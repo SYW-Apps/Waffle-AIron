@@ -636,6 +636,21 @@ methods:
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
     params: []
+  - name: importNames
+    description: >-
+      Forward to project_config_portal.importNames: add public names to the `use` of an external or
+      member of the bound project
+    signature: 'importNames(alias: string, names: string[]): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external or member alias
+      - name: names
+        type: string[]
+        description: The public names to import, or `*`
+    guarantees:
+      - idempotent
 status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T06:15:30.627Z'
+updatedAt: '2026-09-28T16:10:50.023Z'

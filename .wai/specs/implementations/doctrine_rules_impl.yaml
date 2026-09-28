@@ -1190,13 +1190,13 @@ methods:
       - stepNumber: 4
         label: references
         description: >-
-          For each reference the bound project's own specs write with `::` (the graph's authored
-          references whose spec the bound root owns — a contained member's references are its own
-          gate's)
+          For each reference the bound project's own specs write with `::`, and each bare name it
+          binds through a `use` import (the graph's authored references whose spec the bound root
+          owns — a contained member's references are its own gate's)
         type: loop
         loopKind: forEach
         over: the bound project's own authored references
-        endStep: 12
+        endStep: 14
       - stepNumber: 5
         description: >-
           Take the reference's resolution from ctx.resolveCrossProject(spec, position, reference as
@@ -1213,8 +1213,10 @@ methods:
           - value: missing
             step: 9
           - value: unavailable
+            step: 13
+          - value: ambiguous
             step: 11
-        defaultStep: 12
+        defaultStep: 14
       - stepNumber: 7
         label: undeclared
         description: >-
@@ -1227,7 +1229,7 @@ methods:
       - stepNumber: 8
         description: Next reference
         type: jump
-        toStep: 12
+        toStep: 14
       - stepNumber: 9
         label: unexported
         description: >-
@@ -1240,8 +1242,19 @@ methods:
       - stepNumber: 10
         description: Next reference
         type: jump
-        toStep: 12
+        toStep: 14
       - stepNumber: 11
+        label: ambiguousImport
+        description: >-
+          Report IMPORT_AMBIGUOUS (error) on the referring spec, in its draft context, carrying the
+          resolution: the bare name, each alias whose `use` supplies it and whether by name or by
+          `*`, and the remedy — write it `alias::name`, or narrow a `use` so one import supplies it
+        type: local
+      - stepNumber: 12
+        description: Next reference
+        type: jump
+        toStep: 14
+      - stepNumber: 13
         label: unavailable
         description: >-
           Report EXTERNAL_CHECK_UNAVAILABLE (warning) on the referring spec, in its draft context,
@@ -1249,41 +1262,41 @@ methods:
           unreadable pin, a member absent on disk, or a deprecated form naming no alias (run `wairon
           doctor --fix`). Never a pass
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         label: judged
         description: The reference is judged
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         description: For each subsystem's trustedLinks entries
         type: loop
         loopKind: forEach
         over: every subsystem the bound project owns, and its trustedLinks entries
-        endStep: 17
-      - stepNumber: 14
+        endStep: 19
+      - stepNumber: 16
         description: >-
           Find the project the link lands in: ProjectFamily.producerOf(the link as written, from the
           declaring subsystem's project) — the loader leaves trustedLinks raw, so it is read here
           the way the scan binds a reference: a bare subsystem id is local, `alias::sub` lands in
           the project the alias names
         type: local
-      - stepNumber: 15
+      - stepNumber: 17
         description: Does the link stay inside its project?
         type: branch
         condition: the producer is unknown, or is the project that owns the declaring subsystem
-        onTrueStep: 17
-        onFalseStep: 16
-      - stepNumber: 16
+        onTrueStep: 19
+        onFalseStep: 18
+      - stepNumber: 18
         description: >-
           Report TRUSTED_LINK_CROSSES_PROJECT (error) on the declaring subsystem, in its draft
           context, naming the linked subsystem and its project: a trusted link waives the
           client-Adapter shim inside one project and cannot pierce a project boundary; reach the
           other project through its exports
         type: local
-      - stepNumber: 17
+      - stepNumber: 19
         label: linked
         description: The link is judged
         type: local
-      - stepNumber: 18
+      - stepNumber: 20
         description: Every boundary is judged
         type: return
         outcome: judged
@@ -1292,4 +1305,4 @@ methods:
     exportedVia: projectBoundariesRule
 status: design
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-28T06:08:02.330Z'
+updatedAt: '2026-09-28T16:06:46.947Z'

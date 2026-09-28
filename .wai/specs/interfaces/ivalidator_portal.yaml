@@ -39,7 +39,9 @@ methods:
       completeness rules that relax while a spec is draft apply as errors. This is the gate behind
       `wairon lock`, and it is `validateProject` with `treatAllAsComplete` set — named separately
       because a gate that a caller can accidentally run in the relaxed mode is not a gate. It judges
-      the bound project alone: a member's own findings are its own lock's.
+      the bound project alone: a member's own findings are its own lock's, never its parent's (stage
+      4, confirmed); the parent's gate identity still hashes member content until stage 5 (see
+      computeGateStateId).
     signature: 'validateAsComplete(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
     params:
@@ -138,4 +140,4 @@ methods:
           member depth
 status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T06:17:08.175Z'
+updatedAt: '2026-09-28T16:08:13.340Z'

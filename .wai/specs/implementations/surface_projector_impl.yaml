@@ -79,6 +79,6 @@ methods:
         description: Return the self-contained snapshot
         type: return
         outcome: SurfaceSnapshot
-status: complete
+status: design
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-09-27T10:42:41.697Z'
+updatedAt: '2026-09-28T16:14:28.863Z'

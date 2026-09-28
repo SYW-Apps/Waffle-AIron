@@ -1,6 +1,11 @@
 id: validator_portal
 name: Validator Portal
-description: Inbound portal for the SDD validator subsystem.
+description: >-
+  Inbound portal for the SDD validator subsystem. Its two validation entries are the owner's gate
+  (validateProject) and the family run (validateFamily); the library entry (src/index.ts, the
+  embedding API a wrapper compiles its gate from) re-exports exactly those two names, and
+  `validateSddTree` leaves the public API with no alias — a deliberate break in a major release,
+  named in the CHANGELOG (stage 4).
 subsystem: sdd_validator
 componentType: Portal
 owns: []
@@ -10,4 +15,4 @@ dependsOn:
 portalType: Custom
 status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T06:06:40.334Z'
+updatedAt: '2026-09-28T16:14:46.106Z'

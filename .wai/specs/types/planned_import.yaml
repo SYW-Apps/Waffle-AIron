@@ -1,0 +1,57 @@
+kind: value-object
+id: planned_import
+name: PlannedImport
+description: >-
+  One `use` entry the stage-4 positional step adds to a consumer: the public name to import from one
+  producer, and the bare references in the consumer it makes resolve. Planned from references that
+  resolved before stage 4 only by position (the family-wide suffix match), so apply changes what
+  they resolve through, never what they resolve to.
+subsystem: sdd_cli
+fields:
+  - name: alias
+    type: string
+    description: >-
+      The consumer's alias for the producer: an existing external or member alias, else the
+      producer's id (planned as an external, with reason positional)
+    optional: false
+    key: primary
+  - name: producer
+    type: string
+    description: The producer's key in the family's graph
+    optional: false
+  - name: name
+    type: string
+    description: >-
+      The public name imported — an existing one, or the default name of the export planned for it
+      (reason positional)
+    optional: false
+    key: primary
+  - name: references
+    type: string[]
+    description: >-
+      The bare references it resolves, each `<spec id> <position> <as written>` — every one listed
+      in the plan
+    optional: false
+  - name: exportPlanned
+    type: boolean
+    description: >-
+      Whether the producer gains the export this import names (an own `{ typeDef }` entry for a
+      project-level type, a `from:` re-export for a subsystem-owned one)
+    optional: false
+  - name: consumer
+    type: string
+    description: The key of the project whose `use` gains the name
+    optional: false
+  - name: target
+    type: string
+    description: The canonical target `<producer id>::<local id>` the name binds
+    optional: false
+  - name: declaresExternal
+    type: boolean
+    description: >-
+      Whether the consumer must first declare the producer as an external (it declares no alias for
+      it yet)
+    optional: false
+methods: []
+createdAt: '2026-09-28T16:08:56.957Z'
+updatedAt: '2026-09-28T16:13:17.436Z'

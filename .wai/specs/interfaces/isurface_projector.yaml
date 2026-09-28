@@ -10,12 +10,16 @@ methods:
       canonical target (narrowed to the entry's interface when it narrows), its stereotype, dispatch
       table, auth and base path; the exported types listed apart; the transitive type closure; the
       project's effective id beside its name; and StateId provenance. Every re-export is resolved
-      once by the export index, so a consumer never walks the producer's chain.
+      once by the export index, so a consumer never walks the producer's chain. Every type reference
+      inside the snapshot (params, returns, fields) is written in its canonical form
+      (surface_snapshot.canonicalTypeRef), never as the author spelled it, so restating a reference
+      in another legal spelling — a self-prefix dropped, a bare name imported instead of qualified —
+      changes no byte of the snapshot.
     signature: 'projectOwnSurface(maxAudience: string): SurfaceSnapshot'
     returns: SurfaceSnapshot
     params:
       - name: maxAudience
         type: string
-status: complete
+status: design
 createdAt: '2026-07-10T23:13:52.676Z'
-updatedAt: '2026-09-27T10:42:40.655Z'
+updatedAt: '2026-09-28T16:08:23.867Z'

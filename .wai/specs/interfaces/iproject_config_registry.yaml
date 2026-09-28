@@ -222,6 +222,26 @@ methods:
         description: The member's alias
     guarantees:
       - idempotent
-status: complete
+  - name: importNames
+    description: >-
+      Add public names to the `use` of the external or member declared under an alias, so the
+      project may write them bare. Refuses a name that is neither `*` nor a public name of
+      [a-z0-9-_]+, and an alias the configuration declares under neither `externals` nor `members`.
+      Adds only the names not already imported (a `*` already there imports them all), in the order
+      given, after the existing ones; a shorthand member is rewritten to its long form to hold them.
+      Never removes or reorders a name a person wrote. The same names again write nothing. Covers
+      `doctor --fix`'s positional migration step. Returns whether it wrote.
+    signature: 'importNames(alias: string, names: string[]): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external or member alias whose `use` gains the names
+      - name: names
+        type: string[]
+        description: The public names to import, or `*`
+    guarantees:
+      - idempotent
+status: design
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-09-27T10:55:08.119Z'
+updatedAt: '2026-09-28T16:10:32.685Z'

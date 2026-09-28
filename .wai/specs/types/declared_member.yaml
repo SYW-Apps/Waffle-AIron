@@ -27,10 +27,16 @@ fields:
     type: string
     description: >-
       Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+, an empty
-      path, an absolute path, or an alias this configuration also declares under `externals` (one
-      alias names one project).
+      path, an absolute path, an alias this configuration also declares under `externals` (one alias
+      names one project), or a `use` entry that is neither `*` nor a public name of [a-z0-9-_]+.
     optional: true
+  - name: use
+    type: string[]
+    description: >-
+      The long form's `use` as written, deduplicated in first-seen order; empty for the shorthand
+      and when it imports nothing.
+    optional: false
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:33.853Z'
-updatedAt: '2026-09-27T10:32:33.855Z'
+updatedAt: '2026-09-28T16:05:28.674Z'

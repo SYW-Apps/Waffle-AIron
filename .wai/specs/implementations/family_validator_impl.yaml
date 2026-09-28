@@ -131,9 +131,11 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Report each member-absent problem of the graph as MEMBER_NOT_FOUND (naming the declaring
-          project, the alias and the path) and each id-collision problem as PROJECT_ID_COLLISION
-          (pointing at consumption: one member, several consumers)
+          Report the graph's member problems: each member-absent problem as MEMBER_NOT_FOUND (naming
+          the declaring project, the alias and the path); each id-collision as PROJECT_ID_COLLISION
+          (pointing at consumption: one member, several consumers); each defaulted member as
+          PROJECT_ID_DEFAULTED, naming the name slug it answers to now and its alias as the id to
+          declare (doctor --fix writes it); each member with no id as PROJECT_ID_AMBIGUOUS
         type: local
       - stepNumber: 2
         description: >-
@@ -175,4 +177,4 @@ methods:
         outcome: ValidationIssue[]
 status: design
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-09-28T06:06:31.598Z'
+updatedAt: '2026-09-28T16:07:58.543Z'

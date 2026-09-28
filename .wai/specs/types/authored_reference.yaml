@@ -4,12 +4,14 @@ name: AuthoredReference
 description: >-
   A reference as its author wrote it, recorded by the scan before binding replaces it with the
   in-memory key of its target: every reference that carries `::` (an `alias::name`, a leading `::`,
-  a `super::`, or a first segment the referring project does not declare), with the form it was read
-  in, what it bound to, and the text the writer emits for it now. The raw material of
-  DEPRECATED_REFERENCE_FORM, EXTERNAL_UNDECLARED and EXTERNAL_NOT_EXPORTED, of the export usage, and
-  of the chaining migration's reference rewrites. The writer reads it too: a reference whose
-  in-memory value still equals `resolved` is written back as `authored`, so authored text
-  round-trips byte for byte.
+  a `super::`, or a first segment the referring project does not declare), and — since stage 4 —
+  every bare name that names no spec of the referring project (form import, bound through its `use`
+  imports or left unresolved), with the form it was read in, what it bound to, and the text the
+  writer emits for it now. The raw material of DEPRECATED_REFERENCE_FORM, EXTERNAL_UNDECLARED,
+  EXTERNAL_NOT_EXPORTED and IMPORT_AMBIGUOUS, of the export usage (so a lock's `used` covers
+  imported names too), of the positional match the upgrade report and migration share, and of the
+  migrations' reference rewrites. The writer reads it too: a reference whose in-memory value still
+  equals `resolved` is written back as `authored`, so authored text round-trips byte for byte.
 subsystem: sdd_core
 fields:
   - name: specId
@@ -31,26 +33,28 @@ fields:
   - name: form
     type: string
     description: >-
-      alias | leading | super | path. alias: the first segment is one of the referring project's
-      aliases (a `members` or `externals` key), the only form stage 3 writes. leading: a leading
-      `::`, read from the bound root. super: each `super::` climbs one containing project. path: a
-      first segment the referring project does not declare, read the stage-2 way as a member path
-      from the bound root (`desktop::shell` written inside desktop, `waffler_core::transpiler::x`
-      written inside transpiler). leading, super and path are deprecated and still bind for one
-      release.
+      alias | import | leading | super | path. alias: the first segment is one of the referring
+      project's aliases (a `members` or `externals` key), the only `::` form stage 3 writes. import:
+      a bare name (no `::`) that names no spec of the referring project, looked up among the names
+      its `use` imports supply. leading: a leading `::`, read from the bound root. super: each
+      `super::` climbs one containing project. path: a first segment the referring project does not
+      declare, read the stage-2 way as a member path from the bound root. leading, super and path
+      are deprecated and still bind for one release.
     optional: false
   - name: binding
     type: string
     description: >-
-      exported | unexported | undeclared | outside | unresolved | local. exported: it bound to a
-      public name of the producer's resolved L0 table whose audience covers the referrer.
-      unexported: the producer is known, but the name is none of its public names; bound leniently
-      to the producer's spec of that local id (EXTERNAL_NOT_EXPORTED). undeclared: the producer was
-      found only by a deprecated form or by its project id, and the referring project declares no
-      alias for it (EXTERNAL_UNDECLARED). outside: the alias is a declared external whose producer
-      the scan did not read (a parent or sibling of the bound root, or a source.path project), so it
-      is kept as written and judged through its pin and the parent. unresolved: nothing names the
-      first segment. local: a deprecated form that lands in the referring project itself.
+      exported | unexported | undeclared | outside | unresolved | local | ambiguous. exported: it
+      bound to a public name of the producer's resolved L0 table whose audience covers the referrer
+      (for an import: the one import that supplies the name). unexported: the producer is known, but
+      the name is none of its public names; bound leniently to the producer's spec of that local id
+      (EXTERNAL_NOT_EXPORTED). undeclared: the producer was found only by a deprecated form or by
+      its project id, and the referring project declares no alias for it (EXTERNAL_UNDECLARED).
+      outside: the alias — or, for an import, some import that may supply the name — is a declared
+      external whose producer the scan did not read, so it is kept as written and the owner's gate
+      resolves it against that external's pin. unresolved: nothing names the first segment, or no
+      import supplies the bare name. local: a deprecated form that lands in the referring project
+      itself. ambiguous: two imports supply the bare name (IMPORT_AMBIGUOUS).
     optional: false
   - name: resolved
     type: string
@@ -76,7 +80,19 @@ fields:
       `authored` for an alias form already canonical; absent when no rewrite can be written
       (outside, unresolved, or a producer with no id).
     optional: true
+  - name: importedVia
+    type: string
+    description: 'For an import: the alias (or aliases, when ambiguous) whose `use` supplies the name'
+    optional: true
+  - name: hint
+    type: string
+    description: >-
+      For an unresolved import: the declared external or member that exports a name with the same
+      key without importing it, and the `use` line that would import it — what the
+      unresolved-reference finding repeats. Never a project the referrer does not declare: the
+      lookup is owner-scoped, never family-wide.
+    optional: true
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:34.152Z'
-updatedAt: '2026-09-27T10:32:59.373Z'
+updatedAt: '2026-09-28T16:09:15.506Z'

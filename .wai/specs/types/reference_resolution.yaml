@@ -15,15 +15,15 @@ fields:
     type: string
     description: >-
       resolved (one public name whose audience covers the referrer, in a contained member's live
-      export table or in the pinned snapshot of a declared external) | missing (the producer does
-      not export that name or member: EXTERNAL_NOT_EXPORTED) | ambiguous (several foreign surface
-      snapshots expose the name with different contracts: SURFACE_REF_AMBIGUOUS; a family reference
-      cannot be ambiguous, because an alias names one project and a public name one target) |
-      unavailable (nothing to judge against: no pin for the alias, an unreadable pin, a member
-      absent on disk, or a deprecated form naming no alias: EXTERNAL_CHECK_UNAVAILABLE, never a
-      pass) | forbidden (the reference reaches a project the referrer does not declare as a member
-      or an external, or a trusted link crosses into another project: EXTERNAL_UNDECLARED or
-      TRUSTED_LINK_CROSSES_PROJECT)
+      export table or in the pinned snapshot of a declared external — written `alias::name`, or bare
+      through a `use` import) | missing (the producer does not export that name or member:
+      EXTERNAL_NOT_EXPORTED) | ambiguous (two imports supply one bare name: IMPORT_AMBIGUOUS; or
+      several foreign surface snapshots expose a name with different contracts:
+      SURFACE_REF_AMBIGUOUS) | unavailable (nothing to judge against: no pin for the alias, an
+      unreadable pin, a member absent on disk, or a deprecated form naming no alias:
+      EXTERNAL_CHECK_UNAVAILABLE, never a pass) | forbidden (the reference reaches a project the
+      referrer does not declare as a member or an external, or a trusted link crosses into another
+      project: EXTERNAL_UNDECLARED or TRUSTED_LINK_CROSSES_PROJECT)
     optional: false
   - name: owner
     type: string
@@ -54,6 +54,23 @@ fields:
     type: string
     description: One sentence saying why the outcome is what it is, in the words the finding repeats
     optional: false
-methods: []
+  - name: importedVia
+    type: string
+    description: >-
+      For a bare name resolved through an import: the alias whose `use` supplied it, and whether by
+      name or by `*`
+    optional: true
+methods:
+  - name: nameKey
+    signature: 'nameKey(name: string): string'
+    returns: string
+    description: >-
+      The one key a bare name is compared by, locally and through imports alike: lower-cased, with
+      every character outside [a-z0-9] removed — so `WafflerError`, `waffler-error` and
+      `waffler_error` are one name. It is the per-segment normalization type_spec.matchesRef already
+      applies (normalizePart in src/models/type-references.ts, which this names), so a bare name
+      that resolved locally before stage 4 resolves the same way now, and one the family-wide suffix
+      match used to accept resolves through an import with the same spelling. Two public names of
+      one producer that share a key are the producer's EXPORT_ID_DUPLICATE.
 createdAt: '2026-09-28T06:01:47.622Z'
-updatedAt: '2026-09-28T06:01:47.626Z'
+updatedAt: '2026-09-28T16:05:46.898Z'

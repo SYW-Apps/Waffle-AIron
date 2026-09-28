@@ -2,10 +2,10 @@ kind: value-object
 id: position_migration_plan
 name: PositionMigrationPlan
 description: >-
-  The stage-3 share of a family's chaining migration, planned and not yet applied: the legacy mounts
-  to move into `members` with what they carry, the references to rewrite out of a deprecated form,
-  and every finding it will not decide for a person. The chaining migration merges it into its own
-  plan.
+  The share of a family's chaining migration that retires position, planned and not yet applied: the
+  legacy mounts to move into `members` with what they carry, the references to rewrite out of a
+  deprecated form (stage 4's self-prefixed ones among them), stage 4's positional imports, and every
+  finding it will not decide for a person. The chaining migration merges it into its own plan.
 subsystem: sdd_cli
 fields:
   - name: members
@@ -22,7 +22,14 @@ fields:
       Every mount field that stops the move, every reference with no rewrite, every absent member,
       in the order found.
     optional: false
+  - name: imports
+    type: PlannedImport[]
+    description: >-
+      Stage 4's positional imports, one per (consumer, alias, public name), each with every bare
+      reference it resolves and whether the producer needs the export and the consumer the external
+      — which the chaining migration plans with its own entries and declarations
+    optional: false
 methods: []
 sourcePath: src/commands/position-migration.ts
 createdAt: '2026-09-27T10:44:31.358Z'
-updatedAt: '2026-09-27T17:05:36.106Z'
+updatedAt: '2026-09-28T16:13:15.685Z'

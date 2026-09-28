@@ -302,9 +302,14 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
-          Bind every local reference of the root — an id without `::` — inside it (`key::id`), and
-          record every reference with `::` exactly as written, with its spec and position, before
-          binding erases the form
+          Bind every local reference of the root — an id without `::` that names a spec of the root,
+          compared by reference_resolution.nameKey as local resolution always has — inside it
+          (`key::id`); a reference whose first segment (before `::` or `.`) is the root's own id
+          binds locally too and is recorded as a self-prefix (form path, binding local, rewrite the
+          bare local id), the form stage 3 left and stage 4's positional step rewrites; set aside
+          every other bare name that names none, for the import binding; and record every reference
+          with `::` exactly as written, with its spec and position, before binding erases the form.
+          Type expressions are read per identifier, builtins and generic parameters excepted
         type: local
       - stepNumber: 7
         label: members
@@ -377,16 +382,33 @@ methods:
           producer, the public name and the rewrite the writer would emit (AuthoredReference)
         type: local
       - stepNumber: 14
+        label: imports
+        description: >-
+          Bind every bare name set aside, per root, through the root's imports — local first always
+          held, so an import never shadows a local spec. The candidates are the public names each
+          import supplies: a member's or external's resolved L0 table when the scan read the
+          producer (its `use` names, or every name for `*`), compared by nameKey. An explicit name
+          beats a `*` from another import (the ES-module and Rust idiom); exactly one supplier binds
+          it to that entry's canonical target (exported); two explicit suppliers, or two `*`
+          suppliers and no explicit one, bind nothing (ambiguous, IMPORT_AMBIGUOUS); no supplier the
+          scan read, while an import names an external the scan did not read, keeps the name as
+          written (outside — the owner's gate resolves it against that external's pin); otherwise it
+          is unresolved, with the hint naming a declared external or member whose table exports the
+          key without importing it and the `use` line that would. Nothing outside the root's own
+          alias table is ever consulted: no family-wide lookup. Record each as an AuthoredReference
+          of form import
+        type: local
+      - stepNumber: 15
         description: >-
           Record per root its key, parent, alias and form, the description its parent's declaration
           gives it, legacy mount, L0, configuration, alias table, tables, spec keys and authored
           references, and the family problems met
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: Answer the recorded roots, bound root first
         type: return
         outcome: ScannedProjectRoot[]
     detail: full
 status: design
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-28T06:17:32.227Z'
+updatedAt: '2026-09-28T16:14:28.275Z'

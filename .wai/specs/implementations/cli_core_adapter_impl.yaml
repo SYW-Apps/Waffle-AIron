@@ -399,6 +399,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadTypeSpecs
+  - name: importNames
+    narrative:
+      - stepNumber: 1
+        description: Call importNames on the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: importNames
 status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T06:15:32.122Z'
+updatedAt: '2026-09-28T16:10:51.066Z'

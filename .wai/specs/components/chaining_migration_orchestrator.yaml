@@ -6,16 +6,18 @@ description: >-
   producers lack (re-exports, own `{ typeDef }` entries for project-level types, and a minimal L0
   where a producer has none), the externals consumers must declare, the stage-1 family pins to
   convert and delete — and hands the retirement of position (mounts into `members`, reference
-  rewrites) to the position migration, merging its plan. It applies a confirmed plan in a fixed
-  order: ids, then exports, then externals, then pins, then the position migration's moves, rewrites
-  and pin deletions. Config writes go through the core's registry intents, spec writes through the
-  gated authoring seam (new content) or the core's maintenance intents (restating what is there),
-  pins through the surfaces plane; it binds each project's root to write it and restores the
-  caller's binding on every path. It holds no state: the plan is a value its caller holds between
-  plan and apply. It lives in sdd_cli, not sdd_core, because it composes three planes and only a
-  layer above all three can: sdd_authoring already depends on sdd_core, and sdd_validator (which
-  sdd_authoring depends on) depends on sdd_surfaces, so a core or surfaces workflow calling the
-  gated seam would close a cycle. The caller must gate on reach itself.
+  rewrites, and stage 4's positional imports and self-prefix rewrites) to the position migration,
+  merging its plan: a positional import's export joins the producer's exports and its undeclared
+  producer becomes a planned external. It applies a confirmed plan in a fixed order: ids, then
+  exports, then externals, then the position migration (imports, moves, rewrites, pin deletions),
+  and pins LAST, so every snapshot and every lock's `used` map is taken from the final spelling.
+  Config writes go through the core's registry intents, spec writes through the gated authoring seam
+  (new content) or the core's maintenance intents (restating what is there), pins through the
+  surfaces plane; it binds each project's root to write it and restores the caller's binding on
+  every path. It is idempotent (an applied plan re-plans empty) and never locks. It holds no state:
+  the plan is a value its caller holds between plan and apply. It lives in sdd_cli, not sdd_core,
+  because it composes three planes and only a layer above all three can. The caller must gate on
+  reach itself.
 subsystem: sdd_cli
 componentType: Orchestrator
 owns: []
@@ -24,6 +26,6 @@ dependsOn:
   - cli_authoring_adapter
   - cli_surfaces_client_adapter
   - position_migration_orchestrator
-status: complete
+status: design
 createdAt: '2026-09-26T21:12:18.987Z'
-updatedAt: '2026-09-27T10:46:28.671Z'
+updatedAt: '2026-09-28T16:13:09.123Z'

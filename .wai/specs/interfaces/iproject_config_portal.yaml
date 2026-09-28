@@ -150,6 +150,22 @@ methods:
         description: The value under the alias
     guarantees:
       - idempotent
-status: complete
+  - name: importNames
+    description: >-
+      Published write: add public names to the `use` of the bound project's external or member under
+      an alias; refused for a malformed name or an undeclared alias, a no-op for names already
+      imported. Returns whether it wrote. Routed through the core orchestrator.
+    signature: 'importNames(alias: string, names: string[]): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external or member alias
+      - name: names
+        type: string[]
+        description: The public names to import, or `*`
+    guarantees:
+      - idempotent
+status: design
 createdAt: '2026-09-25T17:33:06.947Z'
-updatedAt: '2026-09-26T21:11:00.459Z'
+updatedAt: '2026-09-28T16:10:46.981Z'

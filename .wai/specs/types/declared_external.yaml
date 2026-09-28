@@ -24,10 +24,16 @@ fields:
     type: string
     description: >-
       Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+ (a dotted
-      producer id declared without an explicit alias lands here), or a producer id outside the
-      project-id grammar.
+      producer id declared without an explicit alias lands here), a producer id outside the
+      project-id grammar, or a `use` entry that is neither `*` nor a public name of [a-z0-9-_]+.
     optional: true
+  - name: use
+    type: string[]
+    description: >-
+      The declaration's `use` as written, deduplicated in first-seen order; empty when it imports
+      nothing. `*` stays `*`.
+    optional: false
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-26T17:39:19.261Z'
-updatedAt: '2026-09-26T17:39:19.263Z'
+updatedAt: '2026-09-28T16:05:26.978Z'

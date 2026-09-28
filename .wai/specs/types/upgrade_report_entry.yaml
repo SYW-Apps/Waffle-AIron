@@ -27,11 +27,12 @@ fields:
     type: string
     description: >-
       escalated (a stage-2 notice that is an error since stage 4: EXTERNAL_NOT_EXPORTED,
-      EXPORT_INVALID, TRUSTED_LINK_CROSSES_PROJECT, EXTERNAL_UNDECLARED) | pinned (a cross-project
-      reference now judged against the project's own pin, where it used to be judged through the
-      parent's live tree) | positional (an unresolved reference the family's top resolves by
-      position — a bare name matched into another project's types, or the project's own id used as a
-      prefix — which is how it passed before stage 4)
+      EXPORT_INVALID, EXPORT_UNCONSUMABLE, TRUSTED_LINK_CROSSES_PROJECT, EXTERNAL_UNDECLARED) |
+      pinned (a cross-project reference now judged against the project's own pin, where it used to
+      be judged through the parent's live tree) | positional (a reference the family's top matches
+      by position — a bare name another project supplies, which now needs a `use` import, or the
+      project's own id used as a prefix — which is how it passed before stage 4; position_reader's
+      match)
     optional: false
   - name: resolvedAs
     type: string
@@ -42,10 +43,10 @@ fields:
   - name: rewrite
     type: string
     description: >-
-      For a positional finding: the reference to write instead (`alias::publicName`, or the bare
-      local id for a self-prefixed one) and what the producer must export and the consumer declare
-      and pin for it to resolve
+      For a positional finding: what the positional migration step writes — the `use` line
+      (`externals.shared.use: [waffler-error]`), plus the producer's export and the consumer's
+      external when missing; or the bare local id for a self-prefixed reference
     optional: true
 methods: []
 createdAt: '2026-09-28T06:15:18.135Z'
-updatedAt: '2026-09-28T06:15:18.137Z'
+updatedAt: '2026-09-28T16:10:08.110Z'

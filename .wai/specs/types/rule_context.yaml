@@ -199,15 +199,18 @@ methods:
     signature: 'isTypeResolved(ref: string, generics: Set<string>): boolean'
     returns: boolean
     description: >-
-      Whether a type reference resolves to a builtin, one of the given generic parameters, or a
-      defined type the bound project may name. A reference without an alias resolves only among the
-      bound project's OWN types — never by a suffix match into a contained member's types, which is
-      a boundary crossing nobody declared and the reason a family's children used to pass only from
-      the parent. A reference written through an alias (`billing::money`, `billing.money` — the
-      first segment before `::` or `.`) resolves to a public type of that project: a contained
-      member's live L0 table, or the pinned snapshot of a declared external (its exported types and
-      the types in its signatures' closures). A first segment equal to the project's own id is read
-      as its own id and resolves locally, reported by reference-forms as a deprecated form.
+      Whether a type reference resolves to a builtin, one of the given generic parameters, or a type
+      the bound project may name — owner-scoped and explicit, with no family-wide suffix matching
+      anywhere. A bare identifier resolves among the bound project's OWN types first (by
+      type_spec.matchesRef, whose segments compare by nameKey), then through the project's imports
+      exactly as resolveCrossProject resolves a bare name: to a public type one import supplies — a
+      contained member's live L0 table, or the pin of a declared external (its exported types; a
+      type only inside a signature's closure is not importable). A contained member's types are
+      never matched otherwise: the suffix match that used to accept `WafflerError` from anywhere in
+      the scan is gone. A reference written through an alias (`billing::money`, `billing.money`)
+      resolves to a public type of that project the same way. A first segment equal to the project's
+      own id is read as its own id and resolves locally, reported by reference-forms as a deprecated
+      form.
   - name: targetLanguageFor
     signature: 'targetLanguageFor(subsystemId?: string): string | undefined'
     returns: string | undefined
@@ -340,12 +343,27 @@ methods:
       (exported: resolved; unexported: missing). A reference bound outside the scan — an alias of a
       declared external — is resolved against pinnedExternals only: no pin is unavailable, a public
       name or member the pinned snapshot does not carry is missing, one it carries is resolved. A
-      reference that reaches a project the bound project does not declare, or names a first segment
-      that is neither one of its subsystems, a declared alias nor the provider of a foreign
-      snapshot, is forbidden. A deprecated form that names no alias is unavailable. The result
-      carries the owner, the call site, the canonical target and the digest of the input it was
+      bare name of form import is resolved by the scan's import binding, completed here for
+      externals outside the scan: the names each such external's `use` supplies are read from its
+      pin (every exported name, closure-only types excluded, for `*`), compared by nameKey, with the
+      same precedence — an explicit name beats a `*`, one supplier resolves, two are ambiguous
+      (IMPORT_AMBIGUOUS), none leaves the name unresolved with a hint. A reference that reaches a
+      project the bound project does not declare, or names a first segment that is neither one of
+      its subsystems, a declared alias nor the provider of a foreign snapshot, is forbidden. A
+      deprecated form that names no alias is unavailable. The result carries the owner, the call
+      site, the canonical target, the import it came through and the digest of the input it was
       judged against, so every rule that reads it agrees and only project-boundaries reports a
       non-resolved outcome.
+  - name: importHint
+    signature: 'importHint(name: string): string | null'
+    returns: string | null
+    description: >-
+      For a bare name that resolves nowhere: the declared external or member of the bound project
+      whose table (a member's live one, an external's pin) exports a name with the same nameKey
+      without the project importing it, and the `use` line that would — `externals.shared.use:
+      [waffler-error]`. Null when no declared dependency exports it: the lookup never leaves the
+      project's own alias table. The unresolved-reference rules (UNDEFINED_TYPE_REFERENCE,
+      INVALID_DEPENDENCY_REFERENCE, INVALID_TARGET_COMPONENT_REFERENCE) append it to their message.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-28T06:02:34.748Z'
+updatedAt: '2026-09-28T16:06:31.239Z'

@@ -2,8 +2,10 @@ id: chaining_migration_orchestrator_impl
 name: Chaining Migration Orchestrator Implementation
 description: >-
   Plans a family's chaining migration from the graph, the scan's bindings and export usage — merging
-  the position migration's plan — and applies a confirmed plan ids-first, position last, binding
-  each project's root for its writes and restoring the caller's binding on every path.
+  the position migration's plan and stage 4's positional step (position_reader) — and applies a
+  confirmed plan ids first, then exports, externals, imports and the position migration's moves and
+  rewrites, and pins last, binding each project's root for its writes and restoring the caller's
+  binding on every path.
 contract: ichaining_migration_orchestrator
 sourcePath: src/commands/chaining-migration.ts
 methods:
@@ -185,12 +187,15 @@ methods:
         label: position
         description: >-
           Plan the retirement of position from the same graph — the legacy mounts to move with what
-          they carry, the deprecated references to rewrite, the absent members — and merge it: each
-          planned member into its parent's entry, its carried entries into the member's exports (a
-          member with no L0 marked createsSystem), the rewrites into the plan (a rewrite into a
-          producer its referrer does not declare yet spelled with the alias this plan declares for
-          it, which is what apply's re-save writes once that external exists), its findings after
-          these
+          they carry, the deprecated references to rewrite (stage 4's self-prefixed ones among
+          them), stage 4's positional imports, the absent members — and merge it: each planned
+          member into its parent's entry, its carried entries into the member's exports (a member
+          with no L0 marked createsSystem), each positional import into its consumer's imports with
+          the export it needs merged into the producer's exports (reason positional, checked exactly
+          as step 15 checks an entry) and, when the consumer does not declare the producer, an
+          external planned exactly as step 16 plans one (reason positional) with a pin, the rewrites
+          into the plan (a rewrite into a producer its referrer does not declare yet spelled with
+          the alias this plan declares for it), its findings after these
         type: call
         targetComponent: position_migration_orchestrator
         targetMethod: plan
@@ -348,16 +353,29 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: declareExternal
       - stepNumber: 20
+        label: position
+        description: >-
+          Then retire position, once every id, export and declaration it relies on is written: add
+          each positional import to its consumer's `use`, move each planned mount into its parent's
+          `members`, rewrite each planned reference from the family's top root (deprecated forms,
+          and stage 4's self-prefixed ones to their bare local id), and delete the superseded
+          stage-1 family pins, which nothing reads — BEFORE any pin, so every snapshot is projected
+          from the final spelling (a rewrite inside a producer after its consumers pinned it moved
+          their digests before digests were canonical)
+        type: call
+        targetComponent: position_migration_orchestrator
+        targetMethod: apply
+      - stepNumber: 21
         label: pins
-        description: Pin last, once every id, export and declaration is written
+        description: Pin LAST, once every id, export, declaration, import and rewrite is written
         type: loop
         loopKind: forEach
         over: the projects with aliases to pin
-        endStep: 22
-      - stepNumber: 21
+        endStep: 23
+      - stepNumber: 22
         description: Bind the consumer's root
         type: local
-      - stepNumber: 22
+      - stepNumber: 23
         label: pin
         description: >-
           Pin the planned aliases: each snapshot projects the producer's new entries and each lock's
@@ -367,15 +385,6 @@ methods:
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: pinExternals
-      - stepNumber: 23
-        label: position
-        description: >-
-          Then retire position: move each planned mount into its parent's `members`, rewrite each
-          planned reference from the family's top root, and delete the superseded family pins —
-          last, so every export, declaration and pin they rely on is written
-        type: call
-        targetComponent: position_migration_orchestrator
-        targetMethod: apply
       - stepNumber: 24
         description: >-
           Restore the caller's binding. Collect every file that changed, in write order — its own
@@ -389,6 +398,6 @@ methods:
         type: return
         outcome: ChainingMigrationReport
 detail: full
-status: complete
+status: design
 createdAt: '2026-09-26T21:13:14.060Z'
-updatedAt: '2026-09-27T17:15:26.877Z'
+updatedAt: '2026-09-28T16:13:04.742Z'

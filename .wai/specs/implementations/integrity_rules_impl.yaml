@@ -724,30 +724,6 @@ methods:
           re-lock
         type: local
       - stepNumber: 10
-        label: family
-        description: >-
-          Read the family's identity problems from the project graph in the rule context
-          (ctx.projectFamily); a candidate run carries none
-        type: local
-      - stepNumber: 11
-        description: For each family identity problem
-        type: loop
-        loopKind: forEach
-        over: >-
-          the graph's no-id and defaulted problems (an id collision is family_validator's family
-          check)
-        endStep: 12
-      - stepNumber: 12
-        label: family-reported
-        description: >-
-          Report by the problem's kind: a defaulted member is PROJECT_ID_DEFAULTED (notice), naming
-          the member, the name slug it answers to now, and its alias as the id to declare in its
-          .wai/project.yaml (doctor --fix writes it); a member with no id at all is
-          PROJECT_ID_AMBIGUOUS (warning). The bound root's own defaulted and no-id cases are left to
-          the steps above, so each is reported once. Two members resolving to one id are not judged
-          here: PROJECT_ID_COLLISION is a family check (family_validator.checkMembers)
-        type: local
-      - stepNumber: 13
         label: judged
         description: The identity is judged
         type: return
@@ -843,9 +819,9 @@ methods:
       - stepNumber: 14
         label: unconsumable
         description: >-
-          Report EXPORT_UNCONSUMABLE (notice), naming the public name and the target's stereotype:
-          only a Portal (a gateway is a Portal variant) or an Observer can serve a caller across the
-          boundary
+          Report EXPORT_UNCONSUMABLE (error since stage 4), naming the public name and the target's
+          stereotype: only a Portal (a gateway is a Portal variant) or an Observer can serve a
+          caller across the boundary
         type: local
       - stepNumber: 15
         description: Next problem
@@ -890,10 +866,8 @@ methods:
         type: loop
         loopKind: forEach
         over: >-
-          the graph's authored references whose form is leading, super or path and whose text
-          changes — a path-form reference whose rewrite equals what was written (`shared::x` from a
-          project that has not declared `shared` yet) becomes canonical by declaring the external
-          alone, which is EXTERNAL_UNDECLARED's to say
+          the bound root's authored references in a leading, super or path form, and its bare names
+          whose first segment (before `::` or `.`) is the project's own id (a self-prefix)
         endStep: 5
       - stepNumber: 5
         label: reported
@@ -953,9 +927,37 @@ methods:
         type: local
       - stepNumber: 7
         label: checked
-        description: The external is checked
+        description: The external's declaration is checked
         type: local
       - stepNumber: 8
+        label: each-import
+        description: >-
+          For each name an external or member of the bound project imports by name (a `*` imports
+          whatever is exported, so it lists nothing to check)
+        type: loop
+        loopKind: forEach
+        over: the named `use` entries of the bound root's externals and members
+        endStep: 11
+      - stepNumber: 9
+        description: >-
+          Is it exported? Look the name up by nameKey among the public names the producer exports to
+          this project: a contained member's resolved L0 table, an external's pinned snapshot
+          (ctx.pinnedExternals) — an external with no pin is skipped here, its references already
+          report EXTERNAL_CHECK_UNAVAILABLE
+        type: branch
+        condition: the producer's table is known and carries no public name with that nameKey
+        onFalseStep: 11
+      - stepNumber: 10
+        label: unimported
+        description: >-
+          Report IMPORT_UNRESOLVED (error) naming the declaring project, the alias, the name and the
+          closest public names the producer does export
+        type: local
+      - stepNumber: 11
+        label: import-checked
+        description: The import is checked
+        type: local
+      - stepNumber: 12
         description: Every declaration is judged
         type: return
         outcome: judged
@@ -1063,4 +1065,4 @@ methods:
     exportedVia: memberDeclarationsRule
 status: design
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-28T06:10:05.841Z'
+updatedAt: '2026-09-28T16:10:25.756Z'

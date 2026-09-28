@@ -21,7 +21,11 @@ methods:
       blocking finding; (c) each reference written with a leading `::`, `super::` or a member path,
       raw positions included, rewritten to the scan's canonical text, or a finding when it has none
       — and the other rewrites of a spec holding a bound reference with none are held back with it,
-      since the re-save refuses that spec whole. Writes nothing.
+      since the re-save refuses that spec whole; (d) stage 4's positional step, from
+      position_reader's match: each bare reference that resolved only by position becomes a `use`
+      import on its consumer (with whether the producer needs an export and the consumer an
+      external, which the chaining migration plans), each self-prefixed reference a rewrite to its
+      bare local id, and each ambiguous match or import collision a finding. Writes nothing.
     signature: 'plan(family: ProjectFamily): PositionMigrationPlan'
     returns: PositionMigrationPlan
     params:
@@ -32,13 +36,14 @@ methods:
       - idempotent
   - name: apply
     description: >-
-      Apply the stage-3 share of a confirmed chaining migration plan, after its ids, exports (the
-      carried entries included), externals and pins are written: move each planned mount into its
-      parent's `members` under the parent's binding, rewrite each planned reference from the
-      family's top root (where the deprecated forms still bind), and delete each project's
-      superseded family pins under its binding. Every write is idempotent: a mount already moved, a
-      spec already canonical and a pin already gone change nothing. Answers what it wrote and which
-      projects must be re-locked; locks nothing.
+      Apply the position share of a confirmed chaining migration plan, after its ids, exports (the
+      carried and positional entries included) and externals are written and BEFORE its pins: move
+      each planned mount into its parent's `members` under the parent's binding, add each positional
+      import to its consumer's `use`, rewrite each planned reference from the family's top root
+      (where the deprecated forms still bind; self-prefixed ones to their bare local id), and delete
+      each project's superseded stage-1 family pins under its binding. Every write is idempotent: a
+      mount already moved, a name already imported, a spec already canonical and a pin already gone
+      change nothing. Answers what it wrote and which projects must be re-locked; locks nothing.
     signature: 'apply(plan: ChainingMigrationPlan): PositionMigrationResult'
     returns: PositionMigrationResult
     params:
@@ -47,6 +52,6 @@ methods:
         description: The confirmed plan, whose stage-1 writes the chaining migration has already applied
     guarantees:
       - idempotent
-status: complete
+status: design
 createdAt: '2026-09-27T10:45:32.019Z'
-updatedAt: '2026-09-27T17:32:55.115Z'
+updatedAt: '2026-09-28T16:14:22.257Z'

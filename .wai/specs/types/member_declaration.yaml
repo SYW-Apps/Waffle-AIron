@@ -24,7 +24,16 @@ fields:
       mount's description when the chaining migration moves the mount here; the canvas shows it on
       the member's project node.
     optional: true
+  - name: use
+    type: string[]
+    description: >-
+      The member's public names this project imports, exactly as an external's `use`: `['*']`
+      imports everything the member exports, a list only those names. A member is a dependency like
+      any other, so its names are no more in scope than an external's: without `use` the parent
+      names them `alias::name`. The shorthand `alias: path` imports nothing; importing needs the
+      long form.
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:30.244Z'
-updatedAt: '2026-09-27T10:32:30.252Z'
+updatedAt: '2026-09-28T16:05:24.932Z'

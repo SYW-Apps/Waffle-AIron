@@ -1762,6 +1762,13 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
-status: complete
+  - name: importNames
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: importNames
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T17:03:48.067Z'
+updatedAt: '2026-09-28T16:10:44.923Z'

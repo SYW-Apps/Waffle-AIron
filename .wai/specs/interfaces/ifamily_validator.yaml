@@ -64,13 +64,17 @@ methods:
       The family checks over the root's graph. A declared member with no project on disk is
       MEMBER_NOT_FOUND (error: the family cannot be composed; the owner's gate reports its own
       references into it as unavailable). Two members resolving to one project id are
-      PROJECT_ID_COLLISION (error). Projects of the selection that depend on each other in a loop
-      are PROJECT_DEPENDENCY_CYCLE (warning until stage 5), reported once per loop on each project
-      in it with the references that close each edge. A present member with no lock is
-      MEMBER_UNAPPROVED, and one whose lock no longer matches its own gate identity is
-      MEMBER_DRIFTED (warnings, decision #11: `--ci` at the parent fails until the member is locked
-      or its severity is lowered; a parent lock that refuses is stage 5). Each finding's severity is
-      the root's rules.sddRuleSeverity override, else the default.
+      PROJECT_ID_COLLISION (error, pointing at consumption: one member, several consumers). A member
+      that declares no id is PROJECT_ID_DEFAULTED (notice), naming its alias as the id to declare; a
+      member with no usable id is PROJECT_ID_AMBIGUOUS (warning) — the family half of project
+      identity, moved here from the project-identity rule, which judges only the bound project's own
+      id. Projects of the selection that depend on each other in a loop are PROJECT_DEPENDENCY_CYCLE
+      (warning until stage 5), reported once per loop on each project in it with the references that
+      close each edge. A present member with no lock is MEMBER_UNAPPROVED, and one whose lock no
+      longer matches its own gate identity is MEMBER_DRIFTED (warnings, decision #11: `--ci` at the
+      parent fails until the member is locked or its severity is lowered; a parent lock that refuses
+      is stage 5). Each finding's severity is the root's rules.sddRuleSeverity override, else the
+      default.
     signature: 'checkMembers(family: ProjectFamily): ValidationIssue[]'
     returns: ValidationIssue[]
     params:
@@ -95,6 +99,12 @@ methods:
       - code: MEMBER_DRIFTED
         severity: warning
         summary: 'A member''s lock no longer matches its own gate identity: it changed since it was approved'
+      - code: PROJECT_ID_DEFAULTED
+        severity: notice
+        summary: A member declares no id; it answers to one derived from its display name
+      - code: PROJECT_ID_AMBIGUOUS
+        severity: warning
+        summary: 'A member has no usable id: its name yields no slug, or its declared id breaks the grammar'
 status: design
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-09-28T06:06:08.816Z'
+updatedAt: '2026-09-28T16:07:56.459Z'

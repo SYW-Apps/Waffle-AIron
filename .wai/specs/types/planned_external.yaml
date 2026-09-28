@@ -24,10 +24,12 @@ fields:
   - name: reason
     type: string
     description: >-
-      reference | legacy-pin: the consumer's references cross into the producer, or the consumer
-      held a stage-1 family pin of its parent that this declaration replaces.
+      reference | legacy-pin | positional: the consumer's references cross into the producer, the
+      consumer held a stage-1 family pin of its parent that this declaration replaces, or the
+      consumer's bare references reached the producer only by position and now import from it (stage
+      4).
     optional: false
 methods: []
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:11:44.325Z'
-updatedAt: '2026-09-26T21:57:05.666Z'
+updatedAt: '2026-09-28T16:11:01.098Z'

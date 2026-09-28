@@ -791,6 +791,22 @@ methods:
         description: The spec's in-memory key, from the family's top root
     guarantees:
       - idempotent
-status: complete
+  - name: importNames
+    description: >-
+      Add public names to the `use` of the bound project's external or member under an alias,
+      through the project config Repository: refused for a malformed name or an undeclared alias, a
+      no-op for names already imported. Returns whether it wrote.
+    signature: 'importNames(alias: string, names: string[]): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external or member alias
+      - name: names
+        type: string[]
+        description: The public names to import, or `*`
+    guarantees:
+      - idempotent
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T17:03:59.906Z'
+updatedAt: '2026-09-28T16:10:43.630Z'

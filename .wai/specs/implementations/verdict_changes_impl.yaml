@@ -48,18 +48,18 @@ methods:
         type: local
       - stepNumber: 8
         description: >-
-          Classify today's findings: EXTERNAL_NOT_EXPORTED, EXPORT_INVALID,
+          Classify today's findings: EXTERNAL_NOT_EXPORTED, EXPORT_INVALID, EXPORT_UNCONSUMABLE,
           TRUSTED_LINK_CROSSES_PROJECT and EXTERNAL_UNDECLARED are escalated; a cross-project
           finding whose resolution was judged against the project's pin is pinned; an unresolved
           reference (UNDEFINED_TYPE_REFERENCE, INVALID_DEPENDENCY_REFERENCE,
-          INVALID_TARGET_COMPONENT_REFERENCE) is a positional candidate; everything else is counted
-          unclassified
+          INVALID_TARGET_COMPONENT_REFERENCE) and a self-prefixed deprecated form are positional
+          candidates; everything else is counted unclassified
         type: local
       - stepNumber: 9
         description: Are there positional candidates to explain?
         type: branch
         condition: any covered project has a positional candidate
-        onFalseStep: 14
+        onFalseStep: 17
       - stepNumber: 10
         description: >-
           Walk up to the family's top, one hop at a time — explicit, because the report was asked
@@ -77,20 +77,37 @@ methods:
         targetMethod: resolveChainingParent
       - stepNumber: 12
         description: >-
-          Load, with the top bound, every type of the family as its scan sees them (members keyed by
-          project id)
+          With the top bound, read the family's graph through the core adapter — every project's
+          key, id, alias table and authored references, among them the unresolved bare names and the
+          self-prefixed forms
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 13
+        description: Read every project's resolved L0 export table through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 14
+        description: Load every type of the family as the top's scan sees them
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadTypeSpecs
-      - stepNumber: 13
+      - stepNumber: 15
         description: >-
-          Match each positional candidate with type_spec.matchesRef across the family's types: a
-          unique match in another project is positional, with resolvedAs `<producer id>::<id>` and
-          the rewrite `alias::publicName` plus the typeDef export and the external (and pin) it
-          needs; a match in the project itself through its own id is positional with the bare local
-          id as the rewrite; no match or several are counted unclassified
+          Match the candidates by position — the same match the positional migration step writes
+          from
+        type: call
+        targetComponent: position_reader
+        targetMethod: match
+      - stepNumber: 16
+        description: >-
+          An import match is positional, with resolvedAs and the fix: the `use` line, and the export
+          and the external when the producer or the consumer lacks them; a self-prefix match is
+          positional with the bare local id as its rewrite; ambiguous and none are counted
+          unclassified, their candidates listed
         type: local
-      - stepNumber: 14
+      - stepNumber: 17
         label: report
         description: >-
           Return the report: per project its totals, the classified entries grouped by code, and the
@@ -99,4 +116,4 @@ methods:
         outcome: UpgradeReport
 status: design
 createdAt: '2026-09-28T06:16:03.117Z'
-updatedAt: '2026-09-28T06:16:03.125Z'
+updatedAt: '2026-09-28T16:10:04.849Z'

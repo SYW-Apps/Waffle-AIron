@@ -214,15 +214,15 @@ methods:
         summary: A published surface names as its consumer a subsystem the tree does not have
   - name: projectIdentity
     description: >-
-      Rule project-identity. A project is keyed on its id, so the id must be declared, well-formed,
-      stable and its own: a project that declares none answers to its display name slugified until
-      it writes one (PROJECT_ID_DEFAULTED — for a member of the family, the finding names its alias
-      as the id to declare), a project whose name yields no id or whose declared id breaks the
-      grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), and an id that differs from the
-      one the lock approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). The
-      family half reads the project graph's identity problems. Two members resolving to one id
-      (PROJECT_ID_COLLISION) is a family check since stage 4: family_validator reports it over the
-      family root's graph.
+      Rule project-identity. The bound project is keyed on its id, so the id must be declared,
+      well-formed, stable and its own: a project that declares none answers to its display name
+      slugified until it writes one (PROJECT_ID_DEFAULTED), a project whose name yields no id or
+      whose declared id breaks the grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS),
+      and an id that differs from the one the lock approved has moved under everything that keyed on
+      it (PROJECT_ID_CHANGED). It judges the bound project's own identity only. The family half — a
+      member with a defaulted id (named with its alias as the id to declare), a member with no id,
+      and two members resolving to one id — is a family check since stage 4
+      (family_validator.checkMembers), which reads the family root's graph.
     signature: 'projectIdentity(ctx: RuleContext): void'
     returns: void
     params:
@@ -243,18 +243,19 @@ methods:
     description: >-
       Rule export-tables. Every level's export table must resolve the way a module resolver resolves
       `export … from`: one public name binds one target (EXPORT_ID_DUPLICATE when two wildcards — or
-      two explicit entries — bind a name to different targets; the name is left out), no chain leads
+      two explicit entries — bind a name to different targets, or two public names share one
+      nameKey, since a bare import could not tell them apart; the name is left out), no chain leads
       back to itself (EXPORT_CYCLE — an error for a named chain that never reaches a component or
       type, a warning for a wildcard cycle, which resolves to its union), every entry names a source
       and an item that exist, that the source exports and, for an own type, that the level owns — a
       subsystem-owned type at L1, a project-level type (no subsystem) for an L0 `{ typeDef }`
       without `from` — under a public name of [a-z0-9-_]+ (EXPORT_INVALID), every re-exported
       component can serve a boundary caller — a Portal, a gateway being a Portal variant, or an
-      Observer for events (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports), and an L0 entry that
-      re-exports a member's or an external's export never declares a wider audience than that export
-      has (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. The rule judges
-      the facts the export resolver recorded in the scan — for the bound root's table and every
-      member's — and resolves nothing itself.
+      Observer for events (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports; an error since stage
+      4), and an L0 entry that re-exports a member's or an external's export never declares a wider
+      audience than that export has (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never
+      widen it. The rule judges the facts the export resolver recorded in the scan — for the bound
+      root's table and every contained member's — and resolves nothing itself.
     signature: 'exportTables(ctx: RuleContext): void'
     returns: void
     params:
@@ -278,24 +279,27 @@ methods:
           An export entry names a missing source or item, an item its source does not export or its
           level does not own, or a malformed public name
       - code: EXPORT_UNCONSUMABLE
-        severity: notice
+        severity: error
         summary: 'An exported component no boundary caller may reach: neither a Portal nor an Observer'
       - code: EXPORT_WIDENS_AUDIENCE
         severity: error
         summary: An L0 entry declares a wider audience than the member or external export it re-exports
   - name: referenceForms
     description: >-
-      Rule reference-forms. A cross-project reference is `alias::name`: the alias is one of the
-      referring project's members or externals, the name a public name of that project's L0 table.
-      Three older forms still bind for one release and are reported (DEPRECATED_REFERENCE_FORM),
-      each naming the spec, where in it, the form as written and the text to write instead (the
-      scan's rewrite: a bare local id, or `alias::publicName`): a leading `::`, which escapes to the
-      root of whatever checkout loads it; `super::`, which climbs the containing projects — a place
-      in one family, not a name; and a member path (`desktop::shell` written inside desktop,
-      `waffler_core::transpiler::x` written inside transpiler), a first segment the referring
-      project does not declare, read from the bound root. Wairon's own writer emits none of them. A
-      form with no rewrite (its target is out of reach) is reported with the reason. It reads the
-      project graph's authored references, which the scan records before binding erases the form.
+      Rule reference-forms. A cross-project reference is `alias::name` (or a bare name a `use`
+      imports): the alias is one of the referring project's members or externals, the name a public
+      name of that project's L0 table. The older forms still bind for one release and are reported
+      (DEPRECATED_REFERENCE_FORM), each naming the spec, where in it, the form as written and the
+      text to write instead (the scan's rewrite: a bare local id, or `alias::publicName`): a leading
+      `::`, which escapes to the root of whatever checkout loads it; `super::`, which climbs the
+      containing projects — a place in one family, not a name; a member path (`desktop::shell`
+      written inside desktop, `waffler_core::transpiler::x` written inside transpiler), a first
+      segment the referring project does not declare, read from the bound root; and a self-prefix —
+      the referring project's own id as the first segment, with `::` or `.`
+      (`registry.advisory-channel` inside registry), which stage 3's migration did not rewrite and
+      stage 4's positional step does. Wairon's own writer emits none of them. A form with no rewrite
+      (its target is out of reach) is reported with the reason. It reads the project graph's
+      authored references, which the scan records before binding erases the form.
     signature: 'referenceForms(ctx: RuleContext): void'
     returns: void
     params:
@@ -318,10 +322,15 @@ methods:
       project holds a pin for the alias. A declaration that fails is reported (EXTERNAL_UNRESOLVED)
       with its reason, so a misspelled declaration never passes as declared. A member validated from
       its own root that declares its parent or a sibling is not reported when it has pinned it: the
-      pin is what its gate judges against, and nothing is climbed to find the producer (the climb,
-      and ctx.climbBoundExternals, went with resolve-through-parent). The findings name no spec:
-      externals live in configuration. It reads the project graph's bound externals, its
-      alias-conflict problems and ctx.pinnedExternals.
+      pin is what its gate judges against, and nothing is climbed to find the producer. Every name
+      an external's or a member's `use` lists by name must be a public name the producer exports to
+      this project — a contained member's live L0 table, an external's pin — compared by nameKey
+      (IMPORT_UNRESOLVED, naming the closest public names; a `use` on an unpinned external is left
+      to the pin's own EXTERNAL_CHECK_UNAVAILABLE). A malformed `use` entry is the declaration's
+      problem (EXTERNAL_UNRESOLVED for an external, the member's for a member). The findings name no
+      spec: externals and members live in configuration. It reads the bound root's node of the
+      project graph, its alias-conflict problems, the members' export tables and
+      ctx.pinnedExternals.
     signature: 'externalDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -334,6 +343,9 @@ methods:
         summary: >-
           A declared external whose alias is malformed or taken by a member, whose producer id is
           malformed, or whose producer the family and its source.path do not provide
+      - code: IMPORT_UNRESOLVED
+        severity: error
+        summary: A `use` entry names a public name its producer does not export to this project
   - name: localIds
     description: >-
       Rule local-ids. Inside one project an id names one spec, and an id without `::` is always
@@ -381,4 +393,4 @@ methods:
           `members` entry
 status: design
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-28T06:09:29.372Z'
+updatedAt: '2026-09-28T16:10:19.746Z'

@@ -43,8 +43,9 @@ methods:
     returns: boolean
     description: >-
       True when nothing is left to write: no project has an id, an L0 to create, an export entry, an
-      external, a pin, a member to move or a family pin to delete, and no reference is to be
-      rewritten. Findings do not count — a plan can be empty and still report.
+      external, an import, a pin, a member to move or a family pin to delete, and no reference is to
+      be rewritten. Findings do not count — a plan can be empty and still report. An applied plan
+      re-plans empty: the migration is idempotent.
   - name: blocked
     signature: 'blocked(): boolean'
     returns: boolean
@@ -54,4 +55,4 @@ methods:
       holds differently.
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:12:04.535Z'
-updatedAt: '2026-09-27T10:44:59.793Z'
+updatedAt: '2026-09-28T16:12:24.310Z'

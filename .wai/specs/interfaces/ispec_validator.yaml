@@ -104,11 +104,15 @@ methods:
     description: >-
       Gather the content identity, the governing extensions, the project's gate config, the consumed
       contract inputs and the built-in rule sequence, and compute the gate identity from them. Every
-      input is the bound project's own (its tree including the members it contains, its doctrine,
-      its externals lock and pinned snapshots, its foreign surface snapshots) — never an ancestor's
-      state — so a lock taken at a member's own root and one taken inside its family record the same
-      identity. With resolve-through-parent gone, the verdict a lock certifies no longer depends on
-      an ancestor either.
+      input is the bound project's own (its tree, its doctrine, its externals lock and pinned
+      snapshots, its foreign surface snapshots) — never an ancestor's state — so a lock taken at a
+      member's own root and one taken inside its family record the same identity. With
+      resolve-through-parent gone, the verdict a lock certifies no longer depends on an ancestor
+      either. Known inconsistency, kept on purpose until stage 5: at a parent the content identity
+      (and the consumed inputs) still hash the contained members' specs and pins, although the
+      parent's lock gate (validateAsComplete) ignores the members' findings — so a member edit
+      stales the parent's lock without the parent's verdict having judged it. Stage 5 replaces the
+      member content with each direct member's composition subject.
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
@@ -149,4 +153,4 @@ methods:
     params: []
 status: design
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T06:04:06.549Z'
+updatedAt: '2026-09-28T16:08:11.167Z'

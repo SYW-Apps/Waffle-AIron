@@ -76,9 +76,14 @@ methods:
     signature: 'contentDigest(): string'
     returns: string
     description: >-
-      sha256 over the snapshot's canonical content with its provenance (stateId, generatedAt,
-      origin) stripped — the same stripping the gate's consumed-contract keys use — so re-pinning an
-      unchanged contract never moves it. The lock's `digest`.
+      sha256 over the snapshot's canonical CONTRACT, never over how its references are spelled
+      (stage 2's promise): the public names with each entry's stereotype, transport, auth kind,
+      dispatch bindings and method shapes, the exported types and the closure's type shapes — every
+      type expression passed through canonicalTypeRef, every list in a fixed order — with provenance
+      (stateId, generatedAt, origin) and prose (descriptions, groups, display names) left out.
+      Re-pinning an unchanged contract never moves it, and neither does a producer re-spelling a
+      reference, regrouping a type or rewording a description. The lock's `digest`, and what
+      EXTERNAL_DRIFTED compares.
     sourcePath: src/models/surface-references.ts
   - name: memberDigest
     signature: 'memberDigest(publicName: string, member: string): string | null'
@@ -88,11 +93,24 @@ methods:
       moves it: for a contract method, its name, its parameters' types and optionality in order
       (never their names) and its return type; for `capability:<name>`, the dispatch binding and the
       bound method's signature so digested; for `type`, the type's shape; in every case followed by
-      the shapes of every type in the transitive closure of the types it names, from the snapshot's
-      type closure. Null when the name is not in the snapshot or the member is not on it (the
-      entry's interface narrowing included) — a removed member, never a pass. A lock's `used` map
-      holds these digests.
+      the shapes of every type in the transitive closure of the types it names. Every type
+      expression is passed through canonicalTypeRef before it is hashed, and the closure is found by
+      canonical id, never by the suffix match — so the rewrite `shared::native-access-kind` →
+      `native-access-kind` inside the producer moves no digest. Null when the name is not in the
+      snapshot or the member is not on it (the entry's interface narrowing included) — a removed
+      member, never a pass. A lock's `used` map holds these digests, and EXTERNAL_INCOMPATIBLE is an
+      error only because they are canonical.
     sourcePath: src/models/surface-references.ts
+  - name: canonicalTypeRef
+    signature: 'canonicalTypeRef(typeExpr: string): string'
+    returns: string
+    description: >-
+      A type expression rewritten into the one spelling a digest may see, identifier by identifier,
+      generics and unions kept in place: a builtin becomes its lower-cased builtin name; an
+      identifier naming a type of this snapshot's closure (bare, or prefixed with this snapshot's
+      own project id or alias, compared by reference_resolution.nameKey) becomes that type's id; an
+      identifier that names another project's type becomes `<producer id>::<its id>`; anything
+      unresolvable is kept as written. Pure: the snapshot is the whole input.
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-09-26T17:46:52.360Z'
+updatedAt: '2026-09-28T16:08:31.489Z'

@@ -144,6 +144,13 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: removeMember
-status: complete
+  - name: importNames
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: importNames
+status: design
 createdAt: '2026-09-13T11:19:36.287Z'
-updatedAt: '2026-09-27T10:55:15.048Z'
+updatedAt: '2026-09-28T16:10:38.778Z'
