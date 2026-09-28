@@ -235,11 +235,16 @@ describe('a migration leaves a union type reference exactly as written', () => {
       index: PARAM_UNION,            // a generic inside a union: left verbatim
     });
     // Stage 4 retired the family-wide suffix match: the bare `invoice` left
-    // inside a union no longer reaches the member's type from the parent — it
-    // needs `billing::invoice` or a `use` import. Exactly that one contract is
-    // new (flagged for the migration waves: externalize leaves union members bare).
-    expect(findings(root).filter((f) => f.includes('TYPE') && !typeFindingsBefore.includes(f)))
-      .toEqual(['error UNDEFINED_TYPE_REFERENCE @ireport_builder']);
+    // inside a union reaches the member's type only through a `use` import —
+    // which externalize declares, exporting the type from the member, so the
+    // union stays verbatim and no type reference starts failing.
+    expect(findings(root).filter((f) => f.includes('TYPE') && !typeFindingsBefore.includes(f))).toEqual([]);
+    const parent = readYamlFile(path.join(root, '.wai', 'project.yaml')) as any;
+    expect(parent.members.billing.use).toEqual(['invoice']);
+    const memberL0 = readYamlFile(path.join(root, 'sub', 'billing', '.wai', 'specs', '.index.yaml')) as any;
+    expect(memberL0.publicInterfaces).toEqual([{ typeDef: 'invoice', audience: 'project' }]);
+    // And the parent's owner's gate holds no error the move introduced.
+    expect(findings(root).filter((f) => f.startsWith('error '))).toEqual([]);
   });
 
   it('internalizing it back leaves them alone too', () => {

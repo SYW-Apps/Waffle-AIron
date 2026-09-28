@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   saveSystemSpec,
+  saveSpec,
   loadSubsystemSpec,
   loadSubsystemSpecs,
   loadSystemSpec,
@@ -19,6 +20,8 @@ import {
   getImplementationPath,
   invalidateSpecCache,
   assertContainedProjectPath,
+  loadTypeSpecs,
+  resolveSubsystemExports,
   // The member moves (moveMountToMembers, normalizeReferences) read the graph
   // and write through the spec repository's two maintenance writes.
   graph,
@@ -41,6 +44,8 @@ import { declaredMembers, effectiveProjectId, EXTERNAL_ALIAS_RE, type ProjectCon
 import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   SpecIdSchema,
+  PUBLIC_NAME_RE,
+  nameKey,
   type ComponentSpec,
   type ImplementationSpec,
   type InterfaceSpec,
@@ -535,10 +540,96 @@ export function externalizeSubsystem(subsystemId: string, memberPath: string): v
     projectConfigRepositoryAt(memberDir).declareExternal(parentId, {});
   }
   // Step 10: the parent L0's re-exports of the subsystem now re-export the
-  // member by its alias — the same text, restated; nothing is added.
+  // member by its alias — the same text, restated.
   restateReExports(subsystemId, subsystemId);
+  // Steps 11-12: what each side's references now need to pass the owner's
+  // gate — the exports of what crosses the boundary, and a `use` import for
+  // each bare type name (inside a union, too) the other side now owns.
+  declareBoundaryCrossings(memberDir, memberKey, subsystemId, parentId);
   invalidateSpecCache();
-  // Step 11.
+  // Step 13.
+}
+
+/** A key's local id within its project. */
+function localIn(key: string, project: string): string {
+  return project && key.startsWith(`${project}::`) ? key.slice(project.length + 2) : key;
+}
+
+/**
+ * Steps 11-12 of externalizeSubsystem: read the graph from the parent and, for
+ * every reference that crosses the new boundary, declare what the owner's gate
+ * needs to resolve it on each side. A reference into the other project that
+ * names no public name of it is exported there — a type through its own
+ * subsystem and the project's L0, a component the subsystem already exports
+ * through the L0 (one it does not export stays reported: making a component
+ * public is a design decision, never a move's side effect). A bare type name
+ * the moving side no longer owns — the parent's union members among them — is
+ * imported by name (`use`) from the side that owns it now, and exported there.
+ */
+function declareBoundaryCrossings(memberDir: string, memberKey: string, alias: string, parentId: string | null): void {
+  invalidateSpecCache();
+  const family = graph();
+  const types = loadTypeSpecs();
+  const needs = new Map<string, Set<string>>([['', new Set()], [memberKey, new Set()]]);
+  const imports = new Map<string, Set<string>>([['', new Set()], [memberKey, new Set()]]);
+  for (const ref of family.authoredReferences) {
+    const owner = family.owners.get(ref.specId) ?? '';
+    if (owner !== '' && owner !== memberKey) continue;
+    const other = owner === '' ? memberKey : '';
+    if (ref.producer === other && ref.binding === 'unexported') needs.get(other)!.add(ref.resolved);
+    if (ref.form !== 'import' || ref.binding !== 'unresolved' || ref.position !== 'type') continue;
+    const owned = types.find((t) => (family.owners.get(t.id) ?? '') === other && nameKey(localIn(t.id, other)) === nameKey(ref.authored));
+    if (!owned || !PUBLIC_NAME_RE.test(localIn(owned.id, other))) continue;
+    needs.get(other)!.add(owned.id);
+    imports.get(owner)!.add(localIn(owned.id, other));
+  }
+  // Step 11: the exports, each side under its own root.
+  exportItems([...needs.get('')!]);
+  runWithProjectRoot(memberDir, () => exportItems([...needs.get(memberKey)!].map((k) => localIn(k, memberKey))));
+  // Step 12: the `use` imports — the parent imports from its member, the
+  // member from the parent it declares as an external.
+  if (imports.get('')!.size > 0) projectConfigRepository.importNames(alias, [...imports.get('')!]);
+  if (imports.get(memberKey)!.size > 0 && parentId !== null) {
+    projectConfigRepositoryAt(memberDir).importNames(parentId, [...imports.get(memberKey)!]);
+  }
+}
+
+/**
+ * Export each local id of the bound project that crosses the boundary: a type
+ * through its subsystem (as its own) and the L0; a component its subsystem
+ * already exports through the L0. Each entry is added only when missing, at
+ * the audience a family sees (`project`).
+ */
+function exportItems(ids: string[]): void {
+  if (ids.length === 0) return;
+  invalidateSpecCache();
+  const system = loadSystemSpec();
+  if (!system) return;
+  const entries = [...(system.publicInterfaces ?? [])] as { from?: string; component?: string; typeDef?: string; audience?: string }[];
+  const types = loadTypeSpecs();
+  for (const id of ids) {
+    if (!PUBLIC_NAME_RE.test(id)) continue;
+    const type = types.find((t) => t.id === id);
+    if (type) {
+      if (type.subsystem) exportTypeFromSubsystem(type.subsystem, id);
+      if (!entries.some((e) => e.typeDef === id && e.from === undefined)) entries.push({ typeDef: id, audience: 'project' });
+      continue;
+    }
+    const component = loadComponentSpec(id);
+    if (!component) continue;
+    const exported = resolveSubsystemExports(component.subsystem).entries.some((e) => e.kind === 'component' && e.component === id);
+    if (exported && !entries.some((e) => e.component === id)) entries.push({ from: component.subsystem, component: id, audience: 'project' });
+  }
+  if (entries.length !== (system.publicInterfaces ?? []).length) {
+    saveSystemSpec({ ...system, publicInterfaces: entries as typeof system.publicInterfaces });
+  }
+}
+
+/** A type exported as its own by the subsystem that owns it, when it is not already. */
+function exportTypeFromSubsystem(subsystemId: string, typeId: string): void {
+  const sub = loadSubsystemSpec(subsystemId);
+  if (!sub || sub.publicInterfaces.some((pi) => pi.typeDef === typeId && pi.from === undefined)) return;
+  saveSpec('subsystem', { ...sub, publicInterfaces: [...sub.publicInterfaces, { typeDef: typeId }] });
 }
 
 /**

@@ -265,10 +265,14 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     expect(adapterExt.dependsOn).toEqual(['core::core-portal']);
 
     const afterExt = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_validate_tree', arguments: {} })));
-    // The ref rewrite resolves; the moved portal is not yet exported from the
-    // member's L0, which stage 4 escalates to an error (EXTERNAL_NOT_EXPORTED).
-    expect(errorsOf(afterExt).map((e: { code: string; specId?: string }) => `${e.code} @${e.specId}`))
-      .toEqual(['EXTERNAL_NOT_EXPORTED @cli-core-adapter']);
+    // The ref rewrite resolves, and the moved portal is exported from the
+    // member's L0 (its subsystem already published it), so nothing the move
+    // did is an error. The parent declares a member now, so the tool runs the
+    // family run: the member's own gate is in it too.
+    expect(errorsOf(afterExt)).toEqual([]);
+    expect(afterExt.projects.map((p: { key: string }) => p.key)).toEqual(['', 'core']);
+    expect((readYamlFile(path.join(projDir, 'packages', 'core', '.wai', 'specs', '.index.yaml')) as { publicInterfaces?: unknown }).publicInterfaces)
+      .toEqual([{ from: 'core', component: 'core-portal', audience: 'project' }]);
 
     // --- internalize ---
     unwrapText(await client.callTool({ name: 'sdd_internalize_member', arguments: { alias: 'core' } }));

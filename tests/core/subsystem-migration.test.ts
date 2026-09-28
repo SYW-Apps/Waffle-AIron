@@ -371,11 +371,22 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
       .toEqual(['top::shared_portal', 'ledger::ledger_portal']);
     expect(callTargets(stored(fam.childDir, 'billing/billing_adapter/.implementation.yaml')))
       .toEqual(['top::shared_portal', 'ledger::ledger_portal']);
-    // …the parent is declared as the member's external…
-    expect(projectConfigRepositoryAt(fam.childDir).load()?.externals).toEqual({ top: {} });
+    // …the parent is declared as the member's external, importing by name the
+    // bare type it now owns (stage 4: a bare name resolves locally, then through
+    // a `use` import — never by a family-wide suffix match)…
+    expect(projectConfigRepositoryAt(fam.childDir).load()?.externals).toEqual({ top: { use: ['money'] } });
+    // …and the parent exports what the member reaches across the new boundary:
+    // the portal its subsystem already published, and the imported type.
+    expect(stored(fam.root, '.index.yaml').publicInterfaces).toEqual([
+      { component: 'shared_portal', from: 'shared', audience: 'project' },
+      { typeDef: 'money', audience: 'project' },
+    ]);
+    expect(stored(fam.root, 'shared/.index.yaml').publicInterfaces).toContainEqual({ typeDef: 'money' });
+    // The parent's own gate holds no error after the move.
+    expect(verdict(fam.root).issues.filter((i) => i.severity === 'error')).toEqual([]);
     // …a root-anchored target as written: it names the same spec at every depth…
     expect(stored(fam.childDir, 'billing/billing_audit/.index.yaml').dependsOn).toEqual(['::shared_portal']);
-    // …and a type as written: types resolve by name, from whichever namespace.
+    // …and a type as written: the `use` import above is what now resolves it.
     expect(stored(fam.childDir, 'billing/billing_adapter/.interface.yaml').methods[0].params)
       .toEqual([{ name: 'amount', type: 'money' }]);
     expect(stored(fam.childDir, 'billing/types/invoice.yaml').fields.map((f: any) => f.type)).toEqual(['money']);
