@@ -35,5 +35,6 @@ fields:
     description: Its own gate's notice count
     optional: false
 methods: []
+sourcePath: src/core/validation.ts
 createdAt: '2026-09-28T06:01:58.186Z'
-updatedAt: '2026-09-28T06:01:58.188Z'
+updatedAt: '2026-09-28T18:11:44.730Z'

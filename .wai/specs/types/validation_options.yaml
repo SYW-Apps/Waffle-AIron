@@ -65,6 +65,7 @@ methods:
       is set, or when the bound project declares members and `recursive` is not false. The one
       reading of the flags every caller (CLI validate, the MCP validate tool, doctor) shares, so the
       choice cannot drift between them.
+    sourcePath: src/models/validation-options.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-09-20T14:26:35.723Z'
-updatedAt: '2026-09-28T06:17:10.080Z'
+updatedAt: '2026-09-28T18:11:50.553Z'

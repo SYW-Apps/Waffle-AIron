@@ -680,12 +680,12 @@ methods:
       - stepNumber: 2
         description: Is there an identity to judge?
         type: branch
-        condition: >-
-          the context carries no project identity (no readable configuration, or the parent's
-          verdict on a chained child)
+        condition: the context carries no project identity (no readable configuration)
         onFalseStep: 4
       - stepNumber: 3
-        description: 'No identity of the root''s own to judge: go on to the family''s'
+        description: >-
+          No identity of the root's own to judge: judged (a member's id is the family run's check,
+          family_validator.checkMembers)
         type: jump
         toStep: 10
       - stepNumber: 4
@@ -1080,4 +1080,4 @@ methods:
     exportedVia: memberDeclarationsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-28T17:16:45.678Z'
+updatedAt: '2026-09-28T18:13:27.380Z'

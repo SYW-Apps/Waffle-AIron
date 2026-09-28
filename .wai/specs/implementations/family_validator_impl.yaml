@@ -1,9 +1,15 @@
 id: family_validator_impl
 name: Family Validator Implementation
 description: >-
-  The family run over the bound root's graph. Planned home: src/core/family-validation.ts (not
-  written yet).
+  The family run over the bound root's graph, in src/core/family-validation.ts. Reach is granted by
+  binding each selected project's root under a ceiling: a plain run narrows it to the family root,
+  `--family` keeps the request's (none locally, the credential's hosted), and nothing widens it. The
+  composition's out-of-reach externals are counted for the run's hint; the family codes are tuned by
+  the owning project's sddRuleSeverity (the consumer for composition, the root for the member
+  checks) and lint.allow never applies to them, because they name no spec.
 contract: ifamily_validator
+sourcePath: src/core/family-validation.ts
+simPath: tests/core/family-validation.test.ts
 methods:
   - name: run
     narrative:
@@ -124,7 +130,7 @@ methods:
         description: The external is judged
         type: local
       - stepNumber: 9
-        description: Return the composition findings, with the externals not selected
+        description: Return the composition findings, with the aliases of the externals not selected
         type: return
         outcome: ValidationIssue[]
   - name: checkMembers
@@ -175,6 +181,6 @@ methods:
           default, and return them
         type: return
         outcome: ValidationIssue[]
-status: design
+status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-09-28T16:07:58.543Z'
+updatedAt: '2026-09-28T18:14:21.202Z'

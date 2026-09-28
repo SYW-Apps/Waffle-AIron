@@ -28,6 +28,6 @@ dependsOn:
   - spec_validator
   - validator_core_adapter
   - validator_surfaces_adapter
-status: design
+status: complete
 createdAt: '2026-09-28T06:05:49.633Z'
-updatedAt: '2026-09-28T16:08:03.452Z'
+updatedAt: '2026-09-28T18:11:44.214Z'

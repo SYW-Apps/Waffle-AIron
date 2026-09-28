@@ -60,5 +60,6 @@ fields:
       each rule left.
     optional: true
 methods: []
+sourcePath: src/commands/position-reader.ts
 createdAt: '2026-09-28T16:09:03.266Z'
-updatedAt: '2026-09-28T16:22:10.831Z'
+updatedAt: '2026-09-28T18:12:36.459Z'

@@ -5,9 +5,10 @@ description: >-
   A fact about the family's identities and membership that no single project can see alone: two
   members resolving to one project id, a member resolving to none, a member that declares none, a
   member whose directory is absent, or an alias one project declares twice. Reported, never judged —
-  the project-identity rule turns the identity kinds into PROJECT_ID_COLLISION, PROJECT_ID_AMBIGUOUS
-  or PROJECT_ID_DEFAULTED, and the member-declarations rule judges the others; the chaining
-  migration refuses to write a family with an absent member.
+  the family run's member checks (family_validator.checkMembers) turn the identity kinds into
+  PROJECT_ID_COLLISION, PROJECT_ID_AMBIGUOUS or PROJECT_ID_DEFAULTED and an absent member into
+  MEMBER_NOT_FOUND, and the member-declarations rule judges the others; the chaining migration
+  refuses to write a family with an absent member.
 subsystem: sdd_core
 fields:
   - name: kind
@@ -39,4 +40,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:43.662Z'
-updatedAt: '2026-09-27T10:38:51.444Z'
+updatedAt: '2026-09-28T18:13:33.466Z'

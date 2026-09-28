@@ -402,6 +402,6 @@ lint:
         from the store, so the call the narrative names is the call the code makes. The same shape
         its siblings getSnapshot and listMountSnapshots carry in the debt register; listFamilyPins
         replaced listExternalInterfaces, whose entry for it was retired with it.
-status: design
+status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-28T06:05:00.611Z'
+updatedAt: '2026-09-28T18:12:05.205Z'

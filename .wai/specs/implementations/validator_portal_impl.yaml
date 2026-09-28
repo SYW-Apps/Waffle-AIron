@@ -83,6 +83,6 @@ methods:
         type: call
         targetComponent: family_validator
         targetMethod: run
-status: design
+status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T17:15:52.186Z'
+updatedAt: '2026-09-28T18:11:54.946Z'

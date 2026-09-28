@@ -35,6 +35,6 @@ methods:
       - name: options
         type: ValidationOptions
         description: 'The tool call''s switches: family, recursive, subsystem'
-status: design
+status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T06:11:13.806Z'
+updatedAt: '2026-09-28T18:11:59.233Z'

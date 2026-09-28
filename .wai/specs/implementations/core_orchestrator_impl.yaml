@@ -313,13 +313,14 @@ methods:
           the member root (the same files; code is never moved). The moved subsystem is now keyed
           `<id>::<id>`; every other moved spec `<id>::<local>`. Each reference that now crosses the
           boundary is re-expressed so it keeps binding its old target — the parent's references into
-          the moved subtree (components, contracts and the types it takes along) as `<id>::<local>`,
-          the moved subtree's component and contract references back into the parent as `<parent
-          id>::<local>`, and a `super::` the moved subtree wrote as `<project id>::<local>` by the
-          project the scan bound it to — never as `super::`. A type the moved subtree names in the
-          parent resolves by name from any project and stays as written. A moved `super::` whose
-          target lies beyond the bound root's reach has no such text: it is refused before anything
-          moves (run from the top project, `wairon doctor --fix` rewrites it first)
+          the moved subtree (components, contracts and the types it takes along, when the whole
+          field names one) as `<id>::<local>`, the moved subtree's component and contract references
+          back into the parent as `<parent id>::<local>`, and a `super::` the moved subtree wrote as
+          `<project id>::<local>` by the project the scan bound it to — never as `super::`. A bare
+          type name that is not the whole field (a union member, a generic argument) stays as
+          written; step 12 imports it. A moved `super::` whose target lies beyond the bound root's
+          reach has no such text: it is refused before anything moves (run from the top project,
+          `wairon doctor --fix` rewrites it first)
         type: local
       - stepNumber: 7
         description: >-
@@ -347,13 +348,33 @@ methods:
       - stepNumber: 10
         description: >-
           Re-point the parent L0 entries that re-exported the subsystem (`from: <subsystem>`) at the
-          member (`from: <alias>`) — restating what was already exported, never adding to it — and
-          drop the spec cache. The exports each side newly needs are left to `wairon doctor --fix`;
-          EXTERNAL_NOT_EXPORTED names them until then
+          member (`from: <alias>`), restating what was already exported
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
       - stepNumber: 11
+        description: >-
+          Read the graph from the parent and, for every reference that crosses the new boundary and
+          names no public name of the other side, export it there under that side's own root: a type
+          through its own subsystem (`{ typeDef }`) and the project's L0, a component its subsystem
+          already publishes through the L0 (`{ from, component }`), each at the family's audience
+          (`project`) and only when missing. A component its subsystem does not publish is not
+          exported — making it public is a design decision, and EXTERNAL_NOT_EXPORTED keeps naming
+          it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 12
+        description: >-
+          Import by name each bare type the moving side no longer owns — the parent's union members
+          and generic arguments naming a moved type, the member's bare names of a parent type —
+          through the `use` of the alias that now supplies it (the parent's member alias, the
+          member's external for the parent), so the text stays as written and resolves in the
+          owner's gate; then drop the spec cache
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: importNames
+      - stepNumber: 13
         description: Subsystem externalized into a member project
         type: return
         outcome: externalized
@@ -1771,4 +1792,4 @@ methods:
         targetMethod: importNames
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T17:17:08.074Z'
+updatedAt: '2026-09-28T18:13:18.520Z'

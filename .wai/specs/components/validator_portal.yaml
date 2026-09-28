@@ -13,6 +13,6 @@ dependsOn:
   - spec_validator
   - family_validator
 portalType: Custom
-status: design
+status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T16:14:46.106Z'
+updatedAt: '2026-09-28T18:11:56.391Z'

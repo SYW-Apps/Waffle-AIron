@@ -525,6 +525,6 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_internalize_member
-status: design
+status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T06:11:19.904Z'
+updatedAt: '2026-09-28T18:12:04.758Z'

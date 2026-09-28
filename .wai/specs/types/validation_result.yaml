@@ -20,9 +20,11 @@ fields:
   - name: hint
     type: string
     description: >-
-      The owner's gate only: one line, present when the project declares externals, saying that
-      `validate --family` composes them against their live producers — the gate itself judged them
-      against the pins alone.
+      One line, never a finding. The owner's gate: present when the project declares externals,
+      saying that `validate --family` composes them against their live producers — the gate itself
+      judged them against the pins alone. A family run: present when externals were left out because
+      their producers lie outside the run's reach, counting them and naming `validate --family` from
+      the project that declares them.
     optional: true
   - name: projects
     type: ProjectVerdict[]
@@ -33,4 +35,4 @@ fields:
 methods: []
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-28T06:02:07.715Z'
+updatedAt: '2026-09-28T18:11:46.221Z'

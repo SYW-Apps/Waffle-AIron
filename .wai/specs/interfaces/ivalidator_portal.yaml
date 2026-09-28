@@ -138,6 +138,6 @@ methods:
         description: >-
           The run's switches; `family` makes the walk up explicit, a numeric `recursive` bounds the
           member depth
-status: design
+status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T16:08:13.340Z'
+updatedAt: '2026-09-28T18:11:55.461Z'

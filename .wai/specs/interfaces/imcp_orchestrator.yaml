@@ -307,6 +307,6 @@ methods:
         type: string
         description: What the member is to this project
         optional: true
-status: design
+status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-28T06:11:21.100Z'
+updatedAt: '2026-09-28T18:12:03.763Z'

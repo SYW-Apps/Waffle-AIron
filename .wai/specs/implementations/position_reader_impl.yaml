@@ -1,7 +1,8 @@
 id: position_reader_impl
 name: Position Reader Implementation
-description: 'The positional match, pure. Planned home: src/commands/position-reader.ts (not written yet).'
+description: The positional match, pure, in src/commands/position-reader.ts.
 contract: iposition_reader
+sourcePath: src/commands/position-reader.ts
 methods:
   - name: match
     narrative:
@@ -31,8 +32,10 @@ methods:
       - stepNumber: 6
         label: bare
         description: >-
-          Look the name's key up among the OTHER projects' public names; with no hit, among the
-          types they own that no table exports
+          Look the name's key up among the OTHER projects: their public names and the types they own
+          that no table exports, together — a project holding both counts once, by its public name.
+          The two tie-break rules need both kinds in one candidate set: already-exported can only
+          choose between a project that exports the name and one that merely owns it
         type: local
       - stepNumber: 7
         description: >-
@@ -51,6 +54,6 @@ methods:
         description: Answer the matches in scan order
         type: return
         outcome: PositionalMatch[]
-status: design
+status: complete
 createdAt: '2026-09-28T16:09:37.950Z'
-updatedAt: '2026-09-28T16:22:16.348Z'
+updatedAt: '2026-09-28T18:12:31.393Z'

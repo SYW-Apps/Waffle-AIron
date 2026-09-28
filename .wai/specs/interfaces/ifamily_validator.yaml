@@ -36,11 +36,12 @@ methods:
       producer whose canonical contract changed while nothing used changed is EXTERNAL_DRIFTED
       (notice; prose never drifts); a use that cannot be compared — unpinned, used but not in the
       lock, an unreachable producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. An
-      external whose producer is out of reach is not composed; it is returned as not selected. Each
-      finding's severity is the project's own rules.sddRuleSeverity override, else the code's
-      default: the verdict on a project's edge is tuned by that project, as its gate is.
-    signature: 'compose(project: string): ValidationIssue[]'
-    returns: ValidationIssue[]
+      external whose producer is out of reach is not composed; it is returned as not selected,
+      beside the findings, for the run's hint. Each finding's severity is the project's own
+      rules.sddRuleSeverity override, else the code's default: the verdict on a project's edge is
+      tuned by that project, as its gate is.
+    signature: 'compose(project: string): ExternalComposition'
+    returns: ExternalComposition
     params:
       - name: project
         type: string
@@ -107,6 +108,6 @@ methods:
       - code: PROJECT_ID_AMBIGUOUS
         severity: warning
         summary: 'A member has no usable id: its name yields no slug, or its declared id breaks the grammar'
-status: design
+status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-09-28T16:21:31.510Z'
+updatedAt: '2026-09-28T18:11:33.129Z'

@@ -24,5 +24,6 @@ fields:
     description: Today's findings the report cannot attribute to stage 4 — counted, never explained away
     optional: false
 methods: []
+sourcePath: src/commands/verdict-changes.ts
 createdAt: '2026-09-28T06:15:22.082Z'
-updatedAt: '2026-09-28T06:15:22.084Z'
+updatedAt: '2026-09-28T18:12:37.014Z'

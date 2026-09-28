@@ -39,6 +39,6 @@ methods:
         description: Every type the family top's scan loaded, keyed by project
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-09-28T16:09:32.534Z'
-updatedAt: '2026-09-28T16:22:14.091Z'
+updatedAt: '2026-09-28T18:12:32.093Z'

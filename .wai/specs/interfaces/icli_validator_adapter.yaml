@@ -76,6 +76,6 @@ methods:
         description: >-
           What this run may vary, as the command's flags resolved it; `family` when --family was
           given
-status: design
+status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T06:10:27.166Z'
+updatedAt: '2026-09-28T18:11:57.911Z'

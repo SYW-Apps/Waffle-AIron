@@ -33,5 +33,6 @@ fields:
       difference in totals attributed to the upgrade
     optional: false
 methods: []
+sourcePath: src/commands/verdict-changes.ts
 createdAt: '2026-09-28T06:15:25.650Z'
-updatedAt: '2026-09-28T06:15:25.652Z'
+updatedAt: '2026-09-28T18:12:38.758Z'
