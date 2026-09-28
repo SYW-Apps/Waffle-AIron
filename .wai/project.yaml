@@ -252,7 +252,7 @@ rules:
             covers:
               - '4:cli_validator_adapter.validateRegistry'
               - '5:cli_validator_adapter.validateProjectConfig'
-              - '6:cli_validator_adapter.validateSddTree'
+              - '6:cli_validator_adapter.validateProject'
       # 80 finding(s), 106 unit(s).
       - kind: drift
         why: >-
@@ -610,12 +610,12 @@ rules:
             spec: spec_validator_impl
             at: 'resolveThroughParent'
             covers:
-              - 'validator_portal.validateSddTree'
+              - 'validator_portal.validateProject'
           - code: UNDECLARED_COLOCATED_CALL
             spec: spec_validator_impl
             at: 'validateAsComplete'
             covers:
-              - 'validator_portal.validateSddTree'
+              - 'validator_portal.validateProject'
           - code: UNDECLARED_COLOCATED_CALL
             spec: surface_orchestrator_impl
             at: 'getSnapshot'
@@ -654,7 +654,7 @@ rules:
               - 'user_store.replaceAll'
           - code: UNDECLARED_COLOCATED_CALL
             spec: validator_portal_impl
-            at: 'validateSddTree'
+            at: 'validateProject'
             covers:
               - 'spec_validator.resolveThroughParent'
           - code: UNDECLARED_COLOCATED_CALL
