@@ -10,8 +10,8 @@ import type { ProjectIdentity } from '../../../models/index.js';
 // its configuration against the id its lock recorded (project_config.identity)
 // and hands it over in ctx.projectIdentity; each problem kind the identity
 // names becomes one finding. There is no identity to judge when the root has no
-// readable configuration, or on the run that is the parent's verdict on a
-// chained child — that run judges the child's specs, not the parent's identity.
+// readable configuration. A member's id is the family run's to judge
+// (family_validator.checkMembers), never this rule's.
 //
 // The findings name no spec: the identity lives in .wai/project.yaml, which is
 // configuration, not a spec. A project tunes them through
@@ -30,34 +30,11 @@ export const projectIdentityRule: SddRule = {
   check(ctx) {
     // Step 1: the identity the validator resolved.
     const identity = ctx.projectIdentity;
-    // Steps 2-3: no identity of the root's own to judge — go on to the family's.
+    // Steps 2-3: no identity of the root's own to judge.
     if (identity) judgeOwnIdentity(ctx, identity);
-    // Steps 10-12: the family's identity problems, from the project graph.
-    for (const problem of ctx.projectFamily?.problems ?? []) {
-      if (problem.kind === 'defaulted') {
-        const member = problem.projects[0];
-        ctx.addIssue(
-          'notice',
-          'PROJECT_ID_DEFAULTED',
-          `The member project keyed "${member}" declares no id in its .wai/project.yaml: ${problem.detail}. Declare \`id: ${problem.id}\` there — its alias, the name the family already knows it by (\`doctor --fix\` writes it).`,
-          member,
-        );
-      } else if (problem.kind === 'id-collision') {
-        ctx.addIssue(
-          'error',
-          'PROJECT_ID_COLLISION',
-          `Two members of one family resolve to the id "${problem.id}": ${problem.detail} — one project declared twice. A project is contained once: to use one project in two roles, keep one member and let the other consumers declare it under \`externals\`; if they are different projects, give each its own id in its .wai/project.yaml.`,
-        );
-      } else if (problem.kind === 'no-id') {
-        ctx.addIssue(
-          'warning',
-          'PROJECT_ID_AMBIGUOUS',
-          `${problem.detail[0].toUpperCase()}${problem.detail.slice(1)}. A project id is lower-case letters, digits, "-", "_" and ".", starting and ending with a letter or a digit — declare one in its .wai/project.yaml.`,
-          problem.projects[0],
-        );
-      }
-    }
-    // Step 13: judged.
+    // The family half (a member's defaulted or missing id, two members on
+    // one id) is a family check since stage 4: family_validator.checkMembers.
+    // Step 10: judged.
   },
 };
 

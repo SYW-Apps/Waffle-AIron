@@ -10,7 +10,7 @@ import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { saveSnapshot } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
-import { validateProject, validateAsComplete, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, validateFamily, validateAsComplete, type ValidationResult } from '../../src/core/validation.js';
 import { ChainingMigrationRefusedError, DoctorOptionsError } from '../../src/utils/errors.js';
 import { plan, apply, isEmpty, blocked } from '../../src/commands/chaining-migration.js';
 import { runDoctor } from '../../src/commands/doctor.js';
@@ -219,10 +219,16 @@ describe('stage 2c — the chaining migration', () => {
   it('property: defaulted-id-is-stable — after apply every id is declared, equal to the plan\'s, and PROJECT_ID_DEFAULTED is gone', () => {
     const f = family();
     const planned = at(f.root, () => plan());
-    expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_DEFAULTED')).toHaveLength(3);
+    // Stage 4: the root's own gate judges its own id; its members' ids are the
+    // family run's (family_validator.checkMembers), each naming its alias.
+    expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_DEFAULTED')).toHaveLength(1);
+    const memberLevel = (res: ValidationResult): string[] => res.issues
+      .filter((i) => i.code === 'PROJECT_ID_DEFAULTED' && i.message.includes('member project keyed')).map((i) => i.project ?? '-').sort();
+    expect(memberLevel(at(f.root, () => validateFamily({})))).toHaveLength(2);
     const report = at(f.root, () => apply(planned));
     expect(report.applied).toBe(true);
     expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_DEFAULTED', 'PROJECT_ID_AMBIGUOUS', 'PROJECT_ID_CHANGED')).toEqual([]);
+    expect(codesOf(at(f.root, () => validateFamily({})), 'PROJECT_ID_DEFAULTED', 'PROJECT_ID_AMBIGUOUS', 'PROJECT_ID_CHANGED', 'PROJECT_ID_COLLISION')).toEqual([]);
     for (const p of planned.projects) expect(idOf(p.directory)).toBe(p.id);
   });
 

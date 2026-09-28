@@ -1592,6 +1592,12 @@ export interface ExternalStatus {
   drifted?: boolean;
   uses: ExternalUseStatus[];
   detail?: string;
+  /**
+   * True when the producer's root lies outside the request's reach and was
+   * therefore not read: a family run that narrowed the reach to its selection
+   * counts it in its hint rather than as a comparison that failed.
+   */
+  outOfReach?: boolean;
 }
 
 /** external_listing — one row of `wairon externals list`. */

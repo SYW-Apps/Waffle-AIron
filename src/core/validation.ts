@@ -29,6 +29,8 @@ import {
   exportUsage,
 } from './adapters/validator-core.js';
 import { listSnapshots, listPinnedExternals } from './adapters/validator-surfaces.js';
+// family_validator: the family run the portal forwards validateFamily to.
+import * as familyValidator from './family-validation.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes } from './rules/repository.js';
 
@@ -155,11 +157,37 @@ export interface ValidationResult {
   valid: boolean;
   issues: ValidationIssue[];
   /**
-   * The owner's gate only: one line, present when the project declares
-   * externals, saying that `validate --family` composes them against their
-   * live producers — the gate itself judged them against the pins alone.
+   * One line, never a finding. The owner's gate: present when the project
+   * declares externals, saying that `validate --family` composes them against
+   * their live producers. A family run: present when externals were left out
+   * because their producers lie outside the run's reach.
    */
   hint?: string;
+  /**
+   * A family run only: one line per selected project (the root first, then its
+   * members in scan order) with its own gate's totals. Absent on the owner's
+   * gate.
+   */
+  projects?: ProjectVerdict[];
+}
+
+/**
+ * project_verdict — one project's line in a family run: which project it is,
+ * where it lives, and the totals of its own gate's verdict, which the family
+ * run carries verbatim under the project's key.
+ */
+export interface ProjectVerdict {
+  /** The project's key in the family root's scan ('' for the root itself). */
+  key: string;
+  /** The project's effective id. */
+  id?: string;
+  /** The project's root directory. */
+  directory: string;
+  /** Whether its own gate found no error. */
+  valid: boolean;
+  errors: number;
+  warnings: number;
+  notices: number;
 }
 
 function issue(
@@ -313,17 +341,6 @@ export interface ValidationOptions {
    * other project runs its owner's gate (validation_options.selectsFamily).
    */
   family?: boolean;
-}
-
-/**
- * validation_options.selectsFamily — whether these options ask for the family
- * run rather than the owner's gate: true when `family` is set, or when the
- * bound project declares members and `recursive` is not false. The one reading
- * of the flags every caller shares, so the choice cannot drift between them.
- */
-export function selectsFamily(options: ValidationOptions | undefined, declaresMembers: boolean): boolean {
-  if (options?.family) return true;
-  return declaresMembers && options?.recursive !== false;
 }
 
 /**
@@ -651,6 +668,18 @@ function settledStatusBearing(loaded: {
  */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
   return validateProject({ ...(options ?? {}), treatAllAsComplete: true });
+}
+
+/**
+ * ivalidator_portal.validateFamily — the family run: every selected project's
+ * own gate verbatim under its project key, the composition of each project's
+ * externals against their live producers, and the family checks. `wairon
+ * validate` at a project that declares members, and `--family` anywhere, call
+ * this; the owner's gate is validateProject. It forwards to the family
+ * validator, which keeps the owner's gate a pure function of one project.
+ */
+export function validateFamily(options: ValidationOptions): ValidationResult {
+  return familyValidator.run(options);
 }
 
 /**

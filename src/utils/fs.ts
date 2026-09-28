@@ -103,6 +103,12 @@ interface RequestScope {
   root: string;
   topRoot?: string;
   parentReach?: boolean;
+  /**
+   * True when the caller narrowed the ceiling itself (a family run that did not
+   * ask for --family): the family may continue above topRoot, so a climb that
+   * stops there has not read the family whole.
+   */
+  narrowed?: boolean;
 }
 const requestRootStore = new AsyncLocalStorage<RequestScope>();
 
@@ -128,11 +134,14 @@ export function runWithProjectRoot<T>(dir: string, fn: () => T): T {
 /** Bind a hosted request's root together with its reach (see RequestScope). */
 export function runWithProjectBinding<T>(
   dir: string,
-  reach: { topRoot: string; parentReach: boolean },
+  reach: { topRoot: string; parentReach: boolean; narrowed?: boolean },
   fn: () => T,
 ): T {
   return requestRootStore.run(
-    { root: path.resolve(dir), topRoot: path.resolve(reach.topRoot), parentReach: reach.parentReach },
+    {
+      root: path.resolve(dir), topRoot: path.resolve(reach.topRoot), parentReach: reach.parentReach,
+      ...(reach.narrowed ? { narrowed: true } : {}),
+    },
     fn,
   );
 }
@@ -143,10 +152,10 @@ export function getRequestProjectRoot(): string | null {
 }
 
 /** The current hosted request's reach, or null outside a hosted request binding. */
-export function getRequestParentReach(): { topRoot?: string; parentReach: boolean } | null {
+export function getRequestParentReach(): { topRoot?: string; parentReach: boolean; narrowed?: boolean } | null {
   const scope = requestRootStore.getStore();
   if (!scope || scope.parentReach === undefined) return null;
-  return { topRoot: scope.topRoot, parentReach: scope.parentReach };
+  return { topRoot: scope.topRoot, parentReach: scope.parentReach, ...(scope.narrowed ? { narrowed: true } : {}) };
 }
 
 /** Override the project root. Pass an absolute path to the dir containing .wai/,

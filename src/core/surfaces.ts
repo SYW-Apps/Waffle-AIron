@@ -568,14 +568,14 @@ export function listFamilyPins(): FamilyPin[] {
 
 // ---------------------------------------------------------------------------
 // Declared externals (surface_orchestrator pinExternals / getExternalsStatus /
-// listExternals) â€” `wairon externals` and the sdd_pin_externals /
+// listExternals) — `wairon externals` and the sdd_pin_externals /
 // sdd_get_externals_status tools. The core binds each declared external to its
 // producer (the surfaces plane never walks the family itself); this plane
 // projects the producer's export table, pins it under .wai/externals/ and
 // records in the lock the digest of every member the consumer uses.
 // ---------------------------------------------------------------------------
 
-/** The code on every comparison that could not be made â€” never a pass. */
+/** The code on every comparison that could not be made — never a pass. */
 const CHECK_UNAVAILABLE = 'EXTERNAL_CHECK_UNAVAILABLE';
 
 /** Why nothing outside the family can be used or compared in stage 2. */
@@ -584,10 +584,13 @@ const OUTSIDE_FAMILY = 'no stage-2 reference form reaches a project outside the 
 /** An alias the project does not declare, named to pin: refused before anything is written. */
 export class UnknownExternalAliasError extends Error {
   constructor(unknown: string[], declared: string[]) {
-    super(`Unknown external alias${unknown.length > 1 ? 'es' : ''} ${unknown.map((a) => `"${a}"`).join(', ')} â€” this project declares ${declared.length ? declared.map((a) => `"${a}"`).join(', ') : 'no externals'} in .wai/project.yaml.`);
+    super(`Unknown external alias${unknown.length > 1 ? 'es' : ''} ${unknown.map((a) => `"${a}"`).join(', ')} — this project declares ${declared.length ? declared.map((a) => `"${a}"`).join(', ') : 'no externals'} in .wai/project.yaml.`);
     this.name = 'UnknownExternalAliasError';
   }
 }
+
+/** Why a producer was not read: its root lies outside the request's reach. */
+const OUT_OF_REACH = 'its root is outside the request\'s reach';
 
 /** Whether `target` is `dir` or lies under it. */
 function isWithinDir(dir: string, target: string): boolean {
@@ -605,7 +608,7 @@ function producerUnreadable(directory: string | undefined): string | null {
   if (reach) {
     const bound = getProjectRoot();
     const ceiling = reach.parentReach ? reach.topRoot ?? bound : bound;
-    if (!isWithinDir(ceiling, directory)) return 'its root is outside the request\'s reach';
+    if (!isWithinDir(ceiling, directory)) return OUT_OF_REACH;
   }
   if (!fs.existsSync(directory)) return `its root ${directory} does not exist`;
   return null;
@@ -658,7 +661,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
   const pinned = externalsRepository.readSnapshot(external.alias);
   const snapshotChanged = !pinned || contentDigest(pinned) !== digest;
   if (snapshotChanged) externalsRepository.saveSnapshot(external.alias, snapshot);
-  // Step 14: the lock entry â€” `used` maps each used member to its digest.
+  // Step 14: the lock entry — `used` maps each used member to its digest.
   const { used, missing } = usedDigests(binding.usage, snapshot);
   const entry: ExternalLockEntry = { project: external.project, snapshot: `.wai/externals/${external.alias}.yaml`, digest, used };
   const entryChanged = canonicalize(lock.externals[external.alias] ?? null) !== canonicalize(entry);
@@ -679,7 +682,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
 }
 
 /**
- * surface_orchestrator.pinExternals â€” pin the bound project's declared
+ * surface_orchestrator.pinExternals — pin the bound project's declared
  * externals (the named aliases, else all) into .wai/externals/<alias>.yaml and
  * .wai/externals.lock.yaml. An alias the project does not declare is refused
  * before anything is written; an unresolved or unreachable producer is
@@ -689,7 +692,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
 export function pinExternals(aliases?: string[]): ExternalPin[] {
   // Step 1: the declared externals, each bound to its producer.
   const bindings = resolveExternals();
-  // Steps 2-4: the aliases asked for â€” an undeclared one refused before any write.
+  // Steps 2-4: the aliases asked for — an undeclared one refused before any write.
   const declared = bindings.map((b) => b.external.alias);
   const named = aliases && aliases.length > 0 ? aliases : undefined;
   const unknown = (named ?? []).filter((a) => !declared.includes(a));
@@ -725,7 +728,7 @@ export function pinExternals(aliases?: string[]): ExternalPin[] {
   return pins;
 }
 
-/** Compare every used member â€” the lock's, and the one the references use now â€” with the live snapshot. */
+/** Compare every used member — the lock's, and the one the references use now — with the live snapshot. */
 function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot): ExternalUseStatus[] {
   const uses: ExternalUseStatus[] = [];
   const locked = entry?.used ?? {};
@@ -742,20 +745,20 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
   }
   for (const use of usage?.used ?? []) {
     if (!(use.publicName in locked)) {
-      uses.push({ publicName: use.publicName, state: 'unlocked', detail: 'used now, but not in the lock â€” re-pin' });
+      uses.push({ publicName: use.publicName, state: 'unlocked', detail: 'used now, but not in the lock — re-pin' });
       continue;
     }
     for (const member of use.members) {
-      if (!(member in locked[use.publicName])) uses.push({ publicName: use.publicName, member, state: 'unlocked', detail: 'used now, but not in the lock â€” re-pin' });
+      if (!(member in locked[use.publicName])) uses.push({ publicName: use.publicName, member, state: 'unlocked', detail: 'used now, but not in the lock — re-pin' });
     }
   }
   for (const ref of usage?.unexported ?? []) {
-    uses.push({ member: ref.member, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: `"${ref.specId}" reaches "${ref.target}", which the producer does not export â€” nothing to compare` });
+    uses.push({ member: ref.member, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: `"${ref.specId}" reaches "${ref.target}", which the producer does not export — nothing to compare` });
   }
   return uses;
 }
 
-/** Every locked used member â€” or, when none is locked, the external itself â€” as unavailable. */
+/** Every locked used member — or, when none is locked, the external itself — as unavailable. */
 function unavailableUses(entry: ExternalLockEntry | undefined, reason: string): ExternalUseStatus[] {
   const uses: ExternalUseStatus[] = [];
   for (const [publicName, members] of Object.entries(entry?.used ?? {})) {
@@ -788,8 +791,14 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
     }
   }
   if (!live) {
-    // Step 10: nothing could be compared â€” never a pass.
-    return { ...base, reachable: false, stale: false, uses: unavailableUses(entry, reason!), detail: reason! };
+    // Step 10: nothing could be compared - never a pass. A producer whose root
+    // lies outside the request's reach, or one the climb could not look for
+    // because the reach stopped it, was never read: it is out of reach.
+    const outOfReach = reason === OUT_OF_REACH || (!binding.reachable && external.sourceKind !== 'family');
+    return {
+      ...base, reachable: false, stale: false, uses: unavailableUses(entry, reason!), detail: reason!,
+      ...(outOfReach ? { outOfReach: true } : {}),
+    };
   }
   // Step 8: a producer outside the family has no used members to compare.
   const drifted = entry !== undefined ? contentDigest(live) !== entry.digest : undefined;
@@ -807,7 +816,7 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
 }
 
 /**
- * surface_orchestrator.getExternalsStatus â€” each declared external's pin
+ * surface_orchestrator.getExternalsStatus — each declared external's pin
  * compared with its live producer at signature level (decision 19). What
  * cannot be compared is EXTERNAL_CHECK_UNAVAILABLE, never a pass. It only
  * reports: it writes nothing and fails nothing.
@@ -822,7 +831,7 @@ export function getExternalsStatus(): ExternalStatus[] {
 }
 
 /**
- * surface_orchestrator.listExternals â€” each declared external with how it
+ * surface_orchestrator.listExternals — each declared external with how it
  * resolves, the audience the consumer sees and the lock's entry when pinned.
  * No live comparison.
  */
