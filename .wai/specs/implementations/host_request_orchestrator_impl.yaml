@@ -343,8 +343,9 @@ methods:
       - stepNumber: 6
         description: >-
           Resolve the full authorized binding through the project repository — the root to bind (the
-          mounted chained-child root for a subproject-qualified narrowing/selector), the TOP project
-          id (permission + audit anchor), and the bound mount chain; cross-project access rejected
+          member root for a member-qualified narrowing/selector, one member alias per hop), the TOP
+          project id (permission + audit anchor), and the bound member chain; cross-project access
+          rejected
         type: call
         targetComponent: project_repository
         targetMethod: resolveBinding
@@ -362,23 +363,25 @@ methods:
         description: >-
           Bind the request-scoped project root together with the request's REACH: the top project's
           root and whether the credential is authorized for that top project. A credential narrowed
-          to a chained child binds the child root with no parent reach, so validation never resolves
-          the child's verdict through the parent tree — which would tell the child what its parent
-          contains.
+          to a member binds the member root with no parent reach, so validation never resolves the
+          member's verdict through the parent tree (resolveThroughParent, kept until stage 4) —
+          which would tell the member what its parent contains; a credential that reaches the top
+          project keeps the resolve-through-parent verdict for a bound member, found through the
+          parent's member declarations.
         type: local
       - stepNumber: 10
         description: >-
-          Confine a subproject-qualified credential by the called tool's declared scope. A
-          TREE-scoped tool — every scoped spec tool (the sdd_rename_ tools among them), lock, and
-          the two tree transfer tools — acts on the bound child tree (lock and transfer receive the
-          qualifier). A RECORD-scoped tool acts on the project record or its repository, or answers
-          for the hosted project's relations to other projects, so serving it would let a token
-          scoped to one chained child reach the whole parent — the qualifier would narrow nothing. A
-          tool with no declared scope is treated as record-scoped: confinement fails closed, so a
-          tool added later is refused under a narrowed credential until it declares its scope.
+          Confine a member-qualified credential by the called tool's declared scope. A TREE-scoped
+          tool — every scoped spec tool (the sdd_rename_ tools among them), lock, and the two tree
+          transfer tools — acts on the bound member tree (lock and transfer receive the qualifier).
+          A RECORD-scoped tool acts on the project record or its repository, or answers for the
+          hosted project's relations to other projects, so serving it would let a token scoped to
+          one member reach the whole parent — the qualifier would narrow nothing. A tool with no
+          declared scope is treated as record-scoped: confinement fails closed, so a tool added
+          later is refused under a narrowed credential until it declares its scope.
         type: branch
         condition: >-
-          the resolved binding carries a subproject qualifier AND the called tool is not declared
+          the resolved binding carries a member qualifier AND the called tool is not declared
           TREE-scoped (a record-scoped tool — initialize, approval status, await approval, the six
           project-ops tools, the four landscape discovery tools — or a tool with no declared scope)
         onFalseStep: 12
@@ -410,14 +413,14 @@ methods:
         description: >-
           Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_
           (sdd_get_externals_status among them), or when it is one of the explicitly listed read
-          tools — sdd_list_external_interfaces and the topology reads listAgents, getAgent,
-          listDomains, validateTopology and getProjectConfig — requiring project:read; ANY other
-          tool — the explicit write prefixes
+          tools — the topology reads listAgents, getAgent, listDomains, validateTopology and
+          getProjectConfig — requiring project:read; ANY other tool — the explicit write prefixes
           (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_/sdd_rename_/sdd_pin_),
           AND any unrecognized or newly added name — is treated as a write requiring project:write
-          (fail closed: an unknown tool never falls through to read-level gating, and a rename tool
-          added later is a write by its prefix rather than by a hand-kept list). Every explicit read
-          and every explicit write prefix declares scope tree, so sdd_pin_externals and
+          (fail closed: an unknown tool never falls through to read-level gating, and a tool added
+          later is a write by its prefix rather than by a hand-kept list — sdd_add_member,
+          sdd_move_member and sdd_internalize_member among them). Every explicit read and every
+          explicit write prefix declares scope tree, so sdd_pin_externals and
           sdd_get_externals_status act on the bound (possibly narrowed) tree
         type: local
       - stepNumber: 15
@@ -477,4 +480,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-26T17:50:07.671Z'
+updatedAt: '2026-09-27T11:01:01.925Z'

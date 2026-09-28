@@ -11,26 +11,35 @@ methods:
       `name` slugified) plus an L0 system spec named `name`.
     signature: 'provisionProject(name: string): void'
     returns: void
-  - name: moveSubsystemProject
+  - name: moveMember
     description: >-
-      Write path for relocating an external subsystem (wairon subsystem move /
-      sdd_move_subsystem_project): move the subproject directory and update its projectPath link.
-    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+      Published write: relocate a member's directory and point its `members` entry there (a legacy
+      mount is moved into `members` first). Routed through the core orchestrator.
+    signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The new root, relative to the bound project root
   - name: externalizeSubsystem
     description: >-
-      Write path for externalizing an internal subsystem into a standalone subproject (wairon
-      subsystem externalize / sdd_externalize_subsystem): move its spec subtree out, mount it via
-      projectPath, and rewrite cross-subsystem references.
-    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+      Published write: turn an internal subsystem into a member project declared in `members`.
+      Routed through the core orchestrator.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
     returns: void
-  - name: internalizeSubsystem
+  - name: internalizeMember
     description: >-
-      Write path for internalizing an external subsystem back into the parent tree (wairon subsystem
-      internalize / sdd_internalize_subsystem): move its spec subtree back, drop projectPath, delete
-      the child project, and rewrite references.
-    signature: 'internalizeSubsystem(subsystemId: string): void'
+      Published write: take a single-subsystem member back into the bound project and remove its
+      declaration. Routed through the core orchestrator.
+    signature: 'internalizeMember(alias: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
   - name: importSpecTree
     description: >-
       Imports a .waitree archive into a project root under an explicit import policy, backing up any
@@ -47,7 +56,7 @@ methods:
       Write path for completing a project's bootstrap non-destructively (wairon init, the generate
       cascade): the default configuration and the L0 system spec, each only when absent. A
       configuration it writes declares the given id, else the chosen name slugified.
-    signature: 'ensureProjectInitialized(fallbackName: string, id?: string): ProjectBootstrap'
+    signature: 'ensureProjectInitialized(fallbackName: string, id?: string, vision?: string): ProjectBootstrap'
     returns: ProjectBootstrap
     params:
       - name: fallbackName
@@ -58,6 +67,10 @@ methods:
         description: >-
           The project id a configuration written here declares — a chained child's mount subsystem
           id; omitted, the chosen name slugified
+        optional: true
+      - name: vision
+        type: string
+        description: The vision an L0 written here carries; omitted, a placeholder naming the project
         optional: true
     guarantees:
       - idempotent
@@ -140,6 +153,53 @@ methods:
     params:
       - name: projectRoot
         type: string
+  - name: moveMountToMembers
+    description: >-
+      Published write: move one legacy L1 mount of the bound project into its `members` (path and
+      description), deleting the L1 document; idempotent. Routed through the core orchestrator.
+      Returns whether it wrote.
+    signature: 'moveMountToMembers(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id
+    guarantees:
+      - idempotent
+  - name: normalizeReferences
+    description: >-
+      Published write: re-save one spec with every reference in its canonical stage-3 form, targets
+      unchanged; idempotent. Routed through the core orchestrator. Returns whether the stored text
+      changed.
+    signature: 'normalizeReferences(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+    guarantees:
+      - idempotent
+  - name: createMember
+    description: >-
+      Published write: create a member of the bound project — scaffold its project (configuration
+      with the alias as its id, L0), each part only when absent, and declare it in `members`. Never
+      writes the L1 mount form. Routed through the core orchestrator.
+    signature: 'createMember(alias: string, path: string, description?: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias and new project id
+      - name: path
+        type: string
+        description: The member's root, relative to the bound project root
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-09-26T15:27:04.032Z'
+updatedAt: '2026-09-27T16:07:40.389Z'

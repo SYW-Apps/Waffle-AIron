@@ -127,113 +127,153 @@ methods:
         targetComponent: architecture_diagrams
         targetMethod: render
     conformance: 'off'
-  - name: createChainedSubsystem
+  - name: createMember
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Guard that the subsystem carries a projectPath
+        description: Guard the alias and the path
         type: branch
-        condition: subsystem.projectPath is missing or empty
+        condition: the alias is outside [a-z0-9-_]+ or the path is empty
         onFalseStep: 3
       - stepNumber: 2
-        description: 'Reject: a chained subsystem requires a projectPath'
+        description: 'Reject: a member needs an alias of [a-z0-9-_]+ and a path'
         type: throw
-        error: projectPath is required to create a chained subsystem
+        error: an alias and a path are required to create a member
       - stepNumber: 3
-        description: Persist the parent L1 subsystem spec (with projectPath) at the bound project root
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
+        description: Resolve the member directory by joining the bound project root with the path
+        type: local
       - stepNumber: 4
         description: >-
-          Resolve the child project directory by joining the bound project root with
-          subsystem.projectPath
-        type: local
-      - stepNumber: 5
-        description: >-
-          Containment guard: reject a projectPath that escapes the owning project. The child project
-          directory must resolve to a location strictly within the bound project root
+          Containment guard: reject a path that escapes the declaring project. The member directory
+          must resolve strictly within the bound project root, lexically and through links
         type: branch
         condition: >-
           the resolved child project directory is not contained within the bound project root (an
           absolute path or a ../-escaping projectPath)
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject a projectPath that resolves outside the project root
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject a path that resolves outside the project root
         type: throw
-        error: projectPath must resolve within the project root
-      - stepNumber: 7
+        error: a member path must resolve within the project root
+      - stepNumber: 6
         description: >-
-          Scope the project root to the child directory, so the next reads and writes address the
-          child project
+          Scope the project root to the member directory, so the next reads and writes address the
+          member project
         type: local
-      - stepNumber: 8
-        description: Check whether the child already has a configuration
+      - stepNumber: 7
+        description: Check whether the member already has a configuration
         type: call
         targetComponent: project_config_repository
         targetMethod: exists
-      - stepNumber: 9
+      - stepNumber: 8
         description: 'Complete only what is missing: an existing configuration is never overwritten'
         type: branch
-        condition: the child has no configuration
-        onFalseStep: 11
-      - stepNumber: 10
+        condition: the member has no configuration
+        onFalseStep: 10
+      - stepNumber: 9
         description: >-
-          Write the child's default configuration, named after the child and declaring the mount's
-          subsystem id (its local segment) as the child's project id, through the project config
-          Repository
+          Write the member's default configuration, named after the alias (or the display name
+          given) and declaring the alias as its project id, through the project config Repository
         type: call
         targetComponent: project_config_repository
         targetMethod: create
-      - stepNumber: 11
+      - stepNumber: 10
         label: bootstrap_l0
-        description: 'Keep an existing spec tree intact: bootstrap an L0 only for a child that has none'
+        description: 'Keep an existing spec tree intact: bootstrap an L0 only for a member that has none'
         type: branch
-        condition: the child has no L0 system spec
-        onFalseStep: 13
-      - stepNumber: 12
+        condition: the member has no L0 system spec
+        onFalseStep: 12
+      - stepNumber: 11
         description: >-
-          Persist the child's bootstrap L0 system spec, creating its specs directory, so a fresh
-          child becomes runnable standalone
+          Persist the member's bootstrap L0 system spec, creating its specs directory — its vision
+          is the description given, else one line naming it a member of this project — so a fresh
+          member becomes runnable standalone
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 13
-        description: Restore the parent root scope
+      - stepNumber: 12
+        description: Restore the declaring project's scope
         type: local
+      - stepNumber: 13
+        label: declare
+        description: >-
+          Declare the member in the declaring project's `members` — the path as given, the
+          description when one is given — through the project config Repository; an equal
+          declaration writes nothing and a different one under the alias is refused. No L1 spec is
+          written: a member carries no content in its parent
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
       - stepNumber: 14
-        description: Chained subsystem wired and child project ensured
+        description: Member declared and its project ensured
         type: return
-        outcome: chained subsystem created
+        outcome: member created
     conformance: 'off'
-  - name: moveSubsystemProject
+  - name: moveMember
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Load the target subsystem spec
+        description: >-
+          Read the project graph of the bound root: the member the alias declares, with its
+          declaration form and path
         type: call
         targetComponent: spec_loader
-        targetMethod: loadSubsystemSpec
+        targetMethod: graph
       - stepNumber: 2
-        description: Guard that the subsystem is an external subproject
+        description: Guard that the alias declares a member
         type: branch
-        condition: the subsystem has no existing projectPath
+        condition: the bound root declares no member under the alias
         onFalseStep: 4
       - stepNumber: 3
-        description: 'Reject: the subsystem is not an external subproject'
+        description: 'Reject: the alias names no member'
         type: throw
-        error: subsystem has no projectPath to move (not an external subproject)
+        error: no member is declared under that alias
       - stepNumber: 4
-        description: >-
-          Resolve the old and new child directories from the bound project root; reject if the
-          target already exists; relocate the subproject directory on disk and set the subsystem's
-          projectPath to the new path
-        type: local
+        label: legacy
+        description: Is the member still declared in the legacy L1 form?
+        type: branch
+        condition: the member is declared by a legacy L1 mount
+        onFalseStep: 9
       - stepNumber: 5
-        description: Persist the subsystem spec with its updated projectPath
+        label: carries-fields
+        description: Does the legacy mount carry more than a path and a description?
+        type: branch
+        condition: >-
+          the mount's L1 spec carries a field beyond projectPath and description that its member
+          would have to hold: a non-empty publicInterfaces or trustedLinks, a lint allow, a
+          lifecycle, profile, targetLanguage, designDepth or ext
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Refuse before anything is written, naming the fields and pointing at `wairon doctor
+          --fix`, whose chaining migration carries them into the member plan-first — a move never
+          drops a field
+        type: throw
+        error: the legacy mount carries fields a move cannot carry
+      - stepNumber: 7
+        label: declare
+        description: >-
+          Move the declaration into `members` first (its current path, the mount's description), so
+          wairon never rewrites the L1 form
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 8
+        description: Delete the L1 mount document
         type: call
         targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
+        targetMethod: deleteMount
+      - stepNumber: 9
+        label: relocate
+        description: >-
+          Resolve the old and new member directories from the bound project root under the
+          containment guard; reject a target that already exists; relocate the directory on disk
+        type: local
+      - stepNumber: 10
+        description: Point the `members` entry at the new path
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setMemberPath
     conformance: 'off'
   - name: externalizeSubsystem
     sourcePath: src/core/provision.ts
@@ -244,114 +284,174 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadSubsystemSpec
       - stepNumber: 2
-        description: Guard the subsystem exists and is currently internal
+        description: Guard the subsystem exists and is a subsystem
         type: branch
-        condition: the subsystem is missing or already has a projectPath (already external)
+        condition: the subsystem is missing, or is a legacy mount (a member declaration, not a subsystem)
         onFalseStep: 4
       - stepNumber: 3
-        description: 'Reject: cannot externalize a missing or already-external subsystem'
+        description: 'Reject: cannot externalize a missing subsystem or a member'
         type: throw
-        error: 'cannot externalize: subsystem is missing or already external'
+        error: 'cannot externalize: subsystem is missing or is already a member'
       - stepNumber: 4
         description: >-
-          With the project root scoped to the child directory at projectPath, write the child's
-          default configuration — declaring the externalized subsystem's id as the child's project
-          id — through the project config Repository
+          With the project root scoped to the member directory at the path (under the containment
+          guard), write the member's default configuration — declaring the externalized subsystem's
+          id as its project id — through the project config Repository
         type: call
         targetComponent: project_config_repository
         targetMethod: create
       - stepNumber: 5
-        description: >-
-          Persist the child's bootstrap L0 system spec (still scoped to the child root), then return
-          to the parent scope for the move
+        description: Persist the member's bootstrap L0 system spec (still scoped to the member root)
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
       - stepNumber: 6
         description: >-
           Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
-          implementations, and types) from the parent specs dir into the child specs dir,
-          re-expressing each moved implementation's file paths — sourcePath, each method's
-          sourcePath, simPath — relative to the child root (the same files; code is never moved)
+          implementations, and types) into the member's specs dir, re-expressing each moved
+          implementation's file paths — sourcePath, each method's sourcePath, simPath — relative to
+          the member root (the same files; code is never moved). The moved subsystem is now keyed
+          `<id>::<id>`; every other moved spec `<id>::<local>`. Each reference that now crosses the
+          boundary is re-expressed so it keeps binding its old target — the parent's references into
+          the moved subtree (components, contracts and the types it takes along) as `<id>::<local>`,
+          the moved subtree's component and contract references back into the parent as `<parent
+          id>::<local>`, and a `super::` the moved subtree wrote as `<project id>::<local>` by the
+          project the scan bound it to — never as `super::`. A type the moved subtree names in the
+          parent resolves by name from any project and stays as written. A moved `super::` whose
+          target lies beyond the bound root's reach has no such text: it is refused before anything
+          moves (run from the top project, `wairon doctor --fix` rewrites it first)
         type: local
       - stepNumber: 7
         description: >-
-          Compose a minimal parent mount for the subsystem: id + parentSystem + projectPath with an
-          empty public surface
-        type: local
+          Back in the parent's scope, declare the member in `members` under the subsystem id with
+          the path — no L1 mount is written
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
       - stepNumber: 8
-        description: Persist the parent mount
+        description: >-
+          Re-save every spec on either side whose references now cross the new boundary, targets
+          unchanged, so the writer spells each again from where it lives: the parent's references
+          into the member as `alias::name`, the member's references back into the parent as `<parent
+          id>::name`
         type: call
         targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
+        targetMethod: normalizeReferences
       - stepNumber: 9
         description: >-
-          Rewrite cross-subsystem references across the remaining parent specs (dependsOn, narrative
-          call targets, type refs) from bare ids to the subsystem-namespaced ids, and the moved
-          subtree's own outgoing references (to the parent's other subsystems and to other chained
-          projects) into super:: form
-        type: local
+          Under the member's scope, declare the parent as an external under the parent's id when the
+          moved specs reference it (the same declaration again writes nothing)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareExternal
       - stepNumber: 10
-        description: Invalidate the spec cache
-        type: local
+        description: >-
+          Re-point the parent L0 entries that re-exported the subsystem (`from: <subsystem>`) at the
+          member (`from: <alias>`) — restating what was already exported, never adding to it — and
+          drop the spec cache. The exports each side newly needs are left to `wairon doctor --fix`;
+          EXTERNAL_NOT_EXPORTED names them until then
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
       - stepNumber: 11
-        description: Subsystem externalized into a standalone subproject
+        description: Subsystem externalized into a member project
         type: return
         outcome: externalized
     conformance: 'off'
-  - name: internalizeSubsystem
+  - name: internalizeMember
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Load the target subsystem
+        description: >-
+          Read the project graph of the bound root: the member under the alias, its declaration
+          form, its subsystems, members and externals
         type: call
         targetComponent: spec_loader
-        targetMethod: loadSubsystemSpec
+        targetMethod: graph
       - stepNumber: 2
-        description: Guard the subsystem exists and is currently external
+        description: Guard the alias declares a member
         type: branch
-        condition: the subsystem is missing or has no projectPath (not external)
+        condition: the bound root declares no member under the alias
         onFalseStep: 4
       - stepNumber: 3
-        description: 'Reject: cannot internalize a missing or non-external subsystem'
+        description: 'Reject: the alias names no member'
         type: throw
-        error: 'cannot internalize: subsystem is missing or not external'
+        error: 'cannot internalize: no member is declared under that alias'
       - stepNumber: 4
-        description: Guard the subproject is a single flat subsystem matching the mount id
+        description: Guard the member can be taken in whole
         type: branch
-        condition: the subproject declares subsystems other than the mount id (a multi-subsystem system)
+        condition: >-
+          the member holds more than one subsystem, or declares members or externals of its own
+          other than the parent
         onFalseStep: 6
       - stepNumber: 5
-        description: 'Reject: the subproject is not a flat subsystem'
-        type: throw
-        error: 'cannot internalize: subproject is a multi-subsystem system, not a flat subsystem'
-      - stepNumber: 6
         description: >-
-          Move the subproject's spec subtree back under the parent subsystem folder, stripping the
-          namespace and re-expressing each moved implementation's file paths — sourcePath, each
-          method's sourcePath, simPath — relative to the parent root
-        type: local
+          Reject: a multi-subsystem member (stage 6) or one whose own members and externals would
+          have no home here
+        type: throw
+        error: >-
+          cannot internalize: the member is not a single subsystem, or declares members or externals
+          of its own
+      - stepNumber: 6
+        label: referenced
+        description: Does another project of the family reference the member?
+        type: branch
+        condition: >-
+          a project of the family other than the bound root and the member itself references the
+          member (the graph's cross-project references)
+        onFalseStep: 8
       - stepNumber: 7
-        description: Restore the parent subsystem spec from the child's realization, dropping projectPath
-        type: local
+        description: >-
+          Refuse before anything is written, listing each such reference (the project, the spec and
+          the text as written): internalizing would leave them naming a project that no longer
+          exists, and rewriting other projects is the family migration's job, named and dry-run
+          first
+        type: throw
+        error: 'cannot internalize: other projects of the family reference the member'
       - stepNumber: 8
-        description: Persist the internalized subsystem
+        label: take-in
+        description: >-
+          Delete its legacy L1 mount document first (false, writing nothing, for a member declared
+          in `members`), so the moved subsystem can take the folder the mount document held
         type: call
         targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
+        targetMethod: deleteMount
       - stepNumber: 9
-        description: Delete the child .wai project (project.yaml + specs)
+        description: >-
+          Move the member's spec subtree under the bound project's specs — its subsystem folder and
+          any project-level spec files beside it, refused before anything moves when one would land
+          on an existing file — its keys becoming local, and re-express each moved implementation's
+          file paths — sourcePath, each method's sourcePath, simPath — relative to the bound root.
+          Each reference that crossed the old boundary is re-expressed with the target the scan
+          bound it to before the move, so the re-save below keeps every target
         type: local
       - stepNumber: 10
         description: >-
-          Rewrite references across the parent specs from the namespaced ids back to bare ids, and
-          the moved subtree's super:: references back to their parent-local form
-        type: local
+          Remove the member from `members` (false, writing nothing, for a member declared in the
+          legacy form)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: removeMember
       - stepNumber: 11
-        description: Invalidate the spec cache
+        description: Delete the member's .wai project (project.yaml + specs)
         type: local
       - stepNumber: 12
-        description: Subsystem internalized back into the parent tree
+        description: >-
+          Re-save every spec that referenced across the old boundary, targets unchanged: the
+          parent's `alias::name` references and the moved specs' `<parent id>::name` references
+          become local ids
+        type: call
+        targetComponent: spec_loader
+        targetMethod: normalizeReferences
+      - stepNumber: 13
+        description: >-
+          Re-point the parent L0 entries that re-exported from the member (`from: <alias>`) at the
+          moved subsystem, and drop the spec cache
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 14
+        description: Member internalized into the bound project
         type: return
         outcome: internalized
     conformance: 'off'
@@ -536,22 +636,26 @@ methods:
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Read every spec file in this project's own spec tree
+        description: >-
+          Read the project's member declarations at that root: its project.yaml `members`
+          (project_config.declaredMembers(), read through that root's binding, as the scan reads a
+          root's configuration) and, for one release, the subsystem specs of its own tree carrying a
+          projectPath; a `members` entry wins over a legacy mount under the same alias
         type: local
       - stepNumber: 2
-        description: Walk the subsystem specs that declare a non-empty projectPath
+        description: Walk the member declarations
         type: loop
         loopKind: forEach
-        over: the subsystem specs with a projectPath
+        over: the project's member declarations, members entries first
         endStep: 4
       - stepNumber: 3
-        description: Resolve the projectPath inside the project root; an absolute or escaping path is skipped
+        description: Resolve the path inside the project root; an absolute or escaping path is skipped
         type: local
       - stepNumber: 4
-        description: Record the child directory with its mounting subsystem id
+        description: Record the member's directory with its alias and declaration form
         type: local
       - stepNumber: 5
-        description: Return the direct chained subprojects
+        description: Return the direct members
         type: return
         outcome: ChainedSubprojectDir[]
   - name: readLockState
@@ -1199,7 +1303,10 @@ methods:
           insert reads as the step added, the shift as renumbered runs and the jumps that followed
           their targets as relocations, never as every later step rewritten — and name every path
           the delta carried that the write does not act on — one the schema drops at a depth the
-          permissive delta cannot refuse, and one whose value the stored spec already held
+          permissive delta cannot refuse, and one whose value the stored spec already held. Read the
+          stored FILE raw as well and name every key it carries that the level's canonical schema
+          does not know, each as `path: value` (strippedKeys): the parse already discarded them, and
+          the write re-serializes through the schema, so they would otherwise be lost without a word
         type: local
       - stepNumber: 11
         description: Decide whether there is anything to write
@@ -1227,9 +1334,9 @@ methods:
       - stepNumber: 15
         label: dry-run
         description: >-
-          Answer with the changes the write would make and the paths it would not act on, marked as
-          an account rather than a write: nothing is stamped and not one byte of the stored file
-          moves
+          Answer with the changes the write would make, the paths it would not act on and the stored
+          keys it would drop (strippedKeys), marked as an account rather than a write: nothing is
+          stamped and not one byte of the stored file moves
         type: return
         outcome: dry run
       - stepNumber: 16
@@ -1242,7 +1349,8 @@ methods:
       - stepNumber: 17
         description: >-
           Report what was written: every change it made, every path of the delta it did not act on,
-          the store's placement notices and the judgement's warnings
+          the stored keys the write dropped (strippedKeys), the store's placement notices and the
+          judgement's warnings
         type: return
         outcome: written
   - name: repairForeignStepFields
@@ -1535,8 +1643,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Walk the chained subprojects recursively from the root and keep each directory that holds
-          a spec tree but no project configuration
+          Walk the members recursively from the root — each project's `members` entries and, for one
+          release, its legacy L1 mounts — and keep each directory that holds a spec tree but no
+          project configuration
         type: local
       - stepNumber: 2
         description: Return the directories
@@ -1547,9 +1656,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Walk the chained subprojects recursively from the root; for each that holds a spec tree
-          but no project configuration, write a default configuration named for its mount and
-          declaring the mount's subsystem id as its project id, leaving its specs untouched
+          Walk the members recursively from the root, either declaration form; for each that holds a
+          spec tree but no project configuration, write a default configuration named for its alias
+          and declaring the alias as its project id, leaving its specs untouched
         type: local
       - stepNumber: 2
         description: Return the directories repaired
@@ -1604,6 +1713,55 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: declareExternal
+  - name: moveMountToMembers
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project graph of the bound root: the member the alias declares, with its legacy
+          mount as written (projectPath, description)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: Is there a legacy mount under the alias?
+        type: branch
+        condition: the bound root declares no member under the alias in the legacy L1 form
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Nothing to move: answer false when the alias is already an equal member, else refuse
+          naming the alias
+        type: return
+        outcome: already moved
+      - stepNumber: 4
+        label: declare
+        description: >-
+          Declare the member under the alias — the mount's projectPath as its path, its description
+          when it has one — through the project config Repository; a different member under the
+          alias is refused there and nothing below runs
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 5
+        description: >-
+          Delete the L1 mount document through the spec repository, so the member is declared in one
+          place
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteMount
+      - stepNumber: 6
+        description: Answer that it wrote
+        type: return
+        outcome: moved
+  - name: normalizeReferences
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Re-save the spec with its references in canonical form through the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: normalizeReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T21:10:57.447Z'
+updatedAt: '2026-09-27T17:03:48.067Z'

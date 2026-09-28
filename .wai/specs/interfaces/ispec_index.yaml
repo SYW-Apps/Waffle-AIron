@@ -11,14 +11,14 @@ methods:
     returns: SystemSpec | null
   - name: loadSubsystemSpecs
     description: >-
-      Loads all L1 subsystem specifications, including those of chained subprojects under their
-      mount's namespace. A subsystem a child declares under its mount's own local name is that mount
-      — merged with it at any nesting depth — and every reference to that name inside the child
-      resolves to the mount id. A mount whose path escapes the project that DECLARES it — absolute,
+      Loads all L1 subsystem specifications of the bound root and of every member the scan read,
+      each keyed under its project's key (`billing::billing` for member billing's subsystem
+      `billing`; never merged with anything). A legacy L1 mount (a subsystem carrying projectPath)
+      is read as a member declaration of its project and is NOT loaded as a subsystem: a mount
+      carries no content. A member path that escapes the project that DECLARES it — absolute,
       ../-escaping, or through a link — is refused as PROJECTPATH_ESCAPE and not followed,
-      identically from every loading root; every loader issue about a mount (escaping, cyclic,
-      missing) carries the mount's qualified id, so a validation scope that includes the mount keeps
-      it.
+      identically from every loading root; every loader issue about a member (escaping, cyclic,
+      missing) carries the member's key, so a validation scope that includes the member keeps it.
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
     returns: SubsystemSpec[]
   - name: loadSubsystemSpec
@@ -55,33 +55,32 @@ methods:
     returns: TypeSpec[]
   - name: listChainedRoots
     description: >-
-      Every chained subproject root beneath the bound project, as project-relative directories in
-      walk order, recursing through nested mounts (a child that itself chains a grandchild
-      contributes both). Empty for a project that chains nothing. The roots half of
-      inspectChainedRoots.
+      Every member root beneath the bound project, as project-relative directories in walk order,
+      recursing through the members members declare (either form). Empty for a project that declares
+      none. The roots half of inspectChainedRoots.
     signature: 'listChainedRoots(): string[]'
     returns: string[]
     guarantees:
       - idempotent
   - name: resolveSubprojectForNamespace
     description: >-
-      Resolve a chained mount's qualified namespace (e.g. `kid`, `par::kid2`) to that mount's
-      project root, walking each segment through the scanned index and resolving every mount's
-      projectPath against the previous mount's directory. A hop whose path escapes the project that
-      declares it — absolute, ../-escaping, or through a link — is refused as a loader issue and
-      skipped; returns null when no segment is a mount.
+      Resolve a member's key (its project id, or its alias path when its id is taken or missing) to
+      that member's project root, as the scan recorded it; a member refused at scan time (escaping,
+      missing, cyclic) resolves to null, as does a key no member has.
     signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
     returns: string | null
     params:
       - name: namespace
         type: string
+        description: The member's key
   - name: inspectChainedRoots
     description: >-
-      Walk every chained mount beneath the bound project, in walk order, and report both halves: the
-      project-relative roots that can be followed, and every mount that cannot — escaping the
+      Walk every member beneath the bound project, in walk order, and report both halves: the
+      project-relative roots that can be followed, and every member that cannot — escaping the
       project that declares it (absolute, ../-escaping, or through a link), missing on disk, cyclic,
-      or nested past the depth bound — each with its qualified mount id, declared path and reason.
-      The one place a whole-tree operation learns whether it is seeing the whole tree.
+      or nested past the depth bound — each with its key, the alias and form it is declared in, its
+      declared path and reason. The one place a whole-tree operation learns whether it is seeing the
+      whole tree.
     signature: 'inspectChainedRoots(): ChainedRootsInspection'
     returns: ChainedRootsInspection
     guarantees:
@@ -116,12 +115,14 @@ methods:
     effect: read
   - name: listProjectRoots
     description: >-
-      The project roots the current scan read, bound root first, then each chained member in walk
-      order: where each sits in the mount chain, its own L0 (qualified into its namespace), its
-      configuration (read through that root's binding), the ids of the specs its files declared, and
-      the references its files wrote with a leading `::`. Served from the same cached scan as every
-      other read, so it is never stale with it; the scan's freshness signature also covers each
-      root's .wai/project.yaml, so an edit to a root's externals re-scans.
+      The project roots the current scan read, bound root first, then each member in walk order: its
+      key, where it sits among its family's members and in which form it is declared (with the
+      legacy L1 mount as written, for the migration), its own L0, its configuration (read through
+      that root's binding), its alias table, its resolved L0 and L1 export tables, the keys of the
+      specs its files declared, and every reference with `::` its files wrote, with the form it was
+      read in, what it bound to and its rewrite. Served from the same cached scan as every other
+      read, so it is never stale with it; the scan's freshness signature also covers each root's
+      .wai/project.yaml, so an edit to a root's members or externals re-scans.
     signature: 'listProjectRoots(): ScannedProjectRoot[]'
     returns: ScannedProjectRoot[]
     params: []
@@ -130,4 +131,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-09-26T18:13:12.837Z'
+updatedAt: '2026-09-27T10:34:57.259Z'

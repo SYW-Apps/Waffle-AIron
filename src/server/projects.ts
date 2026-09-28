@@ -4,6 +4,7 @@ import { aiPathsAt } from '../config/paths.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { listFilesRecursive } from '../utils/fs.js';
 import { resolveContainedProjectPath } from './adapters/core.js';
+import { declaredMembers } from '../models/project.js';
 import type { HostedProjectRecord, Principal } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -13,9 +14,11 @@ import type { HostedProjectRecord, Principal } from './types.js';
 // id → isolated-root resolution for request scoping. Each project lives at
 // <dataDir>/projects/<id>/ with its own .wai/ tree — the isolation unit.
 //
-// A selector or narrowing entry MAY be subproject-qualified —
-// 'projectId::subsystemId' (nested mounts compose, e.g. 'proj::a::b') —
-// binding the CHAINED CHILD's root INSIDE the project's isolated tree. The
+// A selector or narrowing entry MAY be member-qualified — 'projectId::alias'
+// (nested members compose, e.g. 'proj::a::b', one member alias per hop) —
+// binding the MEMBER's root INSIDE the project's isolated tree. A hop is the
+// alias the project declares the member under, the same string a legacy mount
+// id was, so every qualifier minted before stage 3 binds the same root. The
 // qualifier is a NARROWING only: permission capabilities keep resolving over
 // the TOP project; the qualifier can never widen or refine grants.
 // ---------------------------------------------------------------------------
@@ -161,10 +164,27 @@ export function parseQualifiedSelector(value: unknown): QualifiedProjectSelector
   return { projectId, mounts };
 }
 
-/** The subsystem spec with `id` in the spec tree at `root` (any layout — the
- *  scan is recursive, mirroring the core chaining walk), reduced to the one
- *  field the mount model needs. Returns null when no such subsystem exists. */
-function findSubsystemSpec(root: string, subsystemId: string): { projectPath?: string } | null {
+/**
+ * The path the member `alias` is declared under at `root`, read the way the
+ * spec loader reads a root's members: its project.yaml `members` entry first
+ * and, for one release, a legacy L1 mount of its own spec tree (a subsystem
+ * with that id carrying a projectPath). Returns null when `root` declares no
+ * member under the alias — an internal subsystem included, which is not a
+ * root at all — and the reason when the declaration cannot be followed.
+ */
+function memberPathOn(root: string, alias: string): { path: string } | { refused: string } | null {
+  let config: unknown = null;
+  try {
+    const file = aiPathsAt(root).projectConfig();
+    if (fs.existsSync(file)) config = readYamlFile(file);
+  } catch {
+    config = null;
+  }
+  const declared = config && typeof config === 'object'
+    ? declaredMembers(config as Parameters<typeof declaredMembers>[0]).find((m) => m.alias === alias)
+    : undefined;
+  if (declared) return declared.problem ? { refused: declared.problem } : { path: declared.path };
+  const externals = (config as { externals?: Record<string, unknown> } | null)?.externals;
   const specsDir = aiPathsAt(root).specsDir();
   if (!fs.existsSync(specsDir)) return null;
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
@@ -175,21 +195,27 @@ function findSubsystemSpec(root: string, subsystemId: string): { projectPath?: s
       continue;
     }
     if (!raw || typeof raw !== 'object' || !('parentSystem' in raw)) continue;
-    if ((raw as { id?: unknown }).id !== subsystemId) continue;
+    if ((raw as { id?: unknown }).id !== alias) continue;
     const pp = (raw as { projectPath?: unknown }).projectPath;
-    return typeof pp === 'string' && pp.trim() !== '' ? { projectPath: pp } : {};
+    if (typeof pp !== 'string' || pp.trim() === '') return null;
+    if (externals?.[alias] !== undefined) {
+      return { refused: `the alias "${alias}" is also declared under \`externals\` — one alias names one project` };
+    }
+    return { path: pp };
   }
   return null;
 }
 
 /**
- * Resolve a chained-subproject mount chain to the child root INSIDE the
- * project's isolated tree. For each hop the current root's subsystem specs are
- * read for the named subsystem carrying a `projectPath`, and the child dir is
- * resolved WITHIN the current root under the chaining containment guard (Fix
- * B2: absolute and ../-escaping mounts are rejected). An unknown subsystem or
- * one without a projectPath throws a clear, actionable error — the resolution
- * never silently falls back to the project root.
+ * Resolve a member chain to the member's root INSIDE the project's isolated
+ * tree. Each hop is a member alias, looked up among the current root's member
+ * declarations — its project.yaml `members` and, for one release, its legacy
+ * L1 mounts (the alias is the string the legacy mount id was, so a qualifier
+ * minted before stage 3 names the same root) — and the member dir is resolved
+ * WITHIN the current root under the containment guard (absolute and
+ * ../-escaping paths are rejected). An alias that declares no member throws a
+ * clear, actionable error — the resolution never silently falls back to the
+ * project root, and never binds an internal subsystem.
  */
 export function resolveSubprojectMounts(
   projectId: string,
@@ -198,32 +224,31 @@ export function resolveSubprojectMounts(
 ): string {
   let root = projectRoot;
   let at = projectId;
-  for (const mount of mounts) {
-    const sub = findSubsystemSpec(root, mount);
-    if (!sub) {
+  for (const alias of mounts) {
+    const member = memberPathOn(root, alias);
+    if (!member) {
       throw new Error(
-        `unknown subproject mount "${mount}" on "${at}" — no subsystem with that id exists in its spec tree`,
+        `unknown member "${alias}" on "${at}" — it declares no member under that alias ` +
+          '(in project.yaml `members`, or a legacy L1 mount); an internal subsystem is not a member and cannot be bound',
       );
     }
-    if (!sub.projectPath) {
-      throw new Error(
-        `subsystem "${mount}" on "${at}" is not a chained subproject (it carries no projectPath) — ` +
-          `only a subsystem mounted via projectPath can be bound as a subproject`,
-      );
+    if ('refused' in member) {
+      throw new Error(`member "${alias}" on "${at}" cannot be bound: ${member.refused}`);
     }
-    // Containment guard: the child dir must resolve strictly within the current
-    // root, so a crafted mount can never escape the project's isolated tree.
-    root = resolveContainedProjectPath(root, sub.projectPath);
-    at = `${at}${SUBPROJECT_SEPARATOR}${mount}`;
+    // Containment guard: the member dir must resolve strictly within the current
+    // root, so a crafted declaration can never escape the project's isolated tree.
+    root = resolveContainedProjectPath(root, member.path);
+    at = `${at}${SUBPROJECT_SEPARATOR}${alias}`;
   }
   return root;
 }
 
 /**
  * Validate ONE possibly-qualified projects-narrowing entry at MINT time: the
- * top project must exist, and for a qualified entry every named subsystem must
- * exist on that project and carry a projectPath. An unknown or non-chained
- * mount throws with guidance so a broken narrowing is never stored. '*' (no
+ * top project must exist, and for a qualified entry each alias must declare a
+ * member of the project it is looked up in (project.yaml `members`, or for one
+ * release a legacy L1 mount). An unknown alias, or an internal subsystem,
+ * throws with guidance so a broken narrowing is never stored. '*' (no
  * narrowing) is always valid.
  */
 export function assertMintableNarrowingEntry(dataDir: string, entry: string): void {
@@ -232,7 +257,7 @@ export function assertMintableNarrowingEntry(dataDir: string, entry: string): vo
   if (!parsed) {
     throw new Error(
       `invalid project narrowing entry "${entry}" (expected a project id, optionally ` +
-        `subproject-qualified as projectId::subsystemId)`,
+        `member-qualified as projectId::alias)`,
     );
   }
   const rec = load(dataDir).find((r) => r.id === parsed.projectId);

@@ -130,7 +130,9 @@ methods:
   - name: currentChildPins
     narrative:
       - stepNumber: 1
-        description: Forward chained-child pin resolution to the core portal
+        description: >-
+          Forward the member pin resolution (the bound root's members, as alias and path) to the
+          approval portal
         type: call
         targetComponent: approval_portal
         targetMethod: currentChildPins
@@ -218,6 +220,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpecs
+  - name: projectFamily
+    narrative:
+      - stepNumber: 1
+        description: Forward the project graph read to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: projectFamily
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-26T16:14:33.766Z'
+updatedAt: '2026-09-27T15:26:29.974Z'

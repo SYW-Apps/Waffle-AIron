@@ -8,25 +8,23 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   invalidateSpecCache,
   resolveChainingParent,
 } from '../../src/core/specs.js';
-import { pinFamilySurfaces, listExternalInterfaces } from '../../src/core/surfaces.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
 import { createMcpServer, statusFamilyContext } from '../../src/mcp/server.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
-// sdd_list_external_interfaces (mcp_surfaces_adapter → surface_portal) and the
-// chained-subproject bind-time announcement (mcp_server createMcpServer step 7).
+// The member bind-time announcement (mcp_server createMcpServer step 7) and the
+// family context sdd_get_status opens with. sdd_list_external_interfaces is
+// gone (stage 3): a member consumes what it declares under `externals`.
 //
 // Driven through the REAL factory (createMcpServer) over an in-memory
-// transport, exactly as a connected agent would — bound first to a chained
-// child (entries + announcement) and then to a top root (no announcement,
-// empty discovery).
+// transport, exactly as a connected agent would — bound first to a member
+// (announcement) and then to a top root (no announcement).
 // ---------------------------------------------------------------------------
 
 const now = new Date().toISOString();
@@ -43,18 +41,23 @@ const iface = (id: string, comp: string, methods: InterfaceSpec['methods']): Int
   id, name: id, description: 'd', component: comp, methods, status: 'complete', createdAt: now, updatedAt: now,
 });
 
-/** Parent project with one published portal + a chained child, surfaces delivered. */
-function buildChainedWorld(rootDir: string): string {
-  fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), JSON.stringify({
+/** A project.yaml, written as JSON (a YAML subset). */
+function writeConfig(dir: string, config: Record<string, unknown>): void {
+  fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
     schemaVersion: '1.0.0',
-    name: 'ext-root-system',
     projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {},
     createdAt: now,
     updatedAt: now,
+    ...config,
   }));
+}
+
+/** Parent project with one published portal, declaring the member `kid`. */
+function buildChainedWorld(rootDir: string): string {
+  writeConfig(rootDir, { name: 'ext-root-system', members: { kid: 'packages/kid' } });
   setProjectRoot(rootDir);
 
   saveSystemSpec({
@@ -69,7 +72,7 @@ function buildChainedWorld(rootDir: string): string {
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('core-sub', {
+  saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [{ type: 'REST', details: 'api', component: 'gateway-portal' }],
   }));
   saveComponentSpec(component('gateway-portal', 'core-sub', {
@@ -82,12 +85,13 @@ function buildChainedWorld(rootDir: string): string {
       endpoint: { transport: 'HTTP', method: 'GET', path: '/records/{id}' },
     },
   ]));
-  createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid', status: 'draft' }), 'kid');
-  invalidateSpecCache();
-  // The child pulls its family surfaces; nothing is pushed into it any more.
   const kidDir = path.join(rootDir, 'packages', 'kid');
+  writeConfig(kidDir, { id: 'kid', name: 'kid' });
   setProjectRoot(kidDir);
-  pinFamilySurfaces();
+  saveSystemSpec({
+    schemaVersion: '1.0.0', name: 'kid', vision: 'a member', boundaries: [], globalRequirements: [],
+    createdAt: now, updatedAt: now,
+  });
   invalidateSpecCache();
   setProjectRoot(rootDir);
   return kidDir;
@@ -107,7 +111,7 @@ function unwrapText(result: { isError?: boolean; content?: { type: string; text?
   return first!.text as string;
 }
 
-describe('sdd_list_external_interfaces + chained-subproject announcement', () => {
+describe('member announcement + family context', () => {
   let rootDir: string;
   let childDir: string;
   let stderrLines: string[];
@@ -129,52 +133,31 @@ describe('sdd_list_external_interfaces + chained-subproject announcement', () =>
     try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
   });
 
-  it('registers the tool and returns the discovery entries for a chained child', async () => {
+  it('no longer registers sdd_list_external_interfaces', async () => {
     setProjectRoot(childDir);
     const client = await connectInMemory(createMcpServer());
     try {
       const tools = await client.listTools();
-      expect(tools.tools.map((t) => t.name)).toContain('sdd_list_external_interfaces');
-
-      const entries = JSON.parse(unwrapText(
-        await client.callTool({ name: 'sdd_list_external_interfaces', arguments: {} }) as never,
-      ));
-      expect(Array.isArray(entries)).toBe(true);
-      const parent = entries.find((e: { sourceKind: string }) => e.sourceKind === 'parent');
-      expect(parent).toBeDefined();
-      expect(parent.projectName).toBe('ext-root-system');
-      expect(parent.origin).toBe('generated');
-      expect(parent.freshness).toBe('fresh');
-      expect(parent.interfaceIds).toContain('gateway');
+      expect(tools.tools.map((t) => t.name)).not.toContain('sdd_list_external_interfaces');
     } finally {
       await client.close();
     }
   });
 
-  it('announces the chaining context on stderr when the bound root is a chained child', () => {
+  it('announces the membership on stderr when the bound root is a member', () => {
     setProjectRoot(childDir);
     createMcpServer();
-    const announcement = stderrLines.find((l) => l.includes('chained subproject'));
+    const announcement = stderrLines.find((l) => l.includes('member project'));
     expect(announcement).toBeDefined();
     expect(announcement).toContain('"kid"');
     expect(announcement).toContain(rootDir);
-    // The child vendors the family surface + the core-sub sibling surface.
-    expect(announcement).toMatch(/2 vendored external surface\(s\)/);
-    expect(announcement).toContain('sdd_list_external_interfaces');
+    expect(announcement).toContain('sdd_get_externals_status');
   });
 
-  it('stays silent for a genuine top root and returns an empty discovery there', async () => {
+  it('stays silent for a genuine top root', () => {
     setProjectRoot(rootDir);
-    const client = await connectInMemory(createMcpServer());
-    try {
-      expect(stderrLines.find((l) => l.includes('chained subproject'))).toBeUndefined();
-      const entries = JSON.parse(unwrapText(
-        await client.callTool({ name: 'sdd_list_external_interfaces', arguments: {} }) as never,
-      ));
-      expect(entries).toEqual([]);
-    } finally {
-      await client.close();
-    }
+    createMcpServer();
+    expect(stderrLines.find((l) => l.includes('member project'))).toBeUndefined();
   });
 
   // Reach: a hosted request binds the child's root together with whether its
@@ -182,19 +165,15 @@ describe('sdd_list_external_interfaces + chained-subproject announcement', () =>
   // parent's current state hash behind freshness, or the parent's location in the
   // announcement — is exactly what a child-narrowed credential must not do.
 
-  it('a credential narrowed to the child reads nothing above it: no parent, and no freshness verdict', () => {
+  it('a credential narrowed to the child reads nothing above it: no parent', () => {
     runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: false }, () => {
       expect(resolveChainingParent()).toBeNull();
-      const entries = listExternalInterfaces();
-      expect(entries.length).toBeGreaterThan(0);
-      expect(entries.map((e) => e.freshness)).toEqual(entries.map(() => 'unverifiable'));
     });
   });
 
-  it('a credential that reaches the top project still sees the parent and the freshness of each pin', () => {
+  it('a credential that reaches the top project still sees the parent, by the alias it declares', () => {
     runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: true }, () => {
-      expect(resolveChainingParent()?.subsystemId).toBe('kid');
-      expect(listExternalInterfaces().find((e) => e.sourceKind === 'parent')?.freshness).toBe('fresh');
+      expect(resolveChainingParent()).toMatchObject({ alias: 'kid', form: 'members' });
     });
   });
 
@@ -206,7 +185,7 @@ describe('sdd_list_external_interfaces + chained-subproject announcement', () =>
 
   it('does not announce the parent from a server bound for a child-scoped credential', () => {
     runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: false }, () => createMcpServer());
-    expect(stderrLines.find((l) => l.includes('chained subproject'))).toBeUndefined();
+    expect(stderrLines.find((l) => l.includes('member project'))).toBeUndefined();
   });
 
   // sdd_get_status tells a connected agent where its root sits among chained
@@ -217,20 +196,20 @@ describe('sdd_list_external_interfaces + chained-subproject announcement', () =>
     const client = await connectInMemory(createMcpServer());
     try {
       const status = unwrapText(await client.callTool({ name: 'sdd_get_status', arguments: {} }) as never);
-      expect(status).toContain('mounted as subsystem "kid" of the parent project "ext-root-system"');
-      expect(status).toContain('sdd_list_external_interfaces');
+      expect(status).toContain('a member of the parent project "ext-root-system", declared as "kid"');
+      expect(status).toContain('sdd_get_externals_status');
     } finally {
       await client.close();
     }
   });
 
-  it('lists the chained subprojects a parent root mounts, and names no parent for a top root', async () => {
+  it('lists the members a parent root declares, and names no parent for a top root', async () => {
     setProjectRoot(rootDir);
     const client = await connectInMemory(createMcpServer());
     try {
       const status = unwrapText(await client.callTool({ name: 'sdd_get_status', arguments: {} }) as never);
-      expect(status).toContain('chained subprojects mounted here — kid (packages/kid)');
-      expect(status).not.toContain('mounted as subsystem');
+      expect(status).toContain('member projects declared here — kid (packages/kid)');
+      expect(status).not.toContain('a member of the parent project');
     } finally {
       await client.close();
     }
@@ -238,7 +217,7 @@ describe('sdd_list_external_interfaces + chained-subproject announcement', () =>
 
   it('keeps the parent out of the family context for a credential narrowed to the child', () => {
     runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: false }, () => {
-      expect(statusFamilyContext()).not.toContain('mounted as subsystem');
+      expect(statusFamilyContext()).not.toContain('a member of the parent project');
     });
   });
 });

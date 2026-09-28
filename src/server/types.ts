@@ -172,8 +172,8 @@ export interface Principal {
   role: DisplayRole;
   /** Coarse projection of the token's project narrowing; '*' denotes no
    *  narrowing (permission rules still gate per project). Entries may be
-   *  subproject-qualified ('projectId::subsystemId') — carried through verbatim
-   *  so root resolution can bind the mounted child root. */
+   *  member-qualified ('projectId::alias', one member alias per hop) — carried
+   *  through verbatim so root resolution can bind the member's root. */
   projects: string[];
   authenticated: boolean;
   /** Resolved human, service, or bootstrap identity behind the action. */
@@ -202,12 +202,14 @@ export interface ApiKeyRecord {
   role?: DisplayRole;
   /** The token's project narrowing: the project ids this token may act on, or
    *  ['*'] for the owner's full accessible set. An entry MAY be
-   *  subproject-qualified — 'projectId::subsystemId' (nested mounts compose,
-   *  e.g. 'proj::a::b') — scoping the token INTO that chained subproject:
-   *  data-plane requests then bind the mounted child root instead of the
-   *  project root. Never a grant — within this narrowing the token acts as the
-   *  owner's LIVE permission (permission rules gate per project; a subproject
-   *  qualifier narrows reach, it never widens or refines grants). */
+   *  member-qualified — 'projectId::alias' (nested members compose, e.g.
+   *  'proj::a::b', one member alias per hop) — scoping the token INTO that
+   *  member project: data-plane requests then bind the member's root instead
+   *  of the project root. A hop is a member alias, the same string a legacy
+   *  mount id was, so a token minted before stage 3 names the same root.
+   *  Never a grant — within this narrowing the token acts as the owner's LIVE
+   *  permission (permission rules gate per project; a qualifier narrows reach,
+   *  it never widens or refines grants). */
   projects: string[];
   createdAt: string;
   /** Human or service identity that owns this token — the identity it acts as. */

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import * as adapter from '../../src/commands/adapters/core.js';
 import * as portal from '../../src/core/index.js';
 import * as projector from '../../src/core/domain_projector.js';
@@ -75,7 +75,7 @@ describe('wairon domains reaches the topology through cli_core_adapter, not thro
       vision: 'a domains-boundary fixture', boundaries: [], globalRequirements: [],
       createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec(subsystem('billing'));
+    saveSpec('subsystem', subsystem('billing'));
     invalidateSpecCache();
     return proj;
   }

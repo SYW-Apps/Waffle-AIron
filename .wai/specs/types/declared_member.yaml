@@ -1,0 +1,36 @@
+kind: value-object
+id: declared_member
+name: DeclaredMember
+description: >-
+  One member as the configuration declares it, normalized from either form: the alias, the path as
+  written, the description when the long form gives one, and what is wrong with the declaration on
+  its own (before the loader looks for the directory). The answer of
+  project_config.declaredMembers().
+subsystem: sdd_core
+fields:
+  - name: alias
+    type: string
+    description: >-
+      The alias key as written in project.yaml: the first segment this project's references use for
+      the member.
+    optional: false
+    key: primary
+  - name: path
+    type: string
+    description: The member's root directory as written, relative to the declaring project's root.
+    optional: false
+  - name: description
+    type: string
+    description: The long form's description, when given.
+    optional: true
+  - name: problem
+    type: string
+    description: >-
+      Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+, an empty
+      path, an absolute path, or an alias this configuration also declares under `externals` (one
+      alias names one project).
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-27T10:32:33.853Z'
+updatedAt: '2026-09-27T10:32:33.855Z'

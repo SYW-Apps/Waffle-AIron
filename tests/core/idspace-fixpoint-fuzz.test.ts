@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -18,7 +18,7 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import type {
   ComponentSpec,
   ImplementationSpec,
@@ -32,9 +32,16 @@ import type {
 // Invariant under test: for ANY spec loaded through the parent root,
 // load -> save -> load yields the SAME in-memory ids (component ids, subsystem
 // publicInterfaces bindings, impl narrative targetComponents, dependsOn), and
-// a second save cycle is also a fixpoint. qualifyId (load) and relativizeId
-// (save) must be exact inverses for every reference shape a chained project
-// tree can produce.
+// a second save cycle is also a fixpoint. The scan's binding (load) and the
+// writer (save) must be exact inverses for every reference shape a family can
+// produce.
+//
+// Stage 3: a member is keyed by its project id (here each member declares its
+// mount's local id), never by its place in the mount chain, and a legacy L1
+// mount is a member declaration, not a subsystem. The generator still WRITES
+// the stage-2 position forms (leading `::`, `super::`, member paths) — they
+// bind for one release — so each reference has two spellings: the alias path
+// the disk forms are built from, and the key it binds to.
 //
 // Deterministic: a fixed-seed mulberry32 PRNG drives every random choice, so
 // each tree (and any failure) reproduces bit-identically in CI. Each tree gets
@@ -70,7 +77,7 @@ const chance = (rng: Rng, p: number): boolean => rng() < p;
 
 interface GenStep {
   kind: 'local' | 'call';
-  /** Qualified (in-memory, as seen from the top root) target component id. */
+  /** The in-memory key of the target component (its project id, then its local id). */
   target?: string;
   /** The relative form actually written into the on-disk fixture file. */
   diskForm?: string;
@@ -83,8 +90,10 @@ interface GenMethod {
 
 interface GenComp {
   local: string;
-  /** Expected in-memory id when loaded through the top root. */
+  /** Expected in-memory key when loaded through the top root. */
   qualified: string;
+  /** The id by its place in the mount chain — what the stage-2 disk forms spell. */
+  pathQualified: string;
   componentType: 'Orchestrator' | 'Portal';
   methods: GenMethod[];
   /** Qualified dependsOn targets + the relative forms written to disk. */
@@ -92,8 +101,10 @@ interface GenComp {
 }
 
 interface GenLevel {
-  /** Namespace prefix under the top root ('' for the root project itself). */
+  /** Alias path under the top root ('' for the root project itself). */
   prefix: string;
+  /** The member's key: its project id ('' for the root project itself). */
+  key: string;
   dir: string;
   parentIdx: number | null;
   /** Bare mount subsystem id in the parent tree (null for the root level). */
@@ -157,6 +168,7 @@ function generateShape(index: number, rootDir: string): GenShape {
   const levels: GenLevel[] = [
     {
       prefix: '',
+      key: '',
       dir: rootDir,
       parentIdx: null,
       mountLocalId: null,
@@ -174,6 +186,7 @@ function generateShape(index: number, rootDir: string): GenShape {
     const parent = levels[prevIdx];
     levels.push({
       prefix: parent.prefix ? `${parent.prefix}::${mount}` : mount,
+      key: mount,
       dir: path.join(parent.dir, 'packages', mount),
       parentIdx: prevIdx,
       mountLocalId: mount,
@@ -189,6 +202,7 @@ function generateShape(index: number, rootDir: string): GenShape {
   if (depth >= 1 && chance(rng, 0.6)) {
     levels.push({
       prefix: 'sib-r1',
+      key: 'sib-r1',
       dir: path.join(rootDir, 'packages', 'sib-r1'),
       parentIdx: 0,
       mountLocalId: 'sib-r1',
@@ -204,6 +218,7 @@ function generateShape(index: number, rootDir: string): GenShape {
     const l1 = levels.findIndex(l => l.mountLocalId === 'mnt-l1');
     levels.push({
       prefix: 'mnt-l1::sib-m1',
+      key: 'sib-m1',
       dir: path.join(levels[l1].dir, 'packages', 'sib-m1'),
       parentIdx: l1,
       mountLocalId: 'sib-m1',
@@ -229,7 +244,8 @@ function generateShape(index: number, rootDir: string): GenShape {
       if (chance(rng, 0.5)) methods.push({ name: 'poke', steps: [] });
       lvl.components.push({
         local,
-        qualified: lvl.prefix ? `${lvl.prefix}::${local}` : local,
+        qualified: lvl.key ? `${lvl.key}::${local}` : local,
+        pathQualified: lvl.prefix ? `${lvl.prefix}::${local}` : local,
         componentType: 'Orchestrator',
         methods,
         dependsOn: [],
@@ -238,7 +254,8 @@ function generateShape(index: number, rootDir: string): GenShape {
     if (lvl.portalLocal) {
       lvl.components.push({
         local: lvl.portalLocal,
-        qualified: `${lvl.prefix}::${lvl.portalLocal}`,
+        qualified: `${lvl.key}::${lvl.portalLocal}`,
+        pathQualified: `${lvl.prefix}::${lvl.portalLocal}`,
         componentType: 'Portal',
         methods: [{ name: 'run', steps: [] }],
         dependsOn: [],
@@ -248,15 +265,15 @@ function generateShape(index: number, rootDir: string): GenShape {
 
   // Cross-refs: dependsOn + narrative call targets across random levels
   // (local sibling, parent level, root level, sibling mounts).
-  const pool = levels.flatMap(l => l.components.map(c => c.qualified));
+  const pool = levels.flatMap(l => l.components);
   for (const lvl of levels) {
     for (const comp of lvl.components) {
       const nDeps = int(rng, 0, 2);
       for (let d = 0; d < nDeps; d++) {
-        const target = pick(rng, pool.filter(q => q !== comp.qualified));
+        const target = pick(rng, pool.filter(q => q.qualified !== comp.qualified));
         comp.dependsOn.push({
-          target,
-          diskForm: pick(rng, validDiskForms(target, lvl.prefix, rootSubsystemIds)),
+          target: target.qualified,
+          diskForm: pick(rng, validDiskForms(target.pathQualified, lvl.prefix, rootSubsystemIds)),
         });
       }
       for (const method of comp.methods) {
@@ -266,8 +283,8 @@ function generateShape(index: number, rootDir: string): GenShape {
             const target = pick(rng, pool);
             method.steps.push({
               kind: 'call',
-              target,
-              diskForm: pick(rng, validDiskForms(target, lvl.prefix, rootSubsystemIds)),
+              target: target.qualified,
+              diskForm: pick(rng, validDiskForms(target.pathQualified, lvl.prefix, rootSubsystemIds)),
             });
           } else {
             method.steps.push({ kind: 'local' });
@@ -314,7 +331,7 @@ function materialize(shape: GenShape, rootDir: string): void {
     if (lvl.parentIdx === null || !lvl.mountLocalId) continue;
     const parent = shape.levels[lvl.parentIdx];
     setProjectRoot(parent.dir);
-    createChainedSubsystem(
+    writeLegacyMount(
       subsystemSpec(lvl.mountLocalId, {
         parentSystem: parent.systemName,
         projectPath: `packages/${lvl.mountLocalId}`,
@@ -335,7 +352,7 @@ function materialize(shape: GenShape, rootDir: string): void {
   //    into `default/` fallback folders. See report: adjacent stale-workspace
   //    hazard in invalidateSpecCache().
   for (const lvl of shape.levels) {
-    workspaceFor(lvl.dir).saveSubsystemSpec(subsystemSpec(lvl.subsystemLocal, { parentSystem: lvl.systemName }));
+    workspaceFor(lvl.dir).save('subsystem', subsystemSpec(lvl.subsystemLocal, { parentSystem: lvl.systemName }));
     for (const comp of lvl.components) {
       workspaceFor(lvl.dir).saveComponentSpec({
         id: comp.local,
@@ -439,7 +456,7 @@ function snapshotIds(tree: LoadedTree): Record<string, unknown> {
 
 /** Re-save EVERY loaded spec through the parent root, as any edit/lock does. */
 function resaveAllThroughRoot(tree: LoadedTree): void {
-  for (const s of tree.subsystems) saveSubsystemSpec(s);
+  for (const s of tree.subsystems) saveSpec('subsystem', s);
   for (const c of tree.components) saveComponentSpec(c);
   for (const i of tree.interfaces) saveInterfaceSpec(i);
   for (const im of tree.implementations) saveImplementationSpec(im);
@@ -453,18 +470,14 @@ function expectIntendedResolution(shape: GenShape, tree: LoadedTree): void {
   const subsById = new Map(tree.subsystems.map(s => [s.id, s]));
 
   for (const lvl of shape.levels) {
-    const subQ = lvl.prefix ? `${lvl.prefix}::${lvl.subsystemLocal}` : lvl.subsystemLocal;
+    const subQ = lvl.key ? `${lvl.key}::${lvl.subsystemLocal}` : lvl.subsystemLocal;
     expect(subsById.has(subQ), `subsystem ${subQ} missing after initial load`).toBe(true);
 
     if (lvl.mountLocalId && lvl.parentIdx !== null) {
-      const parentPrefix = shape.levels[lvl.parentIdx].prefix;
-      const mountQ = parentPrefix ? `${parentPrefix}::${lvl.mountLocalId}` : lvl.mountLocalId;
-      const mount = subsById.get(mountQ);
-      expect(mount, `mount subsystem ${mountQ} missing after initial load`).toBeDefined();
-      expect(
-        mount!.publicInterfaces[0]?.component,
-        `mount ${mountQ} publicInterfaces binding`,
-      ).toBe(`${lvl.prefix}::${lvl.portalLocal}`);
+      // A legacy mount declares its member; it is never loaded as a subsystem.
+      const parentKey = shape.levels[lvl.parentIdx].key;
+      const mountQ = parentKey ? `${parentKey}::${lvl.mountLocalId}` : lvl.mountLocalId;
+      expect(subsById.has(mountQ), `legacy mount ${mountQ} must not load as a subsystem`).toBe(false);
     }
 
     for (const comp of lvl.components) {
@@ -475,12 +488,12 @@ function expectIntendedResolution(shape: GenShape, tree: LoadedTree): void {
         comp.dependsOn.map(d => d.target),
       );
 
-      const ifaceQ = lvl.prefix ? `${lvl.prefix}::i${comp.local}` : `i${comp.local}`;
+      const ifaceQ = lvl.key ? `${lvl.key}::i${comp.local}` : `i${comp.local}`;
       const iface = ifacesById.get(ifaceQ);
       expect(iface, `interface ${ifaceQ} missing after initial load`).toBeDefined();
       expect(iface!.component, `interface ${ifaceQ} component ref`).toBe(comp.qualified);
 
-      const implQ = lvl.prefix ? `${lvl.prefix}::${comp.local}-impl` : `${comp.local}-impl`;
+      const implQ = lvl.key ? `${lvl.key}::${comp.local}-impl` : `${comp.local}-impl`;
       const impl = implsById.get(implQ);
       expect(impl, `implementation ${implQ} missing after initial load`).toBeDefined();
       expect(impl!.contract, `implementation ${implQ} contract ref`).toBe(ifaceQ);
@@ -623,16 +636,16 @@ describe('KNOWN COUNTEREXAMPLE: depth-2 (child-of-child) specs cannot be re-save
       createdAt: now,
       updatedAt: now,
     });
-    createChainedSubsystem(subsystemSpec('mnt-l1', { projectPath: 'packages/mnt-l1' }), 'mnt-l1');
+    writeLegacyMount(subsystemSpec('mnt-l1', { projectPath: 'packages/mnt-l1' }), 'mnt-l1');
     setProjectRoot(path.join(rootDir, 'packages', 'mnt-l1'));
-    createChainedSubsystem(
+    writeLegacyMount(
       subsystemSpec('mnt-l2', { parentSystem: 'mnt-l1', projectPath: 'packages/mnt-l2' }),
       'mnt-l2',
     );
     setProjectRoot(rootDir);
 
     const l2dir = path.join(rootDir, 'packages', 'mnt-l1', 'packages', 'mnt-l2');
-    workspaceFor(l2dir).saveSubsystemSpec(subsystemSpec('sub-l2', { parentSystem: 'mnt-l2' }));
+    workspaceFor(l2dir).save('subsystem', subsystemSpec('sub-l2', { parentSystem: 'mnt-l2' }));
     workspaceFor(l2dir).saveComponentSpec({
       id: 'leaf-comp',
       name: 'leaf-comp',
@@ -649,29 +662,31 @@ describe('KNOWN COUNTEREXAMPLE: depth-2 (child-of-child) specs cannot be re-save
     setProjectRoot(rootDir);
   }
 
+  // Stage 3: a member two levels down is keyed by its own project id, never by
+  // the mount chain, so its key is the same from every root.
   it('re-saving a loaded depth-2 component through the root round-trips', () => {
     buildDepth2Fixture();
 
-    const loaded = loadComponentSpec('mnt-l1::mnt-l2::leaf-comp');
+    const loaded = loadComponentSpec('mnt-l2::leaf-comp');
     expect(loaded).not.toBeNull();
-    expect(loaded!.subsystem).toBe('mnt-l1::mnt-l2::sub-l2');
+    expect(loaded!.subsystem).toBe('mnt-l2::sub-l2');
 
     // Previously threw ('Refusing to write invalid component spec ...')
     // because only 'mnt-l1' was stripped, leaving 'mnt-l2::leaf-comp'.
     expect(() => saveComponentSpec(loaded!)).not.toThrow();
 
     invalidateSpecCache();
-    const reloaded = loadComponentSpec('mnt-l1::mnt-l2::leaf-comp');
+    const reloaded = loadComponentSpec('mnt-l2::leaf-comp');
     expect(reloaded).not.toBeNull();
-    expect(reloaded!.id).toBe('mnt-l1::mnt-l2::leaf-comp');
-    expect(reloaded!.subsystem).toBe('mnt-l1::mnt-l2::sub-l2');
+    expect(reloaded!.id).toBe('mnt-l2::leaf-comp');
+    expect(reloaded!.subsystem).toBe('mnt-l2::sub-l2');
   });
 
   it('dryRunSerializeSpecs is clean on a healthy depth-2 tree', () => {
     buildDepth2Fixture();
 
     // Warm the cache the way validate does.
-    expect(loadComponentSpec('mnt-l1::mnt-l2::leaf-comp')).not.toBeNull();
+    expect(loadComponentSpec('mnt-l2::leaf-comp')).not.toBeNull();
     expect(dryRunSerializeSpecs()).toEqual([]);
   });
 });

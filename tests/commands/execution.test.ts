@@ -6,7 +6,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as yaml from 'js-yaml';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, saveComponentSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSpec, saveComponentSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ function buildProject(rootDir: string): void {
     parentSystem: 'budget-system', publicInterfaces: [], trustedLinks: [],
     status: 'draft', createdAt: now, updatedAt: now,
   };
-  saveSubsystemSpec(sub);
+  saveSpec('subsystem', sub);
   // One mechanical and one decision-carrying component, so the tiers have
   // something to actually differentiate.
   const comp = (id: string, name: string, componentType: string): ComponentSpec => ({

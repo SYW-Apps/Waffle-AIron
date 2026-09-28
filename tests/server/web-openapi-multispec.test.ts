@@ -11,7 +11,7 @@ import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { provisionProject } from '../../src/core/provision.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   invalidateSpecCache,
@@ -92,7 +92,7 @@ describe('web OpenAPI viewer — per-portal selection (sdd_host)', () => {
         createdAt: now,
         updatedAt: now,
       });
-      saveSubsystemSpec({
+      saveSpec('subsystem', {
         id: 'core', name: 'Core', description: 'core', parentSystem: 'ApiSys',
         publicInterfaces: [
           { type: 'REST', details: 'public', component: 'public-portal' },

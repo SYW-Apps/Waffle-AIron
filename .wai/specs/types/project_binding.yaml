@@ -21,10 +21,10 @@ fields:
   - name: subproject
     type: string
     description: >-
-      The bound mount chain ('a' or 'a::b') when the binding is subproject-qualified; absent for a
-      plain project binding.
+      The bound member chain ('a' or 'a::b', one member alias per hop) when the binding is
+      member-qualified; absent for a plain project binding.
     optional: true
 methods: []
 sourcePath: src/server/projects.ts
 createdAt: '2026-07-24T20:50:13.159Z'
-updatedAt: '2026-09-19T11:07:14.044Z'
+updatedAt: '2026-09-27T11:00:30.319Z'

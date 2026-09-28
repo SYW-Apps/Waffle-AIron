@@ -253,7 +253,7 @@ rules:
               - '4:cli_validator_adapter.validateRegistry'
               - '5:cli_validator_adapter.validateProjectConfig'
               - '6:cli_validator_adapter.validateSddTree'
-      # 84 finding(s), 113 unit(s).
+      # 80 finding(s), 106 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -603,12 +603,6 @@ rules:
               - 'spec_registry.invalidateCache'
           - code: UNDECLARED_COLOCATED_CALL
             spec: spec_loader_impl
-            at: 'saveSubsystemSpec'
-            covers:
-              - 'spec_registry.invalidateCache'
-              - 'core_orchestrator.assertContainedProjectPath'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_loader_impl
             at: 'saveSystemSpec'
             covers:
               - 'spec_registry.invalidateCache'
@@ -634,21 +628,9 @@ rules:
               - 'surface_store.put'
           - code: UNDECLARED_COLOCATED_CALL
             spec: surface_orchestrator_impl
-            at: 'listExternalInterfaces'
-            covers:
-              - 'surface_projector.projectSubsystemSurface'
-              - 'surface_store.list'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: surface_orchestrator_impl
             at: 'listMountSnapshots'
             covers:
               - 'surface_store.list'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: surface_orchestrator_impl
-            at: 'pinFamilySurfaces'
-            covers:
-              - 'surface_store.list'
-              - 'surface_store.put'
           - code: UNDECLARED_COLOCATED_CALL
             spec: surface_registry_impl
             at: 'hydrateFromFiles'
@@ -695,11 +677,6 @@ rules:
             at: 'resolve'
             covers:
               - 'secret_store.read'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_registry_impl
-            at: 'saveSubsystemSpec'
-            covers:
-              - 'core_orchestrator.assertContainedProjectPath'
           - code: UNDECLARED_COLOCATED_CALL
             spec: project_repository_impl
             at: 'existingRoot'
@@ -1274,7 +1251,7 @@ rules:
             at: 'WebSession'
             covers:
               - 'projects'
-      # 209 finding(s), 237 unit(s).
+      # 208 finding(s), 236 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of param-conformance on the signatures the contracts describe in
@@ -2275,11 +2252,6 @@ rules:
             at: 'removeSnapshot'
             covers:
               - 'rootDir'
-          - code: UNREALIZED_PARAM
-            spec: surface_projector_impl
-            at: 'projectChildSurface'
-            covers:
-              - 'childSubsystemId'
           - code: UNDECLARED_PARAM
             spec: surface_registry_impl
             at: 'deleteSnapshot'

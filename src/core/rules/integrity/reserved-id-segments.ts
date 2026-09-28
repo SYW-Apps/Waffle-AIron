@@ -7,9 +7,9 @@ import { SddRule } from '../types.js';
 // different spec — the reference cannot be written down at all.
 //
 // The check is over ctx.specIds(), the tree's ids with their kind labels: the
-// question is about the id, and every kind of spec has one. Shadowing is
-// namespace-shadowing's question, and the writer dry-run half of the family is
-// roundtrip-serialization.
+// question is about the id, and every kind of spec has one. Whether a local id
+// names one spec is local-ids' question, and the writer dry-run half of the
+// family is roundtrip-serialization.
 // ---------------------------------------------------------------------------
 
 export const reservedIdSegmentsRule: SddRule = {

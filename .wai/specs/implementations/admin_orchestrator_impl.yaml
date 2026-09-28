@@ -294,10 +294,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Bind the root this lock concerns: the project's isolated root, or — when a subproject
-          qualifier was supplied — the chained CHILD's tree, resolved through the project
-          repository's containment-checked qualified resolution so a qualifier can never resolve
-          outside the project root. Every step below therefore operates on the bound tree.
+          Bind the root this lock concerns: the project's isolated root, or — when a member
+          qualifier was supplied (one member alias per hop) — the member's tree, resolved through
+          the project repository's containment-checked qualified resolution so a qualifier can never
+          resolve outside the project root. Every step below therefore operates on the bound tree.
         type: local
       - stepNumber: 2
         description: >-
@@ -338,12 +338,20 @@ methods:
         targetMethod: captureApprovedSpecs
       - stepNumber: 8
         description: >-
-          Pin each chained child's approved StateId — the parent records the decision the child's
-          owner made, not the child's specs.
+          Read the bound tree's project graph for the members it declares directly — `members`
+          entries and, for one release, legacy L1 mounts, each as its alias and its path relative to
+          the bound root. A member is never a subsystem, so the subsystem specs do not name them
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 9
+        description: >-
+          Pin each member's approved StateId, keyed by its alias — the parent records the decision
+          the member's owner made, not the member's specs.
         type: call
         targetComponent: host_core_adapter
         targetMethod: currentChildPins
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Read the bound tree's project configuration: the record carries its effective id
           (project_config.effectiveId(), a defaulted one included) as projectId, which validate
@@ -352,20 +360,20 @@ methods:
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Assemble a LockRecord: stateId, lockedAt, the AUTHENTICATED approver the caller resolved
           from the credential, validatorVersion, validationResult, status ready, the project's
           effective id as projectId, plus the captured specs and child pins.
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Persist the record BEFORE publishing, so the commit that ships the specs also contains the
           approval that certifies them.
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
           the PR from — the lock is the semantic checkpoint that triggers the auto-publish. A no-op
@@ -374,27 +382,27 @@ methods:
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-      - stepNumber: 13
+      - stepNumber: 14
         description: Only a real publish has a commit to record.
         type: branch
         condition: nothing was published (native project, or a subproject-scoped lock)
-        onTrueStep: 14
-        onFalseStep: 15
-      - stepNumber: 14
+        onTrueStep: 15
+        onFalseStep: 16
+      - stepNumber: 15
         description: Return the persisted record unchanged.
         type: return
         outcome: lock record
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Extend the record with commitSha and compareUrl — known only AFTER the commit, so these
           two fields are re-written into a record the commit already carries.
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Persist the two published fields.
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 17
+      - stepNumber: 18
         description: Return the published record.
         type: return
         outcome: lock record with the compare URL to open the PR
@@ -546,49 +554,56 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: captureApprovedSpecs
       - stepNumber: 12
-        description: Pin each chained child's approved StateId.
+        description: >-
+          Read the bound tree's project graph for the members it declares directly, each as its
+          alias and path
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 13
+        description: Pin each member's approved StateId, keyed by its alias.
         type: call
         targetComponent: host_core_adapter
         targetMethod: currentChildPins
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Assemble a LockRecord: stateId, lockedAt, the AUTHENTICATED approver resolved from the
           caller's credential, validatorVersion, validationResult, status ready, plus the captured
           specs and child pins.
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Persist the record BEFORE publishing, so the commit that ships the specs also contains the
           approval.
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Commit the .wai/-scoped tree and push the working branch, returning the commit sha and
           compare URL.
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-      - stepNumber: 16
+      - stepNumber: 17
         description: Only a real publish has a commit to record.
         type: branch
         condition: nothing was published (native project)
-        onTrueStep: 17
-        onFalseStep: 18
-      - stepNumber: 17
+        onTrueStep: 18
+        onFalseStep: 19
+      - stepNumber: 18
         description: Return the persisted record unchanged.
         type: return
         outcome: lock record
-      - stepNumber: 18
+      - stepNumber: 19
         description: Extend the record with commitSha and compareUrl, known only after the commit.
         type: local
-      - stepNumber: 19
+      - stepNumber: 20
         description: Persist the two published fields.
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 20
+      - stepNumber: 21
         description: Return the published record.
         type: return
         outcome: lock record with the compare URL
@@ -1149,4 +1164,4 @@ methods:
         outcome: project record
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-26T15:27:45.038Z'
+updatedAt: '2026-09-27T15:27:02.240Z'

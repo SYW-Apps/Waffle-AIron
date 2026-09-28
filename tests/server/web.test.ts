@@ -43,7 +43,7 @@ import { validateAsComplete as validateProjectAsComplete } from '../../src/serve
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { provisionProject } from '../../src/core/provision.js';
 import {
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveTypeSpec,
@@ -472,7 +472,7 @@ describe('web graph orchestrator (sdd_host)', () => {
       // provisionProject writes .wai/project.yaml + the L0 system spec 'GraphSys',
       // so the conformance gate (loadProjectConfig) treats the root as a real project.
       provisionProject('GraphSys');
-      saveSubsystemSpec({
+      saveSpec('subsystem', {
         id: 'billing',
         name: 'Billing',
         description: 'billing',

@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSystemSpec, saveSubsystemSpec, saveComponentSpec,
+  saveSystemSpec, saveSpec, saveComponentSpec,
   saveInterfaceSpec, saveImplementationSpec,
   loadInterfaceSpec, loadImplementationSpec, invalidateSpecCache,
 } from '../../src/core/specs.js';
@@ -38,7 +38,7 @@ function project(): string {
     schemaVersion: '1.0.0', name: 'collide', vision: 'collision fixture',
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     id: 'dom', name: 'dom', description: 'the collision domain',
     parentSystem: 'collide', publicInterfaces: [], trustedLinks: [],
     status: 'draft', createdAt: now, updatedAt: now,

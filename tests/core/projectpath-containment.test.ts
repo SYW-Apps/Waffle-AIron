@@ -6,7 +6,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   assertContainedProjectPath,
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   scanAllSpecs,
   invalidateSpecCache,
   getLoaderIssues,
@@ -89,20 +89,6 @@ describe('assertContainedProjectPath (write/setter guard)', () => {
     expect(() => assertContainedProjectPath(root, 'packages/../../victim')).toThrow(/must resolve within/);
   });
 
-  it('saveSubsystemSpec refuses to PERSIST an escaping projectPath (defense in depth)', () => {
-    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-b2-save-'));
-    const proj = path.join(base, 'proj');
-    try {
-      initProject(proj, 'proj-system');
-      expect(() => saveSubsystemSpec(subsystem('billing', 'proj-system', '../escape'))).toThrow(
-        /must resolve within the project root/,
-      );
-    } finally {
-      setProjectRoot(null);
-      invalidateSpecCache();
-      fs.rmSync(base, { recursive: true, force: true });
-    }
-  });
 });
 
 describe('load-time projectPath containment', () => {
@@ -121,14 +107,14 @@ describe('load-time projectPath containment', () => {
 
     // A separate tenant's project we must never load.
     initProject(victim, 'victim-system');
-    saveSubsystemSpec(subsystem('secret', 'victim-system'));
+    saveSpec('subsystem', subsystem('secret', 'victim-system'));
 
     // Root declares a chained subsystem; save it clean (the write guard would
     // otherwise refuse an escaping projectPath — see the write-guard test below),
     // then inject the ../victim escape directly on disk to simulate a
     // maliciously-written spec, exercising the load-time guard in isolation.
     initProject(root, 'root-system');
-    saveSubsystemSpec(subsystem('billing', 'root-system'));
+    saveSpec('subsystem', subsystem('billing', 'root-system'));
     const billingIndex = path.join(root, '.wai', 'specs', 'billing', '.index.yaml');
     fs.appendFileSync(billingIndex, `projectPath: ${path.relative(root, victim)}\n`);
 
@@ -139,8 +125,8 @@ describe('load-time projectPath containment', () => {
     // The loader collected a PROJECTPATH_ESCAPE issue for the escaping child.
     expect(getLoaderIssues().some((i) => i.code === 'PROJECTPATH_ESCAPE')).toBe(true);
 
-    // The mount subsystem itself still exists, but the victim tree was skipped.
-    expect(index.subsystems.some((s) => s.id === 'billing')).toBe(true);
+    // A legacy mount is a member declaration, never a subsystem; the victim tree was skipped.
+    expect(index.subsystems.some((s) => s.id === 'billing')).toBe(false);
     expect(index.subsystems.some((s) => s.id === 'billing::secret')).toBe(false);
     expect(index.subsystems.some((s) => s.id.endsWith('secret'))).toBe(false);
   });
@@ -151,17 +137,18 @@ describe('load-time projectPath containment', () => {
     const child = path.join(root, 'packages', 'billing');
 
     initProject(root, 'root-system');
-    saveSubsystemSpec(subsystem('billing', 'root-system', path.relative(root, child)));
+    saveSpec('subsystem', subsystem('billing', 'root-system', path.relative(root, child)));
 
     initProject(child, 'child-system');
-    saveSubsystemSpec(subsystem('invoice', 'child-system'));
+    saveSpec('subsystem', subsystem('invoice', 'child-system'));
 
     setProjectRoot(root);
     invalidateSpecCache();
     const index = scanAllSpecs();
 
     expect(getLoaderIssues().some((i) => i.code === 'PROJECTPATH_ESCAPE')).toBe(false);
-    expect(index.subsystems.some((s) => s.id === 'billing')).toBe(true);
+    // The mount declares the member; the member (no id of its own) is keyed by its alias.
+    expect(index.subsystems.some((s) => s.id === 'billing')).toBe(false);
     expect(index.subsystems.some((s) => s.id === 'billing::invoice')).toBe(true);
   });
 });
@@ -188,13 +175,13 @@ describe('containment by the declaring project', () => {
     const b = path.join(root, 'packages', 'b');
 
     initProject(root, 'root-system');
-    saveSubsystemSpec(subsystem('a', 'root-system', 'packages/a'));
+    saveSpec('subsystem', subsystem('a', 'root-system', 'packages/a'));
     initProject(b, 'b-system');
-    saveSubsystemSpec(subsystem('secret', 'b-system'));
+    saveSpec('subsystem', subsystem('secret', 'b-system'));
     // `a` declares `inner` at ../b — inside the top root, outside a's own
     // project. Written past the write guard, as a hand-edited spec would be.
     initProject(a, 'a-system');
-    saveSubsystemSpec(subsystem('inner', 'a-system'));
+    saveSpec('subsystem', subsystem('inner', 'a-system'));
     fs.appendFileSync(path.join(a, '.wai', 'specs', 'inner', '.index.yaml'), 'projectPath: ../b\n');
 
     setProjectRoot(root);
@@ -204,7 +191,7 @@ describe('containment by the declaring project', () => {
     expect(fromTop.subsystems.some((s) => s.id.endsWith('secret'))).toBe(false);
     expect(inspectChainedRoots()).toEqual({
       roots: ['packages/a'],
-      skipped: [{ mount: 'a::inner', projectPath: '../b', reason: 'escapes' }],
+      skipped: [{ mount: 'a::inner', alias: 'inner', form: 'mount', projectPath: '../b', reason: 'escapes' }],
     });
 
     setProjectRoot(a);
@@ -220,13 +207,13 @@ describe('containment by the declaring project', () => {
     const outside = path.join(base, 'outside');
 
     initProject(outside, 'outside-system');
-    saveSubsystemSpec(subsystem('secret', 'outside-system'));
+    saveSpec('subsystem', subsystem('secret', 'outside-system'));
     initProject(root, 'root-system');
     fs.symlinkSync(outside, path.join(root, 'linked'), 'junction');
 
     expect(() => assertContainedProjectPath(root, 'linked')).toThrow(/must resolve within the project root/);
 
-    saveSubsystemSpec(subsystem('billing', 'root-system'));
+    saveSpec('subsystem', subsystem('billing', 'root-system'));
     fs.appendFileSync(path.join(root, '.wai', 'specs', 'billing', '.index.yaml'), 'projectPath: linked\n');
     setProjectRoot(root);
     invalidateSpecCache();
@@ -234,7 +221,7 @@ describe('containment by the declaring project', () => {
 
     expect(getLoaderIssues().find((i) => i.code === 'PROJECTPATH_ESCAPE')?.specId).toBe('billing');
     expect(index.subsystems.some((s) => s.id.endsWith('secret'))).toBe(false);
-    expect(inspectChainedRoots().skipped).toEqual([{ mount: 'billing', projectPath: 'linked', reason: 'escapes' }]);
+    expect(inspectChainedRoots().skipped).toEqual([{ mount: 'billing', alias: 'billing', form: 'mount', projectPath: 'linked', reason: 'escapes' }]);
   });
 
   it('still loads a nested subproject when the project itself is reached through a link', () => {
@@ -245,9 +232,9 @@ describe('containment by the declaring project', () => {
     const child = path.join(root, 'packages', 'billing');
 
     initProject(root, 'root-system');
-    saveSubsystemSpec(subsystem('billing', 'root-system', 'packages/billing'));
+    saveSpec('subsystem', subsystem('billing', 'root-system', 'packages/billing'));
     initProject(child, 'child-system');
-    saveSubsystemSpec(subsystem('invoice', 'child-system'));
+    saveSpec('subsystem', subsystem('invoice', 'child-system'));
 
     setProjectRoot(root);
     invalidateSpecCache();
@@ -285,10 +272,10 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
       targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
       rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec(subsystem('billing', 'root-system', 'packages/billing'));
+    saveSpec('subsystem', subsystem('billing', 'root-system', 'packages/billing'));
     initProject(billing, 'billing-system');
     // `ledger` points at a directory nobody created.
-    saveSubsystemSpec(subsystem('ledger', 'billing-system', 'vendor/ledger'));
+    saveSpec('subsystem', subsystem('ledger', 'billing-system', 'vendor/ledger'));
 
     setProjectRoot(root);
     invalidateSpecCache();
@@ -305,11 +292,11 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
     const billing = path.join(root, 'packages', 'billing');
 
     initProject(root, 'root-system');
-    saveSubsystemSpec(subsystem('billing', 'root-system', 'packages/billing'));
-    saveSubsystemSpec(subsystem('gone', 'root-system', 'packages/gone'));
+    saveSpec('subsystem', subsystem('billing', 'root-system', 'packages/billing'));
+    saveSpec('subsystem', subsystem('gone', 'root-system', 'packages/gone'));
     initProject(billing, 'billing-system');
-    saveSubsystemSpec(subsystem('ledger', 'billing-system', 'vendor/ledger'));
-    saveSubsystemSpec(subsystem('again', 'billing-system', '.'));
+    saveSpec('subsystem', subsystem('ledger', 'billing-system', 'vendor/ledger'));
+    saveSpec('subsystem', subsystem('again', 'billing-system', '.'));
 
     setProjectRoot(root);
     const inspection = inspectChainedRoots();
@@ -317,9 +304,9 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
     expect(inspection.roots).toEqual(['packages/billing']);
     expect(inspection.skipped).toHaveLength(3);
     expect(inspection.skipped).toEqual(expect.arrayContaining([
-      { mount: 'gone', projectPath: 'packages/gone', reason: 'missing' },
-      { mount: 'billing::ledger', projectPath: 'vendor/ledger', reason: 'missing' },
-      { mount: 'billing::again', projectPath: '.', reason: 'cyclic' },
+      { mount: 'gone', alias: 'gone', form: 'mount', projectPath: 'packages/gone', reason: 'missing' },
+      { mount: 'billing::ledger', alias: 'ledger', form: 'mount', projectPath: 'vendor/ledger', reason: 'missing' },
+      { mount: 'billing::again', alias: 'again', form: 'mount', projectPath: '.', reason: 'cyclic' },
     ]));
   });
 
@@ -329,7 +316,7 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
     const ids: string[] = [];
     for (let level = 1; level <= 33; level++) {
       initProject(dir, `system-${level}`);
-      saveSubsystemSpec(subsystem(`n${level}`, `system-${level}`, `n${level}`));
+      saveSpec('subsystem', subsystem(`n${level}`, `system-${level}`, `n${level}`));
       ids.push(`n${level}`);
       dir = path.join(dir, `n${level}`);
     }
@@ -339,6 +326,6 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
     const inspection = inspectChainedRoots();
 
     expect(inspection.roots).toHaveLength(32);
-    expect(inspection.skipped).toEqual([{ mount: ids.join('::'), projectPath: 'n33', reason: 'too-deep' }]);
+    expect(inspection.skipped).toEqual([{ mount: ids.join('::'), alias: 'n33', form: 'mount', projectPath: 'n33', reason: 'too-deep' }]);
   });
 });

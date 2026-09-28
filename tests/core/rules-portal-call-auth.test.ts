@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -45,7 +45,7 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
 
     saveSystemSpec({ schemaVersion: '1.0.0', name: 'Sys', vision: 't', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    saveSubsystemSpec({ id: 'sub', name: 'Sub', description: 'd', parentSystem: 'Sys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now } as any);
+    saveSpec('subsystem', { id: 'sub', name: 'Sub', description: 'd', parentSystem: 'Sys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now } as any);
 
     // The authenticated portal being called.
     saveComponentSpec({
@@ -94,7 +94,7 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
     setProjectRoot(proj);
     saveSystemSpec({ schemaVersion: '1.0.0', name: 'Sys', vision: 't', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    saveSubsystemSpec({ id: 'sub', name: 'Sub', description: 'd', parentSystem: 'Sys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now } as any);
+    saveSpec('subsystem', { id: 'sub', name: 'Sub', description: 'd', parentSystem: 'Sys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now } as any);
     sources.forEach((_, i) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       saveComponentSpec({ id: `svc${i}-portal`, name: `Svc${i}`, description: 'd', subsystem: 'sub', componentType: 'Portal', portalType: 'HTTP_API', auth: { scheme: 'apiKey', in: 'header', name: 'X-Svc-Key' }, owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);

@@ -33,10 +33,10 @@ vi.mock('../../src/utils/fs.js', async (importOriginal) => {
 
 import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import {
-  saveSystemSpec, saveSubsystemSpec, saveComponentSpec,
+  saveSystemSpec, saveSpec, saveComponentSpec,
   invalidateSpecCache, workspaceFor, resolveChainingParent,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -66,9 +66,9 @@ function family(): { root: string; kidDir: string } {
     schemaVersion: '1.0.0', name: 'root-system', vision: 'v',
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('parent-sub'));
+  saveSpec('subsystem', subsystem('parent-sub'));
   saveComponentSpec(component('parent-orch', 'parent-sub'));
-  createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+  writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
 
   const kidDir = path.join(root, 'packages', 'kid');
   const kid = workspaceFor(kidDir);
@@ -76,7 +76,7 @@ function family(): { root: string; kidDir: string } {
     schemaVersion: '1.0.0', name: 'kid-system', vision: 'v',
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
-  kid.saveSubsystemSpec(subsystem('k-core', { parentSystem: 'kid-system' }));
+  kid.save('subsystem', subsystem('k-core', { parentSystem: 'kid-system' }));
   kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['super::parent-orch'] }));
   invalidateSpecCache();
   return { root, kidDir };

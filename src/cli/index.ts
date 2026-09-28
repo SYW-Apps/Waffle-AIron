@@ -58,10 +58,10 @@ import {
   storedCredentialFor,
 } from '../commands/remote.js';
 import {
-  runSubsystemAdd,
-  runSubsystemMove,
+  runMemberAdd,
+  runMemberMove,
   runSubsystemExternalize,
-  runSubsystemInternalize,
+  runMemberInternalize,
 } from '../commands/subsystem.js';
 import { composeAgentBrief, loadProjectConfig, resolveAgentTopology } from '../commands/adapters/core.js';
 import { summarize } from '../models/execution.js';
@@ -138,8 +138,8 @@ program
 // cli_runner.runLock — the local `wairon lock` workflow: gate on the
 // as-complete dry-run validation (an invalid tree is never frozen), freeze the
 // tree through the lock adapter, and refresh the generated outputs. A parent
-// lock writes nothing into its chained children: each child pins its own family
-// surfaces (`wairon surface pin`) on its own schedule.
+// lock writes nothing into its members: each member pins what it consumes
+// (`wairon externals pin`) on its own schedule.
 //
 // Why validate-as-complete: the conformance gate downgrades completeness
 // errors to warnings while a spec is `draft`, so a draft tree can "pass" yet
@@ -853,7 +853,7 @@ program
 
 program
   .command('surface <action>')
-  .description('public surface exchange: export | import | list | externals | pin')
+  .description('public surface exchange: export | import | list')
   .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
   .option('--format <fmt>', 'export format: native | openapi (default native)')
   .option('--out <path>', 'export output path (else print)')
@@ -1123,43 +1123,49 @@ hostCmd
   });
 
 // ---------------------------------------------------------------------------
-// subsystem — create/relocate external (chained) subprojects
+// member — the projects this project contains (project.yaml `members`)
+// ---------------------------------------------------------------------------
+
+const memberCmd = program
+  .command('member')
+  .description('Manage members — the projects this project contains, declared in project.yaml `members`');
+
+memberCmd
+  .command('add <alias> <path>')
+  .description('Create a member: scaffold a wairon project at <path> (its id = <alias>) and declare it in project.yaml `members`')
+  .option('--description <text>', 'what the member is to this project (also its bootstrapped L0 vision)')
+  .action(async (alias: string, memberPath: string, opts) => {
+    await runMemberAdd(alias, memberPath, { description: opts.description });
+  });
+
+memberCmd
+  .command('move <alias> <path>')
+  .description('Relocate a member: move its directory and point its `members` entry there (a legacy L1 mount is moved into `members` first)')
+  .action(async (alias: string, memberPath: string) => {
+    await runMemberMove(alias, memberPath);
+  });
+
+memberCmd
+  .command('internalize <alias>')
+  .description('Take a single-subsystem member back into this project (moves its specs in, removes it from `members`, deletes its .wai project)')
+  .action(async (alias: string) => {
+    await runMemberInternalize(alias);
+  });
+
+// ---------------------------------------------------------------------------
+// subsystem externalize — turn an internal subsystem into a member
 // ---------------------------------------------------------------------------
 
 const subsystemCmd = program
   .command('subsystem')
-  .description('Manage subsystems — create and relocate external (chained) subprojects');
-
-subsystemCmd
-  .command('add <id>')
-  .description('Add an external subsystem: scaffold a child wairon project at --project-path and wire it into this project')
-  .requiredOption('--project-path <dir>', 'relative path where the child subproject lives / will be created')
-  .option('--name <name>', 'human-readable display name (defaults to id)')
-  .action(async (id: string, opts) => {
-    await runSubsystemAdd(id, { projectPath: opts.projectPath, name: opts.name });
-  });
-
-subsystemCmd
-  .command('move <id>')
-  .description('Relocate an external subsystem: move its subproject directory and update its projectPath link')
-  .requiredOption('--project-path <dir>', 'the new relative path for the subproject directory')
-  .action(async (id: string, opts) => {
-    await runSubsystemMove(id, { projectPath: opts.projectPath });
-  });
+  .description('Act on a subsystem of this project');
 
 subsystemCmd
   .command('externalize <id>')
-  .description('Migrate an internal subsystem out into a standalone subproject at --project-path (moves specs, rewrites references; you move the source code)')
-  .requiredOption('--project-path <dir>', 'destination directory for the subproject')
+  .description('Turn an internal subsystem into a member project at --path (moves its specs, declares it in `members`, re-saves references as alias::name; you move the source code)')
+  .requiredOption('--path <dir>', 'destination directory for the member project')
   .action(async (id: string, opts) => {
-    await runSubsystemExternalize(id, { projectPath: opts.projectPath });
-  });
-
-subsystemCmd
-  .command('internalize <id>')
-  .description('Migrate an external subsystem back into this project (moves specs back, deletes its child .wai project)')
-  .action(async (id: string) => {
-    await runSubsystemInternalize(id);
+    await runSubsystemExternalize(id, { path: opts.path });
   });
 
 // ---------------------------------------------------------------------------

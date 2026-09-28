@@ -28,8 +28,11 @@ client expects back from them (item 14). The library surface narrows too:
 (item 4). Stage 2 adds three more: a hosted landscape entry with no audience now
 defaults to `instance` rather than `public`, a legacy L0 entry sourced from a chained
 member binds only what that member exports from its own L0, and `doctor --fix` asks
-before it applies the chaining migration (`--yes` in a script). Nothing here is purely
-additive, so `[minor]` would understate it.
+before it applies the chaining migration (`--yes` in a script). Stage 3 renames and
+removes the mount writers' commands and tools with no aliases, re-keys every member's
+specs by its project id (one re-lock), and gives the deprecated reference and mount
+forms one release of grace. Nothing here is purely additive, so `[minor]` would
+understate it.
 
 ### A third severity: `notice`
 
@@ -256,8 +259,8 @@ already report:
 - **externals:** the consumer declares the producer under its id (`alias: {}`);
 - **pins:** each new or affected alias is pinned once everything else is written;
 - **stage-1 pins:** a member's family pin converts to an external for the parent;
-  its sibling pins are listed as superseded and **stay on disk** until stage 3,
-  because stage-1 resolution still reads them.
+  every family pin is listed as superseded, and stage 3's migration deletes them once
+  the externals that replace them are pinned (see *The migration* under stage 3).
 
 What it will not decide it reports instead (`id-ambiguous`, `target-unpublished`,
 `name-taken`, `narrowed`, `subsystem-reference`, `alias-invalid`, `alias-taken`,
@@ -306,6 +309,170 @@ export, so `EXTERNAL_NOT_EXPORTED` stops firing once the type is exported.
 - **A configuration save no longer appends new keys at the end** of `project.yaml`;
   it places them in schema order. A script that compares the file's text after a save
   will see that difference.
+
+### Members, and a loader without position
+
+Stage 3 of the chained-subsystems work. A family becomes a set of projects that name
+each other: a project declares the projects it contains as **members** in
+`project.yaml`, and every cross-project reference is `alias::name`.
+
+```yaml
+# .wai/project.yaml of the containing project
+members:
+  billing: services/billing                                   # shorthand: alias = key
+  ledger: { path: services/ledger, description: The books }   # long form
+```
+
+**A member is not a subsystem.** It has no L1 spec in its parent's tree, carries no
+content there, and is named only by its alias. Its own `.wai/` tree is designed from
+its own root.
+
+- **Resolution without position.** An id without `::` is local to the project that
+  writes it. `alias::name` goes through the referring project's alias table (its
+  members and declared `externals`) to a public name of that project's resolved L0
+  export table. A reference means the same thing from every root and at every depth,
+  and the loader no longer merges a member's tree into its parent's namespace.
+- **Keys.** A member's specs are keyed by its project id (`<id>::<local id>`) at any
+  depth; the bound root's own specs are bare. A subsystem whose key repeats its
+  member's id (`billing::billing`) keeps that honest id, and only its display
+  collapses: the canvas and the status tree label it `billing` under the member.
+- **The status tree** prints each member as `[Project] alias (id)` holding its own
+  subsystems, never as a `[Subsystem]` of its parent; a legacy mount is marked
+  `[mount form]`. `sdd_get_status` names every member the root declares, legacy
+  mounts included, and the `recursive` option of `sdd_get_status` and
+  `sdd_validate_tree` now reads "descend into members".
+- **New findings.** `DEPRECATED_MOUNT_FORM` (notice), `LOCAL_ID_SHADOWS_PROJECT`
+  (warning), `DUPLICATE_SPEC_ID` (error, types included, naming both files),
+  `PROJECT_ID_COLLISION` (error) and `PROJECT_DEPENDENCY_CYCLE` (warning; an error in
+  stage 5). `NAMESPACE_SHADOWING` retires with the root anchor it guarded.
+- **`strippedKeys` on the change report.** `sdd_update_spec` (and every gated delta)
+  names each key the stored file carries that its level's schema does not know — read
+  from the raw file, as `path: value` — which the write drops, on a dry run too.
+
+**The writers write members, never the L1 mount form.**
+
+| Before | Now |
+|---|---|
+| `wairon subsystem add <id> --project-path <dir>` | `wairon member add <alias> <path> [--description]` |
+| `wairon subsystem move <id> --project-path <dir>` | `wairon member move <alias> <path>` |
+| `wairon subsystem internalize <id>` | `wairon member internalize <alias>` |
+| `wairon subsystem externalize <id> --project-path <dir>` | `wairon subsystem externalize <id> --path <dir>` |
+| `sdd_add_subsystem` with `projectPath` | `sdd_add_member` (a `projectPath` is now refused, naming it) |
+| `sdd_move_subsystem_project` | `sdd_move_member` |
+| `sdd_internalize_subsystem` | `sdd_internalize_member` |
+| `sdd_externalize_subsystem { projectPath }` | `sdd_externalize_subsystem { path }` |
+| `sdd_set_subsystem_project_path` | removed — members are configuration; `sdd_move_member` relocates one |
+
+- **`createMember`** (`wairon member add`, `sdd_add_member`, and `wairon init` run in
+  a subdirectory of a project) scaffolds the member project — its `project.yaml`
+  declaring the alias as its id, and an L0 whose vision is the description — each
+  only when absent, and declares it in `members`. It writes no L1 spec.
+- **`moveMember`** relocates a member's directory and points its entry there. A member
+  still declared by a legacy L1 mount is moved into `members` first — and refused,
+  naming the fields, when that mount carries anything beyond its path and description
+  (a published entry, trusted links, lint allows, a lifecycle, profile, target language,
+  design depth or extension data): a move never drops a field, and `wairon doctor
+  --fix` carries them plan-first.
+- **`externalizeSubsystem`** turns an internal subsystem into a member declared under
+  its id. Every reference keeps its target: the parent's references into it become
+  `<id>::name`, its references back into the parent `<parent id>::name` (the parent is
+  declared as the member's external), and a `super::` it wrote becomes the id of the
+  project it lands in — never `super::`. One whose target lies above the bound root is
+  refused before anything moves. The exports either side now needs are left to
+  `wairon doctor --fix`.
+- **`internalizeMember`** takes a single-subsystem member back and re-saves every
+  reference across the old boundary as a local id. It refuses a member that holds
+  more than one subsystem, or declares members or externals of its own, and a member
+  another project of the family still references — listing each reference, since
+  rewriting other projects is the family migration's job.
+- **`EXTERNAL_UNRESOLVED` from a member's own root.** A member that declares its parent
+  or a sibling as an external no longer reads as unresolved when it is validated from
+  its own root: the validator climbs to the family's top (only where the request may
+  read above its root) and the notice fires only when neither the scan nor the climb
+  finds the producer.
+- **Agent topology.** A member's delegating owner is named `<alias> (member project)`
+  and describes the member it delegates into, not a "chained subproject".
+- **The authoring seam refuses** a subsystem that names `projectPath`, before anything
+  reaches disk, and points at `sdd_add_member`.
+- `saveSubsystemSpec` is gone from the library; a subsystem is saved through the
+  generic `saveSpec('subsystem', …)` like every other level.
+
+**Hosted.** A token qualifier keeps its text (`projectId::alias`, one member alias per
+hop), and each hop is now read as a member alias, looked up in `members` or the legacy
+mount. Every existing token binds exactly the root it bound before, an internal
+subsystem is still no root, and nothing widens. The hosted lock pins each member the
+bound tree declares (it was handing over the subsystem specs, which no longer name
+members, and pinned nothing).
+
+**Retired.** The sibling surface — `.wai/surfaces` sibling pins,
+`projectSubsystemSurface`, `pinFamilySurfaces`, the family pin,
+`sdd_list_external_interfaces`, and `wairon surface pin` / `wairon surface externals`
+— is replaced by externals and their pins.
+
+**Upgrading.**
+
+- **Renamed and removed, with no aliases** (this release is major): the CLI commands
+  `wairon subsystem add` → `wairon member add`, `wairon subsystem move` →
+  `wairon member move`, `wairon subsystem internalize` → `wairon member internalize`,
+  `wairon subsystem externalize --project-path` → `--path`; the MCP tools
+  `sdd_move_subsystem_project` → `sdd_move_member`, `sdd_internalize_subsystem` →
+  `sdd_internalize_member`, the `projectPath` argument of `sdd_externalize_subsystem`
+  → `path`, and `sdd_set_subsystem_project_path` and `sdd_list_external_interfaces`
+  removed; `sdd_add_subsystem` refuses `projectPath` (use `sdd_add_member`); and
+  `wairon surface pin` / `wairon surface externals` removed. Library callers of
+  `saveSubsystemSpec`, `createChainedSubsystem`, `moveSubsystemProject` and
+  `internalizeSubsystem` move to `saveSpec('subsystem', …)`, `createMember`,
+  `moveMember` and `internalizeMember`. Scripts and agent prompts that name any of
+  these need the new names.
+- **Members are re-keyed by project id.** A member's specs used to be keyed by the
+  mount path that reached them (`waffler_core::transpiler::*`); they are now keyed by
+  the member's project id (`transpiler::*`). A lock taken before this release reads as
+  stale for the specs whose keys moved: re-lock once.
+- **Deprecated forms, one release of grace.** A leading `::`, `super::`, a member path
+  (`billing::invoice::invoice_portal`) and an L1 subsystem carrying `projectPath` still
+  resolve — a path-form first segment naming a family project's id walks on from that
+  project, so each reads the same from every root — and each is reported
+  (`DEPRECATED_REFERENCE_FORM`, `DEPRECATED_MOUNT_FORM`, notices). The next major
+  release stops reading them.
+- **`wairon doctor --fix` rewrites them** — see *The migration* below.
+
+**The migration.** `wairon doctor --report chaining` prints what the family needs and
+writes nothing; `wairon doctor --fix` prints the same plan, asks, and applies it
+(`--fix --yes` in CI and scripts; with no terminal and no `--yes` it writes none of it).
+Run it from any project of the family: it climbs to the top and plans the whole family.
+On top of stage 2c's ids, exports, externals and pins, it now:
+
+- **moves every legacy L1 mount into its parent's `members`** — its `projectPath` as
+  the path, its description into the member's long form — and deletes the mount
+  document. A mount's published entry becomes an L0 export of the member at audience
+  `project` (published first at L1 in the member subsystem that owns the component,
+  with the entry's transport kind and details, where that subsystem does not publish it
+  yet). Empty arrays, lint allows about the mount and an entry's `consumers` retire with
+  the mount, each listed. A non-empty `trustedLinks`, a `lifecycle`, `profile`,
+  `targetLanguage`, `designDepth` or `ext` on a mount **blocks** the migration — the
+  member has to hold it itself — and nothing is written until a person moves or drops it;
+- **exports a project-level type as the project's own** (`{ typeDef, audience: project }`
+  with no `from`) where another project uses it, and **writes a minimal L0** — the
+  project's name and a one-line vision — for a project that exports and has none;
+- **rewrites every reference out of a deprecated form**, from the family's top root, to
+  the text the writer emits: a bare local id where it lands in its own project, else
+  `alias::name` — raw positions included (type strings, declared `calls`, `component:`
+  credential sources, trusted links, and the display signature beside a rewritten
+  parameter). Every rewrite is listed, grouped per project and spec with counts. A spec
+  that also holds a deprecated reference with no canonical text keeps all its rewrites
+  back, named in a `rewrite-unavailable` finding;
+- **deletes the stage-1 family pins** under `.wai/surfaces` (the parent's and every
+  sibling's), last, once the externals that replace them are pinned — one line per
+  project in the plan;
+- **lists every key its first L0 write will drop** — a key the stored L0 carries that
+  the schema does not know, e.g. `status: draft` — under a "will be removed" line, so
+  the one confirmation covers it.
+
+A second run plans nothing. The migration **locks nothing**: it names every project
+whose approval the writes staled; re-lock each once with `wairon lock`. Proven on a copy
+of a sixteen-project family: 15 mounts moved, 334 references rewritten, 169 family pins
+deleted, and `DEPRECATED_REFERENCE_FORM` / `DEPRECATED_MOUNT_FORM` / `EXTERNAL_UNDECLARED`
+at zero afterwards.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 

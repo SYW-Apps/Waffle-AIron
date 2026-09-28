@@ -108,7 +108,7 @@ interface GenerateOptions {
 export async function runGenerate(options: GenerateOptions = {}): Promise<void> {
   await generateLayer(options);
 
-  // Cascade one layer at a time into each DIRECT chained subproject, generating
+  // Cascade one layer at a time into each DIRECT member, generating
   // its agents in its own .wai/.claude. Skipped for --no-recurse, dry runs, and
   // scoped (--domain/--root) runs. Each subproject is ensured-initialized first
   // (non-destructive) so a not-yet-runnable child becomes generable in place.
@@ -120,9 +120,9 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
   const children = listDirectChainedSubprojects(getProjectRoot());
   for (const child of children) {
     logger.blank();
-    logger.info(`↳ Chained subproject "${child.subsystemId}" — generating its layer in ${path.relative(getProjectRoot(), child.dir) || '.'}/`);
+    logger.info(`↳ Member "${child.alias}" — generating its layer in ${path.relative(getProjectRoot(), child.dir) || '.'}/`);
     await runWithProjectRoot(child.dir, async () => {
-      ensureProjectInitialized(child.subsystemId, child.subsystemId); // non-destructive; a child is identified by its mount's subsystem id
+      ensureProjectInitialized(child.alias, child.alias); // non-destructive; a member is identified by the alias its parent declares it under
       await runGenerate(options); // recurse: this child's layer + its own subprojects
     });
   }

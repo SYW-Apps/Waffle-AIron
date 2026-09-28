@@ -256,7 +256,7 @@ describe('identity orchestrator (sdd_host)', () => {
     it('mintToken rejects an UNKNOWN mount with an actionable error — never stored broken', () => {
       expect(() =>
         identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-a::ghost'] }),
-      ).toThrow(/unknown subproject mount "ghost" on "proj-a"/);
+      ).toThrow(/unknown member "ghost" on "proj-a"/);
       // The failed mint persisted nothing.
       expect(listCredentials(dataDir, '*').some((r) => r.projects.includes('proj-a::ghost'))).toBe(false);
     });
@@ -264,7 +264,7 @@ describe('identity orchestrator (sdd_host)', () => {
     it('mintToken rejects a NON-CHAINED subsystem (exists, but carries no projectPath)', () => {
       expect(() =>
         identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-a::plain'] }),
-      ).toThrow(/not a chained subproject/);
+      ).toThrow(/an internal subsystem is not a member/);
     });
 
     it('mintSelfToken mints a qualified token: permission anchors on the TOP project, entry stored verbatim', () => {
@@ -281,10 +281,10 @@ describe('identity orchestrator (sdd_host)', () => {
     it('mintSelfToken rejects an unknown or non-chained mount with guidance (self-mint variant)', () => {
       const caller = tokenWith('project:read', 'project', 'proj-a');
       expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::ghost', false)).toThrow(
-        /unknown subproject mount "ghost" on "proj-a"/,
+        /unknown member "ghost" on "proj-a"/,
       );
       expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::plain', false)).toThrow(
-        /not a chained subproject/,
+        /an internal subsystem is not a member/,
       );
     });
 

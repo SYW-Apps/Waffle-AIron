@@ -460,6 +460,21 @@ export const ExternalDeclarationSchema = z.object({
 });
 export type ExternalDeclaration = z.infer<typeof ExternalDeclarationSchema>;
 
+/**
+ * member_declaration — one `members` entry of project.yaml in its long form:
+ * the value under an alias key. The shorthand `billing: services/billing` is
+ * read as `{ path: services/billing }`. A member is a project this one
+ * contains: it has no spec in this project's tree and is named only by its
+ * alias. Plain strings: a malformed path is REPORTED, never unreadable.
+ */
+export const MemberDeclarationSchema = z.object({
+  /** The member's root directory, relative to the declaring project's root. */
+  path: z.string(),
+  /** What the member is to this project, in the declaring project's words. */
+  description: z.string().optional(),
+});
+export type MemberDeclaration = z.infer<typeof MemberDeclarationSchema>;
+
 export const ProjectConfigSchema = z.object({
   /**
    * Schema version — used to detect incompatible config formats in future
@@ -489,6 +504,17 @@ export const ProjectConfigSchema = z.object({
    * malformed alias is REPORTED (EXTERNAL_UNRESOLVED), never unreadable.
    */
   externals: z.record(ExternalDeclarationSchema).optional(),
+
+  /**
+   * The projects this project contains, keyed by alias: `billing:
+   * services/billing` (shorthand, the path relative to this root) or `ledger:
+   * { path: services/ledger, description: ... }` (long form). A member is not a
+   * subsystem of this project: it carries no content here, and this project
+   * reaches it only as `alias::name`, through the member's own L0 export table.
+   * Together with `externals` it is this project's alias table. The legacy L1
+   * `projectPath` mount still loads for one release (DEPRECATED_MOUNT_FORM).
+   */
+  members: z.record(z.union([z.string(), MemberDeclarationSchema])).optional(),
 
   /**
    * The type/profile of the project, which configures targeted guidelines, rules,
@@ -745,16 +771,18 @@ export interface DeclaredExternal {
  * DeclaredExternal per alias in declaration order. A malformed alias or
  * producer id is recorded as the entry's problem, never dropped.
  */
-export function declaredExternals(config: Pick<ProjectConfig, 'externals'>): DeclaredExternal[] {
+export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Partial<Pick<ProjectConfig, 'members'>>): DeclaredExternal[] {
   return Object.entries(config.externals ?? {}).map(([alias, declaration]) => {
     const project = declaration?.project ?? alias;
     const problem = !EXTERNAL_ALIAS_RE.test(alias)
       ? (PROJECT_ID_RE.test(alias)
         ? `the alias "${alias}" is not a reference name ([a-z0-9-_]+) — a dotted producer id needs an explicit alias, e.g. \`${alias.replace(/\./g, '-')}: { project: ${alias} }\``
         : `the alias "${alias}" breaks [a-z0-9-_]+`)
-      : !PROJECT_ID_RE.test(project)
-        ? `the producer id "${project}" breaks the project-id grammar`
-        : undefined;
+      : config.members?.[alias] !== undefined
+        ? `the alias "${alias}" is also declared under \`members\` — one alias names one project`
+        : !PROJECT_ID_RE.test(project)
+          ? `the producer id "${project}" breaks the project-id grammar`
+          : undefined;
     return {
       alias,
       project,
@@ -762,4 +790,60 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'>): Dec
       ...(problem ? { problem } : {}),
     };
   });
+}
+
+// ── project_config members ──────────────────────────────────────────────────
+
+/**
+ * declared_member — one member as the configuration declares it, normalized
+ * from either form: the alias, the path as written, the description when the
+ * long form gives one, and what is wrong with the declaration on its own
+ * (before the loader looks for the directory).
+ */
+export interface DeclaredMember {
+  alias: string;
+  /** The member's root directory as written, relative to the declaring root. */
+  path: string;
+  /** The long form's description, when given. */
+  description?: string;
+  /** Why the declaration cannot be used as written. */
+  problem?: string;
+}
+
+/** A `members` value read the way both forms mean it. */
+export function memberDeclarationOf(value: string | MemberDeclaration): MemberDeclaration {
+  return typeof value === 'string' ? { path: value } : value;
+}
+
+/**
+ * project_config.declaredMembers — the configuration's `members`, one
+ * DeclaredMember per alias in declaration order, the shorthand read as
+ * `{ path }`. A malformed alias, an empty or absolute path, or an alias
+ * `externals` also declares is recorded as the entry's problem, never dropped.
+ */
+export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 'externals'>>): DeclaredMember[] {
+  return Object.entries(config.members ?? {}).map(([alias, value]) => {
+    const declaration = memberDeclarationOf(value);
+    const written = typeof declaration?.path === 'string' ? declaration.path : '';
+    const problem = !EXTERNAL_ALIAS_RE.test(alias)
+      ? `the member alias "${alias}" breaks [a-z0-9-_]+`
+      : written.trim() === ''
+        ? `the member "${alias}" declares an empty path`
+        : isAbsolutePath(written)
+          ? `the member "${alias}" declares the absolute path "${written}" — a member path is relative to the project declaring it`
+          : config.externals?.[alias] !== undefined
+            ? `the alias "${alias}" is also declared under \`externals\` — one alias names one project`
+            : undefined;
+    return {
+      alias,
+      path: written,
+      ...(declaration?.description !== undefined ? { description: declaration.description } : {}),
+      ...(problem ? { problem } : {}),
+    };
+  });
+}
+
+/** An absolute path on any platform this configuration may be read on. */
+function isAbsolutePath(p: string): boolean {
+  return /^([/\\]|[A-Za-z]:)/.test(p);
 }

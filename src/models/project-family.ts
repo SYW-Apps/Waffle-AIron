@@ -1,46 +1,70 @@
 import type { ExportUsage } from './exports.js';
+import type { SubsystemSpec } from './specs.js';
 
 // ---------------------------------------------------------------------------
 // The project graph: every project root one scan read, the project that owns
-// each spec id, and the references that leave the project making them.
+// each spec key, and the references that leave the project making them.
 //
 // Every project is a crate of its own (decision 9): another project reaches it
 // only through its L0 exports, and only as a dependency it declared — a member
-// it mounts, or an external it names in project.yaml. These are the shapes the
+// it declares, or an external it names in project.yaml. A cross-project
+// reference is `alias::name` (stage 3); the leading `::`, `super::` and
+// member-path forms still bind for one release. These are the shapes the
 // project family index answers with, and the pure lookups every consumer of
 // the graph asks it. Nothing here does I/O, and nothing here judges.
 // ---------------------------------------------------------------------------
 
+/** How a reference with `::` was read. Only `alias` is written by stage 3. */
+export type ReferenceForm = 'alias' | 'leading' | 'super' | 'path';
+
+/** What a reference with `::` bound to. */
+export type ReferenceBinding = 'exported' | 'unexported' | 'undeclared' | 'outside' | 'unresolved' | 'local';
+
 /**
  * authored_reference — a reference as its author wrote it, recorded by the scan
- * before qualification erases the form. Only the leading-`::` form is recorded:
- * `super::` has no alternative before stage 3, and wairon's own writer emits it.
+ * before binding replaces it with the in-memory key of its target: every
+ * reference that carries `::`, with the form it was read in, what it bound to,
+ * and the text the writer emits for it now.
  */
 export interface AuthoredReference {
-  /** The qualified id of the spec that holds the reference. */
+  /** The in-memory key of the spec that holds the reference. */
   specId: string;
-  /** Where in that spec (dependsOn, owns, dispatch, mounts, lifecycle, publicInterfaces, trustedLinks, contract, narrative, type). */
+  /** Where in that spec (dependsOn, owns, dispatch, mounts, lifecycle, publicInterfaces, trustedLinks, contract, subsystem, narrative, calls, auth, type). */
   position: string;
   /** The reference exactly as written. */
   authored: string;
-  /** The absolute id it qualified to — the form to write instead. */
+  /** alias | leading | super | path. */
+  form: ReferenceForm;
+  /** exported | unexported | undeclared | outside | unresolved | local. */
+  binding: ReferenceBinding;
+  /** The in-memory key it bound to; equal to `authored` for outside and unresolved. */
   resolved: string;
+  /** The key of the project it lands in; absent for outside and unresolved. */
+  producer?: string;
+  /** The public name it bound to, for exported. */
+  publicName?: string;
+  /** The text the writer emits for `resolved` from the referring project; absent when none can be written. */
+  rewrite?: string;
 }
 
 /** cross_project_reference — one reference that leaves the project that makes it. */
 export interface CrossProjectReference {
-  /** The qualified id of the referring spec. */
+  /** The in-memory key of the referring spec. */
   specId: string;
   /** dependsOn | call | register | dispatch | calls | dispatch-table | mounts | lifecycle | auth | reexport | type */
   position: string;
-  /** The qualified id the reference names: a component, a subsystem (a re-export source) or a type. */
+  /** The in-memory key the reference names: a component, a subsystem (a re-export source) or a type. */
   target: string;
   /** The contract method it reaches, or `capability:<name>`; absent for the component or type as a whole. */
   member?: string;
-  /** The namespace of the project that owns the referring spec. */
+  /** The key of the project that owns the referring spec. */
   consumer: string;
-  /** The namespace of the project the reference lands in. */
+  /** The key of the project the reference lands in. */
   producer: string;
+  /** The reference as its author wrote it. */
+  authored: string;
+  /** The producer's public name it bound to; absent when it bound to none. */
+  publicName?: string;
 }
 
 /**
@@ -55,7 +79,7 @@ export interface ResolvedExternal {
   sourceKind: 'family' | 'path' | 'unresolved';
   /** For a family producer: parent | sibling | member | family. */
   relation?: 'parent' | 'sibling' | 'member' | 'family';
-  /** The producer's namespace in the family graph, for a family producer. */
+  /** The producer's key in the family graph, for a family producer. */
   producer?: string;
   /** The producer's root directory, absolute. */
   directory?: string;
@@ -65,9 +89,9 @@ export interface ResolvedExternal {
   problem?: string;
 }
 
-/** project_node — one project root of the family the scan read, keyed by its mount namespace. */
+/** project_node — one project root of the family the scan read, keyed by its in-memory key. */
 export interface ProjectNode {
-  /** '' for the bound root, else the qualified id of the subsystem that mounts it. */
+  /** '' for the bound root, else its effective project id (or its alias path when the id is taken or missing). */
   namespace: string;
   /** The effective project id (declared, else the name slug); absent when none can be made. */
   id?: string;
@@ -75,28 +99,37 @@ export interface ProjectNode {
   idSource: 'declared' | 'name' | 'none';
   /** The display name, absent when the root has no readable configuration. */
   name?: string;
-  /** The namespace of the project that mounts this one; absent for the bound root. */
+  /** The key of the project that declares this one as a member; absent for the bound root. */
   parent?: string;
-  /** The local id of the mounting subsystem; absent for the bound root. */
+  /** The alias the parent declares it under; absent for the bound root. */
   mountAlias?: string;
+  /** members | mount: how the parent declares it; absent for the bound root. */
+  mountForm?: 'members' | 'mount';
+  /** The legacy L1 mount subsystem as its parent wrote it; null otherwise. */
+  legacyMount: SubsystemSpec | null;
+  /** What the parent's declaration says the member is (the `members` description, or a legacy mount's); shown on its canvas node. */
+  memberDescription?: string;
+  /** Whether the project has an L0 of its own. */
+  hasSystem: boolean;
   /** The project's root directory, absolute. */
   directory: string;
-  /** The namespaces of the projects this one mounts directly. */
+  /** The keys of the projects this one declares as members, either form. */
   members: string[];
+  /** The project's alias table: alias → the key of the project it names (members and family externals). */
+  aliases: Map<string, string>;
   /** The project's declared externals, each bound to its producer. */
   externals: ResolvedExternal[];
 }
 
 /**
- * project_family_problem — a fact about the family's identities no single
- * project can see alone. Reported, never judged.
+ * project_family_problem — a fact about the family's identities and membership
+ * no single project can see alone. Reported, never judged.
  */
 export interface ProjectFamilyProblem {
-  /** id-collision | no-id | defaulted */
-  kind: 'id-collision' | 'no-id' | 'defaulted';
-  /** The id two or more projects resolve to; the mount's subsystem id to declare, for a defaulted member. */
+  kind: 'id-collision' | 'no-id' | 'defaulted' | 'member-absent' | 'alias-conflict' | 'duplicate-spec';
+  /** The colliding id; the alias to declare (defaulted); the alias (member-absent, alias-conflict); the key (duplicate-spec). */
   id?: string;
-  /** The namespaces of the projects concerned ('' is the bound root). */
+  /** The keys of the projects concerned ('' is the bound root). */
   projects: string[];
   /** What is wrong, in words a finding can quote. */
   detail: string;
@@ -106,11 +139,11 @@ export interface ProjectFamilyProblem {
 export interface ProjectFamily {
   /** Every project root the scan read, bound root first, then members in walk order. */
   nodes: ProjectNode[];
-  /** Spec id → the namespace of the project that declares it. */
+  /** Spec key → the key of the project that declares it. */
   owners: Map<string, string>;
-  /** Every leading-`::` reference across the family. */
+  /** Every reference with `::` across the family, as written and as bound. */
   authoredReferences: AuthoredReference[];
-  /** Id collisions and id-less projects across the family. */
+  /** Identity and membership problems across the family. */
   problems: ProjectFamilyProblem[];
   /** Every reference in the family that leaves the project making it. */
   references: CrossProjectReference[];
@@ -128,59 +161,154 @@ export interface ExternalBinding {
   reachable: boolean;
 }
 
+// ---- reading a reference without position ----------------------------------
+
+/** A project as reference reading sees it: its key, its parent, its alias table and its own subsystem ids. */
+export interface ReadableProject {
+  namespace: string;
+  parent?: string;
+  /** The effective project id, when it has one. */
+  id?: string;
+  /** alias → the key of the project it names, for every producer the scan read. */
+  aliases: Map<string, string>;
+  /** Every alias it declares, including externals whose producer the scan did not read. */
+  declaredAliases: ReadonlySet<string>;
+  /** Its own subsystem local ids — a subsystem segment qualifies a type, it names no project. */
+  subsystems: ReadonlySet<string>;
+}
+
+/** Where a reference lands: the project and the local id in it, or why it lands nowhere. */
+export type ReferenceLanding =
+  | { kind: 'project'; form?: ReferenceForm; project: string; name: string }
+  | { kind: 'outside'; form: ReferenceForm }
+  | { kind: 'unresolved'; form: ReferenceForm };
+
+/**
+ * Walk a member path from `start`: every segment but the last is an alias of
+ * the project reached so far (a subsystem segment qualifies the item and is
+ * skipped), the last a local id.
+ */
+function walkMemberPath(
+  byKey: Map<string, ReadableProject>,
+  start: ReadableProject,
+  segments: string[],
+): { project: ReadableProject; name: string } | 'outside' | null {
+  let node = start;
+  for (const segment of segments.slice(0, -1)) {
+    const next = node.aliases.get(segment);
+    if (next !== undefined) {
+      const found = byKey.get(next);
+      if (!found) return null;
+      node = found;
+      continue;
+    }
+    if (node.declaredAliases.has(segment)) return 'outside';
+    if (node.subsystems.has(segment)) continue;
+    return null;
+  }
+  return { project: node, name: segments[segments.length - 1] };
+}
+
+/**
+ * Read a reference from the project `from` the way the scan binds one, without
+ * position: an id without `::` is local; `alias::name` goes through `from`'s
+ * alias table; a first segment naming one of `from`'s own subsystems qualifies
+ * a local item; the deprecated forms still bind for one release — a leading
+ * `::` is a member path from the bound root, each `super::` climbs one
+ * containing project and reads the rest there, and a first segment `from` does
+ * not declare is a member path from the bound root, else a family project id.
+ */
+export function landReference(projects: ReadableProject[], reference: string, from: string): ReferenceLanding {
+  const byKey = new Map(projects.map((p) => [p.namespace, p] as const));
+  const origin = byKey.get(from);
+  const root = byKey.get('');
+  if (!reference.includes('::')) return { kind: 'project', project: from, name: reference };
+  const land = (form: ReferenceForm, start: ReadableProject | undefined, segments: string[]): ReferenceLanding => {
+    if (!start) return { kind: 'unresolved', form };
+    const walked = walkMemberPath(byKey, start, segments);
+    if (walked === 'outside') return { kind: 'outside', form };
+    if (walked) return { kind: 'project', form, project: walked.project.namespace, name: walked.name };
+    return { kind: 'unresolved', form };
+  };
+  if (reference.startsWith('::')) return land('leading', root, reference.slice(2).split('::'));
+  const segments = reference.split('::');
+  if (segments[0] === 'super') {
+    let node = origin;
+    while (segments[0] === 'super') {
+      segments.shift();
+      if (!node || node.parent === undefined) return { kind: 'outside', form: 'super' };
+      node = byKey.get(node.parent);
+    }
+    if (segments.length === 0 || !node) return { kind: 'unresolved', form: 'super' };
+    return land('super', node, segments);
+  }
+  if (!origin) return { kind: 'unresolved', form: 'path' };
+  const [first] = segments;
+  if (origin.aliases.has(first) || origin.declaredAliases.has(first)) {
+    if (!origin.aliases.has(first)) return { kind: 'outside', form: 'alias' };
+    return land(segments.length === 2 ? 'alias' : 'path', origin, segments);
+  }
+  if (origin.subsystems.has(first)) return { kind: 'project', project: from, name: segments[segments.length - 1] };
+  const fromRoot = root ? walkMemberPath(byKey, root, segments) : null;
+  if (fromRoot && fromRoot !== 'outside') return { kind: 'project', form: 'path', project: fromRoot.project.namespace, name: fromRoot.name };
+  // A first segment naming a project of the family by its id (or key) — the
+  // bound root itself included, as a path written from a root above it reads —
+  // walks on from that project.
+  const byId = projects.filter((p) => p.id === first || (p.namespace !== '' && p.namespace === first));
+  if (byId.length === 1) {
+    const walked = walkMemberPath(byKey, byId[0], segments.slice(1));
+    if (walked === 'outside') return { kind: 'outside', form: 'path' };
+    if (walked) return { kind: 'project', form: 'path', project: walked.project.namespace, name: walked.name };
+  }
+  return { kind: fromRoot === 'outside' ? 'outside' : 'unresolved', form: 'path' };
+}
+
+/** The in-memory key of a local id in a project. */
+export function keyIn(project: string, localId: string): string {
+  return project ? `${project}::${localId}` : localId;
+}
+
 // ---- project_family behaviour ----------------------------------------------
 
-/** project_family.node — the node with that namespace, or null. */
+/** project_family.node — the node with that key, or null. */
 export function familyNode(family: ProjectFamily, namespace: string): ProjectNode | null {
   return family.nodes.find((n) => n.namespace === namespace) ?? null;
 }
 
-/**
- * Qualify a reference as the loader would from the project at `from`: a
- * leading `::` is absolute, each `super::` climbs one mount, a first segment
- * naming a bound-root subsystem is absolute, anything else is prefixed with
- * `from`. A bound-root subsystem is recognized by its bare id among the owned
- * specs. Null when `super::` climbs above the bound root.
- */
-export function qualifyReference(family: ProjectFamily, reference: string, from: string): string | null {
-  if (reference.startsWith('::')) return reference.slice(2);
-  if (reference.startsWith('super::')) {
-    const scope = from ? from.split('::') : [];
-    const parts = reference.split('::');
-    while (parts[0] === 'super') {
-      if (scope.length === 0) return null;
-      parts.shift();
-      scope.pop();
-    }
-    return [...scope, ...parts].join('::');
-  }
-  const first = reference.split('::')[0];
-  if (!from || family.owners.has(first) && !first.includes('::') && ownedAtRoot(family, first)) return reference;
-  return `${from}::${reference}`;
+/** The nodes as reference reading sees them. */
+function readableProjects(family: ProjectFamily): ReadableProject[] {
+  return family.nodes.map((node) => ({
+    namespace: node.namespace,
+    ...(node.parent !== undefined ? { parent: node.parent } : {}),
+    ...(node.id !== undefined ? { id: node.id } : {}),
+    aliases: node.aliases,
+    declaredAliases: new Set([...node.aliases.keys(), ...node.externals.map((e) => e.alias)]),
+    // The graph keeps no spec kinds; a reference the loader leaves raw is read
+    // without the subsystem-qualifier reading, which only type names use.
+    subsystems: new Set<string>(),
+  }));
 }
 
-/** Whether a bare id is a bound-root subsystem (a root-level spec, or a mount — whose namespace it is). */
-function ownedAtRoot(family: ProjectFamily, id: string): boolean {
-  const owner = family.owners.get(id);
-  return owner === '' || owner === id;
-}
-
-/** project_family.ownerOf — the project that declares the spec, or null for an id the scan did not read. */
+/** project_family.ownerOf — the project that declares the spec, or null for a key the scan did not read. */
 export function ownerOf(family: ProjectFamily, specId: string): ProjectNode | null {
   const ns = family.owners.get(specId);
   return ns === undefined ? null : familyNode(family, ns);
 }
 
 /**
- * project_family.producerOf — the project a reference lands in: the owner of
- * the spec it names, else the node whose namespace is the longest prefix of
- * it. With `from`, the reference is first qualified from that project. Null
- * for a reference that climbs above the bound root.
+ * project_family.producerOf — the project a reference lands in. With `from`,
+ * the reference is read from that project the way the scan binds one; then
+ * the owner of the spec it names, else the node whose key is the longest
+ * prefix of it. Null for a reference nothing binds.
  */
 export function producerOf(family: ProjectFamily, reference: string, from?: string): ProjectNode | null {
-  const target = from === undefined ? reference : qualifyReference(family, reference, from);
-  if (target === null || target.startsWith('super::')) return null;
-  const owned = ownerOf(family, target.startsWith('::') ? target.slice(2) : target);
+  let target = reference;
+  if (from !== undefined) {
+    const landing = landReference(readableProjects(family), reference, from);
+    if (landing.kind !== 'project') return null;
+    target = keyIn(landing.project, landing.name);
+  }
+  const owned = ownerOf(family, target);
   if (owned) return owned;
   let best: ProjectNode | null = null;
   for (const node of family.nodes) {
@@ -192,12 +320,87 @@ export function producerOf(family: ProjectFamily, reference: string, from?: stri
 
 /**
  * project_family.declares — whether the consumer may reach the producer as a
- * declared dependency: a direct member (the mount is the alias), or one of the
- * consumer's externals resolves to it.
+ * declared dependency: a direct member (either form), or one of the consumer's
+ * externals resolves to it.
  */
 export function declares(family: ProjectFamily, consumer: string, producer: string): boolean {
   const node = familyNode(family, consumer);
   if (!node) return false;
   return node.members.includes(producer)
+    || [...node.aliases.values()].includes(producer)
     || node.externals.some((e) => e.sourceKind === 'family' && e.producer === producer);
+}
+
+/**
+ * project_family.dependencyCycles — the loops in the project dependency graph:
+ * an edge from consumer to producer per cross-project reference (containment
+ * is no edge). Each strongly connected set of two or more projects is answered
+ * once, as the keys along one closed walk through every project of the set, in
+ * walk order from its first project, which is repeated at the end.
+ */
+export function dependencyCycles(family: ProjectFamily): string[][] {
+  const order = family.nodes.map((n) => n.namespace);
+  const edges = new Map<string, Set<string>>(order.map((k) => [k, new Set<string>()]));
+  for (const ref of family.references) {
+    if (ref.consumer === ref.producer) continue;
+    if (!edges.has(ref.consumer)) edges.set(ref.consumer, new Set());
+    edges.get(ref.consumer)!.add(ref.producer);
+  }
+  const rank = (k: string): number => { const i = order.indexOf(k); return i === -1 ? order.length : i; };
+  const index = new Map<string, number>();
+  const low = new Map<string, number>();
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const groups: string[][] = [];
+  let next = 0;
+  const visit = (v: string): void => {
+    index.set(v, next); low.set(v, next); next++;
+    stack.push(v); onStack.add(v);
+    for (const w of [...(edges.get(v) ?? [])].sort((a, b) => rank(a) - rank(b))) {
+      if (!index.has(w)) { visit(w); low.set(v, Math.min(low.get(v)!, low.get(w)!)); }
+      else if (onStack.has(w)) low.set(v, Math.min(low.get(v)!, index.get(w)!));
+    }
+    if (low.get(v) === index.get(v)) {
+      const group: string[] = [];
+      let w: string;
+      do { w = stack.pop()!; onStack.delete(w); group.push(w); } while (w !== v);
+      if (group.length > 1) groups.push(group);
+    }
+  };
+  for (const k of [...edges.keys()].sort((a, b) => rank(a) - rank(b))) if (!index.has(k)) visit(k);
+  // One closed walk through each group, in walk order from its first project.
+  return groups
+    .map((group) => {
+      const members = new Set(group);
+      const ordered = [...group].sort((a, b) => rank(a) - rank(b));
+      const walk = [ordered[0]];
+      for (const next of [...ordered.slice(1), ordered[0]]) {
+        if (next !== ordered[0] && walk.includes(next)) continue;
+        walk.push(...shortestPath(walk[walk.length - 1], next, members, edges, rank));
+      }
+      return walk;
+    })
+    .sort((a, b) => rank(a[0]) - rank(b[0]));
+}
+
+/** The keys after `from` on a shortest path to `to` inside one strongly connected group (breadth-first). */
+function shortestPath(from: string, to: string, members: Set<string>, edges: Map<string, Set<string>>, rank: (k: string) => number): string[] {
+  const prev = new Map<string, string>();
+  const queue = [from];
+  const seen = new Set([from]);
+  while (queue.length) {
+    const v = queue.shift()!;
+    for (const w of [...(edges.get(v) ?? [])].filter((x) => members.has(x)).sort((a, b) => rank(a) - rank(b))) {
+      if (w === to) {
+        const path = [w];
+        for (let at = v; at !== from; at = prev.get(at)!) path.unshift(at);
+        return path;
+      }
+      if (seen.has(w)) continue;
+      seen.add(w);
+      prev.set(w, v);
+      queue.push(w);
+    }
+  }
+  return [to];
 }

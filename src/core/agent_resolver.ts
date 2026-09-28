@@ -27,6 +27,9 @@ import {
   getInterfacePath,
   getImplementationPath,
   resolveSubprojectForNamespace,
+  // The members this layer declares (stage 3: a member is not a subsystem), each
+  // collapsing to one delegating owner.
+  graph,
 } from './specs.js';
 import { ComponentSpec, implementationSourceFiles } from '../models/specs.js';
 import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
@@ -244,14 +247,29 @@ export function resolveAgentTopology(): AgentRecord[] {
   if (!system) return [];
 
   // LAYERED topology: generate agents ONLY for THIS project's own layer. The
-  // loader federates every chained subproject recursively (their specs carry a
-  // `::` namespace prefix); those belong to the SUBPROJECT's layer, generated in
-  // the subproject's own .wai. Here a chained subproject collapses to a single
-  // delegating owner. A LOCAL spec id carries no `::` prefix. This keeps each
+  // loader reads every member project too (their specs carry the member's
+  // project key as a `::` prefix); those belong to the MEMBER's layer, generated
+  // in the member's own .wai. Here a member collapses to a single delegating
+  // owner. A LOCAL spec id carries no `::` prefix. This keeps each
   // .claude/agents/ (and the context every session loads) proportional to one
   // layer, not the whole deep tree.
   const isLocal = (id: string): boolean => !id.includes('::');
-  const subsystems = loadSubsystemSpecs().filter((s) => isLocal(s.id));
+  // Each member the bound root declares — `members` or a legacy L1 mount — is
+  // one delegating owner here, shaped as the mount subsystem it used to be.
+  const members = graph().nodes
+    .filter((n) => n.parent === '' && n.mountAlias !== undefined)
+    .map((n) => ({
+      id: n.mountAlias!,
+      name: n.mountAlias!,
+      projectPath: path.relative(getProjectRoot(), n.directory).replace(/\\/g, '/'),
+      form: n.mountForm,
+      createdAt: n.legacyMount?.createdAt ?? system.createdAt,
+      updatedAt: n.legacyMount?.updatedAt ?? system.updatedAt,
+    }));
+  const subsystems = [
+    ...loadSubsystemSpecs().filter((s) => isLocal(s.id)),
+    ...members,
+  ] as (ReturnType<typeof loadSubsystemSpecs>[number] & { form?: 'members' | 'mount' })[];
   const components = loadComponentSpecs().filter((c) => isLocal(c.id) && isLocal(c.subsystem));
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
@@ -287,19 +305,23 @@ export function resolveAgentTopology(): AgentRecord[] {
 
   // 2. Subsystem Owners (Domain Owners)
   for (const sub of subsystems) {
-    // A chained subproject collapses to ONE delegating owner: it owns only the
-    // parent-side mount spec and points work DOWN into the subproject, whose own
-    // detailed agents are generated in that subproject's .wai (one layer deeper).
+    // A member project collapses to ONE delegating owner: it owns only the
+    // parent-side declaration and points work DOWN into the member, whose own
+    // detailed agents are generated in that member's .wai (one layer deeper).
     // It never enumerates the child's internals here — that is the whole point of
     // stacking agents per layer instead of flattening the tree at the top.
     if (sub.projectPath) {
-      const mountSpecPath = path.relative(getProjectRoot(), getSubsystemPath(sub.id)).replace(/\\/g, '/');
+      // The declaration it owns: the legacy mount's spec file, or — declared in
+      // project.yaml `members` — the member's own tree it delegates into.
+      const mountSpecPath = sub.form === 'members'
+        ? `${sub.projectPath}/**`
+        : path.relative(getProjectRoot(), getSubsystemPath(sub.id)).replace(/\\/g, '/');
       agents.push({
         id: `${sub.id}-owner`,
-        name: `${sub.name} (chained subproject)`,
-        description: `Delegates into the "${sub.id}" chained subproject at ${sub.projectPath}. Its own agents live in that subproject's .wai — run \`wairon generate\` there (or spawn from ${sub.projectPath}/.claude/agents). Do not implement its internals from this layer.`,
+        name: `${sub.name} (member project)`,
+        description: `Delegates into the member project "${sub.id}" at ${sub.projectPath}. Its own agents live in that member's .wai — run \`wairon generate\` there (or spawn from ${sub.projectPath}/.claude/agents). Do not implement its internals from this layer.`,
         template: 'domain-owner',
-        creationReason: `Automatically inferred from a chained subproject subsystem: ${sub.id}`,
+        creationReason: `Automatically inferred from the member "${sub.id}" this project declares`,
         domainRoot: sub.id,
         ownedPaths: [mountSpecPath],
         readPaths: ['**'],

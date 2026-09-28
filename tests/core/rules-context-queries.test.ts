@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { buildRuleContext, type BuildContextOptions } from '../../src/core/rules/index.js';
 import { emptyExtensions } from '../../src/core/extensions.js';
 import { RulesConfigSchema } from '../../src/models/project.js';
-import type { SurfaceContractEntry, SurfaceSnapshot } from '../../src/models/index.js';
+import type { ProjectFamily, SurfaceContractEntry, SurfaceSnapshot } from '../../src/models/index.js';
 import type { ValidationIssue } from '../../src/core/validation.js';
 
 // ---------------------------------------------------------------------------
@@ -22,6 +22,24 @@ const method = (name: string) => ({ name, description: 'd', signature: `${name}(
 const intf = (id: string, component: string, methodNames: string[]) =>
   ({ id, name: id, description: 'd', component, methods: methodNames.map(method), status: 'complete', ...stamp }) as never;
 
+/**
+ * A project graph of members, each `[key, parent key]`, and the owner of each
+ * spec key given. Members are keyed by project id (stage 3), never by position.
+ */
+function family(members: [string, string][], owners: [string, string][] = []): ProjectFamily {
+  const node = (namespace: string, parent?: string) => ({
+    namespace, idSource: 'declared' as const, ...(parent !== undefined ? { parent } : {}),
+    legacyMount: null, hasSystem: true, directory: `/${namespace}`, members: [], aliases: new Map<string, string>(), externals: [],
+  });
+  return {
+    nodes: [node(''), ...members.map(([key, parent]) => node(key, parent))],
+    owners: new Map(owners),
+    authoredReferences: [],
+    problems: [],
+    references: [],
+  };
+}
+
 function context(overrides: Partial<BuildContextOptions> = {}) {
   return buildRuleContext({
     system: { schemaVersion: '1.0.0', name: 'S', vision: 'v', ...stamp } as never,
@@ -40,18 +58,18 @@ function context(overrides: Partial<BuildContextOptions> = {}) {
 
 describe('rule_context.isInChainedSubproject', () => {
   const ctx = context({
-    subsystems: [sub('app'), sub('kid', { projectPath: 'kid' }), sub('kid::inner'), sub('plain::nested'), sub('a'), sub('a::b', { projectPath: 'b' })],
+    subsystems: [sub('app'), sub('kid::inner'), sub('plain::nested'), sub('b::c')],
+    projectFamily: family([['kid', ''], ['b', 'kid']], [['app', ''], ['kid::inner', 'kid'], ['b::c', 'b'], ['plain::nested', '']]),
   });
 
-  it('holds for a mount and for anything under it', () => {
-    expect(ctx.isInChainedSubproject('kid')).toBe(true);
+  it('holds for anything a member owns, at any depth', () => {
     expect(ctx.isInChainedSubproject('kid::inner')).toBe(true);
-    expect(ctx.isInChainedSubproject('a::b::c')).toBe(true);
+    expect(ctx.isInChainedSubproject('b::c')).toBe(true);
+    expect(ctx.isInChainedSubproject('kid')).toBe(true);
   });
 
-  it('does not hold when no prefix of the id is a subsystem with a projectPath', () => {
+  it('does not hold for what the bound root owns, or a key no member covers', () => {
     expect(ctx.isInChainedSubproject('app')).toBe(false);
-    expect(ctx.isInChainedSubproject('a')).toBe(false);
     expect(ctx.isInChainedSubproject('plain::nested')).toBe(false);
     expect(ctx.isInChainedSubproject('unknown')).toBe(false);
   });
@@ -77,16 +95,17 @@ describe('rule_context.isExternalNamespaceRef', () => {
 
 describe('rule_context.isCollapsedCrossTreeRef', () => {
   const ctx = context({
-    subsystems: [sub('kid', { projectPath: 'kid' }), sub('kid::core'), sub('kid::core::grand', { projectPath: 'grand' }), sub('app')],
+    subsystems: [sub('kid::core'), sub('grand::core'), sub('app')],
+    projectFamily: family([['kid', ''], ['grand', 'kid']], [['kid::core', 'kid'], ['grand::core', 'grand'], ['app', '']]),
   });
 
-  it('holds for a reference made inside a mount that is not under the nearest enclosing mount', () => {
+  it('holds for a reference made inside a member that the scan bound into another project', () => {
     expect(ctx.isCollapsedCrossTreeRef('invoice-portal', 'kid::core')).toBe(true);
-    expect(ctx.isCollapsedCrossTreeRef('kid::core::x', 'kid::core::grand')).toBe(true);
+    expect(ctx.isCollapsedCrossTreeRef('kid::x', 'grand::core')).toBe(true);
   });
 
-  it('does not hold under the nearest mount, for the mount itself, or outside every mount', () => {
-    expect(ctx.isCollapsedCrossTreeRef('kid::core::store', 'kid::core')).toBe(false);
+  it('does not hold inside the member itself, for the member key, or outside every member', () => {
+    expect(ctx.isCollapsedCrossTreeRef('kid::store', 'kid::core')).toBe(false);
     expect(ctx.isCollapsedCrossTreeRef('kid', 'kid::core')).toBe(false);
     expect(ctx.isCollapsedCrossTreeRef('invoice-portal', 'app')).toBe(false);
   });
@@ -94,17 +113,19 @@ describe('rule_context.isCollapsedCrossTreeRef', () => {
 
 describe('rule_context.resolveSurfaceRef', () => {
   const entry = (component: string, methodNames: string[]): SurfaceContractEntry =>
-    ({ id: `i${component}`, name: component, audience: 'instance', type: 'REST', component, methods: methodNames.map(method), details: '' }) as SurfaceContractEntry;
+    ({ id: component, name: component, audience: 'instance', type: 'REST', component, methods: methodNames.map(method), details: '' }) as SurfaceContractEntry;
   const snapshot = (projectName: string, interfaces: SurfaceContractEntry[]): SurfaceSnapshot =>
     ({ projectName, origin: 'generated', generatedAt: '2026-09-15T10:00:00Z', interfaces, types: [] });
   const resolvedSnapshot = (resolution: ReturnType<ReturnType<typeof context>['resolveSurfaceRef']>): SurfaceSnapshot | undefined =>
     (resolution.kind === 'resolved' ? resolution.snapshot : undefined);
 
-  it('resolves the local name against backing component names and entry ids', () => {
-    const billing = snapshot('Parent::billing', [entry('invoice-portal', ['list'])]);
+  it('resolves the local name against the entries\' public names alone', () => {
+    const billing = snapshot('Parent::billing', [{ ...entry('invoice-portal', ['list']), id: 'invoicing' }]);
     const ctx = context({ surfaceSnapshots: [billing] });
-    expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::invoice-portal'))).toBe(billing);
-    expect(resolvedSnapshot(ctx.resolveSurfaceRef('iinvoice-portal'))).toBe(billing);
+    expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::invoicing'))).toBe(billing);
+    expect(resolvedSnapshot(ctx.resolveSurfaceRef('invoicing'))).toBe(billing);
+    // The backing component is not a name (stage 3 retired that fallback).
+    expect(ctx.resolveSurfaceRef('super::invoice-portal')).toEqual({ kind: 'unresolved' });
   });
 
   it('consults only the provider the reference names — a sibling by its subsystem id', () => {
@@ -138,20 +159,21 @@ describe('rule_context.resolveSurfaceRef', () => {
     const kid = snapshot('Kid', [entry('portal', ['kid'])]);
     const grand = snapshot('Grand', [entry('portal', ['grand'])]);
     const ctx = context({
-      subsystems: [sub('kid', { projectPath: 'kid' }), sub('kid::core'), sub('kid::core::grand', { projectPath: 'grand' }), sub('app')],
+      subsystems: [sub('kid::core'), sub('grand::core'), sub('app')],
+      projectFamily: family([['kid', ''], ['grand', 'kid']], [['kid::core', 'kid'], ['grand::core', 'grand'], ['app', '']]),
       surfaceSnapshots: [root],
       mountSurfaceSnapshots: [
         { namespace: 'kid', snapshots: [kid] },
-        { namespace: 'kid::core::grand', snapshots: [grand] },
+        { namespace: 'grand', snapshots: [grand] },
       ],
     });
     expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal', 'kid::core'))).toBe(kid);
-    expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal', 'kid::core::grand'))).toBe(grand);
+    expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal', 'grand::core'))).toBe(grand);
     expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal', 'app'))).toBe(root);
     expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal'))).toBe(root);
   });
 
-  it('matches a renamed export only by its public name, and an unrenamed or older entry by its component too', () => {
+  it('matches every entry by its public name only — renamed, narrowed or older', () => {
     // An entry projected from an export table records its componentType. Named
     // "invoicing" over invoice-portal, it answers to that name alone.
     const renamed = snapshot('Billing', [{ ...entry('invoice-portal', ['list']), id: 'invoicing', componentType: 'Portal' }]);
@@ -159,13 +181,14 @@ describe('rule_context.resolveSurfaceRef', () => {
     expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::invoicing'))).toBe(renamed);
     expect(ctx.resolveSurfaceRef('super::invoice-portal')).toEqual({ kind: 'unresolved' });
 
-    // Its id is just its interface: it carries no public name of its own.
-    const narrowed = snapshot('Billing', [{ ...entry('invoice-portal', ['list']), interface: 'iinvoice-portal', componentType: 'Portal' }]);
-    expect(resolvedSnapshot(context({ surfaceSnapshots: [narrowed] }).resolveSurfaceRef('super::invoice-portal'))).toBe(narrowed);
+    // A narrowed entry answers to its id, the interface — not to its component.
+    const narrowed = snapshot('Billing', [{ ...entry('invoice-portal', ['list']), id: 'iinvoice-portal', interface: 'iinvoice-portal', componentType: 'Portal' }]);
+    expect(resolvedSnapshot(context({ surfaceSnapshots: [narrowed] }).resolveSurfaceRef('super::iinvoice-portal'))).toBe(narrowed);
+    expect(context({ surfaceSnapshots: [narrowed] }).resolveSurfaceRef('super::invoice-portal')).toEqual({ kind: 'unresolved' });
 
-    // Written before exports carried a stereotype (a sibling surface): the fallback stands until stage 3.
+    // An entry written before exports carried a stereotype no longer answers to its component either.
     const older = snapshot('Billing', [{ ...entry('invoice-portal', ['list']), id: 'invoicing' }]);
-    expect(resolvedSnapshot(context({ surfaceSnapshots: [older] }).resolveSurfaceRef('super::invoice-portal'))).toBe(older);
+    expect(context({ surfaceSnapshots: [older] }).resolveSurfaceRef('super::invoice-portal')).toEqual({ kind: 'unresolved' });
   });
 
   it('is unresolved when no snapshot covers the reference', () => {

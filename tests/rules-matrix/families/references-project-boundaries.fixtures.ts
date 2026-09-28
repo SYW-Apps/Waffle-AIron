@@ -7,20 +7,29 @@
  *  - project-boundaries (src/core/rules/doctrine/project-boundaries.ts):
  *    EXTERNAL_UNDECLARED, EXTERNAL_NOT_EXPORTED, TRUSTED_LINK_CROSSES_PROJECT.
  *  - reference-forms (src/core/rules/integrity/reference-forms.ts):
- *    DEPRECATED_REFERENCE_FORM — a leading `::` only; `super::` is not reported.
+ *    DEPRECATED_REFERENCE_FORM — a leading `::`, `super::` or a member path
+ *    (stage 3); `alias::name` is the one canonical form.
+ *  - member-declarations (src/core/rules/integrity/member-declarations.ts):
+ *    DEPRECATED_MOUNT_FORM — a member declared as an L1 subsystem carrying
+ *    projectPath instead of a project.yaml `members` entry.
+ *  - project-cycles (src/core/rules/doctrine/project-cycles.ts):
+ *    PROJECT_DEPENDENCY_CYCLE — members that depend on each other in a loop.
  *  - external-declarations (src/core/rules/integrity/external-declarations.ts):
  *    EXTERNAL_UNRESOLVED.
  *  - export-tables (EXPORT_WIDENS_AUDIENCE): an L0 re-export of a member's
  *    export that declares a wider audience than the member exports it at.
- *  - project-identity, family half: PROJECT_ID_AMBIGUOUS when two projects of
- *    one family resolve to one id or a member has none, PROJECT_ID_DEFAULTED
- *    when a member declares none (naming its mount's subsystem id).
+ *  - project-identity, family half: PROJECT_ID_COLLISION when two members of
+ *    one family resolve to one id, PROJECT_ID_AMBIGUOUS when a member has none,
+ *    PROJECT_ID_DEFAULTED when a member declares none (naming its alias).
+ *
+ * A member is keyed by its project id (stage 3): billing's portal is
+ * `billing::invoice-portal` because billing declares `id: billing`, and a
+ * member that declares none is keyed by its name slug.
  *
  * Every fixture is the same FleetWorks family: the bound root mounts two
  * chained members, billing (packages/billing) and dispatch (packages/dispatch).
  * Dispatch's route planner depends on billing's invoice portal — a sibling
- * reference, which is exactly the edge the family rules judge. All three
- * notices never fail CI in stage 2.
+ * reference, which is exactly the edge the family rules judge.
  */
 import * as yaml from 'js-yaml';
 import { defineRuleFixture, type FixtureTree } from '../harness.js';
@@ -31,14 +40,15 @@ function dump(spec: Record<string, unknown>): string {
   return yaml.dump({ schemaVersion: '1.0.0', createdAt: TS, updatedAt: TS, ...spec }, { noRefs: true, lineWidth: 200 });
 }
 
-/** A project.yaml with the identity and externals a scenario sets. */
-function projectYaml(identity: { id?: string; name: string }, externals?: Record<string, unknown>): string {
+/** A project.yaml with the identity, externals and members a scenario sets. */
+function projectYaml(identity: { id?: string; name: string }, externals?: Record<string, unknown>, members?: Record<string, unknown>): string {
   return dump({
     ...(identity.id !== undefined ? { id: identity.id } : {}),
     name: identity.name,
     targets: [],
     extensions: { packs: [], useGlobalPacks: false },
     ...(externals ? { externals } : {}),
+    ...(members ? { members } : {}),
   });
 }
 
@@ -53,13 +63,18 @@ interface FleetOptions {
   dispatchExternals?: Record<string, unknown>;
   /** The route planner's dependency on billing's invoice portal, as written. */
   plannerDependsOn?: string;
+  /** Declare both members in the root's project.yaml `members` instead of legacy L1 mounts. */
+  membersForm?: boolean;
+  /** Billing's externals, and what its invoice portal depends on. */
+  billingExternals?: Record<string, unknown>;
+  invoiceDependsOn?: string[];
 }
 
 /** The billing member: an invoice portal with one contract method. */
 function billingFiles(o: FleetOptions): Record<string, string> {
   const base = 'packages/billing/.wai';
   return {
-    [`${base}/project.yaml`]: projectYaml(o.billing ?? { id: 'billing', name: 'Billing Service' }),
+    [`${base}/project.yaml`]: projectYaml(o.billing ?? { id: 'billing', name: 'Billing Service' }, o.billingExternals),
     [`${base}/specs/.index.yaml`]: dump({
       name: 'BillingService',
       vision: 'Issues invoices for every delivered route and tracks what customers owe.',
@@ -71,7 +86,7 @@ function billingFiles(o: FleetOptions): Record<string, string> {
     }),
     [`${base}/specs/components/invoice-portal.yaml`]: dump({
       id: 'invoice-portal', name: 'Invoice Portal', description: 'REST surface that issues invoices for delivered routes.',
-      subsystem: 'billing', componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: [],
+      subsystem: 'billing', componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: o.invoiceDependsOn ?? [],
     }),
     [`${base}/specs/interfaces/iinvoice-portal.yaml`]: dump({
       id: 'iinvoice-portal', name: 'Invoice Portal Interface', description: 'Issue invoices.', component: 'invoice-portal',
@@ -107,15 +122,21 @@ function fleet(o: FleetOptions = {}): FixtureTree {
     },
     subsystems: [
       { id: 'operations', description: 'The operations console dispatchers work in.', ...(o.trustedLinks ? { trustedLinks: o.trustedLinks } : {}) },
-      { id: 'billing', description: 'Chained billing member.', projectPath: 'packages/billing' },
-      { id: 'dispatch', description: 'Chained dispatch member.', projectPath: 'packages/dispatch' },
+      ...(o.membersForm ? [] : [
+        { id: 'billing', description: 'Chained billing member.', projectPath: 'packages/billing' },
+        { id: 'dispatch', description: 'Chained dispatch member.', projectPath: 'packages/dispatch' },
+      ]),
       { id: 'fleet-registry', description: 'The registry of vehicles and drivers.' },
     ],
     components: [
       { id: 'ops-console', subsystem: 'operations', componentType: 'Portal', portalType: 'HTTP_API', description: 'REST surface of the operations console.' },
     ],
     files: {
-      '.wai/project.yaml': projectYaml(o.root ?? { id: 'fleetworks', name: 'FleetWorks' }, o.rootExternals),
+      '.wai/project.yaml': projectYaml(
+        o.root ?? { id: 'fleetworks', name: 'FleetWorks' },
+        o.rootExternals,
+        o.membersForm ? { billing: 'packages/billing', dispatch: 'packages/dispatch' } : undefined,
+      ),
       ...billingFiles(o),
       ...dispatchFiles(o),
     },
@@ -196,10 +217,63 @@ export default [
   }),
   defineRuleFixture({
     code: 'DEPRECATED_REFERENCE_FORM',
-    expectFire: false,
-    reason: '`super::` is not reported in stage 2: wairon\'s own writer emits it, and no alternative exists before stage 3\'s alias::name.',
-    scenario: 'The dispatch member\'s route planner names billing\'s invoice portal as `super::billing::invoice-portal`.',
+    severity: 'notice',
+    anchoredTo: 'dispatch::route-planner',
+    expectFire: true,
+    scenario: 'The dispatch member\'s route planner names billing\'s invoice portal as `super::billing::invoice-portal` — a climb to the parent and a member path from there, a place in one family rather than a name.',
     tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} } }),
+  }),
+  defineRuleFixture({
+    code: 'DEPRECATED_REFERENCE_FORM',
+    expectFire: false,
+    reason: '`alias::name` is the canonical cross-project form: billing is the alias dispatch declares, invoicing the public name billing exports.',
+    scenario: 'The dispatch member\'s route planner names billing\'s invoice portal as `billing::invoicing`, through the external it declares.',
+    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing' }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // DEPRECATED_MOUNT_FORM
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'DEPRECATED_MOUNT_FORM',
+    severity: 'notice',
+    anchoredTo: 'billing',
+    expectFire: true,
+    scenario: 'FleetWorks declares its billing member as the L1 subsystem `billing` carrying `projectPath: packages/billing` — a subsystem that is really a member declaration.',
+    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} } }),
+  }),
+  defineRuleFixture({
+    code: 'DEPRECATED_MOUNT_FORM',
+    expectFire: false,
+    reason: 'Both members are declared in the root\'s project.yaml `members`; no L1 subsystem carries a projectPath.',
+    scenario: 'FleetWorks declares `members: { billing: packages/billing, dispatch: packages/dispatch }` and has no mount subsystems.',
+    tree: fleet({ membersForm: true, billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing' }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // PROJECT_DEPENDENCY_CYCLE
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'PROJECT_DEPENDENCY_CYCLE',
+    severity: 'warning',
+    anchoredTo: 'billing',
+    expectFire: true,
+    scenario: 'Dispatch\'s route planner depends on billing\'s invoicing portal while billing\'s invoice portal depends back on dispatch\'s route planner — two members that each need the other\'s contract first.',
+    tree: fleet({
+      membersForm: true,
+      billingExports: BILLING_EXPORTS,
+      dispatchExternals: { billing: {} },
+      plannerDependsOn: 'billing::invoicing',
+      billingExternals: { dispatch: {} },
+      invoiceDependsOn: ['dispatch::route-planner'],
+    }),
+  }),
+  defineRuleFixture({
+    code: 'PROJECT_DEPENDENCY_CYCLE',
+    expectFire: false,
+    reason: 'Only dispatch depends on billing; billing depends on nothing of dispatch, so the members form no loop.',
+    scenario: 'Dispatch\'s route planner depends on billing\'s invoicing portal, and billing\'s invoice portal depends on nothing outside billing.',
+    tree: fleet({ membersForm: true, billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing' }),
   }),
 
   // -------------------------------------------------------------------------
@@ -249,15 +323,22 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // PROJECT_ID_AMBIGUOUS / PROJECT_ID_DEFAULTED — the family half
+  // PROJECT_ID_COLLISION / PROJECT_ID_AMBIGUOUS / PROJECT_ID_DEFAULTED — the family half
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'PROJECT_ID_AMBIGUOUS',
-    severity: 'warning',
+    code: 'PROJECT_ID_COLLISION',
+    severity: 'error',
     anchoredTo: null,
     expectFire: true,
-    scenario: 'Both chained members of FleetWorks declare `id: fleet-service` — two projects of one family answer to one id, so every declaration keyed on it could mean either.',
+    scenario: 'Both chained members of FleetWorks declare `id: fleet-service` — one project declared twice, where two consumers of one member was meant.',
     tree: fleet({ billing: { id: 'fleet-service', name: 'Billing Service' }, dispatch: { id: 'fleet-service', name: 'Dispatch Service' } }),
+  }),
+  defineRuleFixture({
+    code: 'PROJECT_ID_COLLISION',
+    expectFire: false,
+    reason: 'Each member declares its own id, so every project of the family is contained once.',
+    scenario: 'FleetWorks declares `id: fleetworks`, billing `id: billing` and dispatch `id: dispatch`.',
+    tree: fleet(),
   }),
   defineRuleFixture({
     code: 'PROJECT_ID_AMBIGUOUS',
@@ -277,9 +358,9 @@ export default [
   defineRuleFixture({
     code: 'PROJECT_ID_DEFAULTED',
     severity: 'notice',
-    anchoredTo: 'billing',
+    anchoredTo: 'billing-service',
     expectFire: true,
-    scenario: 'The billing member declares no id, so it answers to "billing-service", its name slug — the finding names its mount\'s subsystem id "billing" as the id to declare.',
+    scenario: 'The billing member declares no id, so it answers to — and is keyed by — "billing-service", its name slug; the finding names its alias "billing" as the id to declare.',
     tree: fleet({ billing: { name: 'Billing Service' } }),
   }),
   defineRuleFixture({

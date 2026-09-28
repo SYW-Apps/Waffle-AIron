@@ -5,10 +5,14 @@ import * as surfaces from './adapters/surfaces.js';
 import { getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import { AI_PATHS } from '../config/paths.js';
 import { ChainingMigrationRefusedError } from '../utils/errors.js';
+// The stage-3 share — retiring position — is its own orchestrator; bound as a
+// namespace so each call names the contract method it reaches.
+import * as position from './position-migration.js';
+import type { PlannedMember, PlannedRewrite } from './position-migration.js';
 import { EXTERNAL_ALIAS_RE, PROJECT_ID_RE } from '../models/project.js';
 import { declares, familyNode, type CrossProjectReference, type ProjectFamily, type ProjectNode } from '../models/project-family.js';
 import { exportTargetKey, type ResolvedExport, type ResolvedExportTable } from '../models/exports.js';
-import type { ComponentSpec, InterfaceSpec, SubsystemSpec, TypeSpec } from '../models/specs.js';
+import type { ComponentSpec, InterfaceSpec, SubsystemSpec, SystemSpec, TypeSpec } from '../models/specs.js';
 
 // ---------------------------------------------------------------------------
 // chaining_migration_orchestrator — the stage-2c chaining migration of one
@@ -16,11 +20,15 @@ import type { ComponentSpec, InterfaceSpec, SubsystemSpec, TypeSpec } from '../m
 //
 // plan() reads what the project graph and the export usage already report and
 // answers, per project, what it would write: the defaulted ids to declare, the
-// L0 re-export entries producers lack, the externals consumers must declare,
-// and the aliases to pin once all of that is written. It writes nothing.
+// L0 entries producers lack (re-exports, and the own `{ typeDef }` of a
+// project-level type), the minimal L0 of a producer that has none, the
+// externals consumers must declare, the aliases to pin once all of that is
+// written — and, through the position migration, the legacy mounts to move
+// into `members` and the deprecated references to rewrite. It writes nothing.
 // apply(plan) writes exactly that, in a fixed order — ids, exports, externals,
-// pins — each under its project's binding, and locks nothing: every project
-// whose approval the writes staled is named for its own human to re-lock.
+// pins, then position — each under its project's binding, and locks nothing:
+// every project whose approval the writes staled is named for its own human
+// to re-lock.
 //
 // It holds no state: the plan is a value its caller holds between the two. It
 // lives in sdd_cli because it composes three planes — the core's configuration
@@ -35,8 +43,10 @@ import type { ComponentSpec, InterfaceSpec, SubsystemSpec, TypeSpec } from '../m
 export interface ChainingMigrationFinding {
   /**
    * id-ambiguous | id-locked | declaration-orphaned | target-unpublished |
-   * name-taken | narrowed | subsystem-reference | alias-invalid | alias-taken |
-   * project-absent | family-partial
+   * target-missing | name-taken | narrowed | subsystem-reference |
+   * alias-invalid | alias-taken | project-absent | member-absent |
+   * family-partial | mount-field-conflict | mount-field-unhomed |
+   * rewrite-unavailable
    */
   kind: string;
   /** The namespace of the project it concerns ('' is the family's top root). */
@@ -49,12 +59,14 @@ export interface ChainingMigrationFinding {
   blocking: boolean;
 }
 
-/** planned_export — one L0 re-export entry the migration adds to a producer. */
+/** planned_export — one L0 entry the migration adds to a producer. */
 export interface PlannedExport {
-  /** The source subsystem's local id in the producer. */
-  from: string;
+  /** The source subsystem's local id in the producer; absent for a project-level type, exported as the project's own. */
+  from?: string;
   /** The re-exported component's local id, for a component reference. */
   component?: string;
+  /** The L3 interface a carried mount entry narrows to. */
+  interface?: string;
   /** The re-exported type's local id, for a type reference. */
   typeDef?: string;
   /** The public name the entry binds: the item's default. */
@@ -65,6 +77,14 @@ export interface PlannedExport {
   consumers: string[];
   /** The members the consumers reach through the entry, sorted. */
   members: string[];
+  /** The transport kind a carried mount entry declared. */
+  type?: string;
+  /** The details a carried mount entry declared. */
+  details?: string;
+  /** reference | mount */
+  reason: string;
+  /** A carried entry whose component its member subsystem does not publish yet: apply publishes it at L1 first. */
+  publishAtL1?: boolean;
 }
 
 /** planned_external — one `externals` declaration the migration adds to a consumer. */
@@ -95,8 +115,14 @@ export interface ProjectMigration {
   externals: PlannedExternal[];
   /** The aliases apply pins once every write is done. */
   pins: string[];
-  /** The storage keys of its stage-1 sibling pins, left on disk until stage 3. */
+  /** The storage keys of its stage-1 family pins, deleted once the externals replacing them are pinned. */
   supersededPins: string[];
+  /** Whether apply writes a minimal L0 first: the project gains entries and has no L0. */
+  createsSystem: boolean;
+  /** The legacy L1 mounts apply moves into this project's `members`, in declaration order. */
+  members: PlannedMember[];
+  /** Keys the stored L0 carries that its schema does not know, which the first gated L0 write drops. */
+  droppedKeys: string[];
 }
 
 /** chaining_migration_plan — the migration of one family, planned and not yet applied. */
@@ -109,6 +135,8 @@ export interface ChainingMigrationPlan {
   projects: ProjectMigration[];
   /** Every ambiguity reported and every reference the plan cannot migrate, in the order found. */
   findings: ChainingMigrationFinding[];
+  /** Every reference apply rewrites out of a deprecated form: projects in walk order, then spec, then position. */
+  rewrites: PlannedRewrite[];
 }
 
 /** chaining_migration_report — the answer of applying a plan. */
@@ -125,9 +153,9 @@ export interface ChainingMigrationReport {
 
 // ── chaining_migration_plan behaviour ───────────────────────────────────────
 
-/** chaining_migration_plan.isEmpty — no project has anything to write; findings do not count. */
+/** chaining_migration_plan.isEmpty — no project has anything to write and no reference is rewritten; findings do not count. */
 export function isEmpty(migration: ChainingMigrationPlan): boolean {
-  return migration.projects.every((p) => !hasWrites(p));
+  return migration.projects.every((p) => !hasWrites(p)) && migration.rewrites.length === 0;
 }
 
 /** chaining_migration_plan.blocked — a finding refuses apply. */
@@ -136,7 +164,8 @@ export function blocked(migration: ChainingMigrationPlan): boolean {
 }
 
 function hasWrites(p: ProjectMigration): boolean {
-  return p.idToWrite !== undefined || p.exports.length > 0 || p.externals.length > 0 || p.pins.length > 0;
+  return p.idToWrite !== undefined || p.createsSystem || p.exports.length > 0 || p.externals.length > 0 || p.pins.length > 0
+    || p.members.length > 0 || p.supersededPins.length > 0;
 }
 
 // ── plan ────────────────────────────────────────────────────────────────────
@@ -148,6 +177,8 @@ interface Planning {
   findings: ChainingMigrationFinding[];
   /** The absent projects' findings, whose blocking is decided once the plan is known. */
   absent: Map<string, ChainingMigrationFinding>;
+  /** The references rewritten out of a deprecated form, as the position migration planned them. */
+  rewrites: PlannedRewrite[];
 }
 
 /**
@@ -158,20 +189,20 @@ export function plan(): ChainingMigrationPlan {
   // Step 1: the bound root; every hop below is a scoped binding, so the
   // caller's binding is restored on every path.
   const bound = getProjectRoot();
-  // Steps 2-4: climb the mount chain.
+  // Steps 1-3: climb the membership chain.
   const climbed = climb(bound);
-  // Steps 5-25: plan the family from the highest root reached.
+  // Steps 4-25: plan the family from the highest root reached.
   return runWithProjectRoot(climbed.top, () => planFamily(climbed.top, climbed.whole));
 }
 
-/** Steps 2-4: the highest root in reach, and whether it is the family's true top. */
+/** Steps 1-3: the highest root in reach, and whether it is the family's true top. */
 function climb(start: string): { top: string; whole: boolean } {
   let current = start;
   let parent: { parentRoot: string } | null;
   do {
-    // Step 3: null for a top root — and for a hop the request may not read.
+    // Step 2: null for a top root — and for a hop the request may not read.
     parent = runWithProjectRoot(current, () => core.resolveChainingParent());
-    // Step 4.
+    // Step 3.
     if (parent) current = parent.parentRoot;
   } while (parent);
   return { top: current, whole: !parentWithheld() };
@@ -184,20 +215,24 @@ function parentWithheld(): boolean {
 }
 
 function planFamily(top: string, whole: boolean): ChainingMigrationPlan {
-  // Step 5: the project graph of the highest root reached.
-  const ctx: Planning = { family: core.projectFamily(), projects: new Map(), findings: [], absent: new Map() };
+  // Step 4: the project graph of the highest root reached.
+  const ctx: Planning = { family: core.projectFamily(), projects: new Map(), findings: [], absent: new Map(), rewrites: [] };
   if (!whole) {
     ctx.findings.push({
       kind: 'family-partial', project: '', blocking: true,
       detail: 'the climb stopped at a hop out of reach, so a producer above it could need writes this plan cannot see — run the migration from the family\'s top root',
     });
   }
-  // Steps 6-9: the ids.
+  // Steps 5-8: the ids.
   decideIds(ctx);
-  // Steps 10-19: the crossings.
+  // Steps 9-17: the crossings.
   planCrossings(ctx);
-  // Steps 20-23: the stage-1 pins.
+  // Steps 18-20: the stage-1 pins.
   convertLegacyPins(ctx);
+  // Step 21: the retirement of position, merged.
+  mergePosition(ctx);
+  // Steps 22-23: what the L0 writes would drop.
+  findDroppedKeys(ctx);
   // Steps 24-25: the projects with something to write, in walk order.
   return settle(ctx, top, whole);
 }
@@ -206,7 +241,10 @@ function planFamily(top: string, whole: boolean): ChainingMigrationPlan {
 function entryOf(ctx: Planning, node: ProjectNode): ProjectMigration {
   let entry = ctx.projects.get(node.namespace);
   if (!entry) {
-    entry = { project: node.namespace, directory: node.directory, exports: [], externals: [], pins: [], supersededPins: [] };
+    entry = {
+      project: node.namespace, directory: node.directory, exports: [], externals: [], pins: [], supersededPins: [],
+      createsSystem: false, members: [], droppedKeys: [],
+    };
     ctx.projects.set(node.namespace, entry);
   }
   return entry;
@@ -219,21 +257,21 @@ function idOf(ctx: Planning, namespace: string): string | undefined {
 
 const label = (namespace: string): string => (namespace === '' ? 'the top root' : `"${namespace}"`);
 
-// ── steps 6-9: ids ──────────────────────────────────────────────────────────
+// ── steps 5-8: ids ──────────────────────────────────────────────────────────
 
 function decideIds(ctx: Planning): void {
-  // Step 6.
+  // Step 5.
   for (const node of ctx.family.nodes) {
-    // Step 7: the id the node's own lock approved, if any.
+    // Step 6: the id the node's own lock approved, if any.
     const approved = core.approvalRecord(node.directory)?.projectId;
-    // Step 8.
+    // Step 7.
     decideId(ctx, node, approved);
   }
-  // Step 9.
+  // Step 8.
   checkPlannedIds(ctx);
 }
 
-/** Step 8: the id one project answers to after apply, and whether apply writes it. */
+/** Step 7: the id one project answers to after apply, and whether apply writes it. */
 function decideId(ctx: Planning, node: ProjectNode, approved: string | undefined): void {
   const entry = entryOf(ctx, node);
   const member = node.parent !== undefined;
@@ -266,7 +304,7 @@ function absentProject(ctx: Planning, node: ProjectNode): void {
   ctx.absent.set(node.namespace, finding);
 }
 
-/** Step 9: a planned id outside the grammar or shared with another project is reported, never written. */
+/** Step 8: a planned id outside the grammar or shared with another project is reported, never written. */
 function checkPlannedIds(ctx: Planning): void {
   const holders = new Map<string, string[]>();
   for (const entry of ctx.projects.values()) {
@@ -285,7 +323,7 @@ function checkPlannedIds(ctx: Planning): void {
   reportOrphanedDeclarations(ctx);
 }
 
-/** Step 9: an external that finds its producer by the id that producer is about to leave. */
+/** Step 8: an external that finds its producer by the id that producer is about to leave. */
 function reportOrphanedDeclarations(ctx: Planning): void {
   for (const node of ctx.family.nodes) {
     for (const external of node.externals) {
@@ -300,10 +338,10 @@ function reportOrphanedDeclarations(ctx: Planning): void {
   }
 }
 
-// ── steps 10-19: crossings ──────────────────────────────────────────────────
+// ── steps 9-17: crossings ───────────────────────────────────────────────────
 
 function planCrossings(ctx: Planning): void {
-  // Step 10: each (consumer, producer) pair, in the order the graph found them.
+  // Step 9: each (consumer, producer) pair, in the order the graph found them.
   const pairs = new Map<string, { consumer: string; producer: string }>();
   for (const ref of ctx.family.references) pairs.set(`${ref.consumer}\u0000${ref.producer}`, { consumer: ref.consumer, producer: ref.producer });
   for (const { consumer, producer } of pairs.values()) planPair(ctx, consumer, producer);
@@ -313,18 +351,18 @@ function planPair(ctx: Planning, consumer: string, producer: string): void {
   const consumerNode = familyNode(ctx.family, consumer);
   const producerNode = familyNode(ctx.family, producer);
   if (!consumerNode || !producerNode) return;
-  // Step 11: the references mapped onto the producer's public names.
+  // Step 10: the references mapped onto the producer's public names.
   const usage = core.exportUsage(consumer, producer);
-  // Step 12: the producer's current table.
+  // Step 11: the producer's current table.
   const table = core.resolveProjectExports(producer || undefined);
-  // Steps 13-16.
+  // Steps 12-15.
   let entries = false;
   for (const ref of usage.unexported) entries = planEntry(ctx, producerNode, ref, table) || entries;
-  // Steps 17-18.
+  // Step 16.
   const alias = declares(ctx.family, consumer, producer)
     ? declaredAlias(consumerNode, producer)
     : planExternal(ctx, consumerNode, producer, 'reference');
-  // Step 19.
+  // Step 17.
   if (alias !== undefined && (entries || alias.planned)) addPin(ctx, consumerNode, alias.alias);
 }
 
@@ -344,38 +382,53 @@ interface ReferenceTarget {
   kind: 'component' | 'type' | 'subsystem';
   /** The item's qualified id. */
   id: string;
-  /** The qualified id of the subsystem that owns it. */
-  source: string;
+  /** The qualified id of the subsystem that owns it; absent for a project-level type, which the project owns. */
+  source?: string;
 }
 
-/** Steps 13-16 for one reference; true when an entry was planned or merged. */
+/** Steps 13-15 for one reference; true when an entry was planned or merged. */
 function planEntry(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, table: ResolvedExportTable): boolean {
-  // Step 14: the spec the reference targets, for the subsystem that owns it.
+  // Step 13: the spec the reference targets, for the subsystem that owns it.
   const target = targetOf(ref);
-  if (!target) return report(ctx, 'target-unpublished', ref, `${ref.specId} names "${ref.target}", which ${label(producer.namespace)} does not hold`);
-  if (target.kind === 'subsystem') {
-    return report(ctx, 'subsystem-reference', ref, `${ref.specId} re-exports ${label(producer.namespace)}'s subsystem "${target.id}" wholesale — no L0 entry short of exporting it expresses that; stage 3 rewrites the reference`);
+  if (!target) {
+    return report(ctx, 'target-missing', ref, `${ref.specId} names "${ref.target}", but ${label(producer.namespace)} declares no component, subsystem-owned type or project-level type of that id — the reference is wrong`);
   }
-  // Step 15: the source subsystem's L1 table.
-  const published = core.resolveSubsystemExports(target.source);
-  // Step 16.
-  return decideEntry(ctx, producer, ref, target, table, published);
+  if (target.kind === 'subsystem') {
+    return report(ctx, 'subsystem-reference', ref, `${ref.specId} re-exports ${label(producer.namespace)}'s subsystem "${target.id}" wholesale — no L0 entry short of exporting it expresses that; rewrite the reference to name the items it uses`);
+  }
+  // Steps 14-15: a project-level type needs no L1 publication; any other item follows its subsystem's table.
+  if (target.source === undefined) return decideOwnType(ctx, producer, ref, target, table);
+  return decideEntry(ctx, producer, ref, target, table, core.resolveSubsystemExports(target.source));
 }
 
-/** Step 14: the component, type or subsystem a reference names, or null. */
+/** Step 13: the component, type or subsystem a reference names, or null. */
 function targetOf(ref: CrossProjectReference): ReferenceTarget | null {
   const component = core.loadSpec('component', ref.target) as ComponentSpec | null;
   if (component) return { kind: 'component', id: component.id, source: component.subsystem };
   const last = ref.target.split('::').pop()!;
   for (const candidate of [ref.target, ref.producer ? `${ref.producer}::${last}` : last]) {
     const type = core.loadSpec('type', candidate) as TypeSpec | null;
-    if (type) return type.subsystem ? { kind: 'type', id: type.id, source: type.subsystem } : null;
+    if (type) return { kind: 'type', id: type.id, ...(type.subsystem ? { source: type.subsystem } : {}) };
   }
   const subsystem = core.loadSpec('subsystem', ref.target) as SubsystemSpec | null;
   return subsystem ? { kind: 'subsystem', id: subsystem.id, source: subsystem.id } : null;
 }
 
-/** Step 16: plan or merge the producer's entry for the reference, or report why not. */
+/** Step 15 for a project-level type: its own `{ typeDef }` entry, the crate-root `pub struct`. */
+function decideOwnType(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, target: ReferenceTarget, table: ResolvedExportTable): boolean {
+  const key = targetKey(target);
+  if (table.entries.some((e) => exportTargetKey(e) === key)) return false;
+  const local = localIn(producer.namespace, target.id);
+  const taken = table.entries.find((e) => e.publicName === local && exportTargetKey(e) !== key)
+    ?? entryOf(ctx, producer).exports.find((e) => e.publicName === local && (e.component ?? e.typeDef) !== local);
+  if (taken) {
+    return report(ctx, 'name-taken', ref, `"${local}" already names another item in ${label(producer.namespace)} — export the type "${target.id}" under a name a person chooses`);
+  }
+  mergeEntry(entryOf(ctx, producer), target, undefined, local, local, ref);
+  return true;
+}
+
+/** Step 15: plan or merge the producer's entry for the reference, or report why not. */
 function decideEntry(
   ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, target: ReferenceTarget,
   table: ResolvedExportTable, published: ResolvedExportTable,
@@ -385,7 +438,10 @@ function decideEntry(
   if (at.length === 0) {
     return report(ctx, 'target-unpublished', ref, `"${target.id}" is not in its subsystem's L1 table, so no L0 re-export can follow it — publish it at L1 first, or the reference is wrong`);
   }
-  if (table.entries.some((e) => exportTargetKey({ ...e, interface: undefined }) === key) || !reachableThrough(at, ref)) {
+  // Exported already: a reference that only lacked its declaration needs no entry (its external is planned below).
+  const exported = table.entries.filter((e) => exportTargetKey({ ...e, interface: undefined }) === key);
+  if (exported.length > 0 && reachableThrough(exported, ref)) return false;
+  if (exported.length > 0 || !reachableThrough(at, ref)) {
     return report(ctx, 'narrowed', ref, `"${target.id}" is exported under a narrowing that does not declare "${ref.member ?? 'what the reference reaches'}" — widen the narrowing or reach another member`);
   }
   const local = localIn(producer.namespace, target.id);
@@ -395,7 +451,7 @@ function decideEntry(
   if (taken) {
     return report(ctx, 'name-taken', ref, `"${publicName}" already names another item in ${label(producer.namespace)} — export "${target.id}" under a name a person chooses`);
   }
-  mergeEntry(entryOf(ctx, producer), target, localIn(producer.namespace, target.source), local, publicName, ref);
+  mergeEntry(entryOf(ctx, producer), target, localIn(producer.namespace, target.source!), local, publicName, ref);
   return true;
 }
 
@@ -416,10 +472,13 @@ function localIn(namespace: string, id: string): string {
   return namespace && id.startsWith(`${namespace}::`) ? id.slice(namespace.length + 2) : id;
 }
 
-function mergeEntry(entry: ProjectMigration, target: ReferenceTarget, from: string, item: string, publicName: string, ref: CrossProjectReference): void {
-  let planned = entry.exports.find((e) => e.from === from && (target.kind === 'type' ? e.typeDef : e.component) === item);
+function mergeEntry(entry: ProjectMigration, target: ReferenceTarget, from: string | undefined, item: string, publicName: string, ref: CrossProjectReference): void {
+  let planned = entry.exports.find((e) => e.from === from && e.interface === undefined && (target.kind === 'type' ? e.typeDef : e.component) === item);
   if (!planned) {
-    planned = { from, ...(target.kind === 'type' ? { typeDef: item } : { component: item }), publicName, audience: 'project', consumers: [], members: [] };
+    planned = {
+      ...(from !== undefined ? { from } : {}), ...(target.kind === 'type' ? { typeDef: item } : { component: item }),
+      publicName, audience: 'project', consumers: [], members: [], reason: 'reference',
+    };
     entry.exports.push(planned);
   }
   addSorted(planned.consumers, ref.consumer);
@@ -440,7 +499,7 @@ function report(ctx: Planning, kind: string, ref: CrossProjectReference, detail:
 }
 
 /**
- * Step 18: the consumer's external for the producer, under the producer's
+ * Step 16: the consumer's external for the producer, under the producer's
  * planned id. An existing declaration that names that id already is the
  * declaration: it starts resolving once the id is written.
  */
@@ -464,23 +523,23 @@ function planExternal(ctx: Planning, consumer: ProjectNode, producer: string, re
   return { alias, planned: true };
 }
 
-// ── steps 20-23: the stage-1 pins ───────────────────────────────────────────
+// ── steps 18-20: the stage-1 pins ───────────────────────────────────────────
 
 function convertLegacyPins(ctx: Planning): void {
-  // Step 20: each chained member.
+  // Step 18: each chained member.
   for (const node of ctx.family.nodes) {
     if (node.parent === undefined) continue;
-    // Steps 21-22: the member's vendored surfaces, with their family role.
-    const vendored = runWithProjectRoot(node.directory, () => surfaces.listExternalInterfaces());
-    // Step 23.
-    for (const surface of vendored) {
-      if (surface.sourceKind === 'sibling') addSorted(entryOf(ctx, node).supersededPins, surface.projectName);
-      else if (surface.sourceKind === 'parent') convertParentPin(ctx, node, node.parent);
+    // Step 19: the member's vendored surfaces, with their family role.
+    const pins = runWithProjectRoot(node.directory, () => surfaces.listFamilyPins());
+    // Step 20: every family pin is superseded; the parent pin converts first.
+    for (const pin of pins) {
+      addSorted(entryOf(ctx, node).supersededPins, pin.key);
+      if (pin.role === 'parent') convertParentPin(ctx, node, node.parent);
     }
   }
 }
 
-/** Step 23: the family pin becomes an external for the parent, unless the member declares it already. */
+/** Step 20: the family pin becomes an external for the parent, unless the member declares it already. */
 function convertParentPin(ctx: Planning, member: ProjectNode, parent: string): void {
   if (declares(ctx.family, member.namespace, parent)) return;
   if (entryOf(ctx, member).externals.some((e) => e.producer === parent)) return;
@@ -488,21 +547,92 @@ function convertParentPin(ctx: Planning, member: ProjectNode, parent: string): v
   if (alias !== undefined) addPin(ctx, member, alias.alias);
 }
 
+// ── step 21: the retirement of position ────────────────────────────────────
+
+function mergePosition(ctx: Planning): void {
+  const planned = position.plan(ctx.family);
+  for (const member of planned.members) {
+    const parent = familyNode(ctx.family, member.parent);
+    const child = familyNode(ctx.family, member.member);
+    if (!parent || !child) continue;
+    entryOf(ctx, parent).members.push(member);
+    for (const carried of member.carried) mergeCarried(entryOf(ctx, child), carried);
+  }
+  ctx.rewrites = planned.rewrites.map((r) => spelledWithPlannedAlias(ctx, r));
+  // A project whose specs are rewritten is one apply writes into.
+  for (const r of ctx.rewrites) {
+    const node = familyNode(ctx.family, r.project);
+    if (node) entryOf(ctx, node);
+  }
+  ctx.findings.push(...planned.findings);
+  // A producer that gains an entry and has no L0 gets a minimal one first.
+  for (const node of ctx.family.nodes) {
+    const entry = ctx.projects.get(node.namespace);
+    if (entry && entry.exports.length > 0 && !node.hasSystem) entry.createsSystem = true;
+  }
+}
+
+/** A carried mount entry, unless an entry for the same item is planned already. */
+function mergeCarried(entry: ProjectMigration, carried: PlannedExport): void {
+  const same = (e: PlannedExport): boolean => e.from === carried.from && e.interface === carried.interface
+    && e.component === carried.component && e.typeDef === carried.typeDef;
+  if (!entry.exports.some(same)) entry.exports.push(carried);
+}
+
+/**
+ * A rewrite into a producer its referrer does not declare yet names the
+ * producer's current id; apply's re-save writes the alias this plan declares
+ * for it, so the plan shows that spelling.
+ */
+function spelledWithPlannedAlias(ctx: Planning, rewrite: PlannedRewrite): PlannedRewrite {
+  const ref = ctx.family.authoredReferences.find((r) => r.specId === rewrite.specId && r.position === rewrite.position && r.authored === rewrite.from);
+  if (!ref || ref.binding !== 'undeclared' || ref.producer === undefined) return rewrite;
+  const consumer = ctx.projects.get(rewrite.project);
+  const alias = consumer?.externals.find((e) => e.producer === ref.producer)?.alias ?? ctx.projects.get(ref.producer)?.id;
+  const rest = rewrite.to.slice(rewrite.to.indexOf('::'));
+  return alias === undefined || !rewrite.to.includes('::') ? rewrite : { ...rewrite, to: `${alias}${rest}` };
+}
+
+// ── steps 22-23: what the L0 writes would drop ──────────────────────────────
+
+function findDroppedKeys(ctx: Planning): void {
+  // Step 22: each project that gains L0 entries and already has an L0.
+  for (const node of ctx.family.nodes) {
+    const entry = ctx.projects.get(node.namespace);
+    if (!entry || entry.exports.length === 0 || !node.hasSystem) continue;
+    // Step 23: the one L0 delta, dry-run through the gated seam under the project's binding.
+    entry.droppedKeys = runWithProjectRoot(node.directory, () => dryRunStrippedKeys(entry));
+  }
+}
+
+/** The keys the stored L0 file carries that its schema drops; none when the dry run is refused (apply's preflight names why). */
+function dryRunStrippedKeys(entry: ProjectMigration): string[] {
+  try {
+    return authoring.updateSpecGated('system', 'system', exportDelta(entry), true).strippedKeys ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // ── step 24 ─────────────────────────────────────────────────────────────────
 
 function settle(ctx: Planning, top: string, whole: boolean): ChainingMigrationPlan {
   const projects: ProjectMigration[] = [];
+  const rewritten = new Set(ctx.rewrites.map((r) => r.project));
   for (const node of ctx.family.nodes) {
     const entry = ctx.projects.get(node.namespace);
-    if (!entry || !hasWrites(entry)) continue;
-    entry.exports.sort((a, b) => compare(a.from, b.from) || compare(a.component ?? a.typeDef ?? '', b.component ?? b.typeDef ?? ''));
+    if (!entry || (!hasWrites(entry) && !rewritten.has(node.namespace))) continue;
+    entry.exports.sort((a, b) => compare(a.from ?? '', b.from ?? '') || compare(a.component ?? a.typeDef ?? '', b.component ?? b.typeDef ?? ''));
     entry.externals.sort((a, b) => compare(a.alias, b.alias));
     entry.pins.sort();
     projects.push(entry);
   }
   // An absent project blocks only when the plan must write it.
   for (const [namespace, finding] of ctx.absent) finding.blocking = projects.some((p) => p.project === namespace);
-  return { familyRoot: top, whole, projects, findings: ctx.findings };
+  // The rewrites, projects in walk order, then spec, then position.
+  const rank = (ns: string): number => ctx.family.nodes.findIndex((n) => n.namespace === ns);
+  const rewrites = [...ctx.rewrites].sort((a, b) => rank(a.project) - rank(b.project) || compare(a.specId, b.specId) || compare(a.position, b.position));
+  return { familyRoot: top, whole, projects, findings: ctx.findings, rewrites };
 }
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -543,12 +673,16 @@ export function apply(plan: ChainingMigrationPlan): ChainingMigrationReport {
   // Steps 11-13.
   for (const p of projects.filter((q) => q.idToWrite !== undefined)) runWithProjectRoot(p.directory, () => declareId(p, log));
   // Steps 14-16.
-  for (const p of projects.filter((q) => q.exports.length > 0)) runWithProjectRoot(p.directory, () => addEntries(p, log));
+  for (const p of projects.filter((q) => q.exports.length > 0)) runWithProjectRoot(p.directory, () => addEntries(p, mountDescription(plan, p.project), log));
   // Steps 17-19.
   for (const p of projects.filter((q) => q.externals.length > 0)) runWithProjectRoot(p.directory, () => declareExternals(p, log));
   // Steps 20-22.
   for (const p of projects.filter((q) => q.pins.length > 0)) runWithProjectRoot(p.directory, () => pin(p, log));
-  // Steps 23-24.
+  // Step 23: then retire position — members, rewrites, the superseded family pins.
+  const retired = position.apply(plan);
+  retired.written.forEach((w) => log.file(w));
+  retired.relock.forEach((d) => log.stale(d));
+  // Steps 24-25.
   return { plan, applied: true, written: log.written, relock: log.relock };
 }
 
@@ -558,16 +692,20 @@ function preflight(p: ProjectMigration): void {
   if (!core.projectConfigExists()) {
     throw new ChainingMigrationRefusedError([`project-absent (${label(p.project)}): ${p.directory} has no project.yaml any more`]);
   }
-  // Step 10: the L0 delta through the whole gated write, writing nothing.
-  if (p.exports.length > 0) authoring.updateSpecGated('system', 'system', exportDelta(p), true);
+  // Step 10: the L0 delta through the whole gated write, writing nothing; a
+  // project with no L0 yet has its minimal one judged when it is written.
+  if (p.exports.length > 0 && !p.createsSystem) authoring.updateSpecGated('system', 'system', exportDelta(p), true);
 }
 
 /** The one delta that adds a producer's planned entries to its L0. */
 function exportDelta(p: ProjectMigration): { publicInterfaces: Record<string, string>[] } {
   return {
     publicInterfaces: p.exports.map((e) => ({
-      from: e.from,
+      ...(e.from !== undefined ? { from: e.from } : {}),
       ...(e.typeDef !== undefined ? { typeDef: e.typeDef } : { component: e.component! }),
+      ...(e.interface !== undefined ? { interface: e.interface } : {}),
+      ...(e.type !== undefined ? { type: e.type } : {}),
+      ...(e.details !== undefined ? { details: e.details } : {}),
       audience: e.audience,
     })),
   };
@@ -578,10 +716,43 @@ function declareId(p: ProjectMigration, log: WriteLog): void {
   if (core.setProjectId(p.idToWrite!)) log.file(AI_PATHS.projectConfig());
 }
 
-/** Step 16: one gated delta; entries already present change nothing. */
-function addEntries(p: ProjectMigration, log: WriteLog): void {
+/** Steps 15-16: the minimal L0 first where there is none, then one gated delta; entries already present change nothing. */
+function addEntries(p: ProjectMigration, description: string | undefined, log: WriteLog): void {
+  // Step 15.
+  if (p.createsSystem && core.loadSystemSpec() === null) createMinimalSystem(p, description, log);
+  // Step 16: a carried entry its subsystem does not publish yet is published at L1 first.
+  for (const e of p.exports.filter((x) => x.publishAtL1 && x.from !== undefined && x.component !== undefined)) {
+    const l1 = authoring.updateSpecGated('subsystem', e.from!, { publicInterfaces: [{ component: e.component, type: e.type, details: e.details }] });
+    if (l1.written) {
+      log.file(`${AI_PATHS.specsDir()}: subsystem ${e.from}`);
+      log.stale(p.directory);
+    }
+  }
   const change = authoring.updateSpecGated('system', 'system', exportDelta(p));
   if (!change.written) return;
+  log.file(AI_PATHS.specsSystem());
+  log.stale(p.directory);
+}
+
+/** The description a legacy mount gives the member at `project`, carried into its member entry. */
+function mountDescription(migration: ChainingMigrationPlan, project: string): string | undefined {
+  for (const p of migration.projects) {
+    const member = p.members.find((m) => m.member === project);
+    if (member) return member.description;
+  }
+  return undefined;
+}
+
+/** Step 15: the minimal L0 of a project that exports and has none — new content, so through the gated seam. */
+function createMinimalSystem(p: ProjectMigration, description: string | undefined, log: WriteLog): void {
+  const name = core.loadProjectConfig()?.name ?? p.id ?? p.project;
+  const spec = {
+    name,
+    vision: description ?? `${name}: a project of its family that exports to the others.`,
+    boundaries: [],
+    globalRequirements: [],
+  } as unknown as SystemSpec;
+  authoring.writeSpec({ kind: 'system', spec, fields: ['name', 'vision', 'boundaries', 'globalRequirements'] });
   log.file(AI_PATHS.specsSystem());
   log.stale(p.directory);
 }

@@ -37,11 +37,9 @@ import {
 // the adapter's own module, which re-exports it from the core portals.
 import {
   loadSystemSpec,
-  loadSubsystemSpecs,
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadTypeSpecs,
-  resolveChainingParent,
   resolveSubprojectForNamespace,
   computeStateId,
   resolveProjectExports,
@@ -51,7 +49,6 @@ import {
 // The pinned-externals aggregate (externals_repository): the lock and the
 // snapshots it names, apart from the legacy .wai/surfaces snapshots.
 import { externalsRepository } from './externals.js';
-import type { ChainingParentRef } from './specs.js';
 import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
 
 // ---------------------------------------------------------------------------
@@ -246,125 +243,6 @@ export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
     ...(exportedTypes.length
       ? { exportedTypes: exportedTypes.map(e => ({ id: e.publicName, type: closureIdOf(e), audience: e.audience ?? 'instance' })) }
       : {}),
-  });
-}
-
-/** The parent surface a chained child may see — the family ceiling includes project-audience entries. */
-export function projectChildSurface(): SurfaceSnapshot {
-  return projectOwnSurface('project');
-}
-
-/** The local (namespace-stripped) name of a possibly-qualified spec id. */
-function localName(id: string): string {
-  return id.split('::').pop()!;
-}
-
-/**
- * The stereotypes that can legally serve a cross-boundary caller, and therefore
- * the only ones a sibling surface may project. This is exactly the set the
- * boundary rules already sanction as a cross-subsystem dependency target
- * (a Portal — see rules/doctrine/subsystem-boundary-dependencies.ts) plus the Observer that may
- * back a MessageBus public interface (see rules/integrity/public-surface.ts). Anything
- * else is declarable as a published entry but never consumable across a
- * boundary, so projecting it would export a contract no sibling can call. A
- * gateway is a Portal with the gateway variant, so it projects as the Portal it is.
- */
-const CROSS_BOUNDARY_TARGETS: ReadonlySet<string> = new Set(['Portal', 'Observer']);
-
-/**
- * Project ONE subsystem's published surface — its L1 publicInterfaces realized
- * by a component that can legally serve a cross-boundary caller (a Portal, or
- * an Observer for an event surface), with full L3 contracts,
- * dispatch tables, and the transitive type closure — into a self-contained
- * contract-grade snapshot at the family ('project') audience ceiling. This is
- * the SIBLING view a chained child receives: siblings expose exactly what they
- * publish, nothing wider. The publishable set matches what the boundary rules
- * already sanction as a cross-subsystem dependency target, so a subsystem
- * publishing through a Portal or an Observer is projected rather than
- * silently absent from every child. A published entry whose backing
- * component can NEVER be a cross-boundary target is omitted and REPORTED as
- * a non-fatal diagnostic. The snapshot is keyed '<systemName>::<subsystemId>'
- * so sibling surfaces never collide with the parent family surface or
- * foreign imports, and carries the parent tree's StateId provenance.
- */
-export function projectSubsystemSurface(subsystemId: string): SurfaceSnapshot {
-  const system = loadSystemSpec();
-  if (!system) {
-    throw new Error('Cannot project a subsystem surface: the L0 system spec is missing.');
-  }
-  const subsystems = loadSubsystemSpecs();
-  const target = subsystems.find(s => s.id === subsystemId);
-  if (!target) {
-    throw new Error(`Cannot project a subsystem surface: subsystem "${subsystemId}" does not exist.`);
-  }
-  const components = loadComponentSpecs();
-  const interfaces = loadInterfaceSpecs();
-  const types = loadTypeSpecs();
-
-  const entries: SurfaceContractEntry[] = [];
-  // Published entries whose backing component can never be a cross-boundary
-  // target: omitted from the projection AND reported below, so an author learns
-  // why a child cannot see them instead of finding an unexplained gap.
-  const unprojectable: { component: string; componentType: string }[] = [];
-  for (const pub of target.publicInterfaces ?? []) {
-    // Unbound entries, and entries naming a component that does not exist, are
-    // deliberately NOT reported here — the validator already raises those as
-    // errors (PUBLIC_INTERFACE_UNBOUND / PUBLIC_INTERFACE_INVALID_COMPONENT), so
-    // a diagnostic would be duplicate noise.
-    if (!pub.component) continue; // unbound published entries cannot be exported
-    // An external (chained) sibling's members load namespace-qualified; match both forms.
-    const comp = components.find(c =>
-      c.id === pub.component || c.id === `${subsystemId}::${pub.component}`);
-    if (!comp) continue;
-    // Siblings expose exactly what they publish, and only through a component a
-    // cross-boundary caller can actually reach. A published entry backed by
-    // anything else (a 'Custom' entry over an Orchestrator or a Store, say)
-    // is unprojectable — collected for reporting rather than silently dropped.
-    if (!CROSS_BOUNDARY_TARGETS.has(comp.componentType)) {
-      unprojectable.push({ component: pub.component, componentType: comp.componentType });
-      continue;
-    }
-
-    const compInterfaces = interfaces.filter(i =>
-      i.component === comp.id
-      && (!pub.interface || i.id === pub.interface || i.id === `${subsystemId}::${pub.interface}`));
-    const methods = compInterfaces.flatMap(i => i.methods);
-
-    entries.push({
-      id: localName(pub.interface ?? comp.id),
-      name: comp.name,
-      // Family ceiling: a sibling surface is consumable by the system family only.
-      audience: 'project',
-      type: pub.type ?? 'Custom',
-      // The snapshot carries the LOCAL portal name — consumers resolve cross-tree
-      // refs by their final segment.
-      component: localName(comp.id),
-      methods,
-      ...(comp.dispatch && comp.dispatch.length ? { dispatch: comp.dispatch } : {}),
-      // Project the backing component's auth + basePath so the codec can emit
-      // OpenAPI security + per-portal servers self-contained from the snapshot.
-      ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
-      ...(comp.basePath ? { basePath: comp.basePath } : {}),
-      details: pub.details ?? '',
-    });
-  }
-
-  // Report the skipped-what-and-why at generation time (same shape the variant
-  // loader uses for a skipped variant file) — a gap in a child's sibling surface
-  // is explained now rather than discovered later as a missing contract.
-  for (const skipped of unprojectable) {
-    console.error(
-      `[surfaces] skipped "${subsystemId}::${skipped.component}": a published ${skipped.componentType} can never serve a cross-boundary caller, so it stays out of every chained child's sibling surface — publish this surface through a Portal, or an Observer (for events).`,
-    );
-  }
-
-  return SurfaceSnapshotSchema.parse({
-    projectName: `${system.name}::${subsystemId}`,
-    origin: 'generated',
-    stateId: stateIdString(),
-    generatedAt: new Date().toISOString(),
-    interfaces: entries,
-    types: computeTypeClosure(entries, types),
   });
 }
 
@@ -608,152 +486,45 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
   return snapshot;
 }
 
-/**
- * What a chained child's family publishes to it NOW, keyed as a pin stores it:
- * the family-scoped parent surface under the parent system name, then the
- * published surface of every sibling — each top-level parent subsystem but the
- * child's own mount — under '<systemName>::<subsystemId>'. The parent root is
- * bound read-only for the projection and the child's binding is restored
- * afterwards. A pin stores exactly this, and freshness is judged against it.
- */
-function projectFamilySurfaces(parent: ChainingParentRef): SurfaceSnapshot[] {
-  return runWithProjectRoot(parent.parentRoot, () => {
-    // The parent is read as it is NOW without asking for it here: a write in
-    // this process drops every workspace's cache, and the loader re-checks a
-    // cached tree's file signature against the disk before it serves it.
-    const siblings = loadSubsystemSpecs()
-      .filter((s) => !s.id.includes('::') && s.id !== parent.subsystemId);
-    return [projectChildSurface(), ...siblings.map((s) => projectSubsystemSurface(s.id))];
-  });
-}
-
-/**
- * surface_orchestrator.pinFamilySurfaces — a chained child PULLS its family's
- * surfaces into its own `.wai/surfaces/`.
- *
- * It replaced delivery, which was pushed: every parent lock wrote (children x
- * subsystems) snapshots into every child's working tree on the parent's
- * schedule, and the hosted lock never delivered at all. A pin is the child
- * owner's own import,
- * taken while the parent is on disk and committed with the child, so a child
- * cloned WITHOUT its parent still has contracts to validate against.
- *
- * Projects exactly what a child may consume: the family-scoped parent surface,
- * and every sibling's published surface except the child's own mount. Returns
- * the paths whose content changed, or null when this root has no parent.
- */
-export function pinFamilySurfaces(): string[] | null {
-  const parent = resolveChainingParent();
-  if (!parent) return null;
-  const childRoot = getProjectRoot();
-
-  const projected = projectFamilySurfaces(parent);
-
-  const before = new Map(listSnapshots(childRoot).map((s) => [s.projectName, surfaceContentKey(s)]));
-  const changed: string[] = [];
-  for (const snapshot of projected) {
-    const stored = saveSnapshot(snapshot, childRoot);
-    if (before.get(snapshot.projectName) !== surfaceContentKey(SurfaceSnapshotSchema.parse(snapshot))) {
-      changed.push(stored);
-    }
-  }
-  return changed;
-}
-
 // ---------------------------------------------------------------------------
-// External-surface discovery (listExternalInterfaces) — the scope-aware
-// catalog of this project's outward world: parent family surface, sibling
-// surfaces, and foreign imports, each with a freshness verdict.
+// Stage-1 family pins (listFamilyPins) — the generated family and sibling
+// snapshots `wairon surface pin` once wrote. Nothing reads them since stage 3;
+// the chaining migration converts the family pin into an external and deletes
+// them all.
 // ---------------------------------------------------------------------------
 
 /**
- * One row of the external-interface discovery listing: a vendored surface
- * snapshot this project can consume, summarized with its origin, family role,
- * provenance, and a freshness verdict. The full contracts stay in the
- * referenced SurfaceSnapshot — this is the catalog view served to agents
- * (sdd_list_external_interfaces) and the CLI (`wairon surface externals`).
+ * family_pin — one stage-1 family pin a project root still holds in
+ * .wai/surfaces/: its storage key, whether it pins the parent's family surface
+ * or one sibling's, and when it was written.
  */
-export interface ExternalSurfaceEntry {
-  /** The snapshot's storage key: the producing project's name, or '<systemName>::<subsystemId>' for a sibling surface. */
-  projectName: string;
-  /** Snapshot origin: 'generated' | 'exchanged' | 'authored'. */
-  origin: SurfaceOrigin;
-  /** Family role from THIS project's standpoint. */
-  sourceKind: 'parent' | 'sibling' | 'foreign';
-  /** ISO-8601 timestamp the snapshot was produced. */
-  generatedAt: string;
-  /** Producing tree's state hash at generation time, when stamped. */
-  stateId?: string;
-  /** Producer-declared version, for authored/exchanged snapshots carrying one. */
-  version?: string;
-  /**
-   * 'fresh' when the snapshot's content equals what the chaining parent projects
-   * for the same key now; 'stale' when it differs or that key is no longer
-   * projected; 'unverifiable' when no parent is in reach or the snapshot is foreign.
-   */
-  freshness: 'fresh' | 'stale' | 'unverifiable';
-  /** Ids of the interfaces the snapshot exposes — the discovery summary. */
-  interfaceIds: string[];
-  /** The producing project's id, when the snapshot records one — beside projectName, the display name and storage key. */
-  projectId?: string;
+export interface FamilyPin {
+  /** The snapshot's storage key: the parent's system name, or `<system>::<subsystem>` for a sibling pin. */
+  key: string;
+  /** parent | sibling */
+  role: 'parent' | 'sibling';
+  /** When the pin was written. */
+  generatedAt?: string;
 }
 
 /**
- * The content of every surface the chaining parent projects for this child
- * now, by storage key. Null when the parent's tree cannot be projected at all —
- * its L0 no longer loads, say — so there is nothing to judge a pin against.
+ * surface_orchestrator.listFamilyPins — the stage-1 family pins the bound root
+ * holds: every generated snapshot, classified by its key. Foreign imports
+ * (exchanged or authored) are never family pins. Reads only the bound root.
  */
-function projectedFamilyContent(parent: ChainingParentRef): Map<string, string> | null {
-  try {
-    return new Map(projectFamilySurfaces(parent).map((s) => [s.projectName, surfaceContentKey(s)]));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Scope-aware discovery of this project's outward world: every vendored
- * surface snapshot as an ExternalSurfaceEntry. sourceKind classification:
- * 'parent' is the generated family surface keyed by the parent system name;
- * 'sibling' is a generated '<systemName>::<subsystemId>' key; 'foreign' is an
- * exchanged/authored import.
- *
- * Freshness is judged on content. When the chaining parent is in reach, what it
- * publishes now is projected exactly as a pin would store it, and a generated
- * snapshot is 'fresh' when its content equals the projection under the same
- * key, 'stale' when it differs or that key is no longer projected. Provenance
- * never decides: a pin leaves a snapshot whose content is unchanged untouched,
- * so its stateId rightly predates any unrelated parent edit — which is why a
- * re-pin always repairs a stale entry. Entries are 'unverifiable' when no
- * parent is in reach (standalone, or a request narrowed to the child), when the
- * parent cannot be projected, or when the snapshot is foreign.
- */
-export function listExternalInterfaces(): ExternalSurfaceEntry[] {
+export function listFamilyPins(): FamilyPin[] {
+  // Step 1: the snapshots the bound root holds.
   const snapshots = listSnapshots();
-  // Reach-gated: null for a top root, and for a request that may not read above its root.
-  const chainingParent = resolveChainingParent();
-  const projected = chainingParent ? projectedFamilyContent(chainingParent) : null;
-
-  return snapshots.map(snapshot => {
-    const generated = snapshot.origin === 'generated';
-    const sourceKind: ExternalSurfaceEntry['sourceKind'] = !generated
-      ? 'foreign'
-      : snapshot.projectName.includes('::') ? 'sibling' : 'parent';
-    const freshness: ExternalSurfaceEntry['freshness'] = generated && projected
-      ? (projected.get(snapshot.projectName) === surfaceContentKey(snapshot) ? 'fresh' : 'stale')
-      : 'unverifiable';
-    return {
-      projectName: snapshot.projectName,
-      origin: snapshot.origin,
-      sourceKind,
-      generatedAt: snapshot.generatedAt,
-      ...(snapshot.stateId ? { stateId: snapshot.stateId } : {}),
-      ...(snapshot.version ? { version: snapshot.version } : {}),
-      freshness,
-      interfaceIds: snapshot.interfaces.map(e => e.id),
-      ...(snapshot.projectId ? { projectId: snapshot.projectId } : {}),
-    };
-  });
+  // Step 2: the generated ones, classified by key.
+  const pins = snapshots
+    .filter((snapshot) => snapshot.origin === 'generated')
+    .map((snapshot): FamilyPin => ({
+      key: snapshot.projectName,
+      role: snapshot.projectName.includes('::') ? 'sibling' : 'parent',
+      ...(snapshot.generatedAt ? { generatedAt: snapshot.generatedAt } : {}),
+    }));
+  // Step 3: in key order.
+  return pins.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
 // ---------------------------------------------------------------------------

@@ -290,10 +290,11 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
  * may mint here; delegated minting-with-dominance is deferred. Rejects a
  * reserved owner id (the built-in subjects can never own a mintable bearer), a
  * deactivated owner (deactivation must stay revoked), and unknown projects in
- * the narrowing — a subproject-qualified entry ('projectId::subsystemId') is
- * validated at mint time: the named subsystem must exist on that project and
- * carry a projectPath (unknown/non-chained mounts are rejected with guidance,
- * never stored broken). Persists only the hashed record with owner/narrowing
+ * the narrowing — a member-qualified entry ('projectId::alias', one member
+ * alias per hop) is validated at mint time: each alias must declare a member of
+ * the project it is looked up in, in project.yaml `members` or for one release
+ * a legacy L1 mount (an unknown alias, or an internal subsystem, is rejected
+ * with guidance, never stored broken). Persists only the hashed record with owner/narrowing
  * metadata and appends a redacted audit event. Returns the plaintext token
  * exactly once.
  */
@@ -310,10 +311,10 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
 
   // The token's project NARROWING (never a grant): which projects it may name.
   // ['*'] (or omitted) = the owner's full accessible set, still resolved live.
-  // An entry MAY be subproject-qualified ('projectId::subsystemId', nested
-  // mounts composing) — validated at MINT time: the named subsystem must exist
-  // on that project and carry a projectPath. An unknown project or an
-  // unknown/non-chained mount is rejected with guidance, never stored broken.
+  // An entry MAY be member-qualified ('projectId::alias', nested members
+  // composing, one alias per hop) — validated at MINT time: each alias must
+  // declare a member. An unknown project, an unknown alias or an internal
+  // subsystem is rejected with guidance, never stored broken.
   const projects = request.projects?.length ? request.projects : ['*'];
   for (const p of projects) {
     assertMintableNarrowingEntry(cfg.dataDir, p);
@@ -392,11 +393,11 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
  * or bearer token) to their principal; require the caller's OWN resolved permission
  * to already cover project:read on the project (and project:write when write) — the
  * token can never exceed the caller's own access at mint time, and it acts as the
- * OWNER's LIVE permission afterwards. `projectId` may be subproject-qualified
- * ('projectId::subsystemId', nested mounts composing), scoping the caller's own
- * token INTO a chained subproject — validated at MINT time (the named subsystem
- * must exist on that project and carry a projectPath; unknown/non-chained mounts
- * are rejected with guidance, never stored broken), while permission keeps
+ * OWNER's LIVE permission afterwards. `projectId` may be member-qualified
+ * ('projectId::alias', nested members composing), scoping the caller's own
+ * token INTO a member project — validated at MINT time (each alias must declare
+ * a member, in `members` or a legacy L1 mount; an unknown alias or an internal
+ * subsystem is rejected with guidance, never stored broken), while permission keeps
  * resolving over the TOP project (the qualifier narrows reach, it never refines
  * grants). Mint a token OWNED BY the caller (ownerSubject AND createdBySubject =
  * the caller's subject, so deactivating the caller revokes it via
@@ -413,12 +414,12 @@ export function mintSelfToken(
   const principal = requirePrincipal(cfg, credential);
 
   // Parse the possibly-qualified project id: permission resolves over the TOP
-  // project — a subproject qualifier narrows reach, never what the token may do.
+  // project — a member qualifier narrows reach, never what the token may do.
   const parsed = parseQualifiedSelector(projectId);
   if (!parsed) {
     throw new Error(
       `invalid project id "${projectId}" (expected a project id, optionally ` +
-        `subproject-qualified as projectId::subsystemId)`,
+        `member-qualified as projectId::alias)`,
     );
   }
 

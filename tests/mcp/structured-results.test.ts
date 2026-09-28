@@ -50,7 +50,6 @@ const STRUCTURED_TOOLS = [
   'sdd_update_spec',
   'sdd_set_endpoints',
   'sdd_set_public_interfaces',
-  'sdd_set_subsystem_project_path',
   'sdd_delete_spec',
   'sdd_get_spec',
   'sdd_validate_tree',

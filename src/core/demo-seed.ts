@@ -1,6 +1,6 @@
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -123,8 +123,8 @@ export function seedDemoTree(): void {
     name: string,
     description: string,
     publicInterfaces: PublicInterface[],
-  ): void =>
-    saveSubsystemSpec({
+  ): void => void
+    saveSpec('subsystem', {
       id,
       name,
       description,

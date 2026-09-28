@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot, listFilesRecursive } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -16,7 +16,7 @@ import {
   renameComponent,
   renameMethod,
   externalizeSubsystem,
-  internalizeSubsystem,
+  internalizeMember,
 } from '../../src/core/provision.js';
 import { validateSddTree } from '../../src/core/validation.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
@@ -112,7 +112,7 @@ function billing(): string {
     boundaries: [], globalRequirements: [], databases: [], publicInterfaces: [],
     createdAt: now, updatedAt: now,
   });
-  saveSubsystemSpec(sub('billing'));
+  saveSpec('subsystem', sub('billing'));
   saveComponentSpec(comp('invoice_store', 'billing', 'Store', { durability: 'durable' }));
   saveInterfaceSpec({
     id: 'iinvoice_store', name: 'iinvoice_store', description: 'd', component: 'invoice_store',
@@ -146,7 +146,7 @@ function billing(): string {
   // bare one is what the reference rewrite can match whole — so it proves the
   // rewrite reached this file at all, which is what makes "the unions are
   // unchanged" mean something.
-  saveSubsystemSpec(sub('reporting'));
+  saveSpec('subsystem', sub('reporting'));
   saveComponentSpec(comp('report_builder', 'reporting', 'Orchestrator'));
   saveInterfaceSpec({
     id: 'ireport_builder', name: 'ireport_builder', description: 'd', component: 'report_builder',
@@ -247,7 +247,7 @@ describe('a migration leaves a union type reference exactly as written', () => {
     externalizeSubsystem('billing', 'sub/billing');
     invalidateSpecCache();
     setProjectRoot(root);
-    internalizeSubsystem('billing');
+    internalizeMember('billing');
     invalidateSpecCache();
     setProjectRoot(root);
 

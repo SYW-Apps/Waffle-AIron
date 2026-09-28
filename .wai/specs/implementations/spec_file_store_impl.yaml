@@ -45,9 +45,9 @@ methods:
         description: Resolve the bound project root and set the bounded ancestor hop budget
         type: local
       - stepNumber: 2
-        description: Walk upward while no mount is found and ancestors remain within the hop budget
+        description: Walk upward while no declaring parent is found and ancestors remain within the hop budget
         type: loop
-        condition: no mounting subsystem recorded and an ancestor remains within the hop budget
+        condition: no declaring parent recorded and an ancestor remains within the hop budget
         loopKind: while
         endStep: 4
       - stepNumber: 3
@@ -57,14 +57,17 @@ methods:
         type: local
       - stepNumber: 4
         description: >-
-          Scan the ancestor's spec directory (when present) for a subsystem spec whose projectPath
-          resolves EXACTLY to the bound root, skipping malformed specs soft; record the first match
-          (parent root + subsystem id)
+          At an ancestor holding a wairon project, read its member declarations — its
+          configuration's `members` (through that ancestor's per-root binding) and, for one release,
+          its subsystem specs carrying projectPath — and record the first whose path resolves
+          EXACTLY to the bound root and stays within the ancestor's own root (parent root, alias,
+          form; a `members` entry wins over a legacy mount under the same alias), skipping malformed
+          files soft
         type: local
       - stepNumber: 5
-        description: A mounting subsystem was recorded
+        description: A declaring parent was recorded
         type: branch
-        condition: a mounting subsystem was recorded
+        condition: a declaring parent was recorded
         onFalseStep: 7
       - stepNumber: 6
         description: Return the chaining-parent reference
@@ -95,4 +98,4 @@ methods:
     symbol: removeSpecFile
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-09-20T14:54:13.474Z'
+updatedAt: '2026-09-27T10:37:08.181Z'

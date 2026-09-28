@@ -6,13 +6,6 @@ description: >-
 contract: imcp_surfaces_adapter
 sourcePath: src/mcp/adapters/surfaces.ts
 methods:
-  - name: listExternalInterfaces
-    narrative:
-      - stepNumber: 1
-        description: Forward the discovery read to the surface-exchange subsystem's published portal
-        type: call
-        targetComponent: surface_portal
-        targetMethod: listExternalInterfaces
   - name: pinExternals
     narrative:
       - stepNumber: 1
@@ -29,4 +22,4 @@ methods:
         targetMethod: getExternalsStatus
 status: complete
 createdAt: '2026-07-24T18:14:33.463Z'
-updatedAt: '2026-09-26T17:49:45.167Z'
+updatedAt: '2026-09-27T10:43:08.329Z'

@@ -1,17 +1,15 @@
 import { SddRule, type RuleContext } from '../types.js';
-import { isDraftSubsystem } from '../../../models/index.js';
+import { isDraftSubsystem, type AuthoredReference } from '../../../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Reference forms: a reference written with a leading `::` escapes to the root
-// of whatever checkout loads it, naming a spec by its place in one mount chain.
-// It always has a fix — the absolute id it resolves to — so every one an author
-// wrote is reported. `super::` is not reported in stage 2: wairon's own writer
-// emits it for every cross-namespace reference, and no alternative exists until
-// stage 3 brings `alias::name`.
+// Reference forms: a cross-project reference is `alias::name`. Three older
+// forms still bind for one release — a leading `::`, `super::` and a member
+// path — and each one an author wrote is reported with the text to write
+// instead: a bare local id, or `alias::publicName`.
 //
-// The rule does no I/O. The scan records each leading-`::` reference before
-// qualification erases the form, and the project graph gathers them
-// (ctx.projectFamily.authoredReferences).
+// The rule does no I/O. The scan records every reference with `::` before
+// binding erases the form, with what it bound to and its rewrite, and the
+// project graph gathers them (ctx.projectFamily.authoredReferences).
 // ---------------------------------------------------------------------------
 
 /** The draft context a finding on this spec takes. */
@@ -25,24 +23,46 @@ function draftOf(ctx: RuleContext, specId: string): boolean {
   return impl ? ctx.isImplementationDraft(impl) : false;
 }
 
+/** What a deprecated form is, in words. */
+function formOf(ref: AuthoredReference): string {
+  switch (ref.form) {
+    case 'leading': return 'a leading `::` names a spec by its place in whichever checkout loads it';
+    case 'super': return '`super::` climbs the containing projects — a place in one family, not a name';
+    default: return 'a member path is read from the bound root, one alias per segment — a place in one family, not a name';
+  }
+}
+
+/** Why a deprecated form has no text to write instead. */
+function whyNoRewrite(ref: AuthoredReference): string {
+  if (ref.binding === 'outside') return 'no rewrite can be written: its target lies outside the scan (a project the scan did not read)';
+  if (ref.binding === 'unresolved') return 'no rewrite can be written: nothing names its first segment';
+  return `no rewrite can be written: the project it lands in (${ref.producer === '' ? 'the bound root' : `"${ref.producer}"`}) has no id to name it by`;
+}
+
 export const referenceFormsRule: SddRule = {
   name: 'reference-forms',
   description:
-    'A reference written with a leading `::` escapes to the root of whatever checkout loads it, naming a spec by its place in one mount chain; it always has a fix, the absolute id it resolves to. Every one an author wrote is reported (DEPRECATED_REFERENCE_FORM), naming the spec, where in it, the form as written and the absolute id to write instead. `super::` is not reported in stage 2: wairon\'s own writer emits it for every cross-namespace reference and no alternative exists until stage 3 brings `alias::name`. It reads the project graph\'s authored references, which the scan records before qualification erases the form.',
+    "A cross-project reference is `alias::name`: the alias is one of the referring project's members or externals, the name a public name of that project's L0 table. Three older forms still bind for one release and are reported (DEPRECATED_REFERENCE_FORM), each naming the spec, where in it, the form as written and the text to write instead (the scan's rewrite: a bare local id, or `alias::publicName`): a leading `::`, which escapes to the root of whatever checkout loads it; `super::`, which climbs the containing projects — a place in one family, not a name; and a member path (`desktop::shell` written inside desktop, `waffler_core::transpiler::x` written inside transpiler), a first segment the referring project does not declare, read from the bound root. Wairon's own writer emits none of them. A form with no rewrite (its target is out of reach) is reported with the reason. It reads the project graph's authored references, which the scan records before binding erases the form.",
   codes: [
-    { code: 'DEPRECATED_REFERENCE_FORM', defaultSeverity: 'notice', summary: 'A reference written with a leading :: where the absolute id it resolves to belongs' },
+    { code: 'DEPRECATED_REFERENCE_FORM', defaultSeverity: 'notice', summary: "A reference written with a leading ::, super:: or a member path where a local id or alias::name belongs" },
   ],
   check(ctx) {
     // Step 1: the graph.
     const family = ctx.projectFamily;
     // Steps 2-3: a candidate run carries none.
     if (!family) return;
-    // Steps 4-5: every leading-`::` reference an author wrote.
+    // Steps 4-5: every reference written in a deprecated form whose text changes.
     for (const ref of family.authoredReferences) {
+      if (ref.form === 'alias') continue;
+      // A path-form reference whose rewrite equals what was written becomes
+      // canonical by declaring the external alone — EXTERNAL_UNDECLARED's to say.
+      if (ref.rewrite !== undefined && ref.rewrite === ref.authored) continue;
+      const bound = ref.binding === 'outside' || ref.binding === 'unresolved' ? '' : ` It binds to "${ref.resolved}".`;
+      const instead = ref.rewrite !== undefined ? `Write "${ref.rewrite}" instead.` : `${whyNoRewrite(ref)[0].toUpperCase()}${whyNoRewrite(ref).slice(1)}.`;
       ctx.addIssue(
         'notice',
         'DEPRECATED_REFERENCE_FORM',
-        `"${ref.specId}" writes "${ref.authored}" (${ref.position}): a leading \`::\` names a spec by its place in whichever checkout loads it. Write the absolute id "${ref.resolved}" instead.`,
+        `"${ref.specId}" writes "${ref.authored}" (${ref.position}): ${formOf(ref)}.${bound} ${instead}`,
         ref.specId,
         draftOf(ctx, ref.specId),
       );

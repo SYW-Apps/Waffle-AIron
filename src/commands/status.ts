@@ -22,6 +22,7 @@ import type { StatusDecor, StatusOptions } from '../core/status.js';
 const LAYER_COLOUR: Record<string, (text: string) => string> = {
   system: text => chalk.bold.blue(text),
   subsystem: text => chalk.bold.cyan(text),
+  project: text => chalk.bold.yellow(text),
   component: text => chalk.magenta(text),
   interface: text => chalk.blue(text),
   implementation: text => chalk.green(text),

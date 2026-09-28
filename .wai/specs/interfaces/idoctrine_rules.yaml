@@ -363,16 +363,16 @@ methods:
     description: >-
       Rule project-boundaries. Every project is a crate of its own (decision 9): another project
       reaches it only through its L0 exports, and only as a dependency it declared. A reference that
-      reaches another project the referring project neither mounts as a member nor declares as an
-      external is EXTERNAL_UNDECLARED; a reference that reaches another project at anything but a
-      public name whose audience covers the referrer — an L1-published or internal component, a
-      method outside the entry's narrowing, a type neither exported by name nor in an exported
-      signature's closure — is EXTERNAL_NOT_EXPORTED; and a trustedLinks entry that names a
-      subsystem of another project is TRUSTED_LINK_CROSSES_PROJECT, since a sanctioned fast lane
-      stays inside one project. A reference is one of the positions CrossProjectReference lists,
-      judged from the project graph (owner of the referring spec versus producer of the target) and
-      the export usages; a reference whose producer the scan cannot place is left to the
-      resolve-through-parent verdict.
+      reaches another project the referring project neither declares as a member nor as an external
+      — found only by a deprecated form or a family project id — is EXTERNAL_UNDECLARED; a reference
+      that reaches another project at anything but a public name of its resolved L0 table whose
+      audience covers the referrer — an L1-published or internal component, a method outside the
+      entry's narrowing, a type the producer exports only inside a signature's closure — is
+      EXTERNAL_NOT_EXPORTED; and a trustedLinks entry that names a subsystem of another project
+      (`alias::sub`) is TRUSTED_LINK_CROSSES_PROJECT, since a sanctioned fast lane stays inside one
+      project. A reference is one of the positions CrossProjectReference lists, judged from what the
+      scan bound it to (project graph and export usages); a reference bound as outside is left to
+      the resolve-through-parent verdict.
     signature: 'projectBoundaries(ctx: RuleContext): void'
     returns: void
     params:
@@ -393,6 +393,25 @@ methods:
       - code: TRUSTED_LINK_CROSSES_PROJECT
         severity: notice
         summary: A trustedLinks entry names a subsystem of another project
+  - name: projectCycles
+    description: >-
+      Rule project-cycles. Projects that depend on each other in a loop cannot be approved or
+      released one at a time: each needs the other's contract first. Every loop in the project
+      dependency graph (ProjectFamily.dependencyCycles: an edge per cross-project reference or L0
+      re-export from a member or external; containment is no edge) is PROJECT_DEPENDENCY_CYCLE,
+      reported once per loop on each project in it, naming the loop and, for each edge that closes
+      it, the references that make the edge — so a person can see which few references to move. A
+      warning in stage 3; stage 5's approval pins need an acyclic graph and raise it to an error.
+    signature: 'projectCycles(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PROJECT_DEPENDENCY_CYCLE
+        severity: warning
+        summary: Projects of the family depend on each other in a loop
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-26T17:46:20.988Z'
+updatedAt: '2026-09-27T10:41:26.446Z'

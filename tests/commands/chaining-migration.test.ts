@@ -8,7 +8,8 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { pinFamilySurfaces } from '../../src/core/surface-portal.js';
+import { saveSnapshot } from '../../src/core/surfaces.js';
+import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import { validateSddTree, validateAsComplete, type ValidationResult } from '../../src/core/validation.js';
 import { ChainingMigrationRefusedError, DoctorOptionsError } from '../../src/utils/errors.js';
 import { plan, apply, isEmpty, blocked } from '../../src/commands/chaining-migration.js';
@@ -23,6 +24,10 @@ import { runLock } from '../../src/commands/lock.js';
 // producer exports anything at L0 — so the plan must declare every defaulted
 // id, add the producers' L0 entries, declare dispatch's externals and pin them.
 // The `property:` cases are the stage-2.md §7 properties 2c makes provable.
+//
+// Stage 3 keys a member by its project id: before the migration declares an
+// id, billing and dispatch answer to (and are keyed by) their name slugs,
+// `billing-service` and `dispatch-service`.
 //
 // `doctor --fix` runs through the real CLI in a Node process of its own, as
 // tests/commands/doctor.test.ts does: applyFixes reaches the MCP adapter
@@ -166,13 +171,21 @@ describe('stage 2c — the chaining migration', () => {
     expect(fromRoot.familyRoot).toBe(path.resolve(f.root));
     expect(fromRoot.whole).toBe(true);
     expect(fromRoot.findings).toEqual([]);
-    expect(fromRoot.projects.map((p) => [p.project, p.idToWrite])).toEqual([['', 'fleetworks'], ['billing', 'billing'], ['dispatch', 'dispatch']]);
+    expect(fromRoot.projects.map((p) => [p.project, p.idToWrite])).toEqual([['', 'fleetworks'], ['billing-service', 'billing'], ['dispatch-service', 'dispatch']]);
     const [top, billing, dispatch] = fromRoot.projects;
     // The typeDef re-export: the operations L1 table resolves the type, so an L0 entry can follow it.
-    expect(top.exports).toEqual([{ from: 'operations', typeDef: 'route-id', publicName: 'route-id', audience: 'project', consumers: ['dispatch'], members: ['type'] }]);
-    expect(billing.exports).toEqual([{ from: 'invoicing', component: 'invoice-portal', publicName: 'invoice-portal', audience: 'project', consumers: ['dispatch'], members: ['issueInvoice'] }]);
+    expect(top.exports).toEqual([{ from: 'operations', typeDef: 'route-id', publicName: 'route-id', audience: 'project', consumers: ['dispatch-service'], members: ['type'], reason: 'reference' }]);
+    expect(billing.exports).toEqual([{ from: 'invoicing', component: 'invoice-portal', publicName: 'invoice-portal', audience: 'project', consumers: ['dispatch-service'], members: ['issueInvoice'], reason: 'reference' }]);
+    // Stage 3: both legacy mounts move into the top's `members`, and dispatch's
+    // three `super::` references are rewritten to the aliases it now declares.
+    expect(top.members.map((m) => [m.alias, m.path, m.description])).toEqual([['billing', 'packages/billing', 'Chained billing member.'], ['dispatch', 'packages/dispatch', 'Chained dispatch member.']]);
+    expect(fromRoot.rewrites.map((r) => [r.specId, r.position, r.from, r.to])).toEqual([
+      ['dispatch-service::iroute-planner', 'type', 'super::operations::route-id', 'fleetworks::route-id'],
+      ['dispatch-service::route-planner', 'dependsOn', 'super::billing::invoice-portal', 'billing::invoice-portal'],
+      ['dispatch-service::route-planner-impl', 'narrative', 'super::billing::invoice-portal', 'billing::invoice-portal'],
+    ]);
     expect(dispatch.externals).toEqual([
-      { alias: 'billing', project: 'billing', producer: 'billing', reason: 'reference' },
+      { alias: 'billing', project: 'billing', producer: 'billing-service', reason: 'reference' },
       { alias: 'fleetworks', project: 'fleetworks', producer: '', reason: 'reference' },
     ]);
     expect(dispatch.pins).toEqual(['billing', 'fleetworks']);
@@ -217,7 +230,7 @@ describe('stage 2c — the chaining migration', () => {
     const f = family();
     const before = at(f.root, () => validateSddTree());
     expect(codesOf(before, 'EXTERNAL_UNDECLARED')).toEqual([
-      'EXTERNAL_UNDECLARED @dispatch::iroute-planner', 'EXTERNAL_UNDECLARED @dispatch::route-planner', 'EXTERNAL_UNDECLARED @dispatch::route-planner-impl',
+      'EXTERNAL_UNDECLARED @dispatch-service::iroute-planner', 'EXTERNAL_UNDECLARED @dispatch-service::route-planner', 'EXTERNAL_UNDECLARED @dispatch-service::route-planner-impl',
     ]);
     expect(codesOf(before, 'EXTERNAL_NOT_EXPORTED')).toHaveLength(3);
     const report = at(f.root, () => apply(plan()));
@@ -231,7 +244,16 @@ describe('stage 2c — the chaining migration', () => {
       '.wai/project.yaml', 'packages/billing/.wai/project.yaml', 'packages/dispatch/.wai/project.yaml',
       '.wai/specs/.index.yaml', 'packages/billing/.wai/specs/.index.yaml',
       'packages/dispatch/.wai/externals/billing.yaml', 'packages/dispatch/.wai/externals.lock.yaml', 'packages/dispatch/.wai/externals/fleetworks.yaml',
+      // Then position: the mounts moved into the top's `members`, dispatch's references rewritten.
+      '.wai/specs: subsystem billing', '.wai/specs: subsystem dispatch',
+      'packages/dispatch/.wai/specs: interface iroute-planner', 'packages/dispatch/.wai/specs: component route-planner',
+      'packages/dispatch/.wai/specs: implementation route-planner-impl',
     ]);
+    // A raw position is rewritten too: the parameter type and the display signature beside it.
+    const contract = fs.readFileSync(path.join(f.dispatch, '.wai', 'specs', 'interfaces', 'iroute-planner.yaml'), 'utf8');
+    expect(contract).toContain('closeRoute(routeId: fleetworks::route-id): void');
+    expect(contract).toContain('type: fleetworks::route-id');
+    expect(contract).not.toContain('super::');
     expect(report.relock.map((d) => path.relative(f.root, d).split(path.sep).join('/'))).toEqual(['', 'packages/billing', 'packages/dispatch']);
     // The entry is written with no `as`: its public name is the item's default.
     const l0 = yaml.load(fs.readFileSync(path.join(f.billing, '.wai', 'specs', '.index.yaml'), 'utf8')) as { publicInterfaces: unknown[] };
@@ -260,10 +282,10 @@ describe('stage 2c — the chaining migration', () => {
     expect(locked?.projectId).toBe('billing-service');
 
     const planned = at(f.root, () => plan());
-    expect(planned.findings).toEqual([expect.objectContaining({ kind: 'id-locked', project: 'billing', blocking: false })]);
-    expect(planned.projects.find((p) => p.project === 'billing')?.idToWrite).toBe('billing-service');
+    expect(planned.findings).toEqual([expect.objectContaining({ kind: 'id-locked', project: 'billing-service', blocking: false })]);
+    expect(planned.projects.find((p) => p.project === 'billing-service')?.idToWrite).toBe('billing-service');
     // Dispatch declares billing under the id it keeps.
-    expect(planned.projects.find((p) => p.project === 'dispatch')?.externals.map((e) => e.alias)).toEqual(['billing-service', 'fleetworks']);
+    expect(planned.projects.find((p) => p.project === 'dispatch-service')?.externals.map((e) => e.alias)).toEqual(['billing-service', 'fleetworks']);
     const report = at(f.root, () => apply(planned));
     expect(report.relock).toContain(path.resolve(f.billing));
     expect(idOf(f.billing)).toBe('billing-service');
@@ -304,35 +326,39 @@ describe('stage 2c — the chaining migration', () => {
   it('reports a reference its subsystem does not publish instead of exporting it', () => {
     const f = family({ billingL1: false });
     const planned = at(f.root, () => plan());
-    expect(planned.projects.find((p) => p.project === 'billing')?.exports ?? []).toEqual([]);
+    expect(planned.projects.find((p) => p.project === 'billing-service')?.exports ?? []).toEqual([]);
     expect(planned.findings.map((x) => [x.kind, x.project, x.reference?.specId])).toEqual([
-      ['target-unpublished', 'billing', 'dispatch::route-planner'],
-      ['target-unpublished', 'billing', 'dispatch::route-planner-impl'],
+      ['target-unpublished', 'billing-service', 'dispatch-service::route-planner'],
+      ['target-unpublished', 'billing-service', 'dispatch-service::route-planner-impl'],
     ]);
     // The external is still declared: the reference crosses into billing either way.
-    expect(planned.projects.find((p) => p.project === 'dispatch')?.externals.map((e) => e.alias)).toEqual(['billing', 'fleetworks']);
+    expect(planned.projects.find((p) => p.project === 'dispatch-service')?.externals.map((e) => e.alias)).toEqual(['billing', 'fleetworks']);
   });
 
-  it('converts a member\'s stage-1 family pin to an external and marks its sibling pins superseded, leaving them on disk', () => {
+  it('converts a member\'s stage-1 family pin to an external and deletes every family pin once the external is pinned', () => {
     const f = family();
-    const pinned = at(f.billing, () => pinFamilySurfaces()) ?? [];
-    expect(pinned.length).toBeGreaterThan(1);
+    // The pins `surface pin` once wrote (stage 3 retired the writer): the parent's family surface and two siblings'.
+    const pin = (projectName: string): string => saveSnapshot(SurfaceSnapshotSchema.parse({
+      projectName, origin: 'generated', stateId: 'sha256:pinned', generatedAt: TS, interfaces: [], types: [],
+    }), f.billing);
+    const pinned = ['FleetWorks', 'FleetWorks::dispatch', 'FleetWorks::operations'].map(pin);
     const planned = at(f.root, () => plan());
-    const billing = planned.projects.find((p) => p.project === 'billing')!;
+    const billing = planned.projects.find((p) => p.project === 'billing-service')!;
     expect(billing.externals).toEqual([{ alias: 'fleetworks', project: 'fleetworks', producer: '', reason: 'legacy-pin' }]);
     expect(billing.pins).toEqual(['fleetworks']);
-    expect(billing.supersededPins).toEqual(['FleetWorks::dispatch', 'FleetWorks::operations']);
+    expect(billing.supersededPins).toEqual(['FleetWorks', 'FleetWorks::dispatch', 'FleetWorks::operations']);
     at(f.root, () => apply(planned));
-    for (const file of pinned) expect(fs.existsSync(file)).toBe(true);
+    for (const file of pinned) expect(fs.existsSync(file)).toBe(false);
+    expect(fs.existsSync(path.join(f.billing, '.wai', 'externals', 'fleetworks.yaml'))).toBe(true);
     expect(isEmpty(at(f.root, () => plan()))).toBe(true);
   });
 
   it('doctor: a plain run counts what is pending; --fix --yes applies it, and the run after is clean', async () => {
     const f = family();
     const plain = await doctorCli(f.dispatch);
-    expect(plain.stdout).toMatch(/Chaining: 9 pending \(3 id\(s\), 2 L0 entries, 2 external\(s\), 2 pin\(s\), 0 superseded pin\(s\), 0 finding\(s\)\)/);
+    expect(plain.stdout).toMatch(/Chaining: 14 pending \(3 id\(s\), 0 L0\(s\) to create, 2 L0 entries, 2 external\(s\), 2 pin\(s\), 2 mount\(s\) to move, 3 rewrite\(s\), 0 family pin\(s\) to delete, 0 dropped key\(s\), 0 finding\(s\)\)/);
     const fixed = await doctorCli(f.dispatch, '--fix', '--yes');
-    expect(fixed.stdout).toContain('Applied the chaining migration: 8 file(s) written.');
+    expect(fixed.stdout).toContain('Applied the chaining migration: 13 file(s) written.');
     expect(fixed.stdout).toContain('Re-lock each with `wairon lock`');
     // The report that follows the fixes plans again, and finds nothing left.
     expect(fixed.stdout).not.toMatch(/Chaining: \d+ pending/);

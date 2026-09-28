@@ -59,13 +59,6 @@ methods:
         type: call
         targetComponent: spec_store_portal
         targetMethod: deleteSpec
-  - name: createChainedSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Call createChainedSubsystem on the core portal
-        type: call
-        targetComponent: spec_store_portal
-        targetMethod: createChainedSubsystem
   - name: loadImplementationSpecs
     narrative:
       - stepNumber: 1
@@ -75,4 +68,4 @@ methods:
         targetMethod: loadImplementationSpecs
 status: complete
 createdAt: '2026-09-18T21:43:38.007Z'
-updatedAt: '2026-09-26T11:01:58.423Z'
+updatedAt: '2026-09-27T10:54:33.830Z'

@@ -1,0 +1,49 @@
+kind: value-object
+id: planned_member
+name: PlannedMember
+description: >-
+  One legacy L1 mount the chaining migration moves into its parent's project.yaml `members`, with
+  what it carries: the member entry the parent gains, the L0 entries the member gains from the
+  mount's published surface, and the mount fields that have no home and retire with it, each listed
+  so nothing is dropped silently.
+subsystem: sdd_cli
+fields:
+  - name: parent
+    type: string
+    description: The key of the project that declares the mount ('' is the top root).
+    optional: false
+  - name: alias
+    type: string
+    description: 'The mount''s local id: the `members` key.'
+    optional: false
+    key: primary
+  - name: path
+    type: string
+    description: 'The mount''s projectPath as written, relative to the parent''s root: the member''s path.'
+    optional: false
+  - name: description
+    type: string
+    description: The mount's description, carried into the member entry's long form.
+    optional: true
+  - name: member
+    type: string
+    description: The key of the member project.
+    optional: false
+  - name: carried
+    type: PlannedExport[]
+    description: >-
+      The member's new L0 entries, one per entry of the mount's publicInterfaces: `{ from: <the
+      subsystem owning the component>, component, interface?, type, details, audience: project }` —
+      the family could reach it through the mount, so the member now exports it to the family.
+    optional: false
+  - name: retired
+    type: string[]
+    description: >-
+      Mount fields that retire with the mount because nothing in the member can hold them and
+      nothing is lost: an empty publicInterfaces or trustedLinks, and lint allows (they silenced
+      findings about the mount spec itself, which stops existing), each listed as `field: value`.
+    optional: false
+methods: []
+sourcePath: src/commands/position-migration.ts
+createdAt: '2026-09-27T10:44:23.135Z'
+updatedAt: '2026-09-27T17:05:34.511Z'

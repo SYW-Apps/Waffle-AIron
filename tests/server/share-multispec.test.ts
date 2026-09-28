@@ -6,7 +6,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   invalidateSpecCache,
@@ -74,7 +74,7 @@ function buildTwoPortals(root: string): void {
       createdAt: now,
       updatedAt: now,
     });
-    saveSubsystemSpec(subsystem('core-sub', {
+    saveSpec('subsystem', subsystem('core-sub', {
       publicInterfaces: [
         { type: 'REST', details: 'public', component: 'public-portal' },
         { type: 'REST', details: 'peer-to-peer', component: 'internal-portal' },

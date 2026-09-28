@@ -17,7 +17,7 @@ import * as path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { writeYamlFile } from '../../src/utils/yaml.js';
+import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import { invalidateSpecCache, loadInterfaceSpec, loadSubsystemSpec } from '../../src/core/specs.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 
@@ -233,28 +233,70 @@ describe('sdd_set_public_interfaces — a replacement through one gated delta', 
   });
 });
 
-describe('sdd_set_subsystem_project_path — a gated delta on the link only', () => {
-  it('sets and clears the link, each answered with the change report', async () => {
-    const { call } = await bound();
+describe('sdd_add_subsystem — a subsystem is never a mount', () => {
+  it('refuses a projectPath, naming sdd_add_member, and writes nothing', async () => {
+    const { root, call } = await bound();
     await seed(call);
-    const set = await call('sdd_set_subsystem_project_path', { subsystem: 'shop', projectPath: 'packages/shop' });
-    expect(set.isError ?? false, textOf(set)).toBe(false);
-    expect(textOf(set).split('\n')[0]).toBe('Updated projectPath for subsystem "shop" to: packages/shop');
-    expect(set.structuredContent.changes).toEqual([expect.objectContaining({ path: 'projectPath', after: expect.stringContaining('packages/shop') })]);
-
-    const cleared = await call('sdd_set_subsystem_project_path', { subsystem: 'shop' });
-    expect(textOf(cleared).split('\n')[0]).toBe('Updated projectPath for subsystem "shop" to: none (cleared)');
-    expect(cleared.structuredContent.written).toBe(true);
+    const result = await call('sdd_add_subsystem', { id: 'billing', name: 'Billing', description: 'd', projectPath: 'packages/billing' });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/^Error: mount form refused: subsystem "billing".*sdd_add_member/);
     invalidateSpecCache();
-    expect(loadSubsystemSpec('shop')?.projectPath).toBeUndefined();
+    expect(loadSubsystemSpec('billing')).toBeNull();
+    expect(fs.existsSync(path.join(root, 'packages', 'billing'))).toBe(false);
+  });
+});
+
+describe('the member tools — sdd_add_member, sdd_move_member, sdd_internalize_member', () => {
+  /** The bound project's `members`, as project.yaml holds them. */
+  const members = (root: string): unknown => (readYamlFile(path.join(root, '.wai', 'project.yaml')) as { members?: unknown }).members;
+
+  it('adds a member (project scaffolded, declared in `members`), moves it, and refuses what they must', async () => {
+    const { root, call } = await bound();
+    await seed(call);
+
+    const added = await call('sdd_add_member', { alias: 'billing', path: 'packages/billing', description: 'Invoices' });
+    expect(added.isError ?? false, textOf(added)).toBe(false);
+    expect(textOf(added)).toContain('Added member "billing" at packages/billing');
+    expect(members(root)).toEqual({ billing: { path: 'packages/billing', description: 'Invoices' } });
+    expect(fs.existsSync(path.join(root, 'packages', 'billing', '.wai', 'project.yaml'))).toBe(true);
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('billing')).toBeNull();
+
+    const moved = await call('sdd_move_member', { alias: 'billing', newPath: 'services/billing' });
+    expect(moved.isError ?? false, textOf(moved)).toBe(false);
+    expect(members(root)).toEqual({ billing: { path: 'services/billing', description: 'Invoices' } });
+    expect(fs.existsSync(path.join(root, 'services', 'billing', '.wai', 'project.yaml'))).toBe(true);
+
+    const bad = await call('sdd_add_member', { alias: 'Bad Alias', path: 'x' });
+    expect(bad.isError).toBe(true);
+    expect(textOf(bad)).toMatch(/^Error: .*an alias and a path are required/);
+    const ghost = await call('sdd_move_member', { alias: 'ghost', newPath: 'x' });
+    expect(ghost.isError).toBe(true);
+    expect(textOf(ghost)).toMatch(/^Error: .*no member is declared under that alias/);
   });
 
-  it('refuses an id no subsystem holds', async () => {
-    const { call } = await bound();
+  it('internalizes a single-subsystem member, and refuses one with externals of its own', async () => {
+    const { root, call } = await bound();
     await seed(call);
-    const result = await call('sdd_set_subsystem_project_path', { subsystem: 'nowhere', projectPath: 'x' });
-    expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('"nowhere" does not exist');
+    // The subsystem out and back in: externalize writes a `members` member.
+    const out = await call('sdd_externalize_subsystem', { subsystem: 'shop', path: 'packages/shop' });
+    expect(out.isError ?? false, textOf(out)).toBe(false);
+    expect(members(root)).toEqual({ shop: 'packages/shop' });
+
+    const back = await call('sdd_internalize_member', { alias: 'shop' });
+    expect(back.isError ?? false, textOf(back)).toBe(false);
+    expect(members(root)).toBeUndefined();
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('shop')?.id).toBe('shop');
+    expect(fs.existsSync(path.join(root, 'packages', 'shop', '.wai'))).toBe(false);
+
+    // A member declaring an external of its own has nowhere to take it here.
+    expect((await call('sdd_add_member', { alias: 'ledger', path: 'packages/ledger' })).isError ?? false).toBe(false);
+    const ledgerConfig = path.join(root, 'packages', 'ledger', '.wai', 'project.yaml');
+    writeYamlFile(ledgerConfig, { ...(readYamlFile(ledgerConfig) as object), externals: { crm: {} } });
+    const refused = await call('sdd_internalize_member', { alias: 'ledger' });
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused)).toMatch(/^Error: .*cannot internalize: the member is not a single subsystem, or declares members or externals of its own/);
   });
 });
 

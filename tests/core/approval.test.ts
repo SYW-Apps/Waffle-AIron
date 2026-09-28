@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSystemSpec, saveSubsystemSpec, saveComponentSpec, updateSpec, loadComponentSpecs,
+  saveSystemSpec, saveSpec, saveComponentSpec, updateSpec, loadComponentSpecs,
   deleteComponentSpec, invalidateSpecCache,
 } from '../../src/core/specs.js';
 import {
@@ -52,7 +52,7 @@ function project(name = 'approval-sys'): string {
     schemaVersion: '1.0.0', name, vision: 'an approval fixture',
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     id: 'dom', name: 'dom', description: 'the approval domain',
     parentSystem: name, publicInterfaces: [], trustedLinks: [],
     status: 'draft', createdAt: now, updatedAt: now,
@@ -282,7 +282,7 @@ describe('the approval', () => {
     // used a fake pin with no mounted child, so it could not see this.
     root = project();
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing', name: 'billing', description: 'a chained billing domain',
       parentSystem: 'approval-sys', publicInterfaces: [], trustedLinks: [],
       projectPath: 'packages/billing',

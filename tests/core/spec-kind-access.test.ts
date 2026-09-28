@@ -21,7 +21,6 @@ import {
   loadSystemSpec,
   loadTypeSpec,
   saveComponentSpec,
-  saveSubsystemSpec,
   saveSystemSpec,
 } from '../../src/core/specs.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec, TypeSpec } from '../../src/models/specs.js';
@@ -40,7 +39,7 @@ function project(): string {
   setProjectRoot(root);
   invalidateSpecCache();
   saveSystemSpec({ schemaVersion: '1.0.0', name: 'kinds-sys', vision: 'v', boundaries: [], globalRequirements: [], databases: [], createdAt: now, updatedAt: now });
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     id: 'shop', name: 'Shop', description: 'd', parentSystem: 'kinds-sys', publicInterfaces: [], trustedLinks: [],
     status: 'draft', createdAt: now, updatedAt: now,
   } as SubsystemSpec);

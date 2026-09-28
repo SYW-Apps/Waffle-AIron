@@ -2,18 +2,21 @@ kind: value-object
 id: planned_export
 name: PlannedExport
 description: >-
-  One L0 re-export entry the chaining migration adds to a producer project, so references another
-  project makes into it land on a public name. One entry per source subsystem and item, shared by
-  every consumer that needs it; written as `{ from, component | typeDef, audience: project }` with
-  no `as`, so its public name is the item's default.
+  One L0 entry the chaining migration adds to a project so references another project makes into it
+  land on a public name, or so a legacy mount's published surface survives the move into the member.
+  One entry per source and item, shared by every consumer that needs it; written as `{ from,
+  component | typeDef, audience: project }` for a subsystem-owned item, as the own `{ typeDef,
+  audience: project }` for a project-level type, with no `as`, so its public name is the item's
+  default. An entry carried from a mount also keeps the mount entry's transport kind and details.
 subsystem: sdd_cli
 fields:
   - name: from
     type: string
     description: >-
       The source subsystem's local id in the producer: the subsystem that owns the item and already
-      publishes it at L1.
-    optional: false
+      publishes it at L1. Absent for a project-level type, which the project exports as its own
+      item.
+    optional: true
   - name: component
     type: string
     description: The re-exported component's local id, for a component reference.
@@ -44,7 +47,37 @@ fields:
       The members the consumers reach through the entry (contract methods, `capability:<name>`, or
       `type`), sorted — what the report prints and the pin's `used` map will hold.
     optional: false
+  - name: type
+    type: string
+    description: >-
+      The transport kind a carried mount entry declared (REST, GraphQL, MessageBus, RPC, Custom);
+      absent for a reference entry, which inherits it from its source.
+    optional: true
+  - name: details
+    type: string
+    description: The details a carried mount entry declared; absent for a reference entry.
+    optional: true
+  - name: reason
+    type: string
+    description: >-
+      reference | mount: planned because references land on it, or carried from a legacy mount's
+      publicInterfaces.
+    optional: false
+  - name: interface
+    type: string
+    description: >-
+      The L3 interface a carried mount entry narrows to (its local id in the producer); absent for a
+      reference entry, which re-exports the whole component.
+    optional: true
+  - name: publishAtL1
+    type: boolean
+    description: >-
+      For an entry carried from a legacy mount whose component its member subsystem does not publish
+      yet: apply first publishes it there as an own L1 item with the mount entry's type and details
+      (the mount published it to the family, so the member now publishes it to its own project),
+      then re-exports it at L0. Absent for every other entry.
+    optional: true
 methods: []
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:11:40.727Z'
-updatedAt: '2026-09-26T21:57:04.789Z'
+updatedAt: '2026-09-27T17:15:21.470Z'

@@ -19,7 +19,7 @@ const FAMILY_SURFACE = yaml.dump(
     types: [],
     interfaces: [
       {
-        id: 'itelemetry_hub',
+        id: 'telemetry-hub',
         name: 'Telemetry Hub',
         component: 'telemetry-hub',
         audience: 'project',
@@ -33,7 +33,7 @@ const FAMILY_SURFACE = yaml.dump(
         }],
       },
       {
-        id: 'irelay_gateway',
+        id: 'relay-gateway',
         name: 'Relay Gateway',
         component: 'relay-gateway',
         audience: 'project',

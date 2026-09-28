@@ -117,27 +117,23 @@ methods:
       - stepNumber: 2
         description: >-
           Write it through the authoring client adapter, which requires the L0, derives parentSystem
-          from it, and scaffolds the child project when a projectPath is given
+          from it, and refuses a projectPath (the legacy mount form)
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: writeSpec
       - stepNumber: 3
-        description: Answer with the receipt, naming the scaffolded child project when there was one
+        description: Answer with the receipt
         type: return
         outcome: written
     symbol: sdd_add_subsystem
-  - name: moveSubsystemProject
+  - name: moveMember
     narrative:
       - stepNumber: 1
-        description: Verify the subsystem exists
+        description: Relocate the member's directory and point its `members` entry there via core
         type: call
         targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpec
-      - stepNumber: 2
-        description: Relocate the subproject directory and update its projectPath link
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: moveSubsystemProject
+        targetMethod: moveMember
+    symbol: sdd_move_member
   - name: externalizeSubsystem
     narrative:
       - stepNumber: 1
@@ -146,22 +142,18 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadSubsystemSpec
       - stepNumber: 2
-        description: Externalize it into a standalone subproject via core
+        description: Turn it into a member project declared in `members` via core
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: externalizeSubsystem
-  - name: internalizeSubsystem
+  - name: internalizeMember
     narrative:
       - stepNumber: 1
-        description: Verify the subsystem exists
+        description: Take the member back into the bound project via core
         type: call
         targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpec
-      - stepNumber: 2
-        description: Internalize it back into the parent tree via core
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: internalizeSubsystem
+        targetMethod: internalizeMember
+    symbol: sdd_internalize_member
   - name: listResources
     narrative:
       - stepNumber: 1
@@ -326,23 +318,6 @@ methods:
         type: return
         outcome: reported
     symbol: sdd_set_public_interfaces
-  - name: setSubsystemProjectPath
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Express the change as a delta: projectPath set to the path given, or unset when none was —
-          only the link moves, never the directory it names
-        type: local
-      - stepNumber: 2
-        description: Apply it through the authoring client adapter, which refuses an id no subsystem holds
-        type: call
-        targetComponent: mcp_authoring_adapter
-        targetMethod: updateSpecGated
-      - stepNumber: 3
-        description: Answer with the change report
-        type: return
-        outcome: reported
-    symbol: sdd_set_subsystem_project_path
   - name: getSpec
     narrative:
       - stepNumber: 1
@@ -552,12 +527,13 @@ methods:
         targetMethod: getStatusReport
       - stepNumber: 2
         description: >-
-          Read the subsystems that mount a chained subproject, so the context line can name which
-          trees this answer spans — a report that silently covered three projects would read exactly
-          like one that covered this one
+          Read the members the bound root declares — its project.yaml `members` entries and, for one
+          release, its legacy L1 mounts, each with its alias, path and form — so the context line
+          can name which projects this answer spans; a report that silently covered three projects
+          would read exactly like one that covered this one
         type: call
         targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpecs
+        targetMethod: listDirectChainedSubprojects
       - stepNumber: 3
         description: >-
           Ask what the lock says about the tree as it stands. An agent reading this tool is deciding
@@ -574,7 +550,15 @@ methods:
         type: return
         outcome: status
     symbol: sdd_get_status
+  - name: addMember
+    narrative:
+      - stepNumber: 1
+        description: Scaffold the member project and declare it in `members` via core
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: createMember
+    symbol: sdd_add_member
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-26T17:50:42.672Z'
+updatedAt: '2026-09-27T15:27:11.406Z'

@@ -86,7 +86,7 @@ import {
 import { getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
 import * as path from 'path';
 import type {
-  SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation,
+  SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation, ProjectFamily,
 } from '../models/index.js';
 
 export type { TestsToRevisit };
@@ -501,9 +501,11 @@ export function validateSddTree(
     // tree. Fail with a clear error instead. A scope is valid when a subsystem's id
     // matches it exactly, or a namespaced (subproject) subsystem lives under it.
     if (scopeSubsystem) {
+      // A member's key is a scope too, even for a member with no subsystem of
+      // its own (a vocabulary project of project-level types).
       const scopeMatches = subsystems.some(
         s => s.id === scopeSubsystem || s.id.startsWith(`${scopeSubsystem}::`),
-      );
+      ) || projectFamily().nodes.some((n) => n.namespace !== '' && n.namespace === scopeSubsystem);
       if (!scopeMatches) {
         const known = subsystems.map(s => s.id).sort();
         const hint = known.length
@@ -533,7 +535,7 @@ export function validateSddTree(
     // RuleContext.mountSurfaceSnapshots). Loaded after the loader issues were
     // collected: resolving a mount that escapes the root raises its issue again.
     const mountSurfaceSnapshots = listMountSnapshots(
-      subsystems.filter((s) => s.projectPath).map((s) => s.id),
+      projectFamily().nodes.filter((n) => n.namespace !== '').map((n) => n.namespace),
     );
 
     // The writer's round-trip dry run over every in-scope spec (same
@@ -571,6 +573,9 @@ export function validateSddTree(
     const pairs = new Map<string, [string, string]>();
     for (const r of family.references) pairs.set(`${r.consumer}|${r.producer}`, [r.consumer, r.producer]);
     const exportUsages = [...pairs.values()].map(([consumer, producer]) => exportUsage(consumer, producer));
+    // The bound root's externals its own scan cannot bind, bound by climbing to
+    // the family's top instead: a member naming its parent or a sibling.
+    const climbBoundExternals = crossTree === 'off' ? [] : externalsBoundByClimb(family);
 
     const ctx = buildRuleContext({
       system,
@@ -593,6 +598,7 @@ export function validateSddTree(
       ],
       projectFamily: family,
       exportUsages,
+      ...(climbBoundExternals.length > 0 ? { climbBoundExternals } : {}),
       // By-name selections only: a legacy path ref pins nothing to check.
       packSelections: projectPackSelections(),
       // The run that IS the parent's verdict on a chained child judges the
@@ -688,18 +694,22 @@ function resolveThroughParent(
   if (reach && !reach.parentReach) return null;
   const ceiling = reach?.topRoot ? path.resolve(reach.topRoot) : undefined;
 
-  const chain: string[] = [];
+  let climbed = false;
   let top = path.resolve(boundRoot);
   while (top !== ceiling) {
     const hop = findChainingParent(top, ceiling);
     if (!hop) break;
     const next = path.resolve(hop.parentRoot);
     if (ceiling && !isWithinOrEqual(ceiling, next)) break;
-    chain.unshift(hop.subsystemId);
+    climbed = true;
     top = next;
   }
-  if (chain.length === 0) return null;
-  const scope = chain.join('::');
+  if (!climbed) return null;
+  // The child's key in the top's scan: its project id at any depth (or its
+  // alias path when the id is taken or missing) — never a position.
+  const child = sameDirectory(boundRoot);
+  const scope = runWithProjectRoot(top, () => projectFamily().nodes.find((n) => child(n.directory))?.namespace);
+  if (!scope) return null;
 
   const inner = runWithProjectRoot(top, () => {
     // The parent is read as it is NOW without asking for it here: every spec
@@ -735,6 +745,40 @@ function resolveThroughParent(
 }
 
 /**
+ * The aliases of the bound root's declared externals its own scan binds to no
+ * project (and gives no source.path), that the family's top binds to a family
+ * producer: the climb toward the top as resolveThroughParent walks it — never
+ * when the request may not read above its root, and never past the request's
+ * top root (the caller must gate on reach itself) — and the top's graph read
+ * with that root bound, this root's node found by its directory.
+ */
+function externalsBoundByClimb(family: ProjectFamily): string[] {
+  const bound = family.nodes.find((n) => n.namespace === '');
+  const wanted = (bound?.externals ?? []).filter((e) => e.sourceKind === 'unresolved' && e.problem?.startsWith('no project of the family'));
+  if (!bound || wanted.length === 0) return [];
+  const reach = getRequestParentReach();
+  if (reach && !reach.parentReach) return [];
+  const ceiling = reach?.topRoot ? path.resolve(reach.topRoot) : undefined;
+  // Step 30: the climb.
+  let top = path.resolve(getProjectRoot());
+  let climbed = false;
+  while (top !== ceiling) {
+    const hop = findChainingParent(top, ceiling);
+    if (!hop) break;
+    const next = path.resolve(hop.parentRoot);
+    if (ceiling && !isWithinOrEqual(ceiling, next)) break;
+    climbed = true;
+    top = next;
+  }
+  if (!climbed) return [];
+  // Step 31: the top's graph binds them, or it does not.
+  const self = sameDirectory(bound.directory);
+  const node = runWithProjectRoot(top, () => projectFamily().nodes.find((n) => self(n.directory)));
+  const aliases = new Set(wanted.map((e) => e.alias));
+  return (node?.externals ?? []).filter((e) => e.sourceKind === 'family' && aliases.has(e.alias)).map((e) => e.alias);
+}
+
+/**
  * Remove a mount-chain prefix (`scope::`) wherever it begins an id in `text` —
  * only at an id boundary, so `kid::` never bites into `bigkid::x` or into a
  * deeper `par::kid::x` that names a different namespace.
@@ -754,6 +798,13 @@ function stripNamespace(text: string, scope: string): string {
 function isIdChar(ch: string): boolean {
   return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
     || ch === '_' || ch === '-' || ch === '.' || ch === ':';
+}
+
+/** A predicate: whether a directory is the same one as `dir`, case-folded where the filesystem folds case. */
+function sameDirectory(dir: string): (other: string) => boolean {
+  const key = (d: string): string => (process.platform === 'win32' ? path.resolve(d).toLowerCase() : path.resolve(d));
+  const want = key(dir);
+  return (other) => key(other) === want;
 }
 
 function isWithinOrEqual(dir: string, target: string): boolean {

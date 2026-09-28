@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -38,7 +38,7 @@ function seed(): string {
   projects.push(proj);
   fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
   setProjectRoot(proj);
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     schemaVersion: '1.0.0', id: 'billing', name: 'Billing', description: 'Billing',
     parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now,
   });

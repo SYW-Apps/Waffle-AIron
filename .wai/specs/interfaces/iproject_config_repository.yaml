@@ -181,6 +181,45 @@ methods:
         description: The value under the alias
     guarantees:
       - idempotent
+  - name: declareMember
+    description: >-
+      Declare one member under an alias; refused for a malformed alias, an empty or absolute path,
+      an alias `externals` holds, or when the alias already holds a different member declaration,
+      and a no-op when it holds the same one (forwarded to the registry). Returns whether it wrote.
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias key
+      - name: declaration
+        type: MemberDeclaration
+        description: The member's path and optional description
+    guarantees:
+      - idempotent
+  - name: setMemberPath
+    description: Point an existing member at a new path (forwarded to the registry). Returns whether it wrote.
+    signature: 'setMemberPath(alias: string, path: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: path
+        type: string
+        description: The new path, relative to this root
+    guarantees:
+      - idempotent
+  - name: removeMember
+    description: Remove one member declaration (forwarded to the registry). Returns whether it wrote.
+    signature: 'removeMember(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-09-26T21:10:51.046Z'
+updatedAt: '2026-09-27T10:55:13.507Z'

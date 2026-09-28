@@ -7,24 +7,35 @@ methods:
     description: Calls loadSystemSpec on the core portal
     signature: 'loadSystemSpec(): SystemSpec | null'
     returns: SystemSpec | null
-  - name: moveSubsystemProject
+  - name: moveMember
     description: >-
-      Calls moveSubsystemProject on the core portal to move an external subsystem's directory and
-      update its projectPath link.
-    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+      Forward to spec_maintenance_portal.moveMember: relocate a member's directory and point its
+      `members` entry there.
+    signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The new root, relative to the bound project root
   - name: externalizeSubsystem
     description: >-
-      Calls externalizeSubsystem on the core portal to migrate an internal subsystem into a
-      standalone subproject.
-    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+      Forward to spec_maintenance_portal.externalizeSubsystem: turn an internal subsystem into a
+      member project declared in `members`.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
     returns: void
-  - name: internalizeSubsystem
+  - name: internalizeMember
     description: >-
-      Calls internalizeSubsystem on the core portal to migrate an external subsystem back into the
-      parent tree.
-    signature: 'internalizeSubsystem(subsystemId: string): void'
+      Forward to spec_maintenance_portal.internalizeMember: take a single-subsystem member back into
+      the bound project.
+    signature: 'internalizeMember(alias: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
   - name: composeAgentBrief
     description: >-
       Calls composeAgentBrief on core portal — the live delegation brief backing `wairon agent
@@ -111,7 +122,7 @@ methods:
       Complete the bound project's bootstrap without overwriting anything: the default configuration
       and the L0 system spec, each only when absent. A configuration it writes declares the given
       id, else the chosen name slugified. Forwarded to the core portal.
-    signature: 'ensureProjectInitialized(fallbackName: string, id?: string): ProjectBootstrap'
+    signature: 'ensureProjectInitialized(fallbackName: string, id?: string, vision?: string): ProjectBootstrap'
     returns: ProjectBootstrap
     params:
       - name: fallbackName
@@ -123,12 +134,17 @@ methods:
           The project id a configuration written here declares — a chained child's mount subsystem
           id; omitted, the chosen name slugified
         optional: true
+      - name: vision
+        type: string
+        description: The vision an L0 written here carries; omitted, a placeholder naming the project
+        optional: true
     guarantees:
       - idempotent
   - name: listDirectChainedSubprojects
     description: >-
-      The direct chained subprojects of a project root, one level deep: each child's directory and
-      the subsystem that mounts it. Forwarded to the core portal.
+      Forward to the core portal: the direct members of a project root, one level deep — its
+      `members` entries and, for one release, its legacy L1 mounts — each as its directory, alias
+      and form.
     signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
     returns: ChainedSubprojectDir[]
     params:
@@ -426,20 +442,6 @@ methods:
     params: []
     guarantees:
       - idempotent
-  - name: loadSubsystemSpec
-    description: >-
-      The stored subsystem under an id, or null. `wairon subsystem add` and `wairon init` in a
-      subdirectory read it to tell a first write from a re-run: a re-run states only what the
-      command owns, so what the author set since (the description, the published surface, the
-      trusted links) is carried rather than overwritten. Forwarded to the spec tree portal.
-    signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
-    params:
-      - name: id
-        type: string
-        description: The subsystem id
-    guarantees:
-      - idempotent
   - name: findLegacySpecFiles
     description: >-
       Forward to spec_maintenance_portal.findLegacySpecFiles: the spec files `wairon doctor` reports
@@ -583,6 +585,50 @@ methods:
         description: The value under the alias
     guarantees:
       - idempotent
+  - name: moveMountToMembers
+    description: >-
+      Forward to spec_maintenance_portal.moveMountToMembers: move one legacy L1 mount of the bound
+      project into its `members`. Returns whether it wrote.
+    signature: 'moveMountToMembers(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id
+    guarantees:
+      - idempotent
+  - name: normalizeReferences
+    description: >-
+      Forward to spec_maintenance_portal.normalizeReferences: re-save one spec with every reference
+      in its canonical stage-3 form. Returns whether the stored text changed.
+    signature: 'normalizeReferences(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+    guarantees:
+      - idempotent
+  - name: createMember
+    description: >-
+      Forward to spec_maintenance_portal.createMember: scaffold a member project and declare it in
+      the bound project's `members`.
+    signature: 'createMember(alias: string, path: string, description?: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias and new project id
+      - name: path
+        type: string
+        description: The member's root, relative to the bound project root
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T21:11:21.196Z'
+updatedAt: '2026-09-27T16:07:39.085Z'

@@ -1,19 +1,16 @@
 id: iexport_index
 name: Export Index Interface
 description: >-
-  Read contract for export tables: projections of the scanned spec tree, memoized with the scan and
-  dropped with it. Nothing here writes, and nothing here judges — problems come back as facts.
+  Read contract for export tables: projections of the tables the scan resolved, dropped with the
+  scan. Nothing here writes, and nothing here judges — problems come back as facts.
 component: export_index
 methods:
   - name: resolveSubsystemExports
     description: >-
-      Project one subsystem's export table — what it makes visible to the other subsystems of its
-      project. Own items bind a component or type the subsystem owns; every re-export is followed to
-      its canonical target and wildcards are expanded; a wildcard cycle resolves to its union.
-      Explicit and own entries shadow a name a wildcard brings in, the same target under one name
-      twice is no conflict, and a name two wildcards bring from different targets is left out. Every
-      problem — duplicate, cycle, invalid, unconsumable — is returned as a fact. A subsystem the
-      tree does not have answers an empty table.
+      One subsystem's export table — what it makes visible to the other subsystems of its project —
+      as the scan resolved it (own items, re-exports followed to their canonical targets, wildcards
+      expanded, a wildcard cycle as its union, every problem a fact). A subsystem the tree does not
+      have answers an empty table.
     signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
     returns: ResolvedExportTable
     params:
@@ -24,38 +21,30 @@ methods:
       - idempotent
   - name: resolveProjectExports
     description: >-
-      Project a project's L0 export table — what other projects may consume — for the bound root, or
-      for the member project at the given namespace (its L0 as the scan recorded it on its root). A
-      legacy entry reads as a re-export (`subsystem` as `from`, `id` as `as`; no source infers it
-      from the component's owner); the public name is `as ?? id ?? interface ?? component`; each
-      entry's audience applies to every name it brings in. An entry's source is one of the project's
-      subsystems, one of its members by mount alias, or one of its declared externals by alias
-      (decision 9); a member or a family external is followed through that project's own table, and
-      an entry declaring a wider audience than the export it re-exports is a widens problem. An
-      external found only through source.path cannot be followed from the scan and is an invalid
-      problem. Problems are returned as facts, exactly as for a subsystem table. A project with no
-      L0 answers an empty table.
+      A project's L0 export table — what other projects may consume — as the scan resolved it: the
+      bound root's, or the member's with the given key. Own project-level types (`{ typeDef }` with
+      no `from`), re-exports from its subsystems, and re-exports from its members and externals by
+      alias are all in it, each with the entry's audience; the public name is `as ?? id ?? interface
+      ?? component ?? typeDef`. A project with no L0 answers an empty table.
     signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
     returns: ResolvedExportTable
     params:
       - name: project
         type: string
-        description: The namespace of a member project; omitted for the bound root
+        description: The key of a member project; omitted for the bound root
         optional: true
     guarantees:
       - idempotent
   - name: usage
     description: >-
-      Map one consumer's references into one producer onto the producer's resolved project table:
-      each reference that lands on a public name (the entry's canonical component, or its type; for
-      a member, the entry's narrowing, when it has one, must declare it) whose audience covers the
-      consumer (project for a family consumer) counts that name as used, with the member it reaches;
-      every other reference is unexported. When several public names bind the same target, each is
-      counted. The key half of a lock's `used` map, and the fact EXTERNAL_NOT_EXPORTED judges. A
-      type counts as used only as a typeDef export: a type the consumer names directly that the
-      producer exports only inside a signature closure is neither used nor unexported in stage 2
-      (its shape is pinned only through the method digests that carry it). A pair with no references
-      answers an empty usage.
+      One consumer's references into one producer, as the scan bound them: each reference that bound
+      to a public name of the producer's table counts that name as used, with the member it reaches
+      (the contract method, or `type` for a type); every reference that bound to no public name —
+      unexported, or reached only by a deprecated form or a project id the consumer does not declare
+      — is unexported. A type the producer exports only inside a signature closure is not a public
+      name: naming it directly is unexported (stage 3), and exporting it takes one `typeDef` entry.
+      When several public names bind the same target, the one the reference named is counted. A pair
+      with no references answers an empty usage.
     signature: 'usage(consumer: string, producer: string): ExportUsage'
     returns: ExportUsage
     params:
@@ -69,4 +58,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-26T16:08:30.136Z'
-updatedAt: '2026-09-26T18:13:46.627Z'
+updatedAt: '2026-09-27T10:37:43.928Z'

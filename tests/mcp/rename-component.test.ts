@@ -8,14 +8,14 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   loadComponentSpec,
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -52,13 +52,13 @@ function books(): string {
   });
   setProjectRoot(root);
   saveSystemSpec({ schemaVersion: '1.0.0', name: 'books-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
-  saveSubsystemSpec(sub('books'));
+  saveSpec('subsystem', sub('books'));
   saveComponentSpec(comp('ledger', 'books', 'Orchestrator'));
   saveInterfaceSpec(intf('iledger', 'ledger'));
   saveComponentSpec(comp('books_orch', 'books', 'Orchestrator', { dependsOn: ['ledger'] }));
-  createChainedSubsystem(sub('ext', { projectPath: 'packages/ext' }), 'ext');
+  writeLegacyMount(sub('ext', { projectPath: 'packages/ext' }), 'ext');
   const ext = workspaceFor(path.join(root, 'packages', 'ext'));
-  ext.saveSubsystemSpec(sub('ext', { parentSystem: 'ext' }));
+  ext.save('subsystem', sub('ext', { parentSystem: 'ext' }));
   ext.saveComponentSpec(comp('widget', 'ext', 'Adapter'));
   invalidateSpecCache();
   return root;

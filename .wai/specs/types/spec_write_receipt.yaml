@@ -39,12 +39,6 @@ fields:
       The notice lines the text answer lists, one per entry: what was carried forward, what a
       restatement removed, what an omission cleared, and every gate warning the write raised.
     optional: false
-  - name: scaffoldedProjectPath
-    type: string | undefined
-    description: >-
-      The child project directory a chained subsystem's create scaffolded; absent for every other
-      write.
-    optional: true
   - name: testsToRevisit
     type: TestsToRevisit[]
     description: >-
@@ -56,4 +50,4 @@ fields:
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-19T07:48:15.465Z'
-updatedAt: '2026-09-24T23:00:59.243Z'
+updatedAt: '2026-09-27T15:37:27.514Z'

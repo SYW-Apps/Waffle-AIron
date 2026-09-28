@@ -436,6 +436,14 @@ export interface RuleContext {
    */
   exportUsages?: ExportUsage[];
   /**
+   * The aliases of the bound root's declared externals that its own scan binds
+   * to no project but the chaining climb binds from the family's top (a member
+   * naming its parent or a sibling), gathered by the validator. The
+   * external-declarations rule does not report them. Absent when nothing was
+   * climbed for.
+   */
+  climbBoundExternals?: string[];
+  /**
    * The snapshots each chained mount holds in its own `.wai/surfaces/`, keyed
    * by mount namespace. Consulted ONLY for references made from inside that
    * mount — never pooled into `surfaceSnapshots`, so a contract a child
@@ -472,39 +480,36 @@ export interface RuleContext {
   /** Scope filter for granular (per-subsystem) validation. */
   isSpecInScope(specId: string): boolean;
   /**
-   * True when the subsystem sits inside a chained mount: some prefix of its
-   * qualified id is a subsystem carrying `projectPath`. Conformance skips such
-   * specs — their sourcePaths are relative to the child project's root, and
-   * the child validates them standalone in its own run.
+   * True when the subsystem belongs to a member rather than the bound root: its
+   * owner in the project graph is not the bound root. Conformance skips such
+   * specs — their sourcePaths are relative to the member's root, and the
+   * member validates them standalone in its own run.
    */
   isInChainedSubproject(subsystemId: string): boolean;
   /**
-   * True when an unresolved reference points OUTSIDE the current loading root,
-   * rather than being a genuine local typo — so it warrants the softer
-   * CROSS_TREE_REF_UNRESOLVED warning ("validate from the parent project")
-   * instead of a hard "does not exist" error. Two shapes qualify:
-   *  - an explicit relative form (`::x` / `super::x`), and
-   *  - a qualified id whose leading namespace segment is not a subsystem in THIS
-   *    tree — e.g. `waffler_core::blueprints-portal` authored from a parent root,
-   *    where `waffler_core` is absent when the same specs are validated from the
-   *    child subproject's own directory.
+   * True when a reference the scan left unbound points OUTSIDE this loading
+   * root rather than being a genuine local typo — so it warrants the softer
+   * CROSS_TREE_REF_UNRESOLVED warning instead of a hard "does not exist" error:
+   * the scan bound it as outside (an alias whose producer it did not read), it
+   * carries a deprecated form (`::x` / `super::x`) that climbs above the bound
+   * root, or its leading segment names neither a subsystem nor a member here.
    */
   isExternalNamespaceRef(ref: string): boolean;
   /**
-   * True when an unresolved reference made from inside a chained mount was
-   * authored in a cross-tree form that the loader collapsed at THIS root: made
-   * from inside mount M and not under `M::`, so it was authored to leave M. This
-   * only licenses consulting the snapshots M holds; a reference they do not
-   * cover is judged exactly as it was before.
+   * True when a reference made from inside a member was authored to leave it:
+   * the scan bound it into a project other than the member that owns
+   * fromSubsystem. This only licenses consulting the snapshots that member
+   * holds; a reference they do not cover is judged exactly as it was before.
    */
   isCollapsedCrossTreeRef(ref: string, fromSubsystem: string): boolean;
   /**
    * Resolve a cross-tree reference against the stored surface snapshots,
-   * matched by provider. The final segment is the local name, matched against
-   * each snapshot's exported entry ids and backing component names; the segment
-   * before it, when there is one, names the provider, and only that provider's
-   * snapshots are consulted. The snapshots of the mounts enclosing
-   * `fromSubsystem` come first, nearest mount first, then the bound root's own;
+   * matched by provider. The final segment is the public name, matched against
+   * each snapshot's entry ids only — the match by backing component is gone
+   * (stage 3); the segment before it, when there is one, names the provider,
+   * and only that provider's snapshots are consulted. The snapshots of the
+   * members enclosing `fromSubsystem` come first, nearest first, then the bound
+   * root's own;
    * the first pool with matches decides, and matches that disagree on the
    * contract make the reference ambiguous.
    */

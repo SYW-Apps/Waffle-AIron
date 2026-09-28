@@ -1,10 +1,21 @@
 id: spec_registry
 name: Spec Registry
 description: >-
-  Validated write face of the spec repository: every save qualifies ids, relativizes namespaces for
-  the target mount, stamps updatedAt, and re-parses through the writer schema before routing the
-  serialized document to the file store; also exercises that same writer pipeline in memory for the
-  round-trip dry run.
+  Validated write face of the spec repository: every save keys the spec's own id, writes its
+  references back relative to the project that owns it — the exact inverse of the scan's binding —
+  stamps updatedAt, and re-parses through the writer schema before routing the serialized document
+  to the file store of the project that owns it; it also exercises that same writer pipeline in
+  memory for the round-trip dry run. The inverse: a key under the owning project's key is written
+  bare; a reference whose in-memory value still equals what the scan bound its authored text to is
+  written back as authored, so authored text round-trips byte for byte; any other key in another
+  project is written `alias::publicName`, with the owning project's alias for the producer (its
+  project id when it declares none) and the public name that binds the target in the producer's
+  recorded table (its local id when none does); an outside or unresolved reference is written as it
+  came. It reads the owning project's alias table and the producers' public names from the workspace
+  scan — the same scan every save already consults to route a key to its member's files — and never
+  emits `super::`, a leading `::` or a member path. Two maintenance writes serve the chaining
+  migration: deleting a legacy L1 mount once its fields are carried, and re-saving a spec with every
+  reference in that canonical form.
 subsystem: sdd_core
 componentType: Registry
 owns: []
@@ -12,4 +23,4 @@ dependsOn:
   - spec_file_store
 status: complete
 createdAt: '2026-07-18T22:57:53.067Z'
-updatedAt: '2026-07-18T22:57:53.836Z'
+updatedAt: '2026-09-27T10:36:21.228Z'

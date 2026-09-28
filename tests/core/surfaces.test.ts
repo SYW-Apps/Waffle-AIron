@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -15,20 +15,17 @@ import {
 } from '../../src/core/specs.js';
 import {
   projectOwnSurface,
-  projectChildSurface,
-  projectSubsystemSurface,
   exportSurface,
   importSurface,
   listSnapshots,
   saveSnapshot,
   removeSnapshot,
-  pinFamilySurfaces,
-  listExternalInterfaces,
+  listFamilyPins,
 } from '../../src/core/surfaces.js';
 import { computeStateIdAt, loadSystemSpec } from '../../src/core/specs.js';
 import { toOpenApi, toOpenApiSet, fromOpenApi, isOpenApiDocument } from '../../src/core/openapi.js';
 import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import type {
   ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SurfaceContractEntry, SurfaceSnapshot,
@@ -65,7 +62,7 @@ function buildParent(rootDir: string): void {
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('core-sub', {
+  saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [
       { type: 'REST', details: 'api', component: 'gateway-portal' },
       { type: 'Custom', details: 'family', component: 'family-portal' },
@@ -136,7 +133,7 @@ describe('surface projection (audience ceilings + type closure)', () => {
     expect(instanceGrade.types.map(t => t.id).sort()).toEqual(['customer-ref', 'invoice-record']);
 
     // Family ceiling includes the project-audience entry.
-    const family = projectChildSurface();
+    const family = projectOwnSurface('project');
     expect(family.interfaces.map(e => e.id).sort()).toEqual(['family-ops', 'gateway']);
   });
 
@@ -394,12 +391,12 @@ describe('standalone-child validation against pinned parent snapshots', () => {
   function buildFamily(): string {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
-    createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
+    writeLegacyMount(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
     const childDir = path.join(rootDir, 'packages', 'transpiler');
 
     // Child content: an Adapter consuming the parent's gateway across the tree.
     setProjectRoot(childDir);
-    saveSubsystemSpec(subsystem('transpiler', { parentSystem: 'transpiler' }));
+    saveSpec('subsystem', subsystem('transpiler', { parentSystem: 'transpiler' }));
     saveComponentSpec(component('parent-gateway-adapter', 'transpiler', {
       componentType: 'Adapter', dependsOn: ['super::gateway-portal'],
     } as Partial<ComponentSpec>));
@@ -418,11 +415,16 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     } as ImplementationSpec);
     invalidateSpecCache();
 
-    // The child pins its outward world: the family surface AND the sibling
-    // surface of every other subsystem (here: core-sub).
-    setProjectRoot(childDir);
-    const written = pinFamilySurfaces();
-    expect(written).toHaveLength(2);
+    // The child holds a stage-1 sibling pin of the parent's core-sub, as
+    // `surface pin` once wrote it (stage 3 retired the writer; the pins a child
+    // holds are still consulted until stage 4).
+    saveSnapshot(SurfaceSnapshotSchema.parse({
+      projectName: 'root-system::core-sub', origin: 'generated', stateId: 'sha256:pinned', generatedAt: now, types: [],
+      interfaces: [{
+        id: 'gateway-portal', name: 'gateway-portal', audience: 'project', type: 'REST', component: 'gateway-portal', details: 'api',
+        methods: [{ name: 'fetchRecord', description: 'Fetches a record by id.', signature: 'fetchRecord(id: string): json', returns: 'json' }],
+      }],
+    }), childDir);
     invalidateSpecCache();
     return childDir;
   }
@@ -573,11 +575,11 @@ describe('cross-tree references are matched by the provider they name', () => {
       schemaVersion: '1.0.0', name: 'root-system', vision: 'provider matching fixture',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
     const kidDir = path.join(root, 'packages', 'kid');
 
     setProjectRoot(kidDir);
-    saveSubsystemSpec(subsystem('desk', { parentSystem: 'kid' }));
+    saveSpec('subsystem', subsystem('desk', { parentSystem: 'kid' }));
     saveComponentSpec(component('invoice-client', 'desk', {
       componentType: 'Adapter', dependsOn: [ref],
     } as Partial<ComponentSpec>));
@@ -693,7 +695,7 @@ describe('cross-tree references are matched by the provider they name', () => {
   });
 });
 
-describe('sibling surface projection + pinned siblings', () => {
+describe('stage-1 family pins + computeStateIdAt', () => {
   let rootDir: string;
   afterEach(() => {
     setProjectRoot(null);
@@ -701,358 +703,33 @@ describe('sibling surface projection + pinned siblings', () => {
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  it('projectSubsystemSurface exports the published Portal only, at the family ceiling, keyed <system>::<subsystem>', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    // Publish a NON-Portal too: it must never join the sibling surface.
-    saveSubsystemSpec(subsystem('core-sub', {
-      publicInterfaces: [
-        { type: 'REST', details: 'api', component: 'gateway-portal' },
-        { type: 'Custom', details: 'family', component: 'family-portal' },
-        { type: 'Custom', details: 'published orchestrator', component: 'core-orch' },
-      ],
-    }));
-    invalidateSpecCache();
-    setProjectRoot(rootDir);
-
-    const snap = projectSubsystemSurface('core-sub');
-    expect(snap.projectName).toBe('root-system::core-sub');
-    expect(snap.origin).toBe('generated');
-    expect(snap.stateId).toMatch(/^sha256:/);
-    expect(snap.generatedAt).toBeTruthy();
-
-    // Published Portal entries only — core-orch (Orchestrator) is excluded.
-    expect(snap.interfaces.map(e => e.component).sort()).toEqual(['family-portal', 'gateway-portal']);
-    // Family ('project') audience ceiling on every entry.
-    expect(snap.interfaces.every(e => e.audience === 'project')).toBe(true);
-
-    const gateway = snap.interfaces.find(e => e.component === 'gateway-portal')!;
-    expect(gateway.methods.map(m => m.name)).toEqual(['fetchRecord']);
-    expect(gateway.dispatch).toEqual([{ capability: 'spec.get', component: 'core-orch', method: 'getRecord' }]);
-    // Transitive type closure travels with the sibling snapshot.
-    expect(snap.types.map(t => t.id).sort()).toEqual(['customer-ref', 'invoice-record']);
-  });
-
-  it('projects a subsystem published through a gateway — a Portal with the gateway variant', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    // A subsystem whose front door is a gateway: a Portal wearing the gateway
-    // variant. The boundary rules accept it as a cross-subsystem dependency
-    // target because it IS a Portal, so a child MUST be able to see (and
-    // verify against) its contract.
-    saveSubsystemSpec(subsystem('gw-sub', {
-      publicInterfaces: [{ type: 'Custom', details: 'gateway-fronted api', component: 'edge-gateway' }],
-    }));
-    saveComponentSpec(component('edge-gateway', 'gw-sub', {
-      componentType: 'Portal',
-      portalType: 'Custom',
-      variant: 'gateway',
-      basePath: '/edge',
-      auth: { scheme: 'bearer', bearerFormat: 'JWT' },
-      dispatch: [{ capability: 'edge.relay', component: 'core-orch', method: 'getRecord' }],
-    } as Partial<ComponentSpec>));
-    saveInterfaceSpec(iface('iedge-gateway', 'edge-gateway', [
-      {
-        name: 'relay',
-        description: 'Relays a record request inward.',
-        signature: 'relay(id: string): invoice-record',
-        returns: 'invoice-record',
-        params: [{ name: 'id', type: 'string' }],
-        guarantees: ['idempotent'],
-      },
-    ]));
-    invalidateSpecCache();
-    setProjectRoot(rootDir);
-
-    const snap = projectSubsystemSurface('gw-sub');
-    expect(snap.projectName).toBe('root-system::gw-sub');
-    expect(snap.interfaces.map(e => e.component)).toEqual(['edge-gateway']);
-
-    // Contracts intact: the full L3 methods, dispatch table, auth and basePath.
-    const gw = snap.interfaces[0];
-    expect(gw.audience).toBe('project');
-    expect(gw.methods.map(m => m.name)).toEqual(['relay']);
-    expect(gw.methods[0].guarantees).toEqual(['idempotent']);
-    expect(gw.dispatch).toEqual([{ capability: 'edge.relay', component: 'core-orch', method: 'getRecord' }]);
-    expect(gw.auth).toEqual({ scheme: 'bearer', bearerFormat: 'JWT' });
-    expect(gw.basePath).toBe('/edge');
-    // And the transitive type closure travels with it.
-    expect(snap.types.map(t => t.id).sort()).toEqual(['customer-ref', 'invoice-record']);
-  });
-
-  it('projects an Observer-backed event surface', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    // public-surface-declared-type.ts sanctions an Observer as the backing of a MessageBus entry.
-    saveSubsystemSpec(subsystem('evt-sub', {
-      publicInterfaces: [{ type: 'MessageBus', details: 'domain events', component: 'evt-observer' }],
-    }));
-    saveComponentSpec(component('evt-observer', 'evt-sub', { componentType: 'Observer' } as Partial<ComponentSpec>));
-    saveInterfaceSpec(iface('ievt-observer', 'evt-observer', [
-      { name: 'onRecordChanged', description: 'handles a record-changed event', signature: 'onRecordChanged(record: invoice-record): void', returns: 'void', params: [{ name: 'record', type: 'invoice-record' }] },
-    ]));
-    invalidateSpecCache();
-    setProjectRoot(rootDir);
-
-    const snap = projectSubsystemSurface('evt-sub');
-    expect(snap.interfaces.map(e => e.component)).toEqual(['evt-observer']);
-    expect(snap.interfaces[0].type).toBe('MessageBus');
-    expect(snap.interfaces[0].methods.map(m => m.name)).toEqual(['onRecordChanged']);
-    expect(snap.types.map(t => t.id).sort()).toEqual(['customer-ref', 'invoice-record']);
-  });
-
-  // A retired Gateway is no cross-boundary target any more: a gateway is a Portal
-  // with the gateway variant, and only that Portal projects.
-  it.each(['Orchestrator', 'Gateway'])('omits a Custom entry backed by a non-target %s AND reports it as a diagnostic', (stereotype) => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    // Declarable (Custom carries no backing obligation) but never consumable
-    // across a boundary — the author must learn WHY the child cannot see it.
-    saveSubsystemSpec(subsystem('calc-sub', {
-      publicInterfaces: [{ type: 'Custom', details: 'a narrow capability', component: 'rate-calculator' }],
-    }));
-    saveComponentSpec(component('rate-calculator', 'calc-sub', { componentType: stereotype } as Partial<ComponentSpec>));
-    saveInterfaceSpec(iface('irate-calculator', 'rate-calculator', [
-      { name: 'rate', description: 'computes a rate', signature: 'rate(): string', returns: 'string' },
-    ]));
-    invalidateSpecCache();
-    setProjectRoot(rootDir);
-
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      const snap = projectSubsystemSurface('calc-sub');
-      expect(snap.interfaces).toEqual([]);
-      expect(spy).toHaveBeenCalledTimes(1);
-      const line = spy.mock.calls[0][0] as string;
-      // Names the subsystem, the backing component and its stereotype.
-      expect(line).toContain('[surfaces] skipped "calc-sub::rate-calculator"');
-      expect(line).toContain(`a published ${stereotype}`);
-    } finally {
-      spy.mockRestore();
-    }
-  });
-
-  it('reports NOTHING for an unbound entry or one naming a missing component — the validator owns those', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    saveSubsystemSpec(subsystem('gap-sub', {
-      publicInterfaces: [
-        { type: 'Custom', details: 'not bound to a component yet' },
-        { type: 'REST', details: 'names a component that does not exist', component: 'ghost-portal' },
-      ],
-    }));
-    invalidateSpecCache();
-    setProjectRoot(rootDir);
-
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    try {
-      const snap = projectSubsystemSurface('gap-sub');
-      expect(snap.interfaces).toEqual([]);
-      // PUBLIC_INTERFACE_UNBOUND / PUBLIC_INTERFACE_INVALID_COMPONENT are errors
-      // the validator already raises — a diagnostic here would be duplicate noise.
-      expect(spy).not.toHaveBeenCalled();
-    } finally {
-      spy.mockRestore();
-    }
-  });
-
-  it('projectSubsystemSurface refuses an unknown subsystem', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    expect(() => projectSubsystemSurface('no-such-subsystem')).toThrow(/no-such-subsystem/);
-  });
-
-  it('a pin pulls family + every sibling surface into its chained child (own mount excluded)', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    // A second internal subsystem with its own published portal.
-    saveSubsystemSpec(subsystem('aux-sub', {
-      publicInterfaces: [{ type: 'REST', details: 'aux api', component: 'aux-portal' }],
-    }));
-    saveComponentSpec(component('aux-portal', 'aux-sub', { componentType: 'Portal', portalType: 'HTTP_API' } as Partial<ComponentSpec>));
-    saveInterfaceSpec(iface('iaux-portal', 'aux-portal', [
-      { name: 'ping', description: 'pings', signature: 'ping(): void', returns: 'void' },
-    ]));
-    // Two chained children.
-    createChainedSubsystem(subsystem('kid-a', { projectPath: 'packages/kid-a', status: 'draft' }), 'kid-a');
-    createChainedSubsystem(subsystem('kid-b', { projectPath: 'packages/kid-b', status: 'draft' }), 'kid-b');
-    invalidateSpecCache();
-    setProjectRoot(rootDir);
-
-    const kidA = path.join(rootDir, 'packages', 'kid-a');
-    const kidB = path.join(rootDir, 'packages', 'kid-b');
-    // Each child pulls its own: family + 3 siblings (core-sub, aux-sub, the OTHER kid).
-    setProjectRoot(kidA);
-    expect(pinFamilySurfaces()).toHaveLength(4);
-    setProjectRoot(kidB);
-    expect(pinFamilySurfaces()).toHaveLength(4);
-    setProjectRoot(rootDir);
-    expect(listSnapshots(kidA).map(s => s.projectName).sort()).toEqual([
-      'root-system',
-      'root-system::aux-sub',
-      'root-system::core-sub',
-      'root-system::kid-b',
-    ]);
-    expect(listSnapshots(kidB).map(s => s.projectName).sort()).toEqual([
-      'root-system',
-      'root-system::aux-sub',
-      'root-system::core-sub',
-      'root-system::kid-a',
-    ]);
-
-    // The sibling KEY lives in the document; filenames stay Windows-legal
-    // (':' is not a valid filename character there).
-    const files = fs.readdirSync(path.join(kidA, '.wai', 'surfaces'));
-    expect(files.length).toBe(4);
-    expect(files.every(f => !f.includes(':'))).toBe(true);
-
-    // The aux sibling surface carries the published portal's contract.
-    const aux = listSnapshots(kidA).find(s => s.projectName === 'root-system::aux-sub')!;
-    expect(aux.interfaces.map(e => e.component)).toEqual(['aux-portal']);
-    expect(aux.interfaces[0].methods.map(m => m.name)).toEqual(['ping']);
-
-    // removeSnapshot resolves the sanitized filename from the storage key.
-    expect(removeSnapshot('root-system::aux-sub', kidA)).toBe(true);
-    expect(listSnapshots(kidA).map(s => s.projectName).sort()).toEqual([
-      'root-system',
-      'root-system::core-sub',
-      'root-system::kid-b',
-    ]);
-  });
-});
-
-describe('external interface discovery (listExternalInterfaces) + computeStateIdAt', () => {
-  let rootDir: string;
-  afterEach(() => {
-    setProjectRoot(null);
-    invalidateSpecCache();
-    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
-  });
-
-  /** Parent + chained child that has pinned its family/sibling snapshots. */
+  /** Parent + chained child holding a stage-1 family pin, a sibling pin and a foreign import. */
   function buildChainedWorld(): string {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
-    createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
+    writeLegacyMount(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
     invalidateSpecCache();
     const childDir = path.join(rootDir, 'packages', 'transpiler');
-    setProjectRoot(childDir);
-    pinFamilySurfaces();
+    const snap = (projectName: string, origin: 'generated' | 'authored') => SurfaceSnapshotSchema.parse({
+      projectName, origin, stateId: 'sha256:pinned', generatedAt: now, types: [], interfaces: [],
+    });
+    saveSnapshot(snap('root-system', 'generated'), childDir);
+    saveSnapshot(snap('root-system::core-sub', 'generated'), childDir);
+    saveSnapshot(snap('stripe', 'authored'), childDir);
     invalidateSpecCache();
     return childDir;
   }
 
-  it('classifies parent | sibling | foreign and verdicts freshness against what the parent projects now', () => {
+  it('lists the generated pins a root holds, parent and sibling, never a foreign import', () => {
     const childDir = buildChainedWorld();
-
-    // A foreign import lives beside the generated snapshots in the child.
     setProjectRoot(childDir);
-    const openapi = JSON.stringify({
-      openapi: '3.0.3',
-      info: { title: 'Partner Billing', version: '2.1.0' },
-      paths: { '/x': { get: { operationId: 'getX', responses: { '200': { description: 'ok' } } } } },
-    });
-    const src = path.join(childDir, 'partner-billing.json');
-    fs.writeFileSync(src, openapi);
-    importSurface(src, 'authored');
-
-    const entries = listExternalInterfaces();
-    const byName = new Map(entries.map(e => [e.projectName, e]));
-    expect([...byName.keys()].sort()).toEqual(['partner-billing', 'root-system', 'root-system::core-sub']);
-
-    const family = byName.get('root-system')!;
-    expect(family.sourceKind).toBe('parent');
-    expect(family.origin).toBe('generated');
-    expect(family.stateId).toMatch(/^sha256:/);
-    expect(family.freshness).toBe('fresh');
-    expect(family.interfaceIds.sort()).toEqual(['family-ops', 'gateway']);
-
-    const sibling = byName.get('root-system::core-sub')!;
-    expect(sibling.sourceKind).toBe('sibling');
-    expect(sibling.origin).toBe('generated');
-    expect(sibling.freshness).toBe('fresh');
-    expect(sibling.interfaceIds.sort()).toEqual(['family-portal', 'gateway-portal']);
-
-    const foreign = byName.get('partner-billing')!;
-    expect(foreign.sourceKind).toBe('foreign');
-    expect(foreign.origin).toBe('authored');
-    expect(foreign.version).toBe('2.1.0');
-    // A foreign snapshot has no comparison source — never fresh, never stale.
-    expect(foreign.freshness).toBe('unverifiable');
-  });
-
-  /** Each pin's freshness as the child sees it now, by storage key. */
-  function freshnessFrom(childDir: string): Record<string, string> {
-    invalidateSpecCache();
-    setProjectRoot(childDir);
-    return Object.fromEntries(listExternalInterfaces().map(e => [e.projectName, e.freshness]));
-  }
-
-  it('freshness is judged on content: an unrelated parent edit keeps pins fresh, a contract change stales them, a re-pin repairs them', () => {
-    const childDir = buildChainedWorld();
-    const allFresh = { 'root-system': 'fresh', 'root-system::core-sub': 'fresh' };
-    expect(freshnessFrom(childDir)).toEqual(allFresh);
-
-    // Edits no family surface carries: a private component and the parent's
-    // vision. The parent's state hash moves; what it publishes does not.
+    expect(listFamilyPins().map((pin) => [pin.key, pin.role])).toEqual([
+      ['root-system', 'parent'],
+      ['root-system::core-sub', 'sibling'],
+    ]);
+    // Reads only the bound root: the parent holds no pins of its own.
     setProjectRoot(rootDir);
-    saveComponentSpec(component('audit-orch', 'core-sub'));
-    saveSystemSpec({ ...loadSystemSpec()!, vision: 'surface fixture, revised' });
-    expect(freshnessFrom(childDir)).toEqual(allFresh);
-    // A re-pin has nothing to rewrite, and the pins stay fresh.
-    expect(pinFamilySurfaces()).toEqual([]);
-    expect(freshnessFrom(childDir)).toEqual(allFresh);
-
-    // The consumed portal's contract changes: both surfaces that carry it go stale.
-    setProjectRoot(rootDir);
-    saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [
-      { name: 'fetchRecordV2', description: 'renamed', signature: 'fetchRecordV2(id: string): json', returns: 'json' },
-    ]));
-    expect(freshnessFrom(childDir)).toEqual({ 'root-system': 'stale', 'root-system::core-sub': 'stale' });
-
-    // Re-pinning repairs them.
-    expect(pinFamilySurfaces()).toHaveLength(2);
-    expect(freshnessFrom(childDir)).toEqual(allFresh);
-  });
-
-  it('a pinned sibling the parent no longer projects is stale, and only that one', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    saveSubsystemSpec(subsystem('aux-sub'));
-    createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
-    invalidateSpecCache();
-    const childDir = path.join(rootDir, 'packages', 'transpiler');
-    setProjectRoot(childDir);
-    pinFamilySurfaces();
-
-    // The parent retires aux-sub, so nothing is projected under its key any more.
-    setProjectRoot(rootDir);
-    expect(deleteSubsystemSpec('aux-sub')).toBe(true);
-
-    expect(freshnessFrom(childDir)).toEqual({
-      'root-system': 'fresh',
-      'root-system::aux-sub': 'stale',
-      'root-system::core-sub': 'fresh',
-    });
-  });
-
-  it('a parent whose tree can no longer be projected leaves its pins unverifiable rather than failing the listing', () => {
-    const childDir = buildChainedWorld();
-    // The mount is still discoverable, but the parent's L0 no longer parses.
-    fs.writeFileSync(path.join(rootDir, '.wai', 'specs', '.index.yaml'), 'name: root-system\n');
-
-    expect(freshnessFrom(childDir)).toEqual({ 'root-system': 'unverifiable', 'root-system::core-sub': 'unverifiable' });
-  });
-
-  it('a standalone project (no chaining parent) verdicts every snapshot unverifiable', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    // A generated snapshot stored locally, but no discoverable chaining parent.
-    saveSnapshot(projectChildSurface(), rootDir);
-    const entries = listExternalInterfaces();
-    expect(entries).toHaveLength(1);
-    expect(entries[0].sourceKind).toBe('parent');
-    expect(entries[0].freshness).toBe('unverifiable');
+    expect(listFamilyPins()).toEqual([]);
   });
 
   it('computeStateIdAt returns the hash, restores the previous binding, and is null for a non-project root', () => {
@@ -1099,7 +776,7 @@ describe('surface projection over the resolved export table', () => {
       fields: [{ name: 'amount', type: 'number', optional: false }],
       methods: [], createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec(subsystem('core-sub', {
+    saveSpec('subsystem', subsystem('core-sub', {
       publicInterfaces: [
         { type: 'REST', details: 'api', component: 'gateway-portal' },
         { type: 'Custom', details: 'family', component: 'family-portal' },

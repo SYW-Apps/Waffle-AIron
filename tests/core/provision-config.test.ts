@@ -3,14 +3,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot, runWithProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, loadSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
-import {
-  provisionProject,
-  ensureProjectInitialized,
-  backfillChainedSubprojectConfigs,
-  createChainedSubsystem,
-  externalizeSubsystem,
-} from '../../src/core/provision.js';
+import { saveSystemSpec, saveSpec, loadSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { provisionProject, ensureProjectInitialized, backfillChainedSubprojectConfigs, externalizeSubsystem, createMember } from '../../src/core/provision.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { isProjectInitialized, aiPathsAt } from '../../src/config/paths.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
@@ -134,8 +128,8 @@ describe('provisioning through the project config Repository', () => {
     const root = tempRoot();
     setProjectRoot(root);
     saveL0('root-system');
-    saveSubsystemSpec(subsystem('alpha', 'alpha', 'packages/alpha'));
-    saveSubsystemSpec(subsystem('beta', 'beta', 'packages/beta'));
+    saveSpec('subsystem', subsystem('alpha', 'alpha', 'packages/alpha'));
+    saveSpec('subsystem', subsystem('beta', 'beta', 'packages/beta'));
     const alpha = path.join(root, 'packages', 'alpha');
     const beta = path.join(root, 'packages', 'beta');
     fs.mkdirSync(path.join(alpha, '.wai', 'specs'), { recursive: true });
@@ -149,14 +143,15 @@ describe('provisioning through the project config Repository', () => {
     expect(untouched(beta)).toBe(true);
   });
 
-  it('createChainedSubsystem keeps an existing child configuration', () => {
+  it('createMember keeps an existing member configuration', () => {
     const root = tempRoot();
+    writeConfig(root, 'root');
     setProjectRoot(root);
     saveL0('root-system');
     const child = path.join(root, 'packages', 'billing');
     writeConfig(child, 'billing-own');
 
-    createChainedSubsystem(subsystem('billing', 'billing', 'packages/billing'), 'billing');
+    createMember('billing', 'packages/billing');
 
     expect(untouched(child)).toBe(true);
     expect(fs.existsSync(path.join(child, '.wai', 'specs', '.index.yaml'))).toBe(true);
@@ -164,9 +159,10 @@ describe('provisioning through the project config Repository', () => {
 
   it('externalizeSubsystem creates the child configuration named after the subsystem', () => {
     const root = tempRoot();
+    writeConfig(root, 'root');
     setProjectRoot(root);
     saveL0('root-system');
-    saveSubsystemSpec(subsystem('core', 'Core Service'));
+    saveSpec('subsystem', subsystem('core', 'Core Service'));
 
     externalizeSubsystem('core', 'packages/core');
 
@@ -177,9 +173,10 @@ describe('provisioning through the project config Repository', () => {
 
   it('externalizeSubsystem refuses a child that already has a configuration, before moving anything', () => {
     const root = tempRoot();
+    writeConfig(root, 'root');
     setProjectRoot(root);
     saveL0('root-system');
-    saveSubsystemSpec(subsystem('core', 'Core Service'));
+    saveSpec('subsystem', subsystem('core', 'Core Service'));
     const child = path.join(root, 'packages', 'core');
     writeConfig(child, 'core-own');
 
@@ -216,8 +213,8 @@ describe('loader wrappers over the project config Repository', () => {
 
 // ---------------------------------------------------------------------------
 // Stage 2a: every provisioning writer declares the project's id. A fresh
-// project gets its name slugified; a chained child is identified by its
-// mount's subsystem id, never by its display name.
+// project gets its name slugified; a member is identified by the alias its
+// parent declares it under, never by its display name.
 // ---------------------------------------------------------------------------
 
 describe('provisioning writes the project id', () => {
@@ -243,34 +240,36 @@ describe('provisioning writes the project id', () => {
     expect(projectConfigRepositoryAt(derived).load()?.id).toBe('ledger-tree');
   });
 
-  it('createChainedSubsystem identifies the child by the subsystem id, not its display name', () => {
+  it('createMember identifies the member by its alias, whatever its description says', () => {
     const root = tempRoot();
+    writeConfig(root, 'root');
     setProjectRoot(root);
     saveL0('root-system');
 
-    createChainedSubsystem(subsystem('billing', 'Billing Service', 'packages/billing'), 'Billing Service');
+    createMember('billing', 'packages/billing', 'Billing Service');
 
     const child = projectConfigRepositoryAt(path.join(root, 'packages', 'billing')).load();
-    expect(child?.name).toBe('Billing Service');
+    expect(child?.name).toBe('billing');
     expect(child?.id).toBe('billing');
   });
 
   it('externalizeSubsystem identifies the child by the subsystem id', () => {
     const root = tempRoot();
+    writeConfig(root, 'root');
     setProjectRoot(root);
     saveL0('root-system');
-    saveSubsystemSpec(subsystem('core', 'Core Service'));
+    saveSpec('subsystem', subsystem('core', 'Core Service'));
 
     externalizeSubsystem('core', 'packages/core');
 
     expect(projectConfigRepositoryAt(path.join(root, 'packages', 'core')).load()?.id).toBe('core');
   });
 
-  it("backfill identifies a child by its mount's subsystem id", () => {
+  it("backfill identifies a member by its alias (here a legacy mount's subsystem id)", () => {
     const root = tempRoot();
     setProjectRoot(root);
     saveL0('root-system');
-    saveSubsystemSpec(subsystem('ledger', 'Ledger', 'packages/general-ledger'));
+    saveSpec('subsystem', subsystem('ledger', 'Ledger', 'packages/general-ledger'));
     const child = path.join(root, 'packages', 'general-ledger');
     fs.mkdirSync(path.join(child, '.wai', 'specs'), { recursive: true });
 

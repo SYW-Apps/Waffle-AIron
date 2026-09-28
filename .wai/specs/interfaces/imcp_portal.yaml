@@ -39,14 +39,15 @@ methods:
       address: mcp tools/call sdd_initialize_system
   - name: sdd_add_subsystem
     description: >-
-      Tool: add an L1 subsystem under the system boundary. The input may state the spec's lifecycle
-      status, so a subsystem can be authored straight at design or complete instead of being born
-      draft and needing a follow-up edit nobody remembers. An unstated status means draft for a new
-      spec and the stored status for a re-authoring, and a stated status that would lower the stored
-      one is refused by name — reopening a frozen spec is an update, not a restatement. The answer
-      carries the write receipt as structured content beside the sentence, so a caller learns the
-      status written and whether a spec already held that id without parsing English; the sentence
-      itself is unchanged.
+      Tool: add an L1 subsystem under the system boundary. A subsystem is never a mount: a
+      `projectPath` in the input is refused, naming sdd_add_member, which declares a member project
+      in project.yaml `members`. The input may state the spec's lifecycle status, so a subsystem can
+      be authored straight at design or complete instead of being born draft and needing a follow-up
+      edit nobody remembers. An unstated status means draft for a new spec and the stored status for
+      a re-authoring, and a stated status that would lower the stored one is refused by name —
+      reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
+      as structured content beside the sentence, so a caller learns the status written and whether a
+      spec already held that id without parsing English; the sentence itself is unchanged.
     signature: 'sdd_add_subsystem(spec: SubsystemSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -102,7 +103,7 @@ methods:
       Tool: validate the SDD tree and answer with every finding, split into errors, warnings and
       notices (three separate lists, in the structured content and the text block alike). Notices
       never make the tree invalid. Optionally narrowed to one subsystem, and optionally descending
-      into chained subprojects.
+      into members.
     signature: 'sdd_validate_tree(subsystem?: string, recursive?: boolean): ValidationResult'
     returns: ValidationResult
     params:
@@ -112,18 +113,18 @@ methods:
         optional: true
       - name: recursive
         type: boolean
-        description: Descend into chained subprojects mounted under this tree
+        description: Descend into the members this project declares
         optional: true
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_validate_tree
   - name: sdd_get_status
     description: >-
-      Tool: the spec tree as a structure, with each level's completeness. Optionally narrowed to one
-      subsystem, and optionally descending into chained subprojects. On a stale server the answer
-      LEADS with the staleness — whether the build on disk changed and whether spec writes are
-      refused because its schemas changed — so the first call of a session surfaces it before
-      anything is written.
+      Tool: the spec tree as a structure, with each level's completeness; each member prints as a
+      project holding its own subsystems. Optionally narrowed to one subsystem, and optionally
+      descending into members. On a stale server the answer LEADS with the staleness — whether the
+      build on disk changed and whether spec writes are refused because its schemas changed — so the
+      first call of a session surfaces it before anything is written.
     signature: 'sdd_get_status(subsystem?: string, recursive?: boolean): string'
     returns: string
     params:
@@ -133,45 +134,22 @@ methods:
         optional: true
       - name: recursive
         type: boolean
-        description: Descend into chained subprojects mounted under this tree
+        description: Descend into the members this project declares
         optional: true
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_get_status
-  - name: sdd_move_subsystem_project
-    description: >-
-      Tool: relocate an external subsystem's subproject directory on disk and update its projectPath
-      link.
-    signature: 'sdd_move_subsystem_project(subsystem: string, newProjectPath: string): void'
-    returns: void
-    params:
-      - name: subsystem
-        type: string
-        description: The external L1 subsystem id to relocate
-      - name: newProjectPath
-        type: string
-        description: The new relative path for the subproject directory
-    endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_move_subsystem_project
   - name: sdd_externalize_subsystem
     description: >-
-      Tool: migrate an internal subsystem into a standalone subproject at projectPath (moves specs,
-      mounts via projectPath, rewrites references)
-    signature: 'sdd_externalize_subsystem(subsystem: string, projectPath: string): void'
+      Tool: turn an internal subsystem into a member project at the path — provisions the member,
+      moves the subsystem's specs there, declares it in project.yaml `members` under the subsystem
+      id, and re-saves every reference across the new boundary as `alias::name`. The exports either
+      side now needs are left to `wairon doctor --fix`.
+    signature: 'sdd_externalize_subsystem(subsystem: string, path: string): void'
     returns: void
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_externalize_subsystem
-  - name: sdd_internalize_subsystem
-    description: >-
-      Tool: migrate an external subsystem's specs back into the parent tree and delete its child
-      .wai project
-    signature: 'sdd_internalize_subsystem(subsystem: string): void'
-    returns: void
-    endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_internalize_subsystem
   - name: listResources
     description: >-
       MCP resource: list everything the server publishes as read-only resources — the built-in SDD
@@ -197,14 +175,6 @@ methods:
     endpoint:
       transport: Custom
       address: mcp resources/read (SDD skill or agent brief)
-  - name: sdd_list_external_interfaces
-    description: >-
-      List the bound project's consumable external surfaces (parent family, siblings, foreign
-      imports) as discovery entries with origin, provenance, and freshness — the tool an agent
-      inside a subproject uses to SEE its outward world instead of discovering it by failed
-      reference resolution.
-    signature: 'sdd_list_external_interfaces(): ExternalSurfaceEntry[]'
-    returns: ExternalSurfaceEntry[]
   - name: sdd_get_agent_brief
     description: >-
       Tool: compose the LIVE delegation brief for one resolved agent (rendered instructions +
@@ -338,24 +308,6 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_set_public_interfaces
-  - name: sdd_set_subsystem_project_path
-    description: >-
-      Tool: set, or clear, an L1 subsystem's projectPath — the chaining link to an external
-      subproject root, given as a path relative to this project. It rewrites the link only;
-      sdd_move_subsystem_project is what relocates the directory with it.
-    signature: 'sdd_set_subsystem_project_path(subsystemId: string, projectPath?: string): SpecChangeReport'
-    returns: SpecChangeReport
-    params:
-      - name: subsystemId
-        type: string
-        description: The L1 subsystem to update, as the tool's subsystem argument names it
-      - name: projectPath
-        type: string
-        description: Relative path to the external project root; omitted clears the link
-        optional: true
-    endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_set_subsystem_project_path
   - name: sdd_get_spec
     description: >-
       Tool: read the parsed contents of one stored spec, without filesystem path searching. A
@@ -506,6 +458,59 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_get_externals_status
+  - name: sdd_add_member
+    description: >-
+      Tool: create a member of the bound project — scaffold the member project at the path (its
+      project.yaml declaring the alias as its project id, and its L0), each part only when absent,
+      and declare it in the bound project's project.yaml `members` with the description. Nothing is
+      written into the bound project's spec tree: a member is reached only as `alias::name` through
+      its own L0 exports.
+    signature: 'sdd_add_member(alias: string, path: string, description?: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias and new project id ([a-z0-9-_]+)
+      - name: path
+        type: string
+        description: The member's root, relative to the bound project
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_add_member
+  - name: sdd_move_member
+    description: >-
+      Tool: relocate a member's directory on disk and point its `members` entry there (a member
+      still declared in the legacy L1 form is moved into `members` first).
+    signature: 'sdd_move_member(alias: string, newPath: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The member's new root, relative to the bound project
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_move_member
+  - name: sdd_internalize_member
+    description: >-
+      Tool: take a single-subsystem member back into the bound project — move its specs in, re-save
+      every reference across the old boundary as a local id, remove it from `members` and delete its
+      .wai project.
+    signature: 'sdd_internalize_member(alias: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_internalize_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T17:50:04.304Z'
+updatedAt: '2026-09-27T10:58:24.906Z'

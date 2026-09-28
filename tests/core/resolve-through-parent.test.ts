@@ -4,10 +4,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSystemSpec, saveSubsystemSpec, saveComponentSpec, saveInterfaceSpec,
+  saveSystemSpec, saveSpec, saveComponentSpec, saveInterfaceSpec,
   invalidateSpecCache, workspaceFor,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { validateSddTree, type ValidationOptions, type ValidationResult } from '../../src/core/validation.js';
 import { isCiDraftWaivable } from '../../src/commands/validate.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
@@ -58,7 +58,7 @@ function family(): { root: string; kidDir: string } {
     schemaVersion: '1.0.0', name: 'root-system', vision: 'v',
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('parent-sub', {
+  saveSpec('subsystem', subsystem('parent-sub', {
     publicInterfaces: [{ type: 'Custom', details: 'the published portal', component: 'parent-portal' }],
   } as Partial<SubsystemSpec>));
   saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
@@ -68,7 +68,7 @@ function family(): { root: string; kidDir: string } {
     status: 'complete', createdAt: now, updatedAt: now,
     methods: [{ name: 'realMethod', description: 'd', signature: 'realMethod(): void', returns: 'void' }],
   } as InterfaceSpec);
-  createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+  writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
 
   const kidDir = path.join(root, 'packages', 'kid');
   const kid = workspaceFor(kidDir);
@@ -76,7 +76,7 @@ function family(): { root: string; kidDir: string } {
     schemaVersion: '1.0.0', name: 'kid-system', vision: 'v',
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
-  kid.saveSubsystemSpec(subsystem('k-core', { parentSystem: 'kid-system' }));
+  kid.save('subsystem', subsystem('k-core', { parentSystem: 'kid-system' }));
   // An Orchestrator crossing a subsystem boundary: only Adapters may.
   kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['super::parent-portal'] }));
   // The legitimate crossing — an Adapter into the PUBLISHED portal. The control.
@@ -129,7 +129,9 @@ function errors(res: ValidationResult, stripPrefix = ''): string[] {
  * tests/core/externals.test.ts — here the edge is "clean" at the verdict's level.
  */
 const STAGE2_NOTICE = (i: { code: string; severity: string }): boolean =>
-  i.severity === 'notice' && (i.code === 'EXTERNAL_UNDECLARED' || i.code === 'EXTERNAL_NOT_EXPORTED');
+  i.severity === 'notice' && (i.code === 'EXTERNAL_UNDECLARED' || i.code === 'EXTERNAL_NOT_EXPORTED'
+    // stage 3: the `super::` form the fixture writes is itself reported, a notice too.
+    || i.code === 'DEPRECATED_REFERENCE_FORM');
 
 const PARENT_JUDGEMENT = [
   'CROSS_SUBSYSTEM_NON_ADAPTER @kid::k-orch',
@@ -258,7 +260,7 @@ describe('step 1b — a surface held inside a mount decides that mount\'s refere
     writeYamlFile(path.join(fam.kidDir, '.wai', 'surfaces', 'crm.yaml'), {
       projectName: 'crm', origin: 'authored', generatedAt: now, types: [],
       interfaces: [{
-        id: 'icrm', name: 'CRM', component: 'crm-portal', audience: 'external', type: 'REST', details: 'crm',
+        id: 'crm-portal', name: 'CRM', component: 'crm-portal', audience: 'external', type: 'REST', details: 'crm',
         methods: [{ name: 'getCustomer', description: 'd', signature: 'getCustomer(): void', returns: 'void' }],
       }],
     });
@@ -432,12 +434,12 @@ describe('step 3 — a chained child is judged through its parent when the paren
       schemaVersion: '1.0.0', name: 'grand-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec(subsystem('grand-sub', {
+    saveSpec('subsystem', subsystem('grand-sub', {
       parentSystem: 'grand-system',
       publicInterfaces: [{ type: 'Custom', details: 'the published portal', component: 'grand-portal' }],
     } as Partial<SubsystemSpec>));
     saveComponentSpec(component('grand-portal', 'grand-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
-    createChainedSubsystem(subsystem('par', { parentSystem: 'grand-system', projectPath: 'packages/par' }), 'par');
+    writeLegacyMount(subsystem('par', { parentSystem: 'grand-system', projectPath: 'packages/par' }), 'par');
 
     const parDir = path.join(top, 'packages', 'par');
     invalidateSpecCache();
@@ -446,7 +448,7 @@ describe('step 3 — a chained child is judged through its parent when the paren
       schemaVersion: '1.0.0', name: 'par-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    createChainedSubsystem(subsystem('kid2', { parentSystem: 'par-system', projectPath: 'packages/kid2' }), 'kid2');
+    writeLegacyMount(subsystem('kid2', { parentSystem: 'par-system', projectPath: 'packages/kid2' }), 'kid2');
 
     const kid2Dir = path.join(parDir, 'packages', 'kid2');
     const kid2 = workspaceFor(kid2Dir);
@@ -454,14 +456,15 @@ describe('step 3 — a chained child is judged through its parent when the paren
       schemaVersion: '1.0.0', name: 'kid2-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    kid2.saveSubsystemSpec(subsystem('k2-core', { parentSystem: 'kid2-system' }));
+    kid2.save('subsystem', subsystem('k2-core', { parentSystem: 'kid2-system' }));
     kid2.saveComponentSpec(component('k2-orch', 'k2-core', { dependsOn: ['super::super::grand-portal'] }));
     kid2.saveComponentSpec(component('k2-adapter', 'k2-core', { componentType: 'Adapter', dependsOn: ['super::super::grand-portal'] }));
     invalidateSpecCache();
 
     const fromKid2 = verdict(kid2Dir);
 
-    expect(fromKid2.resolvedThrough).toEqual({ root: path.resolve(top), scope: 'par::kid2' });
+    // The grandchild's key in the top's scan is its project id, never the mount chain.
+    expect(fromKid2.resolvedThrough).toEqual({ root: path.resolve(top), scope: 'kid2' });
     expect(errors(fromKid2)).toEqual(['CROSS_SUBSYSTEM_NON_ADAPTER @k2-orch']);
   });
 });
@@ -508,11 +511,11 @@ describe('a leniently configured parent never softens what the child judged alon
       schemaVersion: '1.0.0', name: 'root-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    saveSubsystemSpec(subsystem('parent-sub', {
+    saveSpec('subsystem', subsystem('parent-sub', {
       publicInterfaces: [{ type: 'Custom', details: 'the published portal', component: 'parent-portal' }],
     } as Partial<SubsystemSpec>));
     saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
 
     const kidDir = path.join(top, 'packages', 'kid');
     const kid = workspaceFor(kidDir);
@@ -520,8 +523,8 @@ describe('a leniently configured parent never softens what the child judged alon
       schemaVersion: '1.0.0', name: 'kid-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    kid.saveSubsystemSpec(subsystem('k-a', { parentSystem: 'kid-system' }));
-    kid.saveSubsystemSpec(subsystem('k-b', {
+    kid.save('subsystem', subsystem('k-a', { parentSystem: 'kid-system' }));
+    kid.save('subsystem', subsystem('k-b', {
       parentSystem: 'kid-system',
       publicInterfaces: [{ type: 'Custom', details: 'the k-b portal', component: 'k-b-portal' }],
     } as Partial<SubsystemSpec>));

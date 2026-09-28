@@ -1,5 +1,5 @@
 import { SddRule } from '../types.js';
-import { resolveInvariantRef } from './invariant-ref.js';
+import { familyAliases, resolveInvariantRef } from './invariant-ref.js';
 
 /**
  * The STEP side of the invariant registry: every `assertsInvariants` reference
@@ -19,12 +19,14 @@ export const invariantReferencesRule: SddRule = {
     { code: 'UNKNOWN_INVARIANT_REF', defaultSeverity: 'error', summary: 'A narrative step asserts an invariant that no entity declares' },
   ],
   check(ctx) {
+    // A type named through an alias is read through the family's alias tables.
+    const aliases = familyAliases(ctx.projectFamily);
     for (const impl of ctx.implementations) {
       const isDraftCtx = ctx.isImplementationDraft(impl);
       for (const method of impl.methods) {
         for (const step of method.narrative) {
           for (const ref of step.assertsInvariants ?? []) {
-            if (resolveInvariantRef(ref, ctx.types)) continue;
+            if (resolveInvariantRef(ref, ctx.types, aliases)) continue;
             ctx.addIssue(
               'error',
               'UNKNOWN_INVARIANT_REF',

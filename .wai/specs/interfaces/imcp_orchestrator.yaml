@@ -14,8 +14,8 @@ methods:
   - name: addSubsystem
     description: >-
       Persist an L1 subsystem specification and answer with the receipt for it: which spec was
-      written, at what status, whether one already held that id, and the child project directory a
-      chained subsystem scaffolded.
+      written, at what status, and whether one already held that id. A subsystem naming a
+      projectPath is refused by the authoring seam: a member is created with addMember.
     signature: 'addSubsystem(spec: SubsystemSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
   - name: addComponent
@@ -46,24 +46,38 @@ methods:
   - name: getStatus
     description: >-
       Compose the spec-tree completeness dashboard, opened by the project's family context: the
-      mount this root is known by in its parent and the parent project's name (only within the
-      request's reach), and the chained subprojects this root mounts with their paths.
+      alias this root is declared under by its parent and the parent project's name (only within the
+      request's reach), and the members this root declares with their paths. Members print as
+      projects, not subsystems.
     signature: 'getStatus(): string'
     returns: string
-  - name: moveSubsystemProject
+  - name: moveMember
     description: >-
-      Relocate an external subsystem: verify it exists, then move its subproject directory and
-      update its projectPath link.
-    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+      The sdd_move_member workflow: relocate a member's directory and point its `members` entry
+      there; the core refuses an alias that declares no member.
+    signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The new root, relative to the bound project root
   - name: externalizeSubsystem
-    description: Verify the subsystem exists and is internal, then externalize it into a standalone subproject.
-    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
+    description: Verify the subsystem exists, then turn it into a member project declared in `members`.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
     returns: void
-  - name: internalizeSubsystem
-    description: Verify the subsystem exists and is external, then internalize it back into the parent tree.
-    signature: 'internalizeSubsystem(subsystemId: string): void'
+  - name: internalizeMember
+    description: >-
+      The sdd_internalize_member workflow: take a single-subsystem member back into the bound
+      project; the core refuses an alias that declares no member.
+    signature: 'internalizeMember(alias: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
   - name: listResources
     description: >-
       List the MCP resources the server publishes: the built-in SDD skills plus one live
@@ -190,21 +204,6 @@ methods:
         description: >-
           The full replacement list: type, details, and the realizing component and optional
           interface
-  - name: setSubsystemProjectPath
-    description: >-
-      The sdd_set_subsystem_project_path workflow: verify the subsystem exists, then set — or, when
-      no path is given, clear — its projectPath chaining link and restamp updatedAt. It rewrites the
-      link only; the subproject directory itself is relocated by moveSubsystemProject.
-    signature: 'setSubsystemProjectPath(subsystemId: string, projectPath?: string): SpecChangeReport'
-    returns: SpecChangeReport
-    params:
-      - name: subsystemId
-        type: string
-        description: The L1 subsystem whose chaining link is rewritten
-      - name: projectPath
-        type: string
-        description: Relative path to the external project root; omitted clears the link
-        optional: true
   - name: getSpec
     description: >-
       The sdd_get_spec workflow: read one stored spec by kind and id through the core client
@@ -287,6 +286,24 @@ methods:
     signature: 'getProjectConfig(): ProjectConfig | null'
     returns: ProjectConfig | null
     params: []
+  - name: addMember
+    description: >-
+      The sdd_add_member workflow: create a member of the bound project — scaffold its project
+      (configuration with the alias as its project id, L0), each part only when absent, and declare
+      it in project.yaml `members` with the path and description.
+    signature: 'addMember(alias: string, path: string, description?: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias and new project id
+      - name: path
+        type: string
+        description: The member's root, relative to the bound project root
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-26T17:50:42.500Z'
+updatedAt: '2026-09-27T10:58:21.740Z'

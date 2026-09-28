@@ -170,7 +170,43 @@ methods:
     calls:
       - project_config_store.read
       - project_config_store.write
+  - name: declareMember
+    narrative: []
+    intent: >-
+      Refuses an alias outside [a-z0-9-_]+, or an empty or absolute path, before reading anything.
+      Reads the configuration through the store, refusing when the project has none, and refuses an
+      alias `externals` already declares, naming both. When `members` already holds the alias with
+      an equal declaration (the shorthand and a long form with the same path and no description are
+      equal), returns false and writes nothing; with a different one, refuses naming the alias, both
+      declarations and the project root. Otherwise adds the alias after the existing entries
+      (creating `members` when absent) — as the shorthand `alias: path` when there is no
+      description, else the long form — and writes the configuration back through the store, which
+      keeps every comment and places `members` at its schema position, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: setMemberPath
+    narrative: []
+    intent: >-
+      Refuses an empty or absolute path before reading anything. Reads the configuration through the
+      store, refusing when the project has none or `members` does not declare the alias. When the
+      member already has that path, returns false and writes nothing; otherwise sets the path in
+      whichever form the entry was written (the shorthand stays a shorthand, the long form keeps its
+      description) and writes the configuration back through the store, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: removeMember
+    narrative: []
+    intent: >-
+      Reads the configuration through the store, refusing when the project has none. When `members`
+      does not declare the alias, returns false and writes nothing; otherwise removes the entry (and
+      `members` itself when it was the last one) and writes the configuration back through the
+      store, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-26T21:10:37.127Z'
+updatedAt: '2026-09-27T10:55:11.088Z'

@@ -5,7 +5,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import { resolveExpectedOutputPaths } from '../../src/exporters/generate.js';
 import { WAIRON_MANAGED_BANNER } from '../../src/exporters/base.js';
 import type { AgentRecord } from '../../src/models/agent.js';
@@ -57,8 +57,8 @@ function buildTwoDomainProject(rootDir: string, rules: Record<string, unknown> =
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('dom-a'));
-  saveSubsystemSpec(subsystem('dom-b'));
+  saveSpec('subsystem', subsystem('dom-a'));
+  saveSpec('subsystem', subsystem('dom-b'));
   invalidateSpecCache();
   setProjectRoot(null);
 }
@@ -258,8 +258,8 @@ describe('cli_runner.runGenerate: the chained cascade generates each child layer
     writeProjectYaml(rootDir, 'gen-system', { materializeAgentFiles: true });
     setProjectRoot(rootDir);
     saveSystemSpec(systemSpec('gen-system'));
-    saveSubsystemSpec({ ...subsystem('fresh'), projectPath: 'fresh' });
-    saveSubsystemSpec({ ...subsystem('ready'), projectPath: 'ready' });
+    saveSpec('subsystem', { ...subsystem('fresh'), projectPath: 'fresh' });
+    saveSpec('subsystem', { ...subsystem('ready'), projectPath: 'ready' });
     // 'fresh': an empty folder — no configuration and no L0 yet.
     fs.mkdirSync(freshDir, { recursive: true });
     // 'ready': its own configuration (agent files on), its own L0 and one subsystem.
@@ -267,15 +267,15 @@ describe('cli_runner.runGenerate: the chained cascade generates each child layer
     setProjectRoot(readyDir);
     invalidateSpecCache();
     saveSystemSpec(systemSpec('ready'));
-    saveSubsystemSpec({ ...subsystem('inner'), parentSystem: 'ready' });
+    saveSpec('subsystem', { ...subsystem('inner'), parentSystem: 'ready' });
     invalidateSpecCache();
     setProjectRoot(null);
 
     const { stdout } = await runCli(rootDir);
 
     const agentsDir = (dir: string) => path.join(dir, '.claude', 'agents');
-    expect(stdout).toContain('Chained subproject "fresh"');
-    expect(stdout).toContain('Chained subproject "ready"');
+    expect(stdout).toContain('Member "fresh"');
+    expect(stdout).toContain('Member "ready"');
 
     // Parent layer: its architect and one delegate per child — never a child's internals.
     expect(fs.existsSync(path.join(agentsDir(rootDir), 'system-architect.md'))).toBe(true);

@@ -1,0 +1,30 @@
+kind: value-object
+id: member_declaration
+name: MemberDeclaration
+description: >-
+  One `members` entry of project.yaml in its long form: the value under an alias key. The shorthand
+  `billing: services/billing` is read as `{ path: services/billing }`; the long form leaves room for
+  later fields. A member is a project this one contains: it has no spec in this project's tree,
+  carries no content here, and is named only by its alias, which defaults to nothing but the key
+  (the member's own id is whatever its project.yaml declares).
+subsystem: sdd_core
+fields:
+  - name: path
+    type: string
+    description: >-
+      The member's root directory, relative to the declaring project's root. Containment is decided
+      against the declaring project: an absolute path, a ../-escaping path or one that leaves
+      through a link is refused (PROJECTPATH_ESCAPE) and not followed, identically from every
+      loading root.
+    optional: false
+  - name: description
+    type: string
+    description: >-
+      What the member is to this project, in the declaring project's words. The home of a legacy L1
+      mount's description when the chaining migration moves the mount here; the canvas shows it on
+      the member's project node.
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-27T10:32:30.244Z'
+updatedAt: '2026-09-27T10:32:30.252Z'

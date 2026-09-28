@@ -3,7 +3,15 @@ import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, WaiPaths } from '../config/paths.js';
 import { projectConfigRepository } from '../config/project-config.js';
-import type { ProjectConfig, PackSelection, ProjectProfileSelection, ExternalDeclaration } from '../models/project.js';
+import {
+  declaredExternals,
+  declaredMembers,
+  effectiveProjectId,
+  type ProjectConfig,
+  type PackSelection,
+  type ProjectProfileSelection,
+  type ExternalDeclaration,
+} from '../models/project.js';
 import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
@@ -54,8 +62,19 @@ import { buildGraphModel } from './diagram.js';
 // The export index is an owned face of this Repository: the facade forwards
 // its two reads 1:1 (spec_loader resolveSubsystemExports / resolveProjectExports).
 import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf } from './exports.js';
-import type { ExportUsage, ResolvedExportTable } from '../models/exports.js';
-import type { AuthoredReference, ProjectFamily } from '../models/project-family.js';
+// The pure export resolver the scan resolves every project's tables through,
+// before it binds any `alias::name` against them.
+import { resolveProjectTable, resolveSubsystemTables } from './exports.js';
+import type { ExportUsage, ResolvedExport, ResolvedExportTable } from '../models/exports.js';
+import {
+  keyIn,
+  landReference,
+  type AuthoredReference,
+  type ProjectFamily,
+  type ProjectFamilyProblem,
+  type ReadableProject,
+  type ReferenceBinding,
+} from '../models/project-family.js';
 import { projectConfigRepositoryAt } from '../config/project-config.js';
 // The project family index is an owned face of this Repository: the facade
 // forwards its graph 1:1 (spec_loader graph).
@@ -105,29 +124,67 @@ export interface LegacySpecFile {
 }
 
 /**
- * scanned_project_root — what one scan read at one project root beyond the
- * specs it merged into the index: where the root sits in the mount chain, its
- * own L0 (qualified into its namespace), its configuration (read through that
- * root's binding), the ids of the specs it declared, and the leading-`::`
- * references its authors wrote. The raw material of the project graph.
+ * scanned_project_root — what one scan read at one project root, beyond the
+ * specs it put in the index: its key and where it sits among its family's
+ * members, its own L0 (never merged into the index), its configuration, its
+ * alias table, its resolved export tables, the keys of the specs it declared,
+ * and every reference with `::` its authors wrote, as bound. The raw material
+ * of the project graph and the export tables, and what the writer relativizes
+ * a save against.
  */
 export interface ScannedProjectRoot {
-  /** '' for the bound root, else the qualified id of the mount subsystem. */
+  /** '' for the bound root, else its effective project id (or its alias path when the id is taken or missing). */
   namespace: string;
-  /** The namespace of the root that mounts this one. */
+  /** The key of the root that declares this one as a member. */
   parent?: string;
-  /** The local id of the mounting subsystem. */
+  /** The alias its parent declares it under. */
   mountAlias?: string;
+  /** members | mount: how the parent declares it; absent for the bound root. */
+  mountForm?: 'members' | 'mount';
+  /** The legacy L1 mount subsystem as the parent wrote it; null for a members-declared root and the bound root. */
+  legacyMount: SubsystemSpec | null;
+  /** What its parent's declaration says the member is (the `members` description, or a legacy mount's). */
+  memberDescription?: string;
   /** The root directory, absolute. */
   directory: string;
-  /** The root's own L0, qualified into its namespace; null when it has none. */
+  /** The root's own L0, its export entries keyed into its key; null when it has none. */
   system: SystemSpec | null;
   /** The root's configuration, read through that root's binding; null when unreadable. */
   config: ProjectConfig | null;
-  /** The qualified ids of every spec this root's files declared (a mount subsystem belongs to the root it mounts). */
+  /** alias → the key of the project it names in this scan (members and family externals). */
+  aliases: Map<string, string>;
+  /** The root's L0 export table, resolved once in the scan. */
+  exports: ResolvedExportTable;
+  /** Each of the root's subsystems' L1 export tables, by subsystem key. */
+  subsystemExports: Map<string, ResolvedExportTable>;
+  /** The keys of every spec this root's files declared. */
   specIds: string[];
-  /** Every reference this root's files wrote with a leading `::`, before qualification. */
+  /** Every reference with `::` this root's files wrote, as bound. */
   authoredReferences: AuthoredReference[];
+  /** The family problems the scan met at this root: its identity, its members, its duplicate keys. */
+  problems: ProjectFamilyProblem[];
+}
+
+/**
+ * The keys of `raw` that `parsed` (its schema's reading) no longer carries,
+ * appended to `out` as `path: value`. Follows an object the schema kept, and
+ * an array element by element when the schema kept every element.
+ */
+function unknownKeysIn(raw: unknown, parsed: unknown, at: string, out: string[]): void {
+  if (Array.isArray(raw)) {
+    if (!Array.isArray(parsed) || parsed.length !== raw.length) return;
+    raw.forEach((item, i) => unknownKeysIn(item, parsed[i], `${at}[${i}]`, out));
+    return;
+  }
+  if (!raw || typeof raw !== 'object' || !parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const keyPath = at ? `${at}.${key}` : key;
+    if (!(key in (parsed as Record<string, unknown>))) {
+      out.push(`${keyPath}: ${typeof value === 'string' ? value : JSON.stringify(value)}`);
+      continue;
+    }
+    unknownKeysIn(value, (parsed as Record<string, unknown>)[key], keyPath, out);
+  }
 }
 
 function emptyIndex(): SpecIndex {
@@ -177,54 +234,6 @@ function qualifyId(id: string | undefined, prefix: string, rootSubsystems: Reado
 }
 
 const NO_ROOT_SUBSYSTEMS: ReadonlySet<string> = new Set();
-
-/**
- * Qualification for a spec's OWN id at its DECLARATION site, when its file is
- * loaded from a chained child project. Unlike reference resolution
- * (`qualifyId`), a declaration may NEVER root-anchor: a bare child id whose
- * name happens to collide with a ROOT subsystem id still declares a spec that
- * is LOCAL to this mount. Routing declarations through the reference logic
- * root-anchored such an id, silently merging the child spec into the root
- * subsystem's id space — exactly the hazard NAMESPACE_SHADOWING documents,
- * with its tripwire (a QUALIFIED id whose last segment equals a root id) made
- * structurally unreachable from disk. Declarations always mount-qualify; only
- * reference sites keep the root-subsystem anchor.
- *
- * `mountRealization` (subsystem declarations only): ONE bare form does not
- * nest — the flat external realization of the mount itself, a child subsystem
- * declared under the mount's own local name. That is precisely what
- * relativizeId stores for an in-memory id equal to the whole prefix, so it
- * loads back AS the mount id (letting mergeMountRealizations collapse mount +
- * realization into the flat external subsystem), never as a child of itself.
- */
-function qualifyDeclaredId(id: string, prefix: string, mountRealization = false): string {
-  if (!id || !prefix) return id;
-  if (id.startsWith('::') || id.startsWith('super::')) {
-    // A declaration never legitimately carries an explicit hop form (the
-    // writer schema refuses them); should one appear hand-authored, resolve it
-    // exactly as a reference would — these forms never consult the
-    // root-subsystem set, so the shadowing hazard does not apply.
-    return qualifyId(id, prefix, NO_ROOT_SUBSYSTEMS);
-  }
-  if (mountRealization && id === prefix.split('::').pop()) {
-    return prefix;
-  }
-  return `${prefix}::${id}`;
-}
-
-/**
- * Qualification for a REFERENCE to a subsystem — a component's or a type's
- * `subsystem` field. A bare reference to the mount's own local name is the mount
- * itself at ANY depth, mirroring qualifyDeclaredId's mountRealization: a child's
- * flat realization of its mount loads as the mount id, so its members must point
- * there too. The root-subsystem anchor in qualifyId only ever covered the first
- * level, which left a same-id grandchild's components pointing at a subsystem id
- * nothing declares.
- */
-function qualifySubsystemRef(id: string, prefix: string, rootSubsystems: ReadonlySet<string>): string {
-  if (prefix && !id.includes('::') && id === prefix.split('::').pop()) return prefix;
-  return qualifyId(id, prefix, rootSubsystems);
-}
 
 /**
  * The exact inverse of `qualifyId`: turn an in-memory qualified id back into
@@ -418,33 +427,119 @@ export function assertContainedProjectPath(projectRoot: string, projectPath: str
 }
 
 /**
- * The detected chaining-mount context of a project root: which parent project
- * mounts this tree as a chained subsystem. Produced by a filesystem walk-up
- * (never configured), so it reflects where the tree ACTUALLY sits.
+ * The detected membership context of a project root: which parent project
+ * declares this tree as a member. Produced by a filesystem walk-up (never
+ * configured), so it reflects where the tree ACTUALLY sits.
  */
 export interface ChainingParentRef {
-  /** Absolute root directory of the parent project whose subsystem projectPath resolves to this project's root. */
+  /** Absolute root directory of the parent project that declares this project's root as a member. */
   parentRoot: string;
-  /** Id of the parent-tree subsystem that mounts this project. */
-  subsystemId: string;
+  /** The alias the parent declares this project under: its `members` key, or the legacy mount subsystem's id. */
+  alias: string;
+  /** members | mount: which form the parent declares it in. */
+  form: 'members' | 'mount';
+}
+
+/** One member a project declares, in either form, as read before its directory is looked at. */
+interface MemberDeclarationRead {
+  alias: string;
+  /** The path as written, relative to the declaring root. */
+  path: string;
+  form: 'members' | 'mount';
+  description?: string;
+  /** The legacy L1 mount subsystem as written, for the mount form (and a mount a `members` entry shadows). */
+  legacyMount?: SubsystemSpec;
+  /** The spec file the legacy mount is stored in. */
+  legacyFile?: string;
+  /** Why the declaration is not followed. */
+  problem?: string;
+}
+
+/** A project's configuration read through that root's binding; null when it has none or it fails its schema. */
+function configAt(dir: string): ProjectConfig | null {
+  try {
+    return projectConfigRepositoryAt(dir).load();
+  } catch {
+    return null;
+  }
+}
+
+/** Every legacy L1 mount a root's spec files declare (a subsystem carrying projectPath), with its file. */
+function legacyMountsAt(dir: string): { spec: SubsystemSpec; file: string }[] {
+  const specsDir = aiPathsAt(dir).specsDir();
+  if (!pathExists(specsDir)) return [];
+  const out: { spec: SubsystemSpec; file: string }[] = [];
+  for (const file of listSpecFiles(specsDir)) {
+    let raw: unknown;
+    try {
+      raw = readSpecFile(file);
+    } catch {
+      continue;
+    }
+    if (!raw || typeof raw !== 'object' || !('parentSystem' in raw)) continue;
+    const projectPath = (raw as { projectPath?: unknown }).projectPath;
+    if (typeof projectPath !== 'string' || projectPath.trim() === '') continue;
+    const parsed = SubsystemSpecSchema.safeParse(raw);
+    if (parsed.success) out.push({ spec: parsed.data, file });
+  }
+  return out;
 }
 
 /**
- * Walk UP from a project root to find a PARENT wairon project that chains to it
- * — a subsystem (anywhere in the parent's spec tree) whose `projectPath` resolves
- * to this exact root. Returns the parent root + the subsystem id it mounts as, or
- * null when this is a top-level root.
+ * The members a root declares: its `members` entries first, in declaration
+ * order, then each legacy L1 mount whose alias `members` does not hold. A
+ * `members` entry and a mount under one alias are one member, the entry
+ * winning (the mount is kept on it, to be reported as ignored); an alias also
+ * declared under `externals` is not followed.
+ */
+function memberDeclarationsOf(config: ProjectConfig | null, mounts: { spec: SubsystemSpec; file: string }[]): MemberDeclarationRead[] {
+  const out: MemberDeclarationRead[] = [];
+  const byAlias = new Map<string, { spec: SubsystemSpec; file: string }>(mounts.map((m) => [m.spec.id, m]));
+  for (const member of config ? declaredMembers(config) : []) {
+    const shadowed = byAlias.get(member.alias);
+    out.push({
+      alias: member.alias,
+      path: member.path,
+      form: 'members',
+      ...(member.description !== undefined ? { description: member.description } : {}),
+      ...(shadowed ? { legacyMount: shadowed.spec, legacyFile: shadowed.file } : {}),
+      ...(member.problem ? { problem: member.problem } : {}),
+    });
+    byAlias.delete(member.alias);
+  }
+  for (const mount of mounts) {
+    if (!byAlias.has(mount.spec.id)) continue;
+    const conflict = config?.externals?.[mount.spec.id] !== undefined
+      ? `the alias "${mount.spec.id}" is also declared under \`externals\` — one alias names one project`
+      : undefined;
+    out.push({
+      alias: mount.spec.id,
+      path: mount.spec.projectPath!,
+      form: 'mount',
+      ...(mount.spec.description ? { description: mount.spec.description } : {}),
+      legacyMount: mount.spec,
+      legacyFile: mount.file,
+      ...(conflict ? { problem: conflict } : {}),
+    });
+  }
+  return out;
+}
+
+/** The members a root declares, read from its configuration and its spec files. */
+function memberDeclarationsAt(dir: string): MemberDeclarationRead[] {
+  return memberDeclarationsOf(configAt(dir), legacyMountsAt(dir));
+}
+
+/**
+ * Walk UP from a project root to find a PARENT wairon project that declares it
+ * as a member — a `members` entry of its configuration or, for one release, a
+ * legacy L1 subsystem whose `projectPath` resolves to this exact root. Returns
+ * the parent root with the alias and form, or null when this is a top-level
+ * root.
  *
- * This is how a STANDALONE validation of a subproject knows it is a subproject:
- * references INTO the parent tree (shared types, sibling subsystems, cross-tree
- * components — all of which live ABOVE this root and are physically absent here)
- * cannot be resolved standalone, so they are honest cross-tree edges to warn on,
- * not spec defects to error on. Pure filesystem read; no cache mutation.
- *
- * Only a mount the ancestor itself would follow counts: its projectPath stays
- * within that ancestor's own root. `ceiling`, when given, bounds the walk — no
- * directory above it is probed, so a caller confined to a root reads nothing
- * outside it to find a parent. Request-scoped callers go through
+ * Only a member the ancestor itself would follow counts: its path stays within
+ * that ancestor's own root. `ceiling`, when given, bounds the walk — no
+ * directory above it is probed. Request-scoped callers go through
  * resolveChainingParent, which supplies both the ceiling and the reach gate.
  */
 export function findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null {
@@ -458,29 +553,16 @@ export function findChainingParent(childRoot: string, ceiling?: string): Chainin
   let dir = path.dirname(childResolved);
   for (let hops = 0; hops < 32; hops++) {
     if (bound && !isWithin(bound, dir)) break;
-    const specsDir = aiPathsAt(dir).specsDir();
-    if (pathExists(specsDir)) {
-      for (const file of listSpecFiles(specsDir)) {
-        let raw: unknown;
+    if (pathExists(aiPathsAt(dir).specsDir()) || pathExists(aiPathsAt(dir).projectConfig())) {
+      for (const member of memberDeclarationsAt(dir)) {
+        if (member.problem || member.path.trim() === '') continue;
         try {
-          raw = readSpecFile(file);
-        } catch {
-          continue;
-        }
-        // A subsystem spec (has parentSystem) that mounts a child via projectPath.
-        if (raw && typeof raw === 'object' && 'parentSystem' in raw) {
-          const projectPath = (raw as { projectPath?: unknown }).projectPath;
-          if (typeof projectPath === 'string' && projectPath.trim() !== '') {
-            try {
-              const mountDir = path.resolve(dir, projectPath);
-              if (mountDir === childResolved && !projectPathEscapesRoot(dir, projectPath, mountDir)) {
-                const id = (raw as { id?: unknown }).id;
-                return { parentRoot: dir, subsystemId: typeof id === 'string' ? id : '?' };
-              }
-            } catch {
-              /* malformed projectPath — not our mount */
-            }
+          const memberDir = path.resolve(dir, member.path);
+          if (chainDirKey(memberDir) === chainDirKey(childResolved) && !projectPathEscapesRoot(dir, member.path, memberDir)) {
+            return { parentRoot: dir, alias: member.alias, form: member.form };
           }
+        } catch {
+          /* a malformed path is not our member */
         }
       }
     }
@@ -491,32 +573,28 @@ export function findChainingParent(childRoot: string, ceiling?: string): Chainin
   return null;
 }
 
-/** Why a whole-tree walk cannot follow a chained mount. */
+/** Why a whole-tree walk cannot follow a member. */
 export type ChainedRootSkipReason = 'escapes' | 'missing' | 'cyclic' | 'too-deep';
 
 /**
- * Every chained mount beneath a project root (ispec_index.inspectChainedRoots):
- * the roots a whole-tree walk follows, and the mounts it cannot.
+ * Every member beneath a project root (ispec_index.inspectChainedRoots): the
+ * roots a whole-tree walk follows, and the members it cannot.
  */
 export interface ChainedRootsInspection {
-  /** Project-relative POSIX roots in walk order, parents before their own children. */
+  /** Project-relative POSIX roots in walk order, parents before their own members. */
   roots: string[];
-  /** Mounts that cannot be followed: the mount's qualified id, its projectPath as declared, and why. */
-  skipped: { mount: string; projectPath: string; reason: ChainedRootSkipReason }[];
+  /** Members that cannot be followed: the member's key, its alias and form, its path as declared, and why. */
+  skipped: { mount: string; alias: string; form: 'members' | 'mount'; projectPath: string; reason: ChainedRootSkipReason }[];
 }
 
 /**
- * Walk DOWN from a project root over every chained mount beneath it, exactly as
- * the loader recurses: each projectPath resolved against the project that
- * declares it and contained by that project's root. The downward companion to
- * findChainingParent, and what a WHOLE-TREE operation — archiving a project for
- * transfer — needs to know which trees belong to the project, and whether it
- * is seeing all of them.
- *
- * A mount that escapes its project, points at a missing directory, forms a
- * cycle, or nests past the walk bound is reported in `skipped` rather than
- * silently dropped, so a caller can refuse a result that would only look
- * complete. A directory two mounts reach is listed once.
+ * Walk DOWN from a project root over every member beneath it, exactly as the
+ * scan recurses: each path resolved against the project that declares it and
+ * contained by that project's root, whether declared under `members` or as a
+ * legacy L1 mount. A member that escapes its project, points at a missing
+ * directory, forms a cycle, or nests past the walk bound is reported in
+ * `skipped` rather than silently dropped. A directory two members reach is
+ * listed once.
  */
 export function inspectChainedRoots(rootDir: string = getProjectRoot()): ChainedRootsInspection {
   const root = path.resolve(rootDir);
@@ -524,43 +602,29 @@ export function inspectChainedRoots(rootDir: string = getProjectRoot()): Chained
   const listed = new Set<string>();
 
   const walk = (projectDir: string, prefix: string, ancestors: ReadonlySet<string>, depth: number): void => {
-    const specsDir = aiPathsAt(projectDir).specsDir();
-    if (!pathExists(specsDir)) return;
-    for (const file of listSpecFiles(specsDir)) {
-      let raw: unknown;
-      try {
-        raw = readSpecFile(file);
-      } catch {
-        continue;
-      }
-      // A subsystem spec (has parentSystem) that mounts a child via projectPath.
-      if (!raw || typeof raw !== 'object' || !('parentSystem' in raw)) continue;
-      const { id, projectPath } = raw as { id?: unknown; projectPath?: unknown };
-      if (typeof projectPath !== 'string' || projectPath.trim() === '') continue;
-      const localId = typeof id === 'string' ? id : '?';
-
+    for (const member of memberDeclarationsAt(projectDir)) {
+      const key = prefix ? `${prefix}::${member.alias}` : member.alias;
       let childDir: string;
       try {
-        childDir = path.resolve(projectDir, projectPath);
+        childDir = path.resolve(projectDir, member.path);
       } catch {
-        continue; // malformed projectPath — not a resolvable mount
+        continue; // malformed path — not a resolvable member
       }
+      if (member.problem && !path.isAbsolute(member.path)) continue;
       let reason: ChainedRootSkipReason | undefined;
-      if (projectPathEscapesRoot(projectDir, projectPath, childDir)) reason = 'escapes';
+      if (projectPathEscapesRoot(projectDir, member.path, childDir)) reason = 'escapes';
       else if (ancestors.has(chainDirKey(childDir))) reason = 'cyclic';
       else if (!fs.existsSync(childDir)) reason = 'missing';
       else if (depth >= 32) reason = 'too-deep'; // the bound on chain depth
       if (reason) {
-        const mount = prefix ? qualifyDeclaredId(localId, prefix, true) : localId;
-        inspection.skipped.push({ mount, projectPath, reason });
+        inspection.skipped.push({ mount: key, alias: member.alias, form: member.form, projectPath: member.path, reason });
         continue;
       }
-
-      const key = chainDirKey(childDir);
-      if (listed.has(key)) continue;
-      listed.add(key);
+      const dirKey = chainDirKey(childDir);
+      if (listed.has(dirKey)) continue;
+      listed.add(dirKey);
       inspection.roots.push(path.relative(root, childDir).split(path.sep).join('/'));
-      walk(childDir, prefix ? `${prefix}::${localId}` : localId, new Set([...ancestors, key]), depth + 1);
+      walk(childDir, key, new Set([...ancestors, dirKey]), depth + 1);
     }
   };
 
@@ -569,128 +633,215 @@ export function inspectChainedRoots(rootDir: string = getProjectRoot()): Chained
 }
 
 /**
- * Every chained subproject root beneath a project root, in walk order — the
- * roots half of inspectChainedRoots. Returns [] for a project that chains
- * nothing.
+ * Every member root beneath a project root, in walk order — the roots half of
+ * inspectChainedRoots. Returns [] for a project that declares none.
  */
 export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
   return inspectChainedRoots(rootDir).roots;
 }
 
-/**
- * Collapse a mount subsystem (has projectPath) and its same-id child realization
- * into a single flat external subsystem: the child provides the content, the
- * mount contributes projectPath. Genuine duplicates (both internal or both
- * external) are left intact for the validator to flag.
- */
-function mergeMountRealizations(subs: SubsystemSpec[]): SubsystemSpec[] {
-  const result: SubsystemSpec[] = [];
-  const indexById = new Map<string, number>();
-  for (const sub of subs) {
-    const at = indexById.get(sub.id);
-    if (at === undefined) {
-      indexById.set(sub.id, result.length);
-      result.push(sub);
-      continue;
+// ---------------------------------------------------------------------------
+// References: the positions a spec names other specs in.
+//
+// ONE table of positions drives the scan's binding and the writer's inverse,
+// so the two can never disagree about where a reference lives. The loader
+// rewrites the positions below into in-memory keys; the raw positions
+// (trustedLinks, declared calls, auth sources, type names) stay as written
+// and are only recorded.
+// ---------------------------------------------------------------------------
+
+/** The spec kinds whose references the scan binds. */
+type ReferenceKind = 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' | 'group';
+
+/** Rewrites one reference at one position. */
+type ReferenceMapper = (position: string, value: string) => string;
+
+/** A spec with every bound reference passed through `map` (the spec's own id untouched). */
+function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper): T {
+  switch (kind) {
+    case 'subsystem': {
+      const s = spec as unknown as SubsystemSpec;
+      return {
+        ...s,
+        publicInterfaces: s.publicInterfaces.map((p) => ({
+          ...p,
+          ...(p.component !== undefined ? { component: map('publicInterfaces', p.component) } : {}),
+          ...(p.interface !== undefined ? { interface: map('publicInterfaces', p.interface) } : {}),
+          ...(p.typeDef !== undefined ? { typeDef: map('publicInterfaces', p.typeDef) } : {}),
+          ...(p.from !== undefined ? { from: map('publicInterfaces', p.from) } : {}),
+          ...(p.consumers ? { consumers: p.consumers.map((c) => map('publicInterfaces', c)) } : {}),
+        })),
+        ...(s.lifecycle ? { lifecycle: s.lifecycle.map((le) => ({ ...le, component: map('lifecycle', le.component) })) } : {}),
+      } as unknown as T;
     }
-    const prev = result[at];
-    const prevExternal = !!prev.projectPath;
-    const subExternal = !!sub.projectPath;
-    if (prevExternal !== subExternal) {
-      const mount = prevExternal ? prev : sub;
-      const child = prevExternal ? sub : prev;
-      result[at] = { ...child, projectPath: mount.projectPath };
-    } else {
-      result.push(sub);
+    case 'component': {
+      const c = spec as unknown as ComponentSpec;
+      return {
+        ...c,
+        subsystem: map('subsystem', c.subsystem),
+        owns: c.owns.map((o) => map('owns', o)),
+        dependsOn: c.dependsOn.map((d) => map('dependsOn', d)),
+        ...(c.dispatch ? { dispatch: c.dispatch.map((b) => ({ ...b, component: map('dispatch', b.component) })) } : {}),
+        ...(c.mounts ? { mounts: c.mounts.map((m) => ({ ...m, portal: map('mounts', m.portal) })) } : {}),
+      } as unknown as T;
     }
+    case 'interface': {
+      const i = spec as unknown as InterfaceSpec;
+      return { ...i, component: map('contract', i.component) } as unknown as T;
+    }
+    case 'implementation': {
+      const impl = spec as unknown as ImplementationSpec;
+      return {
+        ...impl,
+        contract: map('contract', impl.contract),
+        methods: impl.methods.map((m) => ({
+          ...m,
+          narrative: m.narrative.map((step) => (step.targetComponent !== undefined
+            ? { ...step, targetComponent: map('narrative', step.targetComponent) }
+            : step)),
+        })),
+      } as unknown as T;
+    }
+    case 'type': {
+      const t = spec as unknown as TypeSpec;
+      return {
+        ...t,
+        ...(t.subsystem !== undefined ? { subsystem: map('subsystem', t.subsystem) } : {}),
+        ...(t.group !== undefined ? { group: map('group', t.group) } : {}),
+      } as unknown as T;
+    }
+    case 'group':
+      return spec;
   }
-  return result;
 }
 
-function stripNamespaceFromSubsystem(spec: SubsystemSpec, prefix: string): SubsystemSpec {
-  // MUST mirror the loader (scanSpecsForProject step 2): an external
-  // (projectPath) subsystem's members are qualified with the subsystem's own
-  // qualified id, not with its surrounding namespace — so they relativize
-  // against that same prefix. Deriving both from the subsystem id's namespace
-  // left a root-mounted external subsystem's members fully qualified on save,
-  // which the writer schema then refused (the lock-blocking asymmetry).
-  // A BARE member is already in load form (a freshly constructed spec that
-  // never went through scan qualification) and passes through untouched —
-  // subsystem members bind the subsystem's OWN components, never cross-tree.
-  const memberPrefix = spec.projectPath ? spec.id : prefix;
-  const relMember = (id: string): string => (id.includes('::') ? relativizeId(id, memberPrefix) : id);
-  const relPeer = (id: string): string => (id.includes('::') ? relativizeId(id, prefix) : id);
-  return {
-    ...spec,
-    id: relativizeId(spec.id, prefix),
-    publicInterfaces: spec.publicInterfaces.map(pi => ({
-      ...pi,
-      // A re-export names a peer's item, written relative to the namespace the
-      // subsystem is declared in (the loader's inverse), not its members'.
-      component: pi.component ? (pi.from ? relPeer(pi.component) : relMember(pi.component)) : undefined,
-      interface: pi.interface ? (pi.from ? relPeer(pi.interface) : relMember(pi.interface)) : undefined,
-      ...(pi.typeDef ? { typeDef: pi.from ? relPeer(pi.typeDef) : relMember(pi.typeDef) } : {}),
-      ...(pi.from ? { from: relPeer(pi.from) } : {}),
-      // consumers name SUBSYSTEMS — peers of this one, so they are relative to
-      // the namespace the subsystem itself is declared in, never its members'.
-      ...(pi.consumers ? { consumers: pi.consumers.map(c => (c.includes('::') ? relativizeId(c, prefix) : c)) } : {}),
-    })),
-    lifecycle: spec.lifecycle?.map(le => ({
-      ...le,
-      component: relMember(le.component),
-    })),
-  };
+/** A type string's identifiers that carry `::` (a leading `::` and `super::` included). */
+function qualifiedTypeNames(typeStr: string | undefined): string[] {
+  const out: string[] = [];
+  for (const m of (typeStr ?? '').matchAll(/(?:^|[^A-Za-z0-9_:-])((?:::)?[A-Za-z0-9_][A-Za-z0-9_-]*(?:::[A-Za-z0-9_][A-Za-z0-9_-]*)+)/g)) {
+    if (m[1].includes('::')) out.push(m[1]);
+  }
+  return out;
 }
 
-function stripNamespaceFromComponent(spec: ComponentSpec, prefix: string): ComponentSpec {
-  return {
-    ...spec,
-    id: relativizeId(spec.id, prefix),
-    subsystem: relativizeId(spec.subsystem, prefix),
-    owns: spec.owns.map(o => relativizeId(o, prefix)),
-    dependsOn: spec.dependsOn.map(d => relativizeId(d, prefix)),
-    dispatch: spec.dispatch?.map(b => ({
-      ...b,
-      component: relativizeId(b.component, prefix),
-    })),
-    mounts: spec.mounts?.map(m => ({
-      ...m,
-      portal: relativizeId(m.portal, prefix),
-    })),
+/** The references a spec names in positions the loader leaves raw — recorded only when they carry `::`. */
+function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; value: string }[] {
+  const out: { position: string; value: string }[] = [];
+  const add = (position: string, value: string | undefined): void => {
+    if (value && value.includes('::')) out.push({ position, value });
   };
+  switch (kind) {
+    case 'subsystem':
+      for (const link of (spec as SubsystemSpec).trustedLinks ?? []) add('trustedLinks', link.subsystem);
+      break;
+    case 'interface':
+      for (const m of (spec as InterfaceSpec).methods) {
+        qualifiedTypeNames(m.returns).forEach((t) => add('type', t));
+        m.params?.forEach((p) => qualifiedTypeNames(p.type).forEach((t) => add('type', t)));
+      }
+      break;
+    case 'implementation':
+      for (const m of (spec as ImplementationSpec).methods) {
+        for (const entry of m.calls ?? []) add('calls', parseDeclaredCall(entry)?.compId);
+        for (const step of m.narrative) {
+          const source = (step as { auth?: { from?: string } }).auth?.from;
+          if (typeof source === 'string' && source.startsWith(COMPONENT_AUTH_SOURCE)) add('auth', source.slice(COMPONENT_AUTH_SOURCE.length));
+        }
+      }
+      break;
+    case 'type':
+      for (const f of (spec as TypeSpec).fields) qualifiedTypeNames(f.type).forEach((t) => add('type', t));
+      break;
+    default:
+      break;
+  }
+  return out;
 }
 
-function stripNamespaceFromInterface(spec: InterfaceSpec, prefix: string): InterfaceSpec {
-  return {
-    ...spec,
-    id: relativizeId(spec.id, prefix),
-    component: relativizeId(spec.component, prefix),
-  };
+/** Each qualified name inside a type string passed through `map`, the rest of the string untouched. */
+function mapTypeNames(typeStr: string | undefined, map: ReferenceMapper): string | undefined {
+  if (typeStr === undefined) return undefined;
+  return typeStr.replace(
+    /(^|[^A-Za-z0-9_:-])((?:::)?[A-Za-z0-9_][A-Za-z0-9_-]*(?:::[A-Za-z0-9_][A-Za-z0-9_-]*)+)/g,
+    (_m, lead: string, name: string) => `${lead}${map('type', name)}`,
+  );
 }
 
-function stripNamespaceFromImplementation(spec: ImplementationSpec, prefix: string): ImplementationSpec {
-  return {
-    ...spec,
-    id: relativizeId(spec.id, prefix),
-    contract: relativizeId(spec.contract, prefix),
-    methods: spec.methods.map(m => ({
-      ...m,
-      narrative: m.narrative.map(step => ({
-        ...step,
-        targetComponent: step.targetComponent ? relativizeId(step.targetComponent, prefix) : undefined,
-      })),
-    })),
-  };
+/**
+ * A component whose `dependsOn` and `owns` name each target once, in
+ * first-written order. The same object when neither list repeats a target.
+ */
+function withUniqueTargets(spec: ComponentSpec): ComponentSpec {
+  const unique = (list: string[] | undefined): string[] | undefined => (list ? [...new Set(list)] : list);
+  const dependsOn = unique(spec.dependsOn);
+  const owns = unique(spec.owns);
+  if (dependsOn?.length === spec.dependsOn?.length && owns?.length === spec.owns?.length) return spec;
+  return { ...spec, dependsOn, owns } as ComponentSpec;
+}
+
+/**
+ * A spec with every reference at a raw position (rawReferences) passed through
+ * `map` — the inverse table of rawReferences, used where a raw reference is
+ * rewritten into its canonical text. An interface method's display signature
+ * follows its parameter and return types, token by token.
+ */
+function mapRawReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper): T {
+  switch (kind) {
+    case 'subsystem': {
+      const s = spec as unknown as SubsystemSpec;
+      return { ...s, trustedLinks: (s.trustedLinks ?? []).map((l) => ({ ...l, subsystem: map('trustedLinks', l.subsystem) })) } as unknown as T;
+    }
+    case 'interface': {
+      const i = spec as unknown as InterfaceSpec;
+      return {
+        ...i,
+        methods: i.methods.map((m) => ({
+          ...m,
+          ...(m.signature !== undefined ? { signature: mapTypeNames(m.signature, map)! } : {}),
+          ...(m.returns !== undefined ? { returns: mapTypeNames(m.returns, map)! } : {}),
+          ...(m.params ? { params: m.params.map((p) => ({ ...p, type: mapTypeNames(p.type, map)! })) } : {}),
+        })),
+      } as unknown as T;
+    }
+    case 'implementation': {
+      const impl = spec as unknown as ImplementationSpec;
+      return {
+        ...impl,
+        methods: impl.methods.map((m) => ({
+          ...m,
+          ...(m.calls ? {
+            calls: m.calls.map((entry) => {
+              const call = parseDeclaredCall(entry);
+              const next = call ? map('calls', call.compId) : undefined;
+              return call && next !== call.compId ? `${next}.${call.methodName}` : entry;
+            }),
+          } : {}),
+          narrative: m.narrative.map((step) => {
+            const source = (step as { auth?: { from?: string } }).auth?.from;
+            if (typeof source !== 'string' || !source.startsWith(COMPONENT_AUTH_SOURCE)) return step;
+            const auth = (step as { auth: Record<string, unknown> }).auth;
+            return { ...step, auth: { ...auth, from: `${COMPONENT_AUTH_SOURCE}${map('auth', source.slice(COMPONENT_AUTH_SOURCE.length))}` } };
+          }),
+        })),
+      } as unknown as T;
+    }
+    case 'type': {
+      const t = spec as unknown as TypeSpec;
+      return { ...t, fields: t.fields.map((f) => ({ ...f, type: mapTypeNames(f.type, map)! })) } as unknown as T;
+    }
+    default:
+      return spec;
+  }
 }
 
 /**
  * A chained subproject's implementation file paths (sourcePath, each method's
  * sourcePath, simPath) are relative to ITS root: the loader reads them against
- * it, and the child's own gate checks them there.
+ * it, and the member's own gate checks them there.
  * A path authored through a parent — relative to the authoring root — that
- * lands inside the mounted child is re-expressed against the child root. Any
- * other path is taken as already child-relative (as every loaded one is) and
- * kept verbatim, so load → save stays a fixpoint.
+ * lands inside the member is re-expressed against the member root. Any other
+ * path is taken as already member-relative (as every loaded one is) and kept
+ * verbatim, so load → save stays a fixpoint.
  */
 function childRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string, childRoot: string): ImplementationSpec {
   const reexpress = (p: string): string => {
@@ -707,19 +858,226 @@ function childRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string,
   };
 }
 
-function stripNamespaceFromType(spec: TypeSpec, prefix: string): TypeSpec {
+// ---------------------------------------------------------------------------
+// The scan without position: its per-root working state and the pure steps of
+// its three phases (tables, then binding). The workspace owns the I/O half.
+// ---------------------------------------------------------------------------
+
+/** One reference with `::` set aside in phase one, bound in phase three. */
+interface PendingReference {
+  kind: ReferenceKind;
+  specKey: string;
+  position: string;
+  authored: string;
+  /** A position the loader leaves raw: recorded, never rewritten. */
+  raw: boolean;
+}
+
+/** One root as the scan works on it. */
+interface RawRoot {
+  record: ScannedProjectRoot;
+  /** The alias path from the bound root ('' for it): the key of a member whose id is taken or missing. */
+  aliasPath: string;
+  dir: string;
+  /** Its specs: as written in phase one, keyed and bound after. */
+  index: SpecIndex;
+  /** Its legacy L1 mounts, with their files. */
+  mounts: { spec: SubsystemSpec; file: string }[];
+  members: MemberDeclarationRead[];
+  /** Each followed member's alias → its key. */
+  memberKeys: Map<string, string>;
+  rawSystem: SystemSpec | null;
+  localSubsystems: Set<string>;
+  pending: PendingReference[];
+}
+
+function emptyExportTable(owner: string, level: 'subsystem' | 'project'): ResolvedExportTable {
+  return { owner, level, entries: [], problems: [] };
+}
+
+/** A root's effective project id, when its configuration yields one. */
+function idOf(raw: RawRoot): string | undefined {
+  return raw.record.config ? effectiveProjectId(raw.record.config) ?? undefined : undefined;
+}
+
+/** A key's local id in the project keyed `project`. */
+function localOf(project: string, key: string): string {
+  return project && key.startsWith(`${project}::`) ? key.slice(project.length + 2) : key;
+}
+
+/** The first alias a root declares for a producer key. */
+function aliasFor(raw: RawRoot, producer: string): string | undefined {
+  for (const [alias, key] of raw.record.aliases) if (key === producer) return alias;
+  return undefined;
+}
+
+/** The in-memory key an export entry binds to: its component, or its type. */
+function exportedKey(entry: ResolvedExport): string | undefined {
+  return entry.kind === 'type' ? entry.typeDef : entry.component;
+}
+
+/** A root as reference reading sees it. */
+function readableOf(raw: RawRoot): ReadableProject {
+  const id = idOf(raw);
   return {
-    ...spec,
-    id: relativizeId(spec.id, prefix),
-    subsystem: spec.subsystem ? relativizeId(spec.subsystem, prefix) : undefined,
+    namespace: raw.record.namespace,
+    ...(raw.record.parent !== undefined ? { parent: raw.record.parent } : {}),
+    ...(id !== undefined ? { id } : {}),
+    aliases: raw.record.aliases,
+    declaredAliases: new Set([
+      ...raw.members.map((m) => m.alias),
+      ...(raw.record.config ? Object.keys(raw.record.config.externals ?? {}) : []),
+    ]),
+    subsystems: raw.localSubsystems,
   };
 }
 
-function stripNamespaceFromGroup(spec: GroupSpec, prefix: string): GroupSpec {
+/**
+ * A root's own L0 keyed into its key: `from` against its subsystems (an alias
+ * of a member or external stays as written), `component`, `interface` and
+ * `typeDef` against their source — an item re-exported from another project is
+ * a public name there and stays as written.
+ */
+function keyedSystem(system: SystemSpec | null, key: string, subsystems: ReadonlySet<string>): SystemSpec | null {
+  if (!system || !key) return system;
   return {
-    ...spec,
-    id: relativizeId(spec.id, prefix),
+    ...system,
+    publicInterfaces: system.publicInterfaces?.map((e) => {
+      const source = e.from ?? e.subsystem;
+      const fromProject = source !== undefined && !subsystems.has(source);
+      const item = (value: string | undefined): string | undefined =>
+        value === undefined || fromProject || value.includes('::') ? value : keyIn(key, value);
+      const src = (value: string | undefined): string | undefined =>
+        value === undefined || !subsystems.has(value) ? value : keyIn(key, value);
+      return {
+        ...e,
+        ...(e.from !== undefined ? { from: src(e.from) } : {}),
+        ...(e.subsystem !== undefined ? { subsystem: src(e.subsystem) } : {}),
+        ...(e.component !== undefined ? { component: item(e.component) } : {}),
+        ...(e.interface !== undefined ? { interface: item(e.interface) } : {}),
+        ...(e.typeDef !== undefined ? { typeDef: item(e.typeDef) } : {}),
+      };
+    }),
   };
+}
+
+/**
+ * Phase two: every root's L1 tables and L0 table through the pure export
+ * resolver, each after the producers its L0 re-exports from; a producer met
+ * again on its own resolution path is handed on as null (a named cycle).
+ */
+function resolveFamilyTables(raws: RawRoot[]): void {
+  const byKey = new Map(raws.map((r) => [r.record.namespace, r] as const));
+  const done = new Set<string>();
+  const resolving = new Set<string>();
+  const resolve = (raw: RawRoot): ResolvedExportTable | null => {
+    const key = raw.record.namespace;
+    if (done.has(key)) return raw.record.exports;
+    if (resolving.has(key)) return null;
+    resolving.add(key);
+    try {
+      const { subsystems, components, interfaces, types } = raw.index;
+      // Step 10: the root's L1 tables.
+      const subsystemTables = resolveSubsystemTables(subsystems, components, interfaces, types);
+      // Step 11: the L0 table, after every producer its entries name.
+      const producerTables = new Map<string, ResolvedExportTable | null>();
+      const audienceOf = new Map<string, string>();
+      for (const e of raw.record.system?.publicInterfaces ?? []) {
+        const source = e.from ?? e.subsystem;
+        const producerKey = source !== undefined ? raw.record.aliases.get(source) : undefined;
+        if (producerKey === undefined || producerTables.has(producerKey)) continue;
+        const producer = byKey.get(producerKey);
+        producerTables.set(producerKey, producer ? resolve(producer) : null);
+        audienceOf.set(producerKey, 'project');
+      }
+      raw.record.subsystemExports = subsystemTables;
+      raw.record.exports = resolveProjectTable(raw.record.system, subsystems, components, interfaces, types, subsystemTables, {
+        namespace: key,
+        aliases: raw.record.aliases,
+        producerTables,
+        audienceOf,
+      });
+      done.add(key);
+      return raw.record.exports;
+    } finally {
+      resolving.delete(key);
+    }
+  };
+  raws.forEach((raw) => resolve(raw));
+}
+
+/**
+ * Step 13: bind one reference with `::` written in `raw` — local first, then
+ * by form — and say what it bound to, the value the loader keeps in memory,
+ * and the text the writer would emit for it.
+ */
+function bindAuthored(
+  raw: RawRoot,
+  raws: RawRoot[],
+  readables: ReadableProject[],
+  authored: string,
+): { value: string; reference?: Omit<AuthoredReference, 'specId' | 'position'> } {
+  const key = raw.record.namespace;
+  const landing = landReference(readables, authored, key);
+  if (landing.kind === 'outside' || landing.kind === 'unresolved') {
+    return { value: authored, reference: { authored, form: landing.form, binding: landing.kind, resolved: authored } };
+  }
+  // A subsystem segment of the referring project qualifies a local item.
+  if (!landing.form) return { value: keyIn(key, authored) };
+  const producer = raws.find((r) => r.record.namespace === landing.project)!;
+  const target = keyIn(landing.project, landing.name);
+  const entries = producer.record.exports.entries;
+  if (landing.form === 'alias') {
+    const entry = entries.find((e) => e.publicName === landing.name);
+    const resolved = (entry && exportedKey(entry)) ?? target;
+    return {
+      value: resolved,
+      reference: {
+        authored, form: 'alias', binding: entry ? 'exported' : 'unexported', resolved, producer: landing.project,
+        ...(entry ? { publicName: entry.publicName } : {}), rewrite: authored,
+      },
+    };
+  }
+  if (landing.project === key) {
+    return { value: target, reference: { authored, form: landing.form, binding: 'local', resolved: target, producer: key, rewrite: landing.name } };
+  }
+  const alias = aliasFor(raw, landing.project);
+  const entry = entries.find((e) => e.publicName === landing.name && exportedKey(e) === target)
+    ?? entries.find((e) => exportedKey(e) === target);
+  const aliasText = alias ?? idOf(producer);
+  const binding: ReferenceBinding = alias !== undefined ? (entry ? 'exported' : 'unexported') : 'undeclared';
+  return {
+    value: target,
+    reference: {
+      authored, form: landing.form, binding, resolved: target, producer: landing.project,
+      ...(entry && binding === 'exported' ? { publicName: entry.publicName } : {}),
+      ...(aliasText ? { rewrite: `${aliasText}::${entry?.publicName ?? landing.name}` } : {}),
+    },
+  };
+}
+
+/** Phase three at one root: bind every reference set aside, record it, and put the bound value in the spec. */
+function bindRootReferences(raw: RawRoot, raws: RawRoot[], readables: ReadableProject[]): void {
+  const bound = new Map<string, Map<string, string>>();
+  for (const p of raw.pending) {
+    const { value, reference } = bindAuthored(raw, raws, readables, p.authored);
+    if (reference) raw.record.authoredReferences.push({ specId: p.specKey, position: p.position, ...reference });
+    if (p.raw) continue;
+    const perSpec = bound.get(p.specKey) ?? new Map<string, string>();
+    perSpec.set(`${p.position}|${p.authored}`, value);
+    bound.set(p.specKey, perSpec);
+  }
+  if (bound.size === 0) return;
+  const rebind = <T extends { id: string }>(kind: ReferenceKind, spec: T): T => {
+    const perSpec = bound.get(spec.id);
+    return perSpec ? mapSpecReferences(kind, spec, (position, value) => perSpec.get(`${position}|${value}`) ?? value) : spec;
+  };
+  const index = raw.index;
+  index.subsystems = index.subsystems.map((s) => rebind('subsystem', s));
+  index.components = index.components.map((c) => rebind('component', c));
+  index.interfaces = index.interfaces.map((i) => rebind('interface', i));
+  index.implementations = index.implementations.map((m) => rebind('implementation', m));
+  index.types = index.types.map((t) => rebind('type', t));
 }
 
 // ---------------------------------------------------------------------------
@@ -882,7 +1240,7 @@ type StoredSpec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | I
 
 /**
  * ONE change a write made to a stored spec, addressed by a dotted path with
- * names and indexes: `methods.createChainedSubsystem.narrative.step 7.type`,
+ * names and indexes: `methods.createMember.narrative.step 7.type`,
  * `dependsOn`, `description`.
  */
 export interface SpecChange {
@@ -943,6 +1301,14 @@ export interface SpecChangeReport {
    * The write that creates the collision is the one that reports it.
    */
   testsToRevisit: TestsToRevisit[];
+  /**
+   * Keys the stored document on disk carries that its level's schema does not
+   * know — read from the raw file, since the parse already discarded them —
+   * which this write drops (or, on a dry run, would drop), each as
+   * `path: value` (`status: draft` on an L0). Absent when there are none, and
+   * on a write that changes nothing, because nothing is re-serialized then.
+   */
+  strippedKeys?: string[];
 }
 
 /**
@@ -1727,12 +2093,16 @@ export class SpecWorkspace {
   private cachedSpecDirs: string[] = [];
   private cachedSignature: string | null = null;
   private lastSignatureCheckMs = 0;
-  private rootSubsystems = new Set<string>();
   private scanVisitedSpecDirs: string[] = [];
   private scanVisitedConfigFiles: string[] = [];
   private cachedConfigFiles: string[] = [];
-  private scanRoots: ScannedProjectRoot[] = [];
   private cachedRoots: ScannedProjectRoot[] = [];
+  private cachedRawRoots: RawRoot[] = [];
+  private cachedReadables: ReadableProject[] = [];
+  private cachedOwners: Map<string, string> | null = null;
+  private carryIndex: Map<string, string[]> | null = null;
+  /** Set while normalizeReferences writes: every reference in its canonical form, no authored text carried. */
+  private carryDisabled = false;
   loaderIssues: ValidationIssue[] = [];
 
   constructor(rootDir: string) {
@@ -1756,9 +2126,12 @@ export class SpecWorkspace {
     this.cachedSpecDirs = [];
     this.cachedConfigFiles = [];
     this.cachedRoots = [];
+    this.cachedRawRoots = [];
+    this.cachedReadables = [];
+    this.cachedOwners = null;
+    this.carryIndex = null;
     this.cachedSignature = null;
     this.lastSignatureCheckMs = 0;
-    this.rootSubsystems.clear();
   }
 
   // -------------------------------------------------------------------------
@@ -1779,18 +2152,20 @@ export class SpecWorkspace {
     }
 
     this.loaderIssues = [];
-    this.rootSubsystems.clear();
     this.cachedRecursive = recursive;
     this.scanVisitedSpecDirs = [];
     this.scanVisitedConfigFiles = [];
-    this.scanRoots = [];
-    const visited = new Set<string>([chainDirKey(this.rootDir)]);
 
     const maxDepth = typeof recursive === 'number' ? recursive : (recursive ? Infinity : 0);
-    this.cachedIndex = this.scanSpecsForProject(this.rootDir, '', visited, maxDepth, 0);
+    const scan = this.scanFamily(maxDepth);
+    this.cachedIndex = scan.index;
+    this.cachedRoots = scan.raws.map((raw) => raw.record);
+    this.cachedReadables = scan.readables;
+    this.cachedRawRoots = scan.raws;
+    this.carryIndex = null;
+    this.cachedOwners = null;
     this.cachedSpecDirs = this.scanVisitedSpecDirs;
     this.cachedConfigFiles = this.scanVisitedConfigFiles;
-    this.cachedRoots = this.scanRoots;
     this.cachedSignature = computeSpecTreeSignature(this.cachedSpecDirs, this.cachedConfigFiles);
     this.lastSignatureCheckMs = Date.now();
     return this.cachedIndex;
@@ -1800,124 +2175,250 @@ export class SpecWorkspace {
    * The id a scan-time loader issue is anchored to: the refused spec's own id
    * when the file got far enough to carry one, else its name on disk (the
    * containing directory in the nested layout, where every file is `.index` /
-   * `.interface`), qualified into the mount's namespace exactly as the loader
-   * qualifies the spec itself — so scoping a validate to a mount keeps it.
+   * `.interface`), keyed under its project exactly as the scan keys the spec
+   * itself — so scoping a validate to a member keeps it.
    */
-  private loaderIssueSpecId(file: string, rawId: string | undefined, namespacePrefix: string): string {
+  private loaderIssueSpecId(file: string, rawId: string | undefined, key: string): string {
     const stem = path.basename(file, '.yaml');
     const local = rawId ?? (stem.startsWith('.') ? path.basename(path.dirname(file)) : stem);
-    return namespacePrefix ? qualifyId(local, namespacePrefix, this.rootSubsystems) : local;
+    return keyIn(key, local);
   }
 
-  private scanSpecsForProject(
-    projectDir: string,
-    namespacePrefix: string,
-    visitedDirs: Set<string>,
-    maxDepth: number,
-    currentDepth: number,
-    parentNamespace?: string,
-    mountAlias?: string,
-  ): SpecIndex {
+  /**
+   * ispec_index.listProjectRoots, uncached — the scan without position.
+   * Phase one reads every root (the bound root and each member it declares,
+   * either form) and keys its declarations by project id; phase two resolves
+   * every root's export tables through the pure export resolver, producers
+   * first; phase three binds every reference with `::` through the referring
+   * root's alias table. Nothing is folded into another root's namespace.
+   */
+  private scanFamily(maxDepth: number): { index: SpecIndex; raws: RawRoot[]; readables: ReadableProject[] } {
+    // Steps 1-8: phase one, every root read and keyed, members followed.
+    const raws: RawRoot[] = [];
+    this.readRoot(this.rootDir, null, undefined, new Set([chainDirKey(this.rootDir)]), maxDepth, 0, raws, new Set());
+    raws.forEach((raw) => this.keyRoot(raw));
+    raws.forEach((raw) => this.bindAliases(raw, raws));
+    const readables = raws.map((raw) => readableOf(raw));
+    // Steps 9-11: phase two, every root's tables, producers before consumers.
+    resolveFamilyTables(raws);
+    // Steps 12-13: phase three, every reference with `::` bound.
+    raws.forEach((raw) => bindRootReferences(raw, raws, readables));
+    // Steps 14-15: the index, every root's specs under their keys.
     const index = emptyIndex();
-    const projectPaths = aiPathsAt(projectDir);
+    for (const raw of raws) {
+      index.subsystems.push(...raw.index.subsystems);
+      index.components.push(...raw.index.components);
+      index.interfaces.push(...raw.index.interfaces);
+      index.implementations.push(...raw.index.implementations);
+      index.types.push(...raw.index.types);
+      index.groups.push(...raw.index.groups);
+      for (const kind of Object.keys(index.paths) as (keyof SpecIndex['paths'])[]) Object.assign(index.paths[kind], raw.index.paths[kind]);
+    }
+    return { index, raws, readables };
+  }
 
-    // The project root this walk is at, recorded for the project graph
-    // (ispec_index.listProjectRoots): bound root first, then members in walk order.
-    const root = this.recordProjectRoot(projectDir, namespacePrefix, parentNamespace, mountAlias);
+  /**
+   * Phase one at one root: record it, key it, read its configuration, its L0,
+   * its member declarations and every spec document as written, then follow
+   * each member it declares (containment decided against THIS root).
+   */
+  private readRoot(
+    dir: string,
+    parent: RawRoot | null,
+    member: MemberDeclarationRead | undefined,
+    ancestors: ReadonlySet<string>,
+    maxDepth: number,
+    depth: number,
+    raws: RawRoot[],
+    taken: Set<string>,
+  ): void {
+    // Step 2: the root's configuration, through its own binding.
+    const config = configAt(dir);
+    this.scanVisitedConfigFiles.push(aiPathsAt(dir).projectConfig());
+    const id = config ? effectiveProjectId(config) : null;
+    // Step 5: the key — '' for the bound root, else the effective id unless a
+    // member already holds it, then the alias path.
+    const aliasPath = parent && member ? keyIn(parent.aliasPath, member.alias) : '';
+    const key = !parent ? '' : (id && !taken.has(id) ? id : aliasPath);
+    if (key) taken.add(key);
+    if (!parent && id) taken.add(id);
+    const record: ScannedProjectRoot = {
+      namespace: key,
+      ...(parent ? { parent: parent.record.namespace } : {}),
+      ...(member ? { mountAlias: member.alias, mountForm: member.form } : {}),
+      legacyMount: member?.legacyMount ?? null,
+      ...(member?.description !== undefined ? { memberDescription: member.description } : {}),
+      directory: path.resolve(dir),
+      system: null,
+      config,
+      aliases: new Map(),
+      exports: emptyExportTable(key, 'project'),
+      subsystemExports: new Map(),
+      specIds: [],
+      authoredReferences: [],
+      problems: [],
+    };
+    const raw: RawRoot = {
+      record, aliasPath, dir: path.resolve(dir), index: emptyIndex(), mounts: [], members: [],
+      memberKeys: new Map(), rawSystem: null, localSubsystems: new Set(), pending: [],
+    };
+    raws.push(raw);
+    // Step 4: every spec document as written, and the root's own L0.
+    this.readRootSpecs(raw);
+    // Step 3: the member declarations — `members`, then legacy mounts.
+    raw.members = memberDeclarationsOf(config, raw.mounts);
+    if (depth >= maxDepth) return;
+    // Steps 7-8: follow each member.
+    for (const decl of raw.members) {
+      const childDir = this.followableMember(raw, decl, ancestors);
+      if (!childDir) continue;
+      const before = raws.length;
+      this.readRoot(childDir, raw, decl, new Set([...ancestors, chainDirKey(childDir)]), maxDepth, depth + 1, raws, taken);
+      raw.memberKeys.set(decl.alias, raws[before].record.namespace);
+    }
+  }
 
+  /**
+   * Whether a member can be followed, recording why not: a declaration with a
+   * problem, an escaping path, a directory already on the walk, a missing one.
+   * Every loader issue carries the member's key.
+   */
+  private followableMember(raw: RawRoot, decl: MemberDeclarationRead, ancestors: ReadonlySet<string>): string | null {
+    const memberKey = keyIn(raw.record.namespace, decl.alias);
+    const by = decl.form === 'mount' ? 'subsystem' : 'member';
+    const absolute = path.isAbsolute(decl.path) || path.win32.isAbsolute(decl.path);
+    if (decl.problem && !absolute) {
+      if (decl.problem.includes('`externals`')) {
+        raw.record.problems.push({ kind: 'alias-conflict', id: decl.alias, projects: [raw.record.namespace], detail: decl.problem });
+      }
+      return null;
+    }
+    const childDir = path.resolve(raw.dir, decl.path);
+    if (projectPathEscapesRoot(raw.dir, decl.path, childDir)) {
+      this.loaderIssues.push({
+        severity: 'error',
+        code: 'PROJECTPATH_ESCAPE',
+        message: `Subproject path "${decl.path}" declared by ${by} "${memberKey}" escapes the root of the project declaring it, "${raw.dir}" (resolves to "${childDir}"); absolute, ../-escaping and link-escaping paths are rejected. Skipping this subproject.`,
+        specId: memberKey,
+      });
+      return null;
+    }
+    if (ancestors.has(chainDirKey(childDir))) {
+      this.loaderIssues.push({
+        severity: 'error',
+        code: 'CIRCULAR_SUBPROJECT_REFERENCE',
+        message: `Circular reference detected: ${by === 'subsystem' ? 'Subsystem' : 'Member'} "${memberKey}" refers to subproject "${childDir}" which is already loaded.`,
+        specId: memberKey,
+      });
+      return null;
+    }
+    if (!fs.existsSync(childDir)) {
+      this.loaderIssues.push({
+        severity: 'error',
+        code: 'SUBPROJECT_NOT_FOUND',
+        message: `Subproject directory "${childDir}" declared by ${by} "${memberKey}" does not exist.`,
+        specId: memberKey,
+      });
+      raw.record.problems.push({
+        kind: 'member-absent',
+        id: decl.alias,
+        projects: [raw.record.namespace],
+        detail: `the member "${decl.alias}" declared at "${decl.path}" has no directory there`,
+      });
+      return null;
+    }
+    return childDir;
+  }
+
+  /** Read every spec document of one root as written; a legacy mount is a declaration, never a subsystem. */
+  private readRootSpecs(raw: RawRoot): void {
+    const projectPaths = aiPathsAt(raw.dir);
+    const key = raw.record.namespace;
     const specsDir = projectPaths.specsDir();
     // Track every visited specs dir (even absent ones, so their later creation
     // is picked up) for the freshness signature.
     this.scanVisitedSpecDirs.push(specsDir);
-    if (!pathExists(specsDir)) return index;
-
-    const files = listSpecFiles(specsDir);
+    if (!pathExists(specsDir)) return;
     const systemYaml = path.normalize(projectPaths.specsSystem());
-
-    const localSubprojects: { subsystemId: string; projectPath: string }[] = [];
-
-    for (const file of files) {
-      const normFile = path.normalize(file);
-      if (normFile === systemYaml) continue;
-
+    if (pathExists(systemYaml)) {
+      try {
+        raw.rawSystem = SystemSpecSchema.parse(readSpecFile(systemYaml));
+      } catch {
+        raw.rawSystem = null; // the bound root's L0 is reported by the loader's own read
+      }
+    }
+    const index = raw.index;
+    // The first declaration of a key in one root stays; a second is a duplicate.
+    const keep = <T extends { id: string }>(kind: keyof SpecIndex['paths'], list: T[], spec: T, file: string): void => {
+      const first = index.paths[kind][spec.id];
+      if (first !== undefined) {
+        raw.record.problems.push({
+          kind: 'duplicate-spec',
+          id: keyIn(key, spec.id),
+          projects: [key],
+          detail: `"${spec.id}" is declared by two ${kind} files of one project: "${first}" and "${file}"`,
+        });
+        return;
+      }
+      list.push(spec);
+      index.paths[kind][spec.id] = file;
+    };
+    for (const file of listSpecFiles(specsDir)) {
+      if (path.normalize(file) === systemYaml) continue;
       let detectedType = 'spec';
-      // The refused spec's own id, once the file got far enough to have one. An
-      // issue anchored to the FILE STEM instead is unplaceable: in the nested
-      // layout every stem is `.index`, and no scope filter can map a bare stem to
-      // the mount it came from — so validating a parent scoped to a mount
-      // silently dropped that mount's schema errors.
+      // The refused spec's own id, once the file got far enough to have one.
       let rawId: string | undefined;
       try {
-        const raw = readSpecFile(file);
-        if (raw === null || typeof raw !== 'object') {
+        const doc = readSpecFile(file);
+        if (doc === null || typeof doc !== 'object') {
           this.loaderIssues.push({
             severity: 'error',
             code: 'INVALID_YAML',
             message: `Spec file "${file}" is not a valid YAML object or is empty.`,
-            specId: this.loaderIssueSpecId(file, undefined, namespacePrefix),
+            specId: this.loaderIssueSpecId(file, undefined, key),
           });
           continue;
         }
-        const idField = (raw as { id?: unknown }).id;
+        const idField = (doc as { id?: unknown }).id;
         if (typeof idField === 'string' && idField) rawId = idField;
-
-        if ('parentSystem' in raw) {
+        if ('parentSystem' in doc) {
           detectedType = 'subsystem';
-          const parsed = SubsystemSpecSchema.parse(raw);
-          if (currentDepth === 0) {
-            this.rootSubsystems.add(parsed.id);
-          }
-          if (parsed.projectPath) {
-            localSubprojects.push({
-              subsystemId: parsed.id,
-              projectPath: parsed.projectPath,
-            });
-          }
-          index.subsystems.push(parsed);
-          index.paths.subsystem[parsed.id] = file;
-        } else if ('componentType' in raw) {
+          const parsed = SubsystemSpecSchema.parse(doc);
+          if (parsed.projectPath && parsed.projectPath.trim() !== '') raw.mounts.push({ spec: parsed, file });
+          else keep('subsystem', index.subsystems, parsed, file);
+        } else if ('componentType' in doc) {
           detectedType = 'component';
-          const parsed = ComponentSpecSchema.parse(raw);
-          index.components.push(parsed);
-          index.paths.component[parsed.id] = file;
-        } else if ('component' in raw) {
+          keep('component', index.components, ComponentSpecSchema.parse(doc), file);
+        } else if ('component' in doc) {
           detectedType = 'interface';
-          const parsed = InterfaceSpecSchema.parse(raw);
-          index.interfaces.push(parsed);
-          index.paths.interface[parsed.id] = file;
-        } else if ('contract' in raw) {
+          keep('interface', index.interfaces, InterfaceSpecSchema.parse(doc), file);
+        } else if ('contract' in doc) {
           detectedType = 'implementation';
-          const parsed = ImplementationSpecSchema.parse(raw);
+          const parsed = ImplementationSpecSchema.parse(doc);
           // Every source file the implementation names, its own and each
           // method's, is normalized against the root of the project holding it.
           const normalizeSourcePath = (p: string): string =>
-            path.relative(projectDir, path.resolve(projectDir, p)).replace(/\\/g, '/');
+            path.relative(raw.dir, path.resolve(raw.dir, p)).replace(/\\/g, '/');
           if (parsed.sourcePath) parsed.sourcePath = normalizeSourcePath(parsed.sourcePath);
           for (const method of parsed.methods) {
             if (method.sourcePath) method.sourcePath = normalizeSourcePath(method.sourcePath);
           }
-          index.implementations.push(parsed);
-          index.paths.implementation[parsed.id] = file;
-        } else if ('kind' in raw) {
-          if (raw.kind === 'group') {
+          keep('implementation', index.implementations, parsed, file);
+        } else if ('kind' in doc) {
+          if ((doc as { kind?: unknown }).kind === 'group') {
             detectedType = 'group';
-            const parsed = GroupSpecSchema.parse(raw);
-            index.groups.push(parsed);
-            index.paths.group[parsed.id] = file;
+            keep('group', index.groups, GroupSpecSchema.parse(doc), file);
           } else {
             detectedType = 'type';
-            const parsed = TypeSpecSchema.parse(raw);
-            index.types.push(parsed);
-            index.paths.type[parsed.id] = file;
+            keep('type', index.types, TypeSpecSchema.parse(doc), file);
           }
         }
-
         if (detectedType === 'spec') {
           this.loaderIssues.push({
             severity: 'error',
             code: 'UNKNOWN_SPEC_TYPE',
             message: `Spec file "${file}" does not match any recognized L1-L4 schema structure.`,
-            specId: this.loaderIssueSpecId(file, rawId, namespacePrefix),
+            specId: this.loaderIssueSpecId(file, rawId, key),
           });
         }
       } catch (e: any) {
@@ -1925,335 +2426,80 @@ export class SpecWorkspace {
           severity: 'error',
           code: 'SCHEMA_VALIDATION_ERROR',
           message: `Failed to parse ${detectedType} spec "${file}": ${e.message || String(e)}`,
-          specId: this.loaderIssueSpecId(file, rawId, namespacePrefix),
+          specId: this.loaderIssueSpecId(file, rawId, key),
         });
       }
     }
-
-    // Every reference the root's files wrote with a leading `::`, recorded
-    // before qualification erases the form.
-    root.authoredReferences = this.collectAuthoredReferences(index, namespacePrefix);
-
-    // 2. Namespace local subsystems (runs always to handle projectPath delegation)
-    // Declared ids go through qualifyDeclaredId (always mount-qualified);
-    // qualifyId with the root-subsystem anchor is for REFERENCES only.
-    index.subsystems = index.subsystems.map(sub => {
-      const qualifiedSubId = namespacePrefix ? qualifyDeclaredId(sub.id, namespacePrefix, true) : sub.id;
-      const componentPrefix = sub.projectPath ? qualifiedSubId : namespacePrefix;
-      return {
-        ...sub,
-        id: qualifiedSubId,
-        publicInterfaces: sub.publicInterfaces.map(p => {
-          // A re-export names a PEER's item, so it is qualified into the
-          // namespace this subsystem is declared in, never its own members'.
-          const itemPrefix = p.from ? namespacePrefix : componentPrefix;
-          return {
-            ...p,
-            component: p.component ? qualifyId(p.component, itemPrefix, this.rootSubsystems) : undefined,
-            interface: p.interface ? qualifyId(p.interface, itemPrefix, this.rootSubsystems) : undefined,
-            ...(p.typeDef ? { typeDef: qualifyId(p.typeDef, itemPrefix, this.rootSubsystems) } : {}),
-            ...(p.from ? { from: qualifySubsystemRef(p.from, namespacePrefix, this.rootSubsystems) } : {}),
-            // Each consumer is a subsystem reference: qualified into the namespace
-            // this subsystem is declared in, like a component's `subsystem` field.
-            ...(p.consumers ? { consumers: p.consumers.map(c => qualifySubsystemRef(c, namespacePrefix, this.rootSubsystems)) } : {}),
-          };
-        }),
-        lifecycle: sub.lifecycle?.map(le => ({
-          ...le,
-          component: qualifyId(le.component, componentPrefix, this.rootSubsystems),
-        })),
-      };
-    });
-
-    const originalSubsystemPaths = index.paths.subsystem;
-    index.paths.subsystem = {};
-    for (const [k, v] of Object.entries(originalSubsystemPaths)) {
-      const qualifiedK = namespacePrefix ? qualifyDeclaredId(k, namespacePrefix, true) : k;
-      index.paths.subsystem[qualifiedK] = v;
-    }
-
-    if (namespacePrefix) {
-      index.components = index.components.map(comp => ({
-        ...comp,
-        id: qualifyDeclaredId(comp.id, namespacePrefix),
-        subsystem: qualifySubsystemRef(comp.subsystem, namespacePrefix, this.rootSubsystems),
-        owns: comp.owns.map(o => qualifyId(o, namespacePrefix, this.rootSubsystems)),
-        dependsOn: comp.dependsOn.map(d => qualifyId(d, namespacePrefix, this.rootSubsystems)),
-        dispatch: comp.dispatch?.map(b => ({
-          ...b,
-          component: qualifyId(b.component, namespacePrefix, this.rootSubsystems),
-        })),
-        // A listener's mount names a portal id, qualified like any other
-        // component reference so a chained listener still finds its portals.
-        mounts: comp.mounts?.map(m => ({
-          ...m,
-          portal: qualifyId(m.portal, namespacePrefix, this.rootSubsystems),
-        })),
-      }));
-
-      index.interfaces = index.interfaces.map(intf => ({
-        ...intf,
-        id: qualifyDeclaredId(intf.id, namespacePrefix),
-        component: qualifyId(intf.component, namespacePrefix, this.rootSubsystems),
-      }));
-
-      index.implementations = index.implementations.map(impl => ({
-        ...impl,
-        id: qualifyDeclaredId(impl.id, namespacePrefix),
-        contract: qualifyId(impl.contract, namespacePrefix, this.rootSubsystems),
-        methods: impl.methods.map(m => ({
-          ...m,
-          narrative: m.narrative.map(step => ({
-            ...step,
-            targetComponent: step.targetComponent ? qualifyId(step.targetComponent, namespacePrefix, this.rootSubsystems) : undefined,
-          })),
-        })),
-      }));
-
-      index.types = index.types.map(t => ({
-        ...t,
-        id: qualifyDeclaredId(t.id, namespacePrefix),
-        subsystem: t.subsystem ? qualifySubsystemRef(t.subsystem, namespacePrefix, this.rootSubsystems) : undefined,
-        group: t.group ? qualifyId(t.group, namespacePrefix, this.rootSubsystems) : undefined,
-      }));
-
-      index.groups = index.groups.map(g => ({
-        ...g,
-        id: qualifyDeclaredId(g.id, namespacePrefix),
-      }));
-
-      const originalPaths = index.paths;
-      index.paths = {
-        subsystem: index.paths.subsystem,
-        component: {},
-        interface: {},
-        implementation: {},
-        type: {},
-        group: {},
-      };
-
-      for (const [k, v] of Object.entries(originalPaths.component)) {
-        index.paths.component[qualifyDeclaredId(k, namespacePrefix)] = v;
-      }
-      for (const [k, v] of Object.entries(originalPaths.interface)) {
-        index.paths.interface[qualifyDeclaredId(k, namespacePrefix)] = v;
-      }
-      for (const [k, v] of Object.entries(originalPaths.implementation)) {
-        index.paths.implementation[qualifyDeclaredId(k, namespacePrefix)] = v;
-      }
-      for (const [k, v] of Object.entries(originalPaths.type)) {
-        index.paths.type[qualifyDeclaredId(k, namespacePrefix)] = v;
-      }
-      for (const [k, v] of Object.entries(originalPaths.group)) {
-        index.paths.group[qualifyDeclaredId(k, namespacePrefix)] = v;
-      }
-    }
-
-    // The root's own L0 (a member's is never merged into the index) and the
-    // ids its files declared; a member also owns the mount that realizes it.
-    root.system = this.readRootSystem(projectPaths, namespacePrefix, index.subsystems);
-    root.specIds = [
-      ...(namespacePrefix ? [namespacePrefix] : []),
-      ...index.subsystems.map((x) => x.id),
-      ...index.components.map((x) => x.id),
-      ...index.interfaces.map((x) => x.id),
-      ...index.implementations.map((x) => x.id),
-      ...index.types.map((x) => x.id),
-      ...index.groups.map((x) => x.id),
-    ];
-
-    if (currentDepth < maxDepth) {
-      for (const subproj of localSubprojects) {
-        const childDir = path.resolve(projectDir, subproj.projectPath);
-        // Every issue about this mount names it by its QUALIFIED id, exactly as
-        // the loader names the subsystem itself — so a validation scoped to an
-        // enclosing mount keeps it.
-        const mountId = namespacePrefix
-          ? qualifyDeclaredId(subproj.subsystemId, namespacePrefix, true)
-          : subproj.subsystemId;
-
-        // Containment guard (Fix B2) — THE critical read-time defense. Both the
-        // resolution base and the containment boundary are the project that
-        // DECLARES the mount (projectDir), so a declaration is accepted or
-        // refused identically whichever root loads it; projectDir was itself
-        // contained by its own declaring project, so no hop, however deep,
-        // leaves the bound root. On a violation, surface a loader error and SKIP
-        // the child (do not recurse).
-        if (projectPathEscapesRoot(projectDir, subproj.projectPath, childDir)) {
-          this.loaderIssues.push({
-            severity: 'error',
-            code: 'PROJECTPATH_ESCAPE',
-            message: `Subproject path "${subproj.projectPath}" declared by subsystem "${mountId}" escapes the root of the project declaring it, "${projectDir}" (resolves to "${childDir}"); absolute, ../-escaping and link-escaping projectPaths are rejected. Skipping this subproject.`,
-            specId: mountId,
-          });
-          continue;
-        }
-
-        if (visitedDirs.has(chainDirKey(childDir))) {
-          this.loaderIssues.push({
-            severity: 'error',
-            code: 'CIRCULAR_SUBPROJECT_REFERENCE',
-            message: `Circular reference detected: Subsystem "${mountId}" refers to subproject "${childDir}" which is already loaded.`,
-            specId: mountId,
-          });
-          continue;
-        }
-
-        if (!fs.existsSync(childDir)) {
-          this.loaderIssues.push({
-            severity: 'error',
-            code: 'SUBPROJECT_NOT_FOUND',
-            message: `Subproject directory "${childDir}" declared by subsystem "${mountId}" does not exist.`,
-            specId: mountId,
-          });
-          continue;
-        }
-
-        const childNamespace = namespacePrefix
-          ? `${namespacePrefix}::${subproj.subsystemId}`
-          : subproj.subsystemId;
-
-        const newVisited = new Set(visitedDirs);
-        newVisited.add(chainDirKey(childDir));
-
-        const childIndex = this.scanSpecsForProject(childDir, childNamespace, newVisited, maxDepth, currentDepth + 1, namespacePrefix, subproj.subsystemId);
-
-        index.subsystems.push(...childIndex.subsystems);
-        index.components.push(...childIndex.components);
-        index.interfaces.push(...childIndex.interfaces);
-        index.implementations.push(...childIndex.implementations);
-        index.types.push(...childIndex.types);
-        index.groups.push(...childIndex.groups);
-
-        Object.assign(index.paths.subsystem, childIndex.paths.subsystem);
-        Object.assign(index.paths.component, childIndex.paths.component);
-        Object.assign(index.paths.interface, childIndex.paths.interface);
-        Object.assign(index.paths.implementation, childIndex.paths.implementation);
-        Object.assign(index.paths.type, childIndex.paths.type);
-        Object.assign(index.paths.group, childIndex.paths.group);
-      }
-    }
-
-    // Collapse a mount and its same-id child realization into one flat external
-    // subsystem (child content + mount projectPath). index.paths.subsystem already
-    // resolves the id to the child file (child scan Object.assign wins), so content
-    // saves route to the child; saveSubsystemSpec strips projectPath there.
-    index.subsystems = mergeMountRealizations(index.subsystems);
-
-    return index;
   }
 
   /**
-   * Record one project root of the walk: where it sits in the mount chain and
-   * its configuration, read through the configuration bound at that root — the
-   * per-root binding the scan already reads the root's specs folder through (a
-   * scan may read the configuration of the root it is walking). Its
-   * .wai/project.yaml joins the freshness signature, so an edit to its
-   * externals re-scans.
+   * Steps 5-6 at one root: key every declaration under the root's key, bind
+   * every local reference (no `::`) inside the root, and set aside every
+   * reference with `::` exactly as written for phase three.
    */
-  private recordProjectRoot(projectDir: string, namespace: string, parent?: string, mountAlias?: string): ScannedProjectRoot {
-    let config: ProjectConfig | null = null;
-    try {
-      config = projectConfigRepositoryAt(projectDir).load();
-    } catch {
-      config = null; // a configuration that fails its schema is reported by the paths that load it
-    }
-    this.scanVisitedConfigFiles.push(aiPathsAt(projectDir).projectConfig());
-    const root: ScannedProjectRoot = {
-      namespace,
-      ...(parent !== undefined ? { parent } : {}),
-      ...(mountAlias !== undefined ? { mountAlias } : {}),
-      directory: path.resolve(projectDir),
-      system: null,
-      config,
-      specIds: [],
-      authoredReferences: [],
+  private keyRoot(raw: RawRoot): void {
+    const key = raw.record.namespace;
+    const index = raw.index;
+    raw.localSubsystems = new Set(index.subsystems.map((s) => s.id));
+    const bindLocal = (kind: ReferenceKind, specKey: string): ReferenceMapper => (position, value) => {
+      if (!value.includes('::')) return keyIn(key, value);
+      raw.pending.push({ kind, specKey, position, authored: value, raw: false });
+      return value;
     };
-    this.scanRoots.push(root);
-    return root;
+    const keyed = <T extends { id: string }>(kind: ReferenceKind, spec: T): T => {
+      const specKey = keyIn(key, spec.id);
+      for (const r of rawReferences(kind, spec)) raw.pending.push({ kind, specKey, position: r.position, authored: r.value, raw: true });
+      return { ...mapSpecReferences(kind, spec, bindLocal(kind, specKey)), id: specKey };
+    };
+    index.subsystems = index.subsystems.map((s) => keyed('subsystem', s));
+    index.components = index.components.map((c) => keyed('component', c));
+    index.interfaces = index.interfaces.map((i) => keyed('interface', i));
+    index.implementations = index.implementations.map((m) => keyed('implementation', m));
+    index.types = index.types.map((t) => keyed('type', t));
+    index.groups = index.groups.map((g) => keyed('group', g));
+    if (key) {
+      for (const kind of Object.keys(index.paths) as (keyof SpecIndex['paths'])[]) {
+        index.paths[kind] = Object.fromEntries(Object.entries(index.paths[kind]).map(([id, file]) => [keyIn(key, id), file]));
+      }
+    }
+    raw.record.specIds = [
+      ...index.subsystems, ...index.components, ...index.interfaces,
+      ...index.implementations, ...index.types, ...index.groups,
+    ].map((s) => s.id);
+    raw.record.problems.forEach((p) => { if (p.kind === 'duplicate-spec' && p.id && !p.id.includes('::') && key) p.id = keyIn(key, p.id); });
+    raw.record.system = keyedSystem(raw.rawSystem, key, raw.localSubsystems);
   }
 
   /**
-   * A root's own L0, qualified into its namespace the way the loader qualifies
-   * an L1 re-export: `from` (and a legacy `subsystem`) against the namespace
-   * the root declares its subsystems in, `component`, `interface` and
-   * `typeDef` against that source's namespace. Null when it has none or it
-   * does not parse — the bound root's L0 is reported by the loader's own read.
+   * The root's alias table: each member it followed, and each declared
+   * external whose producer the scan read — by source.path, else by the one
+   * project of the family answering to its id.
    */
-  private readRootSystem(paths: WaiPaths, prefix: string, subsystems: SubsystemSpec[]): SystemSpec | null {
-    const file = paths.specsSystem();
-    if (!pathExists(file)) return null;
-    let system: SystemSpec;
-    try {
-      system = SystemSpecSchema.parse(readSpecFile(file));
-    } catch {
-      return null;
+  private bindAliases(raw: RawRoot, raws: RawRoot[]): void {
+    for (const [alias, memberKey] of raw.memberKeys) raw.record.aliases.set(alias, memberKey);
+    if (!raw.record.config) return;
+    for (const decl of declaredExternals(raw.record.config)) {
+      if (decl.problem || raw.record.aliases.has(decl.alias)) continue;
+      const others = raws.filter((r) => r !== raw);
+      let producer: RawRoot | undefined;
+      if (decl.sourcePath !== undefined) {
+        const at = chainDirKey(path.resolve(raw.dir, decl.sourcePath));
+        producer = others.find((r) => chainDirKey(r.dir) === at && idOf(r) === decl.project);
+      } else {
+        const holders = others.filter((r) => idOf(r) === decl.project);
+        if (holders.length === 1) producer = holders[0];
+      }
+      if (producer) raw.record.aliases.set(decl.alias, producer.record.namespace);
     }
-    if (!prefix) return system;
-    const mounts = new Set(subsystems.filter((x) => x.projectPath).map((x) => x.id));
-    return {
-      ...system,
-      publicInterfaces: system.publicInterfaces?.map((e) => {
-        const source = e.from ?? e.subsystem;
-        const qualifiedSource = source ? qualifySubsystemRef(source, prefix, this.rootSubsystems) : undefined;
-        const itemPrefix = qualifiedSource && mounts.has(qualifiedSource) ? qualifiedSource : prefix;
-        return {
-          ...e,
-          ...(e.from ? { from: qualifiedSource } : {}),
-          ...(e.subsystem ? { subsystem: qualifiedSource } : {}),
-          ...(e.component ? { component: qualifyId(e.component, itemPrefix, this.rootSubsystems) } : {}),
-          ...(e.interface ? { interface: qualifyId(e.interface, itemPrefix, this.rootSubsystems) } : {}),
-          ...(e.typeDef ? { typeDef: qualifyId(e.typeDef, itemPrefix, this.rootSubsystems) } : {}),
-        };
-      }),
-    };
   }
 
-  /** Every leading-`::` reference in a root's freshly parsed (unqualified) specs. */
-  private collectAuthoredReferences(index: SpecIndex, prefix: string): AuthoredReference[] {
-    const out: AuthoredReference[] = [];
-    const add = (specId: string, position: string, ref: string | undefined): void => {
-      if (!ref || !ref.startsWith('::')) return;
-      out.push({ specId, position, authored: ref, resolved: qualifyId(ref, prefix, this.rootSubsystems) });
-    };
-    const addTypes = (specId: string, typeStr: string | undefined): void => {
-      for (const m of (typeStr ?? '').matchAll(/(?:^|[^A-Za-z0-9_:])(::[A-Za-z0-9_][A-Za-z0-9_:-]*)/g)) add(specId, 'type', m[1]);
-    };
-    const own = (id: string, subsystem = false): string => (prefix ? qualifyDeclaredId(id, prefix, subsystem) : id);
-    for (const sub of index.subsystems) {
-      const id = own(sub.id, true);
-      for (const p of sub.publicInterfaces) {
-        add(id, 'publicInterfaces', p.from);
-        add(id, 'publicInterfaces', p.component);
-        add(id, 'publicInterfaces', p.interface);
-        add(id, 'publicInterfaces', p.typeDef);
-      }
-      for (const le of sub.lifecycle ?? []) add(id, 'lifecycle', le.component);
+  /** The file of the legacy L1 mount a key names (its declaring root's key, then its alias), if any. */
+  private legacyMountFile(key: string): string | undefined {
+    for (const raw of this.cachedRawRoots) {
+      const mount = raw.mounts.find((m) => keyIn(raw.record.namespace, m.spec.id) === key);
+      if (mount) return mount.file;
     }
-    for (const comp of index.components) {
-      const id = own(comp.id);
-      comp.dependsOn.forEach((d) => add(id, 'dependsOn', d));
-      comp.owns.forEach((o) => add(id, 'owns', o));
-      comp.dispatch?.forEach((b) => add(id, 'dispatch', b.component));
-      comp.mounts?.forEach((m) => add(id, 'mounts', m.portal));
-    }
-    for (const intf of index.interfaces) {
-      const id = own(intf.id);
-      add(id, 'contract', intf.component);
-      for (const m of intf.methods) {
-        addTypes(id, m.returns);
-        m.params?.forEach((p) => addTypes(id, p.type));
-      }
-    }
-    for (const impl of index.implementations) {
-      const id = own(impl.id);
-      for (const m of impl.methods) m.narrative.forEach((step) => add(id, 'narrative', step.targetComponent));
-    }
-    for (const t of index.types) {
-      const id = own(t.id);
-      t.fields.forEach((f) => addTypes(id, f.type));
-    }
-    return out;
+    return undefined;
   }
 
   /** ispec_index.listProjectRoots — the project roots the current scan read, bound root first. */
@@ -2263,61 +2509,122 @@ export class SpecWorkspace {
   }
 
   // -------------------------------------------------------------------------
-  // Namespace / subproject resolution
+  // Namespace / member resolution
   // -------------------------------------------------------------------------
 
+  /** A member's key → its project root, as the scan recorded it; null for a key no followed member has. */
   resolveSubprojectForNamespace(namespace: string): string | null {
-    const parts = namespace.split('::');
-    let currentDir = this.rootDir;
-    let resolvedAny = false;
-    let currentPrefix = '';
-    for (const part of parts) {
-      currentPrefix = currentPrefix ? `${currentPrefix}::${part}` : part;
-      const index = this.scanAll();
-      const sub = index.subsystems.find((s) => s.id === currentPrefix);
-      if (sub && sub.projectPath) {
-        const nextDir = path.resolve(currentDir, sub.projectPath);
-        // Containment guard (Fix B2): never resolve a namespace into a directory
-        // that escapes the project declaring the hop (currentDir) — the same
-        // boundary the loader applies, so a namespace resolves here exactly when
-        // its tree loads. Surface a loader error and SKIP the escaping hop,
-        // leaving currentDir contained, rather than handing back an out-of-root
-        // directory for a save/lookup.
-        if (projectPathEscapesRoot(currentDir, sub.projectPath, nextDir)) {
-          this.loaderIssues.push({
-            severity: 'error',
-            code: 'PROJECTPATH_ESCAPE',
-            message: `Subproject path "${sub.projectPath}" declared by subsystem "${currentPrefix}" escapes the root of the project declaring it, "${currentDir}" (resolves to "${nextDir}"); absolute, ../-escaping and link-escaping projectPaths are rejected. Skipping this subproject.`,
-            specId: currentPrefix,
-          });
-          continue;
-        }
-        currentDir = nextDir;
-        resolvedAny = true;
-      }
-    }
-    return resolvedAny ? currentDir : null;
+    const root = this.rootCovering(namespace);
+    return root ? root.directory : null;
   }
 
+  /** The deepest member key that prefixes a key: the project whose files hold that spec. */
   getSubprojectPrefix(qualifiedId: string): string | null {
-    const parts = qualifiedId.split('::');
-    if (parts.length <= 1) return null;
-    const index = this.scanAll();
-    // The DEEPEST mount wins: for a nested chain a::b::x (both a and a::b are
-    // mounts), the file lives in b's tree, so ids relativize against a::b.
-    // Returning the first (shallowest) hit left one namespace level in the
-    // written ids, which the strict id schema then refused — every depth-2+
-    // spec became un-savable through the parent root.
     let deepest: string | null = null;
-    let currentPrefix = '';
-    for (let i = 0; i < parts.length - 1; i++) {
-      currentPrefix = currentPrefix ? `${currentPrefix}::${parts[i]}` : parts[i];
-      const sub = index.subsystems.find(s => s.id === currentPrefix);
-      if (sub && sub.projectPath) {
-        deepest = currentPrefix;
-      }
+    for (const root of this.listProjectRoots()) {
+      if (!root.namespace || !qualifiedId.startsWith(`${root.namespace}::`)) continue;
+      if (deepest === null || root.namespace.length > deepest.length) deepest = root.namespace;
     }
     return deepest;
+  }
+
+  /** The member root whose key is the namespace, or its longest prefix. */
+  private rootCovering(namespace: string): ScannedProjectRoot | null {
+    let best: ScannedProjectRoot | null = null;
+    for (const root of this.listProjectRoots()) {
+      if (!root.namespace) continue;
+      if (namespace !== root.namespace && !namespace.startsWith(`${root.namespace}::`)) continue;
+      if (!best || root.namespace.length > best.namespace.length) best = root;
+    }
+    return best;
+  }
+
+  /** The root that owns a key: the one that declared it, else the one whose key is its longest prefix; '' for a bare id. */
+  private ownerKeyOf(key: string): string | null {
+    if (!this.cachedOwners) {
+      this.cachedOwners = new Map();
+      for (const root of this.listProjectRoots()) for (const id of root.specIds) if (!this.cachedOwners.has(id)) this.cachedOwners.set(id, root.namespace);
+    }
+    const owner = this.cachedOwners.get(key);
+    if (owner !== undefined) return owner;
+    // A key lies in a member only strictly under its key: a bare `billing` is
+    // the bound root's own id even where a member is keyed `billing`.
+    const covering = this.getSubprojectPrefix(key);
+    if (covering) return covering;
+    return key.includes('::') ? null : '';
+  }
+
+  /**
+   * Bind one reference written in the project `rootKey` the way the scan binds
+   * it: a bare id is local, `alias::name` goes through the alias table to the
+   * producer's public name, a deprecated form lands where the scan reads it.
+   * The write-side twin of phase three, for a delta written with local names.
+   */
+  bindReference(rootKey: string, reference: string): string {
+    if (!reference.includes('::')) return keyIn(rootKey, reference);
+    this.scanAll();
+    const raw = this.cachedRawRoots.find((r) => r.record.namespace === rootKey);
+    if (!raw) return reference;
+    return bindAuthored(raw, this.cachedRawRoots, this.cachedReadables, reference).value;
+  }
+
+  /**
+   * Write one in-memory reference back relative to the project owning the
+   * spec — the exact inverse of the scan's binding. With `carry`, a value that
+   * still equals what the scan bound its authored text to is written back as
+   * authored, byte for byte. Otherwise: a key in the owning project is bare,
+   * a key in another project is `alias::publicName`, anything else as it came.
+   * Never `super::`, a leading `::` or a member path.
+   */
+  private writeReference(from: string, specKey: string, position: string, value: string, carry: Map<string, number> | null): string {
+    if (carry) {
+      const authored = this.carriedAuthoredText(specKey, position, value, carry);
+      if (authored !== undefined) return authored;
+    }
+    const owner = this.ownerKeyOf(value);
+    if (owner === null) return value;
+    if (owner === from) return localOf(owner, value);
+    const target = this.cachedRawRoots.find((r) => r.record.namespace === owner);
+    const referrer = this.cachedRawRoots.find((r) => r.record.namespace === from);
+    if (!target || !referrer) return value;
+    const alias = aliasFor(referrer, owner) ?? idOf(target);
+    if (!alias) return value;
+    const entry = target.record.exports.entries.find((e) => exportedKey(e) === value);
+    return `${alias}::${entry?.publicName ?? localOf(owner, value)}`;
+  }
+
+  /**
+   * The authored text the scan bound to this value at this position of this
+   * spec, when it did. Two texts that bound to one value (`super::x` and
+   * `::a::x` side by side) are carried in the order they were written, one
+   * each: `used` counts the ones this spec's write already spent.
+   */
+  private carriedAuthoredText(specKey: string, position: string, value: string, used: Map<string, number>): string | undefined {
+    if (!this.carryIndex) {
+      this.carryIndex = new Map();
+      for (const root of this.cachedRoots) {
+        for (const ref of root.authoredReferences) {
+          const k = `${ref.specId}|${ref.position}|${ref.resolved}`;
+          this.carryIndex.set(k, [...(this.carryIndex.get(k) ?? []), ref.authored]);
+        }
+      }
+    }
+    const k = `${specKey}|${position}|${value}`;
+    const texts = this.carryIndex.get(k);
+    if (!texts) return undefined;
+    const n = used.get(k) ?? 0;
+    used.set(k, n + 1);
+    return texts[Math.min(n, texts.length - 1)];
+  }
+
+  /** A spec written back relative to the project that owns it: its own id local, every reference through writeReference. */
+  private relativizeSpec<T extends { id: string }>(kind: ReferenceKind, spec: T, carry = true): T {
+    this.scanAll();
+    const from = this.getSubprojectPrefix(spec.id) ?? '';
+    const carrying = carry && !this.carryDisabled ? new Map<string, number>() : null;
+    const mapped = mapSpecReferences(kind, spec, (position, value) => this.writeReference(from, spec.id, position, value, carrying));
+    // A local id never carries `::`: a subsystem-qualified own id is written by its last segment.
+    return { ...mapped, id: localOf(from, spec.id).split('::').pop()! };
   }
 
   // -------------------------------------------------------------------------
@@ -2329,6 +2636,10 @@ export class SpecWorkspace {
     if (index.paths.subsystem[id]) {
       return index.paths.subsystem[id];
     }
+    // A legacy mount is never a subsystem, but its document stays addressable
+    // by its alias, so a writer of the old form still finds its file.
+    const mount = this.legacyMountFile(id);
+    if (mount) return mount;
     if (id.includes('::')) {
       const parts = id.split('::');
       const childProj = this.resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
@@ -2637,50 +2948,42 @@ export class SpecWorkspace {
   // ---------------------------------------------------------------------------
 
   /**
-   * The namespace context a spec's file is written in: the deepest subproject
-   * mount containing the id, else the id's own namespace. THE single prefix
-   * derivation for the whole write pipeline — every prepare*ForWrite and every
-   * ancillary relativization must use this, never re-derive it inline, or the
-   * dry-run check and the real saves could drift apart.
+   * The key of the project whose files hold a spec: the deepest member key
+   * prefixing it, else the bound root (''). THE single derivation for the whole
+   * write pipeline — every prepare*ForWrite and every ancillary relativization
+   * uses it, so the dry-run check and the real saves cannot drift apart.
    */
   writePrefixFor(qualifiedId: string): string {
-    return this.getSubprojectPrefix(qualifiedId) || splitNamespace(qualifiedId).prefix;
+    return this.getSubprojectPrefix(qualifiedId) ?? '';
   }
 
   prepareSubsystemForWrite(spec: SubsystemSpec): SubsystemSpec {
-    const { prefix } = splitNamespace(spec.id);
-    return stripNamespaceFromSubsystem(spec, prefix);
+    return this.relativizeSpec('subsystem', spec);
   }
 
   prepareComponentForWrite(spec: ComponentSpec): ComponentSpec {
-    const prefix = this.writePrefixFor(spec.id);
-    return prefix ? stripNamespaceFromComponent(spec, prefix) : spec;
+    return this.relativizeSpec('component', spec);
   }
 
   prepareInterfaceForWrite(spec: InterfaceSpec): InterfaceSpec {
-    const prefix = this.writePrefixFor(spec.id);
-    return prefix ? stripNamespaceFromInterface(spec, prefix) : spec;
+    return this.relativizeSpec('interface', spec);
   }
 
-  prepareImplementationForWrite(spec: ImplementationSpec): ImplementationSpec {
-    const prefix = this.writePrefixFor(spec.id);
-    if (!prefix) return spec;
-    const stripped = stripNamespaceFromImplementation(spec, prefix);
-    // A chained subproject's implementation lives in the child's tree, where its
-    // file paths are read against the child root.
-    const mount = this.getSubprojectPrefix(spec.id);
-    const childRoot = mount ? this.resolveSubprojectForNamespace(mount) : null;
-    return childRoot ? childRelativeFilePaths(stripped, this.rootDir, childRoot) : stripped;
+  prepareImplementationForWrite(spec: ImplementationSpec, carry = true): ImplementationSpec {
+    const relative = this.relativizeSpec('implementation', spec, carry);
+    // A member's implementation lives in the member's tree, where its file
+    // paths are read against the member root.
+    const member = this.getSubprojectPrefix(spec.id);
+    const memberRoot = member ? this.resolveSubprojectForNamespace(member) : null;
+    return memberRoot ? childRelativeFilePaths(relative, this.rootDir, memberRoot) : relative;
   }
 
   prepareTypeForWrite(spec: TypeSpec): TypeSpec {
-    const prefix = this.writePrefixFor(spec.id);
-    return prefix ? stripNamespaceFromType(spec, prefix) : spec;
+    return this.relativizeSpec('type', spec);
   }
 
   prepareGroupForWrite(spec: GroupSpec): GroupSpec {
-    const prefix = this.writePrefixFor(spec.id);
-    return prefix ? stripNamespaceFromGroup(spec, prefix) : spec;
+    return this.relativizeSpec('group', spec);
   }
 
   /**
@@ -2734,19 +3037,18 @@ export class SpecWorkspace {
     return issues;
   }
 
-  saveSubsystemSpec(spec: SubsystemSpec, opts?: SaveSpecOptions): void {
+  /**
+   * The subsystem writer behind save('subsystem', ...). Private: the generic
+   * save is the one write door, and a subsystem is never a mount — the
+   * authoring seam refuses a projectPath before anything reaches here, and a
+   * stored legacy mount is read as a member declaration, not loaded as a
+   * subsystem, so no mount document is re-saved through this path.
+   */
+  private writeSubsystemSpec(spec: SubsystemSpec, opts?: SaveSpecOptions): void {
     const p = this.getSubsystemPath(spec.id);
     ensureDir(path.dirname(p));
 
     const { prefix } = splitNamespace(spec.id);
-    // Fix B2 (defense in depth): never persist an escaping projectPath, so no
-    // later code path can resolve+act on it. Only for a top-level (non-prefixed)
-    // subsystem, whose projectPath is relative to this.rootDir; a namespaced
-    // subsystem's projectPath is child-relative and is contained by the
-    // load-time guards (resolveSubprojectForNamespace + the recursive loader).
-    if (!prefix && spec.projectPath && spec.projectPath.trim() !== '') {
-      assertContainedProjectPath(this.rootDir, spec.projectPath);
-    }
     // ALWAYS strip: an external subsystem's members carry the subsystem's own
     // id prefix even when the subsystem itself is mounted at the root (empty
     // prefix) — skipping the strip there wrote qualified member ids the
@@ -3145,7 +3447,7 @@ export class SpecWorkspace {
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
       if (!specToWrite.group && existing.group) {
-        specToWrite.group = relativizeId(existing.group, this.writePrefixFor(spec.id));
+        specToWrite.group = localOf(this.writePrefixFor(spec.id), existing.group);
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
@@ -3219,6 +3521,37 @@ export class SpecWorkspace {
   }
 
   /**
+   * spec_change_report.strippedKeys — every key the stored document of one
+   * spec carries on disk that its level's schema does not know, each as
+   * `path: value`. Read from the RAW file: the parsed spec has already lost
+   * them. Nested objects are followed where the schema kept the object, and
+   * arrays element by element where it kept every element.
+   */
+  strippedKeysOf(kind: WritableSpecKind, id: string): string[] {
+    const file = kind === 'system' ? this.paths.specsSystem() : this.scanAll().paths[kind][id];
+    if (!file || !pathExists(file)) return [];
+    let raw: unknown;
+    try {
+      raw = readSpecFile(file);
+    } catch {
+      return [];
+    }
+    const schema = {
+      system: SystemSpecSchema,
+      subsystem: SubsystemSpecSchema,
+      component: ComponentSpecSchema,
+      interface: InterfaceSpecSchema,
+      implementation: ImplementationSpecSchema,
+      type: TypeSpecSchema,
+    }[kind];
+    const parsed = schema.safeParse(raw);
+    if (!parsed.success) return [];
+    const out: string[] = [];
+    unknownKeysIn(raw, parsed.data, '', out);
+    return out;
+  }
+
+  /**
    * Persist one spec through the typed writer of its kind, answering with that
    * writer's placement notices (none for the L0 and a subsystem). A draft or
    * status-less save keeps the stored status, exactly as the typed writers do.
@@ -3231,7 +3564,7 @@ export class SpecWorkspace {
   private saveOfKind(kind: WritableSpecKind, spec: StoredSpec, opts?: SaveSpecOptions): string[] {
     switch (kind) {
       case 'system':         this.saveSystemSpec(spec as SystemSpec); return [];
-      case 'subsystem':      this.saveSubsystemSpec(spec as SubsystemSpec, opts); return [];
+      case 'subsystem':      this.writeSubsystemSpec(spec as SubsystemSpec, opts); return [];
       case 'component':      return this.saveComponentSpec(spec as ComponentSpec, opts);
       case 'interface':      return this.saveInterfaceSpec(spec as InterfaceSpec, opts);
       case 'implementation': return this.saveImplementationSpec(spec as ImplementationSpec, opts);
@@ -3249,6 +3582,88 @@ export class SpecWorkspace {
       case 'interface':      return this.deleteInterfaceSpec(id);
       case 'implementation': return this.deleteImplementationSpec(id);
       case 'type':           return this.deleteTypeSpec(id);
+    }
+  }
+
+  /**
+   * spec_registry.deleteMount (removeLegacyMount) — delete the bound project's legacy L1 mount
+   * document for one alias: the subsystem carrying projectPath that the scan
+   * reads as a member declaration. A subsystem without projectPath is content,
+   * not a mount, and is refused by name; no document answers false.
+   */
+  removeLegacyMount(alias: string): boolean {
+    this.scanAll();
+    const bound = this.cachedRawRoots.find((r) => r.record.namespace === '');
+    const mount = bound?.mounts.find((m) => m.spec.id === alias);
+    if (!mount) {
+      if (bound?.index.subsystems.some((s) => s.id === alias)) {
+        throw new Error(`Refusing to delete "${alias}" as a legacy mount: it is a subsystem of this project with content (it carries no projectPath), not a member declaration.`);
+      }
+      return false;
+    }
+    if (!removeSpecFile(mount.file, this.paths.specsDir())) return false;
+    invalidateSpecCache();
+    return true;
+  }
+
+  /**
+   * spec_registry.normalizeReferences (writeCanonicalReferences) — re-save one spec with every reference
+   * the loader binds in its canonical form (bare when it lands in the owning
+   * project, `alias::publicName` elsewhere), targets unchanged. Refuses before
+   * writing when a reference carries a deprecated form and bound outside or
+   * unresolved, since no canonical text exists for it. Writes only when the
+   * text changes, and answers whether it did; the stamp and the lock are
+   * never touched.
+   */
+  writeCanonicalReferences(kind: string, id: string): boolean {
+    const refKind = kind as WritableSpecKind;
+    if (!['subsystem', 'component', 'interface', 'implementation', 'type'].includes(kind)) {
+      throw new Error(`Cannot normalize the references of a "${kind}": only a subsystem, component, interface, implementation or type holds bound references.`);
+    }
+    const spec = this.load(refKind, id);
+    if (!spec) throw new Error(`Cannot normalize the references of ${kind} "${id}": no such spec.`);
+    const bound = new Set(['publicInterfaces', 'lifecycle', 'subsystem', 'owns', 'dependsOn', 'dispatch', 'mounts', 'contract', 'narrative', 'group']);
+    const stuck = this.cachedRoots
+      .flatMap((r) => r.authoredReferences)
+      .filter((r) => r.specId === id && bound.has(r.position) && r.form !== 'alias' && (r.binding === 'outside' || r.binding === 'unresolved'));
+    if (stuck.length > 0) {
+      throw new Error(
+        `Refusing to normalize ${kind} "${id}": ${stuck.map((r) => `"${r.authored}" (${r.position}, ${r.binding})`).join(', ')} `
+        + 'carries a deprecated form with no canonical text — its target is out of the scan\'s reach or nothing names it.',
+      );
+    }
+    const asStored = JSON.stringify(this.prepareForKind(refKind, spec));
+    // The raw positions stay as written in memory: each one the scan recorded
+    // a canonical text for is rewritten to it here, token by token.
+    const rawRewrites = new Map(this.cachedRoots
+      .flatMap((r) => r.authoredReferences)
+      .filter((r) => r.specId === id && !bound.has(r.position) && r.rewrite !== undefined && r.rewrite !== r.authored)
+      .map((r) => [`${r.position}|${r.authored}`, r.rewrite!] as const));
+    const rewritten = rawRewrites.size === 0 ? spec
+      : mapRawReferences(refKind as ReferenceKind, spec, (position, value) => rawRewrites.get(`${position}|${value}`) ?? value);
+    // dependsOn and owns are sets: two authored texts that bound one target
+    // (a member path and a leading `::` form, say) collapse to one entry once
+    // both are written canonically, first-written position kept.
+    const rawRewritten = refKind === 'component' ? withUniqueTargets(rewritten as ComponentSpec) : rewritten;
+    this.carryDisabled = true;
+    try {
+      if (JSON.stringify(this.prepareForKind(refKind, rawRewritten)) === asStored) return false;
+      this.saveOfKind(refKind, rawRewritten, { preserveUpdatedAt: true });
+    } finally {
+      this.carryDisabled = false;
+    }
+    return true;
+  }
+
+  /** The write preparation of one kind: what the typed writer serializes. */
+  private prepareForKind(kind: WritableSpecKind, spec: StoredSpec): unknown {
+    switch (kind) {
+      case 'subsystem':      return this.prepareSubsystemForWrite(spec as SubsystemSpec);
+      case 'component':      return this.prepareComponentForWrite(spec as ComponentSpec);
+      case 'interface':      return this.prepareInterfaceForWrite(spec as InterfaceSpec);
+      case 'implementation': return this.prepareImplementationForWrite(spec as ImplementationSpec);
+      case 'type':           return this.prepareTypeForWrite(spec as TypeSpec);
+      default:               return spec;
     }
   }
 
@@ -3359,7 +3774,7 @@ export class SpecWorkspace {
   applySpecStatus(kind: SpecKind, id: string, status: SpecStatus): void {
     const keepStamp: SaveSpecOptions = { preserveUpdatedAt: true };
     switch (kind) {
-      case 'subsystem':      { const s = this.loadSubsystemSpec(id);      if (s) this.saveSubsystemSpec({ ...s, status }, keepStamp); break; }
+      case 'subsystem':      { const s = this.loadSubsystemSpec(id);      if (s) this.writeSubsystemSpec({ ...s, status }, keepStamp); break; }
       case 'component':      { const s = this.loadComponentSpec(id);      if (s) this.saveComponentSpec({ ...s, status }, keepStamp); break; }
       case 'interface':      { const s = this.loadInterfaceSpec(id);      if (s) this.saveInterfaceSpec({ ...s, status }, keepStamp); break; }
       case 'implementation': { const s = this.loadImplementationSpec(id); if (s) this.saveImplementationSpec({ ...s, status }, keepStamp); break; }
@@ -4140,33 +4555,24 @@ export class SpecWorkspace {
     const qualifyDeltaRefs = (d: Record<string, any>): Record<string, any> => {
       if (kind === 'system') return d;
       const prefix = this.writePrefixFor(id);
-      if (!prefix) return d;
       const q = (ref: unknown): unknown =>
-        typeof ref === 'string' ? qualifyId(ref, prefix, this.rootSubsystems) : ref;
+        typeof ref === 'string' ? this.bindReference(prefix, ref) : ref;
       const out: Record<string, any> = { ...d };
       switch (kind) {
         case 'subsystem': {
-          const isExternal = !!(out.projectPath ?? (result as SubsystemSpec).projectPath);
-          const memberPrefix = isExternal ? id : prefix;
-          const qm = (ref: unknown): unknown =>
-            typeof ref === 'string' ? qualifyId(ref, memberPrefix, this.rootSubsystems) : ref;
           if (Array.isArray(out.publicInterfaces)) {
             out.publicInterfaces = out.publicInterfaces.map((pi: any) => ({
               ...pi,
-              // A re-export names a peer's item: qualified into the declaring
-              // namespace (q), not this subsystem's members' (qm).
-              ...(typeof pi?.component === 'string' ? { component: (typeof pi?.from === 'string' ? q : qm)(pi.component) } : {}),
-              ...(typeof pi?.interface === 'string' ? { interface: (typeof pi?.from === 'string' ? q : qm)(pi.interface) } : {}),
-              ...(typeof pi?.typeDef === 'string' ? { typeDef: (typeof pi?.from === 'string' ? q : qm)(pi.typeDef) } : {}),
-              ...(typeof pi?.from === 'string' ? { from: qualifySubsystemRef(pi.from, prefix, this.rootSubsystems) } : {}),
-              ...(Array.isArray(pi?.consumers)
-                ? { consumers: pi.consumers.map((c: unknown) => (typeof c === 'string' ? qualifySubsystemRef(c, prefix, this.rootSubsystems) : c)) }
-                : {}),
+              ...(typeof pi?.component === 'string' ? { component: q(pi.component) } : {}),
+              ...(typeof pi?.interface === 'string' ? { interface: q(pi.interface) } : {}),
+              ...(typeof pi?.typeDef === 'string' ? { typeDef: q(pi.typeDef) } : {}),
+              ...(typeof pi?.from === 'string' ? { from: q(pi.from) } : {}),
+              ...(Array.isArray(pi?.consumers) ? { consumers: pi.consumers.map(q) } : {}),
             }));
           }
           if (Array.isArray(out.lifecycle)) {
             out.lifecycle = out.lifecycle.map((le: any) =>
-              (typeof le?.component === 'string' ? { ...le, component: qm(le.component) } : le));
+              (typeof le?.component === 'string' ? { ...le, component: q(le.component) } : le));
           }
           break;
         }
@@ -4303,6 +4709,10 @@ export class SpecWorkspace {
     // write that the write itself would be refused is not an account worth
     // having.
     const gateNotices = hooks?.gate?.(kind, mergedResult);
+    // The keys the stored FILE carries that the schema does not know: the
+    // parse above already dropped them, and the save below re-serializes
+    // through the schema, so without this they would vanish unannounced.
+    const stripped = this.strippedKeysOf(kind, id);
     if (gateNotices?.length) notices.push(...gateNotices);
 
     // The account, and nothing else. Stamping happens below, so a dry run
@@ -4317,6 +4727,7 @@ export class SpecWorkspace {
         ineffective,
         notices,
         testsToRevisit: [],
+        ...(stripped.length ? { strippedKeys: stripped } : {}),
         summary: `Dry run on ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'} would be made. Nothing was written.`,
       };
     }
@@ -4343,6 +4754,7 @@ export class SpecWorkspace {
       // nothing about the rule engine that reads code. The GATED write above
       // it fills this in, which is also the only write path a human drives.
       testsToRevisit: [],
+      ...(stripped.length ? { strippedKeys: stripped } : {}),
       summary: `Updated ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'}.`,
     };
   }
@@ -5264,10 +5676,6 @@ export function loadSubsystemSpec(id: string): SubsystemSpec | null {
   return current().loadSubsystemSpec(id);
 }
 
-export function saveSubsystemSpec(spec: SubsystemSpec): void {
-  current().saveSubsystemSpec(spec);
-}
-
 export function deleteSubsystemSpec(id: string): boolean {
   return current().deleteSubsystemSpec(id);
 }
@@ -5678,6 +6086,16 @@ export function updateSpec(
  * failed write restores what it already wrote, because a half-moved method
  * leaves callers naming a home it no longer has.
  */
+/** spec_loader.deleteMount — forwarded 1:1 to the registry write face. */
+export function deleteMount(alias: string): boolean {
+  return current().removeLegacyMount(alias);
+}
+
+/** spec_loader.normalizeReferences — forwarded 1:1 to the registry write face. */
+export function normalizeReferences(kind: string, id: string): boolean {
+  return current().writeCanonicalReferences(kind, id);
+}
+
 export function moveMethods(
   from: string,
   to: string,

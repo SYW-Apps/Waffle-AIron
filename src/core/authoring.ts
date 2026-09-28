@@ -24,7 +24,6 @@ import type { MethodMoveReport, SpecChangeReport, SpecWriteHooks, WritableSpecKi
 // portal by identity. The seam is a peer of sdd_core and sdd_validator, and a
 // peer reaches another subsystem through what that subsystem publishes.
 import {
-  createChainedSubsystem,
   deleteSpec as coreDeleteSpec,
   loadImplementationSpecs,
   loadProjectConfig,
@@ -146,8 +145,6 @@ export interface SpecWriteReceipt {
   status?: SpecStatus;
   /** Carried, removed and cleared fields, gate warnings and placement notices — one per entry. */
   notices: string[];
-  /** The child project directory a chained subsystem's create scaffolded. */
-  scaffoldedProjectPath?: string;
   /** The tests that encode a method this write changed or removed. */
   testsToRevisit: TestsToRevisit[];
 }
@@ -648,11 +645,11 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   if (application.refusal !== undefined) throw new Error(application.refusal);
   // Steps 9-12: the intrinsic judgement, for the one kind judged at the boundary.
   const gateNotices = restatement.kind === 'component' ? judgeComponent(application.spec as ComponentSpec, bound) : [];
-  // Steps 13-16: to disk — scaffolding a chained subsystem's child project.
+  // Steps 13-15: to disk — the legacy mount form refused before anything is written.
   const persisted = persistCandidate(restatement.kind, application.spec);
-  // Steps 17-19: the tests this write invalidated, each placed in its file.
+  // Steps 16-18: the tests this write invalidated, each placed in its file.
   const testsToRevisit = testsInvalidatedBy(restatement.kind, id, application.changedMethods, [existing, application.spec], bound);
-  // Step 20: the receipt.
+  // Step 19: the receipt.
   return {
     kind: restatement.kind,
     id,
@@ -660,7 +657,6 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
     replacedExisting: application.replacedExisting,
     ...(application.status ? { status: application.status } : {}),
     notices: [...gateNotices, ...persisted.notices, ...application.notices],
-    ...(persisted.scaffoldedProjectPath ? { scaffoldedProjectPath: persisted.scaffoldedProjectPath } : {}),
     testsToRevisit,
   };
 }
@@ -677,13 +673,24 @@ function judgeComponent(candidate: ComponentSpec, options: { rules?: RulesConfig
   return noticesFrom(verdict);
 }
 
-/** Persist the candidate: a chained subsystem with its child project, anything else through the store. */
-function persistCandidate(kind: WritableSpecKind, spec: Spec): { notices: string[]; scaffoldedProjectPath?: string } {
+/**
+ * Persist the candidate through the store — refusing, before anything reaches
+ * disk, a subsystem that names a projectPath: that is the legacy mount form,
+ * and a member is declared in project.yaml `members` instead.
+ */
+function persistCandidate(kind: WritableSpecKind, spec: Spec): { notices: string[] } {
+  // Step 13: a subsystem naming a projectPath is a member declaration, not a subsystem.
   const projectPath = kind === 'subsystem' ? (spec as SubsystemSpec).projectPath : undefined;
-  if (projectPath && projectPath.trim() !== '') {
-    createChainedSubsystem(spec as SubsystemSpec, (spec as SubsystemSpec).name);
-    return { notices: [], scaffoldedProjectPath: projectPath };
+  if (projectPath !== undefined && projectPath.trim() !== '') {
+    // Step 14: refuse, naming the subsystem and the replacement.
+    const id = (spec as SubsystemSpec).id;
+    throw new Error(
+      `mount form refused: subsystem "${id}" names a projectPath ("${projectPath}"), which is the legacy L1 mount form — `
+      + 'wairon never writes it. A member project is declared in project.yaml `members`: use sdd_add_member '
+      + `(or \`wairon member add ${id} ${projectPath}\`), which scaffolds the member project and declares it.`,
+    );
   }
+  // Step 15: the store's write, collecting its placement notices.
   return { notices: saveSpec(kind, spec) };
 }
 

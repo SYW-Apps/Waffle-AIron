@@ -84,14 +84,15 @@ fields:
   - name: surfaceSnapshots
     type: SurfaceSnapshot[]
     description: >-
-      The stored surface snapshots (.wai/surfaces/) that unresolved cross-tree references are
-      checked against
+      The foreign surface snapshots (exchanged or authored imports in .wai/surfaces/) the bound root
+      holds, which references into a foreign provider are checked against. Generated stage-1 family
+      and sibling pins are not read: externals and their pins replace them
     optional: false
   - name: mountSurfaceSnapshots
     type: MountSurfaceSnapshots[]
     description: >-
-      The snapshots each chained mount holds, by mount namespace; consulted only for references made
-      inside that mount
+      The foreign snapshots each member holds, by member key; consulted only for references made
+      inside that member
     optional: false
   - name: codeModel
     type: CodeModel
@@ -174,6 +175,15 @@ fields:
       references mapped onto the producer's public names; the unexported ones are
       EXTERNAL_NOT_EXPORTED's facts. Absent on a candidate run.
     optional: true
+  - name: climbBoundExternals
+    type: string[]
+    description: >-
+      The aliases of the bound root's declared externals that its own scan binds to no project but
+      the chaining climb binds from the family's top (a member naming its parent or a sibling),
+      gathered by the validator. The external-declarations rule does not report them:
+      EXTERNAL_UNRESOLVED fires only when neither the scan nor the climb finds the producer. Absent
+      when nothing was climbed for.
+    optional: true
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -196,7 +206,11 @@ methods:
     returns: boolean
     description: >-
       Whether a type reference resolves to a builtin, one of the given generic parameters, or a
-      defined type
+      defined type. A reference written through an alias (`marketplace.resolved-dependency`,
+      `billing::money` — the first segment before `::` or `.`) is also read through the family's
+      alias tables: the alias names the key of the project it declares (a member with no declared id
+      is keyed by its name slug, so the key need not be the alias), and the rest is looked up as a
+      type of that project — the same reading the scan gives a reference, without position
   - name: targetLanguageFor
     signature: 'targetLanguageFor(subsystemId?: string): string | undefined'
     returns: string | undefined
@@ -224,32 +238,31 @@ methods:
     signature: 'isInChainedSubproject(subsystemId: string): boolean'
     returns: boolean
     description: >-
-      Whether the subsystem sits inside a chained mount: some prefix of its qualified id is a
-      subsystem with a projectPath. Conformance skips such specs, whose source paths are relative to
-      the child project's root.
+      Whether the subsystem belongs to a member rather than the bound root: its owner in the project
+      graph is not the bound root. Conformance skips such specs, whose source paths are relative to
+      the member's root.
   - name: isExternalNamespaceRef
     signature: 'isExternalNamespaceRef(ref: string): boolean'
     returns: boolean
     description: >-
-      Whether an unresolved reference points outside this loading root rather than being a local
-      typo: a ::x or super::x form, or a qualified id whose leading segment is not a subsystem of
-      this tree
+      Whether a reference the scan left unbound points outside this loading root rather than being a
+      local typo: the scan bound it as outside (an alias whose producer it did not read), or it
+      carries a deprecated form (leading `::`, `super::`) that climbs above the bound root
   - name: isCollapsedCrossTreeRef
     signature: 'isCollapsedCrossTreeRef(ref: string, fromSubsystem: string): boolean'
     returns: boolean
     description: >-
-      Whether an unresolved reference made from inside a chained mount was authored to leave it: it
-      is not under the nearest enclosing mount's namespace, because the loader collapsed its super::
-      or :: form at this root
+      Whether a reference made from inside a member was authored to leave it: the scan bound it to a
+      project other than the member that owns fromSubsystem
   - name: resolveSurfaceRef
     signature: 'resolveSurfaceRef(ref: string, fromSubsystem?: string): SurfaceRefResolution'
     returns: SurfaceRefResolution
     description: >-
-      Resolve a cross-tree reference against the stored surface snapshots. The last segment is the
-      local name and the one before it, if any, the provider; it matches an entry's public name, or
-      — only while the entry carries no public name of its own (its id is just its component or its
-      interface) — the entry's backing component. The snapshots of the mounts enclosing
-      fromSubsystem are consulted first, nearest mount first, then the bound root's own; the first
+      Resolve a reference into a foreign provider against the stored foreign surface snapshots. The
+      last segment is the public name and the one before it, if any, the provider; it matches an
+      entry by its public name only — the match by backing component is gone, so a renamed or
+      narrowed export answers to its name alone. The foreign snapshots of the members enclosing
+      fromSubsystem are consulted first, nearest member first, then the bound root's own; the first
       pool with matches decides, and matches that disagree on the contract make the reference
       ambiguous.
   - name: interfaceMethodsOf
@@ -330,4 +343,4 @@ methods:
       rule that accuses
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-26T18:13:30.387Z'
+updatedAt: '2026-09-27T17:04:15.061Z'

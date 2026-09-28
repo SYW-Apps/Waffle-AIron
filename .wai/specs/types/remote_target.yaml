@@ -14,7 +14,9 @@ fields:
     optional: false
   - name: projectId
     type: string
-    description: The hosted project to bind — optionally subproject-qualified as 'projectId::subsystemId'
+    description: >-
+      The hosted project to bind — optionally member-qualified as 'projectId::alias' (one member
+      alias per hop)
     optional: false
   - name: token
     type: string
@@ -24,4 +26,4 @@ methods: []
 componentClass: cli_remote_adapter
 sourcePath: src/commands/remote.ts
 createdAt: '2026-08-12T18:31:11.240Z'
-updatedAt: '2026-09-19T11:07:15.637Z'
+updatedAt: '2026-09-27T11:00:28.972Z'

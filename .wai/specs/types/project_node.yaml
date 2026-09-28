@@ -2,17 +2,17 @@ kind: value-object
 id: project_node
 name: ProjectNode
 description: >-
-  One project root of the family the scan read: the bound root, or a chained member at any depth.
-  Keyed by its mount namespace, because two projects may (wrongly) resolve to one id and the graph
-  must still tell them apart.
+  One project root of the family the scan read: the bound root, or a member at any depth. Keyed by
+  its in-memory key (its project id, or its alias path when the id is taken or missing), because two
+  projects may (wrongly) resolve to one id and the graph must still tell them apart.
 subsystem: sdd_core
 fields:
   - name: namespace
     type: string
     description: >-
-      The project's mount namespace: '' for the bound root, else the qualified id of the subsystem
-      that mounts it (e.g. billing, billing::ledger). Every spec the project declares is qualified
-      under it.
+      The project's key: '' for the bound root, else its effective project id (billing, transpiler —
+      the same at every depth), or its alias path when another member holds its id or it has none.
+      Every spec the project declares is keyed under it.
     optional: false
     key: primary
   - name: id
@@ -31,27 +31,56 @@ fields:
     optional: true
   - name: parent
     type: string
-    description: The namespace of the project that mounts this one; absent for the bound root.
+    description: The key of the project that declares this one as a member; absent for the bound root.
     optional: true
   - name: mountAlias
     type: string
     description: >-
-      The local id of the mounting subsystem — the alias the parent uses for this member; absent for
-      the bound root.
+      The alias the parent declares it under (its `members` key, or the legacy mount subsystem's
+      local id); absent for the bound root.
     optional: true
+  - name: mountForm
+    type: string
+    description: 'members | mount: how the parent declares it; absent for the bound root.'
+    optional: true
+  - name: legacyMount
+    type: SubsystemSpec | null
+    description: >-
+      The legacy L1 mount subsystem as its parent wrote it, for the migration to carry; null
+      otherwise.
+    optional: false
+  - name: hasSystem
+    type: boolean
+    description: >-
+      Whether the project has an L0 of its own — a project that exports needs one, and the migration
+      writes a minimal one where it is missing.
+    optional: false
   - name: directory
     type: string
     description: The project's root directory, absolute.
     optional: false
   - name: members
     type: string[]
-    description: The namespaces of the projects this one mounts directly.
+    description: The keys of the projects this one declares as members, either form.
+    optional: false
+  - name: aliases
+    type: Map<string, string>
+    description: >-
+      The project's alias table as the scan bound it: alias → the key of the project it names
+      (members and family externals).
     optional: false
   - name: externals
     type: ResolvedExternal[]
     description: The project's declared externals, each bound to its producer (empty when none are declared).
     optional: false
+  - name: memberDescription
+    type: string
+    description: >-
+      What the parent's declaration says the member is — the `members` long form's description, or a
+      legacy mount's description — which the canvas shows on the member's project node; absent for
+      the bound root and for a member declared without one.
+    optional: true
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:52.264Z'
-updatedAt: '2026-09-26T18:32:25.836Z'
+updatedAt: '2026-09-27T15:26:03.139Z'

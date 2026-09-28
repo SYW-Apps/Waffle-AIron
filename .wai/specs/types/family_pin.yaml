@@ -1,0 +1,30 @@
+kind: value-object
+id: family_pin
+name: FamilyPin
+description: >-
+  One stage-1 family pin a project root still holds in .wai/surfaces/: a generated snapshot `wairon
+  surface pin` wrote before externals existed. Nothing reads it since stage 3; the chaining
+  migration converts a parent pin into an `externals` declaration and deletes every family pin.
+subsystem: sdd_surfaces
+fields:
+  - name: key
+    type: string
+    description: >-
+      The snapshot's storage key (its projectName): the parent's system name for the family pin,
+      `<system>::<subsystem>` for a sibling pin — what removeSnapshot takes.
+    optional: false
+    key: primary
+  - name: role
+    type: string
+    description: >-
+      parent | sibling: whether it pins the parent's family surface or one sibling's published
+      surface.
+    optional: false
+  - name: generatedAt
+    type: string
+    description: When the pin was written, for the report.
+    optional: true
+methods: []
+sourcePath: src/core/surfaces.ts
+createdAt: '2026-09-27T10:42:52.668Z'
+updatedAt: '2026-09-27T10:42:52.670Z'

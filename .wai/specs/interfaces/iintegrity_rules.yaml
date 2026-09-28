@@ -52,21 +52,6 @@ methods:
       - code: RESERVED_ID_SEGMENT
         severity: error
         summary: Id uses the reserved namespace keyword "super"
-  - name: namespaceShadowing
-    description: >-
-      Rule namespace-shadowing. A subproject-local name must not shadow a root-level subsystem id —
-      inside its subproject a bare reference to the shadowed name anchors to the ROOT subsystem, so
-      the local spec cannot be addressed reliably.
-    signature: 'namespaceShadowing(ctx: RuleContext): void'
-    returns: void
-    params:
-      - name: ctx
-        type: RuleContext
-        description: The validation run's shared read model and issue sink
-    findings:
-      - code: NAMESPACE_SHADOWING
-        severity: error
-        summary: Subproject-local id shadows a root subsystem id (bare references anchor to the root)
   - name: roundtripSerialization
     description: >-
       Rule roundtrip-serialization. Every loaded spec must re-serialize through the exact writer
@@ -231,12 +216,14 @@ methods:
     description: >-
       Rule project-identity. A project is keyed on its id, so the id must be declared, well-formed,
       stable and its own: a project that declares none answers to its display name slugified until
-      it writes one (PROJECT_ID_DEFAULTED — for a member of the family, the finding names its
-      mount's subsystem id as the id to declare), a project whose name yields no id or whose
-      declared id breaks the grammar has nothing reliable to key on, nor do two projects of one
-      family that resolve to one id (PROJECT_ID_AMBIGUOUS — the family half reads the project
-      graph's identity problems), and an id that differs from the one the lock approved has moved
-      under everything that keyed on it (PROJECT_ID_CHANGED).
+      it writes one (PROJECT_ID_DEFAULTED — for a member of the family, the finding names its alias
+      as the id to declare), a project whose name yields no id or whose declared id breaks the
+      grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), two members of one family that
+      resolve to one id are one project declared twice (PROJECT_ID_COLLISION — a project is
+      contained once; a project used in two roles is modelled as consumption, one member and several
+      consumers, never as two copies of its tree), and an id that differs from the one the lock
+      approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). The family half
+      reads the project graph's identity problems.
     signature: 'projectIdentity(ctx: RuleContext): void'
     returns: void
     params:
@@ -246,15 +233,16 @@ methods:
     findings:
       - code: PROJECT_ID_AMBIGUOUS
         severity: warning
-        summary: >-
-          Project has no usable id: its name yields no slug, its declared id breaks the grammar, or
-          another project of its family resolves to the same id
+        summary: 'Project has no usable id: its name yields no slug, or its declared id breaks the grammar'
       - code: PROJECT_ID_CHANGED
         severity: error
         summary: Project id differs from the id the lock approved
       - code: PROJECT_ID_DEFAULTED
         severity: notice
         summary: Project declares no id; it answers to one derived from its display name
+      - code: PROJECT_ID_COLLISION
+        severity: error
+        summary: Two members of one family resolve to one project id
   - name: exportTables
     description: >-
       Rule export-tables. Every level's export table must resolve the way a module resolver resolves
@@ -262,14 +250,15 @@ methods:
       two explicit entries — bind a name to different targets; the name is left out), no chain leads
       back to itself (EXPORT_CYCLE — an error for a named chain that never reaches a component or
       type, a warning for a wildcard cycle, which resolves to its union), every entry names a source
-      and an item that exist, that the source exports and, for an own type, that the level owns,
-      under a public name of [a-z0-9-_]+ (EXPORT_INVALID), every re-exported component can serve a
-      boundary caller — a Portal, a gateway being a Portal variant, or an Observer for events
-      (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports), and an L0 entry that re-exports a member's
-      or an external's export never declares a wider audience than that export has
-      (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. The rule judges the
-      facts the export resolver gathered — for the bound root's table and every member's — and
-      resolves nothing itself.
+      and an item that exist, that the source exports and, for an own type, that the level owns — a
+      subsystem-owned type at L1, a project-level type (no subsystem) for an L0 `{ typeDef }`
+      without `from` — under a public name of [a-z0-9-_]+ (EXPORT_INVALID), every re-exported
+      component can serve a boundary caller — a Portal, a gateway being a Portal variant, or an
+      Observer for events (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports), and an L0 entry that
+      re-exports a member's or an external's export never declares a wider audience than that export
+      has (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. The rule judges
+      the facts the export resolver recorded in the scan — for the bound root's table and every
+      member's — and resolves nothing itself.
     signature: 'exportTables(ctx: RuleContext): void'
     returns: void
     params:
@@ -300,13 +289,17 @@ methods:
         summary: An L0 entry declares a wider audience than the member or external export it re-exports
   - name: referenceForms
     description: >-
-      Rule reference-forms. A reference written with a leading `::` escapes to the root of whatever
-      checkout loads it, naming a spec by its place in one mount chain; it always has a fix, the
-      absolute id it resolves to. Every one an author wrote is reported (DEPRECATED_REFERENCE_FORM),
-      naming the spec, where in it, the form as written and the absolute id to write instead.
-      `super::` is not reported in stage 2: wairon's own writer emits it for every cross-namespace
-      reference and no alternative exists until stage 3 brings `alias::name`. It reads the project
-      graph's authored references, which the scan records before qualification erases the form.
+      Rule reference-forms. A cross-project reference is `alias::name`: the alias is one of the
+      referring project's members or externals, the name a public name of that project's L0 table.
+      Three older forms still bind for one release and are reported (DEPRECATED_REFERENCE_FORM),
+      each naming the spec, where in it, the form as written and the text to write instead (the
+      scan's rewrite: a bare local id, or `alias::publicName`): a leading `::`, which escapes to the
+      root of whatever checkout loads it; `super::`, which climbs the containing projects — a place
+      in one family, not a name; and a member path (`desktop::shell` written inside desktop,
+      `waffler_core::transpiler::x` written inside transpiler), a first segment the referring
+      project does not declare, read from the bound root. Wairon's own writer emits none of them. A
+      form with no rewrite (its target is out of reach) is reported with the reason. It reads the
+      project graph's authored references, which the scan records before binding erases the form.
     signature: 'referenceForms(ctx: RuleContext): void'
     returns: void
     params:
@@ -316,16 +309,22 @@ methods:
     findings:
       - code: DEPRECATED_REFERENCE_FORM
         severity: notice
-        summary: 'A reference written with a leading :: where the absolute id it resolves to belongs'
+        summary: >-
+          A reference written with a leading ::, super:: or a member path where a local id or
+          alias::name belongs
   - name: externalDeclarations
     description: >-
       Rule external-declarations. Every external a project declares in project.yaml must be usable:
-      its alias fits [a-z0-9-_]+ (a dotted producer id needs an explicit alias), its producer id
-      fits the project-id grammar, and its producer is found — exactly one project of the family
-      answers to the id, or source.path names a directory (whose project, when it is in the family,
-      answers to the declared id). A declaration that fails is reported (EXTERNAL_UNRESOLVED) with
-      its reason, so a misspelled declaration never passes as declared. The findings name no spec:
-      externals live in configuration. It reads the project graph's bound externals.
+      its alias fits [a-z0-9-_]+ (a dotted producer id needs an explicit alias) and is not also a
+      `members` key (one alias names one project), its producer id fits the project-id grammar, and
+      its producer is found — exactly one project of the family answers to the id, or source.path
+      names a directory (whose project, when it is in the family, answers to the declared id). A
+      declaration that fails is reported (EXTERNAL_UNRESOLVED) with its reason, so a misspelled
+      declaration never passes as declared — but only when neither the scan nor the chaining climb
+      finds the producer: a member validated from its own root that declares its parent or a sibling
+      is not reported when the climb to the family's top binds it (ctx.climbBoundExternals). The
+      findings name no spec: externals live in configuration. It reads the project graph's bound
+      externals and alias-conflict problems.
     signature: 'externalDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -336,8 +335,53 @@ methods:
       - code: EXTERNAL_UNRESOLVED
         severity: notice
         summary: >-
-          A declared external whose alias or producer id is malformed, or whose producer the family
-          and its source.path do not provide
+          A declared external whose alias is malformed or taken by a member, whose producer id is
+          malformed, or whose producer the family and its source.path do not provide
+  - name: localIds
+    description: >-
+      Rule local-ids. Inside one project an id names one spec, and an id without `::` is always
+      local. Two spec files of one project declaring one key are DUPLICATE_SPEC_ID: whichever the
+      loader kept, every reference to that key — local, or `alias::name` from another project —
+      could mean either, so the tree has no single reading. A local id equal to one of the project's
+      aliases (a `members` or `externals` key) is LOCAL_ID_SHADOWS_PROJECT: the grammar keeps them
+      apart (a bare id is local, `alias::name` crosses), but a reader seeing `billing` beside
+      `billing::invoice_portal` cannot tell a local subsystem from a member, so the shadow is made
+      visible. It reads the project graph's owners, alias tables and duplicate-spec problems.
+    signature: 'localIds(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DUPLICATE_SPEC_ID
+        severity: error
+        summary: Two spec files of one project declare the same id
+      - code: LOCAL_ID_SHADOWS_PROJECT
+        severity: warning
+        summary: >-
+          A local spec id equals one of the project's aliases (a member or external), so a bare id
+          and the alias read alike
+  - name: memberDeclarations
+    description: >-
+      Rule member-declarations. A project declares its members in project.yaml `members`; a member
+      is not a subsystem and carries no content in its parent. The L1 form — a subsystem carrying
+      projectPath — still loads for one release and is reported (DEPRECATED_MOUNT_FORM), naming the
+      mount, its path, the `members` entry that replaces it, and every field it carries that `doctor
+      --fix` will move into the member (or stop on); a mount whose alias `members` also declares is
+      reported as ignored. It reads the project graph's nodes and their legacy mounts.
+    signature: 'memberDeclarations(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DEPRECATED_MOUNT_FORM
+        severity: notice
+        summary: >-
+          A member declared as an L1 subsystem carrying projectPath instead of a project.yaml
+          `members` entry
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-26T18:12:58.286Z'
+updatedAt: '2026-09-27T17:04:19.388Z'

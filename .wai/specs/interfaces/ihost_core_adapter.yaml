@@ -91,9 +91,10 @@ methods:
         type: Json
   - name: resolveContainedProjectPath
     description: >-
-      Resolve a subsystem's projectPath WITHIN the given root, forwarded to the spec tree portal's
-      containment check — absolute and escaping paths refused. The hosted mount-resolution seam: the
-      project repository never touches core modules directly.
+      Resolve a member's path WITHIN the given root — a project.yaml `members` entry's path or, for
+      one release, a legacy L1 mount's projectPath — forwarded to the spec tree portal's containment
+      check: absolute and escaping paths refused. The hosted member-resolution seam: the project
+      repository never touches core modules directly.
     signature: 'resolveContainedProjectPath(projectRoot: string, projectPath: string): string'
     returns: string
     params:
@@ -133,8 +134,11 @@ methods:
         type: tree_import_options
   - name: currentChildPins
     description: >-
-      The approved StateId of every chained child mounted under this root, keyed by mount id — what
-      a parent approval pins. A child with no approval of its own contributes no pin.
+      The approved StateId of every member the bound root declares, keyed by its alias — what a
+      parent approval pins. The members are read from the project graph (projectFamily: the bound
+      root's direct members, either declaration form) and handed in as alias and path; a member is
+      never a subsystem, so the subsystem specs no longer name them. A member with no approval of
+      its own contributes no pin.
     signature: 'currentChildPins(mounts: SubsystemSpec[]): Record<string, string>'
     returns: Record<string, string>
     params:
@@ -263,6 +267,16 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: projectFamily
+    description: >-
+      The project graph of the bound root's current scan — one node per project root with its
+      parent, alias and declaration form. Forwarded to the spec tree portal; read by the hosted lock
+      to pin the bound root's direct members.
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
+    params: []
+    guarantees:
+      - idempotent
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -278,4 +292,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-26T16:14:31.979Z'
+updatedAt: '2026-09-27T15:26:24.336Z'

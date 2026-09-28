@@ -3,13 +3,17 @@ id: system_public_interface
 name: SystemPublicInterface
 description: >-
   One entry of the project's L0 export table — the only thing another project may consume, like a
-  crate root's `pub use` or an `index.js` re-export. L0 owns no components, so every entry
-  re-exports what a subsystem exports: one component (optionally narrowed to one interface) or one
-  type, optionally renamed with `as`; or, with neither `component` nor `typeDef`, everything the
-  source exports (a wildcard). The export resolver follows each entry to its canonical target once
-  per scan; explicit entries shadow a name a wildcard brings in. A legacy entry `{ subsystem,
-  component, id }` reads as `{ from: subsystem, component, as: id }`, and one without a source
-  infers it from the component's owner, so existing trees keep their published names.
+  crate root's `pub use` or an `index.js` re-export. An entry is one of: an OWN item — `{ typeDef:
+  host-var-values }` with no `from`, a project-level type (a type owned by no subsystem), the
+  crate-root `pub struct`; a one-to-one re-export of a component (optionally narrowed to one
+  interface) or a type from a source, optionally renamed with `as`; or, with neither `component` nor
+  `typeDef`, everything the source exports (a wildcard). A source is one of the project's
+  subsystems, or a member or declared external by its alias. There is no project-level type
+  wildcard: each exported type is one entry, so a type becomes public contract only by being named.
+  The export resolver follows each entry to its canonical target once per scan; explicit entries
+  shadow a name a wildcard brings in. A legacy entry `{ subsystem, component, id }` reads as `{
+  from: subsystem, component, as: id }`, and a component or subsystem-owned type without a source
+  infers it from its owner, so existing trees keep their published names.
 fields:
   - name: id
     type: string
@@ -73,11 +77,17 @@ fields:
     optional: true
   - name: from
     type: string
-    description: 'The source the entry re-exports from: a subsystem of this project.'
+    description: >-
+      The source the entry re-exports from: a subsystem of this project, or a member or declared
+      external by its alias. Absent for an own project-level type, and for a legacy entry whose
+      source is inferred.
     optional: true
   - name: typeDef
     type: string
-    description: A type (entity, value object, enum) exported as is, giving it a public name.
+    description: >-
+      A type (entity, value object, enum) exported as is, giving it a public name. Without `from`, a
+      type this project owns at project level (no subsystem) is an own item; a subsystem-owned type
+      without `from` infers the subsystem as its source.
     optional: true
   - name: as
     type: string
@@ -89,4 +99,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-08T21:10:42.862Z'
-updatedAt: '2026-09-26T16:07:41.684Z'
+updatedAt: '2026-09-27T10:33:56.892Z'

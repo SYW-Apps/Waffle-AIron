@@ -1,9 +1,11 @@
 import * as crypto from 'crypto';
+import * as path from 'path';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
 import type { LockRecord } from '../core/lockfile.js';
 import type { ApproverIdentity } from '../models/lock.js';
+import type { ProjectFamily } from '../models/project-family.js';
 import { effectiveProjectId } from '../models/project.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
@@ -261,15 +263,27 @@ export function hostedApprover(subject?: PrincipalSubject): ApproverIdentity {
 }
 
 /**
+ * The members a bound root declares directly, in the shape an approval pins
+ * them by: the alias and the path relative to that root (either declaration
+ * form — `members` entries and, for one release, legacy L1 mounts).
+ */
+function directMembers(family: ProjectFamily, root: string): { id: string; projectPath: string }[] {
+  return family.nodes
+    .filter((n) => n.parent === '' && n.mountAlias !== undefined)
+    .map((n) => ({ id: n.mountAlias!, projectPath: path.relative(root, n.directory).split(path.sep).join('/') }));
+}
+
+/**
  * Step 1 of executeApprovedLock: the root the action
  * concerns. Without a qualifier that is the project's own isolated root; WITH one
  * it is the CHAINED CHILD's tree, resolved through the project registry's
  * containment-checked qualified resolution — the SAME seam the data plane binds
  * through, so a qualifier can never resolve outside the project root.
  *
- * `subproject` is the mount chain only ('a' or 'a::b'), exactly as
- * ProjectBinding.subproject carries it — never the project id. An unknown mount,
- * a subsystem carrying no projectPath, or an escaping path THROWS (the helper's
+ * `subproject` is the member chain only ('a' or 'a::b', one member alias per
+ * hop), exactly as ProjectBinding.subproject carries it — never the project id.
+ * An alias that declares no member, an internal subsystem, or an escaping path
+ * THROWS (the helper's
  * own actionable errors): the resolution never silently falls back to the project
  * root, because that fallback is precisely the confinement failure being closed.
  */
@@ -328,7 +342,9 @@ export function executeApprovedLock(
     //
     // Settledness is derived from these digests instead, exactly as locally.
     const specs = hostCore.captureApprovedSpecs();
-    const children = hostCore.currentChildPins(hostCore.loadSubsystemSpecs());
+    // The members the bound tree declares directly, from the project graph —
+    // a member is never a subsystem, so the subsystem specs do not name them.
+    const children = hostCore.currentChildPins(directMembers(hostCore.projectFamily(), root));
     // The bound tree's effective id, so a later id change is caught (PROJECT_ID_CHANGED).
     const config = hostCore.loadProjectConfig();
     const projectId = config ? effectiveProjectId(config) : null;
@@ -608,9 +624,10 @@ export function listSecrets(_cfg: HostConfig, credential: string | null): string
 // ── Spec-tree transfer (.waitree) ─────────────────────────────────────────
 //
 // The hosted half of local↔hosted migration. Both are TREE-scoped like lock:
-// a `subproject` qualifier binds the CHAINED CHILD's tree, so a
-// credential narrowed to one child exports/imports exactly that child while
-// permission resolution stays anchored at the top project.
+// a `subproject` qualifier (a member chain, one alias per hop) binds that
+// MEMBER's tree, so a credential narrowed to one member exports/imports
+// exactly that member while permission resolution stays anchored at the top
+// project.
 
 /**
  * Pack a hosted project's spec tree into a .waitree archive. Requires

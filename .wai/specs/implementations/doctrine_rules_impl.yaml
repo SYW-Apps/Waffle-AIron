@@ -1198,15 +1198,17 @@ methods:
         description: Does the consumer declare the producer?
         type: branch
         condition: >-
-          ProjectFamily.declares(consumer, producer) — the producer is a direct member, or one of
-          the consumer's externals resolves to it
+          the reference bound to the producer through one of the consumer's aliases —
+          ProjectFamily.declares(consumer, producer): the producer is a direct member (either
+          declaration form), or one of the consumer's externals resolves to it
         onTrueStep: 7
         onFalseStep: 6
       - stepNumber: 6
         description: >-
           Report EXTERNAL_UNDECLARED (notice) on the referring spec, in its draft context, naming
-          the position, the target, the producer's id and namespace, and the `externals` entry that
-          would declare it (a member needs none; a parent or sibling does)
+          the position, the reference as written, the producer's id and key, and the `externals`
+          entry that would declare it (a member needs none; a parent or sibling does) — after which
+          the reference is written `alias::name`
         type: local
       - stepNumber: 7
         label: declared
@@ -1222,9 +1224,10 @@ methods:
         label: exported
         description: >-
           Report EXTERNAL_NOT_EXPORTED (notice) on the referring spec, in its draft context, naming
-          the target and the producer, and that another project may reach it only through an L0
-          export whose audience covers the referrer — export it from the producer's L0 (audience
-          project reaches the family) and reach it there
+          the reference as written, the target it reached and the producer, and that another project
+          may reach it only through a public name of the producer's L0 table whose audience covers
+          the referrer — export it from the producer's L0 (audience project reaches the family; a
+          project-level type takes one own `{ typeDef }` entry) and reach it by that name
         type: local
       - stepNumber: 10
         description: For each subsystem's trustedLinks entries
@@ -1235,8 +1238,9 @@ methods:
       - stepNumber: 11
         description: >-
           Find the project the link lands in: ProjectFamily.producerOf(the link as written, from the
-          declaring subsystem's project) — the loader leaves trustedLinks raw, so it is qualified
-          here the way the loader qualifies a reference
+          declaring subsystem's project) — the loader leaves trustedLinks raw, so it is read here
+          the way the scan binds a reference: a bare subsystem id is local, `alias::sub` lands in
+          the project the alias names
         type: local
       - stepNumber: 12
         description: Does the link stay inside its project?
@@ -1262,6 +1266,46 @@ methods:
     detail: full
     symbol: check
     exportedVia: projectBoundariesRule
+  - name: projectCycles
+    sourcePath: src/core/rules/doctrine/project-cycles.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        description: 'Find the loops: ProjectFamily.dependencyCycles()'
+        type: local
+      - stepNumber: 5
+        label: loops
+        description: For each loop
+        type: loop
+        loopKind: forEach
+        over: the loops, each once
+        endStep: 6
+      - stepNumber: 6
+        label: reported
+        description: >-
+          Report PROJECT_DEPENDENCY_CYCLE (warning) on each project of the loop (its key; the bound
+          root as the tree), naming the loop in order and, for each edge, the cross-project
+          references that make it (consumer spec, position, the reference as written) — the edges
+          with the fewest references first, since those are the cheapest to move
+        type: local
+      - stepNumber: 7
+        description: Every loop is reported
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: projectCyclesRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-26T18:32:19.206Z'
+updatedAt: '2026-09-27T12:17:46.746Z'

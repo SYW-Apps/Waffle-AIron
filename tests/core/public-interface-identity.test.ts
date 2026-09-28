@@ -17,7 +17,7 @@ import { writeYamlFile } from '../../src/utils/yaml.js';
 import {
   invalidateSpecCache,
   loadSubsystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveSystemSpec,
   updateSpec,
 } from '../../src/core/specs.js';
@@ -40,7 +40,7 @@ function project(publicInterfaces: PublicInterface[]): void {
   setProjectRoot(root);
   invalidateSpecCache();
   saveSystemSpec({ schemaVersion: '1.0.0', name: 'S', vision: 'v', boundaries: [], globalRequirements: [], databases: [], createdAt: now, updatedAt: now });
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     id: 'shop', name: 'Shop', description: 'd', parentSystem: 'S', publicInterfaces, trustedLinks: [],
     status: 'draft', createdAt: now, updatedAt: now,
   } as SubsystemSpec);

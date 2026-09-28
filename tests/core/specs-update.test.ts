@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSubsystemSpec,
+  saveSpec,
   saveInterfaceSpec,
   loadInterfaceSpec,
   saveImplementationSpec,
@@ -35,7 +35,7 @@ describe('granular specification updates via updateSpec', () => {
     setProjectRoot(proj);
 
     // 1. Setup subsystem
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0',
       id: 'billing',
       name: 'Billing Subsystem',
@@ -109,7 +109,7 @@ describe('granular specification updates via updateSpec', () => {
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0', id: 'billing', name: 'Billing', description: 'd',
       parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now,
     });
@@ -172,7 +172,7 @@ describe('granular specification updates via updateSpec', () => {
     setProjectRoot(proj);
 
     // 1. Save Subsystem
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0',
       id: 'billing',
       name: 'Billing Subsystem',
@@ -362,7 +362,7 @@ describe('granular specification updates via updateSpec', () => {
 
     const EXT = { 'pack-x': { budget: 5, note: 'n' }, 'pack-y': 'keep' };
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0', id: 'billing', name: 'Billing', description: 'd',
       parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now,
     });
@@ -427,7 +427,7 @@ describe('granular specification updates via updateSpec', () => {
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
 
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0',
       id: 'billing',
       name: 'Billing Subsystem',
@@ -501,7 +501,7 @@ describe('array deltas upsert by identity and honour delete markers', () => {
 
   it('trustedLinks: a one-entry delta updates that link and KEEPS the others', () => {
     project();
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0', id: 'billing', name: 'Billing', description: 'd', parentSystem: 'GK',
       publicInterfaces: [], trustedLinks: [{ subsystem: 'x', reason: 'r1' }, { subsystem: 'y', reason: 'r2' }],
       createdAt: now, updatedAt: now,
@@ -564,7 +564,7 @@ describe('array deltas upsert by identity and honour delete markers', () => {
 
   it('interface method findings: keyed by code, upserted and deletable', () => {
     project();
-    saveSubsystemSpec({ schemaVersion: '1.0.0', id: 'rules', name: 'Rules', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    saveSpec('subsystem', { schemaVersion: '1.0.0', id: 'rules', name: 'Rules', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
     saveComponentSpec({
       id: 'rule', name: 'Rule', description: 'd', subsystem: 'rules', componentType: 'Orchestrator', dependencyClass: 'pure',
       owns: [], dependsOn: [], createdAt: now, updatedAt: now,
@@ -615,7 +615,7 @@ describe('array deltas upsert by identity and honour delete markers', () => {
 
   it('string arrays have no per-element identity, so they replace wholesale', () => {
     project();
-    saveSubsystemSpec({ schemaVersion: '1.0.0', id: 'billing', name: 'B', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    saveSpec('subsystem', { schemaVersion: '1.0.0', id: 'billing', name: 'B', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
     saveComponentSpec({
       id: 'repo', name: 'Repo', description: 'd', subsystem: 'billing', componentType: 'Repository',
       owns: ['a', 'b', 'c'], dependsOn: [], createdAt: now, updatedAt: now,
@@ -630,7 +630,7 @@ describe('array deltas upsert by identity and honour delete markers', () => {
 
   it('an empty array clears a keyed list outright', () => {
     project();
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0', id: 'billing', name: 'B', description: 'd', parentSystem: 'GK',
       publicInterfaces: [], trustedLinks: [{ subsystem: 'x', reason: 'r' }], createdAt: now, updatedAt: now,
     } as never);
@@ -644,7 +644,7 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     // A listener mounts each portal once, so the portal is the mount's identity;
     // without it a one-mount delta replaced the whole table.
     project();
-    saveSubsystemSpec({ schemaVersion: '1.0.0', id: 'clinic', name: 'Clinic', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    saveSpec('subsystem', { schemaVersion: '1.0.0', id: 'clinic', name: 'Clinic', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
     saveComponentSpec({
       id: 'public_listener', name: 'Public listener', description: 'd', subsystem: 'clinic', componentType: 'Portal', portalType: 'HTTP_API',
       owns: [], dependsOn: [],
@@ -696,7 +696,7 @@ describe('unset removes an optional field', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-unset-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
-    saveSubsystemSpec({ schemaVersion: '1.0.0', id: 's', name: 'S', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    saveSpec('subsystem', { schemaVersion: '1.0.0', id: 's', name: 'S', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
     saveComponentSpec({ id: 'p', name: 'P', description: 'd', subsystem: 's', componentType: 'Portal', portalType: 'HTTP_API', basePath: '/v1', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as never);
     invalidateSpecCache();
   }

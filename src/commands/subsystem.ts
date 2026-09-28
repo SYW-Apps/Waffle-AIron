@@ -2,29 +2,26 @@ import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import { getProjectRoot } from '../utils/fs.js';
-// cli_core_adapter and cli_authoring_adapter — every call these commands make
-// into another subsystem lands on the adapter's own module.
+// cli_core_adapter — every call these commands make into another subsystem
+// lands on the adapter's own module.
 import {
-  loadSystemSpec,
-  loadSubsystemSpec,
-  moveSubsystemProject,
+  createMember,
+  moveMember,
   externalizeSubsystem,
-  internalizeSubsystem,
+  internalizeMember,
   projectConfigExists,
 } from './adapters/core.js';
-import { writeSpec } from './adapters/authoring.js';
-import type { SpecRestatement } from '../core/authoring.js';
-import type { SubsystemSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// subsystem command — create/relocate external (chained) subprojects
+// member commands — the projects this project contains
 //
-// The AI authors in-tree subsystems through the sdd_* tools; this CLI surface is
-// specifically for the *external* case, where a subsystem lives in its own
-// sibling wairon project wired by `projectPath`. `add` AUTHORS the subsystem,
-// so it writes through the authoring seam (which wires the parent link and
-// scaffolds the child project in one write); the relocations are mechanical
-// and go to core's maintenance portal.
+// A member is a project the bound project contains, declared in its
+// project.yaml `members` (`wairon member add|move|internalize`). It is never a
+// subsystem of its parent: nothing is written into the parent's spec tree, and
+// the parent reaches it as `alias::name` through the member's L0 exports.
+// `wairon subsystem externalize` keeps its name because it acts on a subsystem,
+// turning it into a member. Every write here is mechanical and goes to core's
+// maintenance portal.
 // ---------------------------------------------------------------------------
 
 // The rest of the diagram surface `wairon diagram` needs, republished by
@@ -52,118 +49,79 @@ export {
   buildCanvasDataModel,
 } from '../core/index.js';
 
-/**
- * The restatement `wairon subsystem add` states: only what the command owns —
- * the id, the projectPath, and the display name when --name is given — plus,
- * for a subsystem not yet stored, the name (--name or the id) and the
- * placeholder description a new subsystem requires. `fields` lists exactly
- * those, so a re-run carries the stored description, published surface,
- * trusted links and status instead of overwriting them; the seam derives
- * parentSystem and fills a new spec's lists from the schema defaults.
- */
-function subsystemAddRestatement(
-  id: string,
-  projectPath: string,
-  name: string | undefined,
-  stored: SubsystemSpec | null,
-): SpecRestatement {
-  const spec: Record<string, unknown> = { id, projectPath };
-  const fields = ['id', 'projectPath'];
-  if (name !== undefined || !stored) {
-    spec.name = name ?? id;
-    fields.push('name');
-  }
-  if (!stored) {
-    spec.description = `External subsystem ${spec.name}`;
-    fields.push('description');
-  }
-  return { kind: 'subsystem', spec: spec as unknown as SubsystemSpec, fields };
+interface MemberAddOptions {
+  description?: string;
 }
 
-interface SubsystemAddOptions {
-  projectPath?: string;
-  name?: string;
+interface SubsystemExternalizeOptions {
+  path?: string;
 }
 
-interface SubsystemMoveOptions {
-  projectPath?: string;
-}
-
-export async function runSubsystemAdd(id: string, options: SubsystemAddOptions = {}): Promise<void> {
-  logger.header('wairon subsystem add');
-
+/** The initialized-project guard every member command opens with. */
+function requireProject(): void {
   if (!projectConfigExists()) {
     throw new WaironError('Not inside an initialized wairon project. Run `wairon init` first.');
   }
-  if (!options.projectPath) {
-    throw new WaironError(
-      '--project-path is required (use the sdd_add_subsystem MCP tool for in-tree subsystems).',
-    );
-  }
-
-  const system = loadSystemSpec();
-  if (!system) {
-    throw new WaironError('System spec is missing. Run `wairon init` first.');
-  }
-
-  // Step 4: the subsystem already stored under that id, if any — a re-run
-  // must not overwrite what the author set since.
-  const stored = loadSubsystemSpec(id);
-
-  // Step 5: the restatement, with only what this command owns.
-  const restatement = subsystemAddRestatement(id, options.projectPath, options.name, stored);
-
-  // Step 6: through the authoring client adapter into the seam.
-  const receipt = writeSpec(restatement);
-
-  // Step 7: the confirmation, and what a re-authoring did beyond the input.
-  const childDir = path.resolve(getProjectRoot(), options.projectPath);
-  logger.success(`${receipt.replacedExisting ? 'Re-authored' : 'Added'} external subsystem "${id}" → ${options.projectPath}`);
-  for (const notice of receipt.notices) logger.info(notice);
-  logger.info(`Scaffolded child project at ${path.relative(process.cwd(), childDir) || '.'}`);
-  logger.info(`Design its spec tree from this parent using namespaced ids (e.g. ${id}::<component>).`);
 }
 
-export async function runSubsystemMove(id: string, options: SubsystemMoveOptions = {}): Promise<void> {
-  logger.header('wairon subsystem move');
-
-  if (!projectConfigExists()) {
-    throw new WaironError('Not inside an initialized wairon project.');
-  }
-  if (!options.projectPath) {
-    throw new WaironError('--project-path (the new location) is required.');
-  }
-
-  moveSubsystemProject(id, options.projectPath);
-  logger.success(`Moved subsystem "${id}" → ${options.projectPath}`);
+/** A path as the terminal shows it: relative to where the command ran. */
+function shown(memberPath: string): string {
+  return path.relative(process.cwd(), path.resolve(getProjectRoot(), memberPath)) || '.';
 }
 
-export async function runSubsystemExternalize(id: string, options: SubsystemAddOptions = {}): Promise<void> {
+export async function runMemberAdd(alias: string, memberPath: string, options: MemberAddOptions = {}): Promise<void> {
+  logger.header('wairon member add');
+  // Step 1: an initialized project.
+  requireProject();
+  // Steps 2-3: the member needs a path.
+  if (!memberPath) {
+    throw new WaironError('a path is required: wairon member add <alias> <path>');
+  }
+  // Step 4: scaffold the member and declare it in `members`.
+  createMember(alias, memberPath, options.description);
+  // Step 5: the confirmation and next steps.
+  logger.success(`Added member "${alias}" → ${memberPath} (declared in project.yaml \`members\`)`);
+  logger.info(`Scaffolded its project at ${shown(memberPath)} — its project id is "${alias}".`);
+  logger.info(`Design it from its own root, and export what others consume from its L0; reference it here as ${alias}::<name>.`);
+}
+
+export async function runMemberMove(alias: string, newPath: string): Promise<void> {
+  logger.header('wairon member move');
+  // Step 1: an initialized project.
+  requireProject();
+  // Steps 2-3: the new location is required.
+  if (!newPath) {
+    throw new WaironError('a new path is required: wairon member move <alias> <path>');
+  }
+  // Step 4: move the member's directory and point its `members` entry there.
+  moveMember(alias, newPath);
+  // Step 5: the confirmation.
+  logger.success(`Moved member "${alias}" → ${newPath}`);
+}
+
+export async function runSubsystemExternalize(id: string, options: SubsystemExternalizeOptions = {}): Promise<void> {
   logger.header('wairon subsystem externalize');
-
-  if (!projectConfigExists()) {
-    throw new WaironError('Not inside an initialized wairon project.');
+  // Step 1: an initialized project.
+  requireProject();
+  // Steps 2-3: the destination is required.
+  if (!options.path) {
+    throw new WaironError("--path (the member's destination) is required.");
   }
-  if (!options.projectPath) {
-    throw new WaironError('--project-path (the subproject destination) is required.');
-  }
-
-  externalizeSubsystem(id, options.projectPath);
-
-  const childDir = path.resolve(getProjectRoot(), options.projectPath);
-  logger.success(`Externalized subsystem "${id}" → ${options.projectPath}`);
-  logger.info(`Moved its specs into ${path.relative(process.cwd(), childDir) || '.'} (now a standalone subproject).`);
-  logger.info('Move the source code there yourself, then run `wairon validate` to confirm the tree.');
+  // Step 4: turn the subsystem into a member declared in `members`.
+  externalizeSubsystem(id, options.path);
+  // Step 5: the confirmation and what is left to the user.
+  logger.success(`Externalized subsystem "${id}" → member at ${options.path}`);
+  logger.info(`Moved its specs into ${shown(options.path)} and declared it in project.yaml \`members\` as "${id}".`);
+  logger.info('Move the source code there yourself, run `wairon doctor --fix` for the exports either side now needs, then `wairon validate`.');
 }
 
-export async function runSubsystemInternalize(id: string): Promise<void> {
-  logger.header('wairon subsystem internalize');
-
-  if (!projectConfigExists()) {
-    throw new WaironError('Not inside an initialized wairon project.');
-  }
-
-  internalizeSubsystem(id);
-  logger.success(`Internalized subsystem "${id}" back into this project.`);
-  logger.info('Its child .wai project was removed. Run `wairon validate` to confirm the tree.');
+export async function runMemberInternalize(alias: string): Promise<void> {
+  logger.header('wairon member internalize');
+  // Step 1: an initialized project.
+  requireProject();
+  // Step 2: take the member back into this project.
+  internalizeMember(alias);
+  // Step 3: the confirmation.
+  logger.success(`Internalized member "${alias}" into this project.`);
+  logger.info('Its .wai project was removed and its `members` entry dropped. Run `wairon validate` to confirm the tree.');
 }

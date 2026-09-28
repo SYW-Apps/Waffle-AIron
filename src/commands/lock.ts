@@ -13,7 +13,7 @@ import {
   localApprover,
   writeLockRecord,
   specPathsInScope,
-  loadSubsystemSpecs,
+  projectFamily,
   loadSystemSpec,
   readLockState,
   loadProjectConfig,
@@ -178,7 +178,7 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
   // A chained child's own edits never show up in the parent's spec diff — the
   // trees are approved separately. What the parent reviews is the child MOVING:
   // its approval shifting away from the one this parent pinned.
-  const moved = movedChildren(loadSubsystemSpecs());
+  const moved = movedChildren(memberMounts());
   if (moved.length > 0) {
     logger.info(`${moved.length} chained child project(s) moved since the last approval:`);
     for (const m of moved) {
@@ -253,8 +253,21 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
     status: 'ready',
     ...(projectId !== null ? { projectId } : {}),
     specs: captureApprovedSpecs(root, scope),
-    children: currentChildPins(loadSubsystemSpecs(), root),
+    children: currentChildPins(memberMounts(), root),
   };
   writeLockRecord(record);
   return record;
+}
+
+/**
+ * The members this root declares, in the shape the approval pins them by: the
+ * alias and the path. Stage 3: a member is declared in project.yaml `members`
+ * (or, for one release, by a legacy L1 mount) and is never a subsystem, so it
+ * is read from the project graph rather than from the subsystem specs.
+ */
+function memberMounts(): { id: string; projectPath: string }[] {
+  const root = getProjectRoot();
+  return projectFamily().nodes
+    .filter((n) => n.parent === '' && n.mountAlias !== undefined)
+    .map((n) => ({ id: n.mountAlias!, projectPath: path.relative(root, n.directory).split(path.sep).join('/') }));
 }

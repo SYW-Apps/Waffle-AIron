@@ -6,13 +6,13 @@ import * as yaml from 'js-yaml';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   loadComponentSpec,
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { retireSpecialists, type SpecialistRetirement } from '../../src/core/stereotype-migration.js';
 import * as corePortal from '../../src/core/index.js';
 import { retireSpecialists as cliRetireSpecialists } from '../../src/commands/adapters/core.js';
@@ -87,7 +87,7 @@ function calc(): { root: string; globalDir: string; projectVariants: string; glo
   setProjectRoot(root);
 
   saveSystemSpec({ schemaVersion: '1.0.0', name: 'calc-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
-  saveSubsystemSpec(sub('calc'));
+  saveSpec('subsystem', sub('calc'));
   saveComponentSpec(comp('rates', 'Orchestrator', { dependencyClass: 'pure' }));
   saveComponentSpec(comp('lookup', 'Orchestrator', { dependencyClass: 'read' }));
   saveComponentSpec(comp('flow', 'Orchestrator'));
@@ -117,9 +117,9 @@ function calc(): { root: string; globalDir: string; projectVariants: string; glo
   saveComponentSpec(specialist('loop_b', ['loop_a', 'ledger']));
   saveComponentSpec(specialist('loop_c', ['loop_a']));
 
-  createChainedSubsystem(sub('ext', { projectPath: 'packages/ext' }), 'ext');
+  writeLegacyMount(sub('ext', { projectPath: 'packages/ext' }), 'ext');
   const ext = workspaceFor(path.join(root, 'packages', 'ext'));
-  ext.saveSubsystemSpec(sub('ext', { parentSystem: 'ext' }));
+  ext.save('subsystem', sub('ext', { parentSystem: 'ext' }));
   ext.saveComponentSpec(comp('rule', 'Specialist', { subsystem: 'ext' }));
 
   const projectVariants = path.join(root, '.wai', 'variants', 'shapes.yaml');

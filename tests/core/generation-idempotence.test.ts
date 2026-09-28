@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   loadSubsystemSpec,
   applySpecStatus,
   invalidateSpecCache,
@@ -85,7 +85,7 @@ afterEach(() => {
 describe('generated docs are a pure function of the tree', () => {
   it('renders the domains doc identically twice, and carries no date stamp', () => {
     mkProject('Idem System');
-    saveSubsystemSpec(subsystem('core', 'Idem System'));
+    saveSpec('subsystem', subsystem('core', 'Idem System'));
 
     const first = renderDomainsDoc();
     const second = renderDomainsDoc();
@@ -97,10 +97,10 @@ describe('generated docs are a pure function of the tree', () => {
 
   it('changes only when the domains change', () => {
     mkProject('Idem System');
-    saveSubsystemSpec(subsystem('core', 'Idem System'));
+    saveSpec('subsystem', subsystem('core', 'Idem System'));
     const before = renderDomainsDoc();
 
-    saveSubsystemSpec(subsystem('billing', 'Idem System'));
+    saveSpec('subsystem', subsystem('billing', 'Idem System'));
     invalidateSpecCache();
     const after = renderDomainsDoc();
 
@@ -117,7 +117,7 @@ describe('a status promotion is a mechanical re-save', () => {
   it('flips status WITHOUT re-stamping updatedAt', () => {
     setClock('2026-02-01T10:00:00.000Z');
     mkProject('Freeze System');
-    saveSubsystemSpec(subsystem('core', 'Freeze System'));
+    saveSpec('subsystem', subsystem('core', 'Freeze System'));
     invalidateSpecCache();
 
     const authored = loadSubsystemSpec('core');
@@ -139,14 +139,14 @@ describe('a status promotion is a mechanical re-save', () => {
   it('still stamps updatedAt on a REAL edit', () => {
     setClock('2026-02-01T10:00:00.000Z');
     mkProject('Edit System');
-    saveSubsystemSpec(subsystem('core', 'Edit System'));
+    saveSpec('subsystem', subsystem('core', 'Edit System'));
     invalidateSpecCache();
     const authoredStamp = loadSubsystemSpec('core')!.updatedAt;
     expect(authoredStamp).toBe('2026-02-01T10:00:00.000Z');
 
     // A second later, the description genuinely changes.
     setClock('2026-02-01T10:00:01.000Z');
-    saveSubsystemSpec({ ...subsystem('core', 'Edit System'), description: 'genuinely changed' });
+    saveSpec('subsystem', { ...subsystem('core', 'Edit System'), description: 'genuinely changed' });
     invalidateSpecCache();
 
     const edited = loadSubsystemSpec('core');

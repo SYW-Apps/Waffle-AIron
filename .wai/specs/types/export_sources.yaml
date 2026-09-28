@@ -1,0 +1,38 @@
+kind: value-object
+id: export_sources
+name: ExportSources
+description: >-
+  What a project's L0 table may re-export from beyond its own subsystems, handed to the pure
+  resolver so it never reaches back into the scan: the project's key, its alias table, and the
+  already-resolved tables of the members and externals those aliases name. The scan resolves
+  projects in dependency order, so a producer's table is here before its consumer's is resolved; a
+  producer still on the current resolution path is present as null, which the resolver reports as a
+  named cycle.
+subsystem: sdd_core
+fields:
+  - name: namespace
+    type: string
+    description: The key of the project whose table is resolved ('' for the bound root).
+    optional: false
+  - name: aliases
+    type: Map<string, string>
+    description: >-
+      The project's alias table: each member or declared external alias mapped to the key of the
+      project it names in the scan. An alias with no entry is an external the scan did not read.
+    optional: false
+  - name: producerTables
+    type: Map<string, ResolvedExportTable | null>
+    description: >-
+      Each named producer's resolved project table by key; null for a producer still being resolved
+      on this path (a cycle).
+    optional: false
+  - name: audienceOf
+    type: Map<string, string>
+    description: >-
+      For each producer key, the audience it shows this project: project for a family producer
+      (every entry is visible), instance for one found only by source.path.
+    optional: false
+methods: []
+sourcePath: src/core/exports.ts
+createdAt: '2026-09-27T10:34:11.718Z'
+updatedAt: '2026-09-27T10:34:11.719Z'

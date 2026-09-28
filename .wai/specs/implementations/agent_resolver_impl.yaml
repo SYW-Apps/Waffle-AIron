@@ -13,9 +13,9 @@ methods:
         targetMethod: loadSystemSpec
       - stepNumber: 2
         description: >-
-          Load subsystem specs and keep only THIS layer's LOCAL subsystems — a federated
-          chained-subproject subsystem carries a :: namespace prefix and belongs to the subproject's
-          own layer, not this one
+          Load subsystem specs and keep only THIS layer's LOCAL subsystems — a member project's
+          subsystem carries its project key as a :: prefix and belongs to the member's own layer,
+          not this one
         type: call
         targetComponent: spec_loader
         targetMethod: loadSubsystemSpecs
@@ -68,11 +68,12 @@ methods:
       - stepNumber: 10
         description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
-          and ONE delegating owner per chained subproject (projectPath) that routes work into the
-          subproject without enumerating its internals; component implementers only when
-          generateComponentImplementers is enabled. Each owner's and implementer's ownedPaths fence
-          holds the source files its implementations and their methods name, and each carries the
-          rendered variantGuidance for its variant-tagged components.
+          and ONE delegating owner per member project this project declares (in `members`, or for
+          one release a legacy L1 mount) that routes work into the member without enumerating its
+          internals; component implementers only when generateComponentImplementers is enabled. Each
+          owner's and implementer's ownedPaths fence holds the source files its implementations and
+          their methods name, and each carries the rendered variantGuidance for its variant-tagged
+          components.
         type: local
   - name: composeAgentBrief
     narrative:
@@ -146,4 +147,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T22:05:59.127Z'
+updatedAt: '2026-09-27T17:28:23.665Z'

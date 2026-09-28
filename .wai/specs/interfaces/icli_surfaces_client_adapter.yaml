@@ -35,19 +35,6 @@ methods:
     description: Forward list to the surface portal.
     signature: 'listSnapshots(): SurfaceSnapshot[]'
     returns: SurfaceSnapshot[]
-  - name: listExternalInterfaces
-    description: >-
-      Forward the external-surface discovery (origin, provenance, freshness per vendored snapshot)
-      to the surface portal.
-    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
-    returns: ExternalSurfaceEntry[]
-  - name: pinFamilySurfaces
-    description: >-
-      Pin the chaining parent's family and sibling surfaces into this chained child, via the surface
-      portal (`wairon surface pin`). Null at a top root.
-    signature: 'pinFamilySurfaces(): string[] | null'
-    returns: string[] | null
-    params: []
   - name: pinExternals
     description: Forward to surface_portal.pinExternals.
     signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
@@ -67,6 +54,28 @@ methods:
     signature: 'listExternals(): ExternalListing[]'
     returns: ExternalListing[]
     params: []
+  - name: listFamilyPins
+    description: >-
+      Forward to the surface portal: the stage-1 family pins the bound root still holds, for `doctor
+      --fix`'s chaining migration.
+    signature: 'listFamilyPins(): FamilyPin[]'
+    returns: FamilyPin[]
+    params: []
+    guarantees:
+      - idempotent
+  - name: removeSnapshot
+    description: >-
+      Forward to the surface portal: remove one stored snapshot of the bound root by its key (file
+      and projection), for `doctor --fix`'s deletion of superseded family pins. False when there was
+      none.
+    signature: 'removeSnapshot(projectName: string): boolean'
+    returns: boolean
+    params:
+      - name: projectName
+        type: string
+        description: The snapshot's storage key
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-09-26T17:49:14.056Z'
+updatedAt: '2026-09-27T10:43:04.286Z'

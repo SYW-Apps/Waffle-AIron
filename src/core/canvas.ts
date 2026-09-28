@@ -8,6 +8,7 @@ import {
   loadImplementationSpecs,
   loadTypeSpecs,
   resolveProjectExports,
+  graph,
 } from './specs.js';
 import type { ValidationIssue } from './validation.js';
 import { extractTypeIdentifiers, isOwnComponentEntry, matchTypeRef, methodTypeRefs } from '../models/index.js';
@@ -54,6 +55,9 @@ export interface CanvasModel {
     targetLanguage?: string;
     status?: string;
     trustedLinks: { subsystem: string; reason: string }[];
+    /** A member project's node (stage 3): its id is the member's key, its name the
+     *  alias its parent declares it under; the member's specs hang under it. */
+    project?: boolean;
     /** Opt-in deep expansion: with Internals on, this subsystem's box renders
      *  its WHOLE subtree (nested boundary boxes + leaf tiles + direct relation
      *  lines) instead of one layer. Never set by buildCanvasModel — the hosted
@@ -145,6 +149,26 @@ export interface CanvasModel {
    *  (uses a type it owns), pointed at that subsystem's published portal. */
   dataEdges: { from: string; to: string }[];
   issues: { severity: string; code: string; message: string; specId?: string }[];
+}
+
+/**
+ * A node per member project of the graph, keyed by the member's key so the
+ * engine's containment (`key::…`) hangs the member's specs under it. It shows
+ * the alias the member is declared under, and the description its parent's
+ * declaration gives it (a `members` entry or a legacy mount), or its own
+ * name. Ids stay honest: a subsystem `billing::billing`
+ * keeps that id and shows its own name.
+ */
+function memberProjectNodes(): CanvasModel['subsystems'] {
+  return graph().nodes
+    .filter((n) => n.namespace !== '')
+    .map((n) => ({
+      id: n.namespace,
+      name: n.mountAlias ?? n.namespace,
+      description: n.memberDescription ?? n.name ?? '',
+      trustedLinks: [],
+      project: true,
+    }));
 }
 
 export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
@@ -270,6 +294,9 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
       intents,
     };
   });
+
+  // Step 3: one project node per member, its specs contained under its key.
+  const projectNodes = memberProjectNodes();
 
   const componentSub = new Map(components.map(c => [c.id, c.subsystem]));
   const edges: CanvasModel['edges'] = [];
@@ -402,14 +429,17 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
       ...(system?.diagram ? { diagram: system.diagram } : {}),
     },
     generatedAt: new Date().toISOString(),
-    subsystems: subsystems.map(s => ({
-      id: s.id,
-      name: s.name,
-      description: s.description,
-      ...(s.targetLanguage ? { targetLanguage: s.targetLanguage } : {}),
-      ...(s.status ? { status: s.status } : {}),
-      trustedLinks: s.trustedLinks ?? [],
-    })),
+    subsystems: [
+      ...projectNodes,
+      ...subsystems.map(s => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        ...(s.targetLanguage ? { targetLanguage: s.targetLanguage } : {}),
+        ...(s.status ? { status: s.status } : {}),
+        trustedLinks: s.trustedLinks ?? [],
+      })),
+    ],
     components: modelComponents,
     edges,
     types: modelTypes,

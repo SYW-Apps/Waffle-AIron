@@ -1,0 +1,52 @@
+id: iposition_migration_orchestrator
+name: Position Migration Orchestrator Interface
+description: >-
+  Plan first, applied on confirmation, as the chaining migration it is part of. plan() writes
+  nothing; apply(plan) writes only what the plan names and is idempotent — applying again, or
+  planning again after it, changes nothing. Neither locks.
+component: position_migration_orchestrator
+methods:
+  - name: plan
+    description: >-
+      Plan the retirement of position for a family, from its project graph: (a) each legacy L1 mount
+      moved into its parent's `members` — the path, the description carried into the member entry,
+      each published entry of the mount carried into the member's L0 at audience project (published
+      first at L1 in its member subsystem, with the entry's type and details, where that subsystem
+      does not publish it yet; an entry naming no component, or one the member's L0 exports already,
+      carries nothing and retires, listed), and every other field either retired and listed (empty
+      arrays, lint allows about the mount itself, the entries' consumers) or a blocking finding (a
+      public name the member binds to another target; a component the member does not hold; a
+      non-empty trustedLinks or a lifecycle, profile, targetLanguage, designDepth or ext the member
+      must hold itself); (b) each member the family declares whose directory is absent, as a
+      blocking finding; (c) each reference written with a leading `::`, `super::` or a member path,
+      raw positions included, rewritten to the scan's canonical text, or a finding when it has none
+      — and the other rewrites of a spec holding a bound reference with none are held back with it,
+      since the re-save refuses that spec whole. Writes nothing.
+    signature: 'plan(family: ProjectFamily): PositionMigrationPlan'
+    returns: PositionMigrationPlan
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The project graph of the family's top root, as the chaining migration read it
+    guarantees:
+      - idempotent
+  - name: apply
+    description: >-
+      Apply the stage-3 share of a confirmed chaining migration plan, after its ids, exports (the
+      carried entries included), externals and pins are written: move each planned mount into its
+      parent's `members` under the parent's binding, rewrite each planned reference from the
+      family's top root (where the deprecated forms still bind), and delete each project's
+      superseded family pins under its binding. Every write is idempotent: a mount already moved, a
+      spec already canonical and a pin already gone change nothing. Answers what it wrote and which
+      projects must be re-locked; locks nothing.
+    signature: 'apply(plan: ChainingMigrationPlan): PositionMigrationResult'
+    returns: PositionMigrationResult
+    params:
+      - name: plan
+        type: ChainingMigrationPlan
+        description: The confirmed plan, whose stage-1 writes the chaining migration has already applied
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-27T10:45:32.019Z'
+updatedAt: '2026-09-27T17:32:55.115Z'

@@ -3,20 +3,16 @@ name: Spec Store Portal Interface
 description: The raw, ungated spec writes of sdd_core, published only to the gated authoring seam.
 component: spec_store_portal
 methods:
-  - name: createChainedSubsystem
-    description: >-
-      Write path for chained-subsystem creation (wairon subsystem add / init external-subsystem
-      branch): wire the parent L1 subsystem with a projectPath and scaffold the child project at
-      that path.
-    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
-    returns: void
   - name: updateSpec
     description: >-
       Published write: apply a partial delta to one stored spec of any level and persist the result,
       answering with exactly what changed and with every path the delta named that changed nothing.
       Refuses a spec that does not exist, a mis-selected kind on the singleton L0, and a delta key
       the level's canonical schema does not know. Compares the result with what is stored and writes
-      NOTHING when they match. A dry run runs the whole write and answers with the report it would
+      NOTHING when they match. The report also names every key the stored FILE carries that the
+      level's schema does not know (strippedKeys, read from the raw document) — the write
+      re-serializes through the schema and drops them, so they are named rather than silently lost;
+      a dry run names them too. A dry run runs the whole write and answers with the report it would
       have produced, leaving the stored bytes untouched. The caller's hooks, when given, judge the
       merged spec at the last point before anything reaches disk — which is how the authoring seam
       gates a write from above without the store ever calling the rule engine that reads it. A
@@ -102,4 +98,4 @@ methods:
         description: The spec id (namespaced if needed)
 status: complete
 createdAt: '2026-09-25T17:33:00.554Z'
-updatedAt: '2026-09-25T17:33:22.704Z'
+updatedAt: '2026-09-27T11:01:40.611Z'

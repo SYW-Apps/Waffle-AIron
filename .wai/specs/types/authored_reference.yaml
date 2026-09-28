@@ -2,33 +2,81 @@ kind: value-object
 id: authored_reference
 name: AuthoredReference
 description: >-
-  A reference as its author wrote it, recorded by the scan before qualification erases the form: the
-  loader turns `::x` into an absolute id, so nothing downstream could tell it from one written
-  absolute. Only the leading-`::` form is recorded — the one DEPRECATED_REFERENCE_FORM concerns in
-  stage 2. `super::` is not recorded: wairon's own writer emits it and it has no alternative before
-  stage 3.
+  A reference as its author wrote it, recorded by the scan before binding replaces it with the
+  in-memory key of its target: every reference that carries `::` (an `alias::name`, a leading `::`,
+  a `super::`, or a first segment the referring project does not declare), with the form it was read
+  in, what it bound to, and the text the writer emits for it now. The raw material of
+  DEPRECATED_REFERENCE_FORM, EXTERNAL_UNDECLARED and EXTERNAL_NOT_EXPORTED, of the export usage, and
+  of the chaining migration's reference rewrites. The writer reads it too: a reference whose
+  in-memory value still equals `resolved` is written back as `authored`, so authored text
+  round-trips byte for byte.
 subsystem: sdd_core
 fields:
   - name: specId
     type: string
-    description: The qualified id of the spec that holds the reference.
+    description: The in-memory key of the spec that holds the reference.
     optional: false
   - name: position
     type: string
     description: >-
       Where in that spec: dependsOn, owns, dispatch, mounts, lifecycle, publicInterfaces,
-      trustedLinks, contract (an interface's component), narrative (a step's targetComponent, with
-      the method and step number), or type (a field, param or return type).
+      trustedLinks, contract (an interface's component or an implementation's contract), subsystem,
+      narrative (a step's targetComponent, with the method and step number), calls, auth, or type (a
+      field, param or return type).
     optional: false
   - name: authored
     type: string
-    description: 'The reference exactly as written: a leading-`::` form.'
+    description: The reference exactly as written.
+    optional: false
+  - name: form
+    type: string
+    description: >-
+      alias | leading | super | path. alias: the first segment is one of the referring project's
+      aliases (a `members` or `externals` key), the only form stage 3 writes. leading: a leading
+      `::`, read from the bound root. super: each `super::` climbs one containing project. path: a
+      first segment the referring project does not declare, read the stage-2 way as a member path
+      from the bound root (`desktop::shell` written inside desktop, `waffler_core::transpiler::x`
+      written inside transpiler). leading, super and path are deprecated and still bind for one
+      release.
+    optional: false
+  - name: binding
+    type: string
+    description: >-
+      exported | unexported | undeclared | outside | unresolved | local. exported: it bound to a
+      public name of the producer's resolved L0 table whose audience covers the referrer.
+      unexported: the producer is known, but the name is none of its public names; bound leniently
+      to the producer's spec of that local id (EXTERNAL_NOT_EXPORTED). undeclared: the producer was
+      found only by a deprecated form or by its project id, and the referring project declares no
+      alias for it (EXTERNAL_UNDECLARED). outside: the alias is a declared external whose producer
+      the scan did not read (a parent or sibling of the bound root, or a source.path project), so it
+      is kept as written and judged through its pin and the parent. unresolved: nothing names the
+      first segment. local: a deprecated form that lands in the referring project itself.
     optional: false
   - name: resolved
     type: string
-    description: The absolute id the loader qualified it to — the form to write instead.
+    description: >-
+      The in-memory key the reference bound to (the target's key, or the lenient key for unexported
+      and undeclared); equal to `authored` for outside and unresolved.
     optional: false
+  - name: producer
+    type: string
+    description: The key of the project it lands in; absent for outside and unresolved.
+    optional: true
+  - name: publicName
+    type: string
+    description: The public name it bound to, for exported.
+    optional: true
+  - name: rewrite
+    type: string
+    description: >-
+      The text the writer emits for `resolved` from the referring project: a bare local id when it
+      lands in the referrer; else `alias::publicName` with the referrer's alias for the producer
+      (its project id when none is declared yet, which the migration declares) and the public name
+      that binds the target (its local id when none does, which the migration exports). Equal to
+      `authored` for an alias form already canonical; absent when no rewrite can be written
+      (outside, unresolved, or a producer with no id).
+    optional: true
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:34.152Z'
-updatedAt: '2026-09-26T18:32:22.657Z'
+updatedAt: '2026-09-27T10:32:59.373Z'

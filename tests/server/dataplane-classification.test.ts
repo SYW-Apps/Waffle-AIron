@@ -26,7 +26,6 @@ import {
 // ---------------------------------------------------------------------------
 
 const READS_WITHOUT_A_READ_PREFIX = [
-  'sdd_list_external_interfaces',
   'listAgents',
   'getAgent',
   'listDomains',
@@ -47,6 +46,14 @@ describe('data-plane tool classification', () => {
   it('gates a read that carries no read prefix as a read', () => {
     for (const name of READS_WITHOUT_A_READ_PREFIX) {
       expect(requiredDataPlaneCapability(name)).toBe('project:read');
+    }
+  });
+
+  it('gates the member tools as tree-scoped writes, by their prefixes', () => {
+    for (const name of ['sdd_add_member', 'sdd_move_member', 'sdd_internalize_member', 'sdd_externalize_subsystem']) {
+      expect(requiredDataPlaneCapability(name)).toBe('project:write');
+      expect(toolScope(name)).toBe('tree');
+      expect(isExplicitlyClassifiedTool(name)).toBe(true);
     }
   });
 
@@ -121,7 +128,6 @@ describe('subproject confinement by declared tool scope', () => {
       'sdd_get_status',
       'sdd_update_spec',
       'sdd_validate_tree',
-      'sdd_list_external_interfaces',
       'listAgents',
       'sdd_host_lock_project',
       'sdd_host_export_tree',

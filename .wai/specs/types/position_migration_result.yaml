@@ -1,0 +1,26 @@
+kind: value-object
+id: position_migration_result
+name: PositionMigrationResult
+description: >-
+  What applying the stage-3 share of a chaining migration wrote: every file changed, in write order,
+  and the projects whose approval those writes staled. The chaining migration folds it into its
+  report.
+subsystem: sdd_cli
+fields:
+  - name: written
+    type: string[]
+    description: >-
+      Every write, in write order: each parent's project.yaml (its members) and deleted L1 mount
+      document, each rewritten spec and each deleted family-pin snapshot. A write the adapter
+      answers only with whether it wrote is named by where it landed — `<project root>/.wai/specs:
+      <kind> <local id>` for a mount document or a rewritten spec, `<project root>/.wai/surfaces:
+      <pin key>` for a snapshot.
+    optional: false
+  - name: relock
+    type: string[]
+    description: The directories of the projects whose lock the writes left stale.
+    optional: false
+methods: []
+sourcePath: src/commands/position-migration.ts
+createdAt: '2026-09-27T10:44:33.869Z'
+updatedAt: '2026-09-27T17:05:36.805Z'

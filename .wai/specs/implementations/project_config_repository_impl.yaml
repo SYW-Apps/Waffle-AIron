@@ -123,6 +123,27 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: declareExternal
+  - name: declareMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: declareMember
+  - name: setMemberPath
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: setMemberPath
+  - name: removeMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: removeMember
 status: complete
 createdAt: '2026-09-13T11:19:36.287Z'
-updatedAt: '2026-09-26T21:10:52.690Z'
+updatedAt: '2026-09-27T10:55:15.048Z'

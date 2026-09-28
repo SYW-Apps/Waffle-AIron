@@ -104,13 +104,15 @@ methods:
     params: []
   - name: resolveThroughParent
     description: >-
-      Resolve this tree's verdict THROUGH its chained parent: walk up to the top root collecting the
-      mount chain, validate there scoped to that chain with the parent's own doctrine — for each
-      rule the stricter of the parent's and this project's severity, the same as-complete
-      strictness, and without resolving again — and rename the findings into this project's own ids
-      for the caller to merge. Null when no usable parent is reachable (its L0 missing, the mount
-      unknown, or reach denied), and the caller then keeps the standalone verdict. Reach-gated: the
-      walk never climbs above the bound request's top project root.
+      Resolve this tree's verdict THROUGH the project that declares it a member (stage 4 deletes
+      this with composed validation): walk up to the top root collecting the membership chain
+      (`members` entries, or legacy L1 mounts), validate there scoped to this project's key in the
+      top root's graph — its project id, the same at every depth — with the parent's own doctrine —
+      for each rule the stricter of the parent's and this project's severity, the same as-complete
+      strictness, and without resolving again — and rename the findings from that key into this
+      project's own ids for the caller to merge. Null when no usable parent is reachable (its L0
+      missing, the member unknown, or reach denied), and the caller then keeps the standalone
+      verdict. Reach-gated: the walk never climbs above the bound request's top project root.
     signature: >-
       resolveThroughParent(boundRoot: string, treatAllAsComplete: boolean, childRules?:
       RulesConfig): ParentResolution
@@ -165,4 +167,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-25T21:08:57.357Z'
+updatedAt: '2026-09-27T10:47:56.524Z'

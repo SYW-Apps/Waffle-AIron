@@ -8,7 +8,7 @@
 // portal. Client adapters import from here, never from ./surfaces.ts.
 // ---------------------------------------------------------------------------
 import * as surfaceOrchestrator from './surfaces.js';
-import type { ExternalSurfaceEntry, SurfaceExportResult } from './surfaces.js';
+import type { FamilyPin, SurfaceExportResult } from './surfaces.js';
 import type {
   ExternalListing,
   ExternalPin,
@@ -37,16 +37,12 @@ export function removeSnapshot(projectName: string, rootDir?: string): boolean {
   return surfaceOrchestrator.removeSnapshot(projectName, rootDir);
 }
 
-export function listExternalInterfaces(): ExternalSurfaceEntry[] {
-  return surfaceOrchestrator.listExternalInterfaces();
+export function listFamilyPins(): FamilyPin[] {
+  return surfaceOrchestrator.listFamilyPins();
 }
 
 export function listMountSnapshots(mounts: string[]): { namespace: string; snapshots: SurfaceSnapshot[] }[] {
   return surfaceOrchestrator.listMountSnapshots(mounts);
-}
-
-export function pinFamilySurfaces(): string[] | null {
-  return surfaceOrchestrator.pinFamilySurfaces();
 }
 
 export function pinExternals(aliases?: string[]): ExternalPin[] {
