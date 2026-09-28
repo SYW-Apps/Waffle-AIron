@@ -89,11 +89,11 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 250 files / 4313 tests |
+| `npx vitest run` | 255 files / 4340 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
 | `npm run build` | clean |
-| `node dist/cli/index.js validate` | 0 errors, 0 warnings |
-| `node dist/cli/index.js validate --ci` | 0 errors, 0 warnings |
+| `node dist/cli/index.js validate` | 0 errors; 17 warnings mid-stage-4 (wave C's: the positional migration's drafts and unrealized calls/fields, and the debt register's renumbered and paid entries) |
+| `node dist/cli/index.js validate --ci` | 0 errors; fails on 15 of those warnings (the 2 draft ones are waived) until wave C lands |
 
 The counts are a floor, not a target — they move as the suite grows, so update
 this table when they do. `validate` also prints the **conformance debt register**
