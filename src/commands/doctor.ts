@@ -49,6 +49,9 @@ import { claudeMcpConfigPath } from './mcp.js';
 import * as chainingMigration from './chaining-migration.js';
 import type { ChainingMigrationPlan, PlannedExport, ProjectMigration } from './chaining-migration.js';
 import type { PlannedRewrite } from './position-migration.js';
+// The stage-4 upgrade report: what the owner's gate changed in each verdict.
+import * as verdictChanges from './verdict-changes.js';
+import type { UpgradeReport } from './verdict-changes.js';
 
 /** The bound project's enabled targets; none for a project without a configuration. */
 function enabledTargets(): string[] {
@@ -124,7 +127,7 @@ function mcpEntryHealth(settingsPath: string): { mark: Mark; note: string } {
 export interface DoctorOptions {
   /** Apply the repairs before the report: the fixed steps, then the chaining migration once confirmed. */
   fix?: boolean;
-  /** Print one section's plan and nothing else, writing nothing. `chaining` is the one section. */
+  /** Print one section's report and nothing else, writing nothing: `chaining` or `composed-validation`. */
   report?: string;
   /** Answer the chaining migration's confirmation for a non-interactive run. */
   yes?: boolean;
@@ -579,14 +582,28 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
 
 // ── the chaining migration ──────────────────────────────────────────────────
 
-/** Steps 2-5: `--report chaining` alone prints the plan per project and writes nothing. */
+/** Steps 1-8: `--report <section>` alone prints that section and writes nothing. */
 function reportOnly(options: DoctorOptions): void {
+  // Steps 2-3: only a lone `--report` of a known section.
   if (options.fix) {
     throw new DoctorOptionsError('--report prints a plan and writes nothing, so it never combines with --fix.');
   }
-  if (options.report !== 'chaining') {
-    throw new DoctorOptionsError(`--report knows one section, \`chaining\`; "${options.report}" is not one.`);
+  if (options.report !== 'chaining' && options.report !== 'composed-validation') {
+    throw new DoctorOptionsError(`--report knows two sections, \`chaining\` and \`composed-validation\`; "${options.report}" is not one.`);
   }
+  // Step 4: which section?
+  if (options.report === 'composed-validation') {
+    // Steps 5-6: what stage 4 changed in each project's verdict.
+    const report = verdictChanges.explain();
+    logger.blank();
+    console.log(`${chalk.bold('wairon doctor --report composed-validation')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
+    logger.blank();
+    printUpgradeReport(report);
+    console.log(chalk.gray('Nothing was written.'));
+    logger.blank();
+    return;
+  }
+  // Steps 7-8: the chaining plan.
   const migration = chainingMigration.plan();
   logger.blank();
   console.log(`${chalk.bold('wairon doctor --report chaining')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
@@ -594,6 +611,46 @@ function reportOnly(options: DoctorOptions): void {
   printChainingPlan(migration);
   console.log(chalk.gray('Nothing was written.'));
   logger.blank();
+}
+
+/** How a project key reads in the report. */
+function reportLabel(key: string): string {
+  return key === '' ? '(this project)' : key;
+}
+
+/**
+ * Step 6: the upgrade report per project — the lock's totals beside today's
+ * (attributed to the upgrade only when the lock predates stage 4) — then the
+ * entries grouped by code with their reasons and rewrites, then how many
+ * findings it could not attribute. The lock records totals only, and the
+ * report says so: this is not a per-code diff.
+ */
+function printUpgradeReport(report: UpgradeReport): void {
+  console.log(chalk.bold('Composed validation: what stage 4 changed'));
+  console.log(chalk.gray('  A lock records totals only (errors, warnings, notices) and the validator version that took it — nothing per code — so this is not a per-code diff. Today\'s findings are classed by a reason computed now.'));
+  for (const p of report.projects) {
+    const locked = p.lockedTotals ? `locked by v${p.lockedBy}: ${p.lockedTotals}` : 'never locked';
+    const attribution = p.lockedTotals
+      ? (p.predatesStage4 ? ' — the lock predates stage 4, so a difference is the upgrade\'s' : ' — the lock was taken by a stage-4 validator, so a difference is not the upgrade\'s')
+      : '';
+    console.log(`  ${reportLabel(p.key)}: ${locked}; today (as-complete): ${p.currentTotals}${attribution}`);
+  }
+  const byCode = new Map<string, UpgradeReport['entries']>();
+  for (const e of report.entries) byCode.set(e.code, [...(byCode.get(e.code) ?? []), e]);
+  for (const [code, entries] of [...byCode].sort(([a], [b]) => a.localeCompare(b))) {
+    console.log(`  ${chalk.bold(code)} (${entries.length})`);
+    for (const e of entries) {
+      const where = `${reportLabel(e.project)}${e.specId ? ` ${e.specId}` : ''}`;
+      const reason = e.reason === 'escalated'
+        ? 'escalated: a stage-2 notice that is an error since stage 4'
+        : e.reason === 'pinned'
+          ? 'pinned: judged against the project\'s own pin, no longer through the parent\'s live tree'
+          : `positional: the family's top matches it${e.resolvedAs ? ` to ${e.resolvedAs}` : ''} by position, which is how it passed before${e.rewrite ? ` — the migration writes ${e.rewrite}` : ''}`;
+      console.log(`    ${e.severity} ${where}: ${reason}`);
+    }
+  }
+  if (report.entries.length === 0) console.log('  No finding is new for a reason stage 4 introduced.');
+  console.log(`  ${report.unclassified} finding(s) could not be attributed to stage 4.`);
 }
 
 /**
