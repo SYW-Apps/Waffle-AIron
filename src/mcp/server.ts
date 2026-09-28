@@ -72,7 +72,9 @@ import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 import { pinExternals, getExternalsStatus } from './adapters/surfaces.js';
-import { validateProject, validateRegistry } from './adapters/validator.js';
+import { validateProject, validateRegistry, validateFamily } from './adapters/validator.js';
+import { declaredMembers } from '../models/project.js';
+import { selectsFamily } from '../models/validation-options.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -534,8 +536,20 @@ const validateTreeOutput = {
     + 'never fail `wairon validate --ci`.',
   ),
   hint: z.string().optional().describe(
-    'Present when the project declares externals: they were judged against their pins alone, and '
-    + '`wairon validate --family` composes them against their live producers.',
+    "The owner's gate: present when the project declares externals — they were judged against their pins alone, "
+    + 'and `wairon validate --family` composes them against their live producers. A family run: present when '
+    + "externals were left out because their producers lie outside the run's reach.",
+  ),
+  projects: z.array(z.object({
+    key: z.string().describe("The project's key in the family root's scan ('' for the root itself)."),
+    id: z.string().optional().describe("The project's effective id."),
+    directory: z.string().describe("The project's root directory."),
+    valid: z.boolean().describe('Whether its own gate found no error.'),
+    errors: z.number().describe("Its own gate's error count."),
+    warnings: z.number().describe("Its own gate's warning count."),
+    notices: z.number().describe("Its own gate's notice count."),
+  })).optional().describe(
+    "A family run only: one line per selected project (the root first) with its own gate's totals. Absent on the owner's gate.",
   ),
   ...staleServerOutput,
 };
@@ -1993,28 +2007,36 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ subsystem?: string; recursive?: boolean }>(server,
+  reg<{ subsystem?: string; recursive?: boolean; family?: boolean }>(server,
     'sdd_validate_tree',
     {
       description: 'Validate the SDD spec tree, checking parent references, contract compatibility, narratives, and component type boundaries. Supports scoping and recursion controls. Findings come back as structured content too, under the schema this tool declares — errors, warnings and notices already split into three lists (a notice never makes the tree invalid and never fails --ci), each with its code, severity, message and the spec it concerns — so a caller filters them as objects instead of parsing the JSON text block and hoping its shape holds.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only validate the specified subsystem (granular)'),
-        recursive: z.boolean().optional().describe('Whether to descend into the members this project declares (default: true)'),
+        recursive: z.boolean().optional().describe("At a project that declares members: the family run (true, the default) or the owner's gate alone (false)"),
+        family: z.boolean().optional().describe("Ask for the family run explicitly: every member's own gate, and this project's externals composed against their live producers within the request's reach (`wairon validate --family`)"),
       },
       outputSchema: validateTreeOutput,
     },
-    ({ subsystem, recursive }) => {
+    ({ subsystem, recursive, family }) => {
       try {
         const config = loadProjectConfig();
         // A missing config errored before (the loader's loadProjectConfig threw);
         // keep that outcome now that the adapter reads null instead of throwing.
         if (!config) throw new ProjectNotInitializedError();
-        const result = validateProject({
+        const options = {
           rules: config.rules,
           projectType: config.projectType,
           scopeSubsystem: subsystem,
           recursive: recursive ?? true,
-        });
+          family,
+        };
+        // Step 2: which run — the same reading `wairon validate` makes. Steps
+        // 3/5: the family run (within the request's reach, which it never
+        // widens) or the owner's gate.
+        const result = selectsFamily(options, declaredMembers(config).length > 0)
+          ? validateFamily(options)
+          : validateProject(options);
         // The text block is the same JSON it has always been; the structured
         // twin is that very object, so the two can never disagree.
         return jsonStructured({
@@ -2023,6 +2045,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           warnings: result.issues.filter((i) => i.severity === 'warning'),
           notices: result.issues.filter((i) => i.severity === 'notice'),
           ...(result.hint ? { hint: result.hint } : {}),
+          ...(result.projects ? { projects: result.projects } : {}),
         });
       } catch (e) {
         return errText(String(e));

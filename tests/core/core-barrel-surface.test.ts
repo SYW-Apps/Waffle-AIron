@@ -272,6 +272,7 @@ describe('the files that import from the barrel', () => {
  */
 const EMBEDDING_API = [
   'validateProject',
+  'validateFamily',
   'loadExtensions',
   'loadExtensionPacks',
   'loadProjectExtensions',

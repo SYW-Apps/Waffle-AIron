@@ -1,12 +1,17 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized } from '../config/paths.js';
+import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
+import { pathExists } from '../utils/fs.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 // The core reads this adapter makes land on the core portals: the configuration,
 // the agent registry, and the legacy spec filenames a migration would rename.
 import { loadProjectConfig, loadRegistry, findLegacySpecFiles } from '../core/index.js';
-import type { CarriedDebt } from '../models/project.js';
-import { validateRegistry, validateProjectConfig, validateAsComplete, validateProject, computeGateStateId, type ValidationIssue } from '../core/validation.js';
+import { declaredMembers, type CarriedDebt } from '../models/project.js';
+import { selectsFamily } from '../models/validation-options.js';
+import {
+  validateRegistry, validateProjectConfig, validateAsComplete, validateProject, validateFamily, computeGateStateId,
+  type ValidationIssue, type ValidationResult,
+} from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
 // validate command (cli_validator_adapter)
@@ -29,12 +34,18 @@ import { validateRegistry, validateProjectConfig, validateAsComplete, validatePr
 // cli_validator_adapter.validateProject — the full spec-tree conformance
 // gate, republished as the adapter's forward to the validator portal;
 // `wairon doctor` reports its error/warning/notice counts.
-export { validateAsComplete, computeGateStateId, validateProject };
+//
+// cli_validator_adapter.validateFamily — the family run (every selected
+// project's own gate verbatim, the composition of each project's externals and
+// the family checks), republished as the adapter's forward to the validator
+// portal.
+export { validateAsComplete, computeGateStateId, validateProject, validateFamily };
 
 export interface ValidateOptions {
   ci?: boolean; // treat warnings as errors (for CI pipelines); notices never fail
   subsystem?: string; // validate only a specific subsystem
-  recursive?: boolean | number; // whether to recursively validate subprojects
+  recursive?: boolean | number; // at a parent: the family run (true), its depth (a number), or the owner's gate alone (false)
+  family?: boolean; // ask for the family run explicitly (`validate --family` at a member)
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +112,68 @@ export function isCiDraftWaivable(issue: ValidationIssue): boolean {
   if (issue.code === 'DRAFT_COMPONENT_WARNING') return true;
   if (issue.code === 'UNUSED_COMPONENT') return issue.draftContext === true;
   return false;
+}
+
+/** How a family run labels a project: its key, or the bound root's id. */
+function projectLabel(key: string | undefined, result: ValidationResult): string {
+  if (key === undefined) return '';
+  if (key !== '') return key;
+  const root = result.projects?.find((p) => p.key === '');
+  return `${root?.id ?? 'bound project'} (bound)`;
+}
+
+/** What rendering the spec-tree findings decided for the failure decision. */
+interface SpecTally {
+  errors: boolean;
+  fatalWarnings: boolean;
+  waived: number;
+  notices: number;
+}
+
+/**
+ * Render the spec-tree verdict: every finding (errors, warnings and notices
+ * each as their own kind) — in a family run each under its project key, the
+ * per-project verdicts after them — and the one-line hint, when there is one.
+ */
+function renderSpecFindings(result: ValidationResult): SpecTally {
+  const tally: SpecTally = { errors: false, fatalWarnings: false, waived: 0, notices: 0 };
+  if (result.issues.length === 0) {
+    logger.success('Spec tree is valid and component type boundaries are enforced.');
+  }
+  const MAX_PRINT = 100;
+  const printed = { error: 0, warning: 0, notice: 0 };
+  const skipped = { error: 0, warning: 0, notice: 0 };
+  for (const issue of result.issues) {
+    const label = projectLabel(issue.project, result);
+    const prefix = `${label ? chalk.cyan(`[${label}] `) : ''}${issue.specId ? chalk.gray(`[${issue.specId}] `) : ''}`;
+    const line = `${prefix}[${issue.code}] ${issue.message}`;
+    if (issue.severity === 'error') tally.errors = true;
+    else if (issue.severity === 'notice') tally.notices++;
+    else if (isCiDraftWaivable(issue)) tally.waived++;
+    else tally.fatalWarnings = true;
+    if (printed[issue.severity] >= MAX_PRINT) {
+      skipped[issue.severity]++;
+      continue;
+    }
+    printed[issue.severity]++;
+    if (issue.severity === 'error') logger.error(line);
+    else if (issue.severity === 'notice') logger.notice(line);
+    else logger.warn(line);
+  }
+  const more = (n: number, what: string): string => `... and ${n} more ${what}(s) omitted. Use '--subsystem <id>' to validate a specific subsystem.`;
+  if (skipped.error > 0) logger.error(more(skipped.error, 'error'));
+  if (skipped.warning > 0) logger.warn(more(skipped.warning, 'warning'));
+  if (skipped.notice > 0) logger.notice(more(skipped.notice, 'notice'));
+  if (result.projects) {
+    logger.blank();
+    logger.info('Per project (each its own gate):');
+    for (const p of result.projects) {
+      const mark = p.valid ? chalk.green('ok') : chalk.red('fails');
+      logger.info(`  ${projectLabel(p.key, result)} — ${mark}: ${p.errors} error(s), ${p.warnings} warning(s), ${p.notices} notice(s)`);
+    }
+  }
+  if (result.hint) logger.info(result.hint);
+  return tally;
 }
 
 export async function runValidate(options: ValidateOptions = {}): Promise<void> {
@@ -175,72 +248,27 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   }
 
   // --- SDD Spec Tree ---
-  const { AI_PATHS: sddPaths } = require('../config/paths.js') as typeof import('../config/paths.js');
-  const { pathExists: sddPathExists } = require('../utils/fs.js') as typeof import('../utils/fs.js');
-  if (sddPathExists(sddPaths.specsSystem())) {
+  if (pathExists(AI_PATHS.specsSystem())) {
     logger.header('SDD Architectural Specs');
-    const sddResult = validateProject({
+    const sddOptions = {
       rules: projectConfig.rules,
       projectType: projectConfig.projectType,
       scopeSubsystem: options.subsystem,
       recursive: options.recursive ?? true,
-    });
-    if (sddResult.hint) logger.info(sddResult.hint);
-    if (sddResult.issues.length === 0) {
-      logger.success('Spec tree is valid and component type boundaries are enforced.');
-    } else {
-      let errorCount = 0;
-      let warningCount = 0;
-      let noticeCount = 0;
-      const MAX_PRINT = 100;
-      let skippedErrors = 0;
-      let skippedWarnings = 0;
-      let skippedNotices = 0;
-
-      for (const issue of sddResult.issues) {
-        const prefix = issue.specId ? chalk.gray(`[${issue.specId}] `) : '';
-        if (issue.severity === 'error') {
-          hasErrors = true;
-          if (errorCount < MAX_PRINT) {
-            logger.error(`${prefix}[${issue.code}] ${issue.message}`);
-            errorCount++;
-          } else {
-            skippedErrors++;
-          }
-        } else if (issue.severity === 'notice') {
-          // Never part of the failure decision, --ci included.
-          noticeTotal++;
-          if (noticeCount < MAX_PRINT) {
-            logger.notice(`${prefix}[${issue.code}] ${issue.message}`);
-            noticeCount++;
-          } else {
-            skippedNotices++;
-          }
-        } else {
-          if (isCiDraftWaivable(issue)) {
-            waivedWarnings++;
-          } else {
-            hasFatalWarnings = true;
-          }
-          if (warningCount < MAX_PRINT) {
-            logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
-            warningCount++;
-          } else {
-            skippedWarnings++;
-          }
-        }
-      }
-
-      if (skippedErrors > 0) {
-        logger.error(`... and ${skippedErrors} more error(s) omitted. Use '--subsystem <id>' to validate a specific subsystem.`);
-      }
-      if (skippedWarnings > 0) {
-        logger.warn(`... and ${skippedWarnings} more warning(s) omitted. Use '--subsystem <id>' to validate a specific subsystem.`);
-      }
-      if (skippedNotices > 0) {
-        logger.notice(`... and ${skippedNotices} more notice(s) omitted. Use '--subsystem <id>' to validate a specific subsystem.`);
-      }
-    }
+      family: options.family,
+    };
+    // Step 6: which spec-tree check — validation_options.selectsFamily, the one
+    // reading of the flags every caller shares.
+    const family = selectsFamily(sddOptions, declaredMembers(projectConfig).length > 0);
+    // Steps 7-9: the family run already holds the owner's gate of every
+    // selected project; otherwise the owner's gate over the bound project alone.
+    const sddResult = family ? validateFamily(sddOptions) : validateProject(sddOptions);
+    // Step 10: render.
+    const tally = renderSpecFindings(sddResult);
+    hasErrors ||= tally.errors;
+    hasFatalWarnings ||= tally.fatalWarnings;
+    waivedWarnings += tally.waived;
+    noticeTotal += tally.notices;
   }
 
   // The conformance debt register, said out loud on every run. A suppression

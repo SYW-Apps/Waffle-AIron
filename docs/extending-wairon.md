@@ -495,7 +495,10 @@ const result = wairon.validateProject({ extensions });
 ```
 
 An explicitly passed `extensions` takes precedence over config/global
-auto-loading. The relevant exported API: `validateProject(options)`,
+auto-loading. The relevant exported API: `validateProject(options)` (the
+owner's gate: one project from its own files), `validateFamily(options)` (the
+family run: every member's own gate verbatim, the composition of each
+project's externals against their live producers, and the family checks),
 `loadExtensions`, `loadExtensionPacks`, `loadProjectExtensions`,
 `globalPacksDir`, `discoverPacks`, `setProjectRoot`, the `SddRule` /
 `RuleContext` / `LoadedExtensions` / `DeclarativePack` types, `SDD_RULES`,

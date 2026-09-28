@@ -229,7 +229,7 @@ async function lockCommand(opts: { yes?: boolean; subsystem?: string; recursive?
 }
 
 /** cli_runner.runValidate — hosted when attached, else the local validation. */
-async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursive?: boolean }): Promise<void> {
+async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursive?: boolean; family?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
     const report = (await validateAttached(target, opts.subsystem)) as {
@@ -251,7 +251,7 @@ async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursi
     if (errors.length || (opts.ci && warnings.length)) process.exit(1);
     return;
   }
-  await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive });
+  await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive, family: opts.family });
 }
 
 /** cli_runner.runStatus — hosted when attached, else the local dashboard. */
@@ -329,7 +329,8 @@ program
   .description('Validate the project configuration and the SDD Spec Tree')
   .option('--ci', 'treat warnings as errors for CI pipelines (notices are printed and counted, never fatal)')
   .option('--subsystem <id>', 'only validate the specified subsystem (granular)')
-  .option('--no-recursive', 'do not recursively validate subprojects')
+  .option('--no-recursive', "at a project that declares members: run the owner's gate alone instead of the family run")
+  .option('--family', "run the family run from here: every member's own gate, and this project's externals composed against their live producers")
   .action(async (opts) => {
     await validateCommand(opts);
   });
@@ -355,7 +356,7 @@ program
   .command('doctor')
   .description('Health check: flags stale generated guides/skills, an unregistered MCP server, spec-tree issues and the chaining migration still pending')
   .option('--fix', 'regenerate stale in-project guides/context/skills, register the MCP server, then apply the chaining migration once confirmed')
-  .option('--report <section>', "print one section's plan and nothing else, writing nothing (the one section: chaining); never combines with --fix")
+  .option('--report <section>', "print one section's report and nothing else, writing nothing (chaining | composed-validation); never combines with --fix")
   .option('-y, --yes', "answer the chaining migration's confirmation (for a non-interactive --fix)")
   .action(async (opts) => {
     await runDoctor({ fix: opts.fix, report: opts.report, yes: opts.yes });
