@@ -326,10 +326,15 @@ methods:
       an external's or a member's `use` lists by name must be a public name the producer exports to
       this project — a contained member's live L0 table, an external's pin — compared by nameKey
       (IMPORT_UNRESOLVED, naming the closest public names; a `use` on an unpinned external is left
-      to the pin's own EXTERNAL_CHECK_UNAVAILABLE). A malformed `use` entry is the declaration's
-      problem (EXTERNAL_UNRESOLVED for an external, the member's for a member). The findings name no
-      spec: externals and members live in configuration. It reads the bound root's node of the
-      project graph, its alias-conflict problems, the members' export tables and
+      to the pin's own EXTERNAL_CHECK_UNAVAILABLE), and must not share its nameKey with a spec of
+      the project itself (IMPORT_SHADOWED_BY_LOCAL: the local spec wins every bare reference, so the
+      named import can never take effect and says something false — rename one or drop the import).
+      A `*` import shadowed by locals is silent, as a glob import is in Rust. One code, one meaning:
+      IMPORT_UNRESOLVED is only a name the producer does not export, IMPORT_SHADOWED_BY_LOCAL only a
+      named import a local spec hides. A malformed `use` entry is the declaration's problem
+      (EXTERNAL_UNRESOLVED for an external, the member's for a member). The findings name no spec:
+      externals and members live in configuration. It reads the bound root's node of the project
+      graph, its alias-conflict problems, the members' export tables, the project's own spec ids and
       ctx.pinnedExternals.
     signature: 'externalDeclarations(ctx: RuleContext): void'
     returns: void
@@ -346,6 +351,11 @@ methods:
       - code: IMPORT_UNRESOLVED
         severity: error
         summary: A `use` entry names a public name its producer does not export to this project
+      - code: IMPORT_SHADOWED_BY_LOCAL
+        severity: error
+        summary: >-
+          A named `use` import shares its name with a spec of the importing project, so the local
+          spec always wins and the import never takes effect
   - name: localIds
     description: >-
       Rule local-ids. Inside one project an id names one spec, and an id without `::` is always
@@ -393,4 +403,4 @@ methods:
           `members` entry
 status: design
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-28T16:10:19.746Z'
+updatedAt: '2026-09-28T16:21:48.507Z'

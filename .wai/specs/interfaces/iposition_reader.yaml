@@ -8,14 +8,16 @@ methods:
       For each unresolved reference (a bare name the owner's scan could bind neither locally nor
       through an import, or one prefixed with the referring project's own id): a self-prefixed one
       is self-prefix, targeting the bare local id when the project has that spec. A bare name is
-      compared by reference_resolution.nameKey against every OTHER project of the family: first its
-      public names (a contained member's or the family's L0 tables), then the types it owns that no
-      table exports — the retired suffix match. Exactly one project matching is import, naming the
-      producer, the canonical target and the existing public name when there is one. Several
-      projects matching are narrowed to those the referring project already declares (a member or an
-      external): exactly one left is import from it; none or several left is ambiguous, listing
-      every candidate. None is none. Never consults anything but what it is handed, never resolves
-      for validation.
+      compared by reference_resolution.nameKey against every OTHER project of the family: its public
+      names (a contained member's or the family's L0 tables) and the types it owns that no table
+      exports — the retired suffix match. Exactly one project matching is import (reason
+      only-match), naming the producer, the canonical target and the existing public name when there
+      is one. Several projects matching are decided by two rules, in order: prefer the one the
+      referring project already declares as a member or an external (declared-producer); failing
+      that, among the candidates left prefer the one that already exports the name as a public name
+      (already-exported). Otherwise it is ambiguous, listing every candidate and what each rule left
+      — a person picks. Every automatic choice carries its reason. None is none. Never consults
+      anything but what it is handed, never resolves for validation.
     signature: >-
       match(unresolved: AuthoredReference[], family: ProjectFamily, tables: ResolvedExportTable[],
       types: TypeSpec[]): PositionalMatch[]
@@ -39,4 +41,4 @@ methods:
       - idempotent
 status: design
 createdAt: '2026-09-28T16:09:32.534Z'
-updatedAt: '2026-09-28T16:17:00.687Z'
+updatedAt: '2026-09-28T16:22:14.091Z'

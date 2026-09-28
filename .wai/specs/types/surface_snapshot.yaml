@@ -81,9 +81,10 @@ methods:
       dispatch bindings and method shapes, the exported types and the closure's type shapes — every
       type expression passed through canonicalTypeRef, every list in a fixed order — with provenance
       (stateId, generatedAt, origin) and prose (descriptions, groups, display names) left out.
-      Re-pinning an unchanged contract never moves it, and neither does a producer re-spelling a
-      reference, regrouping a type or rewording a description. The lock's `digest`, and what
-      EXTERNAL_DRIFTED compares.
+      Ignoring prose is intended (stage 4 decision): a producer rewording a description, regrouping
+      a type or re-spelling a reference changes no consumer's pin and raises no EXTERNAL_DRIFTED;
+      only a change to the contract a caller can depend on does. Re-pinning an unchanged contract
+      never moves it. The lock's `digest`, and what EXTERNAL_DRIFTED compares.
     sourcePath: src/models/surface-references.ts
   - name: memberDigest
     signature: 'memberDigest(publicName: string, member: string): string | null'
@@ -113,4 +114,4 @@ methods:
       unresolvable is kept as written. Pure: the snapshot is the whole input.
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-09-28T16:08:31.489Z'
+updatedAt: '2026-09-28T16:22:46.641Z'

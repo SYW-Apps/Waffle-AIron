@@ -29,14 +29,16 @@ methods:
   - name: compose
     description: >-
       With one project's root bound: compare each of its externals as its lock records it with the
-      producer's live export table (decision 19, signature-level superset). A used method or type
-      that changed or vanished is EXTERNAL_INCOMPATIBLE (error); a producer that changed while
-      nothing used changed is EXTERNAL_DRIFTED (notice); a use that cannot be compared — unpinned,
-      used but not in the lock, an unreachable producer — is EXTERNAL_CHECK_UNAVAILABLE (warning),
-      never a pass. An external whose producer is out of reach is not composed; it is returned as
-      not selected. Each finding's severity is the project's own rules.sddRuleSeverity override,
-      else the code's default: the verdict on a project's edge is tuned by that project, as its gate
-      is.
+      producer's live export table (decision 19, signature-level superset, canonical digests). The
+      uses compared are every public name the project's references land on — `alias::name`
+      references and bare names bound through its `use` imports alike — so a type used only bare is
+      covered. A used method or type that changed or vanished is EXTERNAL_INCOMPATIBLE (error); a
+      producer whose canonical contract changed while nothing used changed is EXTERNAL_DRIFTED
+      (notice; prose never drifts); a use that cannot be compared — unpinned, used but not in the
+      lock, an unreachable producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. An
+      external whose producer is out of reach is not composed; it is returned as not selected. Each
+      finding's severity is the project's own rules.sddRuleSeverity override, else the code's
+      default: the verdict on a project's edge is tuned by that project, as its gate is.
     signature: 'compose(project: string): ValidationIssue[]'
     returns: ValidationIssue[]
     params:
@@ -107,4 +109,4 @@ methods:
         summary: 'A member has no usable id: its name yields no slug, or its declared id breaks the grammar'
 status: design
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-09-28T16:07:56.459Z'
+updatedAt: '2026-09-28T16:21:31.510Z'

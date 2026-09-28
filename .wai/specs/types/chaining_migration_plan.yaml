@@ -37,6 +37,16 @@ fields:
       Every reference apply rewrites out of a deprecated form (leading `::`, `super::`, member path)
       into its canonical text, each listed: projects in walk order, then spec, then position.
     optional: false
+  - name: newDependencies
+    type: string[]
+    description: >-
+      Every consumer → producer edge the plan introduces that no external and no pin of the consumer
+      had before — the positional step's new externals above all — one line each with the reference
+      count, e.g. "waffler_core now depends on waffler_ui (96 references)". Printed prominently at
+      the top of the plan and never blocking: the migration adds the edge exactly as the specs
+      resolve today and guesses no layering; whether the edge should exist is a person's call after
+      reading it.
+    optional: false
 methods:
   - name: isEmpty
     signature: 'isEmpty(): boolean'
@@ -55,4 +65,4 @@ methods:
       holds differently.
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:12:04.535Z'
-updatedAt: '2026-09-28T16:12:24.310Z'
+updatedAt: '2026-09-28T16:22:32.752Z'

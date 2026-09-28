@@ -52,6 +52,12 @@ fields:
       Whether the consumer must first declare the producer as an external (it declares no alias for
       it yet)
     optional: false
+  - name: reason
+    type: string
+    description: >-
+      Why the producer was chosen (positional_match.reason: only-match | declared-producer |
+      already-exported), printed beside the import in the plan
+    optional: false
 methods: []
 createdAt: '2026-09-28T16:08:56.957Z'
-updatedAt: '2026-09-28T16:13:17.436Z'
+updatedAt: '2026-09-28T16:22:17.363Z'

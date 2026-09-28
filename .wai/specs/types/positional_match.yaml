@@ -49,6 +49,16 @@ fields:
     type: string[]
     description: 'For ambiguous: every `<producer id>::<id>` the name keyed onto'
     optional: true
+  - name: reason
+    type: string
+    description: >-
+      For import, why this producer was chosen — printed beside every automatic choice in the plan
+      and the report: only-match (exactly one other project has the name) | declared-producer
+      (several do; exactly one is a member or external the referring project already declares) |
+      already-exported (several do and the declared rule left none or several; exactly one of them
+      already exports the name as a public name). For ambiguous, why no rule chose: which candidates
+      each rule left.
+    optional: true
 methods: []
 createdAt: '2026-09-28T16:09:03.266Z'
-updatedAt: '2026-09-28T16:09:03.268Z'
+updatedAt: '2026-09-28T16:22:10.831Z'

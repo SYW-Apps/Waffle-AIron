@@ -385,18 +385,19 @@ methods:
         label: imports
         description: >-
           Bind every bare name set aside, per root, through the root's imports — local first always
-          held, so an import never shadows a local spec. The candidates are the public names each
-          import supplies: a member's or external's resolved L0 table when the scan read the
-          producer (its `use` names, or every name for `*`), compared by nameKey. An explicit name
-          beats a `*` from another import (the ES-module and Rust idiom); exactly one supplier binds
-          it to that entry's canonical target (exported); two explicit suppliers, or two `*`
-          suppliers and no explicit one, bind nothing (ambiguous, IMPORT_AMBIGUOUS); no supplier the
-          scan read, while an import names an external the scan did not read, keeps the name as
-          written (outside — the owner's gate resolves it against that external's pin); otherwise it
-          is unresolved, with the hint naming a declared external or member whose table exports the
-          key without importing it and the `use` line that would. Nothing outside the root's own
-          alias table is ever consulted: no family-wide lookup. Record each as an AuthoredReference
-          of form import
+          held, so an import never shadows a local spec (a NAMED import a local spec hides is
+          IMPORT_SHADOWED_BY_LOCAL, reported by external-declarations; a `*` import hidden by locals
+          is silent, as in Rust). The candidates are the public names each import supplies: a
+          member's or external's resolved L0 table when the scan read the producer (its `use` names,
+          or every name for `*`), compared by nameKey. An explicit name beats a `*` from another
+          import (the ES-module and Rust idiom); exactly one supplier binds it to that entry's
+          canonical target (exported); two explicit suppliers, or two `*` suppliers and no explicit
+          one, bind nothing (ambiguous, IMPORT_AMBIGUOUS); no supplier the scan read, while an
+          import names an external the scan did not read, keeps the name as written (outside — the
+          owner's gate resolves it against that external's pin); otherwise it is unresolved, with
+          the hint naming a declared external or member whose table exports the key without
+          importing it and the `use` line that would. Nothing outside the root's own alias table is
+          ever consulted: no family-wide lookup. Record each as an AuthoredReference of form import
         type: local
       - stepNumber: 15
         description: >-
@@ -411,4 +412,4 @@ methods:
     detail: full
 status: design
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-28T16:14:28.275Z'
+updatedAt: '2026-09-28T16:22:50.394Z'

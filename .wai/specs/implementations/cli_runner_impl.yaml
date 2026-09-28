@@ -1414,15 +1414,21 @@ methods:
         targetMethod: plan
       - stepNumber: 8
         description: >-
-          Print the plan per project, each item once: the id to declare, the minimal L0 to create,
-          the L0 entries to add with the consumers each serves (own `{ typeDef }` entries and
-          mount-carried entries marked), every key the first L0 write will drop from the stored file
+          Print the plan per project, each item once, OPENING with the new dependencies it
+          introduces (one prominent line per consumer → producer edge no external or pin had before,
+          with its reference count — "waffler_core now depends on waffler_ui (96 references)";
+          listed, never blocking): the id to declare, the minimal L0 to create, the L0 entries to
+          add with the consumers each serves (own `{ typeDef }` entries, mount-carried and
+          positional entries marked), every key the first L0 write will drop from the stored file
           (droppedKeys, e.g. `status: draft`) under a line saying they will be removed, the
-          externals to declare, the aliases to pin, the legacy mounts moved into `members` with
-          every field they carry or retire, and the superseded family pins as ONE line per project
-          with their count; then every reference rewrite (from → to, grouped per project and spec),
-          every finding once, and the totals (the P1 probe's counts). The plan is computed without
-          projecting any sibling surface, so no projector message reaches it. Nothing is written
+          externals to declare, the `use` imports to add with the reason each producer was chosen
+          (only-match, declared-producer, already-exported), the aliases to pin, the legacy mounts
+          moved into `members` with every field they carry or retire, and the superseded family pins
+          as ONE line per project with their count; then every reference rewrite (from → to, grouped
+          per project and spec), every finding once (positional-ambiguous with each candidate,
+          import-shadowed, import-collision among them), and the totals. The plan is computed
+          without projecting any sibling surface, so no projector message reaches it. Nothing is
+          written
         type: return
         outcome: chaining plan reported
       - stepNumber: 9
@@ -2711,4 +2717,4 @@ lint:
         steps, which is the point.
 status: design
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T06:16:28.222Z'
+updatedAt: '2026-09-28T16:22:43.784Z'

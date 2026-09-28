@@ -937,7 +937,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the named `use` entries of the bound root's externals and members
-        endStep: 11
+        endStep: 13
       - stepNumber: 9
         description: >-
           Is it exported? Look the name up by nameKey among the public names the producer exports to
@@ -954,10 +954,25 @@ methods:
           closest public names the producer does export
         type: local
       - stepNumber: 11
+        label: shadow-check
+        description: >-
+          Does a spec of the bound project itself share the name's nameKey (its own components,
+          interfaces and types from the rule context)?
+        type: branch
+        condition: the project owns a spec whose id has the name's nameKey
+        onFalseStep: 13
+      - stepNumber: 12
+        label: shadowed
+        description: >-
+          Report IMPORT_SHADOWED_BY_LOCAL (error) naming the declaring project, the alias, the name
+          and the local spec that hides it: every bare reference binds the local spec, so the named
+          import never takes effect — rename one, or drop the import
+        type: local
+      - stepNumber: 13
         label: import-checked
         description: The import is checked
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: Every declaration is judged
         type: return
         outcome: judged
@@ -1065,4 +1080,4 @@ methods:
     exportedVia: memberDeclarationsRule
 status: design
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-28T16:10:25.756Z'
+updatedAt: '2026-09-28T16:22:00.005Z'

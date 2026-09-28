@@ -36,10 +36,12 @@ methods:
         type: local
       - stepNumber: 7
         description: >-
-          Classify: one project is import (producer, canonical target, existing public name if any);
-          several are narrowed to the projects the referring project already declares as a member or
-          an external — one left is import from it, none or several are ambiguous with every
-          candidate; none is none
+          Classify: one project is import with reason only-match (producer, canonical target,
+          existing public name if any); several are narrowed first to the projects the referring
+          project already declares as a member or an external — one left is import with reason
+          declared-producer — then, among those left (all of them when none is declared), to the
+          ones that already export the name — one left is import with reason already-exported;
+          otherwise ambiguous, with every candidate and what each rule left; none is none
         type: local
       - stepNumber: 8
         label: matched
@@ -51,4 +53,4 @@ methods:
         outcome: PositionalMatch[]
 status: design
 createdAt: '2026-09-28T16:09:37.950Z'
-updatedAt: '2026-09-28T16:17:02.080Z'
+updatedAt: '2026-09-28T16:22:16.348Z'

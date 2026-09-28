@@ -135,12 +135,15 @@ methods:
           Plan from each match. import: an import of the public name on the consumer's alias for the
           producer (its existing external or member alias, else the producer's id, marked
           declaresExternal), one entry per (consumer, alias, name) listing every reference it
-          resolves, marked exportPlanned when the producer exports the target under no public name
-          (its default public name is then the one imported). self-prefix: a rewrite to the bare
-          local id (form self-prefix). ambiguous: a positional-ambiguous finding listing every
-          candidate, the reference left as it is. Two imports that would supply one bare name to one
-          consumer are both dropped for that name and reported (import-collision). none: nothing — a
-          genuine dangling reference, which the gate reports
+          resolves and the reason the producer was chosen, marked exportPlanned when the producer
+          exports the target under no public name (its default public name is then the one
+          imported). The migration never writes a named import a local spec of the consumer would
+          shadow (the same nameKey): that name is an import-shadowed finding naming the local spec,
+          and its references are left as they are. self-prefix: a rewrite to the bare local id (form
+          self-prefix). ambiguous: a positional-ambiguous finding listing every candidate and what
+          each tie-break rule left, the reference left as it is — a person picks. Two imports that
+          would supply one bare name to one consumer are both dropped for that name and reported
+          (import-collision). none: nothing — a genuine dangling reference, which the gate reports
         type: local
       - stepNumber: 17
         description: 'Answer the plan: members, rewrites, imports and findings'
@@ -235,4 +238,4 @@ methods:
 detail: full
 status: design
 createdAt: '2026-09-27T10:45:51.006Z'
-updatedAt: '2026-09-28T16:14:16.648Z'
+updatedAt: '2026-09-28T16:22:23.654Z'

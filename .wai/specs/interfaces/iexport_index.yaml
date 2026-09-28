@@ -39,12 +39,16 @@ methods:
     description: >-
       One consumer's references into one producer, as the scan bound them: each reference that bound
       to a public name of the producer's table counts that name as used, with the member it reaches
-      (the contract method, or `type` for a type); every reference that bound to no public name —
-      unexported, or reached only by a deprecated form or a project id the consumer does not declare
-      — is unexported. A type the producer exports only inside a signature closure is not a public
-      name: naming it directly is unexported (stage 3), and exporting it takes one `typeDef` entry.
-      When several public names bind the same target, the one the reference named is counted. A pair
-      with no references answers an empty usage.
+      (the contract method, or `type` for a type) — an `alias::name` reference and a bare name bound
+      through the consumer's `use` import (AuthoredReference form import, binding exported) alike,
+      so a name used only bare is still used, the lock's `used` map pins it and a change to it is
+      EXTERNAL_INCOMPATIBLE; every reference that bound to no public name — unexported, or reached
+      only by a deprecated form or a project id the consumer does not declare — is unexported. An
+      import binding that was ambiguous or unresolved counts nothing. A type the producer exports
+      only inside a signature closure is not a public name: naming it directly is unexported (stage
+      3), and exporting it takes one `typeDef` entry. When several public names bind the same
+      target, the one the reference named is counted. A pair with no references answers an empty
+      usage.
     signature: 'usage(consumer: string, producer: string): ExportUsage'
     returns: ExportUsage
     params:
@@ -56,6 +60,6 @@ methods:
         description: The producer's namespace in the family graph
     guarantees:
       - idempotent
-status: complete
+status: design
 createdAt: '2026-09-26T16:08:30.136Z'
-updatedAt: '2026-09-27T10:37:43.928Z'
+updatedAt: '2026-09-28T16:21:20.088Z'
