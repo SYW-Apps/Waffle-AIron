@@ -629,6 +629,13 @@ methods:
         type: string
         description: What the member is to this project
         optional: true
-status: complete
+  - name: loadTypeSpecs
+    description: >-
+      Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
+      members' included (keyed by project id)
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
+    params: []
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T16:07:39.085Z'
+updatedAt: '2026-09-28T06:15:30.627Z'

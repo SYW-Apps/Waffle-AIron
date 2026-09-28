@@ -1,0 +1,24 @@
+id: iverdict_changes
+name: Verdict Changes Interface
+description: The one read behind `wairon doctor --report composed-validation`.
+component: verdict_changes
+methods:
+  - name: explain
+    description: >-
+      For the bound project, and each member at a parent: run its as-complete owner's gate, read its
+      lock's totals and validator version, and classify every finding whose reason is new in stage 4
+      — escalated (a stage-2 notice now an error), pinned (a cross-project reference now judged
+      against the project's own pin: the finding carries a resolution whose input is the pin), or
+      positional (an unresolved reference the family's top resolves by position: a bare name matched
+      into another project's types, or the project's own id used as a prefix), with what it matched
+      and the rewrite that makes it resolve. Totals are compared with the lock only when the lock
+      predates stage 4; a per-code diff is never claimed, because the lock records none. Writes
+      nothing.
+    signature: 'explain(): UpgradeReport'
+    returns: UpgradeReport
+    params: []
+    guarantees:
+      - idempotent
+status: design
+createdAt: '2026-09-28T06:15:48.628Z'
+updatedAt: '2026-09-28T06:15:48.636Z'

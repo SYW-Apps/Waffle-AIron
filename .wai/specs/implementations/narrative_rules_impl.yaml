@@ -447,7 +447,7 @@ methods:
         over: >-
           the call, dispatch and register steps of every method narrative of every implementation
           impl in ctx.implementations whose contract ctx.interfaceMap.get(impl.contract) resolves
-        endStep: 12
+        endStep: 10
       - stepNumber: 2
         label: outsideTree
         description: >-
@@ -463,73 +463,63 @@ methods:
         label: classifyRef
         description: >-
           Compute isDraftCtx = ctx.isImplementationDraft(impl); fromSubsystem = the subsystem of the
-          calling component ctx.componentMap.get(contract.component), when it resolves;
-          isCrossTreeForm = ctx.isExternalNamespaceRef(step.targetComponent), which covers the
-          explicit relative forms (super::/::) and a qualified reference whose leading namespace
-          segment is not a subsystem in THIS tree; isCollapsedForm = not isCrossTreeForm,
-          fromSubsystem known, and ctx.isCollapsedCrossTreeRef(step.targetComponent, fromSubsystem),
-          a reference made from inside a chained mount that the loader collapsed at this root; and
-          the verb: 'dispatches through', 'registers callback' or 'calls'
+          calling component ctx.componentMap.get(contract.component), when it resolves; resolution =
+          ctx.resolveCrossProject(impl.id, the step, step.targetComponent), set when the reference
+          leaves the bound project (an alias of a member or an external, an undeclared first
+          segment, a foreign provider, a deprecated form) and null for a local id; and the verb:
+          'dispatches through', 'registers callback' or 'calls'
         type: local
       - stepNumber: 4
-        description: Only a cross-tree or collapsed reference is judged against the surface snapshots
+        description: >-
+          Only a reference that leaves the project is looked up in a contract outside it; a local id
+          that names nothing is a typo
         type: branch
-        condition: isCrossTreeForm or isCollapsedForm
-        onFalseStep: 7
+        condition: resolution is set
+        onFalseStep: 8
       - stepNumber: 5
-        description: resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem)
+        description: >-
+          resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem) — the contract entry
+          the resolution landed on: a contained member's live table, the external's pin, or a
+          foreign snapshot
         type: local
       - stepNumber: 6
         label: surfaceVerdict
         description: >-
-          Act on how the snapshots judged the reference: one that resolved names a single declared
-          contract and is left to surface-reference-backing, which judges what that contract
-          exposes; one they do not cover falls back to the unresolved-target findings
+          Act on the resolution: resolved is left to surface-reference-backing, which judges what
+          the entry exposes; ambiguous (foreign snapshots that disagree) is reported here; every
+          other outcome is project-boundaries' single finding
         type: switch
-        'on': resolved.kind
+        'on': resolution.outcome
         cases:
           - value: ambiguous
-            step: 12
+            step: 10
           - value: resolved
             step: 1
         defaultStep: 7
       - stepNumber: 7
-        label: unresolved
+        label: reportedElsewhere
         description: >-
-          An unresolved reference that points OUTSIDE this loading root is only verifiable from the
-          parent project — a chained subproject opened standalone physically does not contain its
-          parent's specs, which is a known-honest state rather than a spec defect. Any other
-          unresolved reference is the typo it always was
-        type: branch
-        condition: isCrossTreeForm
-        onFalseStep: 10
+          Forbidden, missing and unavailable are reported once, by project-boundaries, with the
+          resolution: continue with the next step. (The retired CROSS_TREE_REF_UNRESOLVED warning
+          and its advice to validate from the parent are gone.)
+        type: jump
+        toStep: 1
       - stepNumber: 8
+        label: invalidRef
         description: >-
-          Report CROSS_TREE_REF_UNRESOLVED (warning; draft context isDraftCtx) naming the method,
-          the verb, the cross-tree component and the step, with the remedies: validate from the
-          parent project, pin the family surfaces (wairon surface pin), or import the producing
-          project's surface
+          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
+          reaches a component that does not exist, naming the verb, the component and the step
         type: local
       - stepNumber: 9
         description: Continue with the next step
         type: jump
         toStep: 1
       - stepNumber: 10
-        label: invalidRef
-        description: >-
-          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
-          reaches a component that does not exist, naming the verb, the component and the step
-        type: local
-      - stepNumber: 11
-        description: Continue with the next step
-        type: jump
-        toStep: 1
-      - stepNumber: 12
         label: ambiguousRef
         description: >-
-          Report SURFACE_REF_AMBIGUOUS (error; draft context isDraftCtx; not surface-resolved) with
-          the message resolved.ambiguityMessage(subject, step.targetComponent), where subject names
-          the reaching clause: 'Method <method> in implementation <impl> dispatches (step <n>)
+          Report SURFACE_REF_AMBIGUOUS (error; draft context isDraftCtx; carrying the resolution)
+          with the message resolved.ambiguityMessage(subject, step.targetComponent), where subject
+          names the reaching clause: 'Method <method> in implementation <impl> dispatches (step <n>)
           through' for a dispatch step, and 'Method <method> in implementation <impl>
           calls|registers callback "<targetMethod>" (step <n>) on' otherwise
         type: local
@@ -550,27 +540,27 @@ methods:
           impl in ctx.implementations whose contract ctx.interfaceMap.get(impl.contract) resolves
         endStep: 15
       - stepNumber: 2
-        label: surfaceResolvedTarget
+        label: resolvedTarget
         description: >-
-          Only a target that left this tree AND resolved to a single declared contract is judged
-          here, which is five conditions: a malformed step and a target this tree contains are
-          narrative-target-references', and a reference that is not a cross-tree form, or that the
-          snapshots leave ambiguous or do not cover at all, is cross-tree-references'
+          Only a target that left the project AND resolved to a single declared contract entry is
+          judged here: a malformed step and a target this tree contains are
+          narrative-target-references', and a reference whose resolution is anything but resolved is
+          cross-tree-references' (ambiguous) or project-boundaries' (forbidden, missing,
+          unavailable)
         type: branch
         condition: >-
           step.targetComponent is set; step.targetMethod is set unless the step dispatches;
-          ctx.componentMap.get(step.targetComponent) resolves nothing in this tree; the reference is
-          a cross-tree form (ctx.isExternalNamespaceRef) or a collapsed one
-          (ctx.isCollapsedCrossTreeRef from the calling component's subsystem, fromSubsystem); and
-          resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem) has kind resolved
+          ctx.componentMap.get(step.targetComponent) resolves nothing in this tree;
+          ctx.resolveCrossProject(impl.id, the step, step.targetComponent) is resolved; and resolved
+          = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem) names the entry — a contained
+          member's live table, the external's pin, or a foreign snapshot
         onFalseStep: 1
       - stepNumber: 3
         description: >-
           Compute isDraftCtx = ctx.isImplementationDraft(impl); caller =
           ctx.componentMap.get(contract.component); and the verb every finding reads with:
           'dispatches through', 'registers callback' or 'calls'. Every finding below is a contract
-          verdict rather than a resolution failure, so each is reported surface-resolved, which is
-          what keeps it at full strength in a chained subproject
+          verdict on a resolved reference, and carries that resolution
         type: local
       - stepNumber: 4
         label: declaredDependency
@@ -586,8 +576,8 @@ methods:
       - stepNumber: 5
         description: >-
           Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
-          ctx.isComponentDraft(caller.id); surface-resolved) naming the caller, the verb and the
-          cross-tree component it reaches without declaring it
+          ctx.isComponentDraft(caller.id); carrying the resolution) naming the caller, the verb and
+          the component in the other project it reaches without declaring it
         type: local
       - stepNumber: 6
         label: whatMustBeExposed
@@ -605,9 +595,9 @@ methods:
         onFalseStep: 1
       - stepNumber: 8
         description: >-
-          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
-          the capability, the cross-tree portal, the snapshot's projectName and the entry id that
-          does not serve it
+          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; carrying the resolution)
+          naming the capability, the portal in the other project, the providing project and the
+          entry id that does not serve it
         type: local
       - stepNumber: 9
         description: Continue with the next step
@@ -636,9 +626,9 @@ methods:
       - stepNumber: 13
         label: surfaceUnbacked
         description: >-
-          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx; surface-resolved)
-          naming the step, the method, the guarantee, the snapshot's projectName and the entry
-          method that does not declare it
+          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx; carrying the
+          resolution) naming the step, the method, the guarantee, the providing project and the
+          entry method that does not declare it
         type: local
       - stepNumber: 14
         description: Continue with the next step once every asserted guarantee is checked
@@ -647,9 +637,9 @@ methods:
       - stepNumber: 15
         label: methodNotExposed
         description: >-
-          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; surface-resolved) naming
-          the method, the verb, the cross-tree component, the snapshot's projectName and the entry
-          id that does not expose it
+          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; carrying the resolution)
+          naming the method, the verb, the component in the other project, the providing project and
+          the entry id that does not expose it
         type: local
     symbol: check
     exportedVia: surfaceReferenceBackingRule
@@ -1040,6 +1030,6 @@ methods:
         type: local
     symbol: check
     exportedVia: detailSufficiencyRule
-status: complete
+status: design
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-23T17:53:13.336Z'
+updatedAt: '2026-09-28T06:09:49.450Z'

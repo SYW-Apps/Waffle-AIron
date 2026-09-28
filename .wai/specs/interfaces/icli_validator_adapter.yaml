@@ -3,11 +3,11 @@ name: CLI Validator Adapter Interface
 description: Adapter contract for the CLI to run validations.
 component: cli_validator_adapter
 methods:
-  - name: validateSddTree
+  - name: validateProject
     description: >-
-      Forward the tree validation to the validator portal, carrying what the command line asked to
-      vary: a --subsystem scope, a chained depth, the project's rules and type.
-    signature: 'validateSddTree(options?: ValidationOptions, projectType?: string): ValidationResult'
+      Forward the owner's gate to the validator portal, carrying what the command line asked to
+      vary: a --subsystem scope and the project's rules and type.
+    signature: 'validateProject(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
     params:
       - name: options
@@ -46,11 +46,16 @@ methods:
       The whole `wairon validate` workflow over the LOCAL tree: run the registry, project-config and
       spec-tree checks, render their findings (notices listed and counted apart from warnings), and
       exit non-zero when the tree is invalid (or, under --ci, carries warnings — never for notices).
-      The runner delegates here rather than orchestrating the three checks itself, so the
-      composition lives with the checks it composes.
+      The spec-tree check is the family run at a project that declares members or when --family is
+      given, and the owner's gate otherwise (--no-recursive at a parent asks for the owner's gate
+      alone) — validation_options.selectsFamily decides, as it does for the MCP tool. A family run
+      prints each project's findings verbatim under its project; an owner's gate with externals
+      prints the one-line --family hint. Nothing is ever printed as 'verified through the parent':
+      that path is gone. The runner delegates here rather than orchestrating the three checks
+      itself, so the composition lives with the checks it composes.
     signature: >-
-      runValidation(options: { ci?: boolean; subsystem?: string; recursive?: boolean }):
-      Promise<void>
+      runValidation(options: { ci?: boolean; subsystem?: string; recursive?: boolean; family?:
+      boolean }): Promise<void>
     returns: Promise<void>
   - name: computeGateStateId
     description: >-
@@ -59,6 +64,18 @@ methods:
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
-status: complete
+  - name: validateFamily
+    description: >-
+      Forward the family run to the validator portal: every selected project's own gate verbatim,
+      the composition of each project's externals, and the family checks.
+    signature: 'validateFamily(options: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          What this run may vary, as the command's flags resolved it; `family` when --family was
+          given
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T14:49:20.465Z'
+updatedAt: '2026-09-28T06:10:27.166Z'

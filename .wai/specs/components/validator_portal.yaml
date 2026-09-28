@@ -1,10 +1,13 @@
-id: "validator_portal"
-name: "Validator Portal"
-description: "Inbound portal for the SDD validator subsystem."
-subsystem: "sdd_validator"
-componentType: "Portal"
-portalType: "Custom"
+id: validator_portal
+name: Validator Portal
+description: Inbound portal for the SDD validator subsystem.
+subsystem: sdd_validator
+componentType: Portal
+owns: []
 dependsOn:
-  - "spec_validator"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - spec_validator
+  - family_validator
+portalType: Custom
+status: design
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-09-28T06:06:40.334Z'

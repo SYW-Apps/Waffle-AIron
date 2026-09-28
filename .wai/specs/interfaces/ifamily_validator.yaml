@@ -1,0 +1,100 @@
+id: ifamily_validator
+name: Family Validator Interface
+description: >-
+  The family run: every selected project's own gate verbatim, the composition of each project's
+  externals against their live producers, and the family checks over the root's graph. One judge per
+  edge: a family run never judges an owner's edge differently from the owner's own gate, it only
+  adds findings that need two projects on disk.
+component: family_validator
+methods:
+  - name: run
+    description: >-
+      Validate the bound project's family: the bound root and its members (all levels, or as many as
+      a numeric `recursive` bounds), each by its own gate under its own configuration and prefixed
+      with its project key, verbatim; then the composition findings of each project's externals;
+      then the family checks. A plain run narrows the request's reach to the bound root before any
+      read, so an external whose producer lies above the family is not composed and is counted in a
+      one-line hint instead; with `family` set the reach stays the request's (locally an explicit
+      walk up, hosted the credential's), never widened. The result is valid when no project's gate
+      and no family finding holds an error, and lists each project's totals.
+    signature: 'run(options: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          The run's switches: family (walk up explicitly), recursive (a number bounds the member
+          depth), scopeSubsystem (a member key narrows the run to that member), treatAllAsComplete
+          and pre-loaded packs, passed to every project's own gate
+  - name: compose
+    description: >-
+      With one project's root bound: compare each of its externals as its lock records it with the
+      producer's live export table (decision 19, signature-level superset). A used method or type
+      that changed or vanished is EXTERNAL_INCOMPATIBLE (error); a producer that changed while
+      nothing used changed is EXTERNAL_DRIFTED (notice); a use that cannot be compared — unpinned,
+      used but not in the lock, an unreachable producer — is EXTERNAL_CHECK_UNAVAILABLE (warning),
+      never a pass. An external whose producer is out of reach is not composed; it is returned as
+      not selected. Each finding's severity is the project's own rules.sddRuleSeverity override,
+      else the code's default: the verdict on a project's edge is tuned by that project, as its gate
+      is.
+    signature: 'compose(project: string): ValidationIssue[]'
+    returns: ValidationIssue[]
+    params:
+      - name: project
+        type: string
+        description: >-
+          The key of the project whose externals are composed ('' for the family root), stamped on
+          each finding
+    findings:
+      - code: EXTERNAL_INCOMPATIBLE
+        severity: error
+        summary: >-
+          A method or type a project uses from an external changed or vanished in the producer's
+          live export table
+      - code: EXTERNAL_DRIFTED
+        severity: notice
+        summary: An external's producer changed since it was pinned, but nothing the project uses changed
+      - code: EXTERNAL_CHECK_UNAVAILABLE
+        severity: warning
+        summary: >-
+          A use of an external could not be compared with its producer: unpinned, not in the lock,
+          or the producer unreachable
+  - name: checkMembers
+    description: >-
+      The family checks over the root's graph. A declared member with no project on disk is
+      MEMBER_NOT_FOUND (error: the family cannot be composed; the owner's gate reports its own
+      references into it as unavailable). Two members resolving to one project id are
+      PROJECT_ID_COLLISION (error). Projects of the selection that depend on each other in a loop
+      are PROJECT_DEPENDENCY_CYCLE (warning until stage 5), reported once per loop on each project
+      in it with the references that close each edge. A present member with no lock is
+      MEMBER_UNAPPROVED, and one whose lock no longer matches its own gate identity is
+      MEMBER_DRIFTED (warnings, decision #11: `--ci` at the parent fails until the member is locked
+      or its severity is lowered; a parent lock that refuses is stage 5). Each finding's severity is
+      the root's rules.sddRuleSeverity override, else the default.
+    signature: 'checkMembers(family: ProjectFamily): ValidationIssue[]'
+    returns: ValidationIssue[]
+    params:
+      - name: family
+        type: ProjectFamily
+        description: >-
+          The family root's project graph: the selected projects, their directories, the
+          cross-project references and the identity and membership problems
+    findings:
+      - code: MEMBER_NOT_FOUND
+        severity: error
+        summary: A member the project declares has no project on disk at its path
+      - code: PROJECT_ID_COLLISION
+        severity: error
+        summary: Two members of one family resolve to one project id
+      - code: PROJECT_DEPENDENCY_CYCLE
+        severity: warning
+        summary: Projects of the family depend on each other in a loop
+      - code: MEMBER_UNAPPROVED
+        severity: warning
+        summary: A member of the family has never been locked
+      - code: MEMBER_DRIFTED
+        severity: warning
+        summary: 'A member''s lock no longer matches its own gate identity: it changed since it was approved'
+status: design
+createdAt: '2026-09-28T06:06:08.804Z'
+updatedAt: '2026-09-28T06:06:08.816Z'

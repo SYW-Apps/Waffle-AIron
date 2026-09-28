@@ -319,10 +319,12 @@ methods:
           Resolve the member's path against THIS root and under the containment guard against this
           root, lexically and through links (the declaring project decides containment, so a member
           is accepted or refused identically whichever root loads it): an escaping path is
-          PROJECTPATH_ESCAPE, a directory already on the walk CIRCULAR_SUBPROJECT_REFERENCE, a
-          missing one SUBPROJECT_NOT_FOUND with a member-absent problem — each skipped, and each
-          loader issue carrying the member's key. Otherwise, below the depth bound, walk the member
-          the same way from step 2, as a member of this root declared under its alias
+          PROJECTPATH_ESCAPE and a directory already on the walk CIRCULAR_SUBPROJECT_REFERENCE, each
+          a loader issue carrying the member's key; a missing one records a member-absent problem in
+          the graph and no loader issue — the family run reports it as MEMBER_NOT_FOUND (stage 4
+          retires SUBPROJECT_NOT_FOUND), and the declaring project's own gate reports its references
+          into the member as unavailable. Each is skipped. Otherwise, below the depth bound, walk
+          the member the same way from step 2, as a member of this root declared under its alias
         type: local
       - stepNumber: 9
         label: tables
@@ -385,6 +387,6 @@ methods:
         type: return
         outcome: ScannedProjectRoot[]
     detail: full
-status: complete
+status: design
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-27T15:25:56.061Z'
+updatedAt: '2026-09-28T06:17:32.227Z'

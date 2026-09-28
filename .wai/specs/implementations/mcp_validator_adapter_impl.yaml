@@ -6,13 +6,14 @@ description: >-
 contract: imcp_validator_adapter
 sourcePath: src/mcp/adapters/validator.ts
 methods:
-  - name: validateSddTree
+  - name: validateProject
     narrative:
       - stepNumber: 1
-        description: Call validateSddTree on validator portal
+        description: Call validateProject on the validator portal
         type: call
         targetComponent: validator_portal
-        targetMethod: validateSddTree
+        targetMethod: validateProject
+    symbol: validateSddTree
   - name: validateRegistry
     narrative:
       - stepNumber: 1
@@ -20,6 +21,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: validateRegistry
-status: complete
+  - name: validateFamily
+    narrative:
+      - stepNumber: 1
+        description: Call validateFamily on the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateFamily
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:09:46.193Z'
+updatedAt: '2026-09-28T06:11:15.445Z'

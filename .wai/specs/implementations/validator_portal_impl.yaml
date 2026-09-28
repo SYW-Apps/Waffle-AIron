@@ -5,13 +5,14 @@ contract: ivalidator_portal
 sourcePath: src/core/validation.ts
 simPath: tests/core/validation.test.ts
 methods:
-  - name: validateSddTree
+  - name: validateProject
     narrative:
       - stepNumber: 1
-        description: Forward validateSddTree call to spec validator
+        description: Forward validateProject to the spec validator
         type: call
         targetComponent: spec_validator
-        targetMethod: validateSddTree
+        targetMethod: validateProject
+    symbol: validateSddTree
   - name: validateRegistry
     narrative:
       - stepNumber: 1
@@ -76,6 +77,13 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: builtinProjectKinds
-status: complete
+  - name: validateFamily
+    narrative:
+      - stepNumber: 1
+        description: Forward validateFamily to the family validator's run
+        type: call
+        targetComponent: family_validator
+        targetMethod: run
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:09:02.597Z'
+updatedAt: '2026-09-28T06:16:55.895Z'

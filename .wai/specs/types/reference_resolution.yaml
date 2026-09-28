@@ -1,0 +1,59 @@
+kind: value-object
+id: reference_resolution
+name: ReferenceResolution
+description: >-
+  How one cross-project reference was resolved by the owner's gate, decided BEFORE any severity: the
+  structured result a finding about that reference carries, so a reader (or a later stage) can tell
+  a reference that is not exported from one that could not be compared without parsing prose. It is
+  computed from the referring project's own files only — its scan (its own specs and its contained
+  members' export tables), its externals lock and its pinned snapshots — so the same reference
+  resolves the same way from every root. `resolved` means the reference lands on one public name the
+  referrer may see, and the ordinary contract checks then apply to that entry; every other outcome
+  is reported once, by the project-boundaries rule.
+fields:
+  - name: outcome
+    type: string
+    description: >-
+      resolved (one public name whose audience covers the referrer, in a contained member's live
+      export table or in the pinned snapshot of a declared external) | missing (the producer does
+      not export that name or member: EXTERNAL_NOT_EXPORTED) | ambiguous (several foreign surface
+      snapshots expose the name with different contracts: SURFACE_REF_AMBIGUOUS; a family reference
+      cannot be ambiguous, because an alias names one project and a public name one target) |
+      unavailable (nothing to judge against: no pin for the alias, an unreadable pin, a member
+      absent on disk, or a deprecated form naming no alias: EXTERNAL_CHECK_UNAVAILABLE, never a
+      pass) | forbidden (the reference reaches a project the referrer does not declare as a member
+      or an external, or a trusted link crosses into another project: EXTERNAL_UNDECLARED or
+      TRUSTED_LINK_CROSSES_PROJECT)
+    optional: false
+  - name: owner
+    type: string
+    description: >-
+      The referring project's id (its key when it has no usable id): the one project whose gate
+      judges this reference
+    optional: false
+  - name: callSite
+    type: string
+    description: >-
+      Where the reference is written: the referring spec id and the position in it (a dependsOn
+      entry, a narrative step by number, a field or parameter type, a trusted link)
+    optional: false
+  - name: canonicalTarget
+    type: string
+    description: >-
+      The target in producer-id form, `<producer id>::<public name>` with `.<member>` when a method
+      or a type member is named; the reference as written when it lands nowhere
+    optional: true
+  - name: inputDigest
+    type: string
+    description: >-
+      The digest of the input the reference was judged against: the pinned snapshot's content digest
+      from the externals lock, or the content digest of a contained member's live export table.
+      Absent when there was nothing to judge against
+    optional: true
+  - name: reason
+    type: string
+    description: One sentence saying why the outcome is what it is, in the words the finding repeats
+    optional: false
+methods: []
+createdAt: '2026-09-28T06:01:47.622Z'
+updatedAt: '2026-09-28T06:01:47.626Z'

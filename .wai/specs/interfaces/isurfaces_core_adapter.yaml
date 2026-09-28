@@ -19,16 +19,6 @@ methods:
     description: Loads type specs (closure source).
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
-  - name: resolveSubprojectForNamespace
-    description: >-
-      Resolve a chained mount's qualified namespace to its project root through the core portal, or
-      null — how the surfaces plane finds the `.wai/surfaces/` a mount holds without walking the
-      filesystem itself.
-    signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
-    returns: string | null
-    params:
-      - name: namespace
-        type: string
   - name: computeStateId
     description: >-
       Forward to approval_portal.computeStateId: the spec tree's content identity a snapshot is
@@ -66,4 +56,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-09-27T10:43:42.633Z'
+updatedAt: '2026-09-28T06:04:46.147Z'

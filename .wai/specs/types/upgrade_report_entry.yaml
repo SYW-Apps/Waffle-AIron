@@ -1,0 +1,51 @@
+kind: value-object
+id: upgrade_report_entry
+name: UpgradeReportEntry
+description: >-
+  One finding of today's owner's gate that stage 4 changed, with the reason it is new. Every reason
+  is computed from files that exist now; none is recalled from a previous run, because nothing
+  records one.
+subsystem: sdd_cli
+fields:
+  - name: project
+    type: string
+    description: The key of the project whose gate reported it ('' for the bound root)
+    optional: false
+  - name: code
+    type: string
+    description: The finding's code
+    optional: false
+  - name: severity
+    type: string
+    description: Its severity now
+    optional: false
+  - name: specId
+    type: string
+    description: The spec it is on, when it names one
+    optional: true
+  - name: reason
+    type: string
+    description: >-
+      escalated (a stage-2 notice that is an error since stage 4: EXTERNAL_NOT_EXPORTED,
+      EXPORT_INVALID, TRUSTED_LINK_CROSSES_PROJECT, EXTERNAL_UNDECLARED) | pinned (a cross-project
+      reference now judged against the project's own pin, where it used to be judged through the
+      parent's live tree) | positional (an unresolved reference the family's top resolves by
+      position — a bare name matched into another project's types, or the project's own id used as a
+      prefix — which is how it passed before stage 4)
+    optional: false
+  - name: resolvedAs
+    type: string
+    description: >-
+      For a positional finding: what the family's top matched the reference to, `<producer
+      id>::<id>`
+    optional: true
+  - name: rewrite
+    type: string
+    description: >-
+      For a positional finding: the reference to write instead (`alias::publicName`, or the bare
+      local id for a self-prefixed one) and what the producer must export and the consumer declare
+      and pin for it to resolve
+    optional: true
+methods: []
+createdAt: '2026-09-28T06:15:18.135Z'
+updatedAt: '2026-09-28T06:15:18.137Z'

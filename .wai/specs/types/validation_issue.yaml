@@ -33,7 +33,22 @@ fields:
       True when the issue was raised on a draft/design spec (or an ancestor) — lets the --ci gate
       waive warnings that merely reflect declared, unfinished work.
     optional: true
+  - name: resolution
+    type: ReferenceResolution
+    description: >-
+      On a finding about a cross-project reference: how the owner's gate resolved it (outcome,
+      owner, call site, canonical target, input digest, reason), decided before the severity. It
+      replaces the retired surfaceResolved flag, which existed only so the resolve-through-parent
+      merge could tell a contract verdict from a resolution failure.
+    optional: true
+  - name: project
+    type: string
+    description: >-
+      In a family run: the key of the project whose gate (or whose external, for a composition
+      finding) the finding belongs to — '' for the family root. The finding's message is that
+      gate's, verbatim; the run only prefixes it. Absent on the owner's own run.
+    optional: true
 methods: []
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-26T14:48:46.126Z'
+updatedAt: '2026-09-28T06:02:04.395Z'

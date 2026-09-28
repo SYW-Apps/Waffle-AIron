@@ -1,0 +1,28 @@
+kind: value-object
+id: upgrade_report
+name: UpgradeReport
+description: >-
+  `wairon doctor --report composed-validation`: what stage 4 changed in each project's verdict, from
+  what can honestly be computed. The lock records only totals (errors, warnings, notices) and the
+  validator version that took it — no per-code list — so the report compares totals with the last
+  lock and classifies today's findings by a reason it can compute now; it never claims a per-code
+  diff against the past.
+subsystem: sdd_cli
+fields:
+  - name: projects
+    type: UpgradeReportProject[]
+    description: One line per project the report covered (the bound root, and its members at a parent)
+    optional: false
+  - name: entries
+    type: UpgradeReportEntry[]
+    description: >-
+      Every finding of today's owner's gates whose reason is new in stage 4, grouped by code when
+      printed
+    optional: false
+  - name: unclassified
+    type: number
+    description: Today's findings the report cannot attribute to stage 4 — counted, never explained away
+    optional: false
+methods: []
+createdAt: '2026-09-28T06:15:22.082Z'
+updatedAt: '2026-09-28T06:15:22.084Z'

@@ -41,13 +41,6 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: removeSnapshot
-  - name: listMountSnapshots
-    narrative:
-      - stepNumber: 1
-        description: Forward listMountSnapshots to the surface orchestrator
-        type: call
-        targetComponent: surface_orchestrator
-        targetMethod: listMountSnapshots
   - name: pinExternals
     narrative:
       - stepNumber: 1
@@ -76,6 +69,13 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: listFamilyPins
-status: complete
+  - name: listPinnedExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward listPinnedExternals to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listPinnedExternals
+status: design
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-09-27T10:43:01.280Z'
+updatedAt: '2026-09-28T06:04:45.246Z'

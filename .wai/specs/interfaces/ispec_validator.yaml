@@ -13,27 +13,30 @@ description: >-
   the target subsystem's published surface).
 component: spec_validator
 methods:
-  - name: validateSddTree
+  - name: validateProject
     description: >-
-      Performs full SDD spec tree structural validation and returns results. A --subsystem scope
-      that names no loaded subsystem fails fast with SUBSYSTEM_NOT_FOUND (listing the known
-      subsystems) rather than silently passing. When the tree is a chained subproject whose parent
-      is on disk (detected via the loader's findChainingParent) and it still holds references no
-      surface snapshot covers, the verdict is resolved THROUGH the parent: the top root is validated
-      scoped to the mount chain, its findings are renamed into the child's own ids, and they are
-      merged with the child's own findings — never replacing them, never changing a severity — and
-      the result names the root it was resolved through. A credential narrowed to the child alone
-      never reaches the parent this way. When no usable parent is reachable, uncovered references
-      fall back to the standalone verdict.
-    signature: 'validateSddTree(options?: ValidationOptions, projectType?: string): ValidationResult'
+      The owner's gate (stage 4): judge the bound project from its own files alone — its specs, its
+      configuration and doctrine, its code, its lock, its externals lock and pinned snapshots, and
+      the export tables of the members it contains — and nothing else. It never walks up to a
+      parent, never reads a sibling's live tree and discovers nothing, so a project's verdict is the
+      same from every root and with or without its family on disk. A reference into another project
+      is judged before any severity (the rule context's resolveCrossProject): into a contained
+      member, against that member's live L0 table; into a declared external, against the pinned
+      snapshot only — the public name exists, its audience covers the project, the used member
+      exists — and what cannot be compared is EXTERNAL_CHECK_UNAVAILABLE, never a pass. Every
+      finding about such a reference carries its ReferenceResolution. A contained member's own specs
+      are never judged here: its gate judges them under its own configuration. A --subsystem scope
+      that names no loaded subsystem fails fast with SUBSYSTEM_NOT_FOUND. When the project declares
+      externals the result carries a one-line hint that `validate --family` composes them against
+      their live producers.
+    signature: 'validateProject(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
     params:
       - name: options
         type: ValidationOptions
         description: >-
-          What this run may vary: rules, project type, subsystem scope, chained depth, pre-loaded
-          packs, full strictness, and cross-tree suppression. A bare RulesConfig is accepted for
-          callers that only override severities
+          What this run may vary: rules, project type, subsystem scope, pre-loaded packs and full
+          strictness. A bare RulesConfig is accepted for callers that only override severities
         optional: true
       - name: projectType
         type: string
@@ -51,10 +54,12 @@ methods:
     returns: ValidationResult
   - name: validateAsComplete
     description: >-
-      Run full SDD tree validation at full strictness, treating every spec as complete (no draft
-      severity relaxation) and mutating nothing. The strictness flip happens inside the run, because
-      invalidating the spec cache would discard any status set beforehand. Returns the as-complete
-      results.
+      The owner's gate at full strictness, treating every spec as complete (no draft severity
+      relaxation) and mutating nothing — the gate behind `wairon lock`. It judges the bound project
+      alone, exactly as validateProject does, so a member locked at its own root and one locked
+      inside its family are held to one verdict; a member's own findings never block its parent's
+      lock (a parent that refuses on an unapproved member is stage 5). The strictness flip happens
+      inside the run, because invalidating the spec cache would discard any status set beforehand.
     signature: 'validateAsComplete(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
     params:
@@ -98,38 +103,15 @@ methods:
   - name: computeGateStateId
     description: >-
       Gather the content identity, the governing extensions, the project's gate config, the consumed
-      contract inputs and the built-in rule sequence, and compute the gate identity from them.
+      contract inputs and the built-in rule sequence, and compute the gate identity from them. Every
+      input is the bound project's own (its tree including the members it contains, its doctrine,
+      its externals lock and pinned snapshots, its foreign surface snapshots) — never an ancestor's
+      state — so a lock taken at a member's own root and one taken inside its family record the same
+      identity. With resolve-through-parent gone, the verdict a lock certifies no longer depends on
+      an ancestor either.
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
-  - name: resolveThroughParent
-    description: >-
-      Resolve this tree's verdict THROUGH the project that declares it a member (stage 4 deletes
-      this with composed validation): walk up to the top root collecting the membership chain
-      (`members` entries, or legacy L1 mounts), validate there scoped to this project's key in the
-      top root's graph — its project id, the same at every depth — with the parent's own doctrine —
-      for each rule the stricter of the parent's and this project's severity, the same as-complete
-      strictness, and without resolving again — and rename the findings from that key into this
-      project's own ids for the caller to merge. Null when no usable parent is reachable (its L0
-      missing, the member unknown, or reach denied), and the caller then keeps the standalone
-      verdict. Reach-gated: the walk never climbs above the bound request's top project root.
-    signature: >-
-      resolveThroughParent(boundRoot: string, treatAllAsComplete: boolean, childRules?:
-      RulesConfig): ParentResolution
-    returns: ParentResolution
-    params:
-      - name: boundRoot
-        type: string
-        description: The root this tree was validated at — where the walk up starts
-      - name: treatAllAsComplete
-        type: boolean
-        description: Judge the parent's run at the same as-complete strictness as this one
-      - name: childRules
-        type: RulesConfig
-        description: >-
-          This project's own rule severities; each rule is judged at the stricter of the parent's
-          and these
-        optional: true
   - name: findTestsReferencing
     description: >-
       Find the tests that encode a given set of methods, resolving the project's declared test roots
@@ -165,6 +147,6 @@ methods:
     signature: 'builtinProjectKinds(): string[]'
     returns: string[]
     params: []
-status: complete
+status: design
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T10:47:56.524Z'
+updatedAt: '2026-09-28T06:04:06.549Z'

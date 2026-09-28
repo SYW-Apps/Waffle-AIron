@@ -1,0 +1,39 @@
+kind: value-object
+id: project_verdict
+name: ProjectVerdict
+description: >-
+  One project's line in a family run: which project it is, where it lives, and the totals of its own
+  gate's verdict, which the family run prints verbatim under the project's name. A family run never
+  re-judges these findings; it only adds the composition and family findings beside them.
+fields:
+  - name: key
+    type: string
+    description: The project's key in the family root's scan ('' for the root itself, else its project id)
+    optional: false
+  - name: id
+    type: string
+    description: The project's effective id
+    optional: true
+  - name: directory
+    type: string
+    description: The project's root directory
+    optional: false
+  - name: valid
+    type: boolean
+    description: Whether its own gate found no error
+    optional: false
+  - name: errors
+    type: number
+    description: Its own gate's error count
+    optional: false
+  - name: warnings
+    type: number
+    description: Its own gate's warning count
+    optional: false
+  - name: notices
+    type: number
+    description: Its own gate's notice count
+    optional: false
+methods: []
+createdAt: '2026-09-28T06:01:58.186Z'
+updatedAt: '2026-09-28T06:01:58.188Z'

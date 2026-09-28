@@ -1,0 +1,102 @@
+id: verdict_changes_impl
+name: Verdict Changes Implementation
+description: 'The stage-4 upgrade report. Planned home: src/commands/verdict-changes.ts (not written yet).'
+contract: iverdict_changes
+methods:
+  - name: explain
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph through the core adapter: the bound project and the
+          members it contains are the projects the report covers
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: For each covered project
+        type: loop
+        loopKind: forEach
+        over: the graph's projects, root first
+        endStep: 8
+      - stepNumber: 3
+        description: Bind the project's root for the next calls, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 4
+        description: >-
+          Run its owner's gate as-complete — the strictness the lock's totals were taken at, so the
+          two are comparable
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 5
+        description: Compute its gate identity now
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 6
+        description: >-
+          Read its lock through the core adapter: the record's validationResult totals and
+          validatorVersion — all the lock holds about a past verdict
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: readLockState
+      - stepNumber: 7
+        description: >-
+          Record the project's line: the lock's totals and version (absent when never locked),
+          today's totals, and whether the lock predates the stage-4 release — only then is a
+          difference in totals attributed to the upgrade
+        type: local
+      - stepNumber: 8
+        description: >-
+          Classify today's findings: EXTERNAL_NOT_EXPORTED, EXPORT_INVALID,
+          TRUSTED_LINK_CROSSES_PROJECT and EXTERNAL_UNDECLARED are escalated; a cross-project
+          finding whose resolution was judged against the project's pin is pinned; an unresolved
+          reference (UNDEFINED_TYPE_REFERENCE, INVALID_DEPENDENCY_REFERENCE,
+          INVALID_TARGET_COMPONENT_REFERENCE) is a positional candidate; everything else is counted
+          unclassified
+        type: local
+      - stepNumber: 9
+        description: Are there positional candidates to explain?
+        type: branch
+        condition: any covered project has a positional candidate
+        onFalseStep: 14
+      - stepNumber: 10
+        description: >-
+          Walk up to the family's top, one hop at a time — explicit, because the report was asked
+          for, and reach-gated: a request that may not read above its root stops here
+        type: loop
+        condition: a chaining parent is reachable from the root reached so far
+        loopKind: while
+        endStep: 11
+      - stepNumber: 11
+        description: >-
+          Find the chaining parent of the root reached so far through the core adapter's reach-gated
+          detection
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 12
+        description: >-
+          Load, with the top bound, every type of the family as its scan sees them (members keyed by
+          project id)
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 13
+        description: >-
+          Match each positional candidate with type_spec.matchesRef across the family's types: a
+          unique match in another project is positional, with resolvedAs `<producer id>::<id>` and
+          the rewrite `alias::publicName` plus the typeDef export and the external (and pin) it
+          needs; a match in the project itself through its own id is positional with the bare local
+          id as the rewrite; no match or several are counted unclassified
+        type: local
+      - stepNumber: 14
+        label: report
+        description: >-
+          Return the report: per project its totals, the classified entries grouped by code, and the
+          unclassified count
+        type: return
+        outcome: UpgradeReport
+status: design
+createdAt: '2026-09-28T06:16:03.117Z'
+updatedAt: '2026-09-28T06:16:03.125Z'

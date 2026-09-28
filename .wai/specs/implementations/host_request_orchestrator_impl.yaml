@@ -363,11 +363,11 @@ methods:
         description: >-
           Bind the request-scoped project root together with the request's REACH: the top project's
           root and whether the credential is authorized for that top project. A credential narrowed
-          to a member binds the member root with no parent reach, so validation never resolves the
-          member's verdict through the parent tree (resolveThroughParent, kept until stage 4) —
-          which would tell the member what its parent contains; a credential that reaches the top
-          project keeps the resolve-through-parent verdict for a bound member, found through the
-          parent's member declarations.
+          to a member binds the member root with no parent reach. The reach no longer changes any
+          project's own verdict — validation's owner gate reads only the bound project's own files
+          and pins (stage 4) — it bounds what a family run may compose and what any reach-gated read
+          (externals status, pinning) may open, and nothing is read above the member's root for a
+          narrowed credential.
         type: local
       - stepNumber: 10
         description: >-
@@ -480,4 +480,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-27T11:01:01.925Z'
+updatedAt: '2026-09-28T06:13:58.212Z'

@@ -3,9 +3,11 @@ name: MCP Validator Adapter Interface
 description: Adapter contract for MCP to run spec validations.
 component: mcp_validator_adapter
 methods:
-  - name: validateSddTree
-    description: Calls validateSddTree on validator portal
-    signature: 'validateSddTree(): ValidationResult'
+  - name: validateProject
+    description: >-
+      Forward the owner's gate to the validator portal: the bound project judged from its own files
+      alone
+    signature: 'validateProject(): ValidationResult'
     returns: ValidationResult
   - name: validateRegistry
     description: >-
@@ -23,6 +25,16 @@ methods:
       caller: >-
         A connected AI client calling the MCP server's validateTopology tool, which createMcpServer
         registers but mcp_portal does not yet model, so no narrative carries this hop.
-status: complete
+  - name: validateFamily
+    description: >-
+      Forward the family run to the validator portal: every selected project's own gate verbatim,
+      the composition findings and the family checks
+    signature: 'validateFamily(options: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: 'The tool call''s switches: family, recursive, subsystem'
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:36:25.369Z'
+updatedAt: '2026-09-28T06:11:13.806Z'

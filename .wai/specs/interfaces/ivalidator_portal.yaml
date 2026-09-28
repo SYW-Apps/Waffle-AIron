@@ -3,14 +3,14 @@ name: Validator Portal Interface
 description: Inbound Portal contract for validator subsystem.
 component: validator_portal
 methods:
-  - name: validateSddTree
+  - name: validateProject
     description: >-
-      Validate the SDD tree and answer with every finding. What the run judges is not fixed: the
-      options carry the rules and project type to judge with, an optional subsystem to narrow to,
-      how deep to descend into chained subprojects, pre-loaded extension packs, whether to judge at
-      full strictness, and whether to suppress cross-tree findings. Passing nothing validates the
-      whole tree on the project's own configuration.
-    signature: 'validateSddTree(options?: ValidationOptions, projectType?: string): ValidationResult'
+      The owner's gate: validate the bound project from its own files alone — its specs,
+      configuration, code, lock, externals lock and pins, and the export tables of the members it
+      contains — and answer with every finding. The same verdict from every root, with or without
+      its family on disk; a finding about a cross-project reference carries its structured
+      resolution. Passing nothing validates the project on its own configuration.
+    signature: 'validateProject(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
     params:
       - name: options
@@ -35,10 +35,11 @@ methods:
     returns: ValidationResult
   - name: validateAsComplete
     description: >-
-      Validate at full strictness: every spec is judged as though complete, so the completeness
-      rules that relax while a spec is draft apply as errors. This is the gate behind `wairon lock`,
-      and it is `validateSddTree` with `treatAllAsComplete` set — named separately because a gate
-      that a caller can accidentally run in the relaxed mode is not a gate.
+      The owner's gate at full strictness: every spec is judged as though complete, so the
+      completeness rules that relax while a spec is draft apply as errors. This is the gate behind
+      `wairon lock`, and it is `validateProject` with `treatAllAsComplete` set — named separately
+      because a gate that a caller can accidentally run in the relaxed mode is not a gate. It judges
+      the bound project alone: a member's own findings are its own lock's.
     signature: 'validateAsComplete(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
     params:
@@ -121,6 +122,20 @@ methods:
     signature: 'builtinProjectKinds(): string[]'
     returns: string[]
     params: []
-status: complete
+  - name: validateFamily
+    description: >-
+      The family run: every selected project's own gate verbatim under its project key, the
+      composition of each project's externals against their live producers, and the family checks.
+      `wairon validate` at a project that declares members, and `--family` anywhere, call this; the
+      owner's gate is validateProject.
+    signature: 'validateFamily(options: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          The run's switches; `family` makes the walk up explicit, a numeric `recursive` bounds the
+          member depth
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:09:00.951Z'
+updatedAt: '2026-09-28T06:17:08.175Z'

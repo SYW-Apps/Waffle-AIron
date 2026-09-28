@@ -733,19 +733,19 @@ methods:
         description: For each family identity problem
         type: loop
         loopKind: forEach
-        over: the graph's id-collision, no-id and defaulted problems
+        over: >-
+          the graph's no-id and defaulted problems (an id collision is family_validator's family
+          check)
         endStep: 12
       - stepNumber: 12
         label: family-reported
         description: >-
           Report by the problem's kind: a defaulted member is PROJECT_ID_DEFAULTED (notice), naming
           the member, the name slug it answers to now, and its alias as the id to declare in its
-          .wai/project.yaml (doctor --fix writes it); an id-collision is PROJECT_ID_COLLISION
-          (error) naming the id and each member resolving to it with where its id came from
-          (declared or name), and that a project is contained once — to use one project in two
-          roles, keep one member and let the other consumers declare it as an external; a member
-          with no id at all is PROJECT_ID_AMBIGUOUS (warning). The bound root's own defaulted and
-          no-id cases are left to the steps above, so each is reported once
+          .wai/project.yaml (doctor --fix writes it); a member with no id at all is
+          PROJECT_ID_AMBIGUOUS (warning). The bound root's own defaulted and no-id cases are left to
+          the steps above, so each is reported once. Two members resolving to one id are not judged
+          here: PROJECT_ID_COLLISION is a family check (family_validator.checkMembers)
         type: local
       - stepNumber: 13
         label: judged
@@ -831,9 +831,10 @@ methods:
       - stepNumber: 12
         label: invalid
         description: >-
-          Report EXPORT_INVALID (notice) with the problem's detail: the missing source or item, the
-          item the source does not export, the own item the level does not own, or the public name
-          that breaks [a-z0-9-_]+
+          Report EXPORT_INVALID (error since stage 4, when the owner's gate judges every entry
+          exactly) with the problem's detail: the missing source or item, the item the source does
+          not export, the own item the level does not own, or the public name that breaks
+          [a-z0-9-_]+
         type: local
       - stepNumber: 13
         description: Next problem
@@ -926,17 +927,21 @@ methods:
         outcome: no graph
       - stepNumber: 4
         label: each-external
-        description: For each external every project of the family declares
+        description: >-
+          For each external the bound project declares (a contained member's declarations are its
+          own gate's: the findings name no spec, so the rule selects the bound root's node instead
+          of relying on the owner filter)
         type: loop
         loopKind: forEach
-        over: every node's bound externals
+        over: the bound root node's bound externals
         endStep: 7
       - stepNumber: 5
         description: Is it unresolved?
         type: branch
         condition: >-
-          the external's sourceKind is unresolved, and it is not an external of the bound root the
-          chaining climb bound from the family's top (ctx.climbBoundExternals)
+          the external's sourceKind is unresolved, and the bound root holds no pin for it
+          (ctx.pinnedExternals has no entry and snapshot for the alias): a pin is what its gate
+          judges against, and nothing is climbed to find the producer
         onFalseStep: 7
       - stepNumber: 6
         description: >-
@@ -1056,6 +1061,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: memberDeclarationsRule
-status: complete
+status: design
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-27T17:04:16.552Z'
+updatedAt: '2026-09-28T06:10:05.841Z'

@@ -4,13 +4,14 @@ description: Concrete implementation forwarding validation requests to the valid
 contract: icli_validator_adapter
 sourcePath: src/commands/validate.ts
 methods:
-  - name: validateSddTree
+  - name: validateProject
     narrative:
       - stepNumber: 1
-        description: Call validateSddTree on the validator portal
+        description: Call validateProject on the validator portal
         type: call
         targetComponent: validator_portal
-        targetMethod: validateSddTree
+        targetMethod: validateProject
+    symbol: validateSddTree
   - name: validateRegistry
     narrative:
       - stepNumber: 1
@@ -66,16 +67,40 @@ methods:
         targetComponent: cli_validator_adapter
         targetMethod: validateProjectConfig
       - stepNumber: 6
-        description: Check the SDD spec tree.
-        type: call
-        targetComponent: cli_validator_adapter
-        targetMethod: validateSddTree
+        description: >-
+          Which spec-tree check? validation_options.selectsFamily(the configuration declares
+          members): the family run at a parent or with --family, the owner's gate otherwise
+        type: branch
+        condition: the options select the family run
+        onFalseStep: 9
       - stepNumber: 7
         description: >-
+          Run the family run: every selected project's own gate, the composition findings and the
+          family checks
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateFamily
+      - stepNumber: 8
+        description: 'The family run already holds the owner''s gate of every selected project: go render'
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        label: ownerGate
+        description: >-
+          Run the owner's gate over the bound project alone (skipped when the family run ran — the
+          family run already includes it)
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 10
+        label: render
+        description: >-
           Render every finding — errors, warnings and notices each as their own kind, with a count
-          of the notices — say out loud how much conformance debt the project's register carries and
-          how it splits across the three kinds, and exit non-zero when errors were reported — or,
-          under --ci, when warnings were. Notices never fail the run, under --ci or without it.
+          of the notices; in a family run each project's findings under its project key, the
+          composition and family findings after them; for the owner's gate the one-line --family
+          hint when it has externals — say out loud how much conformance debt the project's register
+          carries, and exit non-zero when errors were reported — or, under --ci, when warnings were.
+          Notices never fail the run, under --ci or without it.
         type: local
     symbol: runValidate
   - name: computeGateStateId
@@ -85,6 +110,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: computeGateStateId
-status: complete
+  - name: validateFamily
+    narrative:
+      - stepNumber: 1
+        description: Call validateFamily on the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateFamily
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T14:49:18.613Z'
+updatedAt: '2026-09-28T06:10:47.669Z'

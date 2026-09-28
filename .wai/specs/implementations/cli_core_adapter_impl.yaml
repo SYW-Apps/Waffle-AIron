@@ -392,6 +392,13 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: createMember
-status: complete
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadTypeSpecs on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadTypeSpecs
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T11:02:30.564Z'
+updatedAt: '2026-09-28T06:15:32.122Z'

@@ -65,25 +65,6 @@ methods:
     signature: 'consumedContractInputs(): string[]'
     returns: string[]
     params: []
-  - name: resolveChainingParent
-    description: >-
-      Forward to spec_tree_portal.resolveChainingParent: the parent that mounts the bound root,
-      within the request's reach
-    signature: 'resolveChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
-    params: []
-  - name: findChainingParent
-    description: >-
-      Forward to spec_tree_portal.findChainingParent: the parent mounting a named root, below a
-      ceiling. Not reach-gated — the validator gates on the request's reach itself before it walks
-    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null'
-    returns: ChainingParentRef | null
-    params:
-      - name: childRoot
-        type: string
-      - name: ceiling
-        type: string
-        optional: true
   - name: settledSpecPaths
     description: >-
       Forward to approval_portal.settledSpecPaths: the spec files unchanged since the approval, or
@@ -180,6 +161,6 @@ methods:
         description: The producer's namespace in the family graph
     guarantees:
       - idempotent
-status: complete
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T17:44:34.374Z'
+updatedAt: '2026-09-28T06:05:16.730Z'

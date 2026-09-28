@@ -60,11 +60,12 @@ methods:
   - name: crossTreeReferences
     description: >-
       Rule cross-tree-references. A narrative call, dispatch or register target that is not a
-      component of this tree must resolve against the stored surface snapshots to exactly one
-      declared contract. Snapshots that expose the name with disagreeing contracts leave the
-      reference ambiguous; no snapshot at all is a warning for a reference that points outside this
-      loading root (only the parent project can verify it) and the error a genuine local typo has
-      always got.
+      component of this tree either leaves the project — and then its resolution
+      (resolveCrossProject) decides: resolved is surface-reference-backing's, foreign snapshots that
+      disagree are SURFACE_REF_AMBIGUOUS here, and every other outcome is project-boundaries' single
+      finding — or it is a local id that names nothing, the INVALID_TARGET_COMPONENT_REFERENCE typo
+      it always was. The CROSS_TREE_REF_UNRESOLVED warning ("only the parent project can verify it")
+      is retired: no reference is left for a parent to judge.
     signature: 'crossTreeReferences(ctx: RuleContext): void'
     returns: void
     params:
@@ -75,11 +76,6 @@ methods:
       - code: INVALID_TARGET_COMPONENT_REFERENCE
         severity: error
         summary: Call/register step targets a non-existent component
-      - code: CROSS_TREE_REF_UNRESOLVED
-        severity: warning
-        summary: >-
-          Cross-tree reference (super::/:: form) with no surface snapshot covering it — only the
-          parent project can verify it
       - code: SURFACE_REF_AMBIGUOUS
         severity: error
         summary: >-
@@ -87,11 +83,12 @@ methods:
           with different contracts
   - name: surfaceReferenceBacking
     description: >-
-      Rule surface-reference-backing. The surface snapshot a cross-tree narrative target resolves to
-      must back what the step asks of it: the calling component declares the collaborator, the
-      snapshot exposes the called method (or serves the dispatched capability), and it declares
-      every semantic guarantee the step asserts. A snapshot is the provider's declared contract, so
-      these are contract verdicts rather than resolution failures.
+      Rule surface-reference-backing. The contract entry a narrative target in another project
+      resolves to — a contained member's live export table, a declared external's pinned snapshot,
+      or a foreign surface snapshot — must back what the step asks of it: the calling component
+      declares the collaborator, the entry exposes the called method (or serves the dispatched
+      capability), and it declares every semantic guarantee the step asserts. These are contract
+      verdicts on a resolved reference, and each carries that resolution.
     signature: 'surfaceReferenceBacking(ctx: RuleContext): void'
     returns: void
     params:
@@ -311,6 +308,6 @@ methods:
         summary: >-
           Method explicitly dialed below the full narrative floor of its logic stereotype, with no
           narrative
-status: complete
+status: design
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-09-19T21:38:41.394Z'
+updatedAt: '2026-09-28T06:09:12.658Z'

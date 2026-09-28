@@ -1,0 +1,30 @@
+id: family_validator
+name: Family Validator
+description: >-
+  The family run (stage 4): `validate` at a project that declares members, `validate --family` at
+  any project, the MCP validate tool with the same flags, and the hosted data plane through that
+  tool. It composes; it never re-judges. For the root and every selected member it binds that
+  project's root and runs the project's OWN gate (spec_validator.validateProject) under the
+  project's own configuration, carrying the findings verbatim under the project's key; then, for
+  each of that project's externals whose producer lies in reach, it compares what the project's lock
+  says it uses with the producer's live export table (EXTERNAL_INCOMPATIBLE, EXTERNAL_DRIFTED,
+  EXTERNAL_CHECK_UNAVAILABLE); and over the root's graph it runs the family checks
+  (MEMBER_NOT_FOUND, PROJECT_ID_COLLISION, PROJECT_DEPENDENCY_CYCLE, MEMBER_UNAPPROVED,
+  MEMBER_DRIFTED). An unrelated member's failure changes nothing in another member's verdict,
+  because each verdict is that member's own gate. Reach is granted before any read: a plain run at a
+  parent narrows the reach to the family root, so nothing above it is read; `--family` makes the
+  walk up explicit, and a hosted request keeps its credential's reach, which the run never widens.
+  Why a component of its own: the owner's gate (spec_validator) must stay a pure function of one
+  project's files, and a workflow that loops over projects calling that gate cannot live inside it
+  without making the gate call itself across roots — the very shape resolve-through-parent had. It
+  holds no state; each verdict is computed per call.
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_validator
+  - validator_core_adapter
+  - validator_surfaces_adapter
+status: design
+createdAt: '2026-09-28T06:05:49.633Z'
+updatedAt: '2026-09-28T06:05:49.642Z'

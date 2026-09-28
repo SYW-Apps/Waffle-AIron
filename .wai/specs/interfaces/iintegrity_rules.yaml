@@ -218,12 +218,11 @@ methods:
       stable and its own: a project that declares none answers to its display name slugified until
       it writes one (PROJECT_ID_DEFAULTED — for a member of the family, the finding names its alias
       as the id to declare), a project whose name yields no id or whose declared id breaks the
-      grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), two members of one family that
-      resolve to one id are one project declared twice (PROJECT_ID_COLLISION — a project is
-      contained once; a project used in two roles is modelled as consumption, one member and several
-      consumers, never as two copies of its tree), and an id that differs from the one the lock
-      approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). The family half
-      reads the project graph's identity problems.
+      grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), and an id that differs from the
+      one the lock approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). The
+      family half reads the project graph's identity problems. Two members resolving to one id
+      (PROJECT_ID_COLLISION) is a family check since stage 4: family_validator reports it over the
+      family root's graph.
     signature: 'projectIdentity(ctx: RuleContext): void'
     returns: void
     params:
@@ -240,9 +239,6 @@ methods:
       - code: PROJECT_ID_DEFAULTED
         severity: notice
         summary: Project declares no id; it answers to one derived from its display name
-      - code: PROJECT_ID_COLLISION
-        severity: error
-        summary: Two members of one family resolve to one project id
   - name: exportTables
     description: >-
       Rule export-tables. Every level's export table must resolve the way a module resolver resolves
@@ -277,7 +273,7 @@ methods:
           A re-export chain leads back to itself (a warning for a wildcard cycle, which resolves to
           its union)
       - code: EXPORT_INVALID
-        severity: notice
+        severity: error
         summary: >-
           An export entry names a missing source or item, an item its source does not export or its
           level does not own, or a malformed public name
@@ -317,14 +313,15 @@ methods:
       Rule external-declarations. Every external a project declares in project.yaml must be usable:
       its alias fits [a-z0-9-_]+ (a dotted producer id needs an explicit alias) and is not also a
       `members` key (one alias names one project), its producer id fits the project-id grammar, and
-      its producer is found — exactly one project of the family answers to the id, or source.path
-      names a directory (whose project, when it is in the family, answers to the declared id). A
-      declaration that fails is reported (EXTERNAL_UNRESOLVED) with its reason, so a misspelled
-      declaration never passes as declared — but only when neither the scan nor the chaining climb
-      finds the producer: a member validated from its own root that declares its parent or a sibling
-      is not reported when the climb to the family's top binds it (ctx.climbBoundExternals). The
-      findings name no spec: externals live in configuration. It reads the project graph's bound
-      externals and alias-conflict problems.
+      it has something to be judged against — a project of the scan answers to the id, source.path
+      names a directory (whose project, when it is in the scan, answers to the declared id), or the
+      project holds a pin for the alias. A declaration that fails is reported (EXTERNAL_UNRESOLVED)
+      with its reason, so a misspelled declaration never passes as declared. A member validated from
+      its own root that declares its parent or a sibling is not reported when it has pinned it: the
+      pin is what its gate judges against, and nothing is climbed to find the producer (the climb,
+      and ctx.climbBoundExternals, went with resolve-through-parent). The findings name no spec:
+      externals live in configuration. It reads the project graph's bound externals, its
+      alias-conflict problems and ctx.pinnedExternals.
     signature: 'externalDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -382,6 +379,6 @@ methods:
         summary: >-
           A member declared as an L1 subsystem carrying projectPath instead of a project.yaml
           `members` entry
-status: complete
+status: design
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-27T17:04:19.388Z'
+updatedAt: '2026-09-28T06:09:29.372Z'

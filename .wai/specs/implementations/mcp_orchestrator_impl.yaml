@@ -92,21 +92,6 @@ methods:
         type: return
         outcome: written
     symbol: sdd_write_narrative
-  - name: validateTree
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Read the bound project's configuration through the core adapter: its rule severities and
-          projectType govern the gate
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadProjectConfig
-      - stepNumber: 2
-        description: Run the conformance gate via the validator client adapter
-        type: call
-        targetComponent: mcp_validator_adapter
-        targetMethod: validateSddTree
-    symbol: sdd_validate_tree
   - name: addSubsystem
     narrative:
       - stepNumber: 1
@@ -558,7 +543,49 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: createMember
     symbol: sdd_add_member
+  - name: validateTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core adapter: its rule severities and
+          projectType govern the gate, and whether it declares members decides the default run
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Which run? validation_options.selectsFamily(the configuration declares members) over the
+          tool's `family` and `recursive` flags — the same reading `wairon validate` makes
+        type: branch
+        condition: the options select the family run
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Run the family run via the validator client adapter — within the request's reach, which
+          the run narrows and never widens
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: validateFamily
+      - stepNumber: 4
+        description: >-
+          Answer the family verdict, split into errors, warnings and notices, each finding under its
+          project
+        type: return
+        outcome: ValidationResult (family run)
+      - stepNumber: 5
+        label: ownerGate
+        description: Run the owner's gate via the validator client adapter
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 6
+        description: >-
+          Answer the project's verdict, split into errors, warnings and notices, with the --family
+          hint when it has externals
+        type: return
+        outcome: ValidationResult (owner's gate)
+    symbol: sdd_validate_tree
 conformance: anchored
-status: complete
+status: design
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-27T15:27:11.406Z'
+updatedAt: '2026-09-28T06:11:31.537Z'
