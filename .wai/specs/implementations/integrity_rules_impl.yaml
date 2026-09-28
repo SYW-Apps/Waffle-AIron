@@ -1078,6 +1078,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: memberDeclarationsRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-28T16:22:00.005Z'
+updatedAt: '2026-09-28T17:16:45.678Z'

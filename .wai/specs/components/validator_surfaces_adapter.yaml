@@ -11,6 +11,6 @@ componentType: Adapter
 owns: []
 dependsOn:
   - surface_portal
-status: design
+status: complete
 createdAt: '2026-07-10T23:12:44.720Z'
-updatedAt: '2026-09-28T06:05:11.962Z'
+updatedAt: '2026-09-28T17:16:57.807Z'

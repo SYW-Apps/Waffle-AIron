@@ -72,5 +72,7 @@ methods:
       that resolved locally before stage 4 resolves the same way now, and one the family-wide suffix
       match used to accept resolves through an import with the same spelling. Two public names of
       one producer that share a key are the producer's EXPORT_ID_DUPLICATE.
+    sourcePath: src/models/type-references.ts
+sourcePath: src/models/project-family.ts
 createdAt: '2026-09-28T06:01:47.622Z'
-updatedAt: '2026-09-28T16:05:46.898Z'
+updatedAt: '2026-09-28T17:16:24.393Z'

@@ -151,6 +151,6 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: importNames
-status: design
+status: complete
 createdAt: '2026-09-13T11:19:36.287Z'
-updatedAt: '2026-09-28T16:10:38.778Z'
+updatedAt: '2026-09-28T17:17:06.835Z'

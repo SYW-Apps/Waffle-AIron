@@ -151,6 +151,6 @@ methods:
     signature: 'builtinProjectKinds(): string[]'
     returns: string[]
     params: []
-status: design
+status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T16:08:11.167Z'
+updatedAt: '2026-09-28T17:17:10.516Z'

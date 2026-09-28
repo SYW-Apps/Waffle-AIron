@@ -25,6 +25,6 @@ methods:
     signature: 'getExternalsStatus(): ExternalStatus[]'
     returns: ExternalStatus[]
     params: []
-status: design
+status: complete
 createdAt: '2026-07-10T23:14:09.299Z'
-updatedAt: '2026-09-28T06:05:08.176Z'
+updatedAt: '2026-09-28T17:16:58.367Z'

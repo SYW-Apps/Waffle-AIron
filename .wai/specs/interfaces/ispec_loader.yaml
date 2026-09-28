@@ -266,6 +266,6 @@ methods:
     guarantees:
       - idempotent
     effect: write
-status: design
+status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T16:21:22.861Z'
+updatedAt: '2026-09-28T17:16:50.517Z'

@@ -112,6 +112,7 @@ methods:
       own project id or alias, compared by reference_resolution.nameKey) becomes that type's id; an
       identifier that names another project's type becomes `<producer id>::<its id>`; anything
       unresolvable is kept as written. Pure: the snapshot is the whole input.
+    sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-09-28T16:22:46.641Z'
+updatedAt: '2026-09-28T17:16:03.303Z'

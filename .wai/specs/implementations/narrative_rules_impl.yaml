@@ -1030,6 +1030,6 @@ methods:
         type: local
     symbol: check
     exportedVia: detailSufficiencyRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-28T06:09:49.450Z'
+updatedAt: '2026-09-28T17:16:47.445Z'

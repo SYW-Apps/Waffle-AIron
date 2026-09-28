@@ -359,7 +359,7 @@ methods:
         summary: Pattern facade narrative is not a single call to an owned member
   - name: projectBoundaries
     description: >-
-      Rule project-boundaries: the one judge of every cross-project reference the bound project
+      Rule project-boundaries. The one judge of every cross-project reference the bound project
       writes (decision 9 — every project is a crate of its own, reached only through its L0 exports
       and only as a dependency it declared). It reads each of the project's own references from the
       project graph — `::` forms and bare names bound through `use` imports alike — takes its
@@ -410,6 +410,6 @@ methods:
         summary: >-
           Two `use` imports supply one bare name: two explicit names, or two `*` imports with no
           explicit one
-status: design
+status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-28T16:06:43.904Z'
+updatedAt: '2026-09-28T17:16:43.887Z'

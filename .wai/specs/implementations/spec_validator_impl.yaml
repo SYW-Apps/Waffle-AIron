@@ -545,7 +545,6 @@ methods:
         description: Return the project's verdict — the same from every root
         type: return
         outcome: ValidationResult
-    symbol: validateSddTree
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -559,6 +558,6 @@ lint:
         and the export usages. Folding calls into prose would hide exactly the cross-subsystem hops
         those adapters exist to make visible; the count tracks how many inputs a project's own gate
         has, and stage 4 removed the parent walk rather than adding to it.
-status: design
+status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T06:07:03.569Z'
+updatedAt: '2026-09-28T17:15:51.000Z'

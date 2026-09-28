@@ -80,7 +80,14 @@ fields:
       legacy mount's description — which the canvas shows on the member's project node; absent for
       the bound root and for a member declared without one.
     optional: true
+  - name: imports
+    type: ProjectImport[]
+    description: >-
+      The project's `use` imports: one per declared member and external alias without a problem, in
+      declaration order (members first), each with the names it imports as written — empty when the
+      alias imports nothing (stage 4). What the owner's gate resolves a bare name through.
+    optional: false
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:52.264Z'
-updatedAt: '2026-09-27T15:26:03.139Z'
+updatedAt: '2026-09-28T17:16:23.570Z'

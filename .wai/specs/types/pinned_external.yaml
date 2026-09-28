@@ -36,5 +36,6 @@ fields:
       snapshot unreadable. Absent when the entry and the snapshot are both present
     optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-09-28T06:01:54.841Z'
-updatedAt: '2026-09-28T06:01:54.843Z'
+updatedAt: '2026-09-28T17:16:24.975Z'

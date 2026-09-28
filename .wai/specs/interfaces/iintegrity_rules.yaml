@@ -401,6 +401,6 @@ methods:
         summary: >-
           A member declared as an L1 subsystem carrying projectPath instead of a project.yaml
           `members` entry
-status: design
+status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-28T16:21:48.507Z'
+updatedAt: '2026-09-28T17:16:45.294Z'

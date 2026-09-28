@@ -12,7 +12,6 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: validateProject
-    symbol: validateSddTree
   - name: validateRegistry
     narrative:
       - stepNumber: 1
@@ -86,4 +85,4 @@ methods:
         targetMethod: run
 status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T06:16:55.895Z'
+updatedAt: '2026-09-28T17:15:52.186Z'

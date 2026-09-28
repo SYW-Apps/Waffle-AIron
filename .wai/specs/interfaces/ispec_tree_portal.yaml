@@ -277,6 +277,6 @@ methods:
     signature: 'resolveExternals(): ExternalBinding[]'
     returns: ExternalBinding[]
     params: []
-status: design
+status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T16:21:21.496Z'
+updatedAt: '2026-09-28T17:16:51.287Z'

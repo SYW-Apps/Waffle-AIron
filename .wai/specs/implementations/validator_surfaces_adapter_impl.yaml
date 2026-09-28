@@ -28,6 +28,6 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: getExternalsStatus
-status: design
+status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-09-28T06:05:10.254Z'
+updatedAt: '2026-09-28T17:16:59.162Z'

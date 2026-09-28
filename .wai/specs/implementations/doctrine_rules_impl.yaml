@@ -1303,6 +1303,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: projectBoundariesRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-28T16:06:46.947Z'
+updatedAt: '2026-09-28T17:16:44.452Z'
