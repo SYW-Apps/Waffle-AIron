@@ -97,25 +97,21 @@ the boilerplate (schemaVersion, timestamps, derived names/descriptions, status
 | `implementations` | `contract` defaults to the single interface; narrative steps need a `description` (write real ones). |
 | `types` | `kind` defaults to `entity`. |
 | `rules` | RulesConfig fragment (severity overrides, naming/complexity/documentation dials, designDepth…). |
-| `projectType` | validateSddTree projectType (default `backend`). |
+| `projectType` | validateProject projectType (default `backend`). |
 | `packs` | extension-pack refs for the temp project — use `FIXTURE_PACK_DIR` for the test pack. |
 | `files` | extra files under the temp root: source files for the code↔spec conformance family, `.wai/surfaces/*.yaml` snapshots, nested subprojects… |
-| `scopeSubsystem` / `treatAllAsComplete` | validateSddTree passthrough (scoped runs, the as-complete lock gate). |
+| `scopeSubsystem` / `treatAllAsComplete` | validateProject passthrough (scoped runs, the as-complete lock gate). |
 | `validateFromSubdir` | bind the VALIDATED root to a subdirectory of the temp root (relative, no `..`) — see below. |
 
-**`validateFromSubdir` — the chained-child seam.** Some verdicts only exist
-when the validated root is itself a CHAINED CHILD of an ancestor project: such
-a child is judged THROUGH its parent, found by `findChainingParent`, which
-walks UP the filesystem from the validated root looking for an ancestor `.wai`
-project whose subsystem `projectPath` resolves to that exact root — impossible
-when the root is the temp-dir top (its ancestors are bare OS temp dirs). With
-`validateFromSubdir`, the tree still materializes at the temp root exactly as
-always — so the top-level tree plays the PARENT (declare the mount subsystem
-with `projectPath` there) — while the CHILD project is laid down as raw spec
-YAML under `tree.files` and validation is bound to its directory. Override the
-parent's `.wai/specs/.index.yaml` through `tree.files` to make the parent
-unloadable: that is the standalone fallback, where references keep their raw
-verdicts. See `families/references-chained-context.fixtures.ts` for both.
+**`validateFromSubdir` — the member's own gate.** Since stage 4 a project's
+own gate judges only its own references, so a fixture about a member's
+reference validates FROM that member. With `validateFromSubdir`, the tree still
+materializes at the temp root exactly as always — the top-level tree plays the
+PARENT (declare the member there) — while the MEMBER project is laid down as
+raw spec YAML under `tree.files` and validation is bound to its directory. The
+owner's gate never walks up, so the verdict is the same with the parent
+loadable, broken (override its `.wai/specs/.index.yaml`) or absent. See
+`families/references-chained-context.fixtures.ts`.
 
 **`anchoredTo: null`** (vs. omitting it) asserts the emitted finding carries
 NO `specId` at all — for tree-level findings like `MISSING_SYSTEM_SPEC`.
@@ -127,7 +123,7 @@ a scenario is about the draft downgrades or the depth gate themselves.
 ## How fixtures execute (and why the loader path)
 
 `runRuleFixture` materializes the tree as a REAL temporary `.wai` project
-(YAML files on disk) and runs **`validateSddTree()`** against it — the same
+(YAML files on disk) and runs **`validateProject()`** against it — the same
 entry point the CLI, MCP server, and hosted gate use. That executes the full
 composed rule sequence (`composeRuleSequence` semantics: builtins, then the
 project's loaded pack rules, lint-allows audit last) *plus* everything around

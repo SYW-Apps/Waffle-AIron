@@ -23,8 +23,15 @@ function draftOf(ctx: RuleContext, specId: string): boolean {
   return impl ? ctx.isImplementationDraft(impl) : false;
 }
 
+/** Whether a reference is a self-prefix: the referring project's own id used as its first segment. */
+function isSelfPrefix(ref: AuthoredReference, ownerKey: string | undefined): boolean {
+  return ref.binding === 'local' && ref.producer === ownerKey && ref.form === 'path'
+    && ref.rewrite !== undefined && !ref.rewrite.includes('::') && ref.authored !== ref.rewrite;
+}
+
 /** What a deprecated form is, in words. */
-function formOf(ref: AuthoredReference): string {
+function formOf(ref: AuthoredReference, selfPrefix: boolean): string {
+  if (selfPrefix) return "the project's own id used as a prefix names nothing a bare local id does not";
   switch (ref.form) {
     case 'leading': return 'a leading `::` names a spec by its place in whichever checkout loads it';
     case 'super': return '`super::` climbs the containing projects — a place in one family, not a name';
@@ -42,7 +49,7 @@ function whyNoRewrite(ref: AuthoredReference): string {
 export const referenceFormsRule: SddRule = {
   name: 'reference-forms',
   description:
-    "A cross-project reference is `alias::name`: the alias is one of the referring project's members or externals, the name a public name of that project's L0 table. Three older forms still bind for one release and are reported (DEPRECATED_REFERENCE_FORM), each naming the spec, where in it, the form as written and the text to write instead (the scan's rewrite: a bare local id, or `alias::publicName`): a leading `::`, which escapes to the root of whatever checkout loads it; `super::`, which climbs the containing projects — a place in one family, not a name; and a member path (`desktop::shell` written inside desktop, `waffler_core::transpiler::x` written inside transpiler), a first segment the referring project does not declare, read from the bound root. Wairon's own writer emits none of them. A form with no rewrite (its target is out of reach) is reported with the reason. It reads the project graph's authored references, which the scan records before binding erases the form.",
+    "A cross-project reference is `alias::name` (or a bare name a `use` imports): the alias is one of the referring project's members or externals, the name a public name of that project's L0 table. The older forms still bind for one release and are reported (DEPRECATED_REFERENCE_FORM), each naming the spec, where in it, the form as written and the text to write instead (the scan's rewrite: a bare local id, or `alias::publicName`): a leading `::`, which escapes to the root of whatever checkout loads it; `super::`, which climbs the containing projects — a place in one family, not a name; a member path (`desktop::shell` written inside desktop, `waffler_core::transpiler::x` written inside transpiler), a first segment the referring project does not declare, read from the bound root; and a self-prefix — the referring project's own id as the first segment, with `::` or `.` (`registry.advisory-channel` inside registry), which stage 3's migration did not rewrite and stage 4's positional step does. Wairon's own writer emits none of them. A form with no rewrite (its target is out of reach) is reported with the reason. It reads the project graph's authored references, which the scan records before binding erases the form.",
   codes: [
     { code: 'DEPRECATED_REFERENCE_FORM', defaultSeverity: 'notice', summary: "A reference written with a leading ::, super:: or a member path where a local id or alias::name belongs" },
   ],
@@ -53,7 +60,7 @@ export const referenceFormsRule: SddRule = {
     if (!family) return;
     // Steps 4-5: every reference written in a deprecated form whose text changes.
     for (const ref of family.authoredReferences) {
-      if (ref.form === 'alias') continue;
+      if (ref.form === 'alias' || ref.form === 'import') continue;
       // A path-form reference whose rewrite equals what was written becomes
       // canonical by declaring the external alone — EXTERNAL_UNDECLARED's to say.
       if (ref.rewrite !== undefined && ref.rewrite === ref.authored) continue;
@@ -62,7 +69,7 @@ export const referenceFormsRule: SddRule = {
       ctx.addIssue(
         'notice',
         'DEPRECATED_REFERENCE_FORM',
-        `"${ref.specId}" writes "${ref.authored}" (${ref.position}): ${formOf(ref)}.${bound} ${instead}`,
+        `"${ref.specId}" writes "${ref.authored}" (${ref.position}): ${formOf(ref, isSelfPrefix(ref, family.owners.get(ref.specId)))}.${bound} ${instead}`,
         ref.specId,
         draftOf(ctx, ref.specId),
       );

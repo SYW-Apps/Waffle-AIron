@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ describe('trustedLinks license direct in-process cross-subsystem edges', () => {
     proj.component('front-orch', 'front', 'Orchestrator', 'dependsOn: [billing-portal]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'CROSS_SUBSYSTEM_NON_ADAPTER');
+      const found = byCode(validateProject(), 'CROSS_SUBSYSTEM_NON_ADAPTER');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('trustedLink');
     } finally { proj.cleanup(); }
@@ -102,7 +102,7 @@ describe('trustedLinks license direct in-process cross-subsystem edges', () => {
     proj.component('front-orch', 'front', 'Orchestrator', 'dependsOn: [billing-portal]');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CROSS_SUBSYSTEM_NON_ADAPTER')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CROSS_SUBSYSTEM_NON_ADAPTER')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -112,8 +112,8 @@ describe('trustedLinks license direct in-process cross-subsystem edges', () => {
     proj.component('front-orch', 'front', 'Orchestrator', 'dependsOn: [billing-orch]'); // internal target
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CROSS_SUBSYSTEM_NON_ADAPTER')).toHaveLength(0); // licensed
-      expect(byCode(validateSddTree(), 'CROSS_SUBSYSTEM_PRIVATE_ACCESS').length).toBeGreaterThan(0); // still guarded
+      expect(byCode(validateProject(), 'CROSS_SUBSYSTEM_NON_ADAPTER')).toHaveLength(0); // licensed
+      expect(byCode(validateProject(), 'CROSS_SUBSYSTEM_PRIVATE_ACCESS').length).toBeGreaterThan(0); // still guarded
     } finally { proj.cleanup(); }
   });
 
@@ -134,7 +134,7 @@ describe('trustedLinks license direct in-process cross-subsystem edges', () => {
     proj.component('front-orch', 'front', 'Orchestrator', 'dependsOn: [billing-portal]');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CROSS_SUBSYSTEM_NON_ADAPTER')).toHaveLength(1);
+      expect(byCode(validateProject(), 'CROSS_SUBSYSTEM_NON_ADAPTER')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 });
@@ -161,7 +161,7 @@ describe('Portal read-face access — reads may shortcut, writes may not', () =>
     ]);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(byCode(res, 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP')).toHaveLength(0);
       expect(byCode(res, 'PORTAL_WRITE_SHORTCUT')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -175,7 +175,7 @@ describe('Portal read-face access — reads may shortcut, writes may not', () =>
     ]);
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'PORTAL_WRITE_SHORTCUT');
+      const found = byCode(validateProject(), 'PORTAL_WRITE_SHORTCUT');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('error');
       expect(found[0].message).toContain('READS only');
@@ -189,7 +189,7 @@ describe('Portal read-face access — reads may shortcut, writes may not', () =>
     proj.component('rec-store', 'sub-a', 'Store', 'durability: ram-projection');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP').length).toBeGreaterThan(0);
+      expect(byCode(validateProject(), 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP').length).toBeGreaterThan(0);
     } finally { proj.cleanup(); }
   });
 });

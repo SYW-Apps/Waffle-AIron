@@ -5,15 +5,14 @@
  * context in src/core/rules/index.ts and declared in src/core/rules/types.ts).
  *
  * Documented intents pinned here:
- *  - CROSS_TREE_REF_UNRESOLVED (warning): an unresolved narrative target that
- *    points OUTSIDE this loading root — an explicit relative form
- *    (`super::x` / `::x`) OR a qualified id whose leading namespace segment is
- *    not a subsystem in THIS tree — with NO surface snapshot covering it.
- *    Only the parent project can verify it, so it warns instead of raising the
- *    hard error a genuine local typo gets (a BARE unresolved id stays a typo:
- *    INVALID_TARGET_COMPONENT_REFERENCE, never this code). Both recognized
- *    cross-tree shapes get a fire fixture; both documented "this is NOT
- *    cross-tree" boundaries get a control.
+ *  - Stage 4 retired CROSS_TREE_REF_UNRESOLVED: a narrative target that
+ *    leaves the project is judged once, by project-boundaries, with its
+ *    resolution. A deprecated `super::x` / `::x` naming no alias, with no
+ *    surface snapshot covering it, is EXTERNAL_CHECK_UNAVAILABLE (warning,
+ *    never a pass); a qualified id whose first segment is none of this
+ *    project's subsystems, aliases or foreign providers is EXTERNAL_UNDECLARED
+ *    (error). A BARE unresolved id stays the local typo
+ *    INVALID_TARGET_COMPONENT_REFERENCE, never either.
  *  - SURFACE_REF_NOT_EXPOSED (error): the cross-tree reference DOES resolve
  *    against a vendored surface snapshot, but the snapshot does not expose the
  *    called method (call/register shape) or does not serve the dispatched
@@ -121,10 +120,10 @@ const streamToHub = (targetComponent: string) => ({
 
 export default [
   // -------------------------------------------------------------------------
-  // CROSS_TREE_REF_UNRESOLVED — explicit relative form (super::)
+  // EXTERNAL_CHECK_UNAVAILABLE — explicit relative form (super::)
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'CROSS_TREE_REF_UNRESOLVED',
+    code: 'EXTERNAL_CHECK_UNAVAILABLE',
     severity: 'warning',
     anchoredTo: 'telemetry_forwarder_impl',
     expectFire: true,
@@ -140,15 +139,15 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // CROSS_TREE_REF_UNRESOLVED — qualified foreign-namespace form
+  // EXTERNAL_UNDECLARED — qualified foreign-namespace form
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'CROSS_TREE_REF_UNRESOLVED',
-    severity: 'warning',
+    code: 'EXTERNAL_UNDECLARED',
+    severity: 'error',
     anchoredTo: 'telemetry_forwarder_impl',
     expectFire: true,
     scenario:
-      'A telemetry narrative authored from the parent root calls fleet-core::route-planner, but fleet-core is not a subsystem of this standalone tree, so only the parent can verify the edge.',
+      'A telemetry narrative authored from the parent root calls fleet-core::route-planner, but fleet-core is none of this project\'s subsystems, aliases or foreign providers — an undeclared dependency on another project.',
     tree: telemetryTree({
       stepNumber: 1,
       type: 'call',
@@ -159,10 +158,10 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // CROSS_TREE_REF_UNRESOLVED — control: a vendored snapshot covers the ref
+  // EXTERNAL_CHECK_UNAVAILABLE — control: a vendored snapshot covers the ref
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'CROSS_TREE_REF_UNRESOLVED',
+    code: 'EXTERNAL_CHECK_UNAVAILABLE',
     expectFire: false,
     reason:
       'A vendored parent surface snapshot covers super::telemetry-hub, so the edge is validated against the DECLARED contract instead of being unresolvable.',
@@ -203,10 +202,10 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // CROSS_TREE_REF_UNRESOLVED — control: a bare unresolved id is a local typo
+  // EXTERNAL_CHECK_UNAVAILABLE — control: a bare unresolved id is a local typo
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'CROSS_TREE_REF_UNRESOLVED',
+    code: 'EXTERNAL_CHECK_UNAVAILABLE',
     expectFire: false,
     reason:
       'A bare unresolved id carries no namespace shape, so per the documented boundary it is a local typo (the hard INVALID_TARGET_COMPONENT_REFERENCE error), never the softer cross-tree warning.',

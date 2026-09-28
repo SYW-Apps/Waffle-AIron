@@ -521,7 +521,7 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
     expect(fs.existsSync(path.join(demoRoot, '.wai', 'specs', '.index.yaml'))).toBe(false);
   }, 120_000);
 
-  it('parent reach: only a credential for the TOP project gets a chained child judged through its parent', async () => {
+  it('reach: every credential that reaches the chained child gets the one verdict — its own gate, never its parent', async () => {
     // A boundary violation only the parent tree can show: the child's
     // Orchestrator depends on a Portal the PARENT publishes. Judging it means
     // reading the parent — which a token narrowed to the child must not do.
@@ -563,30 +563,24 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
 
     interface Verdict {
       errors: { code: string; specId?: string }[];
-      resolvedThrough?: { root: string; scope: string };
+      warnings: { code: string; specId?: string }[];
     }
     const validate = async (tok: string, selector?: string): Promise<Verdict> => {
       const r = await callTool(tok, selector, 'sdd_validate_tree');
       expect(r.isError, r.text).toBe(false);
       return JSON.parse(r.text) as Verdict;
     };
-    const showsViolation = (v: Verdict): boolean =>
-      v.errors.some((e) => e.code === 'CROSS_SUBSYSTEM_NON_ADAPTER' && e.specId === 'k-orch');
+    const verdictOf = (v: Verdict): string[] =>
+      [...v.errors, ...v.warnings].map((e) => `${e.code} @${e.specId ?? '-'}`).sort();
 
-    // Authorized for the TOP project, narrowing through a selector: judged through the parent.
+    // Stage 4: the owner's gate never walks up, so every credential that
+    // reaches the child gets the one verdict — reach changes what may be read,
+    // never how the child is judged (no-softening-by-location).
     const viaTop = await validate(token, 'demo::billing');
-    expect(viaTop.resolvedThrough?.scope).toBe('billing');
-    expect(showsViolation(viaTop)).toBe(true);
-
-    // '*' covers the top project as well.
     const viaStar = await validate(starToken, 'demo::billing');
-    expect(viaStar.resolvedThrough?.scope).toBe('billing');
-    expect(showsViolation(viaStar)).toBe(true);
-
-    // NARROWED to the child: the child is bound, the parent is never read, and
-    // so no parent-derived finding comes back.
     const viaNarrowed = await validate(qualToken);
-    expect(viaNarrowed.resolvedThrough).toBeUndefined();
-    expect(showsViolation(viaNarrowed)).toBe(false);
+    expect(verdictOf(viaTop)).toContain('EXTERNAL_CHECK_UNAVAILABLE @k-orch');
+    expect(verdictOf(viaStar)).toEqual(verdictOf(viaTop));
+    expect(verdictOf(viaNarrowed)).toEqual(verdictOf(viaTop));
   }, 120_000);
 });

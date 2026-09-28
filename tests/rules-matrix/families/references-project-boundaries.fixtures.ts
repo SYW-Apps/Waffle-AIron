@@ -12,15 +12,19 @@
  *  - member-declarations (src/core/rules/integrity/member-declarations.ts):
  *    DEPRECATED_MOUNT_FORM — a member declared as an L1 subsystem carrying
  *    projectPath instead of a project.yaml `members` entry.
- *  - project-cycles (src/core/rules/doctrine/project-cycles.ts):
- *    PROJECT_DEPENDENCY_CYCLE — members that depend on each other in a loop.
  *  - external-declarations (src/core/rules/integrity/external-declarations.ts):
  *    EXTERNAL_UNRESOLVED.
  *  - export-tables (EXPORT_WIDENS_AUDIENCE): an L0 re-export of a member's
  *    export that declares a wider audience than the member exports it at.
- *  - project-identity, family half: PROJECT_ID_COLLISION when two members of
- *    one family resolve to one id, PROJECT_ID_AMBIGUOUS when a member has none,
- *    PROJECT_ID_DEFAULTED when a member declares none (naming its alias).
+ *  - project-identity: the bound project's own id — PROJECT_ID_AMBIGUOUS when
+ *    it has none, PROJECT_ID_DEFAULTED when it declares none. The family half
+ *    (a member's id, two members resolving to one id) and the dependency
+ *    loop are family checks since stage 4, never the owner's gate.
+ *
+ * Stage 4: the owner's gate judges a project's own references only — a
+ * member's references are its own gate's, so a fixture about dispatch's
+ * references binds the validated root to dispatch (`validateFromSubdir`),
+ * where billing is a sibling outside the scan, judged against dispatch's pin.
  *
  * A member is keyed by its project id (stage 3): billing's portal is
  * `billing::invoice-portal` because billing declares `id: billing`, and a
@@ -68,6 +72,12 @@ interface FleetOptions {
   /** Billing's externals, and what its invoice portal depends on. */
   billingExternals?: Record<string, unknown>;
   invoiceDependsOn?: string[];
+  /** What the root's operations console depends on (a reference into a member). */
+  consoleDependsOn?: string[];
+  /** Validate from dispatch's own root instead of the family root. */
+  fromDispatch?: boolean;
+  /** Give dispatch a pin of billing exporting "invoicing". */
+  dispatchPin?: boolean;
 }
 
 /** The billing member: an invoice portal with one contract method. */
@@ -109,6 +119,16 @@ function dispatchFiles(o: FleetOptions): Record<string, string> {
       subsystem: 'dispatch', componentType: 'Orchestrator', owns: [],
       dependsOn: [o.plannerDependsOn ?? 'super::billing::invoice-portal'],
     }),
+    ...(o.dispatchPin ? {
+      [`${base}/externals.lock.yaml`]: yaml.dump({ externals: { billing: { project: 'billing', snapshot: '.wai/externals/billing.yaml', digest: 'sha256:pinned', used: {} } } }),
+      [`${base}/externals/billing.yaml`]: yaml.dump({
+        projectName: 'BillingService', projectId: 'billing', origin: 'generated', generatedAt: TS, types: [],
+        interfaces: [{
+          id: 'invoicing', name: 'Invoice Portal', component: 'invoice-portal', audience: 'project', type: 'REST', componentType: 'Portal', details: 'Issue invoices.',
+          methods: [{ name: 'issueInvoice', description: 'Issue the invoice of one delivered route.', signature: 'issueInvoice(routeId: string): string', returns: 'string' }],
+        }],
+      }, { noRefs: true, lineWidth: 200 }),
+    } : {}),
   };
 }
 
@@ -129,8 +149,12 @@ function fleet(o: FleetOptions = {}): FixtureTree {
       { id: 'fleet-registry', description: 'The registry of vehicles and drivers.' },
     ],
     components: [
-      { id: 'ops-console', subsystem: 'operations', componentType: 'Portal', portalType: 'HTTP_API', description: 'REST surface of the operations console.' },
+      {
+        id: 'ops-console', subsystem: 'operations', componentType: 'Portal', portalType: 'HTTP_API', description: 'REST surface of the operations console.',
+        ...(o.consoleDependsOn ? { dependsOn: o.consoleDependsOn } : {}),
+      },
     ],
+    ...(o.fromDispatch ? { validateFromSubdir: 'packages/dispatch' } : {}),
     files: {
       '.wai/project.yaml': projectYaml(
         o.root ?? { id: 'fleetworks', name: 'FleetWorks' },
@@ -152,18 +176,18 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'EXTERNAL_UNDECLARED',
-    severity: 'notice',
-    anchoredTo: 'dispatch::route-planner',
+    severity: 'error',
+    anchoredTo: 'route-planner',
     expectFire: true,
-    scenario: 'The dispatch member\'s route planner depends on billing\'s invoice portal, a sibling project, but dispatch\'s project.yaml declares no externals — the dependency on another project was never declared.',
-    tree: fleet({ billingExports: BILLING_EXPORTS }),
+    scenario: 'Judged by its own gate, the dispatch member\'s route planner depends on `billing::invoicing`, but dispatch\'s project.yaml declares no alias `billing` — the dependency on another project was never declared.',
+    tree: fleet({ billingExports: BILLING_EXPORTS, plannerDependsOn: 'billing::invoicing', fromDispatch: true }),
   }),
   defineRuleFixture({
     code: 'EXTERNAL_UNDECLARED',
     expectFire: false,
-    reason: 'Dispatch declares billing under `externals`, so the sibling reference is a declared dependency.',
-    scenario: 'The dispatch member declares `externals: { billing: {} }` and its route planner depends on billing\'s exported invoice portal.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} } }),
+    reason: 'Dispatch declares billing under `externals`, so the sibling reference is a declared dependency (judged against its pin).',
+    scenario: 'The dispatch member declares `externals: { billing: {} }`, pins it, and its route planner depends on billing\'s exported invoicing portal.',
+    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing', fromDispatch: true, dispatchPin: true }),
   }),
 
   // -------------------------------------------------------------------------
@@ -171,18 +195,26 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'EXTERNAL_NOT_EXPORTED',
-    severity: 'notice',
-    anchoredTo: 'dispatch::route-planner',
+    severity: 'error',
+    anchoredTo: 'ops-console',
     expectFire: true,
-    scenario: 'Dispatch declares billing as an external and its route planner depends on billing\'s invoice portal, but billing\'s L0 exports nothing — the portal is only L1-published inside billing, which another project may not reach.',
-    tree: fleet({ dispatchExternals: { billing: {} } }),
+    scenario: 'The FleetWorks operations console depends on `billing::invoice-portal`, but its billing member\'s L0 exports nothing — the portal is only L1-published inside billing, which another project may not reach.',
+    tree: fleet({ consoleDependsOn: ['billing::invoice-portal'] }),
+  }),
+  defineRuleFixture({
+    code: 'EXTERNAL_NOT_EXPORTED',
+    severity: 'error',
+    anchoredTo: 'route-planner',
+    expectFire: true,
+    scenario: 'Judged by its own gate against its pin of billing, the dispatch route planner depends on `billing::invoice-portal`, a name the pinned billing contract does not export.',
+    tree: fleet({ dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoice-portal', fromDispatch: true, dispatchPin: true }),
   }),
   defineRuleFixture({
     code: 'EXTERNAL_NOT_EXPORTED',
     expectFire: false,
-    reason: 'Billing\'s L0 exports the invoice portal at audience project, which covers every project of the family.',
-    scenario: 'Billing re-exports its invoice portal from its L0 as "invoicing" at audience project, and dispatch depends on it through its declared external.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} } }),
+    reason: 'Billing\'s L0 exports the invoice portal as "invoicing" at audience project, which covers the whole family.',
+    scenario: 'Billing re-exports its invoice portal from its L0 as "invoicing" at audience project, and the operations console depends on `billing::invoicing`.',
+    tree: fleet({ billingExports: BILLING_EXPORTS, consoleDependsOn: ['billing::invoicing'] }),
   }),
 
   // -------------------------------------------------------------------------
@@ -190,7 +222,7 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'TRUSTED_LINK_CROSSES_PROJECT',
-    severity: 'notice',
+    severity: 'error',
     anchoredTo: 'operations',
     expectFire: true,
     scenario: 'The root\'s operations subsystem declares a trusted link to billing, the subsystem that mounts the billing member project — a fast lane that would pierce a project boundary.',
@@ -210,25 +242,25 @@ export default [
   defineRuleFixture({
     code: 'DEPRECATED_REFERENCE_FORM',
     severity: 'notice',
-    anchoredTo: 'dispatch::route-planner',
+    anchoredTo: 'route-planner',
     expectFire: true,
     scenario: 'The dispatch member\'s route planner names billing\'s invoice portal as `::billing::invoice-portal` — a leading `::` that names the portal by its place in whichever checkout loads it.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: '::billing::invoice-portal' }),
+    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: '::billing::invoice-portal', fromDispatch: true }),
   }),
   defineRuleFixture({
     code: 'DEPRECATED_REFERENCE_FORM',
     severity: 'notice',
-    anchoredTo: 'dispatch::route-planner',
+    anchoredTo: 'route-planner',
     expectFire: true,
     scenario: 'The dispatch member\'s route planner names billing\'s invoice portal as `super::billing::invoice-portal` — a climb to the parent and a member path from there, a place in one family rather than a name.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} } }),
+    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, fromDispatch: true }),
   }),
   defineRuleFixture({
     code: 'DEPRECATED_REFERENCE_FORM',
     expectFire: false,
     reason: '`alias::name` is the canonical cross-project form: billing is the alias dispatch declares, invoicing the public name billing exports.',
     scenario: 'The dispatch member\'s route planner names billing\'s invoice portal as `billing::invoicing`, through the external it declares.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing' }),
+    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing', fromDispatch: true, dispatchPin: true }),
   }),
 
   // -------------------------------------------------------------------------
@@ -251,32 +283,6 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // PROJECT_DEPENDENCY_CYCLE
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'PROJECT_DEPENDENCY_CYCLE',
-    severity: 'warning',
-    anchoredTo: 'billing',
-    expectFire: true,
-    scenario: 'Dispatch\'s route planner depends on billing\'s invoicing portal while billing\'s invoice portal depends back on dispatch\'s route planner — two members that each need the other\'s contract first.',
-    tree: fleet({
-      membersForm: true,
-      billingExports: BILLING_EXPORTS,
-      dispatchExternals: { billing: {} },
-      plannerDependsOn: 'billing::invoicing',
-      billingExternals: { dispatch: {} },
-      invoiceDependsOn: ['dispatch::route-planner'],
-    }),
-  }),
-  defineRuleFixture({
-    code: 'PROJECT_DEPENDENCY_CYCLE',
-    expectFire: false,
-    reason: 'Only dispatch depends on billing; billing depends on nothing of dispatch, so the members form no loop.',
-    scenario: 'Dispatch\'s route planner depends on billing\'s invoicing portal, and billing\'s invoice portal depends on nothing outside billing.',
-    tree: fleet({ membersForm: true, billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing' }),
-  }),
-
-  // -------------------------------------------------------------------------
   // EXTERNAL_UNRESOLVED
   // -------------------------------------------------------------------------
   defineRuleFixture({
@@ -292,15 +298,15 @@ export default [
     severity: 'notice',
     anchoredTo: null,
     expectFire: true,
-    scenario: 'The dispatch member declares `externals: { acme.ledger: {} }` — a dotted producer id used as its own alias, which is not a reference name.',
-    tree: fleet({ dispatchExternals: { 'acme.ledger': {} } }),
+    scenario: 'Judged by its own gate, the dispatch member declares `externals: { acme.ledger: {} }` — a dotted producer id used as its own alias, which is not a reference name.',
+    tree: fleet({ dispatchExternals: { 'acme.ledger': {} }, fromDispatch: true }),
   }),
   defineRuleFixture({
     code: 'EXTERNAL_UNRESOLVED',
     expectFire: false,
-    reason: 'Exactly one project of the family answers to "billing", so the declaration resolves.',
-    scenario: 'The dispatch member declares `externals: { billing: {} }`, and the billing member declares `id: billing`.',
-    tree: fleet({ dispatchExternals: { billing: {} } }),
+    reason: 'Dispatch holds a pin for its declared external billing, which is what its own gate judges against: nothing is climbed to find the producer.',
+    scenario: 'Judged by its own gate, the dispatch member declares `externals: { billing: {} }` and holds billing\'s pin.',
+    tree: fleet({ dispatchExternals: { billing: {} }, fromDispatch: true, dispatchPin: true }),
   }),
 
   // -------------------------------------------------------------------------
@@ -323,50 +329,35 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // PROJECT_ID_COLLISION / PROJECT_ID_AMBIGUOUS / PROJECT_ID_DEFAULTED — the family half
+  // PROJECT_ID_AMBIGUOUS / PROJECT_ID_DEFAULTED — the bound project's own id
   // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'PROJECT_ID_COLLISION',
-    severity: 'error',
-    anchoredTo: null,
-    expectFire: true,
-    scenario: 'Both chained members of FleetWorks declare `id: fleet-service` — one project declared twice, where two consumers of one member was meant.',
-    tree: fleet({ billing: { id: 'fleet-service', name: 'Billing Service' }, dispatch: { id: 'fleet-service', name: 'Dispatch Service' } }),
-  }),
-  defineRuleFixture({
-    code: 'PROJECT_ID_COLLISION',
-    expectFire: false,
-    reason: 'Each member declares its own id, so every project of the family is contained once.',
-    scenario: 'FleetWorks declares `id: fleetworks`, billing `id: billing` and dispatch `id: dispatch`.',
-    tree: fleet(),
-  }),
   defineRuleFixture({
     code: 'PROJECT_ID_AMBIGUOUS',
     severity: 'warning',
-    anchoredTo: 'billing',
+    anchoredTo: null,
     expectFire: true,
-    scenario: 'The billing member is named only in Japanese ("請求") and declares no id, so no id can be derived for it and none is invented.',
-    tree: fleet({ billing: { name: '請求' } }),
+    scenario: 'The FleetWorks root is named only in Japanese ("配送") and declares no id, so no id can be derived for it and none is invented.',
+    tree: fleet({ root: { name: '配送' } }),
   }),
   defineRuleFixture({
     code: 'PROJECT_ID_AMBIGUOUS',
     expectFire: false,
-    reason: 'Every project of the family declares its own well-formed id.',
+    reason: 'The root declares its own well-formed id.',
     scenario: 'FleetWorks declares `id: fleetworks`, billing `id: billing` and dispatch `id: dispatch`.',
     tree: fleet(),
   }),
   defineRuleFixture({
     code: 'PROJECT_ID_DEFAULTED',
     severity: 'notice',
-    anchoredTo: 'billing-service',
+    anchoredTo: null,
     expectFire: true,
-    scenario: 'The billing member declares no id, so it answers to — and is keyed by — "billing-service", its name slug; the finding names its alias "billing" as the id to declare.',
-    tree: fleet({ billing: { name: 'Billing Service' } }),
+    scenario: 'The FleetWorks root declares no id, so it answers to "fleetworks", its name slug — renaming the project would move it.',
+    tree: fleet({ root: { name: 'FleetWorks' } }),
   }),
   defineRuleFixture({
     code: 'PROJECT_ID_DEFAULTED',
     expectFire: false,
-    reason: 'The root and both members declare their ids, so nothing answers to a derived one.',
+    reason: 'The root declares its id, so nothing answers to a derived one.',
     scenario: 'FleetWorks, billing and dispatch each declare an explicit id in their project.yaml.',
     tree: fleet(),
   }),

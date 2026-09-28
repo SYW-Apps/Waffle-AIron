@@ -10,7 +10,7 @@ import { externalsRepository, externalsFileAdapter } from '../../src/core/extern
 import {
   pinExternals, getExternalsStatus, listExternals, projectOwnSurface, UnknownExternalAliasError,
 } from '../../src/core/surfaces.js';
-import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { consumedContractInputs } from '../../src/core/specs.js';
 import { contentDigest, ownerOf, producerOf, declares, familyNode } from '../../src/models/index.js';
 
@@ -39,6 +39,8 @@ interface FleetOptions {
   billingId?: string;
   issueInvoiceReturns?: string;
   voidInvoiceReturns?: string;
+  /** How dispatch's route planner names billing's portal (default `super::billing::invoice-portal`). */
+  plannerRef?: string;
 }
 
 const DIRECT_EXPORTS = [{ from: 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'project', type: 'REST' }];
@@ -103,7 +105,7 @@ function fleet(o: FleetOptions = {}): { root: string; billing: string; dispatch:
   write(root, `${d}/specs/subsystems/dispatch.yaml`, dump({ id: 'dispatch', name: 'Dispatch', description: 'Routes.', parentSystem: 'DispatchService' }));
   write(root, `${d}/specs/components/route-planner.yaml`, dump({
     id: 'route-planner', name: 'Route Planner', description: 'Plans routes and bills them.', subsystem: 'dispatch',
-    componentType: 'Orchestrator', owns: [], dependsOn: ['super::billing::invoice-portal'],
+    componentType: 'Orchestrator', owns: [], dependsOn: [o.plannerRef ?? 'super::billing::invoice-portal'],
   }));
   write(root, `${d}/specs/interfaces/iroute-planner.yaml`, dump({
     id: 'iroute-planner', name: 'Route Planner Interface', description: 'Plan.', component: 'route-planner',
@@ -111,7 +113,7 @@ function fleet(o: FleetOptions = {}): { root: string; billing: string; dispatch:
   }));
   write(root, `${d}/specs/implementations/route-planner-impl.yaml`, dump({
     id: 'route-planner-impl', name: 'Route Planner Impl', description: 'Closes routes.', contract: 'iroute-planner',
-    methods: [{ name: 'closeRoute', narrative: [{ stepNumber: 1, type: 'call', description: 'Bill the route.', targetComponent: 'super::billing::invoice-portal', targetMethod: 'issueInvoice' }] }],
+    methods: [{ name: 'closeRoute', narrative: [{ stepNumber: 1, type: 'call', description: 'Bill the route.', targetComponent: o.plannerRef ?? 'super::billing::invoice-portal', targetMethod: 'issueInvoice' }] }],
   }));
   invalidateSpecCache();
   return { root, billing: path.join(root, 'packages', 'billing'), dispatch: path.join(root, 'packages', 'dispatch') };
@@ -222,26 +224,36 @@ describe('stage 2b — the project graph and declared externals', () => {
 
   // ---- the findings --------------------------------------------------------------
 
-  it('property: undeclared-is-reported-from-every-root — from the family root and from the child', () => {
-    const f = family();
-    const fromRoot = at(f.root, () => validateSddTree());
-    expect(codes(fromRoot, 'EXTERNAL_UNDECLARED')).toEqual(['notice @dispatch::route-planner', 'notice @dispatch::route-planner-impl']);
-    const fromChild = at(f.dispatch, () => validateSddTree());
-    expect(fromChild.resolvedThrough?.scope).toBe('dispatch');
-    expect(codes(fromChild, 'EXTERNAL_UNDECLARED')).toEqual(['notice @route-planner', 'notice @route-planner-impl']);
-    // A notice never fails the gate.
-    expect(fromRoot.issues.filter((i) => i.code === 'EXTERNAL_UNDECLARED').every((i) => i.severity === 'notice')).toBe(true);
+  it('stage 4: a member\'s references are its own gate\'s — the parent never reports them, the member does', () => {
+    const f = family({ plannerRef: 'billing::invoicing' });
+    const fromRoot = at(f.root, () => validateProject());
+    expect(codes(fromRoot, 'EXTERNAL_UNDECLARED')).toEqual([]);
+    // From its own root, dispatch declares no alias `billing`: an error now, carrying its resolution.
+    const fromChild = at(f.dispatch, () => validateProject());
+    expect(codes(fromChild, 'EXTERNAL_UNDECLARED')).toEqual(['error @route-planner', 'error @route-planner-impl']);
+    const finding = fromChild.issues.find((i) => i.code === 'EXTERNAL_UNDECLARED')!;
+    expect(finding.resolution).toMatchObject({ outcome: 'forbidden', owner: 'dispatch', canonicalTarget: 'billing::invoicing' });
+    // A deprecated form that names no alias is unavailable from the member's own root — never a pass.
+    const legacy = family();
+    expect(codes(at(legacy.dispatch, () => validateProject()), 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual(['warning @route-planner', 'warning @route-planner-impl']);
   });
 
-  it('property: not-exported-is-reported — a declared producer that exports nothing public', () => {
-    const f = family({ dispatchExternals: { billing: {} }, billingExports: [] });
-    const res = at(f.root, () => validateSddTree());
+  it('property: not-exported-is-reported — judged against the member\'s own pin, which exports nothing public', () => {
+    const f = family({ dispatchExternals: { billing: {} }, billingExports: [], plannerRef: 'billing::invoice-portal' });
+    const res = at(f.root, () => validateProject());
     expect(codes(res, 'EXTERNAL_UNDECLARED')).toEqual([]);
-    expect(codes(res, 'EXTERNAL_NOT_EXPORTED')).toEqual(['notice @dispatch::route-planner', 'notice @dispatch::route-planner-impl']);
+    expect(codes(res, 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
+    // Unpinned, the member has nothing to judge it against.
+    expect(codes(at(f.dispatch, () => validateProject()), 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual(['warning @route-planner', 'warning @route-planner-impl']);
     const pins = at(f.dispatch, () => pinExternals());
     expect(pins[0].outcome).toBe('pinned');
     expect(pins[0].usedNames).toBe(0);
     expect(pins[0].unexported.map((r) => r.specId).sort()).toEqual(['dispatch::route-planner', 'dispatch::route-planner-impl']);
+    // Pinned, its own gate judges the reference against the pin: missing.
+    const pinned = at(f.dispatch, () => validateProject());
+    expect(codes(pinned, 'EXTERNAL_NOT_EXPORTED')).toEqual(['error @route-planner', 'error @route-planner-impl']);
+    expect(pinned.issues.find((i) => i.code === 'EXTERNAL_NOT_EXPORTED')!.resolution).toMatchObject({ outcome: 'missing', inputDigest: expect.stringMatching(/^sha256:/) });
+    expect(pinned.hint).toMatch(/validate --family/);
   });
 
   // ---- pin, status, list -----------------------------------------------------------
@@ -289,7 +301,7 @@ describe('stage 2b — the project graph and declared externals', () => {
       return at(f.dispatch, () => externalsRepository.readLock())!.externals.billing.used;
     };
     expect(lockOf(chained)).toEqual(lockOf(direct));
-    const verdict = (f: ReturnType<typeof fleet>) => at(f.root, () => validateSddTree()).issues
+    const verdict = (f: ReturnType<typeof fleet>) => at(f.root, () => validateProject()).issues
       .filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => `${i.code} @${i.specId}`).sort();
     expect(verdict(chained)).toEqual(verdict(direct));
   });

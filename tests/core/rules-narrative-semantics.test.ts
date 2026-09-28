@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { buildCodeModel } from '../../src/core/source-analysis.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
@@ -95,7 +95,7 @@ describe('INESCAPABLE_CYCLE — provable non-termination in one narrative', () =
     ].join('\n'));
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'INESCAPABLE_CYCLE');
+      const found = byCode(validateProject(), 'INESCAPABLE_CYCLE');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('2 → 3');
@@ -118,7 +118,7 @@ describe('INESCAPABLE_CYCLE — provable non-termination in one narrative', () =
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -136,7 +136,7 @@ describe('INESCAPABLE_CYCLE — provable non-termination in one narrative', () =
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -156,7 +156,7 @@ describe('MEANINGLESS_BRANCH — decisions that decide nothing', () => {
     ].join('\n'));
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'MEANINGLESS_BRANCH');
+      const found = byCode(validateProject(), 'MEANINGLESS_BRANCH');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('decides nothing');
     } finally { proj.cleanup(); }
@@ -183,7 +183,7 @@ describe('MEANINGLESS_BRANCH — decisions that decide nothing', () => {
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'MEANINGLESS_BRANCH')).toHaveLength(1);
+      expect(byCode(validateProject(), 'MEANINGLESS_BRANCH')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 
@@ -201,7 +201,7 @@ describe('MEANINGLESS_BRANCH — decisions that decide nothing', () => {
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'MEANINGLESS_BRANCH')).toHaveLength(0);
+      expect(byCode(validateProject(), 'MEANINGLESS_BRANCH')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -220,7 +220,7 @@ describe('UNCONDITIONAL_CALL_CYCLE — unbounded recursion across components', (
     proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), '      - { stepNumber: 2, description: Done, type: return, outcome: done }'].join('\n'));
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE');
+      const found = byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('orch-a::ping');
       expect(found[0].message).toContain('orch-b::pong');
@@ -245,7 +245,7 @@ describe('UNCONDITIONAL_CALL_CYCLE — unbounded recursion across components', (
     proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), '      - { stepNumber: 2, description: Done, type: return, outcome: done }'].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -256,7 +256,7 @@ describe('UNCONDITIONAL_CALL_CYCLE — unbounded recursion across components', (
     proj.impl('orch-a', ['methods:', '  - name: ping', '    narrative:', CALL(1, 'orch-a', 'ping'), '      - { stepNumber: 2, description: Done, type: return, outcome: done }'].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(1);
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 
@@ -277,7 +277,7 @@ describe('UNCONDITIONAL_CALL_CYCLE — unbounded recursion across components', (
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -304,7 +304,7 @@ describe('antipatterns follow the step graph — parallel joins and completion',
     ].join('\n'));
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'MEANINGLESS_BRANCH');
+      const found = byCode(validateProject(), 'MEANINGLESS_BRANCH');
       expect(found.map(i => i.message)).toEqual([expect.stringContaining('branch step 3 sends both arms to step 6')]);
     } finally { proj.cleanup(); }
   });
@@ -326,7 +326,7 @@ describe('antipatterns follow the step graph — parallel joins and completion',
     ].join('\n'));
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'MEANINGLESS_BRANCH');
+      const found = byCode(validateProject(), 'MEANINGLESS_BRANCH');
       expect(found.map(i => i.message)).toEqual([expect.stringContaining('switch step 3 sends every case (and the default) to step 6')]);
     } finally { proj.cleanup(); }
   });
@@ -345,7 +345,7 @@ describe('antipatterns follow the step graph — parallel joins and completion',
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'MEANINGLESS_BRANCH')).toHaveLength(0);
+      expect(byCode(validateProject(), 'MEANINGLESS_BRANCH')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -363,7 +363,7 @@ describe('antipatterns follow the step graph — parallel joins and completion',
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -385,7 +385,7 @@ describe('antipatterns follow the step graph — parallel joins and completion',
     proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), DONE(2)].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(1);
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 
@@ -408,7 +408,7 @@ describe('antipatterns follow the step graph — parallel joins and completion',
     proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), DONE(2)].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -424,7 +424,7 @@ describe('antipatterns follow the step graph — parallel joins and completion',
     proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch_a', 'ping'), DONE(2)].join('\n'));
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE');
+      const found = byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('orch-b::pong → orch_a::ping');
       expect(found[0].specId).toBe('impl-orch-b');
@@ -457,7 +457,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/orch.ts', "import { put } from './store.js';\nexport function runFlow(): void { put(); }\n");
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -470,7 +470,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/orch.ts', 'export function runFlow(): void { /* forgot the store */ }\n');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'CALL_STEP_UNREALIZED');
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('store-a.put');
@@ -491,7 +491,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -507,7 +507,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/orch.ts', "import { saveSnapshot } from './store.js';\nexport function runFlow(): void { saveSnapshot(); }\n");
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -535,7 +535,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/store.ts', 'export function put(): void {}\n');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -560,7 +560,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/store.ts', 'export function put(): void {}\nexport function save(): void { /* forwards nothing */ }\n');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'CALL_STEP_UNREALIZED');
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('store-a.put');
       expect(found[0].message).toContain('"save"');
@@ -576,7 +576,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     offProj.source('src/orch.ts', 'export function runFlow(): void {}\n');
     offProj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { offProj.cleanup(); }
 
     const pyProj = createTempProject();
@@ -587,7 +587,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     pyProj.source('src/orch.py', 'def runFlow():\n    pass\n');
     pyProj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { pyProj.cleanup(); }
   });
 
@@ -613,7 +613,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/commands/run-flow.ts', 'export function runFlow(): void { /* the store call was dropped */ }\n');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'CALL_STEP_UNREALIZED');
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('"src/commands/run-flow.ts"');
     } finally { proj.cleanup(); }
@@ -629,7 +629,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/commands/run-flow.ts', "import { put } from '../store.js';\nexport function runFlow(): void { put(); }\n");
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -642,7 +642,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/commands/run-flow.ts', 'export function runFlow(): void { /* forgot the store */ }\n');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(1);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 });
@@ -687,7 +687,7 @@ describe('F80 — an aliased re-export forwards like an unaliased one', () => {
     aliasedAdapter(proj, "export { listSnapshots as loadSurfaceSnapshots } from '../store.js';\n", CONSUMER);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(byCode(res, 'CALL_STEP_UNREALIZED')).toEqual([]);
       expect(byCode(res, 'CALL_ORIGIN_UNRESOLVED')).toEqual([]);
       expect(byCode(res, 'METHOD_BODY_NOT_FOUND')).toEqual([]);
@@ -704,7 +704,7 @@ describe('F80 — an aliased re-export forwards like an unaliased one', () => {
       // The middle hop is a file no spec names: it is in the code model because
       // the run declares its source root, as a project that wants its unclaimed
       // code seen does. A file outside the model is not read.
-      const res = validateSddTree({ rules: { conformance: { sourceRoots: ['src'] } } as never });
+      const res = validateProject({ rules: { conformance: { sourceRoots: ['src'] } } as never });
       expect(byCode(res, 'CALL_STEP_UNREALIZED')).toEqual([]);
     } finally { proj.cleanup(); }
   });
@@ -725,7 +725,7 @@ describe('F80 — an aliased re-export forwards like an unaliased one', () => {
     proj.source('src/audit.ts', "import { loadSurfaceSnapshots } from './adapters/store.js';\nexport function audit(): void { loadSurfaceSnapshots(); }\n");
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toEqual([]);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toEqual([]);
     } finally { proj.cleanup(); }
   });
 
@@ -735,7 +735,7 @@ describe('F80 — an aliased re-export forwards like an unaliased one', () => {
     proj.source('src/other.ts', 'export function countSnapshots(): number { return 0; }\n');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'CALL_STEP_UNREALIZED');
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
       expect(found).toHaveLength(1);
       expect(found[0].specId).toBe('impl-store-adapter');
       expect(found[0].message).toContain('store-a.listSnapshots');
@@ -800,7 +800,7 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 

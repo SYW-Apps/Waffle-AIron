@@ -10,15 +10,14 @@ import { ambiguityMessage, isOwnComponentEntry } from '../../../models/index.js'
 export const subsystemBoundaryDepsRule: SddRule = {
   name: 'subsystem-boundary-dependencies',
   description:
-    'Judges every dependsOn edge that leaves its own subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A published surface may also name the subsystems it serves (a publicInterfaces entry\'s consumers): a component every one of whose entries names consumers may be depended on only from those subsystems, which is how a provider keeps a surface — the raw spec writes — away from a door that must not reach it. A reference that names nothing in this tree is resolved against the stored surface snapshots: a hit is a DECLARED remote portal and the same Adapter requirement applies to it, snapshots of several providers that disagree make the reference ambiguous, and a reference authored to leave this root that no snapshot covers warns instead of erroring. Boundary rules are never relaxed by a pack profile.',
+    "Judges every dependsOn edge that leaves its own subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A published surface may also name the subsystems it serves (a publicInterfaces entry's consumers): a component every one of whose entries names consumers may be depended on only from those subsystems. An edge into another project is judged on the contract entry it resolves to (resolveSurfaceRef — a contained member's live table, a declared external's pin, or a foreign snapshot): the same Adapter requirement applies to it, and foreign snapshots of several providers that disagree make it SURFACE_REF_AMBIGUOUS. An edge into another project that does not resolve is reported once, by project-boundaries, with its resolution — never here, and never as the retired CROSS_TREE_REF_UNRESOLVED warning. A bare id that names nothing is INVALID_DEPENDENCY_REFERENCE. Boundary rules are never relaxed by a pack profile.",
   codes: [
-    { code: 'INVALID_DEPENDENCY_REFERENCE', defaultSeverity: 'error', summary: 'dependsOn names a non-existent component' },
-    { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree dependsOn (super::/:: form) with no surface snapshot covering it' },
-    { code: 'SURFACE_REF_AMBIGUOUS', defaultSeverity: 'error', summary: 'Cross-tree dependsOn matched by surface snapshots of several providers with different contracts' },
-    { code: 'CROSS_SUBSYSTEM_NON_ADAPTER', defaultSeverity: 'error', summary: 'Non-Adapter component crossing a subsystem boundary' },
-    { code: 'CROSS_SUBSYSTEM_PRIVATE_ACCESS', defaultSeverity: 'error', summary: 'Cross-subsystem dependency on an unpublished component' },
-    { code: 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL', defaultSeverity: 'error', summary: 'Cross-subsystem hop entering through a non-Portal' },
-    { code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER', defaultSeverity: 'error', summary: 'Cross-subsystem dependency on a surface published only to other subsystems' },
+    { code: 'INVALID_DEPENDENCY_REFERENCE', defaultSeverity: 'error', summary: "dependsOn names a non-existent component" },
+    { code: 'SURFACE_REF_AMBIGUOUS', defaultSeverity: 'error', summary: "Cross-tree dependsOn matched by surface snapshots of several providers with different contracts" },
+    { code: 'CROSS_SUBSYSTEM_NON_ADAPTER', defaultSeverity: 'error', summary: "Non-Adapter component crossing a subsystem boundary" },
+    { code: 'CROSS_SUBSYSTEM_PRIVATE_ACCESS', defaultSeverity: 'error', summary: "Cross-subsystem dependency on an unpublished component" },
+    { code: 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL', defaultSeverity: 'error', summary: "Cross-subsystem hop entering through a non-Portal" },
+    { code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER', defaultSeverity: 'error', summary: "Cross-subsystem dependency on a surface published only to other subsystems" },
   ],
   check(ctx) {
     for (const edge of ctx.dependencyEdges().all) {
@@ -30,46 +29,45 @@ export const subsystemBoundaryDepsRule: SddRule = {
       const comp = edge.from;
 
       switch (edge.reach) {
-        case 'missing':
+        case 'missing': {
+          // A bare id that names nothing — the typo it always was, with the
+          // `use` line that would import it when a declared dependency exports it.
+          const hint = ctx.importHint(edge.ref);
           ctx.addIssue(
             'error',
             'INVALID_DEPENDENCY_REFERENCE',
-            `Component "${comp.id}" lists dependency "${edge.ref}" which does not exist.`,
+            `Component "${comp.id}" lists dependency "${edge.ref}" which does not exist.${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}`,
             comp.id,
             edge.draftContext,
           );
           continue;
+        }
 
-        case 'unpinned':
-          ctx.addIssue(
-            'warning',
-            'CROSS_TREE_REF_UNRESOLVED',
-            `Component "${comp.id}" depends on cross-tree component "${edge.ref}", and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
-            comp.id,
-            edge.draftContext,
-          );
+        case 'cross-project':
+          // The edge leaves the project and did not resolve (forbidden,
+          // missing, unavailable, or an ambiguous import): project-boundaries
+          // reports it once, with its resolution. Nothing is reported here.
           continue;
 
         case 'ambiguous':
-          // Snapshots of several providers expose the name with different
-          // contracts, so none of them may judge the edge: the ambiguity is
-          // the finding. The reach carries the resolution that decided it.
+          // Foreign snapshots of several providers expose the name with
+          // different contracts, so none of them may judge the edge: the
+          // ambiguity is the finding, carrying the edge's resolution.
           ctx.addIssue(
             'error',
             'SURFACE_REF_AMBIGUOUS',
             ambiguityMessage(edge.surface!, `Component "${comp.id}" depends on`, edge.ref),
             comp.id,
             edge.draftContext,
+            edge.resolution,
           );
           continue;
 
         case 'surface':
-          // A snapshot DECLARES the remote surface, so the cross-boundary
-          // shape rule (the source must be an Adapter) applies exactly as it
-          // does to a cross-subsystem edge. surfaceResolved: verified against
-          // the vendored snapshot — a genuine boundary verdict that keeps full
-          // strength even when this tree is a chained subproject validated
-          // standalone.
+          // A contract entry DECLARES the remote surface — a declared
+          // external's pin or a foreign snapshot — so the cross-boundary shape
+          // rule (the source must be an Adapter) applies exactly as it does to a
+          // cross-subsystem edge, carrying the edge's resolution.
           if (comp.componentType !== 'Adapter') {
             const provider = edge.surface!.kind === 'resolved' ? edge.surface!.snapshot.projectName : '';
             ctx.addIssue(
@@ -78,7 +76,7 @@ export const subsystemBoundaryDepsRule: SddRule = {
               `Boundary violation: ${comp.componentType} "${comp.id}" depends directly on "${edge.ref}", a surface of project "${provider}". Only a local client Adapter may cross a project boundary — route this hop through an Adapter.`,
               comp.id,
               edge.draftContext,
-              true,
+              edge.resolution,
             );
           }
           continue;

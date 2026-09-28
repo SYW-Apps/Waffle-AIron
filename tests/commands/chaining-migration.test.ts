@@ -10,7 +10,7 @@ import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { saveSnapshot } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
-import { validateSddTree, validateAsComplete, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, validateAsComplete, type ValidationResult } from '../../src/core/validation.js';
 import { ChainingMigrationRefusedError, DoctorOptionsError } from '../../src/utils/errors.js';
 import { plan, apply, isEmpty, blocked } from '../../src/commands/chaining-migration.js';
 import { runDoctor } from '../../src/commands/doctor.js';
@@ -219,25 +219,27 @@ describe('stage 2c — the chaining migration', () => {
   it('property: defaulted-id-is-stable — after apply every id is declared, equal to the plan\'s, and PROJECT_ID_DEFAULTED is gone', () => {
     const f = family();
     const planned = at(f.root, () => plan());
-    expect(codesOf(at(f.root, () => validateSddTree()), 'PROJECT_ID_DEFAULTED')).toHaveLength(3);
+    expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_DEFAULTED')).toHaveLength(3);
     const report = at(f.root, () => apply(planned));
     expect(report.applied).toBe(true);
-    expect(codesOf(at(f.root, () => validateSddTree()), 'PROJECT_ID_DEFAULTED', 'PROJECT_ID_AMBIGUOUS', 'PROJECT_ID_CHANGED')).toEqual([]);
+    expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_DEFAULTED', 'PROJECT_ID_AMBIGUOUS', 'PROJECT_ID_CHANGED')).toEqual([]);
     for (const p of planned.projects) expect(idOf(p.directory)).toBe(p.id);
   });
 
   it('after apply the migrated references are declared and exported: EXTERNAL_UNDECLARED and EXTERNAL_NOT_EXPORTED are gone', () => {
     const f = family();
-    const before = at(f.root, () => validateSddTree());
-    expect(codesOf(before, 'EXTERNAL_UNDECLARED')).toEqual([
-      'EXTERNAL_UNDECLARED @dispatch-service::iroute-planner', 'EXTERNAL_UNDECLARED @dispatch-service::route-planner', 'EXTERNAL_UNDECLARED @dispatch-service::route-planner-impl',
+    // Dispatch's references are its own gate's (stage 4): the parent reports none of them.
+    expect(codesOf(at(f.root, () => validateProject()), 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
+    const before = at(f.dispatch, () => validateProject());
+    // From its own root its `super::` forms name no alias: nothing to judge them against yet.
+    expect(codesOf(before, 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([
+      'EXTERNAL_CHECK_UNAVAILABLE @iroute-planner', 'EXTERNAL_CHECK_UNAVAILABLE @route-planner', 'EXTERNAL_CHECK_UNAVAILABLE @route-planner-impl',
     ]);
-    expect(codesOf(before, 'EXTERNAL_NOT_EXPORTED')).toHaveLength(3);
     const report = at(f.root, () => apply(plan()));
-    const after = at(f.root, () => validateSddTree());
+    const after = at(f.root, () => validateProject());
     expect(codesOf(after, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXPORT_INVALID')).toEqual([]);
     // The same verdict from the child.
-    expect(codesOf(at(f.dispatch, () => validateSddTree()), 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
+    expect(codesOf(at(f.dispatch, () => validateProject()), 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([]);
     // Written in order: ids, L0 specs, externals, pins; the producers' and the consumer's locks are stale.
     const rel = report.written.map((w) => path.relative(f.root, w).split(path.sep).join('/'));
     expect(rel).toEqual([
@@ -295,7 +297,7 @@ describe('stage 2c — the chaining migration', () => {
     expect(codesOf(gate, 'PROJECT_ID_CHANGED')).toEqual([]);
     const relocked = await at(f.billing, () => runLock({ yes: true }, gate));
     expect(relocked?.projectId).toBe('billing-service');
-    expect(codesOf(at(f.root, () => validateSddTree()), 'PROJECT_ID_CHANGED', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
+    expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_CHANGED', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
   });
 
   it('a family only partly in reach blocks apply before its first write', () => {

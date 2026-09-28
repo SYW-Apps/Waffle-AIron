@@ -19,7 +19,7 @@ import {
   workspaceFor,
 } from '../../src/core/specs.js';
 import { writeLegacyMount } from '../helpers/legacy-mount.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -320,7 +320,7 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
   });
 });
 
-describe('standalone child: cross-tree refs warn instead of erroring like typos', () => {
+describe('standalone child: cross-tree refs are judged by the owner alone (stage 4)', () => {
   let rootDir: string;
   afterEach(() => {
     setProjectRoot(null);
@@ -328,7 +328,7 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  it('an unresolvable super:: target raises CROSS_TREE_REF_UNRESOLVED (warning), not INVALID_TARGET_COMPONENT_REFERENCE', async () => {
+  it('an unresolvable super:: target is EXTERNAL_CHECK_UNAVAILABLE (warning, never a pass), not INVALID_TARGET_COMPONENT_REFERENCE', async () => {
     // Simulate opening a chained child standalone: its file carries a
     // super:: ref whose target lives in the (absent) parent project.
     rootDir = makeRoot();
@@ -349,19 +349,20 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     } as ImplementationSpec);
     invalidateSpecCache();
 
-    const { validateSddTree } = await import('../../src/core/validation.js');
-    const res = validateSddTree();
-    // Two warnings: the call step (cross-tree-references) AND the dependsOn edge
-    // (stereotype-deps) — both honest, neither a typo-grade error.
-    const crossTree = res.issues.filter(i => i.code === 'CROSS_TREE_REF_UNRESOLVED');
-    expect(crossTree).toHaveLength(2);
-    expect(crossTree.every(i => i.severity === 'warning')).toBe(true);
-    expect(crossTree.map(i => i.message).join('\n')).toMatch(/validate from the parent project/);
+    const { validateProject } = await import('../../src/core/validation.js');
+    const res = validateProject();
+    // Two warnings from project-boundaries, the one judge: the dependsOn edge
+    // and the call step — a deprecated form naming no alias has nothing to be
+    // judged against, which is never a pass and never a typo-grade error.
+    const unavailable = res.issues.filter(i => i.code === 'EXTERNAL_CHECK_UNAVAILABLE');
+    expect(unavailable.map(i => i.specId).sort()).toEqual(['transpiler-impl', 'transpiler-orch']);
+    expect(unavailable.every(i => i.severity === 'warning' && i.resolution?.outcome === 'unavailable')).toBe(true);
+    expect(unavailable.map(i => i.message).join('\n')).toMatch(/doctor --fix/);
     expect(res.issues.filter(i => i.code === 'INVALID_TARGET_COMPONENT_REFERENCE')).toHaveLength(0);
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 
-  it('with its parent on disk, a chained child is judged THROUGH the parent — a bare parent id is a real error, not a waived warning', async () => {
+  it('location-independent: a chained child gets the same verdict with its parent on disk — a bare parent id is its own typo', async () => {
     // Parent project mounts `kid` as a chained subproject; kid depends on a
     // parent component BY BARE ID. From inside a mount a bare id qualifies to
     // `kid::parent-portal`, which does not exist — a typo-grade error, and the
@@ -383,41 +384,38 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['parent-portal'] }));
     invalidateSpecCache();
 
-    const { validateSddTree } = await import('../../src/core/validation.js');
+    const { validateProject } = await import('../../src/core/validation.js');
 
-    // From the PARENT root: its verdict, and no chained-subproject notice.
+    // From the PARENT root: the kid's finding is the kid's own gate's.
     setProjectRoot(rootDir);
     invalidateSpecCache();
-    const fromParent = validateSddTree();
-    expect(fromParent.resolvedThrough).toBeUndefined();
+    const fromParent = validateProject();
+    expect(fromParent.issues.filter(i => i.specId?.startsWith('kid::'))).toEqual([]);
 
-    // From KID's own root the verdict is the same one — resolved through the
-    // parent and renamed into kid's ids. It used to be REPLACED by a waived
-    // UNVERIFIED_EXTERNAL_REF warning, and `validate --ci` passed.
+    // From KID's own root: a bare id naming nothing of the kid is its own typo,
+    // judged without walking up — the same verdict with or without the parent.
     setProjectRoot(kidDir);
     invalidateSpecCache();
-    const fromKid = validateSddTree();
+    const fromKid = validateProject();
     const invalid = fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
     expect(invalid.map(i => [i.specId, i.severity])).toEqual([['k-orch', 'error']]);
-    expect(fromKid.resolvedThrough).toEqual({ root: path.resolve(rootDir), scope: 'kid' });
     expect(fromKid.valid).toBe(false);
   });
 
-  it('a root-name-qualified target (waffler_core::x form, authored from a parent) warns, not errors, from the child root', async () => {
-    // The exact field report: refs stored as `<parent-subsystem>::x` (NOT super::)
-    // because they were authored from the parent root. From the child dir the
-    // leading segment names no local subsystem — an honest cross-tree edge, not a
-    // typo, so it must warn (CROSS_TREE_REF_UNRESOLVED), not flood hard errors.
+  it('a root-name-qualified target (waffler_core::x form, authored from a parent) is EXTERNAL_UNDECLARED from the child root', async () => {
+    // Refs stored as `<parent-subsystem>::x` (NOT super::) because they were
+    // authored from the parent root. From the child dir the first segment names
+    // none of its subsystems, aliases or foreign providers: an undeclared
+    // dependency on another project (stage 4), reported once — never a typo flood.
     rootDir = makeRoot();
     saveSpec('subsystem', subsystem('transpiler'));
     saveComponentSpec(component('transpiler-orch', 'transpiler', { dependsOn: ['waffler_core::blueprints-portal'] }));
     invalidateSpecCache();
 
-    const { validateSddTree } = await import('../../src/core/validation.js');
-    const res = validateSddTree();
-    const crossTree = res.issues.filter(i => i.code === 'CROSS_TREE_REF_UNRESOLVED');
-    expect(crossTree.length).toBeGreaterThanOrEqual(1);
-    expect(crossTree.every(i => i.severity === 'warning')).toBe(true);
+    const { validateProject } = await import('../../src/core/validation.js');
+    const res = validateProject();
+    const undeclared = res.issues.filter(i => i.code === 'EXTERNAL_UNDECLARED');
+    expect(undeclared.map(i => [i.specId, i.severity, i.resolution?.outcome])).toEqual([['transpiler-orch', 'error', 'forbidden']]);
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 });
@@ -735,14 +733,14 @@ describe("a chained child's implementation file paths are relative to its own ro
   });
 
   it("the child's own gate checks the file the parent's author named", async () => {
-    const { validateSddTree } = await import('../../src/core/validation.js');
+    const { validateProject } = await import('../../src/core/validation.js');
     const kidDir = mountKid();
     fs.mkdirSync(path.join(kidDir, 'src'), { recursive: true });
     fs.writeFileSync(path.join(kidDir, 'src', 'run.ts'), 'export function run(): void {}\n');
     const missingFromKid = (): string[] => {
       invalidateSpecCache();
       setProjectRoot(kidDir);
-      return validateSddTree().issues
+      return validateProject().issues
         .filter((i) => i.code === 'MISSING_SOURCE_FILE' || i.code === 'SOURCE_PATH_ESCAPES_ROOT')
         .map((i) => `${i.code} @${i.specId}`);
     };
@@ -807,9 +805,9 @@ describe('a member\'s own subsystem named like its alias, at every depth', () =>
 
   it('validates with no dangling subsystem reference and round-trips the member through the top root', async () => {
     const { extraDir } = nestedFlatFamily();
-    const { validateSddTree } = await import('../../src/core/validation.js');
+    const { validateProject } = await import('../../src/core/validation.js');
 
-    const res = validateSddTree();
+    const res = validateProject();
     expect(res.issues.filter((i) => i.code === 'INVALID_SUBSYSTEM_REFERENCE').map((i) => i.specId)).toEqual([]);
 
     saveComponentSpec(loadComponentSpec('extra::extra-comp')!);
@@ -855,7 +853,7 @@ describe('public_interface.consumers are subsystem references in a chained subpr
 
   it('resolves them from the parent: the sibling is a subsystem of the tree, not an unknown consumer', () => {
     buildFixture();
-    const codes = validateSddTree({ recursive: true }).issues.map((i) => i.code);
+    const codes = validateProject({ recursive: true }).issues.map((i) => i.code);
     expect(codes).not.toContain('PUBLIC_INTERFACE_UNKNOWN_CONSUMER');
   });
 

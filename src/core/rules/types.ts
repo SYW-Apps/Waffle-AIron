@@ -16,6 +16,8 @@ import {
   SourceFileFacts,
   SurfaceRefResolution,
   CallSiteFact,
+  PinnedExternal,
+  ReferenceResolution,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
@@ -263,17 +265,19 @@ export interface ImportGraph {
  * Where a dependsOn edge lands, decided once per edge so the rules that judge
  * it never re-derive it. The six answers are exhaustive: a ref either names a
  * component in this tree (`internal` when it shares the source's subsystem,
- * `cross-subsystem` when it does not), or it leaves the tree and a vendored
- * surface snapshot declares it (`surface`) or several providers' snapshots
- * disagree about it (`ambiguous`), or nothing declares it — `unpinned` when it
- * was authored to leave this root, `missing` when it is a local typo.
+ * `cross-subsystem` when it does not), or it leaves the project and resolves
+ * to a declared contract entry — a pin or a foreign snapshot (`surface`) — or
+ * foreign snapshots of several providers disagree about it (`ambiguous`), or
+ * it leaves the project and does not resolve (`cross-project`: its resolution
+ * is project-boundaries' single finding), or it is a local id that names
+ * nothing (`missing`).
  */
 export type EdgeReach =
   | 'internal'
   | 'cross-subsystem'
   | 'surface'
   | 'ambiguous'
-  | 'unpinned'
+  | 'cross-project'
   | 'missing';
 
 /**
@@ -292,6 +296,8 @@ export interface DependencyEdge {
   to?: ComponentSpec;
   /** What the surface snapshots answered — set for a `surface` or `ambiguous` edge only, and then always carrying that kind. */
   surface?: SurfaceRefResolution;
+  /** The owner's resolution of an edge that leaves the project; set for `surface`, `ambiguous` and `cross-project`. */
+  resolution?: ReferenceResolution;
   /**
    * Either end is a retired stereotype, so no boundary or matrix rule judges
    * the edge: retired-stereotypes reports the component once, and its
@@ -404,8 +410,21 @@ export interface RuleContext {
   publicSet: Map<string, Set<string>>;
   /** Interfaces grouped by owning component id — the shared read path for a component's contract methods (rules and the reachability walker must agree on this enumeration). */
   interfacesByComponent: Map<string, InterfaceSpec[]>;
-  /** Stored surface snapshots (.wai/surfaces/) — declared contracts that unresolved cross-tree/remote references validate against. */
+  /**
+   * The foreign surface snapshots (exchanged or authored imports in
+   * .wai/surfaces/) the bound root holds, which references into a foreign
+   * provider are checked against. Only the bound root's own: no member's
+   * snapshots are pooled or consulted.
+   */
   surfaceSnapshots: SurfaceSnapshot[];
+  /**
+   * The bound project's declared externals with their lock entries and pinned
+   * snapshots, read by the validator from the project's own .wai/externals
+   * files: what a reference into a project outside the scan is judged against.
+   * Never the live producer, never anything above the bound root. Empty on a
+   * candidate run.
+   */
+  pinnedExternals: PinnedExternal[];
   /**
    * The validated root's identity, resolved by the validator from its project
    * configuration against the id its lock recorded, so the project-identity
@@ -436,21 +455,6 @@ export interface RuleContext {
    */
   exportUsages?: ExportUsage[];
   /**
-   * The aliases of the bound root's declared externals that its own scan binds
-   * to no project but the chaining climb binds from the family's top (a member
-   * naming its parent or a sibling), gathered by the validator. The
-   * external-declarations rule does not report them. Absent when nothing was
-   * climbed for.
-   */
-  climbBoundExternals?: string[];
-  /**
-   * The snapshots each chained mount holds in its own `.wai/surfaces/`, keyed
-   * by mount namespace. Consulted ONLY for references made from inside that
-   * mount — never pooled into `surfaceSnapshots`, so a contract a child
-   * imported can never decide the bound root's own references.
-   */
-  mountSurfaceSnapshots: MountSurfaceSnapshots[];
-  /**
    * The pure source-code model (per-sourcePath declaration/export/import/
    * anchor facts) built by the source analysis adapter — what the
    * Level 1 conformance rules check realization against. Empty when the
@@ -473,47 +477,45 @@ export interface RuleContext {
   isImplementationDraft(impl: ImplementationSpec): boolean;
   /** The architectural profile governing a component (subsystem override, else project type). */
   getComponentProfile(compId: string): ArchProfile;
-  /** Whether a type reference resolves against builtins, generics, or defined types. */
+  /**
+   * Whether a type reference resolves to a builtin, a generic parameter, or a
+   * type the bound project may name — owner-scoped and explicit, with no
+   * family-wide suffix matching: a bare name resolves among the bound
+   * project's OWN types first, then through its `use` imports exactly as
+   * resolveCrossProject resolves a bare name.
+   */
   isTypeResolved(ref: string, generics: Set<string>): boolean;
   /** Effective target language for a subsystem (subsystem override, else system), normalized to the language-table key, or undefined. */
   targetLanguageFor(subsystemId: string | undefined): string | undefined;
   /** Scope filter for granular (per-subsystem) validation. */
   isSpecInScope(specId: string): boolean;
   /**
-   * True when the subsystem belongs to a member rather than the bound root: its
-   * owner in the project graph is not the bound root. Conformance skips such
-   * specs — their sourcePaths are relative to the member's root, and the
-   * member validates them standalone in its own run.
+   * True when the subsystem belongs to a contained member rather than the bound
+   * project. Nothing about such a spec is judged in this project's gate —
+   * addIssue drops it, and the conformance family does not even read its
+   * source paths, which are relative to the member's root.
    */
   isInChainedSubproject(subsystemId: string): boolean;
   /**
-   * True when a reference the scan left unbound points OUTSIDE this loading
-   * root rather than being a genuine local typo — so it warrants the softer
-   * CROSS_TREE_REF_UNRESOLVED warning instead of a hard "does not exist" error:
-   * the scan bound it as outside (an alias whose producer it did not read), it
-   * carries a deprecated form (`::x` / `super::x`) that climbs above the bound
-   * root, or its leading segment names neither a subsystem nor a member here.
-   */
-  isExternalNamespaceRef(ref: string): boolean;
-  /**
-   * True when a reference made from inside a member was authored to leave it:
-   * the scan bound it into a project other than the member that owns
-   * fromSubsystem. This only licenses consulting the snapshots that member
-   * holds; a reference they do not cover is judged exactly as it was before.
-   */
-  isCollapsedCrossTreeRef(ref: string, fromSubsystem: string): boolean;
-  /**
-   * Resolve a cross-tree reference against the stored surface snapshots,
-   * matched by provider. The final segment is the public name, matched against
-   * each snapshot's entry ids only — the match by backing component is gone
-   * (stage 3); the segment before it, when there is one, names the provider,
-   * and only that provider's snapshots are consulted. The snapshots of the
-   * members enclosing `fromSubsystem` come first, nearest first, then the bound
-   * root's own;
-   * the first pool with matches decides, and matches that disagree on the
-   * contract make the reference ambiguous.
+   * The declared contract entry a reference that leaves the bound project
+   * lands on: a declared external's pinned snapshot (by alias, or through a
+   * `use` import), else the bound root's own foreign snapshots, matched by
+   * provider — snapshots of several providers that disagree make it
+   * ambiguous. No member's snapshots are consulted.
    */
   resolveSurfaceRef(ref: string, fromSubsystem?: string): SurfaceRefResolution;
+  /**
+   * The owner's resolution of one reference the scan recorded, decided before
+   * any severity from the bound project's own files: null for a reference that
+   * stays inside the bound project (or is written by a contained member).
+   */
+  resolveCrossProject(specId: string, position: string, reference: string): ReferenceResolution | null;
+  /**
+   * For a bare name that resolves nowhere: the declared external or member
+   * whose table exports a name with the same nameKey without the project
+   * importing it, and the `use` line that would. Null when none does.
+   */
+  importHint(name: string): string | null;
   /** Every contract method across the component's interfaces (memoized — eight rules ask per binding or per step). */
   interfaceMethodsOf(compId: string): MethodSignature[];
   /** The run's source-code model keyed for lookup (memoized). */
@@ -625,10 +627,9 @@ export interface RuleContext {
    * draft-context downgrades for completeness rules — min(default, warning),
    * so a draft never raises a notice. 'off' suppresses the issue entirely.
    *
-   * `surfaceResolved` marks a finding whose reference DID resolve against a
-   * vendored surface snapshot — a genuine contract/boundary verdict rather
-   * than a resolution failure, so it keeps full strength in a chained
-   * subproject.
+   * A finding on a spec a contained member owns is dropped first: the member's
+   * own gate judges it. `resolution` is the structured answer a finding about
+   * a cross-project reference carries (resolveCrossProject).
    *
    * `parts` is the finding's IDENTITY — its site inside the spec and the units
    * it aggregates — which is what the conformance debt register matches on. A
@@ -642,7 +643,7 @@ export interface RuleContext {
     message: string,
     specId?: string,
     isDraftContext?: boolean,
-    surfaceResolved?: boolean,
+    resolution?: ReferenceResolution,
     parts?: FindingParts,
   ): void;
 }
@@ -679,10 +680,4 @@ export interface SddRule {
   /** Every issue code this rule can emit, with default severity and summary. */
   codes: RuleCode[];
   check(ctx: RuleContext): void;
-}
-
-/** The surface snapshots one chained mount holds, keyed by the mount's namespace. */
-export interface MountSurfaceSnapshots {
-  namespace: string;
-  snapshots: SurfaceSnapshot[];
 }

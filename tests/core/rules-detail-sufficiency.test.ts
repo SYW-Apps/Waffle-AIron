@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { buildCodeModel } from '../../src/core/source-analysis.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { RulesConfigSchema } from '../../src/models/project.js';
@@ -194,7 +194,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     proj.source('src/store.ts', BRANCHY_FN('put'));
     proj.activate();
     try {
-      const found = detailIssues(validateSddTree());
+      const found = detailIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('UNNARRATED_COMPLEXITY');
       expect(found[0].severity).toBe('warning');
@@ -211,7 +211,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     proj.source('src/store.ts', SIMPLE_FN('put'));
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -231,7 +231,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     proj.source('src/store.ts', BRANCHY_FN('put'));
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -243,7 +243,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     proj.source('src/store.ts', BRANCHY_FN('saveSnapshot'));
     proj.activate();
     try {
-      const found = detailIssues(validateSddTree());
+      const found = detailIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('"saveSnapshot"');
     } finally { proj.cleanup(); }
@@ -258,7 +258,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     highLimit.activate();
     try {
       const rules = RulesConfigSchema.parse({ complexity: { maxUnnarratedComplexity: 20 } });
-      expect(detailIssues(validateSddTree({ rules }))).toHaveLength(0);
+      expect(detailIssues(validateProject({ rules }))).toHaveLength(0);
     } finally { highLimit.cleanup(); }
 
     const lowLimit = createTempProject();
@@ -269,7 +269,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     lowLimit.activate();
     try {
       const rules = RulesConfigSchema.parse({ complexity: { maxUnnarratedComplexity: 1 } });
-      const found = detailIssues(validateSddTree({ rules }));
+      const found = detailIssues(validateProject({ rules }));
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('limit 1');
     } finally { lowLimit.cleanup(); }
@@ -283,7 +283,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     proj.source('src/store.ts', BRANCHY_FN('put'));
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -295,7 +295,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     proj.source('src/flow.py', 'def run_flow():\n    if True:\n        if True:\n            pass\n');
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -315,7 +315,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     proj.source('src/store.ts', BRANCHY_FN('put'));
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -328,7 +328,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     proj.source('src/store/put.ts', BRANCHY_FN('put'));
     proj.activate();
     try {
-      const found = detailIssues(validateSddTree());
+      const found = detailIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('UNNARRATED_COMPLEXITY');
       expect(found[0].message).toContain('"src/store/put.ts"');
@@ -344,7 +344,7 @@ describe('UNNARRATED_COMPLEXITY — real branching may not hide below detail: fu
     proj.source('src/store/put.ts', SIMPLE_FN('put'));
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -357,7 +357,7 @@ describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s 
     proj.impl('orch-a', `methods:\n${INTENT('runFlow')}`);
     proj.activate();
     try {
-      const found = detailIssues(validateSddTree());
+      const found = detailIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('DETAIL_BELOW_STEREOTYPE');
       expect(found[0].severity).toBe('warning');
@@ -372,7 +372,7 @@ describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s 
     proj.impl('process-a', `methods:\n${INTENT('runFlow')}`);
     proj.activate();
     try {
-      const found = detailIssues(validateSddTree());
+      const found = detailIssues(validateProject());
       expect(found.map(i => i.code)).toEqual(['DETAIL_BELOW_STEREOTYPE']);
       expect(found[0].message).toContain(stereotype);
     } finally { proj.cleanup(); }
@@ -385,7 +385,7 @@ describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s 
     proj.impl('store-a', `methods:\n${INTENT('put')}`);
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -397,7 +397,7 @@ describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s 
     proj.impl('repo-a', `methods:\n${INTENT('getRecord')}`);
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -416,7 +416,7 @@ describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s 
     ].join('\n'));
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -428,7 +428,7 @@ describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s 
     proj.source('src/orch.ts', BRANCHY_FN('runFlow'));
     proj.activate();
     try {
-      const found = detailIssues(validateSddTree());
+      const found = detailIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('UNNARRATED_COMPLEXITY');
     } finally { proj.cleanup(); }
@@ -452,7 +452,7 @@ describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s 
     proj.impl('portal-a', 'methods:\n  - name: toolCall\n    intent: Forwards the tool invocation to the orchestrator and maps errors onto the wire shape.');
     proj.activate();
     try {
-      expect(detailIssues(validateSddTree())).toHaveLength(0);
+      expect(detailIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

@@ -11,8 +11,9 @@ import {
   invalidateSpecCache,
   getLoaderIssues,
   inspectChainedRoots,
+  graph as projectFamily,
 } from '../../src/core/specs.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
@@ -279,11 +280,14 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
 
     setProjectRoot(root);
     invalidateSpecCache();
-    const scoped = validateSddTree({ scopeSubsystem: 'billing' });
+    const scoped = validateProject({ scopeSubsystem: 'billing' });
 
-    const notFound = scoped.issues.filter((i) => i.code === 'SUBPROJECT_NOT_FOUND');
-    expect(notFound.length).toBeGreaterThan(0);
-    expect(notFound.every((i) => i.specId === 'billing::ledger')).toBe(true);
+    // Stage 4 retires SUBPROJECT_NOT_FOUND: the absent member is a fact of the
+    // graph, recorded on the project that declares it (a family run reports it
+    // as MEMBER_NOT_FOUND), and never a loader issue of the bound root.
+    expect(scoped.issues.filter((i) => i.code === 'SUBPROJECT_NOT_FOUND')).toEqual([]);
+    const absent = projectFamily().problems.filter((p) => p.kind === 'member-absent');
+    expect(absent.map((p) => [p.id, p.projects])).toEqual([['ledger', ['billing']]]);
   });
 
   it('reports each mount a whole-tree walk cannot follow, and why', () => {

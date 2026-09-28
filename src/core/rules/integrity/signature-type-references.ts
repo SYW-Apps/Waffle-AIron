@@ -32,10 +32,11 @@ export const signatureTypeReferencesRule: SddRule = {
         const refs = methodTypeRefs(m);
         for (const ref of refs) {
           if (!ctx.isTypeResolved(ref, allGenerics)) {
+            const hint = ctx.importHint(ref);
             ctx.addIssue(
               'error',
               'UNDEFINED_TYPE_REFERENCE',
-              `Method "${m.name}" on interface "${intf.id}" references undefined type "${ref}" in signature.`,
+              `Method "${m.name}" on interface "${intf.id}" references undefined type "${ref}" in signature.${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}`,
               intf.id,
               isDraftCtx,
             );

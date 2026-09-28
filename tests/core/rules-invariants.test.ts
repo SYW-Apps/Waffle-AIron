@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, saveSpec, saveSystemSpec, workspaceFor } from '../../src/core/specs.js';
 
@@ -121,7 +121,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.entity('org-unit', UNIT_INVARIANTS);
     proj.activate();
     try {
-      expect(invariantIssues(validateSddTree())).toHaveLength(0);
+      expect(invariantIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -133,7 +133,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.entity('org-unit', UNIT_INVARIANTS);
     proj.activate();
     try {
-      const found = invariantIssues(validateSddTree());
+      const found = invariantIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('UNASSERTED_INVARIANT');
       expect(found[0].severity).toBe('warning');
@@ -151,7 +151,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.entity('org-unit', UNIT_INVARIANTS);
     proj.activate();
     try {
-      expect(invariantIssues(validateSddTree())).toHaveLength(0);
+      expect(invariantIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -164,7 +164,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     ].join('\n'));
     proj.activate();
     try {
-      const found = invariantIssues(validateSddTree());
+      const found = invariantIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('INVARIANT_UNANCHORED');
       expect(found[0].message).toContain('componentClass');
@@ -179,7 +179,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.entity('org-unit', UNIT_INVARIANTS);
     proj.activate();
     try {
-      const found = invariantIssues(validateSddTree());
+      const found = invariantIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('INVARIANT_UNANCHORED');
       expect(found[0].message).toContain('effect: write');
@@ -194,7 +194,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.entity('org-unit', UNIT_INVARIANTS);
     proj.activate();
     try {
-      const found = invariantIssues(validateSddTree());
+      const found = invariantIssues(validateProject());
       const codes = found.map(i => i.code).sort();
       // the bad ref errors AND the real invariant stays unasserted
       expect(codes).toEqual(['UNASSERTED_INVARIANT', 'UNKNOWN_INVARIANT_REF']);
@@ -219,7 +219,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     ].join('\n'));
     proj.activate();
     try {
-      const found = invariantIssues(validateSddTree());
+      const found = invariantIssues(validateProject());
       expect(found.map(i => i.code)).toContain('DUPLICATE_INVARIANT_ID');
       expect(found.find(i => i.code === 'DUPLICATE_INVARIANT_ID')!.severity).toBe('error');
     } finally { proj.cleanup(); }
@@ -233,7 +233,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.entity('org-unit', UNIT_INVARIANTS);
     proj.activate();
     try {
-      expect(invariantIssues(validateSddTree())).toHaveLength(0);
+      expect(invariantIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -252,7 +252,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.entity('org-unit', UNIT_INVARIANTS);
     proj.activate();
     try {
-      expect(invariantIssues(validateSddTree())).toHaveLength(0);
+      expect(invariantIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -283,7 +283,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.impl('b-registry', `methods:\n${ASSERTING_WRITE('branch-unit.slug-unique-among-siblings')}`);
     proj.activate();
     try {
-      expect(invariantIssues(validateSddTree())).toHaveLength(0);
+      expect(invariantIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -307,7 +307,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.impl('b-registry', `methods:\n${SILENT_WRITE}`);
     proj.activate();
     try {
-      const found = invariantIssues(validateSddTree());
+      const found = invariantIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('UNASSERTED_INVARIANT');
       expect(found[0].specId).toBe('impl-b-registry');
@@ -336,7 +336,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     proj.impl('b-registry', `methods:\n${ASSERTING_WRITE('sub-a.org-unit.slug-unique-among-siblings')}`);
     proj.activate();
     try {
-      const found = invariantIssues(validateSddTree());
+      const found = invariantIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('UNASSERTED_INVARIANT');
       expect(found[0].specId).toBe('impl-b-registry');
@@ -358,7 +358,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
     ].join('\n'));
     proj.activate();
     try {
-      const found = invariantIssues(validateSddTree()).filter(i => i.code === 'UNASSERTED_INVARIANT');
+      const found = invariantIssues(validateProject()).filter(i => i.code === 'UNASSERTED_INVARIANT');
       // createUnit misses the second invariant; renameUnit misses both
       expect(found).toHaveLength(3);
     } finally { proj.cleanup(); }
@@ -438,14 +438,18 @@ describe('invariants inside a chained subproject — ids resolve through the mou
 
   it('an asserted invariant in the child anchors and resolves clean from the parent root', () => {
     buildChained(true);
-    expect(invariantIssues(validateSddTree())).toHaveLength(0);
+    expect(invariantIssues(validateProject())).toHaveLength(0);
   });
 
-  it('anchoring works through the mount: a silent child write yields exactly its own UNASSERTED_INVARIANT', () => {
+  it('a silent child write is the child\u2019s own UNASSERTED_INVARIANT — judged by its gate, never by the parent\u2019s', () => {
     buildChained(false);
-    const found = invariantIssues(validateSddTree());
+    // The parent's gate never judges a contained member's specs (stage 4).
+    expect(invariantIssues(validateProject())).toHaveLength(0);
+    setProjectRoot(path.join(rootDir, 'packages', 'inventory'));
+    invalidateSpecCache();
+    const found = invariantIssues(validateProject());
     expect(found).toHaveLength(1);
     expect(found[0].code).toBe('UNASSERTED_INVARIANT');
-    expect(found[0].specId).toBe('inventory::unit-registry-impl');
+    expect(found[0].specId).toBe('unit-registry-impl');
   });
 });

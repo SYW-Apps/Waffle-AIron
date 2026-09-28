@@ -14,9 +14,10 @@
  *  - CROSS_SUBSYSTEM_UNLISTED_CONSUMER (error): a component every one of
  *    whose publicInterfaces entries names consumers may be depended on only
  *    from those subsystems; one entry without the field publishes it to anyone.
- *  - CROSS_TREE_REF_UNRESOLVED (warning): a `::`/`super::` cross-tree
- *    dependsOn with no surface snapshot covering it; a stored snapshot in
- *    .wai/surfaces/ resolves it (and then the Adapter-crosser shape applies).
+ *  - EXTERNAL_CHECK_UNAVAILABLE (warning, project-boundaries): a deprecated
+ *    `::`/`super::` dependsOn that names no alias has nothing to be judged
+ *    against (never a pass); a stored foreign snapshot in .wai/surfaces/
+ *    resolves it (and then the Adapter-crosser shape applies).
  *  - INVALID_DEPENDENCY_REFERENCE (error): dependsOn names a non-existent
  *    local component.
  *  - PORTAL_WRITE_SHORTCUT (error): a Portal narrative `call`, or a Portal
@@ -414,15 +415,15 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // CROSS_TREE_REF_UNRESOLVED
+  // EXTERNAL_CHECK_UNAVAILABLE (the retired CROSS_TREE_REF_UNRESOLVED's case)
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'CROSS_TREE_REF_UNRESOLVED',
+    code: 'EXTERNAL_CHECK_UNAVAILABLE',
     severity: 'warning',
     anchoredTo: 'telemetry-export-adapter',
     expectFire: true,
     scenario:
-      'The telemetry export adapter depends on the observability hub\'s ingest portal in another project tree, and no surface snapshot in .wai/surfaces covers that reference.',
+      'The telemetry export adapter depends on the observability hub\'s ingest portal through a deprecated root-anchored form naming no alias, and no surface snapshot in .wai/surfaces covers it, so there is nothing to judge it against.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'clinic-operations', description: 'Operational telemetry and monitoring hooks of the clinic platform.' }],
@@ -438,10 +439,10 @@ export default [
     },
   }),
   defineRuleFixture({
-    code: 'CROSS_TREE_REF_UNRESOLVED',
+    code: 'EXTERNAL_CHECK_UNAVAILABLE',
     expectFire: false,
     reason:
-      'A stored surface snapshot for the observability-hub project declares the ingest portal, so the cross-tree edge validates against the DECLARED contract instead of falling back to the unresolved warning.',
+      'A stored surface snapshot for the observability-hub project declares the ingest portal, so the edge resolves and is judged against the DECLARED contract.',
     scenario:
       'The telemetry export adapter depends on the observability hub\'s ingest portal, and the vendored observability-hub surface snapshot declares that portal.',
     tree: {

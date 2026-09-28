@@ -6,8 +6,7 @@
 // here and resolves to the portal's function, not to a wrapper in the
 // validator's own file.
 //
-// findChainingParent is the unguarded walk: it answers for any root the caller
-// names. The validator gates on the request's reach itself before it calls it.
+// The owner's gate never walks up to a parent, so nothing here climbs.
 // ---------------------------------------------------------------------------
 export {
   loadSystemSpec,
@@ -21,8 +20,6 @@ export {
   loadProjectConfig,
   computeStateId,
   consumedContractInputs,
-  resolveChainingParent,
-  findChainingParent,
   settledSpecPaths,
   readLockRecord,
   getLoaderIssues,

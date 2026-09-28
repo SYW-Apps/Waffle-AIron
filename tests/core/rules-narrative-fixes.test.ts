@@ -116,12 +116,13 @@ describe('UNDECLARED_DEPENDENCY_CALL — surface-resolved cross-tree targets', (
     const run = clientRun([], [step]);
     const codes = run.issues.map(i => i.code);
     // The reference resolved against the pinned surface.
-    expect(codes).not.toContain('CROSS_TREE_REF_UNRESOLVED');
+    expect(codes).not.toContain('EXTERNAL_CHECK_UNAVAILABLE');
     expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
     const found = undeclared(run);
     expect(found.map(i => [i.severity, i.specId])).toEqual([['error', 'telemetry_client_impl']]);
     expect(found[0].message).toContain(phrase);
-    expect(found[0].surfaceResolved).toBe(true);
+    // A contract verdict on a resolved reference carries that resolution.
+    expect(found[0].resolution?.outcome).toBe('resolved');
   });
 
   it('stays silent when the caller declares every cross-tree collaborator it reaches', () => {
@@ -131,7 +132,8 @@ describe('UNDECLARED_DEPENDENCY_CALL — surface-resolved cross-tree targets', (
 
   it('judges no dependency on a cross-tree target no surface covers, as for a local target that does not resolve', () => {
     const run = clientRun([], [HUB_CALL, RELAY_DISPATCH], {});
-    expect(run.issues.map(i => i.code)).toContain('CROSS_TREE_REF_UNRESOLVED');
+    // Nothing to judge it against: unavailable, never a pass (stage 4 retired the cross-tree warning).
+    expect(run.issues.map(i => i.code)).toContain('EXTERNAL_CHECK_UNAVAILABLE');
     expect(undeclared(run)).toEqual([]);
   });
 });

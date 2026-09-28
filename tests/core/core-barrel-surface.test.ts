@@ -271,7 +271,7 @@ describe('the files that import from the barrel', () => {
  * Portal is exactly the accident the narrowing nearly caused.
  */
 const EMBEDDING_API = [
-  'validateSddTree',
+  'validateProject',
   'loadExtensions',
   'loadExtensionPacks',
   'loadProjectExtensions',

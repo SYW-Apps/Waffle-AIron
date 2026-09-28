@@ -6,7 +6,7 @@ import { ProjectNotInitializedError } from '../utils/errors.js';
 // the agent registry, and the legacy spec filenames a migration would rename.
 import { loadProjectConfig, loadRegistry, findLegacySpecFiles } from '../core/index.js';
 import type { CarriedDebt } from '../models/project.js';
-import { validateRegistry, validateProjectConfig, validateAsComplete, validateSddTree, computeGateStateId, type ValidationIssue } from '../core/validation.js';
+import { validateRegistry, validateProjectConfig, validateAsComplete, validateProject, computeGateStateId, type ValidationIssue } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
 // validate command (cli_validator_adapter)
@@ -26,10 +26,10 @@ import { validateRegistry, validateProjectConfig, validateAsComplete, validateSd
 // and every staleness check compares, republished as the adapter's forward to
 // the validator portal.
 //
-// cli_validator_adapter.validateSddTree — the full spec-tree conformance
+// cli_validator_adapter.validateProject — the full spec-tree conformance
 // gate, republished as the adapter's forward to the validator portal;
 // `wairon doctor` reports its error/warning/notice counts.
-export { validateAsComplete, computeGateStateId, validateSddTree };
+export { validateAsComplete, computeGateStateId, validateProject };
 
 export interface ValidateOptions {
   ci?: boolean; // treat warnings as errors (for CI pipelines); notices never fail
@@ -179,18 +179,13 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   const { pathExists: sddPathExists } = require('../utils/fs.js') as typeof import('../utils/fs.js');
   if (sddPathExists(sddPaths.specsSystem())) {
     logger.header('SDD Architectural Specs');
-    const sddResult = validateSddTree({
+    const sddResult = validateProject({
       rules: projectConfig.rules,
       projectType: projectConfig.projectType,
       scopeSubsystem: options.subsystem,
       recursive: options.recursive ?? true,
     });
-    if (sddResult.resolvedThrough) {
-      logger.info(
-        `Chained subproject — verified through the parent project at ${sddResult.resolvedThrough.root} ` +
-          `(mount "${sddResult.resolvedThrough.scope}").`,
-      );
-    }
+    if (sddResult.hint) logger.info(sddResult.hint);
     if (sddResult.issues.length === 0) {
       logger.success('Spec tree is valid and component type boundaries are enforced.');
     } else {

@@ -38,7 +38,7 @@ import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../
 import { checkSkillFreshness, exportSddSkills } from './adapters/skills.js';
 // A configuration's enabled targets are the project_config type's own behaviour.
 import { activeTargetTypes } from '../models/project.js';
-import { computeGateStateId, validateSddTree } from './validate.js';
+import { computeGateStateId, validateProject } from './validate.js';
 // The approver's own projection, taken from the models rather than from
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
 // a command has no business reaching a Store to get it.
@@ -201,7 +201,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     try {
       const cfg = loadProjectConfig();
       if (!cfg) throw new ProjectNotInitializedError();
-      const result = validateSddTree(cfg.rules, cfg.projectType);
+      const result = validateProject(cfg.rules, cfg.projectType);
       const errs = result.issues.filter((i) => i.severity === 'error').length;
       const warns = result.issues.filter((i) => i.severity === 'warning').length;
       // Notices are counted and named, but alone they leave the check passing.

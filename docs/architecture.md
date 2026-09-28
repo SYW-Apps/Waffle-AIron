@@ -47,7 +47,7 @@ to the artifacts the host AI tool consumes:
   scope.
 - **Generation is a single native-subagent render** per agent into each target's
   output directory. wairon does not do per-directory or session-based rendering.
-- **Conformance is centralized** in `core/validation.ts` (`validateSddTree`),
+- **Conformance is centralized** in `core/validation.ts` (`validateProject`),
   reused by both the `validate` command and the `sdd_validate_tree` MCP tool.
   `validateAsComplete` runs the same gate at full strictness for `lock`.
 - **Optionally hosted.** `wairon serve` (the `sdd_host` subsystem, in `server/`)

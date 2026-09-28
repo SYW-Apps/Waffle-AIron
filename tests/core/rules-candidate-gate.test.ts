@@ -5,7 +5,7 @@ import * as os from 'os';
 import { validateComponentCandidate } from '../../src/core/rules/candidate.js';
 import { formatCandidateRefusal } from '../../src/models/candidate.js';
 import { specScopedRules, registerBuiltinRules } from '../../src/core/rules/repository.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache, loadComponentSpec, saveComponentSpec } from '../../src/core/specs.js';
 // The whole-spec write, aliased: this file's own temp-project helper is also
 // called writeSpec, and it writes raw YAML rather than through the seam.
@@ -178,7 +178,7 @@ describe('the split is behaviour-preserving for a tree run', () => {
     writeSpec('component', 'rate-arbiter', 'schemaVersion: 1.0.0\nid: rate-arbiter\nname: RateArbiter\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nstatus: complete\ndurability: durable');
     invalidateSpecCache();
 
-    const result = validateSddTree();
+    const result = validateProject();
     const found = result.issues.map(i => i.code);
     expect(found).toContain('UNEXPECTED_PORTAL_FIELD');
     expect(found).toContain('DURABILITY_ON_NON_STORE');
@@ -204,7 +204,7 @@ describe('the split is behaviour-preserving for a tree run', () => {
     ].join('\n'));
     invalidateSpecCache();
 
-    const result = validateSddTree();
+    const result = validateProject();
     expect(result.issues.map(i => i.code)).toContain('MISSING_ENDPOINT');
     fs.rmSync(tempDir, { recursive: true, force: true });
   });

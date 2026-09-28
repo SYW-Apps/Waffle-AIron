@@ -72,7 +72,7 @@ import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 import { pinExternals, getExternalsStatus } from './adapters/surfaces.js';
-import { validateSddTree, validateRegistry } from './adapters/validator.js';
+import { validateProject, validateRegistry } from './adapters/validator.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -509,9 +509,19 @@ const validationIssueOutput = {
   draftContext: z.boolean().optional().describe(
     'True when the finding was raised against a draft/design spec — what the --ci gate waives.',
   ),
-  surfaceResolved: z.boolean().optional().describe(
-    'True when the finding was verified against a vendored surface snapshot, so it is a contract verdict '
-    + 'rather than a resolution failure.',
+  resolution: z.object({
+    outcome: z.enum(['resolved', 'missing', 'ambiguous', 'unavailable', 'forbidden']).describe('How the owner\'s gate resolved the reference, decided before the severity.'),
+    owner: z.string().describe('The referring project\'s id: the one project whose gate judges the reference.'),
+    callSite: z.string().describe('Where the reference is written: the referring spec and the position in it.'),
+    canonicalTarget: z.string().optional().describe('The target in producer-id form, `<producer id>::<public name>`.'),
+    inputDigest: z.string().optional().describe('The digest of the input the reference was judged against (a pin, or a member\'s live table).'),
+    reason: z.string().describe('One sentence saying why the outcome is what it is.'),
+    importedVia: z.string().optional().describe('For a bare name resolved through a `use` import: the alias that supplied it.'),
+  }).optional().describe(
+    'On a finding about a cross-project reference: how the owner\'s gate resolved it, decided before the severity.',
+  ),
+  project: z.string().optional().describe(
+    'In a family run: the key of the project whose gate the finding belongs to (\'\' for the family root).',
   ),
 } satisfies Record<keyof ValidationIssue, z.ZodTypeAny>;
 
@@ -523,12 +533,9 @@ const validateTreeOutput = {
     'Every finding of severity notice: reported, never a failure — they never make the tree invalid and '
     + 'never fail `wairon validate --ci`.',
   ),
-  resolvedThrough: z.object({
-    root: z.string().describe('The top root that was validated.'),
-    scope: z.string().describe('The mount chain the verdict was scoped to.'),
-  }).optional().describe(
-    'Present when a chained subproject\'s verdict was resolved through its parent; absent when the tree '
-    + 'was validated on its own.',
+  hint: z.string().optional().describe(
+    'Present when the project declares externals: they were judged against their pins alone, and '
+    + '`wairon validate --family` composes them against their live producers.',
   ),
   ...staleServerOutput,
 };
@@ -2002,7 +2009,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // A missing config errored before (the loader's loadProjectConfig threw);
         // keep that outcome now that the adapter reads null instead of throwing.
         if (!config) throw new ProjectNotInitializedError();
-        const result = validateSddTree({
+        const result = validateProject({
           rules: config.rules,
           projectType: config.projectType,
           scopeSubsystem: subsystem,
@@ -2015,7 +2022,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           errors: result.issues.filter((i) => i.severity === 'error'),
           warnings: result.issues.filter((i) => i.severity === 'warning'),
           notices: result.issues.filter((i) => i.severity === 'notice'),
-          ...(result.resolvedThrough ? { resolvedThrough: result.resolvedThrough } : {}),
+          ...(result.hint ? { hint: result.hint } : {}),
         });
       } catch (e) {
         return errText(String(e));

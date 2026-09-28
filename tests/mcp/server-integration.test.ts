@@ -247,7 +247,7 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     try { fs.rmSync(projDir, { recursive: true, force: true }); } catch { /* windows file locks */ }
   });
 
-  it('externalizes then internalizes a subsystem, rewriting the cross-ref, with no new errors', async () => {
+  it('externalizes then internalizes a subsystem, rewriting the cross-ref; the one new error is the unexported member', async () => {
     const before = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_validate_tree', arguments: {} })));
     expect(errorsOf(before)).toEqual([]);
 
@@ -265,7 +265,10 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     expect(adapterExt.dependsOn).toEqual(['core::core-portal']);
 
     const afterExt = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_validate_tree', arguments: {} })));
-    expect(errorsOf(afterExt)).toEqual([]); // ref rewrite kept it error-free
+    // The ref rewrite resolves; the moved portal is not yet exported from the
+    // member's L0, which stage 4 escalates to an error (EXTERNAL_NOT_EXPORTED).
+    expect(errorsOf(afterExt).map((e: { code: string; specId?: string }) => `${e.code} @${e.specId}`))
+      .toEqual(['EXTERNAL_NOT_EXPORTED @cli-core-adapter']);
 
     // --- internalize ---
     unwrapText(await client.callTool({ name: 'sdd_internalize_member', arguments: { alias: 'core' } }));

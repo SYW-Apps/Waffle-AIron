@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { carriedDebtSummary, isCiDraftWaivable, validateAsComplete } from '../../src/commands/validate.js';
 import type { CarriedDebt } from '../../src/models/project.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import type { ValidationIssue } from '../../src/core/validation.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
@@ -183,7 +183,7 @@ describe('--ci failure decision over a real tree (draft-waiver end to end)', () 
   it('a fresh draft tree passes --ci: DRAFT_SUBSYSTEM_WARNING fires but is waived', () => {
     const proj = createDraftSubsystemOnlyProject();
     try {
-      const result = validateSddTree();
+      const result = validateProject();
       const draftWarn = result.issues.find((i) => i.code === 'DRAFT_SUBSYSTEM_WARNING');
       // The rule still fires and is still surfaced — the waiver only
       // classifies the failure decision, it does not silence the rule.
@@ -203,7 +203,7 @@ describe('--ci failure decision over a real tree (draft-waiver end to end)', () 
     // is real unfinished work — the gate stays strict.
     const proj = createDraftPortalProject();
     try {
-      const result = validateSddTree();
+      const result = validateProject();
       const missing = result.issues.find((i) => i.code === 'MISSING_ENDPOINT');
       expect(missing?.severity).toBe('warning');
       expect(missing?.draftContext).toBe(true);
@@ -223,7 +223,7 @@ describe('validateAsComplete (the lock gate forwarder)', () => {
   it('surfaces draft-hidden completeness errors that a normal validate does not', () => {
     const proj = createDraftPortalProject();
     try {
-      const asDraft = validateSddTree();
+      const asDraft = validateProject();
       expect(asDraft.issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(false);
 
       const asComplete = validateAsComplete();
@@ -245,7 +245,7 @@ describe('validateAsComplete (the lock gate forwarder)', () => {
 
       // Later reads still see the tree at its real statuses.
       invalidateSpecCache();
-      expect(validateSddTree().issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(false);
+      expect(validateProject().issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(false);
     } finally {
       fs.rmSync(proj.tempDir, { recursive: true, force: true });
     }

@@ -7,7 +7,7 @@ import { installPackFromDirectory, uninstallPack, resolveInstalledPack } from '.
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { expandSource } from '../../src/commands/packs.js';
 import { defaultPackSelections } from '../../src/core/extensions.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { loadProjectConfig as validatorLoadProjectConfig } from '../../src/core/adapters/validator-core.js';
 import { loadProjectConfig } from '../../src/core/index.js';
 
@@ -196,7 +196,7 @@ describe('an unresolvable selection fails LOUDLY, under a code that names the re
 
     // The end that matters: `validate` refuses. A gate running without the
     // doctrine the project declared must never look clean.
-    const result = validateSddTree();
+    const result = validateProject();
     const failure = result.issues.find((i) => i.code === 'PACK_NOT_INSTALLED');
     expect(failure).toBeDefined();
     expect(failure?.severity).toBe('error');
@@ -397,7 +397,7 @@ describe('enforceReproducibility finally enforces something (A6)', () => {
     invalidateSpecCache();
     // Pass rules exactly as the validate command and the MCP tool do — otherwise
     // the project's opt-out never reaches the rule.
-    return validateSddTree({ rules: loadProjectConfig()?.rules }).issues.map((i) => i.code);
+    return validateProject({ rules: loadProjectConfig()?.rules }).issues.map((i) => i.code);
   }
 
   it('warns on a floating selection — it resolves off whatever this machine has', () => {
@@ -452,7 +452,7 @@ describe('enforceReproducibility finally enforces something (A6)', () => {
     vi.spyOn(process, 'cwd').mockReturnValue(dir);
     invalidateSpecCache();
 
-    const codes = validateSddTree().issues.map((i) => i.code);
+    const codes = validateProject().issues.map((i) => i.code);
     expect(codes).not.toContain('UNPINNED_PACK_SELECTION');
     expect(codes).not.toContain('PACK_SOURCE_UNFETCHABLE');
   });

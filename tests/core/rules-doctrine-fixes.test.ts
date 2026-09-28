@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ function createTempProject() {
     validate: (): Issue[] => {
       vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
       try {
-        return validateSddTree().issues as Issue[];
+        return validateProject().issues as Issue[];
       } finally {
         invalidateSpecCache();
         vi.restoreAllMocks();

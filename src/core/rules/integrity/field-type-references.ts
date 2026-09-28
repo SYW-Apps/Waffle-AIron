@@ -26,10 +26,11 @@ export const fieldTypeReferencesRule: SddRule = {
         const refs = fieldTypeRefs(t, field.type);
         for (const ref of refs) {
           if (!ctx.isTypeResolved(ref, new Set())) {
+            const hint = ctx.importHint(ref);
             ctx.addIssue(
               'error',
               'UNDEFINED_TYPE_REFERENCE',
-              `Type "${t.id}" field "${field.name}" references undefined type "${ref}" in "${field.type}".`,
+              `Type "${t.id}" field "${field.name}" references undefined type "${ref}" in "${field.type}".${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}`,
               t.id,
               isDraftCtx,
             );

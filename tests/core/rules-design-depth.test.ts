@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree, type ValidationIssue } from '../../src/core/validation.js';
+import { validateProject, type ValidationIssue } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { buildRuleContext } from '../../src/core/rules/index.js';
 import { knownIssueCodes, registerBuiltinRules, registerPackRules } from '../../src/core/rules/repository.js';
@@ -99,7 +99,7 @@ describe('designDepth gates expectation checks', () => {
     interfacesOnlyTree(proj);
     proj.activate();
     try {
-      const found = codes(validateSddTree());
+      const found = codes(validateProject());
       expect(found).toContain('UNUSED_COMPONENT'); // no narrative edges reach it
     } finally { proj.cleanup(); }
   });
@@ -109,7 +109,7 @@ describe('designDepth gates expectation checks', () => {
     interfacesOnlyTree(proj);
     proj.activate();
     try {
-      const found = codes(validateSddTree({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) }));
+      const found = codes(validateProject({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) }));
       for (const gated of ['UNUSED_METHOD', 'UNUSED_COMPONENT', 'MISSING_NARRATIVE', 'MISSING_SOURCE_PATH', 'MISSING_IMPLEMENTATION_METHOD', 'INTENT_FLOOR']) {
         expect(found).not.toContain(gated);
       }
@@ -127,7 +127,7 @@ describe('designDepth gates expectation checks', () => {
     ].join('\n'));
     proj.activate();
     try {
-      const found = codes(validateSddTree({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) }));
+      const found = codes(validateProject({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) }));
       expect(found).toContain('MALFORMED_FLOW_STEP');
     } finally { proj.cleanup(); }
   });
@@ -138,7 +138,7 @@ describe('designDepth gates expectation checks', () => {
     interfacesOnlyTree(proj, 'deep', 'designDepth: narratives');
     proj.activate();
     try {
-      const issues = validateSddTree({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) })
+      const issues = validateProject({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) })
         .issues.filter(i => i.code === 'UNUSED_COMPONENT');
       const ids = issues.map(i => i.specId);
       expect(ids).toContain('orch-deep');
@@ -154,7 +154,7 @@ describe('designDepth gates expectation checks', () => {
     proj.contract('front-portal', ['handle']);
     proj.activate();
     try {
-      expect(codes(validateSddTree({ rules: RulesConfigSchema.parse({ designDepth: 'components' }) }))).not.toContain('MISSING_ENDPOINT');
+      expect(codes(validateProject({ rules: RulesConfigSchema.parse({ designDepth: 'components' }) }))).not.toContain('MISSING_ENDPOINT');
     } finally { proj.cleanup(); }
 
     const deep = createTempProject();
@@ -164,7 +164,7 @@ describe('designDepth gates expectation checks', () => {
     deep.contract('front-portal', ['handle']);
     deep.activate();
     try {
-      expect(codes(validateSddTree())).toContain('MISSING_ENDPOINT');
+      expect(codes(validateProject())).toContain('MISSING_ENDPOINT');
     } finally { deep.cleanup(); }
   });
 

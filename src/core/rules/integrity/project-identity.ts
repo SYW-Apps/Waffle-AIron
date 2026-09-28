@@ -21,12 +21,11 @@ import type { ProjectIdentity } from '../../../models/index.js';
 export const projectIdentityRule: SddRule = {
   name: 'project-identity',
   description:
-    "A project is keyed on its id, so the id must be declared, well-formed, stable and its own: a project that declares none answers to its display name slugified until it writes one (PROJECT_ID_DEFAULTED — for a member of the family, the finding names its alias as the id to declare), a project whose name yields no id or whose declared id breaks the grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), two members of one family that resolve to one id are one project declared twice (PROJECT_ID_COLLISION — a project is contained once; a project used in two roles is modelled as consumption, one member and several consumers, never as two copies of its tree), and an id that differs from the one the lock approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). The family half reads the project graph's identity problems.",
+    "The bound project is keyed on its id, so the id must be declared, well-formed, stable and its own: a project that declares none answers to its display name slugified until it writes one (PROJECT_ID_DEFAULTED), a project whose name yields no id or whose declared id breaks the grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), and an id that differs from the one the lock approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). It judges the bound project's own identity only. The family half — a member with a defaulted id (named with its alias as the id to declare), a member with no id, and two members resolving to one id — is a family check since stage 4 (family_validator.checkMembers), which reads the family root's graph.",
   codes: [
     { code: 'PROJECT_ID_AMBIGUOUS', defaultSeverity: 'warning', summary: "Project has no usable id: its name yields no slug, or its declared id breaks the grammar" },
     { code: 'PROJECT_ID_CHANGED', defaultSeverity: 'error', summary: "Project id differs from the id the lock approved" },
     { code: 'PROJECT_ID_DEFAULTED', defaultSeverity: 'notice', summary: "Project declares no id; it answers to one derived from its display name" },
-    { code: 'PROJECT_ID_COLLISION', defaultSeverity: 'error', summary: "Two members of one family resolve to one project id" },
   ],
   check(ctx) {
     // Step 1: the identity the validator resolved.

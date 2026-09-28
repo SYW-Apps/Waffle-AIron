@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateRegistry, validateProjectConfig, validateSddTree, validateAsComplete } from '../../src/core/validation.js';
+import { validateRegistry, validateProjectConfig, validateProject, validateAsComplete } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { createEmptyRegistry } from '../../src/models/registry.js';
 import { createAgentRecord } from '../../src/models/agent.js';
@@ -128,7 +128,7 @@ describe('validateProjectConfig', () => {
   });
 });
 
-describe('validateSddTree', () => {
+describe('validateProject', () => {
   function createTempProject() {
     invalidateSpecCache();
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-sdd-test-'));
@@ -246,7 +246,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(true);
       expect(res.issues).toHaveLength(0);
     } finally {
@@ -275,14 +275,14 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.activate();
     try {
       // A typo'd / non-existent scope must fail loudly, not validate "clean".
-      const missing = validateSddTree({ scopeSubsystem: 'does-not-exist' });
+      const missing = validateProject({ scopeSubsystem: 'does-not-exist' });
       expect(missing.valid).toBe(false);
       const err = missing.issues.find(i => i.code === 'SUBSYSTEM_NOT_FOUND');
       expect(err).toBeDefined();
       expect(err!.message).toContain('sub-a'); // lists the known subsystems
 
       // A real subsystem scope still validates.
-      const ok = validateSddTree({ scopeSubsystem: 'sub-a' });
+      const ok = validateProject({ scopeSubsystem: 'sub-a' });
       expect(ok.issues.find(i => i.code === 'SUBSYSTEM_NOT_FOUND')).toBeUndefined();
     } finally {
       proj.cleanup();
@@ -347,7 +347,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'REPOSITORY_CONTAINMENT')).toBe(true);
       expect(res.issues.some(i => i.code === 'BLOCK_OWNS_MEMBERS')).toBe(true);
@@ -370,7 +370,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'orch', `\nid: orch\nname: Orchestrator\ndescription: workflow\nsubsystem: sub-a\ncomponentType: Orchestrator\nowns: []\ndependsOn: [repo, repo-store]\n${meta}\n`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const vis = res.issues.filter(i => i.code === 'VISIBILITY_VIOLATION');
       // Intra-group member deps (store->adapter, registry->store, index->store) must NOT be flagged.
       expect(vis.some(i => i.specId === 'repo-store' || i.specId === 'repo-registry' || i.specId === 'repo-index')).toBe(false);
@@ -405,7 +405,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'SCHEMA_VALIDATION_ERROR')).toBe(true);
       const schemaErr = res.issues.find(i => i.code === 'SCHEMA_VALIDATION_ERROR');
@@ -508,7 +508,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'UNDECLARED_DEPENDENCY_CALL')).toBe(true);
       const depErr = res.issues.find(i => i.code === 'UNDECLARED_DEPENDENCY_CALL');
@@ -563,7 +563,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'CIRCULAR_DEPENDENCY')).toBe(true);
       const cycleErr = res.issues.find(i => i.code === 'CIRCULAR_DEPENDENCY');
@@ -608,7 +608,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'MISSING_PORTAL_TYPE')).toBe(true);
     } finally {
@@ -665,7 +665,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'MISSING_ENDPOINT')).toBe(true);
     } finally {
@@ -724,7 +724,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'ENDPOINT_TRANSPORT_MISMATCH')).toBe(true);
       expect(res.issues.some(i => i.code === 'MISSING_ENDPOINT')).toBe(false);
@@ -783,7 +783,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'MISSING_ENDPOINT')).toBe(false);
       expect(res.issues.some(i => i.code === 'ENDPOINT_TRANSPORT_MISMATCH')).toBe(false);
     } finally {
@@ -841,7 +841,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       // Since it's in draft mode, it should be valid (errors downgraded to warnings)
       expect(res.valid).toBe(true);
       expect(res.issues.some(i => i.code === 'MISSING_ENDPOINT' && i.severity === 'warning')).toBe(true);
@@ -899,7 +899,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
 
       const draftUnused = res.issues.find(i => i.code === 'UNUSED_COMPONENT' && i.specId === 'draft-store');
       const completeUnused = res.issues.find(i => i.code === 'UNUSED_COMPONENT' && i.specId === 'complete-store');
@@ -968,7 +968,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.activate();
     try {
       // 1. By default, it fails with error severity
-      const resDefault = validateSddTree();
+      const resDefault = validateProject();
       expect(resDefault.valid).toBe(false);
       expect(resDefault.issues.some(i => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(true);
 
@@ -979,7 +979,7 @@ updatedAt: '2026-06-10T22:00:00Z'
           'MISSING_ENDPOINT': 'warning' as const
         }
       };
-      const resWarning = validateSddTree(rulesWithWarningOverride);
+      const resWarning = validateProject(rulesWithWarningOverride);
       expect(resWarning.valid).toBe(true);
       expect(resWarning.issues.some(i => i.code === 'MISSING_ENDPOINT' && i.severity === 'warning')).toBe(true);
 
@@ -990,7 +990,7 @@ updatedAt: '2026-06-10T22:00:00Z'
           'MISSING_ENDPOINT': 'off' as const
         }
       };
-      const resOff = validateSddTree(rulesWithOffOverride);
+      const resOff = validateProject(rulesWithOffOverride);
       expect(resOff.valid).toBe(true);
       expect(resOff.issues.some(i => i.code === 'MISSING_ENDPOINT')).toBe(false);
     } finally {
@@ -1014,7 +1014,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       // It should successfully parse and not throw MISSING_SYSTEM_SPEC or SCHEMA_VALIDATION_ERROR for this
       expect(res.issues.some(i => i.code === 'SCHEMA_VALIDATION_ERROR')).toBe(false);
       expect(res.issues.some(i => i.code === 'MISSING_SYSTEM_SPEC')).toBe(false);
@@ -1069,7 +1069,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP')).toBe(true);
     } finally {
@@ -1116,7 +1116,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'store-b', comp('store-b', 'sub-b', 'Store'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_NON_ADAPTER')).toBe(true);
       expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_PRIVATE_ACCESS')).toBe(true);
@@ -1135,7 +1135,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'portal-b', comp('portal-b', 'sub-b', 'Portal', { portalType: 'HTTP_API' }));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code.startsWith('CROSS_SUBSYSTEM_'))).toBe(false);
       expect(res.valid).toBe(true);
     } finally {
@@ -1154,7 +1154,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL')).toBe(true);
       // It IS published, so this is not a private-access violation.
@@ -1173,7 +1173,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'store-b', comp('store-b', 'sub-b', 'Store'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_PRIVATE_ACCESS')).toBe(true);
       expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_NON_ADAPTER')).toBe(false);
     } finally {
@@ -1188,7 +1188,7 @@ updatedAt: '2026-06-10T22:00:00Z'
       'publicInterfaces:\n  - type: MessageBus\n    details: queue\n'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_UNBOUND')).toBe(true);
     } finally {
@@ -1204,7 +1204,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(false);
       expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_TYPE_MISMATCH')).toBe(true);
     } finally {
@@ -1220,7 +1220,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'obs-b', comp('obs-b', 'sub-b', 'Observer'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code.startsWith('PUBLIC_INTERFACE_'))).toBe(false);
       expect(res.valid).toBe(true);
     } finally {
@@ -1236,7 +1236,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const issue = res.issues.find(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED');
       expect(issue).toBeDefined();
       expect(issue!.severity).toBe('warning');
@@ -1253,7 +1253,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'obs-b', comp('obs-b', 'sub-b', 'Observer'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED')).toBe(false);
     } finally {
       proj.cleanup();
@@ -1268,7 +1268,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED')).toBe(false);
     } finally {
       proj.cleanup();
@@ -1330,7 +1330,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toBe(true);
     } finally {
       proj.cleanup();
@@ -1393,7 +1393,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toBe(false);
     } finally {
       proj.cleanup();
@@ -1455,7 +1455,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toBe(true);
     } finally {
       proj.cleanup();
@@ -1518,7 +1518,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       // Should flag shared::WafflerError as undefined, but sub-a::node_id and string should pass
       expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(true);
       const issue = res.issues.find(i => i.code === 'UNDEFINED_TYPE_REFERENCE');
@@ -1596,7 +1596,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
       expect(res.valid).toBe(true);
     } finally {
@@ -1625,7 +1625,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const typeIssues = res.issues.filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE');
       expect(typeIssues.length).toBe(2);
       expect(typeIssues.some(i => i.message.includes('NonExistentType'))).toBe(true);
@@ -1656,7 +1656,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
       expect(res.valid).toBe(true);
     } finally {
@@ -1684,7 +1684,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
       expect(res.valid).toBe(true);
     } finally {
@@ -1714,7 +1714,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
       expect(res.valid).toBe(true);
     } finally {
@@ -1743,7 +1743,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toBe(false);
       expect(res.valid).toBe(true);
     } finally {
@@ -1776,7 +1776,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT')).toBe(true);
       expect(res.valid).toBe(false);
     } finally {
@@ -1816,7 +1816,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const issue = res.issues.find(i => i.code === 'MISSING_IMPLEMENTATION_METHOD');
       expect(issue).toBeDefined();
       expect(issue!.severity).toBe('error');
@@ -1984,7 +1984,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(true);
 
       const unusedCompIssue = res.issues.find(i => i.code === 'UNUSED_COMPONENT');
@@ -2176,7 +2176,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(true);
 
       const unusedIssues = res.issues.filter(i => i.code === 'UNUSED_METHOD' || i.code === 'UNUSED_COMPONENT');
@@ -2255,7 +2255,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     writeMutualDepFixture(proj, '');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.valid).toBe(true); // warning, not error — both directions use the sanctioned shape
       const mutual = res.issues.find(i => i.code === 'MUTUAL_SUBSYSTEM_DEPENDENCY');
       expect(mutual).toBeDefined();
@@ -2274,7 +2274,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.find(i => i.code === 'MUTUAL_SUBSYSTEM_DEPENDENCY')).toBeUndefined();
       expect(res.issues.find(i => i.code === 'UNUSED_TRUSTED_LINK')).toBeUndefined();
       expect(res.issues.find(i => i.code === 'INVALID_TRUSTED_LINK')).toBeUndefined();
@@ -2318,7 +2318,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const invalid = res.issues.find(i => i.code === 'INVALID_TRUSTED_LINK');
       expect(invalid).toBeDefined();
       expect(invalid!.severity).toBe('error');
@@ -2379,7 +2379,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const god = res.issues.find(i => i.code === 'GOD_COMPONENT');
       expect(god).toBeDefined();
       expect(god!.severity).toBe('warning');
@@ -2440,7 +2440,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const foreign = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_BUILTIN');
       // Vec is a Rust marker → flagged in a TypeScript system; Promise is native → not flagged.
       expect(foreign).toHaveLength(1);
@@ -2523,7 +2523,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const undef = res.issues.filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE');
       // Only GhostType (from structured params) is flagged; WeirdProseToken in
       // the prose signature is never tokenized because params are authoritative.
@@ -2601,7 +2601,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.activate();
     try {
       // A normal validate sees the draft and warns about it.
-      const normal = validateSddTree();
+      const normal = validateProject();
       expect(normal.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING' && i.specId === 'comp-a')).toBe(true);
 
       // The as-complete gate must see NO drafts. Validation starts by
@@ -2612,7 +2612,7 @@ updatedAt: '2026-06-10T22:00:00Z'
       expect(asComplete.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING')).toBe(false);
 
       // And the flip must not leak into the shared cache afterwards.
-      const after = validateSddTree();
+      const after = validateProject();
       expect(after.issues.some(i => i.code === 'DRAFT_COMPONENT_WARNING' && i.specId === 'comp-a')).toBe(true);
     } finally {
       proj.cleanup();

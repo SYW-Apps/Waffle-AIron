@@ -557,25 +557,22 @@ export function buildImplementationMethods(ctx: RuleContext): ResolvedMethod[] {
 type EdgeReachResolved = 'internal' | 'cross-subsystem';
 
 /**
- * A ref that names no component in this tree. Only a ref authored to LEAVE the
- * tree — an explicit cross-tree form, or one the loader collapsed at this root
- * from inside a chained mount — is resolved against the stored surface
- * snapshots, and only a HIT changes anything: from this root the whole tree is
- * loaded, so a collapsed ref no snapshot covers is genuinely missing. Snapshots
- * that answer with different contracts decide nothing either way — the
- * ambiguity is the verdict.
+ * A ref that names no component in this tree. A ref that leaves the project
+ * carries the owner's resolution (resolveCrossProject): resolved, it is judged
+ * on the contract entry it lands on — a declared external's pin or a foreign
+ * snapshot (`surface`); foreign snapshots that disagree make it `ambiguous`;
+ * any other outcome is `cross-project`, project-boundaries' single finding. A
+ * local id that names nothing is `missing`, the typo it always was.
  *
  * The edge is never marked retired: a reference finding stands whatever
  * declares it, retired or not.
  */
 function offTreeEdge(ctx: RuleContext, from: ComponentSpec, ref: string, fromDraft: boolean): DependencyEdge {
   const base = { from, ref, retired: false, draftContext: fromDraft, licensed: false };
-  const external = ctx.isExternalNamespaceRef(ref);
-  if (external || ctx.isCollapsedCrossTreeRef(ref, from.subsystem)) {
-    const surface = ctx.resolveSurfaceRef(ref, from.subsystem);
-    if (surface.kind === 'ambiguous') return { ...base, reach: 'ambiguous', surface };
-    if (surface.kind === 'resolved') return { ...base, reach: 'surface', surface };
-    if (external) return { ...base, reach: 'unpinned' };
-  }
-  return { ...base, reach: 'missing' };
+  const resolution = ctx.resolveCrossProject(from.id, 'dependsOn', ref);
+  if (!resolution) return { ...base, reach: 'missing' };
+  const surface = ctx.resolveSurfaceRef(ref, from.subsystem);
+  if (surface.kind === 'ambiguous' && resolution.outcome === 'ambiguous') return { ...base, reach: 'ambiguous', surface, resolution };
+  if (surface.kind === 'resolved' && resolution.outcome === 'resolved') return { ...base, reach: 'surface', surface, resolution };
+  return { ...base, reach: 'cross-project', resolution };
 }

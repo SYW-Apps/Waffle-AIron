@@ -20,7 +20,7 @@ import {
 import { externalizeSubsystem, internalizeMember } from '../../src/core/provision.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { writeLegacyMount } from '../helpers/legacy-mount.js';
-import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, TypeSpec } from '../../src/models/index.js';
 
@@ -305,7 +305,7 @@ function family(): { root: string; childDir: string } {
 function verdict(at: string): ValidationResult {
   invalidateSpecCache();
   setProjectRoot(at);
-  return validateSddTree();
+  return validateProject();
 }
 
 /** Findings on whether a reference resolves, and on the edge it resolves to, as `CODE @specId` with `strip` removed. */
@@ -381,17 +381,23 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     expect(stored(fam.childDir, 'billing/types/invoice.yaml').fields.map((f: any) => f.type)).toEqual(['money']);
   });
 
-  it('from the child root, with the parent on disk, the same references resolve through it', () => {
+  it('from the child root the references into the parent are judged against its pins alone — unpinned, unavailable', () => {
     const fam = family();
     root = fam.root;
     externalizeSubsystem('billing', 'packages/billing');
 
     const fromChild = verdict(fam.childDir);
 
-    expect(fromChild.resolvedThrough).toEqual({ root: path.resolve(fam.root), scope: 'billing' });
-    // The parent is declared as the member's external; bound at the member it is
-    // found only once pinned, a notice about configuration, not a reference.
-    expect(referenceFindings(fromChild).filter((f) => !f.startsWith('EXTERNAL_UNRESOLVED'))).toEqual([]);
+    // Stage 4: nothing is resolved through the parent. The member declares the
+    // parent as an external; until it is pinned, its references into it have
+    // nothing to be judged against — never a pass, never a typo-grade error.
+    expect(fromChild.issues.some((i) => i.code === 'EXTERNAL_CHECK_UNAVAILABLE')).toBe(true);
+    // The one exception is the deprecated root-anchored `::shared_portal`: a
+    // leading `::` reads from whichever root loads it, so from the member's own
+    // root it names the member's own (absent) spec — the reason it is
+    // deprecated, and `doctor --fix` rewrites it.
+    expect(fromChild.issues.filter((i) => i.code === 'INVALID_DEPENDENCY_REFERENCE' || i.code === 'INVALID_TARGET_COMPONENT_REFERENCE').map((i) => i.specId))
+      .toEqual(['billing_audit']);
   });
 
   it('internalizing afterwards restores every reference as the parent wrote it', () => {

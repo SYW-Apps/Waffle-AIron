@@ -6,7 +6,7 @@ import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { seedDemoTree, DEMO_SYSTEM_NAME } from '../../src/core/demo-seed.js';
 import { buildCanvasModel, type CanvasModel } from '../../src/core/canvas.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { runHostDemo } from '../../src/commands/host.js';
 import { existingProjectRoot } from '../../src/server/projects.js';
 
@@ -85,7 +85,7 @@ describe('demo-project seeder', () => {
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     const result = runWithProjectRoot(proj, () => {
       seedDemoTree();
-      return validateSddTree();
+      return validateProject();
     });
     expect(result.issues.filter((i) => i.code === 'STEREOTYPE_RETIRED')).toEqual([]);
     expect(result.issues.filter((i) => i.code === 'DEPENDENCY_CLASS_VIOLATION')).toEqual([]);

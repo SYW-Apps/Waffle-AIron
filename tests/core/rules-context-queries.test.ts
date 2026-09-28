@@ -6,8 +6,8 @@ import type { ProjectFamily, SurfaceContractEntry, SurfaceSnapshot } from '../..
 import type { ValidationIssue } from '../../src/core/validation.js';
 
 // ---------------------------------------------------------------------------
-// The rule context's shared queries (rule_context): chained-mount and
-// cross-tree reference analysis, surface-snapshot resolution, the contract
+// The rule context's shared queries (rule_context): contained-member
+// ownership, surface-snapshot and pin resolution, the contract
 // method enumeration, the effective rule configs, the builtin type vocabulary,
 // and the round-trip findings and known codes the caller gathers.
 // ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ const intf = (id: string, component: string, methodNames: string[]) =>
 function family(members: [string, string][], owners: [string, string][] = []): ProjectFamily {
   const node = (namespace: string, parent?: string) => ({
     namespace, idSource: 'declared' as const, ...(parent !== undefined ? { parent } : {}),
-    legacyMount: null, hasSystem: true, directory: `/${namespace}`, members: [], aliases: new Map<string, string>(), externals: [],
+    legacyMount: null, hasSystem: true, directory: `/${namespace}`, members: [], aliases: new Map<string, string>(), externals: [], imports: [],
   });
   return {
     nodes: [node(''), ...members.map(([key, parent]) => node(key, parent))],
@@ -72,42 +72,6 @@ describe('rule_context.isInChainedSubproject', () => {
     expect(ctx.isInChainedSubproject('app')).toBe(false);
     expect(ctx.isInChainedSubproject('plain::nested')).toBe(false);
     expect(ctx.isInChainedSubproject('unknown')).toBe(false);
-  });
-});
-
-describe('rule_context.isExternalNamespaceRef', () => {
-  const ctx = context({ subsystems: [sub('billing')] });
-
-  it('holds for the explicit ::x and super::x forms', () => {
-    expect(ctx.isExternalNamespaceRef('::shared::error-type')).toBe(true);
-    expect(ctx.isExternalNamespaceRef('super::sibling')).toBe(true);
-  });
-
-  it('holds for a qualified id whose leading segment is not a subsystem of this tree', () => {
-    expect(ctx.isExternalNamespaceRef('waffler_core::blueprints-portal')).toBe(true);
-  });
-
-  it('does not hold for a bare id, or an id qualified by a subsystem of this tree', () => {
-    expect(ctx.isExternalNamespaceRef('invoice-store')).toBe(false);
-    expect(ctx.isExternalNamespaceRef('billing::invoice-store')).toBe(false);
-  });
-});
-
-describe('rule_context.isCollapsedCrossTreeRef', () => {
-  const ctx = context({
-    subsystems: [sub('kid::core'), sub('grand::core'), sub('app')],
-    projectFamily: family([['kid', ''], ['grand', 'kid']], [['kid::core', 'kid'], ['grand::core', 'grand'], ['app', '']]),
-  });
-
-  it('holds for a reference made inside a member that the scan bound into another project', () => {
-    expect(ctx.isCollapsedCrossTreeRef('invoice-portal', 'kid::core')).toBe(true);
-    expect(ctx.isCollapsedCrossTreeRef('kid::x', 'grand::core')).toBe(true);
-  });
-
-  it('does not hold inside the member itself, for the member key, or outside every member', () => {
-    expect(ctx.isCollapsedCrossTreeRef('kid::store', 'kid::core')).toBe(false);
-    expect(ctx.isCollapsedCrossTreeRef('kid', 'kid::core')).toBe(false);
-    expect(ctx.isCollapsedCrossTreeRef('invoice-portal', 'app')).toBe(false);
   });
 });
 
@@ -154,23 +118,23 @@ describe('rule_context.resolveSurfaceRef', () => {
     expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal'))).toBe(first);
   });
 
-  it("consults the enclosing mounts' snapshots first, nearest first, and only for references made inside them", () => {
+  it("looks an alias up in that external's pin first, and never in a member's snapshots (the mount pool is retired)", () => {
     const root = snapshot('Root', [entry('portal', ['root'])]);
-    const kid = snapshot('Kid', [entry('portal', ['kid'])]);
-    const grand = snapshot('Grand', [entry('portal', ['grand'])]);
+    const pinned = snapshot('Billing', [entry('portal', ['pinned'])]);
+    const graph = family([['kid', '']], [['kid::core', 'kid'], ['app', '']]);
+    graph.nodes[0].imports = [{ alias: 'billing', section: 'externals', use: [] }];
     const ctx = context({
-      subsystems: [sub('kid::core'), sub('grand::core'), sub('app')],
-      projectFamily: family([['kid', ''], ['grand', 'kid']], [['kid::core', 'kid'], ['grand::core', 'grand'], ['app', '']]),
+      subsystems: [sub('kid::core'), sub('app')],
+      projectFamily: graph,
       surfaceSnapshots: [root],
-      mountSurfaceSnapshots: [
-        { namespace: 'kid', snapshots: [kid] },
-        { namespace: 'grand', snapshots: [grand] },
-      ],
+      pinnedExternals: [{ alias: 'billing', project: 'billing', snapshot: pinned }],
     });
-    expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal', 'kid::core'))).toBe(kid);
-    expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal', 'grand::core'))).toBe(grand);
+    expect(resolvedSnapshot(ctx.resolveSurfaceRef('billing::portal', 'app'))).toBe(pinned);
+    // Any other foreign reference: the bound root's own snapshots, from every subsystem alike.
+    expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal', 'kid::core'))).toBe(root);
     expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal', 'app'))).toBe(root);
-    expect(resolvedSnapshot(ctx.resolveSurfaceRef('super::portal'))).toBe(root);
+    // A pinned alias that does not expose the name is unresolved — it never borrows a foreign snapshot's.
+    expect(ctx.resolveSurfaceRef('billing::other')).toEqual({ kind: 'unresolved' });
   });
 
   it('matches every entry by its public name only — renamed, narrowed or older', () => {

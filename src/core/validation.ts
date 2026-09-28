@@ -20,8 +20,6 @@ import {
   loadProjectConfig,
   computeStateId,
   consumedContractInputs,
-  resolveChainingParent,
-  findChainingParent,
   settledSpecPaths,
   readLockRecord,
   loadProjectVariants,
@@ -30,7 +28,7 @@ import {
   projectFamily,
   exportUsage,
 } from './adapters/validator-core.js';
-import { listSnapshots, listMountSnapshots } from './adapters/validator-surfaces.js';
+import { listSnapshots, listPinnedExternals } from './adapters/validator-surfaces.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes } from './rules/repository.js';
 
@@ -83,10 +81,10 @@ import {
   findTestsReferencing as findTestsUnderRoots,
   type TestsToRevisit,
 } from './source-analysis.js';
-import { getProjectRoot, runWithProjectRoot, getRequestParentReach } from '../utils/fs.js';
+import { getProjectRoot } from '../utils/fs.js';
 import * as path from 'path';
 import type {
-  SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation, ProjectFamily,
+  SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation, ReferenceResolution,
 } from '../models/index.js';
 
 export type { TestsToRevisit };
@@ -107,80 +105,6 @@ export function findTestsReferencing(
   testRoots: readonly string[] = [],
 ): TestsToRevisit[] {
   return findTestsUnderRoots(methods, projectRoot, testRoots);
-}
-
-/**
- * Reference-RESOLUTION failures: the only findings whose verdict is
- * ROOT-DEPENDENT. Each fires because a reference — a dependency, a call target,
- * a type, a subsystem, a trusted link, or a cross-tree form — does not resolve
- * in THIS tree, and it may resolve from the parent. A chained child holding one
- * is judged through its parent when the parent is on disk
- * (resolveThroughParent), and a failure the parent's run does not repeat is the
- * reference resolving there. With no usable parent they keep their raw verdict:
- * a cross-tree form stays a CROSS_TREE_REF_UNRESOLVED warning and a typo stays
- * an error. References that DID resolve against a vendored surface snapshot are
- * verdicts in their own right (surfaceResolved).
- *
- * A verdict on an edge this tree can see — a boundary crossing between its own
- * subsystems (CROSS_SUBSYSTEM_NON_ADAPTER), a call its caller does not declare
- * (UNDECLARED_DEPENDENCY_CALL) — is not root-dependent and is never replaced:
- * listing those here let a leniently configured parent soften a child's own
- * errors. Code↔spec conformance is not root-dependent either: a chained child's
- * source paths are relative to its own root.
- */
-const RESOLUTION_FAILURE_CODES = new Set([
-  'UNDEFINED_TYPE_REFERENCE',
-  'INVALID_DEPENDENCY_REFERENCE',
-  'INVALID_TARGET_COMPONENT_REFERENCE',
-  'INVALID_SUBSYSTEM_REFERENCE',
-  'INVALID_TRUSTED_LINK',
-  'CROSS_TREE_REF_UNRESOLVED',
-]);
-
-/**
- * Severities in order. A notice sits between off and warning: it is reported,
- * so it outranks a silenced code, but it never fails anything a warning can.
- */
-const SEVERITY_RANK = { off: 0, notice: 1, warning: 2, error: 3 } as const;
-
-/** A finding's identity when merging two roots' verdicts: its code on its spec. */
-function issueKey(issue: ValidationIssue): string {
-  return `${issue.code}|${issue.specId ?? ''}`;
-}
-
-/** The most severe severity reported for each code on each spec. */
-function worstByKey(issues: ValidationIssue[]): Map<string, ValidationIssue['severity']> {
-  const worst = new Map<string, ValidationIssue['severity']>();
-  for (const issue of issues) {
-    const key = issueKey(issue);
-    const seen = worst.get(key);
-    if (!seen || SEVERITY_RANK[issue.severity] > SEVERITY_RANK[seen]) worst.set(key, issue.severity);
-  }
-  return worst;
-}
-
-/**
- * The severities a resolve-through-parent run judges under: for every rule
- * either project overrides, the stricter of the two effective severities. The
- * parent's doctrine still decides what is judged, and its configuration can make
- * the child's verdict stricter, never quieter — a rule the parent turns off must
- * not make a child's failure look like a reference that resolved.
- */
-function stricterSeverities(parent: RulesConfig | undefined, child: RulesConfig | undefined): RulesConfig | undefined {
-  const fromParent = parent?.sddRuleSeverity ?? {};
-  const fromChild = child?.sddRuleSeverity ?? {};
-  const codes = new Set([...Object.keys(fromParent), ...Object.keys(fromChild)]);
-  if (codes.size === 0) return parent ?? child;
-  const defaults = new Map(knownIssueCodes().map((rc) => [rc.code, rc.defaultSeverity]));
-  const merged: Record<string, IssueSeverity | 'off'> = {};
-  for (const code of codes) {
-    const p = fromParent[code] ?? defaults.get(code);
-    const c = fromChild[code] ?? defaults.get(code);
-    merged[code] = p === undefined || c === undefined
-      ? (p ?? c)!
-      : SEVERITY_RANK[p] >= SEVERITY_RANK[c] ? p : c;
-  }
-  return { ...(parent ?? child)!, sddRuleSeverity: merged };
 }
 
 // ---------------------------------------------------------------------------
@@ -214,24 +138,28 @@ export interface ValidationIssue {
    */
   draftContext?: boolean;
   /**
-   * True when this finding was verified AGAINST a vendored surface snapshot —
-   * the reference resolved to a declared cross-tree contract, so the finding is
-   * a genuine contract/boundary verdict, not a resolution failure. Such issues
-   * keep full strength in a chained subproject; the parent's re-judgement of the
-   * same edge stands in for one only when it is at least as severe.
+   * On a finding about a cross-project reference: how the owner's gate
+   * resolved it (outcome, owner, call site, canonical target, input digest,
+   * reason), decided before the severity.
    */
-  surfaceResolved?: boolean;
+  resolution?: ReferenceResolution;
+  /**
+   * In a family run: the key of the project whose gate (or whose external,
+   * for a composition finding) the finding belongs to — '' for the family
+   * root. Absent on the owner's own run.
+   */
+  project?: string;
 }
 
 export interface ValidationResult {
   valid: boolean;
   issues: ValidationIssue[];
   /**
-   * Present when a chained subproject's verdict was resolved through its
-   * parent: the top root that was validated and the mount chain it was scoped
-   * to. Absent when the tree was validated on its own.
+   * The owner's gate only: one line, present when the project declares
+   * externals, saying that `validate --family` composes them against their
+   * live producers — the gate itself judged them against the pins alone.
    */
-  resolvedThrough?: { root: string; scope: string };
+  hint?: string;
 }
 
 function issue(
@@ -380,10 +308,22 @@ export interface ValidationOptions {
    */
   treatAllAsComplete?: boolean;
   /**
-   * Internal: 'off' skips resolving a chained subproject through its parent. Set
-   * on the run that IS the parent's verdict, so that run can never walk again.
+   * Ask for the family run explicitly (`validate --family`, MCP `family:
+   * true`). Omitted, a project that declares members runs its family and any
+   * other project runs its owner's gate (validation_options.selectsFamily).
    */
-  crossTree?: 'off';
+  family?: boolean;
+}
+
+/**
+ * validation_options.selectsFamily — whether these options ask for the family
+ * run rather than the owner's gate: true when `family` is set, or when the
+ * bound project declares members and `recursive` is not false. The one reading
+ * of the flags every caller shares, so the choice cannot drift between them.
+ */
+export function selectsFamily(options: ValidationOptions | undefined, declaresMembers: boolean): boolean {
+  if (options?.family) return true;
+  return declaresMembers && options?.recursive !== false;
 }
 
 /**
@@ -398,31 +338,55 @@ export function listRules(): SddRule[] {
   return ruleSequence();
 }
 
-export function validateSddTree(
+/**
+ * The key of the contained member that owns a spec key, or undefined for one
+ * of the bound project's own: its owner in the graph, else the longest member
+ * key prefixing it (a loader issue on a file whose spec did not load).
+ */
+function memberOwning(owners: Map<string, string>, memberKeys: string[], key: string): string | undefined {
+  const owner = owners.get(key);
+  if (owner !== undefined) return owner === '' ? undefined : owner;
+  let best: string | undefined;
+  for (const k of memberKeys) {
+    if (key.startsWith(`${k}::`) && (!best || k.length > best.length)) best = k;
+  }
+  return best;
+}
+
+/**
+ * ispec_validator/ivalidator_portal.validateProject — the owner's gate (stage
+ * 4): judge the bound project from its own files alone — its specs, its
+ * configuration and doctrine, its code, its lock, its externals lock and
+ * pinned snapshots, and the export tables of the members it contains — and
+ * nothing else. It never walks up to a parent, never reads a sibling's live
+ * tree and discovers nothing, so a project's verdict is the same from every
+ * root and with or without its family on disk. A contained member's own specs
+ * are never judged here: its gate judges them under its own configuration.
+ */
+export function validateProject(
   rulesOrOptions?: RulesConfig | ValidationOptions,
   projectType: string = 'backend'
 ): ValidationResult {
   let rules = rulesOrOptions as RulesConfig | undefined;
   let scopeSubsystem: string | undefined;
-  let recursive: boolean | number = true;
   let extensions: LoadedExtensions | undefined;
   let treatAllAsComplete = false;
-  let crossTree: 'off' | undefined;
 
-  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions || 'crossTree' in rulesOrOptions)) {
+  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions || 'family' in rulesOrOptions)) {
     const opts = rulesOrOptions as ValidationOptions;
     rules = opts.rules;
     projectType = opts.projectType ?? 'backend';
     scopeSubsystem = opts.scopeSubsystem;
-    recursive = opts.recursive ?? true;
     extensions = opts.extensions;
     treatAllAsComplete = opts.treatAllAsComplete ?? false;
-    crossTree = opts.crossTree;
   }
   extensions ??= loadProjectExtensions();
 
-  // Configure spec loader recursion
-  scanAllSpecs({ recursive });
+  // Step 1: the scan reads the bound project and the members it contains —
+  // its own references into a contained member are judged against that
+  // member's L0 table, whatever `recursive` selects for a family run. Nothing
+  // above the bound root is read.
+  scanAllSpecs({ recursive: true });
 
   const issues: ValidationIssue[] = [];
 
@@ -437,6 +401,10 @@ export function validateSddTree(
   // Stored surface snapshots (.wai/surfaces/): declared contracts that
   // unresolved cross-tree/remote references validate against.
   const surfaceSnapshots = listSnapshots();
+  // Step 10: the bound project's pinned externals — its own lock and
+  // snapshots, never the producer — what a reference into a project outside
+  // the scan is judged against.
+  const pinnedExternals = listPinnedExternals();
   // Source-code model (per-sourcePath declaration/export/import/anchor facts)
   // — what structural conformance checks realization against. The declared
   // source roots widen the walked set with the files no spec names yet, which
@@ -472,7 +440,11 @@ export function validateSddTree(
   try {
     // Retrieve any loader schema validation issues
     const isSpecInScope = makeScopeFilter({ components, interfaces, implementations, types, scopeSubsystem });
-    const loaderErrors = getLoaderIssues();
+    // Step 14: only the loader's diagnostics on the bound project's own files —
+    // one on a contained member's file is that member's gate's.
+    const scanned = projectFamily();
+    const memberKeys = scanned.nodes.filter((n) => n.namespace !== '').map((n) => n.namespace);
+    const loaderErrors = getLoaderIssues().filter((e) => !e.specId || memberOwning(scanned.owners, memberKeys, e.specId) === undefined);
     if (scopeSubsystem) {
       issues.push(...loaderErrors.filter(e => e.specId && isSpecInScope(e.specId)));
     } else {
@@ -530,18 +502,10 @@ export function validateSddTree(
       issues.push(issue('error', 'EXTENSION_LOAD_ERROR', err));
     }
 
-    // The snapshots each chained mount holds, kept per mount so a contract a
-    // child imported decides only that child's references (see
-    // RuleContext.mountSurfaceSnapshots). Loaded after the loader issues were
-    // collected: resolving a mount that escapes the root raises its issue again.
-    const mountSurfaceSnapshots = listMountSnapshots(
-      projectFamily().nodes.filter((n) => n.namespace !== '').map((n) => n.namespace),
-    );
-
     // The writer's round-trip dry run over every in-scope spec (same
     // relativization, same schema, no I/O), gathered here so the
-    // roundtrip-serialization rule reports it from the context. Like the mount
-    // snapshots, it runs after the loader issues were collected.
+    // roundtrip-serialization rule reports it from the context. It runs after
+    // the loader issues were collected.
     const roundTripIssues = dryRunSerializeSpecs(isSpecInScope);
 
     // Register the built-in rules and the loaded pack rules into the rule
@@ -562,20 +526,16 @@ export function validateSddTree(
       knownIssueCodes().filter((rc) => rc.carryable).map((rc) => rc.code),
     );
 
-    // The project graph of this scan (on a run that judges a chained child
-    // through its parent, the parent's), every member project's L0 table, and
-    // for each (consumer, producer) pair the references connect, those
-    // references mapped onto the producer's public names.
+    // Steps 29-33: the project graph of this scan — the bound project's own
+    // from every root, nothing above it — every contained member's L0 table,
+    // and for each producer the bound project's references connect it to,
+    // those references mapped onto the producer's public names.
     const family = projectFamily();
     const memberTables = family.nodes
       .filter((n) => n.namespace !== '')
       .map((n) => resolveProjectExports(n.namespace));
-    const pairs = new Map<string, [string, string]>();
-    for (const r of family.references) pairs.set(`${r.consumer}|${r.producer}`, [r.consumer, r.producer]);
-    const exportUsages = [...pairs.values()].map(([consumer, producer]) => exportUsage(consumer, producer));
-    // The bound root's externals its own scan cannot bind, bound by climbing to
-    // the family's top instead: a member naming its parent or a sibling.
-    const climbBoundExternals = crossTree === 'off' ? [] : externalsBoundByClimb(family);
+    const producers = new Set(family.references.filter((r) => r.consumer === '').map((r) => r.producer));
+    const exportUsages = [...producers].map((producer) => exportUsage('', producer));
 
     const ctx = buildRuleContext({
       system,
@@ -598,14 +558,11 @@ export function validateSddTree(
       ],
       projectFamily: family,
       exportUsages,
-      ...(climbBoundExternals.length > 0 ? { climbBoundExternals } : {}),
+      pinnedExternals,
       // By-name selections only: a legacy path ref pins nothing to check.
       packSelections: projectPackSelections(),
-      // The run that IS the parent's verdict on a chained child judges the
-      // child's specs, not the parent's identity, so it carries none.
-      projectIdentity: crossTree === 'off' ? undefined : boundProjectIdentity(),
+      projectIdentity: boundProjectIdentity(),
       surfaceSnapshots,
-      mountSurfaceSnapshots,
       codeModel,
       roundTripIssues,
       knownIssueCodes: knownCodes,
@@ -618,209 +575,23 @@ export function validateSddTree(
       rule.check(ctx);
     }
 
-    // Chained subprojects: when this tree is validated from its own root but is a
-    // chained subproject of a discoverable parent, references INTO the parent
-    // (shared types, sibling subsystems, cross-tree components) point at specs
-    // that physically live ABOVE this root.
-    //
-    // RESOLVE THROUGH THE PARENT. When the parent is on disk, a reference this
-    // root cannot resolve is not "unverifiable" — it is judged by validating the
-    // parent scoped to this mount. The child keeps what it judged on its own and
-    // gains the parent's verdict for what it could not see, so it is never judged
-    // more leniently than alone or than its parent. With no usable parent (its L0
-    // missing, the mount unknown, or reach denied) every finding keeps its raw
-    // verdict: a chained child that cannot be judged through its parent pins its
-    // family surfaces or fails its gate. Code↔spec conformance keeps full
-    // strength on both paths: a chained child's source paths are its own.
-    //
-    // Gated on actually HAVING a resolution failure, so a clean tree (or a hosted
-    // per-request validate) never pays the walk-up-the-filesystem cost. Discovery
-    // itself goes through the reach gate: a request whose credential is narrowed
-    // to the child reads nothing above its root, not even to find the parent.
-    const unresolved = (i: ValidationIssue): boolean => RESOLUTION_FAILURE_CODES.has(i.code) && !i.surfaceResolved;
-    const chainingParent = crossTree !== 'off' && issues.some(unresolved) ? resolveChainingParent() : null;
-    const resolution = chainingParent ? resolveThroughParent(getProjectRoot(), treatAllAsComplete, rules) : null;
-    if (resolution) {
-      // A child finding gives way only to a parent finding on the same code and
-      // spec that is at least as severe — one finding worded from two roots — or,
-      // for a resolution failure, to the parent's run not repeating it: the
-      // reference resolved there. Everything else the child reached on its own
-      // stands, whatever severity or draft context the parent's run applied.
-      const judgedByParent = worstByKey(resolution.issues);
-      const kept = issues.filter((i) => {
-        const judged = judgedByParent.get(issueKey(i));
-        if (judged !== undefined) return SEVERITY_RANK[judged] < SEVERITY_RANK[i.severity];
-        return !unresolved(i);
-      });
-      // A parent finding the child already reports more severely adds nothing.
-      const keptByChild = worstByKey(kept);
-      const added = resolution.issues.filter((i) => {
-        const own = keptByChild.get(issueKey(i));
-        return own === undefined || SEVERITY_RANK[own] <= SEVERITY_RANK[i.severity];
-      });
-      const merged = dedupeIssues([...kept, ...added]);
-      return {
-        valid: merged.every((i) => i.severity !== 'error'),
-        issues: merged,
-        resolvedThrough: { root: resolution.root, scope: resolution.scope },
-      };
-    }
+    // Steps 37-38: a project that declares externals judged them against its
+    // pins alone; the hint says the family run composes them. A hint, not a
+    // finding: it never changes the verdict.
+    const count = pinnedExternals.length;
+    const hint = count > 0
+      ? `${count} external${count === 1 ? ' was' : 's were'} judged against ${count === 1 ? 'its pin' : 'their pins'} alone; \`wairon validate --family\` composes ${count === 1 ? 'it' : 'them'} against the live producer${count === 1 ? '' : 's'}.`
+      : undefined;
 
+    // Step 39: the project's verdict — the same from every root.
     return {
       valid: issues.every((i) => i.severity !== 'error'),
       issues,
+      ...(hint ? { hint } : {}),
     };
   } finally {
     statusBearing.forEach((s, i) => { s.status = statusSnapshot[i]; });
   }
-}
-
-/**
- * Validate a chained subproject's specs FROM ITS PARENT: walk up to the top root
- * collecting the mount chain, validate there scoped to that chain, and rename
- * the findings into the child's own ids. Null when no usable parent is reachable
- * — the caller then keeps the standalone verdict.
- *
- * Reach: resolving reads the parent tree. A hosted request whose credential is
- * narrowed to the child never gets here, and the walk never climbs above the
- * request's own top project root.
- */
-function resolveThroughParent(
-  boundRoot: string,
-  treatAllAsComplete: boolean,
-  childRules: RulesConfig | undefined,
-): { root: string; scope: string; issues: ValidationIssue[] } | null {
-  const reach = getRequestParentReach();
-  if (reach && !reach.parentReach) return null;
-  const ceiling = reach?.topRoot ? path.resolve(reach.topRoot) : undefined;
-
-  let climbed = false;
-  let top = path.resolve(boundRoot);
-  while (top !== ceiling) {
-    const hop = findChainingParent(top, ceiling);
-    if (!hop) break;
-    const next = path.resolve(hop.parentRoot);
-    if (ceiling && !isWithinOrEqual(ceiling, next)) break;
-    climbed = true;
-    top = next;
-  }
-  if (!climbed) return null;
-  // The child's key in the top's scan: its project id at any depth (or its
-  // alias path when the id is taken or missing) — never a position.
-  const child = sameDirectory(boundRoot);
-  const scope = runWithProjectRoot(top, () => projectFamily().nodes.find((n) => child(n.directory))?.namespace);
-  if (!scope) return null;
-
-  const inner = runWithProjectRoot(top, () => {
-    // The parent is read as it is NOW without asking for it here: every spec
-    // write drops every workspace's cache, and validateSddTree below starts by
-    // clearing the loader (clearLoaderIssues), which drops them again before it
-    // reads a single spec.
-    // The parent's doctrine and profile decide what is judged; each rule's
-    // severity is the stricter of the parent's and the child's, so the parent's
-    // configuration can make the child's verdict stricter, never quieter.
-    let governing: { rules?: RulesConfig; projectType?: string } = { rules: stricterSeverities(undefined, childRules) };
-    try {
-      const config = loadProjectConfig();
-      if (config) governing = { rules: stricterSeverities(config.rules, childRules), projectType: config.projectType };
-    } catch { /* a parent configuration that fails its schema judges at the defaults, tightened by the child's severities */ }
-    return validateSddTree({
-      ...governing,
-      scopeSubsystem: scope,
-      recursive: true,
-      crossTree: 'off',
-      treatAllAsComplete,
-    });
-  });
-  // No L0 to walk, or the mount is not in the parent's tree: nothing to resolve through.
-  if (inner.issues.some((i) => i.code === 'MISSING_SYSTEM_SPEC' || i.code === 'SUBSYSTEM_NOT_FOUND')) return null;
-
-  const local = scope.split('::').pop()!;
-  const issues = inner.issues.map((i) => ({
-    ...i,
-    message: stripNamespace(i.message, scope),
-    ...(i.specId !== undefined ? { specId: i.specId === scope ? local : stripNamespace(i.specId, scope) } : {}),
-  }));
-  return { root: top, scope, issues };
-}
-
-/**
- * The aliases of the bound root's declared externals its own scan binds to no
- * project (and gives no source.path), that the family's top binds to a family
- * producer: the climb toward the top as resolveThroughParent walks it — never
- * when the request may not read above its root, and never past the request's
- * top root (the caller must gate on reach itself) — and the top's graph read
- * with that root bound, this root's node found by its directory.
- */
-function externalsBoundByClimb(family: ProjectFamily): string[] {
-  const bound = family.nodes.find((n) => n.namespace === '');
-  const wanted = (bound?.externals ?? []).filter((e) => e.sourceKind === 'unresolved' && e.problem?.startsWith('no project of the family'));
-  if (!bound || wanted.length === 0) return [];
-  const reach = getRequestParentReach();
-  if (reach && !reach.parentReach) return [];
-  const ceiling = reach?.topRoot ? path.resolve(reach.topRoot) : undefined;
-  // Step 30: the climb.
-  let top = path.resolve(getProjectRoot());
-  let climbed = false;
-  while (top !== ceiling) {
-    const hop = findChainingParent(top, ceiling);
-    if (!hop) break;
-    const next = path.resolve(hop.parentRoot);
-    if (ceiling && !isWithinOrEqual(ceiling, next)) break;
-    climbed = true;
-    top = next;
-  }
-  if (!climbed) return [];
-  // Step 31: the top's graph binds them, or it does not.
-  const self = sameDirectory(bound.directory);
-  const node = runWithProjectRoot(top, () => projectFamily().nodes.find((n) => self(n.directory)));
-  const aliases = new Set(wanted.map((e) => e.alias));
-  return (node?.externals ?? []).filter((e) => e.sourceKind === 'family' && aliases.has(e.alias)).map((e) => e.alias);
-}
-
-/**
- * Remove a mount-chain prefix (`scope::`) wherever it begins an id in `text` —
- * only at an id boundary, so `kid::` never bites into `bigkid::x` or into a
- * deeper `par::kid::x` that names a different namespace.
- */
-function stripNamespace(text: string, scope: string): string {
-  const prefix = `${scope}::`;
-  let out = '';
-  let from = 0;
-  for (let at = text.indexOf(prefix); at !== -1; at = text.indexOf(prefix, from)) {
-    const atBoundary = at === 0 || !isIdChar(text[at - 1]);
-    out += text.slice(from, at) + (atBoundary ? '' : prefix);
-    from = at + prefix.length;
-  }
-  return out + text.slice(from);
-}
-
-function isIdChar(ch: string): boolean {
-  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
-    || ch === '_' || ch === '-' || ch === '.' || ch === ':';
-}
-
-/** A predicate: whether a directory is the same one as `dir`, case-folded where the filesystem folds case. */
-function sameDirectory(dir: string): (other: string) => boolean {
-  const key = (d: string): string => (process.platform === 'win32' ? path.resolve(d).toLowerCase() : path.resolve(d));
-  const want = key(dir);
-  return (other) => key(other) === want;
-}
-
-function isWithinOrEqual(dir: string, target: string): boolean {
-  const rel = path.relative(dir, target);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
-}
-
-/** One finding per (code, spec, message): a union must never print the same verdict twice. */
-function dedupeIssues(list: ValidationIssue[]): ValidationIssue[] {
-  const seen = new Set<string>();
-  return list.filter((i) => {
-    const key = `${i.code}|${i.specId ?? ''}|${i.message}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 /**
@@ -873,13 +644,13 @@ function settledStatusBearing(loaded: {
  * `wairon lock` and the hosting lock require: a draft tree can "pass" a normal
  * validate yet break the moment it is frozen, so lock must gate on this.
  *
- * The status flip lives inside validateSddTree (treatAllAsComplete) because
+ * The status flip lives inside validateProject (treatAllAsComplete) because
  * validation begins by invalidating the spec cache (clearLoaderIssues), which
  * would discard any objects mutated out here before the rules ever saw them —
  * exactly the silent degradation this wrapper previously suffered from.
  */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
-  return validateSddTree({ ...(options ?? {}), treatAllAsComplete: true });
+  return validateProject({ ...(options ?? {}), treatAllAsComplete: true });
 }
 
 /**

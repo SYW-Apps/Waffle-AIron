@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as yaml from 'js-yaml';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import type { ValidationIssue } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
@@ -13,7 +13,7 @@ import type { RulesConfig } from '../../src/models/project.js';
 // Wiring-family fixes: one reproduction per reported misbehaviour in the
 // wiring rules (dependency cycles, unused detection, untyped seams, prose
 // claims, invariant backing, event topology, dispatch tables). Each tree is a
-// real .wai project validated through validateSddTree, as the CLI does.
+// real .wai project validated through validateProject, as the CLI does.
 // ---------------------------------------------------------------------------
 
 const STAMP = { createdAt: '2026-09-15T00:00:00Z', updatedAt: '2026-09-15T00:00:00Z' };
@@ -73,7 +73,7 @@ function createProject() {
       invalidateSpecCache();
       setProjectRoot(root);
       try {
-        return validateSddTree({ rules: RULES, projectType: 'backend', ...opts });
+        return validateProject({ rules: RULES, projectType: 'backend', ...opts });
       } finally {
         setProjectRoot(null);
         invalidateSpecCache();

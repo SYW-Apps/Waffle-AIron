@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { validateSddTree, type ValidationIssue } from '../../src/core/validation.js';
+import { validateProject, type ValidationIssue } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { findingRealizationRule } from '../../src/core/rules/conformance/finding-realization.js';
@@ -124,7 +124,7 @@ function validate(t: Tree, children: Record<string, Tree> = {}): ValidationIssue
   for (const [rel, child] of Object.entries(children)) writeTree(path.join(root, ...rel.split('/')), child);
   invalidateSpecCache();
   setProjectRoot(root);
-  return validateSddTree().issues;
+  return validateProject().issues;
 }
 
 const byCode = (issues: ValidationIssue[], code: string): ValidationIssue[] => issues.filter(i => i.code === code);
@@ -211,8 +211,10 @@ describe('the integration-sim rules — chained subprojects', () => {
       files: { 'src/portal.ts': 'export function chargeCard(): void {}\n' },
     });
     const issues = validate(parent, { 'packages/billing': billing });
-    // The chained child really loaded (its component is judged in this run).
-    expect(issues.some(i => (i.specId ?? '').startsWith('billing::'))).toBe(true);
+    // The chained child really loaded: the parent's reference into it resolves
+    // (its own findings are its own gate's, so none is reported here).
+    expect(byCode(issues, 'INVALID_DEPENDENCY_REFERENCE')).toEqual([]);
+    expect(issues.some(i => (i.specId ?? '').startsWith('billing::'))).toBe(false);
     expect(byCode(issues, 'UNWIRED_INTEGRATION_SIM')).toEqual([]);
   });
 });

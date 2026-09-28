@@ -9,7 +9,7 @@
  * OWN code's silence).
  *
  * Execution goes through the REAL loader: the tree is materialized as a
- * temporary `.wai/` project on disk and validated with `validateSddTree()`,
+ * temporary `.wai/` project on disk and validated with `validateProject()`,
  * exactly the path the CLI, MCP server, and hosted gate take (YAML → zod
  * schemas → spec cache → composed rule sequence → severity/lint-allow/depth
  * gates). See tests/rules-matrix/README.md for the full contract, the
@@ -20,7 +20,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
 import { expect } from 'vitest';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import type { ValidationIssue, ValidationResult } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
@@ -79,9 +79,9 @@ export interface FixtureTree {
   implementations?: FixtureSpecInput[];
   /** Entity / value-object types. `kind` defaults to 'entity'. */
   types?: FixtureSpecInput[];
-  /** RulesConfig fragment merged over the harness defaults and passed to validateSddTree. */
+  /** RulesConfig fragment merged over the harness defaults and passed to validateProject. */
   rules?: Record<string, unknown>;
-  /** validateSddTree projectType (default 'backend'). */
+  /** validateProject projectType (default 'backend'). */
   projectType?: string;
   /**
    * Extension-pack refs written into the temp project's
@@ -96,7 +96,7 @@ export interface FixtureTree {
    * targets), surface snapshots, variants, or nested subprojects.
    */
   files?: Record<string, string>;
-  /** Scope the run to one subsystem (validateSddTree scopeSubsystem). */
+  /** Scope the run to one subsystem (validateProject scopeSubsystem). */
   scopeSubsystem?: string;
   /** Validate at full strictness, as `wairon lock` does (treatAllAsComplete). */
   treatAllAsComplete?: boolean;
@@ -105,14 +105,11 @@ export interface FixtureTree {
    * instead of the temp root itself (relative, forward-slash, no '..' — same
    * hygiene as `files`). The tree still materializes at the temp root exactly
    * as always, so the top-level tree becomes an ANCESTOR project of the
-   * validated one. This is the seam for chained-subproject resolution: the
-   * loader's findChainingParent walks UP from the root looking for an ancestor
-   * project whose subsystem `projectPath` resolves to that exact root, and a
-   * child found that way is judged THROUGH that parent. Materialize the parent
-   * (with the mount subsystem) at the top, the child project under `files`, and
-   * point this at the child directory. Overriding the parent's own
-   * `.wai/specs/.index.yaml` through `files` makes the parent unloadable — the
-   * seam for the standalone fallback, where references keep their raw verdicts.
+   * validated one. This is the seam for judging a chained member by its own
+   * gate (stage 4): the owner's gate never walks up, so the member gets the
+   * same verdict whether its parent is loadable, broken or absent.
+   * Materialize the parent (with the mount) at the top, the member project
+   * under `files`, and point this at the member directory.
    */
   validateFromSubdir?: string;
 }
@@ -428,7 +425,7 @@ export interface FixtureRun {
 
 /**
  * Materialize the fixture tree as a temp .wai project and validate it through
- * the real entry point (validateSddTree → composed rule sequence, with the
+ * the real entry point (validateProject → composed rule sequence, with the
  * project's declared extension packs loaded). The temp project is always
  * removed; the project-root override and spec cache are always restored.
  */
@@ -459,7 +456,7 @@ export function runRuleFixture(fixture: RuleFixture): FixtureRun {
     invalidateSpecCache();
     setProjectRoot(boundRoot);
     try {
-      const result = validateSddTree({
+      const result = validateProject({
         rules: { ...BASE_FIXTURE_RULES, ...(fixture.tree.rules ?? {}) } as RulesConfig,
         projectType: fixture.tree.projectType ?? 'backend',
         ...(fixture.tree.scopeSubsystem !== undefined ? { scopeSubsystem: fixture.tree.scopeSubsystem } : {}),

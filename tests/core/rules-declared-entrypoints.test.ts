@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ describe('register steps — reachability edges for unused-detection', () => {
     registerChainFixture(proj, { portal: true });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const unused = unusedMessages(res);
       expect(unused).not.toMatch(/worker-orch|tick/);
       expect(unused).not.toMatch(/audit-store|append/);
@@ -143,7 +143,7 @@ describe('register steps — reachability edges for unused-detection', () => {
     registerChainFixture(proj, { portal: false }); // nothing seeds sched-orch
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const unusedComponents = byCode(res, 'UNUSED_COMPONENT').map(i => i.message).join('\n');
       expect(unusedComponents).toMatch(/sched-orch/);
       expect(unusedComponents).toMatch(/worker-orch/);
@@ -160,7 +160,7 @@ describe('register steps — reachability edges for unused-detection', () => {
     try {
       // The same shape as a `call` self-recursion (which IS flagged) — but a
       // handoff defers to the runtime, so it cannot recurse by construction.
-      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -186,7 +186,7 @@ describe('register steps — the durability boot walk must NOT take the edge', (
     ].join('\n'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const hydration = byCode(res, 'MISSING_HYDRATION');
       expect(hydration).toHaveLength(1);
       expect(hydration[0].message).toMatch(/state-store/);
@@ -215,7 +215,7 @@ describe('register steps — the durability boot walk must NOT take the edge', (
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'MISSING_HYDRATION')).toHaveLength(0);
+      expect(byCode(validateProject(), 'MISSING_HYDRATION')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -242,7 +242,7 @@ describe('register steps — contract validation identical to call steps', () =>
     ].join('\n'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const badComp = byCode(res, 'INVALID_TARGET_COMPONENT_REFERENCE');
       expect(badComp).toHaveLength(1);
       expect(badComp[0].message).toMatch(/registers callback component "ghost-comp"/);
@@ -285,7 +285,7 @@ describe('register steps — exempt from call-graph conformance', () => {
     proj.source('src/orch.ts', 'export function start(): void { /* setInterval(tickRef, 30_000) via the host runtime */ }\n');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -306,7 +306,7 @@ describe('register steps — exempt from call-graph conformance', () => {
     proj.source('src/orch.ts', 'export function start(): void { /* forgot the call */ }\n');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(1);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 });
@@ -325,7 +325,7 @@ describe('invokedBy — seeding, propagation, and the declaration audit', () => 
     proj.contract('audit-store', { append: [] });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const unused = unusedMessages(res);
       expect(unused).not.toMatch(/worker-orch|onTimer/);
       expect(unused).not.toMatch(/audit-store|append/); // propagation — lint.allow could never do this
@@ -355,7 +355,7 @@ describe('invokedBy — seeding, propagation, and the declaration audit', () => 
     ].join('\n'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const undescribed = byCode(res, 'INVOKED_BY_UNDESCRIBED');
       expect(undescribed).toHaveLength(2);
       expect(undescribed.map(i => i.specId)).toEqual(['iworker-orch', 'iworker-orch']);
@@ -375,7 +375,7 @@ describe('invokedBy — seeding, propagation, and the declaration audit', () => 
     proj.impl('run-orch', ['methods:', '  - name: run', '    narrative:', RETURN(1)].join('\n'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const redundant = byCode(res, 'INVOKED_BY_REDUNDANT');
       expect(redundant).toHaveLength(1);
       expect(redundant[0].specId).toBe('irun-orch');
@@ -409,7 +409,7 @@ describe('invokedBy — seeding, propagation, and the declaration audit', () => 
     proj.impl('worker-orch', ['methods:', '  - name: onTimer', '    narrative:', RETURN(1)].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'INVOKED_BY_UNDESCRIBED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'INVOKED_BY_UNDESCRIBED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
