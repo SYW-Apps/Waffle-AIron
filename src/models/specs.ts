@@ -1534,6 +1534,25 @@ export const ExternalsLockSchema = z.object({
 });
 export type ExternalsLock = z.infer<typeof ExternalsLockSchema>;
 
+/**
+ * pinned_external — one declared external as the owner's gate judges against
+ * it: its lock entry and the snapshot that entry names, read from the bound
+ * project's own .wai/externals.lock.yaml and .wai/externals/ and nothing else.
+ * The producer is never read.
+ */
+export interface PinnedExternal {
+  /** The alias the project declares in project.yaml externals. */
+  alias: string;
+  /** The producer's project id the lock recorded (the declaration's, when never pinned). */
+  project: string;
+  /** The lock's entry for the alias; absent when it was declared but never pinned. */
+  entry?: ExternalLockEntry;
+  /** The pinned snapshot the entry names; absent when unpinned, or the file is missing or malformed. */
+  snapshot?: SurfaceSnapshot;
+  /** Why the alias has nothing to judge against; absent when the entry and the snapshot are both present. */
+  problem?: string;
+}
+
 /** external_pin — what pinning did for one alias. */
 export interface ExternalPin {
   alias: string;

@@ -13,6 +13,7 @@ import type {
   ExternalListing,
   ExternalPin,
   ExternalStatus,
+  PinnedExternal,
   SurfaceOrigin,
   SurfaceSnapshot,
 } from '../models/index.js';
@@ -41,10 +42,6 @@ export function listFamilyPins(): FamilyPin[] {
   return surfaceOrchestrator.listFamilyPins();
 }
 
-export function listMountSnapshots(mounts: string[]): { namespace: string; snapshots: SurfaceSnapshot[] }[] {
-  return surfaceOrchestrator.listMountSnapshots(mounts);
-}
-
 export function pinExternals(aliases?: string[]): ExternalPin[] {
   return surfaceOrchestrator.pinExternals(aliases);
 }
@@ -55,4 +52,8 @@ export function getExternalsStatus(): ExternalStatus[] {
 
 export function listExternals(): ExternalListing[] {
   return surfaceOrchestrator.listExternals();
+}
+
+export function listPinnedExternals(): PinnedExternal[] {
+  return surfaceOrchestrator.listPinnedExternals();
 }

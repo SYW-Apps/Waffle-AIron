@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import type { MethodSignature, SurfaceContractEntry, SurfaceSnapshot, SurfaceTypeDef } from './specs.js';
-import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs } from './type-references.js';
+import { BUILTIN_TYPES, extractTypeIdentifiers, matchTypeRef, methodTypeRefs, nameKey } from './type-references.js';
 import { canonicalize } from '../utils/canonical-json.js';
 
 // ---------------------------------------------------------------------------
@@ -67,45 +67,106 @@ function sha256(text: string): string {
   return `sha256:${createHash('sha256').update(text).digest('hex')}`;
 }
 
+/** An identifier inside a type expression: a name, optionally qualified by `::` or `.` segments. */
+const TYPE_IDENTIFIER = /(?:::)?[A-Za-z0-9_][A-Za-z0-9_-]*(?:(?:::|\.)[A-Za-z0-9_][A-Za-z0-9_-]*)*/g;
+
+/** The closure type one identifier names, compared by nameKey; the one exact key match when several suffix-match. */
+function closureTypeOf(snapshot: SurfaceSnapshot, identifier: string): SurfaceTypeDef | undefined {
+  const segments = identifier.replace(/^::/, '').split(/::|\./).filter(Boolean);
+  const own = new Set([snapshot.projectId, snapshot.projectName].filter((s): s is string => !!s).map(nameKey));
+  // A prefix naming this snapshot's own project is its own spelling of a local name.
+  const local = segments.length > 1 && own.has(nameKey(segments[0])) ? segments.slice(1) : segments;
+  const ref = local.join('::');
+  const matches = snapshot.types.filter((def) => matchTypeRef(ref, def.id));
+  if (matches.length === 1) return matches[0];
+  return matches.find((def) => nameKey(def.id) === nameKey(ref));
+}
+
 /**
- * surface_snapshot.contentDigest — sha256 over the snapshot's canonical content
- * with its provenance (stateId, generatedAt, origin) stripped, so re-pinning an
- * unchanged contract never moves it. The lock's `digest`.
+ * surface_snapshot.canonicalTypeRef — a type expression rewritten into the one
+ * spelling a digest may see, identifier by identifier, generics and unions kept
+ * in place: a builtin becomes its lower-cased builtin name; an identifier
+ * naming a type of this snapshot's closure (bare, or prefixed with this
+ * snapshot's own project id, compared by nameKey) becomes that type's id;
+ * anything else — another project's name, which a snapshot cannot resolve on
+ * its own — is kept as written. Pure: the snapshot is the whole input.
  */
-export function contentDigest(snapshot: SurfaceSnapshot): string {
-  const { stateId, generatedAt, origin, ...content } = snapshot;
-  return sha256(canonicalize(content));
+export function canonicalTypeRef(snapshot: SurfaceSnapshot, typeExpr: string): string {
+  return typeExpr.replace(TYPE_IDENTIFIER, (identifier) => {
+    if (!/[A-Za-z]/.test(identifier)) return identifier;
+    if (BUILTIN_TYPES.has(identifier.toLowerCase())) return identifier.toLowerCase();
+    return closureTypeOf(snapshot, identifier)?.id ?? identifier;
+  });
 }
 
-/** A type definition's shape: what a caller depends on, never its prose. */
-function typeShape(def: SurfaceTypeDef): unknown {
-  return { id: def.id, kind: def.kind, fields: def.fields.map((f) => ({ name: f.name, type: f.type, optional: f.optional === true })) };
+/** A type definition's shape: what a caller depends on, never its prose; every field type canonical. */
+function typeShape(snapshot: SurfaceSnapshot, def: SurfaceTypeDef): unknown {
+  return {
+    id: def.id,
+    kind: def.kind,
+    fields: sortedBy(def.fields, (f) => f.name)
+      .map((f) => ({ name: f.name, type: canonicalTypeRef(snapshot, f.type), optional: f.optional === true })),
+  };
 }
 
-/** The shapes of every closure type the given references name, transitively, sorted by id. */
-function closureShapes(snapshot: SurfaceSnapshot, refs: string[]): unknown[] {
+/**
+ * The shapes of every closure type the given type expressions name,
+ * transitively, sorted by id — found by CANONICAL id, never by the suffix
+ * match, so a reference re-spelled inside the producer finds the same type.
+ */
+function closureShapes(snapshot: SurfaceSnapshot, exprs: string[]): unknown[] {
+  const byId = new Map(snapshot.types.map((def) => [def.id, def] as const));
   const seen = new Map<string, SurfaceTypeDef>();
-  const queue = [...refs];
+  const queue = exprs.flatMap((expr) => extractTypeIdentifiers(canonicalTypeRef(snapshot, expr)));
   while (queue.length) {
-    const ref = queue.shift()!;
-    for (const def of snapshot.types) {
-      if (seen.has(def.id) || !matchTypeRef(ref, def.id)) continue;
-      seen.set(def.id, def);
-      for (const field of def.fields) queue.push(...extractTypeIdentifiers(field.type));
-    }
+    const def = byId.get(queue.shift()!);
+    if (!def || seen.has(def.id)) continue;
+    seen.set(def.id, def);
+    for (const field of def.fields) queue.push(...extractTypeIdentifiers(canonicalTypeRef(snapshot, field.type)));
   }
-  return [...seen.keys()].sort().map((id) => typeShape(seen.get(id)!));
+  return [...seen.keys()].sort().map((id) => typeShape(snapshot, seen.get(id)!));
 }
 
-/** A method's signature as a caller depends on it: parameter types and optionality in order, never their names. */
-function methodShape(method: MethodSignature): unknown {
+/** A method's signature as a caller depends on it: parameter types and optionality in order, never their names; every type canonical. */
+function methodShape(snapshot: SurfaceSnapshot, method: MethodSignature): unknown {
   return {
     name: method.name,
     params: method.params && method.params.length > 0
-      ? method.params.map((p) => ({ type: p.type, optional: p.optional === true }))
-      : method.signature,
-    returns: method.returns,
+      ? method.params.map((p) => ({ type: canonicalTypeRef(snapshot, p.type), optional: p.optional === true }))
+      : canonicalTypeRef(snapshot, method.signature),
+    returns: canonicalTypeRef(snapshot, method.returns),
   };
+}
+
+/** A copy sorted by a key. */
+function sortedBy<T>(list: readonly T[], key: (t: T) => string): T[] {
+  return [...list].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+}
+
+/**
+ * surface_snapshot.contentDigest — sha256 over the snapshot's canonical
+ * CONTRACT, never over how its references are spelled: the public names with
+ * each entry's stereotype, transport, auth kind, dispatch bindings and method
+ * shapes, the exported types and the closure's type shapes — every type
+ * expression passed through canonicalTypeRef, every list in a fixed order —
+ * with provenance (stateId, generatedAt, origin) and prose (descriptions,
+ * groups, display names) left out. Re-pinning an unchanged contract never
+ * moves it. The lock's `digest`, and what EXTERNAL_DRIFTED compares.
+ */
+export function contentDigest(snapshot: SurfaceSnapshot): string {
+  const contract = {
+    interfaces: sortedBy(snapshot.interfaces, (e) => e.id).map((e) => ({
+      id: e.id,
+      componentType: e.componentType ?? null,
+      type: e.type,
+      auth: e.auth?.scheme ?? null,
+      dispatch: sortedBy(e.dispatch ?? [], (b) => `${b.capability} ${b.method}`).map((b) => ({ capability: b.capability, method: b.method })),
+      methods: sortedBy(e.methods, (m) => m.name).map((m) => methodShape(snapshot, m)),
+    })),
+    exportedTypes: sortedBy(snapshot.exportedTypes ?? [], (t) => t.id).map((t) => ({ id: t.id, type: t.type })),
+    types: sortedBy(snapshot.types, (t) => t.id).map((t) => typeShape(snapshot, t)),
+  };
+  return sha256(canonicalize(contract));
 }
 
 /**
@@ -122,7 +183,7 @@ export function memberDigest(snapshot: SurfaceSnapshot, publicName: string, memb
     if (!exported) return null;
     const def = snapshot.types.find((t) => t.id === exported.type);
     if (!def) return null;
-    return sha256(canonicalize({ type: typeShape(def), closure: closureShapes(snapshot, [def.id]) }));
+    return sha256(canonicalize({ type: typeShape(snapshot, def), closure: closureShapes(snapshot, [def.id]) }));
   }
   const entry = snapshot.interfaces.find((e) => e.id === publicName);
   if (!entry) return null;
@@ -132,11 +193,11 @@ export function memberDigest(snapshot: SurfaceSnapshot, publicName: string, memb
     const bound = entry.methods.find((m) => m.name === binding.method);
     return sha256(canonicalize({
       binding: { capability: binding.capability, method: binding.method },
-      method: bound ? methodShape(bound) : null,
+      method: bound ? methodShape(snapshot, bound) : null,
       closure: bound ? closureShapes(snapshot, methodTypeRefs(bound)) : [],
     }));
   }
   const method = entry.methods.find((m) => m.name === member);
   if (!method) return null;
-  return sha256(canonicalize({ method: methodShape(method), closure: closureShapes(snapshot, methodTypeRefs(method)) }));
+  return sha256(canonicalize({ method: methodShape(snapshot, method), closure: closureShapes(snapshot, methodTypeRefs(method)) }));
 }

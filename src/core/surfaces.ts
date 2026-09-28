@@ -21,8 +21,11 @@ import {
   matchTypeRef,
   methodTypeRefs,
   BUILTIN_TYPES,
+  canonicalTypeRef,
   contentDigest,
   memberDigest,
+  declaredExternals,
+  type PinnedExternal,
   type ExportUsage,
   type ExternalBinding,
   type ExternalListing,
@@ -40,7 +43,6 @@ import {
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadTypeSpecs,
-  resolveSubprojectForNamespace,
   computeStateId,
   resolveProjectExports,
   loadProjectConfig,
@@ -232,7 +234,7 @@ export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
 
   // Steps 10-12: the project's id, the StateId, and the stamp.
   const projectId = boundProjectId();
-  return SurfaceSnapshotSchema.parse({
+  return canonicalReferences(SurfaceSnapshotSchema.parse({
     projectName: system.name,
     ...(projectId ? { projectId } : {}),
     origin: 'generated',
@@ -243,7 +245,30 @@ export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
     ...(exportedTypes.length
       ? { exportedTypes: exportedTypes.map(e => ({ id: e.publicName, type: closureIdOf(e), audience: e.audience ?? 'instance' })) }
       : {}),
-  });
+  }));
+}
+
+/**
+ * The snapshot with every type reference inside it — parameter and return
+ * types, the display signature, and every closure field — written in its
+ * canonical form (surface_snapshot.canonicalTypeRef), never as the author
+ * spelled it: restating a reference in another legal spelling changes no byte.
+ */
+function canonicalReferences(snapshot: SurfaceSnapshot): SurfaceSnapshot {
+  const canon = (expr: string): string => canonicalTypeRef(snapshot, expr);
+  return {
+    ...snapshot,
+    interfaces: snapshot.interfaces.map((entry) => ({
+      ...entry,
+      methods: entry.methods.map((m) => ({
+        ...m,
+        signature: canon(m.signature),
+        returns: canon(m.returns),
+        ...(m.params ? { params: m.params.map((p) => ({ ...p, type: canon(p.type) })) } : {}),
+      })),
+    })),
+    types: snapshot.types.map((def) => ({ ...def, fields: def.fields.map((f) => ({ ...f, type: canon(f.type) })) })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -353,27 +378,41 @@ export function loadSurfaceSnapshots(): SurfaceSnapshot[] {
 }
 
 /**
- * surface_orchestrator.listMountSnapshots — the snapshots each chained mount
- * holds in its OWN `.wai/surfaces/`, keyed by the mount's namespace.
- *
- * A chained child may import a foreign project's surface. From the child's
- * root that snapshot is simply one of "this project's snapshots"; from the
- * parent root nothing ever read it, so the child's `super::crm-portal` — which
- * collapses to a bare `crm-portal` under the parent — was judged a local typo.
- *
- * Kept per mount, never pooled with the bound root's own snapshots: a contract
- * the child imported decides only the child's references.
+ * surface_orchestrator.listPinnedExternals — the owner's gate read of the bound
+ * project's pins: each declared external's alias with its lock entry and the
+ * snapshot that entry names, read from the bound root's own
+ * .wai/externals.lock.yaml and .wai/externals/ through the externals
+ * Repository. It never resolves a producer, never reads another root and never
+ * climbs: an alias never pinned, or whose snapshot file is missing or
+ * malformed, is answered with its problem instead of a snapshot. Writes nothing.
  */
-export function listMountSnapshots(mounts: string[]): { namespace: string; snapshots: SurfaceSnapshot[] }[] {
-  const bound = path.resolve(getProjectRoot());
-  const out: { namespace: string; snapshots: SurfaceSnapshot[] }[] = [];
-  for (const namespace of mounts) {
-    const dir = resolveSubprojectForNamespace(namespace);
-    if (!dir || path.resolve(dir) === bound) continue;
-    const snapshots = listSnapshots(dir);
-    if (snapshots.length > 0) out.push({ namespace, snapshots });
+export function listPinnedExternals(): PinnedExternal[] {
+  // Step 1: the declared aliases and producer ids only — nothing is bound.
+  let declared: { alias: string; project: string }[] = [];
+  try {
+    const config = loadProjectConfig();
+    declared = config ? declaredExternals(config) : [];
+  } catch {
+    // A configuration that fails its schema is reported by the paths that load it.
+    return [];
   }
-  return out;
+  // Step 2: the externals lock; one that cannot be read pins nothing.
+  let lock: ExternalsLock | null = null;
+  let lockProblem: string | undefined;
+  try {
+    lock = externalsRepository.readLock();
+  } catch (e) {
+    lockProblem = `the externals lock cannot be read: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  // Steps 3-5: each declared alias, with its entry and snapshot — or the problem.
+  return declared.map(({ alias, project }): PinnedExternal => {
+    if (lockProblem) return { alias, project, problem: lockProblem };
+    const entry = lock?.externals[alias];
+    if (!entry) return { alias, project, problem: `the external "${alias}" was never pinned (run \`wairon externals pin\`)` };
+    const snapshot = externalsRepository.readSnapshot(alias);
+    if (!snapshot) return { alias, project: entry.project, entry, problem: `the pinned snapshot ${entry.snapshot} is missing or unreadable (re-pin with \`wairon externals pin\`)` };
+    return { alias, project: entry.project, entry, snapshot };
+  });
 }
 
 // ---------------------------------------------------------------------------
