@@ -55,6 +55,15 @@ import {
   STEP_TYPE_FIELDS,
   STEP_LABEL_TWINS,
   stepFieldsFor,
+  // The bare-name reading of stage 4's imports: one nameKey, the local type
+  // match, and the type identifiers a spec names.
+  BUILTIN_TYPES,
+  nameKey,
+  typeMatchesRef,
+  methodTypeRefs,
+  methodGenericParameters,
+  interfaceGenericParameters,
+  fieldTypeRefs,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -758,6 +767,52 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
   return out;
 }
 
+/** The positions whose bare names may be bound through a `use` import (stage 4): collaborators. */
+const IMPORTABLE_POSITIONS = new Set(['dependsOn', 'dispatch', 'mounts', 'narrative']);
+
+/**
+ * The bare names (no `::`) a spec writes in positions the loader leaves raw
+ * and an import may supply: every type identifier of an interface method or a
+ * type field, builtins and generic parameters excepted, and every declared-call
+ * target. Each name once per spec and position.
+ */
+function bareRawReferences(kind: ReferenceKind, spec: unknown): { position: string; value: string }[] {
+  const out: { position: string; value: string }[] = [];
+  const seen = new Set<string>();
+  const add = (position: string, value: string | undefined, generics: ReadonlySet<string> = new Set()): void => {
+    if (!value || value.includes('::') || BUILTIN_TYPES.has(value.toLowerCase()) || generics.has(value.toLowerCase())) return;
+    const k = `${position}|${value}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ position, value });
+  };
+  const lower = (set: Set<string>): Set<string> => new Set([...set].map((g) => g.toLowerCase()));
+  switch (kind) {
+    case 'interface': {
+      const intf = spec as InterfaceSpec;
+      const own = lower(interfaceGenericParameters(intf));
+      for (const m of intf.methods) {
+        const generics = new Set([...own, ...lower(methodGenericParameters(m))]);
+        for (const ref of methodTypeRefs(m)) add('type', ref, generics);
+      }
+      break;
+    }
+    case 'type': {
+      const t = spec as TypeSpec;
+      for (const f of t.fields) for (const ref of fieldTypeRefs(t, f.type)) add('type', ref);
+      break;
+    }
+    case 'implementation':
+      for (const m of (spec as ImplementationSpec).methods) {
+        for (const entry of m.calls ?? []) add('calls', parseDeclaredCall(entry)?.compId);
+      }
+      break;
+    default:
+      break;
+  }
+  return out;
+}
+
 /** Each qualified name inside a type string passed through `map`, the rest of the string untouched. */
 function mapTypeNames(typeStr: string | undefined, map: ReferenceMapper): string | undefined {
   if (typeStr === undefined) return undefined;
@@ -889,6 +944,8 @@ interface RawRoot {
   rawSystem: SystemSpec | null;
   localSubsystems: Set<string>;
   pending: PendingReference[];
+  /** Every bare name set aside in phase one because it names no spec of the root: bound through the root's `use` imports in phase three. */
+  pendingImports: PendingReference[];
 }
 
 function emptyExportTable(owner: string, level: 'subsystem' | 'project'): ResolvedExportTable {
@@ -1056,6 +1113,89 @@ function bindAuthored(
   };
 }
 
+/** One `use` import of a root: the alias, the producer the scan read (absent for one it did not), and what it imports. */
+interface ImportSupplier {
+  alias: string;
+  /** externals | members: where the alias is declared, for the `use` line a hint names. */
+  section: 'externals' | 'members';
+  producer?: RawRoot;
+  /** Whether it imports every public name (`*`). */
+  star: boolean;
+  /** The nameKeys it imports by name. */
+  names: Set<string>;
+}
+
+/** Every alias the root declares with its `use` imports — members and externals alike. */
+function importSuppliers(raw: RawRoot, raws: RawRoot[]): ImportSupplier[] {
+  const config = raw.record.config;
+  if (!config) return [];
+  const producerOf = (alias: string): RawRoot | undefined => {
+    const key = raw.record.aliases.get(alias);
+    return key === undefined ? undefined : raws.find((r) => r.record.namespace === key);
+  };
+  const supplier = (alias: string, section: ImportSupplier['section'], use: string[]): ImportSupplier => ({
+    alias, section, producer: producerOf(alias), star: use.includes('*'), names: new Set(use.filter((u) => u !== '*').map(nameKey)),
+  });
+  return [
+    ...declaredMembers(config).filter((m) => !m.problem).map((m) => supplier(m.alias, 'members', m.use)),
+    ...declaredExternals(config).filter((e) => !e.problem).map((e) => supplier(e.alias, 'externals', e.use)),
+  ];
+}
+
+/** The public name of a kind a producer's L0 table exports under a nameKey, if any. */
+function exportedUnder(producer: RawRoot, key: string, kind: 'component' | 'type'): ResolvedExport | undefined {
+  return producer.record.exports.entries.find((e) => e.kind === kind && nameKey(e.publicName) === key);
+}
+
+/**
+ * Step 14 for one bare name: bind it through the root's imports. An explicit
+ * name beats a `*`; exactly one supplier binds it (exported), two are
+ * ambiguous; none the scan read, while an import names an external it did not
+ * read, keeps it as written (outside: the owner's gate resolves it against the
+ * pin); otherwise it is unresolved, with a hint naming a declared alias whose
+ * table exports the key without importing it. Nothing outside the root's own
+ * alias table is ever consulted.
+ */
+function bindImport(raw: RawRoot, suppliers: ImportSupplier[], p: PendingReference): { value: string; reference: AuthoredReference } {
+  const key = nameKey(p.authored);
+  const kind = p.position === 'type' ? 'type' : 'component';
+  const local = keyIn(raw.record.namespace, p.authored);
+  const base = { specId: p.specKey, position: p.position, authored: p.authored, form: 'import' as const };
+  const supplies = (s: ImportSupplier): boolean => s.star || s.names.has(key);
+  const found = (s: ImportSupplier): ResolvedExport | undefined => (s.producer ? exportedUnder(s.producer, key, kind) : undefined);
+  const explicit = suppliers.filter((s) => s.names.has(key) && (!s.producer || found(s)));
+  const pool = explicit.length > 0 ? explicit : suppliers.filter((s) => s.star && (!s.producer || found(s)));
+  const read = pool.filter((s) => s.producer);
+  const unread = pool.filter((s) => !s.producer);
+  if (read.length + unread.length > 1 && (explicit.length > 0 || read.length > 1)) {
+    return { value: local, reference: { ...base, binding: 'ambiguous', resolved: local, importedVia: pool.map((s) => s.alias).join(', ') } };
+  }
+  if (read.length === 1 && unread.length === 0) {
+    const s = read[0];
+    const entry = found(s)!;
+    const target = exportedKey(entry) ?? local;
+    return {
+      value: target,
+      reference: {
+        ...base, binding: 'exported', resolved: target, producer: s.producer!.record.namespace, publicName: entry.publicName,
+        rewrite: p.authored, importedVia: `${s.alias} (${s.names.has(key) ? 'by name' : 'by *'})`,
+      },
+    };
+  }
+  if (unread.length > 0) {
+    return { value: local, reference: { ...base, binding: 'outside', resolved: local, importedVia: unread.map((s) => s.alias).join(', ') } };
+  }
+  const hinted = suppliers.find((s) => !supplies(s) && found(s));
+  const entry = hinted ? found(hinted) : undefined;
+  return {
+    value: local,
+    reference: {
+      ...base, binding: 'unresolved', resolved: local,
+      ...(hinted && entry ? { hint: `${hinted.section}.${hinted.alias}.use: [${entry.publicName}]` } : {}),
+    },
+  };
+}
+
 /** Phase three at one root: bind every reference set aside, record it, and put the bound value in the spec. */
 function bindRootReferences(raw: RawRoot, raws: RawRoot[], readables: ReadableProject[]): void {
   const bound = new Map<string, Map<string, string>>();
@@ -1065,6 +1205,16 @@ function bindRootReferences(raw: RawRoot, raws: RawRoot[], readables: ReadablePr
     if (p.raw) continue;
     const perSpec = bound.get(p.specKey) ?? new Map<string, string>();
     perSpec.set(`${p.position}|${p.authored}`, value);
+    bound.set(p.specKey, perSpec);
+  }
+  // Step 14: every bare name set aside, bound through the root's imports.
+  const suppliers = importSuppliers(raw, raws);
+  for (const p of raw.pendingImports) {
+    const { value, reference } = bindImport(raw, suppliers, p);
+    raw.record.authoredReferences.push(reference);
+    if (p.raw || reference.binding !== 'exported') continue;
+    const perSpec = bound.get(p.specKey) ?? new Map<string, string>();
+    perSpec.set(`${p.position}|${keyIn(raw.record.namespace, p.authored)}`, value);
     bound.set(p.specKey, perSpec);
   }
   if (bound.size === 0) return;
@@ -2260,7 +2410,7 @@ export class SpecWorkspace {
     };
     const raw: RawRoot = {
       record, aliasPath, dir: path.resolve(dir), index: emptyIndex(), mounts: [], members: [],
-      memberKeys: new Map(), rawSystem: null, localSubsystems: new Set(), pending: [],
+      memberKeys: new Map(), rawSystem: null, localSubsystems: new Set(), pending: [], pendingImports: [],
     };
     raws.push(raw);
     // Step 4: every spec document as written, and the root's own L0.
@@ -2313,12 +2463,9 @@ export class SpecWorkspace {
       return null;
     }
     if (!fs.existsSync(childDir)) {
-      this.loaderIssues.push({
-        severity: 'error',
-        code: 'SUBPROJECT_NOT_FOUND',
-        message: `Subproject directory "${childDir}" declared by ${by} "${memberKey}" does not exist.`,
-        specId: memberKey,
-      });
+      // No loader issue (stage 4 retires SUBPROJECT_NOT_FOUND): a family run
+      // reports the absent member, and the declaring project's own gate reports
+      // its references into it as unavailable.
       raw.record.problems.push({
         kind: 'member-absent',
         id: decl.alias,
@@ -2441,14 +2588,55 @@ export class SpecWorkspace {
     const key = raw.record.namespace;
     const index = raw.index;
     raw.localSubsystems = new Set(index.subsystems.map((s) => s.id));
+    // Step 6: a bare name binds locally when it names a spec of the root
+    // (compared by nameKey, as local resolution always has); its own id used
+    // as a prefix binds locally too and is recorded as a self-prefix; every
+    // other bare name in an importable position is set aside for the imports.
+    const ownId = idOf(raw);
+    const localKeys = new Set([
+      ...index.subsystems, ...index.components, ...index.interfaces,
+      ...index.implementations, ...index.types, ...index.groups,
+    ].map((s) => nameKey(s.id.split('::').pop()!)));
+    const rawTypes = index.types;
+    const selfPrefixed = (value: string): string | undefined => {
+      const dot = value.indexOf('.');
+      if (!ownId || dot <= 0 || value.includes('::')) return undefined;
+      const rest = value.slice(dot + 1);
+      return nameKey(value.slice(0, dot)) === nameKey(ownId) && rest && !rest.includes('.') ? rest : undefined;
+    };
+    const recordSelfPrefix = (specKey: string, position: string, value: string, local: string): void => {
+      raw.record.authoredReferences.push({
+        specId: specKey, position, authored: value, form: 'path', binding: 'local', resolved: keyIn(key, local), producer: key, rewrite: local,
+      });
+    };
     const bindLocal = (kind: ReferenceKind, specKey: string): ReferenceMapper => (position, value) => {
-      if (!value.includes('::')) return keyIn(key, value);
-      raw.pending.push({ kind, specKey, position, authored: value, raw: false });
-      return value;
+      if (value.includes('::')) {
+        raw.pending.push({ kind, specKey, position, authored: value, raw: false });
+        return value;
+      }
+      const self = selfPrefixed(value);
+      if (self !== undefined) {
+        recordSelfPrefix(specKey, position, value, self);
+        return keyIn(key, self);
+      }
+      if (IMPORTABLE_POSITIONS.has(position) && !localKeys.has(nameKey(value))) {
+        raw.pendingImports.push({ kind, specKey, position, authored: value, raw: false });
+      }
+      return keyIn(key, value);
     };
     const keyed = <T extends { id: string }>(kind: ReferenceKind, spec: T): T => {
       const specKey = keyIn(key, spec.id);
       for (const r of rawReferences(kind, spec)) raw.pending.push({ kind, specKey, position: r.position, authored: r.value, raw: true });
+      // Raw positions read per identifier: a bare type name no local type
+      // matches, and a bare declared-call target no local spec names.
+      for (const r of bareRawReferences(kind, spec)) {
+        if (r.position === 'type') {
+          const self = selfPrefixed(r.value);
+          if (self !== undefined) { recordSelfPrefix(specKey, 'type', r.value, self); continue; }
+          if (r.value.includes('.') || rawTypes.some((t) => typeMatchesRef(t, r.value))) continue;
+        } else if (localKeys.has(nameKey(r.value))) continue;
+        raw.pendingImports.push({ kind, specKey, position: r.position, authored: r.value, raw: true });
+      }
       return { ...mapSpecReferences(kind, spec, bindLocal(kind, specKey)), id: specKey };
     };
     index.subsystems = index.subsystems.map((s) => keyed('subsystem', s));
@@ -5972,6 +6160,16 @@ export function setProjectId(id: string): boolean {
  */
 export function declareExternal(alias: string, declaration: ExternalDeclaration): boolean {
   return projectConfigRepository.declareExternal(alias, declaration);
+}
+
+/**
+ * core_orchestrator.importNames — add public names to the `use` of the bound
+ * project's external or member under an alias, through the project config
+ * Repository: refused for a malformed name or an undeclared alias, a no-op for
+ * names already imported. Returns whether it wrote.
+ */
+export function importNames(alias: string, names: string[]): boolean {
+  return projectConfigRepository.importNames(alias, names);
 }
 
 /**

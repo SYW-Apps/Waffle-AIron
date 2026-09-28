@@ -212,6 +212,17 @@ function normalizePart(part: string): string {
 }
 
 /**
+ * reference_resolution.nameKey — the one key a bare name is compared by,
+ * locally and through imports alike: lower-cased, every character outside
+ * [a-z0-9] removed, so `WafflerError`, `waffler-error` and `waffler_error` are
+ * one name. It is normalizePart, the per-segment normalization
+ * type_spec.matchesRef already applies.
+ */
+export function nameKey(name: string): string {
+  return normalizePart(name);
+}
+
+/**
  * Whether a written type reference names a type id: the reference's `::` or
  * `.` segments are a suffix of the id's, compared ignoring case and
  * punctuation.

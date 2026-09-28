@@ -14,11 +14,15 @@ import type { SubsystemSpec } from './specs.js';
 // the graph asks it. Nothing here does I/O, and nothing here judges.
 // ---------------------------------------------------------------------------
 
-/** How a reference with `::` was read. Only `alias` is written by stage 3. */
-export type ReferenceForm = 'alias' | 'leading' | 'super' | 'path';
+/**
+ * How a reference was read. `alias` is the only `::` form stage 3 writes;
+ * `import` is a bare name that names no spec of the referring project, looked
+ * up among the names its `use` imports supply (stage 4).
+ */
+export type ReferenceForm = 'alias' | 'import' | 'leading' | 'super' | 'path';
 
-/** What a reference with `::` bound to. */
-export type ReferenceBinding = 'exported' | 'unexported' | 'undeclared' | 'outside' | 'unresolved' | 'local';
+/** What a reference bound to. `ambiguous`: two imports supply one bare name. */
+export type ReferenceBinding = 'exported' | 'unexported' | 'undeclared' | 'outside' | 'unresolved' | 'local' | 'ambiguous';
 
 /**
  * authored_reference — a reference as its author wrote it, recorded by the scan
@@ -45,6 +49,37 @@ export interface AuthoredReference {
   publicName?: string;
   /** The text the writer emits for `resolved` from the referring project; absent when none can be written. */
   rewrite?: string;
+  /** For an import: the alias (or aliases, when ambiguous) whose `use` supplies the name. */
+  importedVia?: string;
+  /**
+   * For an unresolved import: the declared external or member that exports a
+   * name with the same key without importing it, and the `use` line that
+   * would import it. Never a project the referrer does not declare.
+   */
+  hint?: string;
+}
+
+/**
+ * reference_resolution — how one cross-project reference was resolved by the
+ * owner's gate, decided BEFORE any severity, from the referring project's own
+ * files only (its scan, its contained members' export tables, its externals
+ * lock and its pinned snapshots).
+ */
+export interface ReferenceResolution {
+  /** resolved | missing | ambiguous | unavailable | forbidden */
+  outcome: 'resolved' | 'missing' | 'ambiguous' | 'unavailable' | 'forbidden';
+  /** The referring project's id (its key when it has no usable id): the one project whose gate judges it. */
+  owner: string;
+  /** Where the reference is written: the referring spec id and the position in it. */
+  callSite: string;
+  /** The target in producer-id form, `<producer id>::<public name>`; the reference as written when it lands nowhere. */
+  canonicalTarget?: string;
+  /** The digest of the input it was judged against: the pin's content digest, or a contained member's live table's. */
+  inputDigest?: string;
+  /** One sentence saying why the outcome is what it is. */
+  reason: string;
+  /** For a bare name resolved through an import: the alias whose `use` supplied it, and whether by name or by `*`. */
+  importedVia?: string;
 }
 
 /** cross_project_reference — one reference that leaves the project that makes it. */
@@ -119,6 +154,21 @@ export interface ProjectNode {
   aliases: Map<string, string>;
   /** The project's declared externals, each bound to its producer. */
   externals: ResolvedExternal[];
+  /**
+   * The project's `use` imports: one per declared member and external alias,
+   * in declaration order (members first), each with the names it imports as
+   * written — empty when the alias imports nothing (stage 4).
+   */
+  imports: ProjectImport[];
+}
+
+/** project_import — one alias's `use` imports, as the project's configuration declares them. */
+export interface ProjectImport {
+  alias: string;
+  /** externals | members: where the alias is declared. */
+  section: 'externals' | 'members';
+  /** The `use` entries, deduplicated in first-seen order; `*` stays `*`. */
+  use: string[];
 }
 
 /**

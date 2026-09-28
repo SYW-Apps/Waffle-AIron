@@ -1,5 +1,6 @@
 import {
   SURFACE_AUDIENCES,
+  nameKey,
   type ComponentSpec,
   type CrossProjectReference,
   type InterfaceSpec,
@@ -331,7 +332,25 @@ function settle(owner: string, level: 'subsystem' | 'project', candidates: Candi
       detail: `"${name}" is bound to ${targets.length} different targets (${targets.join(', ')}) by ${explicit.length ? 'explicit entries' : 'wildcard re-exports'}; it is left out of the table`,
     });
   }
-  return { owner, level, entries, problems };
+  // Two public names bound to different targets that share one nameKey
+  // (`waffler-error`, `waffler_error`) are a duplicate too: a consumer's bare
+  // `use` import compares by that key and could not tell them apart.
+  const byKey = new Map<string, ResolvedExport[]>();
+  for (const e of entries) byKey.set(nameKey(e.publicName), [...(byKey.get(nameKey(e.publicName)) ?? []), e]);
+  const clashing = new Set<ResolvedExport>();
+  for (const group of byKey.values()) {
+    const targets = [...new Set(group.map((e) => exportTargetKey(e)))];
+    if (group.length < 2 || targets.length < 2) continue;
+    group.forEach((e) => clashing.add(e));
+    problems.push({
+      kind: 'duplicate',
+      owner,
+      publicName: group.map((e) => e.publicName).join(', '),
+      targets,
+      detail: `the public names ${group.map((e) => `"${e.publicName}"`).join(' and ')} share one name key and bind different targets (${targets.join(', ')}), so a bare \`use\` import could not tell them apart; both are left out of the table`,
+    });
+  }
+  return { owner, level, entries: entries.filter((e) => !clashing.has(e)), problems };
 }
 
 /** The strongly connected groups of the `from` graph, sources before their readers. */

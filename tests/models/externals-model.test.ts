@@ -22,10 +22,19 @@ describe('project_config.declaredExternals', () => {
       externals: { billing: {}, crm: { project: 'crm' }, ledger: { project: 'acme.ledger', source: { path: '../ledger' } } },
     });
     expect(declaredExternals(config)).toEqual([
-      { alias: 'billing', project: 'billing' },
-      { alias: 'crm', project: 'crm' },
-      { alias: 'ledger', project: 'acme.ledger', sourcePath: '../ledger' },
+      { alias: 'billing', project: 'billing', use: [] },
+      { alias: 'crm', project: 'crm', use: [] },
+      { alias: 'ledger', project: 'acme.ledger', sourcePath: '../ledger', use: [] },
     ]);
+  });
+
+  it('reads `use` deduplicated in first-seen order, `*` kept, and a malformed entry as the problem (stage 4)', () => {
+    const [shared, broken] = declaredExternals({ externals: {
+      shared: { use: ['waffler-error', '*', 'waffler-error'] },
+      crm: { use: ['CustomerRecord'] },
+    } });
+    expect(shared).toEqual({ alias: 'shared', project: 'shared', use: ['waffler-error', '*'] });
+    expect(broken.problem).toMatch(/neither `\*` nor a public name/);
   });
 
   it('records a malformed alias or producer id as the entry\'s problem rather than dropping it', () => {
