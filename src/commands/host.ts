@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
+import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 // sdd_host's admin workflows are reached in-process through cli_host_adapter,
@@ -24,6 +25,7 @@ import type {
   PermissionValue,
   ScopeKind,
 } from '../server/types.js';
+import type { PackImpact } from '../models/pack-impact.js';
 
 // ---------------------------------------------------------------------------
 // CLI Host Client Adapter + host command runners (sdd_cli → sdd_host)
@@ -68,6 +70,8 @@ export interface HostOptions {
   file?: string;
   open?: boolean;
   force?: boolean;
+  /** Write without the impact report or the question (scripts). */
+  yes?: boolean;
 }
 
 function resolveHostConfig(options: HostOptions): HostConfig {
@@ -659,6 +663,64 @@ export async function runHostSecret(action: string, options: HostOptions = {}): 
 
 // ── wairon host packs <action> ────────────────────────────────────────────────
 
+// ── host packs: the impact before a project pack write ─────────────────────────
+//
+// Installing a pack into a hosted project, or removing one from it, is
+// intentional: in a terminal the command shows what the write would change
+// first — measured by the host, writing nothing — and asks. `--yes`, or a run
+// with no terminal to ask on, writes without the report and says so. The report
+// states changes and never judges them: a pack that loosens wairon's checks is a
+// change like any other. The server-global tier governs no project by itself,
+// so its writes ask nothing.
+
+/** An unattended run: --yes, or no terminal to ask on. */
+function hostPackWriteUnattended(yes?: boolean): boolean {
+  return yes === true || !process.stdin.isTTY || !process.stdout.isTTY;
+}
+
+/** Ask whether to write; anything but yes is no. */
+async function askHostPackWrite(message: string): Promise<boolean> {
+  const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
+    { type: 'confirm', name: 'confirmed', message, default: false },
+  ]);
+  return confirmed === true;
+}
+
+/** The line an unattended project pack write ends with. */
+function sayHostPackAppliedUnseen(name: string, verb: 'installed' | 'removed'): void {
+  logger.info(`${verb === 'installed' ? 'Installed' : 'Removed'} "${name}" without showing its impact (--yes, or no terminal) — run the command in a terminal to see it first.`);
+}
+
+/** The impact report: the doctrine against wairon's defaults by profile, the governing profiles, the finding changes and both totals. */
+function printHostPackImpact(impact: PackImpact): void {
+  const removal = impact.direction === 'remove';
+  logger.blank();
+  console.log(chalk.bold(`Pack impact — ${impact.pack}${impact.version ? ` v${impact.version}` : ''}${impact.replaces ? ` (replaces v${impact.replaces})` : ''}`));
+  console.log(chalk.dim(removal
+    ? '  Measured as removed: the findings below are what the pack accounts for on this project now.'
+    : '  Measured as applied. Nothing has been written. Changes are stated, never judged.'));
+  console.log(chalk.bold('\n  What it changes against wairon\'s defaults'));
+  if (impact.doctrine.length === 0) console.log(chalk.dim('    (no changes against wairon\'s defaults)'));
+  const groups = new Map<string, PackImpact['doctrine']>();
+  for (const c of impact.doctrine) groups.set(c.profile ?? '', [...(groups.get(c.profile ?? '') ?? []), c]);
+  for (const [profile, list] of groups) {
+    console.log(`  ${profile === '' ? 'pack-wide' : `profile ${chalk.bold(profile)}`}`);
+    for (const c of list) {
+      const range = c.from !== undefined || c.to !== undefined ? chalk.dim(` (${c.from ?? '—'} → ${c.to ?? '—'})`) : '';
+      console.log(`    ${c.axis} ${chalk.bold(c.change)}: ${c.subject}${range}${c.reason ? chalk.dim(` — ${c.reason}`) : ''}`);
+    }
+  }
+  console.log(`\n  Governs here: ${impact.governing.length > 0 ? impact.governing.join(', ') : chalk.dim('none of its profiles')}`);
+  const f = impact.findings;
+  console.log(chalk.bold(`\n  Findings on this project${removal ? ' once it no longer applies' : ''}: ${f.introduced.length} introduced, ${f.resolved.length} resolved, ${f.regraded.length} regraded`));
+  for (const i of f.introduced) console.log(`    + ${i.severity} [${i.code}]${i.specId ? chalk.dim(` ${i.specId}`) : ''} ${i.message}`);
+  for (const i of f.resolved) console.log(`    - ${i.severity} [${i.code}]${i.specId ? chalk.dim(` ${i.specId}`) : ''} ${i.message}`);
+  for (const r of f.regraded) console.log(`    ~ ${r.finding.severity} [${r.finding.code}]${r.finding.specId ? chalk.dim(` ${r.finding.specId}`) : ''} ${chalk.dim(`was ${r.from}`)}`);
+  const totals = (v: PackImpact['before']): string => `${v.errors} error(s), ${v.warnings} warning(s), ${v.notices} notice(s)`;
+  console.log(`\n  Before: ${totals(impact.before)}\n  After:  ${totals(impact.after)}`);
+  logger.blank();
+}
+
 export async function runHostPacks(action: string, options: HostOptions = {}): Promise<void> {
   const cfg = resolveHostConfig(options);
   const cred = masterCredential();
@@ -683,18 +745,38 @@ export async function runHostPacks(action: string, options: HostOptions = {}): P
         if (!options.file) throw new WaironError('`--file <path>` (a declarative pack YAML) is required for install.');
         const name = options.name ?? path.basename(options.file).replace(/\.(ya?ml)$/i, '');
         const content = fs.readFileSync(path.resolve(options.file), 'utf8');
+        // Steps 10-14: into a project, the impact first — then install only on yes.
+        if (project && !hostPackWriteUnattended(options.yes)) {
+          printHostPackImpact(localAdmin.previewProjectPack(cfg, cred, project, name, content));
+          if (!(await askHostPackWrite(`Install the pack "${name}" into ${scope}?`))) {
+            logger.info('Nothing was installed.');
+            break;
+          }
+        }
         const desc = project
           ? localAdmin.installProjectPack(cfg, cred, project, name, content)
           : localAdmin.installGlobalPack(cfg, cred, name, content);
         logger.success(`Installed ${scope} pack "${desc.name}" (${desc.profiles} profile(s), ${desc.languages} language(s)).`);
         if (project) logger.info('Committed with the project — every clone and CI will enforce it.');
+        // Step 16: an unattended run says it installed without showing the impact.
+        if (project && hostPackWriteUnattended(options.yes)) sayHostPackAppliedUnseen(desc.name, 'installed');
         break;
       }
       case 'remove': {
         if (!options.name) throw new WaironError('`--name <name>` is required for `host packs remove`.');
+        // Steps 20-24: from a project, the impact first — then remove only on yes.
+        if (project && !hostPackWriteUnattended(options.yes)) {
+          printHostPackImpact(localAdmin.previewProjectPackRemoval(cfg, cred, project, options.name));
+          if (!(await askHostPackWrite(`Remove the pack "${options.name}" from ${scope}?`))) {
+            logger.info('Nothing was removed.');
+            break;
+          }
+        }
         if (project) localAdmin.removeProjectPack(cfg, cred, project, options.name);
         else localAdmin.removeGlobalPack(cfg, cred, options.name);
         logger.success(`Removed ${scope} pack "${options.name}".`);
+        // Step 26: an unattended run says it removed without showing the impact.
+        if (project && hostPackWriteUnattended(options.yes)) sayHostPackAppliedUnseen(options.name, 'removed');
         break;
       }
       default:

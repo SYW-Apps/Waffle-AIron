@@ -30,6 +30,8 @@ import {
   syncContextFiles,
 } from './adapters/core.js';
 import { exportSddSkills } from './adapters/skills.js';
+import { reportMemberPacks } from './subsystem.js';
+import type { MemberCreation } from '../core/index.js';
 import { defaultTargetConfig } from '../config/defaults.js';
 import { ProjectConfig, TargetConfig, activeTargetTypes, declaredMembers, effectiveProjectId } from '../models/project.js';
 
@@ -131,6 +133,7 @@ async function runInitAsMember(
   // there, and this directory is scaffolded as its project.
   const prevOverride = getProjectRootOverride();
   setProjectRoot(parentRoot);
+  let creation: MemberCreation;
   try {
     // Step 8: the parent's system spec; a parent without one is refused.
     const system = loadSystemSpec();
@@ -145,7 +148,7 @@ async function runInitAsMember(
     if (declared) alias = declared.alias;
     // Step 11: scaffold this directory's project and declare it in the
     // parent's `members`; no L1 spec is written into the parent.
-    createMember(alias, relPath);
+    creation = createMember(alias, relPath);
   } finally {
     setProjectRoot(prevOverride);
   }
@@ -153,6 +156,9 @@ async function runInitAsMember(
   // Step 12: the member was created.
   logger.success(`Created "${relPath}" as the member "${alias}" of the parent project.`);
   logger.info(`Declared it in the parent's project.yaml \`members\` and scaffolded this directory as its project (id "${alias}").`);
+  // What scaffolding applied: the parent's required packs, the projectType, and
+  // each requirement nothing installed satisfies — as `wairon member add` states it.
+  reportMemberPacks(creation);
   logger.info(`Design it from here, and export what the parent consumes from its L0; the parent references it as ${alias}::<name>.`);
 }
 

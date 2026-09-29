@@ -1123,9 +1123,10 @@ hostCmd
   .option('--project <id>', 'target a hosted project (omit for server-global)')
   .option('--name <name>', 'pack name / file stem')
   .option('--file <path>', 'declarative pack YAML file (for install)')
+  .option('-y, --yes', 'install or remove a project pack without showing its impact or asking (scripts)')
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
-    await runHostPacks(action, { project: opts.project, name: opts.name, file: opts.file, dataDir: opts.dataDir });
+    await runHostPacks(action, { project: opts.project, name: opts.name, file: opts.file, dataDir: opts.dataDir, yes: opts.yes });
   });
 
 hostCmd

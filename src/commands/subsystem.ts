@@ -73,9 +73,10 @@ function shown(memberPath: string): string {
 /**
  * What scaffolding applied: the required packs written into a new member's
  * configuration (an unattended pack write, so no impact report is shown), the
- * projectType it set, and each requirement nothing installed satisfies.
+ * projectType it set, and each requirement nothing installed satisfies. Shared
+ * by `wairon member add` and the member branch of `wairon init`.
  */
-function reportMemberPacks(creation: MemberCreation): void {
+export function reportMemberPacks(creation: MemberCreation): void {
   if (!creation.configCreated) return;
   for (const selection of creation.adopted) {
     logger.info(`Applied the required pack ${selection.name}@${selection.version} to its new configuration (pinned, with its digest) — no impact report is shown for scaffolding; see it with \`wairon pack impact ${selection.name}\` at the member's root.`);
