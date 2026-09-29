@@ -127,28 +127,15 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: resolveProjectExports
       - stepNumber: 15
-        label: rounds
         description: >-
-          Match in rounds, each over the references the rounds before left undecided: a name no
-          tie-break rule decides may be decided once the imports already planned declare their
-          producers and export their names — exactly what a re-run after apply would decide, so the
+          Match those references by position — the same match the upgrade report explains, which
+          decides in rounds what a re-run after apply would decide (a producer the consumer will
+          declare, and a name a producer will export, count as declared and exported), so the
           migration stays idempotent
-        type: loop
-        condition: >-
-          the last round declared a producer or planned an export it had not before, and a name is
-          still undecided
-        loopKind: doWhile
-        endStep: 17
-      - stepNumber: 16
-        description: >-
-          Match those references by position — the same match the upgrade report explains — over the
-          graph and tables as the imports planned so far leave them (each import's producer declared
-          by its consumer, each planned export bound under its public name); the chaining migration
-          hands in the graph with the externals its own crossings and converted pins declare already
         type: call
         targetComponent: position_reader
         targetMethod: match
-      - stepNumber: 17
+      - stepNumber: 16
         label: plan-matches
         description: >-
           Plan from each match. import: an import of the public name on the consumer's alias for the
@@ -166,7 +153,7 @@ methods:
           already holds — are dropped for that name and reported (import-collision). none: nothing —
           a genuine dangling reference, which the gate reports
         type: local
-      - stepNumber: 18
+      - stepNumber: 17
         label: held-back
         description: >-
           Hold back every rewrite planned in a spec that also holds a reference the loader binds
@@ -174,7 +161,7 @@ methods:
           planned import makes resolve: the re-save refuses that spec whole, so its rewrites wait
           with it, named in its rewrite-unavailable finding
         type: local
-      - stepNumber: 19
+      - stepNumber: 18
         description: 'Answer the plan: members, rewrites, imports and findings'
         type: return
         outcome: PositionMigrationPlan
@@ -267,4 +254,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-09-27T10:45:51.006Z'
-updatedAt: '2026-09-29T14:16:56.263Z'
+updatedAt: '2026-09-29T14:20:42.923Z'

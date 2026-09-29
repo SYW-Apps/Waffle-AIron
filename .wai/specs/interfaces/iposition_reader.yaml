@@ -13,10 +13,13 @@ methods:
       exports — the retired suffix match. Exactly one project matching is import (reason
       only-match), naming the producer, the canonical target and the existing public name when there
       is one. Several projects matching are decided by two rules, in order: prefer the one the
-      referring project already declares as a member or an external (declared-producer); failing
-      that, among the candidates left prefer the one that already exports the name as a public name
-      (already-exported). Otherwise it is ambiguous, listing every candidate and what each rule left
-      — a person picks. Every automatic choice carries its reason. None is none. Never consults
+      referring project declares (declared-producer); failing that, among the candidates left prefer
+      the one that exports the name as a public name (already-exported). Otherwise it is ambiguous,
+      listing every candidate and what each rule left — a person picks. It decides in rounds, as a
+      re-run after the migration applies would: "declares" counts a member or external, a project
+      its `alias::name` references already reach (the migration declares it) and a producer an
+      earlier round's import declares; "exports" counts a name an earlier round's import makes the
+      producer export. Every automatic choice carries its reason. None is none. Never consults
       anything but what it is handed, never resolves for validation.
     signature: >-
       match(unresolved: AuthoredReference[], family: ProjectFamily, tables: ResolvedExportTable[],
@@ -41,4 +44,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-28T16:09:32.534Z'
-updatedAt: '2026-09-28T18:12:32.093Z'
+updatedAt: '2026-09-29T14:21:11.677Z'

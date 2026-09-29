@@ -21,6 +21,13 @@ import {
 // its export tables and its types, and computes. The upgrade report
 // (verdict_changes) and the positional migration step both read it, so the
 // report explains exactly what the migration writes.
+//
+// It decides in rounds, each over what the rounds before left ambiguous: a
+// producer the referring project will declare once the migration applies — one
+// it already reaches by `alias::name`, or one an import decided in an earlier
+// round declares — is a declared producer, and a name an earlier round's
+// import makes a producer export is already exported. That is exactly what a
+// re-run after apply decides, so the migration it plans is idempotent.
 // ---------------------------------------------------------------------------
 
 /**
@@ -110,7 +117,7 @@ function canonical(family: ProjectFamily, claim: Claim): string {
   return `${id}::${claim.localId}`;
 }
 
-/** Steps 3-4: a self-prefixed reference — the referring project's own id as its first segment. */
+/** Steps 4-5: a self-prefixed reference — the referring project's own id as its first segment. */
 function selfPrefix(family: ProjectFamily, ref: AuthoredReference, consumer: string): PositionalMatch | null {
   const ownId = familyNode(family, consumer)?.id;
   const [first, ...rest] = ref.authored.split(/::|\./);
@@ -123,8 +130,33 @@ function selfPrefix(family: ProjectFamily, ref: AuthoredReference, consumer: str
     : { ...base, kind: 'none', reason: `the project's own id prefixes "${local}", which it does not hold` };
 }
 
-/** Step 7: classify the projects a bare name matched. */
-function classify(family: ProjectFamily, base: Omit<PositionalMatch, 'kind'>, consumer: string, claims: Claim[], index: NameIndex, key: string): PositionalMatch {
+/**
+ * The producers each project declares or will declare once the migration
+ * applies: its members and externals, the projects its `alias::name`
+ * references already reach, and what earlier rounds' imports declare.
+ */
+class Declarations {
+  private readonly extra = new Map<string, Set<string>>();
+
+  constructor(private readonly family: ProjectFamily) {
+    for (const ref of family.references) this.add(ref.consumer, ref.producer);
+  }
+
+  add(consumer: string, producer: string): boolean {
+    const set = this.extra.get(consumer) ?? new Set<string>();
+    if (set.has(producer)) return false;
+    set.add(producer);
+    this.extra.set(consumer, set);
+    return true;
+  }
+
+  has(consumer: string, producer: string): boolean {
+    return declares(this.family, consumer, producer) || (this.extra.get(consumer)?.has(producer) ?? false);
+  }
+}
+
+/** Step 8: classify the projects a bare name matched. */
+function classify(family: ProjectFamily, base: Omit<PositionalMatch, 'kind'>, consumer: string, claims: Claim[], index: NameIndex, key: string, declared_: Declarations): PositionalMatch {
   const byProject = [...new Set(claims.map((c) => c.project))];
   const pick = (project: string, reason: string): PositionalMatch => {
     const claim = claims.find((c) => c.project === project)!;
@@ -136,7 +168,7 @@ function classify(family: ProjectFamily, base: Omit<PositionalMatch, 'kind'>, co
   };
   if (byProject.length === 0) return { ...base, kind: 'none', reason: 'nothing in the family matches the name' };
   if (byProject.length === 1) return pick(byProject[0], 'only-match');
-  const declared = byProject.filter((p) => declares(family, consumer, p));
+  const declared = byProject.filter((p) => declared_.has(consumer, p));
   if (declared.length === 1) return pick(declared[0], 'declared-producer');
   const left = declared.length > 0 ? declared : byProject;
   const exporting = left.filter((p) => index.exported.get(key)?.some((c) => c.project === p));
@@ -163,30 +195,60 @@ export function match(
   tables: ResolvedExportTable[],
   types: TypeSpec[],
 ): PositionalMatch[] {
-  // Step 1: index the family once.
+  // Step 1: index the family once, and what each project declares.
   const index = indexFamily(family, tables, types);
-  const out: PositionalMatch[] = [];
-  // Step 2: each unresolved reference, in scan order.
-  for (const ref of unresolved) {
-    const consumer = family.owners.get(ref.specId) ?? '';
-    // Steps 3-5: a self-prefix.
-    const self = selfPrefix(family, ref, consumer);
-    if (self) {
-      out.push(self);
-      continue;
-    }
-    // Step 6: the name's key among the OTHER projects' public names, and the
-    // types they own that no table exports (a project's public name first).
-    const segments = ref.authored.split(/::|\./);
-    const key = nameKey(segments[segments.length - 1]);
-    const others = (claims: Claim[] | undefined): Claim[] => (claims ?? []).filter((c) => c.project !== consumer);
-    const exported = others(index.exported.get(key));
-    const claims = [...exported, ...others(index.owned.get(key)).filter((c) => !exported.some((e) => e.project === c.project))];
-    // Steps 7-8: classify.
-    const base = { consumer, specId: ref.specId, position: ref.position, authored: ref.authored };
-    out.push(classify(family, base, consumer, claims, index, key));
+  const declared = new Declarations(family);
+  const out = new Map<AuthoredReference, PositionalMatch>();
+  let open = unresolved;
+  // Step 2: in rounds, while the last one declared or exported something new.
+  for (;;) {
+    // Steps 3-9: each reference still open, in scan order.
+    for (const ref of open) out.set(ref, matchOne(ref, family, index, declared));
+    // Step 10: what this round's imports declare and export.
+    const decided = open.map((ref) => out.get(ref)!).filter((m) => m.kind === 'import');
+    const grew = decided.reduce((g, m) => learn(m, family, index, declared) || g, false);
+    open = open.filter((ref) => out.get(ref)!.kind === 'ambiguous');
+    if (!grew || open.length === 0) break;
   }
-  // Step 9.
-  return out;
+  // Step 11.
+  return unresolved.map((ref) => out.get(ref)!);
+}
+
+/** Steps 4-9 for one reference. */
+function matchOne(ref: AuthoredReference, family: ProjectFamily, index: NameIndex, declared: Declarations): PositionalMatch {
+  const consumer = family.owners.get(ref.specId) ?? '';
+  // Steps 4-6: a self-prefix.
+  const self = selfPrefix(family, ref, consumer);
+  if (self) return self;
+  // Step 7: the name's key among the OTHER projects' public names, and the
+  // types they own that no table exports (a project's public name first).
+  const segments = ref.authored.split(/::|\./);
+  const key = nameKey(segments[segments.length - 1]);
+  const others = (claims: Claim[] | undefined): Claim[] => (claims ?? []).filter((c) => c.project !== consumer);
+  const exported = others(index.exported.get(key));
+  const claims = [...exported, ...others(index.owned.get(key)).filter((c) => !exported.some((e) => e.project === c.project))];
+  // Steps 8-9: classify.
+  const base = { consumer, specId: ref.specId, position: ref.position, authored: ref.authored };
+  return classify(family, base, consumer, claims, index, key, declared);
+}
+
+/**
+ * Step 10: what one decided import leaves behind once applied — its producer
+ * declared by its consumer, and a name exported under its default public name
+ * where the producer exported none. An import a spec of the consumer would
+ * shadow is never written, so it teaches nothing. True when something is new.
+ */
+function learn(m: PositionalMatch, family: ProjectFamily, index: NameIndex, declared: Declarations): boolean {
+  const localId = m.target!.slice(m.target!.indexOf('::') + 2);
+  const name = m.publicName ?? localId.split('::').pop()!;
+  const key = nameKey(name);
+  const shadowed = [...family.owners].some(([id, owner]) => owner === m.consumer && nameKey(id.split('::').pop()!) === key);
+  if (shadowed) return false;
+  let grew = declared.add(m.consumer, m.producer!);
+  if (m.publicName === undefined && !(index.exported.get(key) ?? []).some((c) => c.project === m.producer)) {
+    add(index.exported, key, { project: m.producer!, localId, publicName: name });
+    grew = true;
+  }
+  return grew;
 }
 

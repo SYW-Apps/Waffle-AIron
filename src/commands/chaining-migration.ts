@@ -583,10 +583,7 @@ function pinNeverPinned(ctx: Planning, node: ProjectNode): void {
 // ── step 22: the retirement of position ────────────────────────────────────
 
 function mergePosition(ctx: Planning): void {
-  // The graph as this plan's earlier steps leave it: a positional name's
-  // declared producer includes one the crossings or a converted stage-1 pin
-  // declare now, exactly as a re-run after apply would see it.
-  const planned = position.plan(declaredAsPlanned(ctx));
+  const planned = position.plan(ctx.family);
   for (const member of planned.members) {
     const parent = familyNode(ctx.family, member.parent);
     const child = familyNode(ctx.family, member.member);
@@ -660,22 +657,6 @@ function newDependencies(ctx: Planning): string[] {
     }
   }
   return lines;
-}
-
-/** The family graph with every external planned so far declared on its consumer. */
-function declaredAsPlanned(ctx: Planning): ProjectFamily {
-  return {
-    ...ctx.family,
-    nodes: ctx.family.nodes.map((node) => {
-      const externals = ctx.projects.get(node.namespace)?.externals ?? [];
-      if (externals.length === 0) return node;
-      return {
-        ...node,
-        aliases: new Map([...node.aliases, ...externals.map((e) => [e.alias, e.producer] as [string, string])]),
-        externals: [...node.externals, ...externals.map((e) => ({ alias: e.alias, project: e.project, sourceKind: 'family' as const, producer: e.producer, audience: 'project' }))],
-      };
-    }),
-  };
 }
 
 /** A carried mount entry, unless an entry for the same item is planned already. */

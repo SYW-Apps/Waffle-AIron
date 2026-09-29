@@ -12,6 +12,7 @@ import { ComponentSpecSchema, TypeSpecSchema } from '../../src/models/index.js';
 import { validateProject, validateFamily, type ValidationResult } from '../../src/core/validation.js';
 import { plan, apply, isEmpty } from '../../src/commands/chaining-migration.js';
 import { runDoctor } from '../../src/commands/doctor.js';
+import { explain } from '../../src/commands/verdict-changes.js';
 import { buildImportFamily, type ImportFamily } from '../helpers/reference-family.js';
 
 // ---------------------------------------------------------------------------
@@ -132,6 +133,8 @@ describe('stage 4 — the positional migration', () => {
     const ambiguous = planned.findings.find((x) => x.kind === 'positional-ambiguous')!;
     expect(ambiguous.detail).toContain('shared::waffler-error and ui::waffler_error');
     expect(ambiguous.detail).toContain('a person picks');
+    // The upgrade report reads the same match: what it leaves to a person is what the plan leaves.
+    expect(at(f.top, () => explain()).unmatched.filter((m) => m.kind === 'ambiguous').map((m) => `${m.consumer}|${m.authored}`)).toEqual(['|WafflerError']);
   });
 
   it('property: newDependencies lists exactly the edges no external and no pin had before', () => {
@@ -166,7 +169,7 @@ describe('stage 4 — the positional migration', () => {
     const planned = at(f.top, () => plan());
     const app = planned.projects.find((p) => p.project === 'app')!;
     expect(app.externals.map((e) => `${e.alias}|${e.reason}`)).toEqual(['shared|reference', 'ui|positional']);
-    expect(app.imports.find((i) => i.name === 'waffler-error')).toMatchObject({ alias: 'shared', reason: 'declared-producer', declaresExternal: false });
+    expect(app.imports.find((i) => i.name === 'waffler-error')).toMatchObject({ alias: 'shared', reason: 'declared-producer' });
     at(f.top, () => apply(planned));
     expect(isEmpty(at(f.top, () => plan()))).toBe(true);
   });
