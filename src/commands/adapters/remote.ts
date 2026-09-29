@@ -135,10 +135,11 @@ export async function importRemoteTree(
   })) as TreeImportResult;
 }
 
-/** cli_remote_adapter.validateRemoteTree — sdd_validate_tree on the bound project. */
-export async function validateRemoteTree(target: RemoteTarget, subsystem?: string): Promise<unknown> {
-  // Step 1: call the hosted validator over the bound tree.
-  return callTool(target, 'sdd_validate_tree', subsystem ? { subsystem } : {});
+/** cli_remote_adapter.validateRemoteTree — sdd_validate_tree on the bound project; `family` asks for the family run. */
+export async function validateRemoteTree(target: RemoteTarget, subsystem?: string, family?: boolean): Promise<unknown> {
+  // Step 1: call the hosted validator over the bound tree. The family run is
+  // the instance's, within the credential's reach: asking never widens it.
+  return callTool(target, 'sdd_validate_tree', { ...(subsystem ? { subsystem } : {}), ...(family ? { family: true } : {}) });
 }
 
 /** cli_remote_adapter.getRemoteStatus — sdd_get_status on the bound project. */

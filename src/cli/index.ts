@@ -232,7 +232,7 @@ async function lockCommand(opts: { yes?: boolean; subsystem?: string; recursive?
 async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursive?: boolean; family?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
-    const report = (await validateAttached(target, opts.subsystem)) as {
+    const report = (await validateAttached(target, opts.subsystem, opts.family)) as {
       valid?: boolean;
       errors?: { code: string; message: string; specId?: string }[];
       warnings?: { code: string; message: string; specId?: string }[];

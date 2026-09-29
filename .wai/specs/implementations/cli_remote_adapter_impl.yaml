@@ -60,8 +60,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          POST a tools/call for sdd_validate_tree scoped to the bound project; return the parsed
-          report.
+          POST a tools/call for sdd_validate_tree scoped to the bound project, with family: true
+          when the family run was asked for; return the parsed report.
         type: call
         targetComponent: host_http_portal
         targetMethod: handleMcpRequest
@@ -166,4 +166,4 @@ lint:
         resolves import graphs within a single build.
 status: complete
 createdAt: '2026-08-12T18:32:35.043Z'
-updatedAt: '2026-09-25T20:49:39.376Z'
+updatedAt: '2026-09-29T13:55:00.785Z'

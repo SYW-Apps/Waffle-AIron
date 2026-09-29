@@ -55,14 +55,19 @@ methods:
     description: >-
       Call sdd_validate_tree against the bound hosted project and return the validation report, so
       `wairon validate` in an attached checkout gates on the tree that actually exists rather than
-      on nothing. Requires project:read.
-    signature: 'validateRemoteTree(target: RemoteTarget, subsystem?: string): Json'
+      on nothing. With family, the call asks for the family run; the instance composes within the
+      credential's reach, and asking never widens it. Requires project:read.
+    signature: 'validateRemoteTree(target: RemoteTarget, subsystem?: string, family?: boolean): Json'
     returns: Json
     params:
       - name: target
         type: remote_target
       - name: subsystem
         type: string
+        optional: true
+      - name: family
+        type: boolean
+        description: Ask for the family run (`validate --family`)
         optional: true
   - name: getRemoteStatus
     description: >-
@@ -88,4 +93,4 @@ methods:
         type: remote_target
 status: complete
 createdAt: '2026-08-12T18:31:37.284Z'
-updatedAt: '2026-09-24T13:20:20.617Z'
+updatedAt: '2026-09-29T13:54:58.491Z'
