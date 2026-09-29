@@ -512,7 +512,8 @@ it is validated from: every cross-project edge has exactly one judge.
 - **Reach.** A plain run reads nothing above the project it was started at: an
   external whose producer lies above is counted in a one-line hint instead of failing.
   `--family` makes the walk up explicit. Hosted, the run keeps the credential's reach
-  and never widens it.
+  and never widens it; `validate --family` in an attached checkout asks the instance for
+  it.
 - **Declared imports.** An external or a member may import names:
   `externals: { shared: { use: [waffler-error] } }` (or `use: ['*']`). A bare name
   resolves to a local spec first, then to an exported public name of an alias that
@@ -546,7 +547,38 @@ findings by a reason it can compute: **escalated** (one of the codes above),
 **pinned** (a reference now judged against the project's own pin), and **positional**
 (a reference the family's top still matches by position, with what it matched and the
 `use` line, export or external it needs — the same match the positional migration
-writes from). What it cannot attribute is counted, never explained away.
+writes from). What it cannot attribute is counted, never explained away; a positional
+candidate no rule decides is listed with every candidate for a person to pick.
+
+**The positional migration.** `wairon doctor --report chaining` plans it and writes
+nothing; `wairon doctor --fix` prints the same plan, asks (`--yes` in a script) and
+applies it. For every reference that resolved before stage 4 only by position it writes
+the explicit form stage 4 needs, from the same match the upgrade report explains:
+
+- a **named `use` import** — `externals: { shared: { use: [waffler-error] } }`, or on the
+  member alias — with the reason the producer was chosen (`only-match`,
+  `declared-producer`, `already-exported`; a producer this plan itself declares is marked
+  so), the export the producer lacks (reason `positional`) and the external the consumer
+  lacks, pinned;
+- a **self-prefixed reference** (`registry.x`, `registry::x` in the project called
+  registry — for a member that declares no id, also the alias its parent gives it)
+  rewritten to its bare local id, raw type positions included;
+- nothing it would have to guess: a name no tie-break rule decides is
+  `positional-ambiguous` (every candidate listed — a person picks), a named import a local
+  spec would shadow is `import-shadowed` and never written, and two imports supplying one
+  bare name are `import-collision`.
+
+The match decides in rounds, as a re-run after apply would: a producer the consumer
+declares — or will, because it already reaches it by `alias::name` or an earlier round's
+import declares it — is a declared producer. So the migration is idempotent: the second
+plan is empty. The plan **opens with every new cross-project dependency** it adds
+("waffler_core now depends on waffler_ui (61 references)") — listed, never blocking, no
+layering guessed; whether the edge should exist is the reader's call. Apply writes ids,
+exports and externals, then the member moves, imports, rewrites and stage-1 pin
+deletions, and **pins last** — every family external declared before the migration and
+never pinned included — so every snapshot projects the final spelling. Nothing is
+locked: each project whose approval the writes staled is named, to be re-locked with
+`wairon lock` at its own root.
 
 **Upgrading.**
 
@@ -558,8 +590,10 @@ writes from). What it cannot attribute is counted, never explained away.
   alone.
 - **A bare name another project supplies needs a `use` import**, and a reference into
   another project needs the producer to export it and the consumer to declare and pin
-  it (`wairon externals pin`). The positional migration step that writes these for a
-  whole family ships in the next wave; until then the report lists each one.
+  it. Run `wairon doctor --report chaining` at the family's top, read the new
+  dependencies it lists first, then `wairon doctor --fix` to write them all; settle what
+  it reports for a person (`positional-ambiguous`, `import-shadowed`, `import-collision`)
+  by hand, and re-lock each project it names.
 - Scripts that called `validateSddTree` call `validateProject`.
 - An MCP client reading `sdd_validate_tree` sees an optional `projects` list and a
   `project` key on each finding in a family run.
