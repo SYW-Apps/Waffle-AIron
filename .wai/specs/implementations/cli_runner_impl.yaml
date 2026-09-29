@@ -2718,6 +2718,6 @@ lint:
         and every `pack` subcommand's action calls runPack directly, so scope-based sub-dispatchers
         would be invented here rather than named in the code. Adding a pack subcommand adds two
         steps, which is the point.
-status: design
+status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-29T13:54:54.397Z'
+updatedAt: '2026-09-29T14:48:29.075Z'

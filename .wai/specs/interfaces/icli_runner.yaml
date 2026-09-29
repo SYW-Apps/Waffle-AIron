@@ -507,6 +507,6 @@ methods:
     signature: 'runExternals(action: string, aliases: string[], options: { json?: boolean }): Promise<void>'
     returns: Promise<void>
     params: []
-status: design
+status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T06:16:54.809Z'
+updatedAt: '2026-09-29T14:48:28.588Z'
