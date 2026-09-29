@@ -6,8 +6,10 @@ description: >-
   (unchanged; this wrapper is never stored), each required/default pack the instance policy applied
   with its impact measured before the write, and the impact of the governing-profile step, measured
   separately. Init is an unattended policy write, so nothing is shown beforehand; this is how its
-  result states what it changed. The same impacts are also written to the project.init.policy audit
-  event. Declared in src/server/types.ts beside HostedProjectRecord.
+  result states what it changed, and it is the only place the full impacts are kept. The
+  project.init.policy audit event records a compact form of each impact (doctrine changes counted by
+  kind, finding counts and both totals), because audit metadata is size-capped and a full finding
+  list would not fit. Declared in src/server/types.ts beside HostedProjectRecord.
 fields:
   - name: record
     type: HostedProjectRecord
@@ -30,4 +32,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-09-29T16:14:30.254Z'
-updatedAt: '2026-09-29T21:27:33.633Z'
+updatedAt: '2026-09-29T21:58:59.101Z'

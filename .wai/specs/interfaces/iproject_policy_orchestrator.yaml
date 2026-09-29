@@ -25,7 +25,9 @@ methods:
       projectType in place and is recorded in the audit rather than failing project creation.
       Returns a GovernedProjectCreation: the created hosted project record (the persisted record,
       unchanged) with the impact of every pack and of the governing-profile step the init applied —
-      an unattended policy write stating what it changed; the audit event carries the same impacts.
+      an unattended policy write stating what it changed; the audit event records a compact form of
+      them (audit metadata is size-capped; the full lists are only in the returned
+      GovernedProjectCreation).
     signature: >-
       initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
       GovernedProjectCreation
@@ -200,11 +202,13 @@ methods:
       before its write), records the resolved ProjectProfileSelection, APPLIES that selection so it
       actually governs the new project (the first recorded id the instance can resolve becomes
       projectType, the step measured separately before its writes; the rest stay recorded as the
-      unapplied remainder), and audits 'project.init.policy' best-effort with the impacts. A
-      selection no tier can resolve leaves the default projectType in place and is reported in the
-      audit rather than failing creation. When a principal is supplied the recorded selection and
-      the audit are attributed to that caller; the pre-authorized entry runs without one. Returns
-      the GovernedProjectCreation: the persisted record, unchanged, beside the pack impacts and the
+      unapplied remainder), and audits 'project.init.policy' best-effort with a compact form of the
+      impacts (doctrine changes counted by kind, finding counts and both totals — audit metadata is
+      size-capped, so the full lists stay in the returned GovernedProjectCreation). A selection no
+      tier can resolve leaves the default projectType in place and is reported in the audit rather
+      than failing creation. When a principal is supplied the recorded selection and the audit are
+      attributed to that caller; the pre-authorized entry runs without one. Returns the
+      GovernedProjectCreation: the persisted record, unchanged, beside the pack impacts and the
       governing-profile impact.
     signature: >-
       createGovernedProject(request: ProjectInitRequest, principal?: Principal):
@@ -275,4 +279,4 @@ methods:
         description: The redacted event to append
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-09-29T16:15:57.819Z'
+updatedAt: '2026-09-29T21:59:28.518Z'
