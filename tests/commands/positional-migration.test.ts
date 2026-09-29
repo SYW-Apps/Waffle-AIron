@@ -142,6 +142,35 @@ describe('stage 4 — the positional migration', () => {
     expect(at(f.top, () => plan()).newDependencies).toEqual([]);
   });
 
+  it('a name no rule decides in one round is decided in the next, by what the plan declares — so a re-run finds nothing left', () => {
+    const f = fresh();
+    // `Glyph` keys onto the top and ui, neither of which app declares; `BannerStyle` makes the plan declare ui.
+    typeFile(f.top, 'glyph', [{ name: 'shape', type: 'string' }]);
+    typeFile(f.ui, 'glyph', [{ name: 'shape', type: 'string' }]);
+    typeFile(f.app, 'badge', [{ name: 'glyph', type: 'Glyph' }]);
+    const planned = at(f.top, () => plan());
+    const app = planned.projects.find((p) => p.project === 'app')!;
+    expect(app.imports.map((i) => `${i.alias}|${i.name}|${i.reason}`)).toEqual([
+      'shared|waffler-error|declared-producer', 'ui|banner-style|only-match', 'ui|glyph|declared-producer',
+    ]);
+    expect(planned.newDependencies).toEqual(['app now depends on ui (2 references)']);
+    at(f.top, () => apply(planned));
+    expect(isEmpty(at(f.top, () => plan()))).toBe(true);
+  });
+
+  it('a producer the plan\'s own crossings declare is a declared producer for the positional step', () => {
+    const f = fresh();
+    // app declares nothing, but its `shared::host-record` makes the plan declare shared; so `WafflerError` is shared's.
+    fs.writeFileSync(path.join(f.app, '.wai', 'project.yaml'), ['schemaVersion: 1.0.0', 'id: app', 'name: App', 'targets: []',
+      `createdAt: '${STAMP}'`, `updatedAt: '${STAMP}'`, ''].join('\n'));
+    const planned = at(f.top, () => plan());
+    const app = planned.projects.find((p) => p.project === 'app')!;
+    expect(app.externals.map((e) => `${e.alias}|${e.reason}`)).toEqual(['shared|reference', 'ui|positional']);
+    expect(app.imports.find((i) => i.name === 'waffler-error')).toMatchObject({ alias: 'shared', reason: 'declared-producer', declaresExternal: false });
+    at(f.top, () => apply(planned));
+    expect(isEmpty(at(f.top, () => plan()))).toBe(true);
+  });
+
   it('property: a named import a local spec would shadow is reported, never written', () => {
     const f = fresh();
     const planned = at(f.top, () => plan());

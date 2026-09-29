@@ -770,7 +770,8 @@ function printProjectMigration(p: ProjectMigration): void {
   }
   for (const i of p.imports) {
     const needs = [i.exportPlanned ? 'its export planned above' : undefined, i.declaresExternal ? 'its external planned above' : undefined].filter(Boolean);
-    console.log(`    use: ${i.alias}: [${i.name}] — ${i.target}, ${i.reason}; resolves ${i.references.length} reference(s)${needs.length > 0 ? `, with ${needs.join(' and ')}` : ''}`);
+    const byPlan = i.reason === 'declared-producer' && p.externals.some((x) => x.alias === i.alias) ? ' (declared by this plan)' : '';
+    console.log(`    use: ${i.alias}: [${i.name}] — ${i.target}, ${i.reason}${byPlan}; resolves ${i.references.length} reference(s)${needs.length > 0 ? `, with ${needs.join(' and ')}` : ''}`);
   }
   if (p.pins.length > 0) console.log(`    pin (last): ${p.pins.join(', ')}`);
   for (const m of p.members) {

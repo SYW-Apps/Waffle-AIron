@@ -3,12 +3,12 @@ import * as core from './adapters/core.js';
 import * as surfaces from './adapters/surfaces.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { declaredMembers } from '../models/project.js';
-import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode } from '../models/project-family.js';
+import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode, type ResolvedExternal } from '../models/project-family.js';
 import { nameKey } from '../models/type-references.js';
 // position_reader: stage 4's positional match — the same one the upgrade report explains.
 import * as positionReader from './position-reader.js';
 import type { PositionalMatch } from './position-reader.js';
-import { exportTargetKey, type ResolvedExportTable } from '../models/exports.js';
+import { exportTargetKey, type ResolvedExport, type ResolvedExportTable } from '../models/exports.js';
 import type { ComponentSpec, PublicInterface, SubsystemSpec, TypeSpec } from '../models/specs.js';
 import type { ChainingMigrationFinding, ChainingMigrationPlan, PlannedExport, ProjectMigration } from './chaining-migration.js';
 
@@ -142,11 +142,11 @@ export function plan(family: ProjectFamily): PositionMigrationPlan {
   // Steps 11-12: each deprecated reference.
   const seen = new Set<string>();
   for (const ref of family.authoredReferences) planRewrite(family, ref, seen, out);
-  // Steps 13-16: stage 4's positional step.
+  // Steps 13-17: stage 4's positional step.
   planPositional(family, out);
-  // Step 17: a spec the re-save would refuse keeps its rewrites back.
+  // Step 18: a spec the re-save would refuse keeps its rewrites back.
   holdBack(family, out);
-  // Step 18.
+  // Step 19.
   return out;
 }
 
@@ -310,7 +310,7 @@ function whyNone(ref: AuthoredReference): string {
 const BOUND = new Set(['publicInterfaces', 'lifecycle', 'subsystem', 'owns', 'dependsOn', 'dispatch', 'mounts', 'contract', 'narrative', 'group']);
 
 /**
- * Step 17: a spec holding a bound reference with no canonical text keeps every
+ * Step 18: a spec holding a bound reference with no canonical text keeps every
  * rewrite back — a deprecated form bound outside or unresolved, or a bare name
  * no planned import will make resolve.
  */
@@ -331,7 +331,7 @@ function holdBack(family: ProjectFamily, out: PositionMigrationPlan): void {
   }
 }
 
-// ── steps 13-16: stage 4's positional step ─────────────────────────────────
+// ── steps 13-17: stage 4's positional step ─────────────────────────────────
 
 /** A reference as a planned import lists it: `<spec id> <position> <as written>`. */
 function referenceLine(ref: { specId: string; position: string; authored: string }): string {
@@ -344,7 +344,7 @@ function isSelfPrefix(ref: AuthoredReference, owner: string | undefined): boolea
     && ref.rewrite !== undefined && !ref.rewrite.includes('::') && ref.authored !== ref.rewrite;
 }
 
-/** Steps 13-16: the positional imports and self-prefix rewrites, and every finding no rule decides. */
+/** Steps 13-17: the positional imports and self-prefix rewrites, and every finding no rule decides. */
 function planPositional(family: ProjectFamily, out: PositionMigrationPlan): void {
   const seen = new Set<string>();
   const candidates = family.authoredReferences.filter((r) => {
@@ -357,23 +357,82 @@ function planPositional(family: ProjectFamily, out: PositionMigrationPlan): void
   if (candidates.length === 0) return;
   // Step 13: every type of the family as the top's scan sees them.
   const types = core.loadTypeSpecs();
-  // Step 14: every project's L0 table.
+  // Step 14: every project's L0 table, in the graph's node order.
   const tables = family.nodes.map((n) => core.resolveProjectExports(n.namespace || undefined));
-  // Step 15: the positional match — the same one the upgrade report explains.
-  const matches = positionReader.match(candidates, family, tables, types);
-  // Step 16: plan from each match.
   const imports = new Map<string, PlannedImport>();
-  const ambiguous = new Map<string, PositionalMatch[]>();
-  for (const m of matches) {
-    if (m.kind === 'self-prefix') planSelfPrefix(family, m, out);
-    else if (m.kind === 'import') addImport(family, m, imports);
-    else if (m.kind === 'ambiguous') {
-      const key = `${m.consumer}\u0000${nameKey(m.authored.split(/::|\./).pop()!)}`;
-      ambiguous.set(key, [...(ambiguous.get(key) ?? []), m]);
+  const admissible = admissibility(family);
+  let remaining = candidates;
+  let ambiguous: PositionalMatch[] = [];
+  let reached = '';
+  // Step 15: in rounds.
+  for (;;) {
+    // Step 16: the positional match — the same one the upgrade report explains — over the
+    // family as the imports planned so far leave it, so a re-run matches what this one left.
+    const planned = [...imports.values()].filter(admissible);
+    const matches = positionReader.match(remaining, declaring(family, planned), exporting(family, tables, planned), types);
+    // Step 17: plan from each match.
+    for (const m of matches) {
+      if (m.kind === 'self-prefix') planSelfPrefix(family, m, out);
+      else if (m.kind === 'import') addImport(family, m, imports);
     }
+    ambiguous = matches.filter((m) => m.kind === 'ambiguous');
+    // A name no rule decided may be decided once this round's declarations and exports hold.
+    const now = reach([...imports.values()].filter(admissible));
+    if (ambiguous.length === 0 || now === reached) break;
+    reached = now;
+    const open = new Set(ambiguous.map(referenceLine));
+    remaining = remaining.filter((r) => open.has(referenceLine(r)));
   }
-  for (const group of ambiguous.values()) reportAmbiguous(group, out);
+  const byName = new Map<string, PositionalMatch[]>();
+  for (const m of ambiguous) {
+    const key = `${m.consumer}\u0000${nameKey(m.authored.split(/::|\./).pop()!)}`;
+    byName.set(key, [...(byName.get(key) ?? []), m]);
+  }
+  for (const group of byName.values()) reportAmbiguous(group, out);
   out.imports = settleImports(family, [...imports.values()], out);
+}
+
+/** Whether a planned import will be written: no local spec shadows it and no other alias's `use` imports its name already. */
+function admissibility(family: ProjectFamily): (i: PlannedImport) => boolean {
+  const cache = new Map<string, boolean>();
+  return (i) => {
+    const key = `${i.consumer}\u0000${i.alias}\u0000${i.name}`;
+    if (!cache.has(key)) cache.set(key, shadowingSpec(family, i.consumer, i.name) === undefined && heldElsewhere(family, i) === undefined);
+    return cache.get(key)!;
+  };
+}
+
+/** What the planned imports add to the family: each consumer → producer declaration and each producer's export, as one comparable string. */
+function reach(planned: PlannedImport[]): string {
+  return [...new Set(planned.flatMap((i) => [
+    ...(i.declaresExternal ? [`declares ${i.consumer} ${i.producer}`] : []),
+    ...(i.exportPlanned ? [`exports ${i.producer} ${i.name}`] : []),
+  ]))].sort().join('\n');
+}
+
+/** The graph as the planned imports leave it: each import's producer declared by its consumer. */
+function declaring(family: ProjectFamily, planned: PlannedImport[]): ProjectFamily {
+  const added = new Map<string, ResolvedExternal[]>();
+  for (const i of planned.filter((x) => x.declaresExternal)) {
+    const list = added.get(i.consumer) ?? [];
+    if (!list.some((e) => e.producer === i.producer)) list.push({ alias: i.alias, project: i.alias, sourceKind: 'family', producer: i.producer, audience: 'project' });
+    added.set(i.consumer, list);
+  }
+  if (added.size === 0) return family;
+  return { ...family, nodes: family.nodes.map((n) => (added.has(n.namespace) ? { ...n, externals: [...n.externals, ...added.get(n.namespace)!] } : n)) };
+}
+
+/** The project tables (in node order) as the planned imports leave them: each planned export bound under its public name. */
+function exporting(family: ProjectFamily, tables: ResolvedExportTable[], planned: PlannedImport[]): ResolvedExportTable[] {
+  const toExport = planned.filter((i) => i.exportPlanned);
+  if (toExport.length === 0) return tables;
+  return tables.map((table, n) => {
+    const producer = family.nodes[n]?.namespace;
+    const entries = toExport.filter((i) => i.producer === producer).map((i): ResolvedExport => ({
+      publicName: i.name, kind: 'type', source: '', typeDef: keyIn(producer, i.target.slice(i.target.indexOf('::') + 2)), via: [],
+    }));
+    return entries.length === 0 ? table : { ...table, entries: [...table.entries, ...entries] };
+  });
 }
 
 /** A self-prefixed reference rewritten to its bare local id — marked on the rewrite the scan already planned, else planned here. */
@@ -407,7 +466,7 @@ function addImport(family: ProjectFamily, m: PositionalMatch, imports: Map<strin
   imports.set(key, planned);
 }
 
-/** Step 16: one name no tie-break rule decides, with every candidate and every spec writing it — a person picks. */
+/** Step 17: one name no tie-break rule decides, with every candidate and every spec writing it — a person picks. */
 function reportAmbiguous(group: PositionalMatch[], out: PositionMigrationPlan): void {
   const first = group[0];
   const candidates = [...new Set(group.flatMap((m) => m.candidates ?? []))].sort();
@@ -420,7 +479,7 @@ function reportAmbiguous(group: PositionalMatch[], out: PositionMigrationPlan): 
 }
 
 /**
- * Step 16: drop and report every import that would not take effect as
+ * Step 17: drop and report every import that would not take effect as
  * planned — one a local spec of the consumer shadows (import-shadowed), and
  * every one of two or more that would supply one bare name to one consumer
  * (import-collision) — then order the rest: consumers in walk order, then
