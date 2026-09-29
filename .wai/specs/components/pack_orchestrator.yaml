@@ -10,8 +10,11 @@ description: >-
   executable rule code — delegating the pack-file I/O and the declarative-schema check to the pack
   store. Owns the project pack registration: it loads the project configuration and registers or
   deregisters packs in it through the core adapter, since the pack store stores pack files only.
-  Reached from the admin portal, the web portal (session as credential), and the MCP data plane
-  (bearer as credential) through the project ops orchestrator.
+  Measures a project install or adoption before it happens (previewProjectPack, governance stage)
+  through the host validator adapter, so every hosted surface can show a pack's impact before the
+  write; the writes themselves stay unattended and say that they applied. Reached from the admin
+  portal, the web portal (session as credential), and the MCP data plane (bearer as credential)
+  through the project ops orchestrator.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -21,6 +24,7 @@ dependsOn:
   - pack_store
   - project_repository
   - host_core_adapter
+  - host_validator_adapter
 status: complete
 createdAt: '2026-07-04T18:46:35.024Z'
-updatedAt: '2026-09-17T16:42:00.950Z'
+updatedAt: '2026-09-29T16:01:52.952Z'

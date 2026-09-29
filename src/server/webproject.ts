@@ -9,6 +9,7 @@ import {
 import { initializeProjectWithProfile } from './policy.js';
 import type { LockRecord } from '../core/lockfile.js';
 import type {
+  GovernedProjectCreation,
   HostConfig,
   HostedProjectRecord,
   ProjectInitRequest,
@@ -93,14 +94,16 @@ export function createProject(
   id: string,
   unitId: string,
   profileSelection?: ProjectProfileSelection,
-): HostedProjectRecord {
+): GovernedProjectCreation {
   // step 1: the init request (id, REQUIRED owner unit, optional profile).
   const request: ProjectInitRequest = {
     id,
     ownerUnitId: unitId,
     ...(profileSelection !== undefined ? { profileSelection } : {}),
   };
-  return initializeProjectWithProfile(cfg, sessionId, request); // steps 2–3 (forward)
+  // Steps 2-3: forward, and answer the GovernedProjectCreation — the record with
+  // what the policy applied, which the web UI shows after creation.
+  return initializeProjectWithProfile(cfg, sessionId, request);
 }
 
 /**

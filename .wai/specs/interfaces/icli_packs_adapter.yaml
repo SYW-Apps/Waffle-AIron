@@ -5,11 +5,16 @@ component: cli_packs_adapter
 methods:
   - name: addPack
     description: >-
-      Install a pack (`wairon pack add <source> [--global]`). ZIP-aware: a .wpack/.zip source is
-      safely extracted via the SDK into .wai/packs/<name>/ (or the global packs dir) and the
-      directory registered; a plain file/dir source is vendored + registered as before. Verifies the
-      pack loads before registering anything.
-    signature: 'addPack(source: string, global: boolean): void'
+      Install a pack (`wairon pack add <source> [--global]`, legacy). ZIP-aware: a .wpack/.zip
+      source is safely extracted via the SDK into .wai/packs/<name>/ (or the global packs dir) and
+      the directory registered; a plain file/dir source is vendored + registered as before. Verifies
+      the pack loads before registering anything. For a project it then shows the pack's impact
+      BEFORE vendoring and registering the path reference — the probed manifest measured as a
+      supplied candidate, since nothing is on disk yet — and asks to apply; declining vendors and
+      registers nothing. Under --yes, or with no terminal to ask on, it applies and says so without
+      the report. `--global` copies into the machine-wide folder and selects nothing for any
+      project, so it shows no report.
+    signature: 'addPack(source: string, global: boolean, yes?: boolean): void'
     returns: void
     params:
       - name: source
@@ -17,20 +22,33 @@ methods:
       - name: global
         type: boolean
         optional: true
+      - name: 'yes'
+        type: boolean
+        description: Apply without showing the impact report
+        optional: true
   - name: listPacks
     description: List the loaded packs (global + project) with provenance and what each provides.
     signature: 'listPacks(): void'
     returns: void
     params: []
   - name: removePack
-    description: Deregister and delete a vendored pack by name.
-    signature: 'removePack(name: string, global: boolean): void'
+    description: >-
+      Deregister and delete a vendored pack by name (legacy `wairon pack remove`). For a project it
+      first shows the removal's impact (the matched path reference measured with `remove`) and asks;
+      declining deregisters and deletes nothing. Under --yes, or with no terminal, it removes and
+      says so without the report. `--global` removes a machine-wide file and selects nothing for any
+      project, so it shows no report.
+    signature: 'removePack(name: string, global: boolean, yes?: boolean): void'
     returns: void
     params:
       - name: name
         type: string
       - name: global
         type: boolean
+        optional: true
+      - name: 'yes'
+        type: boolean
+        description: Remove without showing the impact report
         optional: true
   - name: initPack
     description: >-
@@ -64,13 +82,24 @@ methods:
       follows the identical archive path (SDK envelope inspection, code-pack refusal, extraction
       limits), so a remote pack is validated exactly like a local one with no second code path to
       diverge. A local-path origin is reported as unfetchable, because CI and a fresh clone could
-      not obtain it.
-    signature: 'installPack(source: string): void'
+      not obtain it. One exception to "applies to nothing" is an update in disguise: run inside a
+      project whose selection of the same name floats (no version pin), a version that would become
+      the latest installed changes that project's doctrine. Then, before the store write, it shows
+      that project's impact (the extracted manifest measured as a supplied candidate for the
+      floating selection) and asks to install; declining installs nothing. Under --yes, or with no
+      terminal, it installs and says the floating selection now resolves to the new version, without
+      the report. Other projects on the machine that float on the name are not measured: nothing
+      here knows them.
+    signature: 'installPack(source: string, yes?: boolean): void'
     returns: void
     params:
       - name: source
         type: string
         description: A pack directory or a .wpack/.zip archive.
+      - name: 'yes'
+        type: boolean
+        description: Install without showing the impact report
+        optional: true
   - name: uninstallStorePack
     description: >-
       `wairon pack uninstall <name>[@version]` — remove a pack from the store: the named version, or
@@ -96,12 +125,17 @@ methods:
   - name: usePack
     description: >-
       `wairon pack use <name>[@version]` — SELECT an installed pack for this project, recorded by
-      name in .wai/project.yaml. The source is copied from the store's install record so the project
-      self-describes how a fresh machine or CI runner obtains the same doctrine; --source overrides
-      it, --pin freezes the resolved version and its content digest, and --bundle marks it for
-      committing. Re-selecting a pack replaces its existing entry rather than duplicating it, and an
-      origin that is not a fetchable URL is reported because CI and a fresh clone could not resolve
-      it.
+      name in .wai/project.yaml. Before anything is written it shows the pack's impact
+      (validator_portal.measurePackImpact: what the pack changes against wairon's defaults, which of
+      its profiles would govern, and the findings that change on this project) and asks to apply;
+      declining writes nothing. Under --yes, or with no terminal to ask on, it applies without
+      showing the report and says that it applied and how to see the report (`wairon pack impact`).
+      The source is copied from the store's install record so the project self-describes how a fresh
+      machine or CI runner obtains the same doctrine; --source overrides it, --pin freezes the
+      resolved version and its content digest, and --bundle marks it for committing. Re-selecting a
+      pack replaces its existing entry rather than duplicating it (an update: the report then also
+      shows the replaced version), and an origin that is not a fetchable URL is reported because CI
+      and a fresh clone could not resolve it.
     signature: 'usePack(spec: string, options: object): void'
     returns: void
     params:
@@ -110,16 +144,22 @@ methods:
         description: A pack name, or name@version.
       - name: options
         type: object
-        description: source / pin / bundle.
+        description: source / pin / bundle / yes (apply without the report).
   - name: unusePack
     description: >-
       `wairon pack unuse <name>` — drop this project's selection of a pack. The pack stays installed
-      in the store; only this project stops applying it.
-    signature: 'unusePack(name: string): void'
+      in the store; only this project stops applying it. It first shows the removal's impact (the
+      stored selection measured with `remove`) and asks; declining writes nothing. Under --yes, or
+      with no terminal, it deselects and says so without the report.
+    signature: 'unusePack(name: string, yes?: boolean): void'
     returns: void
     params:
       - name: name
         type: string
+      - name: 'yes'
+        type: boolean
+        description: Deselect without showing the impact report
+        optional: true
   - name: bundlePack
     description: >-
       `wairon pack bundle [name] [--all]` — commit a copy of a selected pack under
@@ -153,6 +193,21 @@ methods:
     signature: 'syncPacks(): void'
     returns: void
     params: []
+  - name: impactPack
+    description: >-
+      `wairon pack impact <name>[@version]` — show, on demand and writing nothing, what the pack
+      changes: its doctrine against wairon's defaults, which of its profiles would govern this
+      project, and the findings that change on this project. For a pack this project does not apply,
+      or applies at another version, it measures applying the requested one (as `pack use` would
+      record it); for one it applies exactly as asked, it measures removing it and presents the
+      result as what the pack accounts for now. Refuses outside a wairon project, and for a pack not
+      installed in the store, with the same messages `pack use` gives.
+    signature: 'impactPack(spec: string): void'
+    returns: void
+    params:
+      - name: spec
+        type: string
+        description: A pack name, or name@version.
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-07-29T20:20:54.864Z'
+updatedAt: '2026-09-29T16:10:18.257Z'

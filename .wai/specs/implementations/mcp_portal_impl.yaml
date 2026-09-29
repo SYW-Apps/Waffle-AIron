@@ -221,6 +221,13 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: internalizeMember
+  - name: sdd_pack_impact
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the packImpact workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: packImpact
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T10:57:51.958Z'
+updatedAt: '2026-09-29T16:00:51.335Z'

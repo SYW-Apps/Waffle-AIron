@@ -10,6 +10,8 @@ description: >-
   Installs are declarative-only; the store enforces the schema and rejects code packs.
 contract: ipack_orchestrator
 sourcePath: src/server/packs.ts
+injectedParams:
+  - cfg
 methods:
   - name: listGlobalPacks
     narrative:
@@ -506,8 +508,152 @@ methods:
         description: Return the project-scoped profile catalog
         type: return
         outcome: project-scoped profile catalog
+  - name: previewProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:read permission over the target project — the preview writes
+          nothing
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:read value is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the preview
+        type: throw
+        error: Forbidden — previewing a project pack requires project:read over the project
+      - stepNumber: 5
+        label: bind
+        description: Bind and verify the target project's isolated root
+        type: local
+      - stepNumber: 6
+        description: >-
+          Is the pack's content uploaded with the request (an install), or named from the
+          server-global set (an adoption)?
+        type: branch
+        condition: content was given
+        onFalseStep: 10
+      - stepNumber: 7
+        description: >-
+          Judge the uploaded content as a DECLARATIVE pack through the core adapter, exactly as the
+          install does
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: checkDeclarativePack
+      - stepNumber: 8
+        description: >-
+          A rule or code pack, or content that does not parse, is refused here as the install would
+          refuse it
+        type: branch
+        condition: the content is not a declarative pack
+        onFalseStep: 13
+      - stepNumber: 9
+        description: Reject the preview
+        type: throw
+        error: not a declarative pack — rule and code packs install only through the trusted filesystem
+      - stepNumber: 10
+        label: adopt
+        description: Resolve the named server-global pack's declarative content, as an adoption would
+        type: call
+        targetComponent: pack_store
+        targetMethod: executeApprovedResolveGlobalPacks
+      - stepNumber: 11
+        description: If the instance carries no such pack, reject
+        type: branch
+        condition: the name is unresolved
+        onFalseStep: 13
+      - stepNumber: 12
+        description: Reject the preview of an unavailable pack
+        type: throw
+        error: no server-global pack of that name
+      - stepNumber: 13
+        label: measure
+        description: >-
+          Read the uploaded or resolved content as a declarative pack through the core adapter — the
+          manifest the candidate supplies, since nothing is on disk yet
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: parseDeclarativePack
+      - stepNumber: 14
+        description: >-
+          Build the candidate: the path reference the install or adoption would register under
+          .wai/packs/, with that manifest supplied
+        type: local
+      - stepNumber: 15
+        description: Measure it through the host validator adapter under the bound root, writing nothing
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 16
+        description: Return the impact
+        type: return
+        outcome: PackImpact
+  - name: previewProjectPackRemoval
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:read permission over the target project — the preview writes
+          nothing
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:read value is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the preview
+        type: throw
+        error: Forbidden — previewing a project pack removal requires project:read over the project
+      - stepNumber: 5
+        label: bind
+        description: Bind and verify the target project's isolated root
+        type: local
+      - stepNumber: 6
+        description: >-
+          Load the project configuration through the core adapter, to find the registration the
+          removal would drop (matched by stem or declared name, as removeProjectPack matches it)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: Only a registered pack can be removed
+        type: branch
+        condition: the project registers no pack of that name
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the preview
+        type: throw
+        error: the project registers no pack of that name
+      - stepNumber: 9
+        label: measure
+        description: >-
+          Measure the removal through the host validator adapter under the bound root: the matched
+          path reference as the candidate with `remove`, writing nothing
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 10
+        description: Return the impact (direction remove)
+        type: return
+        outcome: PackImpact
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-09-17T16:42:02.670Z'
+updatedAt: '2026-09-29T21:38:54.569Z'

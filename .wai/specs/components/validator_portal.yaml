@@ -5,14 +5,16 @@ description: >-
   (validateProject) and the family run (validateFamily); the library entry (src/index.ts, the
   embedding API a wrapper compiles its gate from) re-exports exactly those two names, and
   `validateSddTree` leaves the public API with no alias — a deliberate break in a major release,
-  named in the CHANGELOG (stage 4).
+  named in the CHANGELOG (stage 4). It also publishes the pre-write pack measurement
+  (measurePackImpact, governance stage), forwarded to pack_impact: a read, never a write.
 subsystem: sdd_validator
 componentType: Portal
 owns: []
 dependsOn:
   - spec_validator
   - family_validator
+  - pack_impact
 portalType: Custom
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T18:11:56.391Z'
+updatedAt: '2026-09-29T15:53:54.827Z'

@@ -68,13 +68,19 @@ methods:
       member project at the path — its specs directory, project.yaml (declaring the alias as its
       project id) and L0 system spec, each only when absent, so a fresh member is runnable
       standalone and an already- or partially-scaffolded one is completed without overwriting
-      anything — then declare it in the bound project's project.yaml `members` under the alias.
-      Writes no L1 spec: a member carries no content in its parent. Throws for an alias outside
-      [a-z0-9-_]+ or an empty path, if the path does not resolve strictly within the owning project
-      root (absolute, ../-escaping and link-escaping paths are rejected), or if the alias already
-      declares a different member.
-    signature: 'createMember(alias: string, path: string, description?: string): void'
-    returns: void
+      anything — then declare it in the bound project's project.yaml `members` under the alias. When
+      it creates the member's configuration, it also writes the bound project's required packs
+      (composition.requirePolicies) into the new member's extensions.packs once, each pinned to the
+      highest installed version its range admits, and a required profile as the projectType when
+      exactly one requirement names one; a requirement nothing installed satisfies is returned as
+      unadopted, never written. Afterwards the selections are the member's own: nothing reads the
+      parent's requirements at the member's gate. Scaffolding is an unattended pack write, so it
+      shows no impact report; the answer states what it applied. Writes no L1 spec: a member carries
+      no content in its parent. Throws for an alias outside [a-z0-9-_]+ or an empty path, if the
+      path does not resolve strictly within the owning project root (absolute, ../-escaping and
+      link-escaping paths are rejected), or if the alias already declares a different member.
+    signature: 'createMember(alias: string, path: string, description?: string): MemberCreation'
+    returns: MemberCreation
     params:
       - name: alias
         type: string
@@ -813,4 +819,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T18:12:57.622Z'
+updatedAt: '2026-09-29T15:57:07.840Z'

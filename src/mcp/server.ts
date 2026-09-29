@@ -72,7 +72,9 @@ import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 import { pinExternals, getExternalsStatus } from './adapters/surfaces.js';
-import { validateProject, validateRegistry, validateFamily } from './adapters/validator.js';
+import { validateProject, validateRegistry, validateFamily, measurePackImpact } from './adapters/validator.js';
+import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
+import type { MemberCreation } from '../core/index.js';
 import { declaredMembers } from '../models/project.js';
 import { selectsFamily } from '../models/validation-options.js';
 
@@ -526,6 +528,103 @@ const validationIssueOutput = {
     'In a family run: the key of the project whose gate the finding belongs to (\'\' for the family root).',
   ),
 } satisfies Record<keyof ValidationIssue, z.ZodTypeAny>;
+
+/** sdd_add_member's structured answer: what creating the member wrote about packs. */
+const memberCreationOutput = {
+  configCreated: z.boolean().describe("Whether this call created the member's configuration; only then were the declaring project's required packs scaffolded."),
+  adopted: z.array(z.object({
+    name: z.string(),
+    version: z.string().optional(),
+    integrity: z.string().optional(),
+    source: z.string().optional(),
+    bundle: z.boolean().optional(),
+  })).describe("The selections written into the new member's extensions.packs, each pinned to the highest installed version its requirement admits."),
+  unadopted: z.array(z.object({
+    pack: z.string(),
+    version: z.string(),
+    profile: z.string().optional(),
+  })).describe('Requirements no installed version satisfies: nothing was written for them, and the next family run reports each as POLICY_NOT_ADOPTED.'),
+  projectType: z.string().optional().describe("The profile written as the new member's projectType, when exactly one adopted requirement names one."),
+  ...staleServerOutput,
+};
+
+/** What a member creation applied, as one sentence (empty when its configuration already existed or nothing is required). */
+function describeMemberPacks(creation: MemberCreation): string {
+  if (!creation.configCreated) return '';
+  const parts: string[] = [];
+  if (creation.adopted.length > 0) {
+    parts.push(` Applied the required pack(s) ${creation.adopted.map((s) => `${s.name}@${s.version}`).join(', ')} to its new configuration (an unattended write: no impact report was shown).`);
+  }
+  if (creation.projectType) parts.push(` Set its projectType to "${creation.projectType}".`);
+  if (creation.unadopted.length > 0) {
+    parts.push(` No installed version satisfies ${creation.unadopted.map((r) => `"${r.pack}" ${r.version}`).join(', ')}: nothing was written for ${creation.unadopted.length === 1 ? 'it' : 'them'}, and the family run reports POLICY_NOT_ADOPTED until the member selects ${creation.unadopted.length === 1 ? 'it' : 'them'} (\`wairon pack install <source>\`, then \`wairon pack use <name>@<version> --pin\` at the member's root).`);
+  }
+  return parts.join('');
+}
+
+/** One doctrine change, as sdd_pack_impact states it. */
+const doctrineChangeOutput = z.object({
+  axis: z.enum(['rule', 'concept']),
+  change: z.string().describe('loosened | raised | off | added | depth | inert | redefined | removed | discouraged | licensed | gated — stated, never judged.'),
+  subject: z.string(),
+  profile: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+/** One run's totals in a pack impact. */
+const impactTotalsOutput = z.object({
+  key: z.string(),
+  id: z.string().optional(),
+  directory: z.string(),
+  valid: z.boolean(),
+  errors: z.number(),
+  warnings: z.number(),
+  notices: z.number(),
+});
+
+/** sdd_pack_impact's structured answer: the PackImpact itself. */
+const packImpactOutput = {
+  pack: z.string().describe('The pack measured.'),
+  version: z.string().optional().describe('The version the candidate resolves to; absent for an unversioned pack.'),
+  replaces: z.string().optional().describe('The version applied now under the same name, when the selection would replace it.'),
+  direction: z.enum(['apply', 'remove']).describe('remove when the pack is already applied exactly as asked: the findings then read as what the pack accounts for now.'),
+  doctrine: z.array(doctrineChangeOutput).describe("The pack's changes against wairon's defaults. Nothing in it is a finding."),
+  previousDoctrine: z.array(doctrineChangeOutput).optional().describe("On an update: the replaced version's changes against the same defaults."),
+  governing: z.array(z.string()).describe("The pack's profiles that would govern something in this project."),
+  findings: z.object({
+    introduced: z.array(z.object(validationIssueOutput)),
+    resolved: z.array(z.object(validationIssueOutput)),
+    regraded: z.array(z.object({ finding: z.object(validationIssueOutput), from: z.string() })),
+  }).describe("The owner's-gate findings that differ between the current and the candidate configuration."),
+  before: impactTotalsOutput.describe("The current configuration's totals."),
+  after: impactTotalsOutput.describe("The candidate configuration's totals."),
+  ...staleServerOutput,
+};
+
+/** A pack impact as text: the doctrine changes by profile, the governing profiles, the finding changes. */
+function renderPackImpact(impact: PackImpact): string {
+  const lines: string[] = [];
+  const removal = impact.direction === 'remove';
+  lines.push(`Pack impact: ${impact.pack}${impact.version ? ` v${impact.version}` : ''}${impact.replaces ? ` (replaces v${impact.replaces})` : ''} — ${removal ? 'already applied exactly as asked; measured as removed, so the findings are what the pack accounts for now' : 'measured as applied'}. Nothing was written.`);
+  lines.push('', "Doctrine against wairon's defaults (stated, never judged):");
+  if (impact.doctrine.length === 0) lines.push('  (no changes)');
+  for (const c of impact.doctrine) {
+    const range = c.from !== undefined || c.to !== undefined ? ` (${c.from ?? '-'} -> ${c.to ?? '-'})` : '';
+    lines.push(`  ${c.profile ? `[${c.profile}] ` : ''}${c.axis} ${c.change}: ${c.subject}${range}${c.reason ? ` — ${c.reason}` : ''}`);
+  }
+  lines.push('', `Governing here: ${impact.governing.length > 0 ? impact.governing.join(', ') : 'none of its profiles'}`);
+  const f = impact.findings;
+  lines.push('', `Findings: ${f.introduced.length} introduced, ${f.resolved.length} resolved, ${f.regraded.length} regraded.`);
+  for (const i of f.introduced) lines.push(`  + [${i.severity}] ${i.code}${i.specId ? ` (${i.specId})` : ''}: ${i.message}`);
+  for (const i of f.resolved) lines.push(`  - [${i.severity}] ${i.code}${i.specId ? ` (${i.specId})` : ''}: ${i.message}`);
+  for (const r of f.regraded) lines.push(`  ~ [${r.from} -> ${r.finding.severity}] ${r.finding.code}${r.finding.specId ? ` (${r.finding.specId})` : ''}`);
+  const totals = (v: PackImpact['before']): string => `${v.errors} error(s), ${v.warnings} warning(s), ${v.notices} notice(s)`;
+  lines.push('', `Before: ${totals(impact.before)}. After: ${totals(impact.after)}.`);
+  return lines.join(String.fromCharCode(10));
+}
+
 
 const validateTreeOutput = {
   valid: z.boolean().describe('False when the tree holds at least one error; warnings and notices never make it false.'),
@@ -1411,23 +1510,65 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ alias: string; path: string; description?: string }>(server,
     'sdd_add_member',
     {
-      description: "Create a member of the bound project: scaffold the member project at the path (its project.yaml declaring the alias as its project id, and its L0), each part only when absent, and declare it in the bound project's project.yaml `members` with the description. Nothing is written into the bound project's spec tree: a member is reached only as `alias::name` through its own L0 exports. Idempotent — the same call again writes nothing; a different member under the alias is refused.",
+      description: "Create a member of the bound project: scaffold the member project at the path (its project.yaml declaring the alias as its project id, and its L0), each part only when absent, and declare it in the bound project's project.yaml `members` with the description. A newly created member configuration also selects the bound project's required packs (composition.requirePolicies), once, each pinned to the highest installed version its range admits; the answer states what was applied and which requirements nothing installed satisfies. Nothing is written into the bound project's spec tree: a member is reached only as `alias::name` through its own L0 exports. Idempotent — the same call again writes nothing; a different member under the alias is refused.",
       inputSchema: {
         alias: z.string().describe("The member's alias and new project id ([a-z0-9-_]+)"),
         path: z.string().describe("The member's root, relative to the bound project"),
         description: z.string().optional().describe('What the member is to this project; also the vision of a bootstrapped L0'),
       },
+      outputSchema: memberCreationOutput,
     },
     ({ alias, path: memberPath, description }) => {
       try {
-        // mcp_orchestrator.addMember step 1: scaffold and declare via core.
-        createMember(alias, memberPath, description);
-        return text(`Added member "${alias}" at ${memberPath} (declared in project.yaml \`members\`). Design it from its own root and export what others consume from its L0; reference it here as ${alias}::<name>.`);
+        // mcp_orchestrator.addMember step 1: scaffold and declare via core;
+        // the answer states the packs the new member was given.
+        const creation = createMember(alias, memberPath, description);
+        return structured(
+          `Added member "${alias}" at ${memberPath} (declared in project.yaml \`members\`).${describeMemberPacks(creation)} Design it from its own root and export what others consume from its L0; reference it here as ${alias}::<name>.`,
+          creation,
+        );
       } catch (e) {
         return errText(String(e));
       }
     },
   );
+
+  // Read-only and local: the local server has no pack-selecting tool, so an
+  // agent proposes a pack with this report and the human applies it with
+  // `wairon pack use`. Not advertised on the hosted data plane, whose pack
+  // previews are the hosted pack workflow's.
+  if (!options.hostedTools) {
+    reg<{ pack: string; version?: string }>(server,
+      'sdd_pack_impact',
+      {
+        description: "What selecting (or updating to) an installed pack would change on the bound project, writing nothing — the pack's doctrine against wairon's defaults (rules loosened, raised, turned off or added; profiles, stereotype fencing, edge licenses, patterns, guarantees and language tables added, redefined or removed), which of its profiles would govern, and the findings that change here. A pack the project already applies exactly as asked is measured as removed, so the findings read as what it accounts for now. Nothing in it is a finding: packs exist to adjust wairon's checks, and a loosening is stated like any other change. Apply a pack with `wairon pack use`.",
+        inputSchema: {
+          pack: z.string().describe('The pack name'),
+          version: z.string().optional().describe('An exact version; omitted, the latest installed'),
+        },
+        outputSchema: packImpactOutput,
+      },
+      ({ pack, version }) => {
+        try {
+          // mcp_orchestrator.packImpact step 1: does the bound project apply the pack exactly as asked?
+          const config = loadProjectConfig();
+          if (!config) throw new ProjectNotInitializedError();
+          const stored = (config.extensions?.packs ?? []).find((e) => typeof e !== 'string' && e.name === pack);
+          const exact = stored !== undefined && typeof stored !== 'string' && (stored.version ?? '') === (version ?? '');
+          // Step 2: the stored entry removed, or the by-name selection.
+          const candidate: PackCandidate = exact
+            ? { entry: stored, remove: true }
+            : { entry: { name: pack, ...(version ? { version } : {}) } };
+          // Step 3: measured through the validator client adapter, writing nothing.
+          const impact = measurePackImpact(candidate);
+          // Step 4: the impact as structured content, with its text rendering.
+          return structured(renderPackImpact(impact), impact);
+        } catch (e) {
+          return errMessage(e);
+        }
+      },
+    );
+  }
 
   reg<{ alias: string; newPath: string }>(server,
     'sdd_move_member',
@@ -2319,7 +2460,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
 }
 
 // ---------------------------------------------------------------------------
-// mcp_portal.advertiseHostedTools — ONE method for the sixteen sdd_host_* and
+// mcp_portal.advertiseHostedTools — ONE method for the seventeen sdd_host_* and
 // sdd_landscape_* entries, because publishing a discovery list is one job.
 // Execution is intercepted upstream by the hosting request orchestrator, which
 // owns their contracts; these registrations exist so an MCP client can FIND the
@@ -2381,6 +2522,13 @@ function advertiseHostedTools(server: McpServer, options: McpServerOptions): voi
       inputSchema: {
         name: z.string().describe('Pack name (letters, digits, dot, underscore, hyphen)'),
         content: z.string().describe('The declarative pack YAML content'),
+      },
+    }, hostedStub);
+    reg<{ name: string; content?: string }>(server, 'sdd_host_pack_impact', {
+      description: "Hosted project ops: measure, writing nothing, what installing a DECLARATIVE pack (content given) or adopting the server-global pack of that name (content omitted) would change on the BOUND project — the pack's doctrine against wairon's defaults (rules loosened, raised, turned off or added; profiles and concepts added, redefined or removed), which of its profiles would govern, and the findings that change. Show it to your human before sdd_host_pack_install, which applies without it. Nothing in it is a finding: packs exist to adjust wairon's checks. Requires project:read over the project.",
+      inputSchema: {
+        name: z.string().describe('Pack name (letters, digits, dot, underscore, hyphen); the server-global pack to adopt when content is omitted'),
+        content: z.string().optional().describe('The declarative pack YAML an install would upload; omitted, the server-global pack an adoption would vendor'),
       },
     }, hostedStub);
     reg<Record<string, never>>(server, 'sdd_host_policy_evaluate', {

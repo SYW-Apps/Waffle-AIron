@@ -70,10 +70,17 @@ methods:
         targetMethod: checkMembers
       - stepNumber: 10
         description: >-
+          Run the governance checks over the root's graph: each requiring project's
+          composition.requirePolicies judged against the members below it
+        type: call
+        targetComponent: family_validator
+        targetMethod: checkPolicies
+      - stepNumber: 11
+        description: >-
           When externals were left out because their producers lie outside the reach, add a one-line
           hint counting them and naming `validate --family` from the member that declares them
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Return the family verdict: valid when no project's gate and no family finding holds an
           error, with every project's totals
@@ -181,6 +188,273 @@ methods:
           default, and return them
         type: return
         outcome: ValidationIssue[]
+  - name: checkPolicies
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each selected project that may require something of the projects below it, the root
+          first
+        type: loop
+        loopKind: forEach
+        over: >-
+          the selected projects of the graph that have members in the selection, root first, then in
+          scan order
+        endStep: 9
+      - stepNumber: 2
+        description: Bind the project's root for the next calls, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 3
+        description: >-
+          Read the project's own configuration through the core adapter: its requirements and the
+          severity overrides that tune the findings about them
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: >-
+          Read its requirements with project_config.requiredPolicies and keep those whose range
+          parses (pack_requirement.rangeProblem is null); an unreadable one is skipped here — the
+          requiring project's own gate reports it as POLICY_REQUIREMENT_INVALID
+        type: local
+      - stepNumber: 5
+        description: Nothing valid is required here
+        type: branch
+        condition: the project has no valid requirement
+        onTrueStep: 9
+        onFalseStep: 6
+      - stepNumber: 6
+        label: members
+        description: >-
+          For each selected member below this project, at every level (the graph's parent links,
+          followed down)
+        type: loop
+        loopKind: forEach
+        over: the selected projects whose parent chain reaches this project, in scan order
+        endStep: 8
+      - stepNumber: 7
+        description: >-
+          Bind the member's root for the next call, restoring the requiring project's binding
+          afterwards
+        type: local
+      - stepNumber: 8
+        label: member-judged
+        description: Judge the member's adoption of this project's valid requirements
+        type: call
+        targetComponent: family_validator
+        targetMethod: adoption
+      - stepNumber: 9
+        label: requirer-done
+        description: >-
+          Resolve each adoption finding this project caused at this project's sddRuleSeverity
+          override, else the code default, dropping those it turned off
+        type: local
+      - stepNumber: 10
+        description: Return the governance findings
+        type: return
+        outcome: ValidationIssue[]
+  - name: adoption
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the member's own configuration through the core adapter: its pack entries, their pins
+          and its projectType
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Load the member's packs, for the committed manifests its legacy path references name
+          (their pack name and declared version). A selection's loaded version is never read: it
+          depends on the machine's store
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 3
+        description: For each requirement
+        type: loop
+        loopKind: forEach
+        over: the requirements, in declaration order
+        endStep: 21
+      - stepNumber: 4
+        description: >-
+          Find the member's entry for the required pack: a selection of that name, else a legacy
+          path reference whose committed manifest carries it
+        type: local
+      - stepNumber: 5
+        description: Does the member select it at all?
+        type: branch
+        condition: the member has no entry for the pack
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          POLICY_NOT_ADOPTED: the member does not select the pack — naming the pack, the range, the
+          profile when one is required, and the requiring project
+        type: local
+      - stepNumber: 7
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 8
+        label: pinned
+        description: >-
+          A floating selection resolves to whatever the machine has installed, so no family can
+          judge it
+        type: branch
+        condition: the entry is a selection with no version pin
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          POLICY_NOT_ADOPTED: "unpinned — a family cannot judge a floating selection; pin a
+          version", naming the requirement and the selection
+        type: local
+      - stepNumber: 10
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 11
+        label: range
+        description: >-
+          Does pack_requirement.admits accept the committed version — the selection's pin, or a
+          legacy reference's manifest version? An unversioned manifest is admitted by `*` only
+        type: branch
+        condition: the requirement does not admit the committed version
+        onFalseStep: 14
+      - stepNumber: 12
+        description: >-
+          POLICY_NOT_ADOPTED: selected outside the range — naming the range and the member's pinned
+          (or declared) version
+        type: local
+      - stepNumber: 13
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 14
+        label: profile
+        description: When the requirement names a profile, is the member governed by it?
+        type: branch
+        condition: the requirement names a profile and the member's projectType is another
+        onFalseStep: 17
+      - stepNumber: 15
+        description: >-
+          POLICY_NOT_ADOPTED: the pack is selected but the required profile does not govern — naming
+          the profile and the member's projectType
+        type: local
+      - stepNumber: 16
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 17
+        label: settings
+        description: Read the adopted pack's manifest for the pinned entry, the loader's way
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: packManifest
+      - stepNumber: 18
+        description: >-
+          A manifest that did not load has no settings to compare; the member's own gate reports the
+          load failure
+        type: branch
+        condition: no manifest resolved
+        onFalseStep: 20
+      - stepNumber: 19
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 20
+        label: compare
+        description: >-
+          Compare the member with extension_pack.settings under the governing profile — the required
+          one, else the member's projectType when the pack defines it, else none
+        type: call
+        targetComponent: family_validator
+        targetMethod: deviations
+      - stepNumber: 21
+        label: next
+        description: The requirement is judged
+        type: local
+      - stepNumber: 22
+        description: >-
+          Return the adoption findings and the deviations at their default severities, each stamped
+          with the member's key; the requiring project's overrides are applied by checkPolicies
+        type: return
+        outcome: ValidationIssue[]
+    symbol: judgeAdoption
+  - name: deviations
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the member's own configuration through the core adapter: rules.sddRuleSeverity,
+          rules.designDepth, rules.naming, rules.complexity and rules.documentation
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Read the member's subsystem specs, for their profile and designDepth overrides and their
+          lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Read the member's component specs, for their lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Read the member's interface specs, for their lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Read the member's implementation specs, for their lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Read the member's type specs, for their lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: >-
+          Rule severities: a POLICY_DEVIATION for each rules.sddRuleSeverity entry naming a code the
+          pack sets (profile severity, assertion code or rule code) at a different severity — the
+          precedence getRuleSeverity gives the project over the profile
+        type: local
+      - stepNumber: 8
+        description: >-
+          Design depth: one for rules.designDepth, and one per subsystem designDepth, other than the
+          profile's designDepth when it sets one — effectiveDesignDepth's precedence
+        type: local
+      - stepNumber: 9
+        description: >-
+          Naming, complexity and documentation: one per key the profile's rules.naming (subsystems,
+          components, interfaces, types, entities, valueObjects, methods, fields, constants,
+          variables, and each stereotypes entry), rules.complexity (maxMethodParams,
+          maxInterfaceMethods, maxComponentDependencies, maxNarrativeSteps, maxSubsystemComponents,
+          maxUnnarratedComplexity) or rules.documentation (minDescriptionLength,
+          requireDescriptions, requireMethodDescriptions, requireFieldDescriptions) sets and the
+          member's same key replaces with another value — the key-level overlay namingConfigFor,
+          complexityConfigFor and documentationConfigFor apply
+        type: local
+      - stepNumber: 10
+        description: >-
+          Profile: one per subsystem whose `profile` is not the governing profile — there the pack's
+          severities, depth, naming, complexity, documentation, stereotype fencing and edge licences
+          no longer apply
+        type: local
+      - stepNumber: 11
+        description: >-
+          Lint allows: one per lint.allow on any of the member's specs over a code the pack sets,
+          naming the spec and site
+        type: local
+      - stepNumber: 12
+        description: >-
+          Return the deviations, each naming the setting, the pack's value, the member's value and
+          the requirement, stamped with the member's key
+        type: return
+        outcome: ValidationIssue[]
+    symbol: policyDeviations
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-09-28T18:14:21.202Z'
+updatedAt: '2026-09-29T16:08:57.373Z'

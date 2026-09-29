@@ -21,7 +21,7 @@ import {
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { CarriedDebtKind, PackSelection, ProjectIdentity } from '../../models/project.js';
+import type { CarriedDebtKind, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
 import type { ExportUsage, ResolvedExportTable } from '../../models/exports.js';
@@ -570,6 +570,12 @@ export interface RuleContext {
      * about whether a pack applies.
      */
     selectionFailures: PackSelectionFailure[];
+    /**
+     * The bound project's OWN composition.requirePolicies, which the
+     * pack-requirements rule checks for a readable range. Never a parent's: a
+     * parent's requirements reach a member only in the family run.
+     */
+    packRequirements: PackRequirement[];
   };
 
   /**

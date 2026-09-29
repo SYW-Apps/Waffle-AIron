@@ -11,7 +11,7 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 // ---------------------------------------------------------------------------
 // mcp_portal.advertiseHostedTools.
 //
-// The hosted data plane's sixteen tools are ADVERTISED by this server and
+// The hosted data plane's seventeen tools are ADVERTISED by this server and
 // executed by nobody in it: the hosting request orchestrator intercepts them
 // upstream and owns their contracts. The registrations exist so an MCP client
 // can find them, which makes "which ones, and only when hosted" the whole
@@ -27,6 +27,7 @@ const HOSTED_TOOLS = [
   'sdd_host_import_tree',
   'sdd_host_initialize_project',
   'sdd_host_lock_project',
+  'sdd_host_pack_impact',
   'sdd_host_pack_install',
   'sdd_host_pack_list',
   'sdd_host_policy_evaluate',
@@ -43,6 +44,7 @@ const ARGUMENTS_REQUIRED = new Set([
   'sdd_host_get_approval_status',
   'sdd_host_import_tree',
   'sdd_host_initialize_project',
+  'sdd_host_pack_impact',
   'sdd_host_pack_install',
   'sdd_host_produce',
   'sdd_landscape_get_project_surface',
@@ -86,7 +88,7 @@ describe('advertiseHostedTools', () => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('advertises the sixteen hosted and landscape entries when hosted tools are on', async () => {
+  it('advertises the seventeen hosted and landscape entries when hosted tools are on', async () => {
     root = project();
     client = await connect(true);
     const { tools } = await client.listTools();

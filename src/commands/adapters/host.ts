@@ -30,6 +30,8 @@ export {
   listProjectPacks,
   installProjectPack,
   removeProjectPack,
+  previewProjectPack,
+  previewProjectPackRemoval,
   setAssignment,
   removeAssignment,
   listAssignments,

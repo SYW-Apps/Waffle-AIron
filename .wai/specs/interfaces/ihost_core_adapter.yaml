@@ -277,6 +277,17 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: parseDeclarativePack
+    description: >-
+      Read a parsed manifest as a declarative pack, forwarded to the extension portal: the
+      ExtensionPack the loader would build from it, throwing the first schema error when it is not
+      one. What the hosted previews and policy writes supply as a pack impact candidate's manifest
+      while the pack is not on disk yet.
+    signature: 'parseDeclarativePack(manifest: Json): ExtensionPack'
+    returns: ExtensionPack
+    params:
+      - name: manifest
+        type: Json
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -292,4 +303,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-27T15:26:24.336Z'
+updatedAt: '2026-09-29T21:27:52.106Z'

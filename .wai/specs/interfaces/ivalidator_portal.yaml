@@ -138,6 +138,34 @@ methods:
         description: >-
           The run's switches; `family` makes the walk up explicit, a numeric `recursive` bounds the
           member depth
+  - name: measurePackImpact
+    description: >-
+      What one pack write would change on the bound project, measured before it happens: the pack's
+      doctrine against wairon's defaults, the profiles of it that would govern, and the owner's-gate
+      findings that differ between the current and the candidate configuration. The report every
+      pack-selecting surface shows before it writes (`wairon pack use`/`add`, an install that moves
+      a floating selection, the MCP and hosted pack tools) and `wairon pack impact` shows on demand.
+      Writes nothing.
+    signature: 'measurePackImpact(candidate: PackCandidate): PackImpact'
+    returns: PackImpact
+    params:
+      - name: candidate
+        type: PackCandidate
+        description: The pack write to measure
+    guarantees:
+      - idempotent
+  - name: measurePackDoctrine
+    description: >-
+      What one pack changes against wairon's defaults, with no project to validate — the doctrine
+      half alone (an init request evaluated before the project exists). Writes nothing.
+    signature: 'measurePackDoctrine(manifest: ExtensionPack): PackDoctrine'
+    returns: PackDoctrine
+    params:
+      - name: manifest
+        type: ExtensionPack
+        description: The parsed pack manifest
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T18:11:55.461Z'
+updatedAt: '2026-09-29T16:14:48.062Z'

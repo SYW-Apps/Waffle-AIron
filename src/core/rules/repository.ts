@@ -59,6 +59,7 @@ import { assertionRequiredFieldsRule } from './extension/assertion-required-fiel
 import { assertionEndpointShapesRule } from './extension/assertion-endpoint-shapes.js';
 import { packResolutionRule } from './extension/pack-resolution.js';
 import { reproducibilityRule } from './extension/pack-reproducibility.js';
+import { packRequirementsRule } from './extension/pack-requirements.js';
 import { cyclesRule } from './wiring/dependency-cycles.js';
 import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
 import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
@@ -324,6 +325,10 @@ export const SDD_RULES: SddRule[] = [
   // elsewhere?) rather than spec content.
   packResolutionRule,
   reproducibilityRule,
+  // The syntax of this project's own composition.requirePolicies (governance
+  // stage): configuration too, and the family run cannot judge a member against
+  // a requirement that does not parse.
+  packRequirementsRule,
   // MUST run last, in this order: each audits what the earlier rules did
   // with a declared exception. The debt register first (which carried
   // findings the conformance family actually matched), then the allows

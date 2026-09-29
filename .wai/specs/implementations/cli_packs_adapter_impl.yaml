@@ -57,9 +57,39 @@ methods:
         type: return
         outcome: not-a-project error (suggests wairon init or --global); exit code 1
       - stepNumber: 11
+        label: ask-gate
+        description: 'An unattended run applies without the report: --yes, or no terminal to ask on'
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 16
+        onFalseStep: 12
+      - stepNumber: 12
+        label: measure
+        description: >-
+          Measure the pack before vendoring it: the probed manifest supplied as the candidate with
+          the path reference it would be registered under, since nothing is on disk yet — its
+          doctrine against wairon's defaults, the profiles of it that would govern, the findings
+          that change here
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 13
+        description: Print the impact report and ask whether to apply it
+        type: local
+      - stepNumber: 14
+        description: Installing a pack is intentional
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 16
+      - stepNumber: 15
+        description: Stop without vendoring or registering anything
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 16
+        label: vendor
         description: Vendor the pack into .wai/packs/ under its basename (guarding against a self-copy).
         type: local
-      - stepNumber: 12
+      - stepNumber: 17
         description: >-
           Register the vendored ref in extensions.packs through the core portal: it is appended only
           when absent, the write records useGlobalPacks itself, and the result says whether it was
@@ -67,23 +97,23 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: registerPackRef
-      - stepNumber: 13
+      - stepNumber: 18
         description: First registration vs refresh.
         type: branch
         condition: the ref was newly registered
-        onTrueStep: 14
-        onFalseStep: 16
-      - stepNumber: 14
+        onTrueStep: 19
+        onFalseStep: 21
+      - stepNumber: 19
         description: Report the pack as vendored and registered.
         type: local
-      - stepNumber: 15
+      - stepNumber: 20
         description: Skip the refresh arm.
         type: jump
-        toStep: 17
-      - stepNumber: 16
+        toStep: 22
+      - stepNumber: 21
         description: 'Already registered: refresh the vendored copy from the source and report the refresh.'
         type: local
-      - stepNumber: 17
+      - stepNumber: 22
         description: 'Print commit guidance: commit .wai/ so CI and every clone enforce the pack''s doctrine.'
         type: local
     detail: intent
@@ -91,11 +121,16 @@ methods:
       Install a pack. A .wpack/.zip source is inspected + safely extracted via the SDK portal into
       .wai/packs/<name>/ (or the global packs dir under --global); a plain file/dir source is
       vendored under its basename as before. A project install refuses outside an initialized
-      project (the core portal's projectConfigExists) and registers the directory ref through the
-      core portal's registerPackRef, which appends it only when absent and records useGlobalPacks
-      itself; a false result means the ref was already registered, and the pack is reported as
-      refreshed instead. The pack is probe-loaded to verify it parses before anything is registered;
-      a malformed/unsafe source fails with a clear error and leaves no partial registration.
+      project (the core portal's projectConfigExists); unless the run is unattended (--yes, or no
+      terminal), it then measures the probed manifest as a supplied candidate through
+      validator_portal.measurePackImpact, prints the report and asks — anything but yes returns with
+      nothing vendored or registered; a refresh of an already-registered pack is measured the same
+      way, as an update. It registers the directory ref through the core portal's registerPackRef,
+      which appends it only when absent and records useGlobalPacks itself; a false result means the
+      ref was already registered, and the pack is reported as refreshed instead. The pack is
+      probe-loaded to verify it parses before anything is registered; a malformed/unsafe source
+      fails with a clear error and leaves no partial registration. --global selects nothing for any
+      project and shows no report.
   - name: listPacks
     narrative:
       - stepNumber: 1
@@ -193,31 +228,59 @@ methods:
         type: branch
         condition: a matching project pack was found
         onTrueStep: 13
-        onFalseStep: 17
+        onFalseStep: 22
       - stepNumber: 13
+        description: An unattended run (--yes, or no terminal) removes without the report
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 18
+        onFalseStep: 14
+      - stepNumber: 14
+        label: measure-removal
+        description: >-
+          Measure the removal before writing it: the matched path reference as the candidate with
+          `remove` — the pack's doctrine against wairon's defaults and the findings that change here
+          once it no longer applies
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 15
+        description: Print the impact report and ask whether to remove
+        type: local
+      - stepNumber: 16
+        description: Removing a pack is as intentional as adding one
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 18
+      - stepNumber: 17
+        description: Stop without deregistering or deleting anything
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 18
+        label: deregister
         description: >-
           Deregister exactly the matched legacy ref through the core portal; by-name selections are
           untouched.
         type: call
         targetComponent: project_config_portal
         targetMethod: deregisterPackRef
-      - stepNumber: 14
+      - stepNumber: 19
         description: Only vendored files are deleted.
         type: branch
         condition: >-
           the ref's resolved files lie inside .wai/packs (containment guard — never delete
           user-owned paths)
-        onTrueStep: 15
-        onFalseStep: 16
-      - stepNumber: 15
+        onTrueStep: 20
+        onFalseStep: 21
+      - stepNumber: 20
         description: Done.
         type: return
         outcome: deregistered and vendored files deleted (reported)
-      - stepNumber: 16
+      - stepNumber: 21
         description: Done, files preserved.
         type: return
         outcome: deregistered; files outside .wai/packs left in place (reported)
-      - stepNumber: 17
+      - stepNumber: 22
         description: Report and stop.
         type: return
         outcome: no matching project pack registered; error with exit code 1
@@ -277,16 +340,64 @@ methods:
         targetMethod: extractPack
       - stepNumber: 3
         description: >-
+          Read the bound project's configuration, when the command runs inside one: does it select
+          this pack's name without a version pin?
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: >-
+          Read the latest version of the name installed now: the one a floating selection resolves
+          to today
+        type: call
+        targetComponent: extension_portal
+        targetMethod: resolveInstalledPack
+      - stepNumber: 5
+        description: >-
+          Only an install that moves this project's floating selection is an update; and an
+          unattended run (--yes, or no terminal) applies without the report
+        type: branch
+        condition: >-
+          not inside a project, or the project does not select the name floating, or the new version
+          would not become the latest installed, or the run is unattended
+        onTrueStep: 10
+        onFalseStep: 6
+      - stepNumber: 6
+        label: measure-update
+        description: >-
+          Measure the update before the store write: the project's floating selection as the
+          candidate, with the extracted manifest supplied — the doctrine against wairon's defaults,
+          what the replaced version changed, the findings that change here
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 7
+        description: Print the impact report and ask whether to install
+        type: local
+      - stepNumber: 8
+        description: Installing a pack that changes a project's doctrine is intentional
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 10
+      - stepNumber: 9
+        description: 'Stop without installing: remove the temporary extraction and write nothing to the store'
+        type: return
+        outcome: declined; nothing installed
+      - stepNumber: 10
+        label: install
+        description: >-
           Install the materialized directory into the pack store via the core surface, recording the
           origin it came from.
         type: local
-      - stepNumber: 4
+      - stepNumber: 11
         description: >-
           Report what was installed (name, version, path, digest) and state plainly that it applies
           to NOTHING until a project selects it — the distinction the old --global install never
-          made.
+          made. When it moved this project's floating selection, say so instead: the selection now
+          resolves to this version; an unattended run adds that the impact was not shown and names
+          `wairon pack impact <name>`.
         type: local
-      - stepNumber: 5
+      - stepNumber: 12
         description: >-
           Warn when the origin is a local path rather than a fetchable URL: a selection recorded
           from it cannot be resolved by CI or a fresh clone.
@@ -351,19 +462,53 @@ methods:
         outcome: no-such-pack error; exit code 1, nothing written
       - stepNumber: 7
         description: >-
-          Build the selection (the name; the resolved version when one was requested or --pin was
-          passed; the digest under --pin; the source from --source or the recorded origin, only when
-          it is a fetchable URL; the bundle flag when asked) and record it: any same-name selection
-          is dropped and this one is appended last, the highest precedence. The result says whether
-          a selection was replaced.
+          Build the selection to record: the name; the resolved version when one was requested or
+          --pin was passed; the digest under --pin; the source from --source or the recorded origin,
+          only when it is a fetchable URL; the bundle flag when asked
+        type: local
+      - stepNumber: 8
+        description: 'An unattended run applies without the report: --yes, or no terminal to ask on'
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 13
+        onFalseStep: 9
+      - stepNumber: 9
+        description: >-
+          Measure the selection before writing it: the pack's doctrine against wairon's defaults,
+          the profiles of it that would govern, and the findings that change on this project (a dry
+          validate of the current and the candidate configuration — nothing is written)
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 10
+        description: >-
+          Print the impact report — on an update, also what the replaced version changed — and ask
+          whether to apply it
+        type: local
+      - stepNumber: 11
+        description: Installing a pack is intentional
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 13
+      - stepNumber: 12
+        description: Stop without writing
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 13
+        label: record
+        description: >-
+          Record the selection: any same-name selection is dropped and this one is appended last,
+          the highest precedence (project_config.withPack's reading, the one the report measured).
+          The result says whether a selection was replaced.
         type: call
         targetComponent: project_config_portal
         targetMethod: upsertPackSelection
-      - stepNumber: 8
+      - stepNumber: 14
         description: >-
-          Report "Re-selected" when a selection was replaced and "Selected" otherwise; note bundling
-          under --bundle, warn when no fetchable source was recorded and no bundle was requested,
-          and remind to commit .wai/project.yaml.
+          Report "Re-selected" when a selection was replaced and "Selected" otherwise — an
+          unattended run adds that it applied without showing the impact and names `wairon pack
+          impact <name>`; note bundling under --bundle, warn when no fetchable source was recorded
+          and no bundle was requested, and remind to commit .wai/project.yaml.
         type: return
         outcome: selected or re-selected
     detail: calls-only
@@ -373,11 +518,16 @@ methods:
       the installed names when nothing matches. Builds the selection: the name always; the resolved
       version when one was requested or --pin was passed; the content digest under --pin; the source
       from --source or the store's recorded origin, but ONLY when that origin is a fetchable URL;
-      and the bundle flag when asked. Records it through the core portal's upsertPackSelection,
-      which drops any same-name selection and appends this one last — the highest precedence — and
-      reports "Re-selected" when that replaced a selection and "Selected" otherwise. Warns when no
-      fetchable source was recorded and no bundle was requested, because CI and a fresh clone would
-      then be unable to obtain the pack.
+      and the bundle flag when asked. Unless the run is unattended (--yes, or no terminal to ask
+      on), it measures the selection through validator_portal.measurePackImpact and prints the
+      report — the pack's changes against wairon's defaults, the profiles of it that would govern,
+      the findings that change here — and asks to apply; anything but yes returns with nothing
+      written. Records it through the core portal's upsertPackSelection, which drops any same-name
+      selection and appends this one last — the highest precedence — and reports "Re-selected" when
+      that replaced a selection and "Selected" otherwise; an unattended run says it applied without
+      showing the impact and names `wairon pack impact`. Warns when no fetchable source was recorded
+      and no bundle was requested, because CI and a fresh clone would then be unable to obtain the
+      pack.
   - name: unusePack
     narrative:
       - stepNumber: 1
@@ -396,36 +546,75 @@ methods:
         type: return
         outcome: not-a-project error (suggests wairon init); exit code 1, nothing written
       - stepNumber: 4
+        description: 'Read this project''s configuration: does it select a pack of that name?'
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: >-
+          Nothing to measure when nothing is selected (the deselect then reports not-selected), and
+          an unattended run (--yes, or no terminal) deselects without the report
+        type: branch
+        condition: no selection of that name, or the run is unattended
+        onTrueStep: 10
+        onFalseStep: 6
+      - stepNumber: 6
+        label: measure-removal
+        description: >-
+          Measure the removal before writing it: the stored selection as the candidate with `remove`
+          — the pack's doctrine against wairon's defaults and the findings that change here once it
+          no longer applies
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 7
+        description: Print the impact report and ask whether to deselect
+        type: local
+      - stepNumber: 8
+        description: Removing a pack is as intentional as adding one
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Stop without writing
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 10
+        label: deselect
         description: >-
           Deselect the pack: only same-name selections are dropped — legacy path refs are untouched
           — and nothing is written when none matched. The result says whether anything was dropped.
         type: call
         targetComponent: project_config_portal
         targetMethod: removePackSelection
-      - stepNumber: 5
+      - stepNumber: 11
         description: Only a selected pack can be deselected.
         type: branch
         condition: nothing was dropped
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
         description: Report that this project does not select a pack of that name.
         type: return
         outcome: not-selected error; exit code 1, nothing written
-      - stepNumber: 7
+      - stepNumber: 13
         description: >-
           Report the deselection: the pack remains installed in the store, and its profiles, rules,
-          and assertions no longer apply here.
+          and assertions no longer apply here; an unattended run adds that it applied without
+          showing the impact and names `wairon pack impact <name>`.
         type: return
         outcome: deselected
     detail: calls-only
     intent: >-
-      Refuses outside a wairon project (the core portal's projectConfigExists). Deselects the pack
-      through the core portal's removePackSelection, which drops only same-name selections — legacy
-      path refs are untouched, `pack remove` handles those — and writes nothing when none matched. A
-      false result is the "this project does not select a pack named" error with exit code 1;
-      otherwise it states plainly that the pack remains installed in the store while its profiles,
-      rules, and assertions no longer apply here.
+      Refuses outside a wairon project (the core portal's projectConfigExists). Unless the run is
+      unattended (--yes, or no terminal) and when the project selects a pack of that name, it
+      measures the removal through validator_portal.measurePackImpact (the stored selection with
+      `remove`), prints the report and asks — anything but yes returns with nothing written.
+      Deselects the pack through the core portal's removePackSelection, which drops only same-name
+      selections — legacy path refs are untouched, `pack remove` handles those — and writes nothing
+      when none matched. A false result is the "this project does not select a pack named" error
+      with exit code 1; otherwise it states plainly that the pack remains installed in the store
+      while its profiles, rules, and assertions no longer apply here.
   - name: bundlePack
     narrative:
       - stepNumber: 1
@@ -593,6 +782,61 @@ methods:
       is checked immediately, so a substituted pack is caught at install rather than later by the
       gate. One failed selection never stops the others; every temp file is cleaned up on both
       paths.
+  - name: impactPack
+    narrative:
+      - stepNumber: 1
+        description: Is this inside an initialized wairon project?
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: An impact is measured on a project
+        type: branch
+        condition: not inside an initialized wairon project
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Report and stop
+        type: return
+        outcome: not-a-project error (suggests wairon init); exit code 1
+      - stepNumber: 4
+        label: resolve
+        description: Resolve the requested name (and optional version) against the pack store
+        type: call
+        targetComponent: extension_portal
+        targetMethod: resolveInstalledPack
+      - stepNumber: 5
+        description: Only an installed pack can be measured
+        type: branch
+        condition: no installed pack matches
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Report the installed pack names and stop
+        type: return
+        outcome: no-such-pack error; exit code 1
+      - stepNumber: 7
+        label: config
+        description: 'Read this project''s configuration: does it already apply the pack exactly as asked?'
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 8
+        description: >-
+          Build the candidate: when the pack is applied exactly as asked, its stored entry with
+          `remove` (the report then reads as what the pack accounts for now); otherwise the
+          selection `pack use` would record for the request
+        type: local
+      - stepNumber: 9
+        description: Measure it, writing nothing
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 10
+        description: >-
+          Print the report: the doctrine changes grouped by profile, the profiles that govern here,
+          and the introduced, resolved and regraded findings with both runs' totals
+        type: return
+        outcome: impact shown; nothing written
+    detail: calls-only
 detail: calls-only
 lint:
   allow:
@@ -607,4 +851,4 @@ lint:
         limitation at the workspace-package boundary, in src/commands/packs.ts.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-09-25T17:33:35.076Z'
+updatedAt: '2026-09-29T16:10:14.880Z'

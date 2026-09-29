@@ -72,7 +72,17 @@ fields:
     type: string
     description: Optional reason supplied when approving or denying the request.
     optional: true
+  - name: executionSummary
+    type: string
+    description: >-
+      Set when an approved project:init is executed: one line per pack the instance policy applied
+      and for the governing-profile step, each with its headline doctrine changes and finding totals
+      (from the init's GovernedProjectCreation), so whoever reads the approval — getApprovalStatus,
+      awaitApproval, the decider — sees what the unattended init changed. The full impacts are in
+      the init's GovernedProjectCreation; the project.init.policy audit event records a compact
+      form. Absent for every other kind and before execution.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:44.031Z'
-updatedAt: '2026-09-19T11:07:05.250Z'
+updatedAt: '2026-09-29T21:59:30.134Z'

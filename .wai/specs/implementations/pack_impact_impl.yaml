@@ -1,0 +1,188 @@
+id: pack_impact_impl
+name: Pack Impact Implementation
+description: >-
+  The pre-write measurement in src/core/pack-impact.ts. Reads through the validator's core adapter
+  and runs the owner's gate through spec_validator; the doctrine diff and the finding diff are the
+  pure type methods extension_pack.changesAgainst and validation_result.changesTo. How the dry
+  validate stays dry: validateProject only reads (specs, pins, code) and its ValidationOptions carry
+  every configuration input — rules, projectType, packSelections and extensions — so the candidate
+  configuration exists only in memory and nothing under .wai/ is written; the rule registry it
+  re-registers is per-run state every validation rebuilds.
+contract: ipack_impact
+sourcePath: src/core/pack-impact.ts
+simPath: tests/core/pack-impact.test.ts
+methods:
+  - name: measure
+    narrative:
+      - stepNumber: 1
+        description: Read the bound project's stored configuration through the core adapter
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: 'A pack applies to a project: there must be one'
+        type: branch
+        condition: the bound project has no configuration
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Refuse: nothing to measure against'
+        type: throw
+        error: not inside a wairon project
+      - stepNumber: 4
+        label: candidate
+        description: >-
+          Build the candidate configuration in memory with project_config.withPack(entry, remove) —
+          the reading the registry's write uses — and set its projectType when the candidate names
+          one. Note the same-name entry the stored configuration applies now, if any: the replaced
+          one on an update, the measured one on a removal
+        type: local
+      - stepNumber: 5
+        description: >-
+          Is there nothing to resolve — the manifest is supplied with the candidate (a hosted
+          install whose YAML is not on disk yet), or the candidate names no entry (a
+          projectType-only write, whose doctrine half is then empty)?
+        type: branch
+        condition: the candidate supplies its manifest and does not remove, or names no entry
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Use the supplied manifest, or none
+        type: jump
+        toStep: 10
+      - stepNumber: 7
+        label: resolve
+        description: >-
+          Resolve the manifest of the entry being measured — the candidate's entry, or on a removal
+          the stored same-name entry — the loader's way
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: packManifest
+      - stepNumber: 8
+        description: An entry that does not resolve cannot be measured
+        type: branch
+        condition: no manifest resolved
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Refuse with the reason the gate would give the same entry (not installed, version
+          unsatisfied, integrity mismatch)
+        type: throw
+        error: the pack does not resolve
+      - stepNumber: 10
+        label: previous
+        description: Is this an update — a same-name entry applies now and the candidate replaces it?
+        type: branch
+        condition: the candidate applies and the stored configuration already applies a same-name entry
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Resolve the manifest applied now, for the replaced version's doctrine (null leaves
+          previousDoctrine absent: it did not resolve, which the current gate already reports)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: packManifest
+      - stepNumber: 12
+        label: baseline
+        description: >-
+          Register the builtin rules alone, so the registry holds wairon's own rule set and no
+          pack's
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 13
+        description: Read every builtin code with its default severity
+        type: call
+        targetComponent: rule_repository
+        targetMethod: knownIssueCodes
+      - stepNumber: 14
+        description: Read the builtin profile ids
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProfileIds
+      - stepNumber: 15
+        description: Read the builtin composite project kinds
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProjectKinds
+      - stepNumber: 16
+        description: >-
+          Compose wairon's defaults as a DoctrineBaseline (the builtin codes and severities,
+          profiles, project kinds, authorable stereotypes, builtin guarantee tokens, designDepth
+          narratives) and state the pack's changes against it with extension_pack.changesAgainst —
+          and the replaced manifest's, on an update. A loosening is stated like any other change
+        type: local
+      - stepNumber: 17
+        description: >-
+          Run the owner's gate under the stored configuration — its own rules and projectType, never
+          the family run
+        type: call
+        targetComponent: spec_validator
+        targetMethod: validateProject
+      - stepNumber: 18
+        description: >-
+          Load the extensions the candidate configuration would apply, the candidate's supplied
+          manifest merged at its entry's position
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadExtensionsFor
+      - stepNumber: 19
+        description: >-
+          Run the owner's gate again with every configuration input from the candidate: its rules,
+          its projectType, its by-name pack selections and the extensions just loaded. Nothing is
+          written: the candidate exists only in the options
+        type: call
+        targetComponent: spec_validator
+        targetMethod: validateProject
+      - stepNumber: 20
+        description: >-
+          Read the bound project's subsystem specs, for the profiles they name (the governing half
+          of the report)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 21
+        description: >-
+          Diff the two verdicts with validation_result.changesTo; name the pack's profiles that
+          govern something under the candidate (its projectType and each subsystem profile that
+          names one); record both runs' totals, the direction (apply or remove) and, on an update,
+          the replaced version
+        type: local
+      - stepNumber: 22
+        description: Answer the impact
+        type: return
+        outcome: PackImpact
+  - name: doctrine
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Register the builtin rules alone, so the registry holds wairon's own rule set and no
+          pack's
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 2
+        description: Read every builtin code with its default severity
+        type: call
+        targetComponent: rule_repository
+        targetMethod: knownIssueCodes
+      - stepNumber: 3
+        description: Read the builtin profile ids
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProfileIds
+      - stepNumber: 4
+        description: Read the builtin composite project kinds
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProjectKinds
+      - stepNumber: 5
+        description: >-
+          Compose the DoctrineBaseline exactly as measure does and state the manifest's changes
+          against it with extension_pack.changesAgainst
+        type: local
+      - stepNumber: 6
+        description: Answer the pack's name, declared version and changes
+        type: return
+        outcome: PackDoctrine
+status: complete
+createdAt: '2026-09-29T15:53:20.337Z'
+updatedAt: '2026-09-29T16:52:55.734Z'

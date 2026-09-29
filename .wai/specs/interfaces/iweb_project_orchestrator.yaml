@@ -24,11 +24,12 @@ methods:
       project_policy_orchestrator.initializeProjectWithProfile with the session as the credential,
       so the instance pack policy (required/default packs, profile requirements, enforcement mode)
       applies to a web create exactly as it does to the MCP init (project:create over the unit
-      enforced there).
+      enforced there). Answers the GovernedProjectCreation: the record with the impact of every pack
+      and of the governing-profile step the policy applied.
     signature: >-
       create(sessionId: string, id: string, unitId: string, profileSelection:
-      ProjectProfileSelection): HostedProjectRecord
-    returns: HostedProjectRecord
+      ProjectProfileSelection): GovernedProjectCreation
+    returns: GovernedProjectCreation
     params:
       - name: sessionId
         type: string
@@ -70,4 +71,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-09-17T20:37:46.090Z'
+updatedAt: '2026-09-29T16:16:13.660Z'

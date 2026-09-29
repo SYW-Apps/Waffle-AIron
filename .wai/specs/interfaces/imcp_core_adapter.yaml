@@ -200,10 +200,11 @@ methods:
         type: VariantDef[]
   - name: createMember
     description: >-
-      Calls createMember on the core portal: scaffold a member project and declare it in the bound
-      project's `members`.
-    signature: 'createMember(alias: string, path: string, description?: string): void'
-    returns: void
+      Calls createMember on the core portal: scaffold a member project (with the bound project's
+      required packs, once, when its configuration is created) and declare it in the bound project's
+      `members`; answers what was scaffolded.
+    signature: 'createMember(alias: string, path: string, description?: string): MemberCreation'
+    returns: MemberCreation
     params:
       - name: alias
         type: string
@@ -230,4 +231,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T15:27:07.694Z'
+updatedAt: '2026-09-29T15:57:18.016Z'

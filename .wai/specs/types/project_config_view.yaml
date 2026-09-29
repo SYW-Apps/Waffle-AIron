@@ -58,7 +58,14 @@ fields:
       profile governs the whole project" is a claim the UI can qualify honestly rather than an
       assumption.
     optional: true
+  - name: impact
+    type: PackImpact
+    description: >-
+      Returned by setProjectType only: what the write changed on the project — the new governing
+      profile (and the pack registered to contribute it, when one was) measured before the write. An
+      unattended policy write, so this is how it states what it changed.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-23T11:23:30.795Z'
-updatedAt: '2026-09-19T11:07:14.235Z'
+updatedAt: '2026-09-29T16:11:05.937Z'

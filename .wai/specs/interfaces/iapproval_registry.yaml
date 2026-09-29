@@ -34,12 +34,20 @@ methods:
   - name: markCompleted
     description: >-
       Transition an approved request to completed after its privileged workflow has executed
-      successfully; only an approved request may become completed.
-    signature: 'markCompleted(id: string): ApprovalRequest'
+      successfully; only an approved request may become completed. When the workflow reports what it
+      changed (an executed project:init's executionSummary), the summary is stored on the completed
+      request in the same write.
+    signature: 'markCompleted(id: string, executionSummary?: string): ApprovalRequest'
     returns: ApprovalRequest
     params:
       - name: id
         type: string
+      - name: executionSummary
+        type: string
+        description: >-
+          What the executed workflow changed, recorded on the completed request (a project:init's
+          applied packs and governing profile)
+        optional: true
     guarantees:
       - atomic
   - name: expirePending
@@ -53,4 +61,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-09T19:30:39.410Z'
-updatedAt: '2026-07-09T19:32:58.248Z'
+updatedAt: '2026-09-29T21:27:39.375Z'

@@ -227,6 +227,14 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: projectFamily
+  - name: parseDeclarativePack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: parseDeclarativePack
+    detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-27T15:26:29.974Z'
+updatedAt: '2026-09-29T21:27:59.174Z'

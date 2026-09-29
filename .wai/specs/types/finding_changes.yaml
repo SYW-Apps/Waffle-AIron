@@ -1,0 +1,27 @@
+kind: value-object
+id: finding_changes
+name: FindingChanges
+description: >-
+  How one project's findings differ between two validation runs of the same tree under two
+  configurations: the findings only the second run reports, the ones only the first reports, and the
+  ones both report at a different severity. A finding's identity across the runs is its code, its
+  project key, its spec and its message with the severity word removed (a validation issue carries
+  no site of its own today) — never its position in the list — so a reordered rule sequence changes
+  nothing; identical findings are matched as a multiset.
+fields:
+  - name: introduced
+    type: ValidationIssue[]
+    description: Reported by the second run only, at the second run's severity.
+    optional: false
+  - name: resolved
+    type: ValidationIssue[]
+    description: Reported by the first run only, at the first run's severity.
+    optional: false
+  - name: regraded
+    type: RegradedFinding[]
+    description: Reported by both, at different severities (including a code turned to notice).
+    optional: false
+methods: []
+sourcePath: src/models/pack-impact.ts
+createdAt: '2026-09-29T15:50:09.077Z'
+updatedAt: '2026-09-29T16:41:17.050Z'

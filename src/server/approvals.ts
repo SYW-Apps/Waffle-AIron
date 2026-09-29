@@ -188,9 +188,10 @@ class ApprovalRegistry {
   /**
    * Locate the request by id (not-found error when absent) and transition it to
    * completed only from an approved status (any other status is a validation
-   * error), then persist and refresh the store.
+   * error), setting the executionSummary when one is given, then persist and
+   * refresh the store.
    */
-  markCompleted(id: string): ApprovalRequest {
+  markCompleted(id: string, executionSummary?: string): ApprovalRequest {
     const requests = this.store.all();
     const idx = requests.findIndex((r) => r.id === id);
     if (idx === -1) {
@@ -203,7 +204,11 @@ class ApprovalRegistry {
           `only an approved request can be completed.`,
       );
     }
-    const completed: ApprovalRequest = { ...current, status: 'completed' };
+    const completed: ApprovalRequest = {
+      ...current,
+      status: 'completed',
+      ...(executionSummary !== undefined ? { executionSummary } : {}),
+    };
     const next = [...requests];
     next[idx] = completed;
     persistRequests(this.dataDir, next);
@@ -307,11 +312,12 @@ export function listApprovalRequests(
   return new ApprovalIndex(store).list(status, projectId, requestedByUserId, kind);
 }
 
-/** Mark an approved request completed after its privileged workflow ran (atomic). */
-export function markApprovalCompleted(dataDir: string, id: string): ApprovalRequest {
+/** Mark an approved request completed after its privileged workflow ran (atomic),
+ *  recording what the workflow changed when it reports it (a project:init). */
+export function markApprovalCompleted(dataDir: string, id: string, executionSummary?: string): ApprovalRequest {
   const store = new ApprovalStore(dataDir);
   store.load();
-  return new ApprovalRegistry(dataDir, store).markCompleted(id);
+  return new ApprovalRegistry(dataDir, store).markCompleted(id, executionSummary);
 }
 
 /** Expire pending requests at or past their expiresAt; returns the count expired (atomic). */

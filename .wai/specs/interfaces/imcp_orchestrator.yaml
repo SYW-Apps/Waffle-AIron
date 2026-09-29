@@ -293,9 +293,12 @@ methods:
     description: >-
       The sdd_add_member workflow: create a member of the bound project — scaffold its project
       (configuration with the alias as its project id, L0), each part only when absent, and declare
-      it in project.yaml `members` with the path and description.
-    signature: 'addMember(alias: string, path: string, description?: string): void'
-    returns: void
+      it in project.yaml `members` with the path and description. A newly created configuration
+      carries the bound project's required packs, once; the answer states the packs it applied and
+      the requirements nothing installed satisfies, and shows no impact report (an unattended
+      write).
+    signature: 'addMember(alias: string, path: string, description?: string): MemberCreation'
+    returns: MemberCreation
     params:
       - name: alias
         type: string
@@ -307,6 +310,26 @@ methods:
         type: string
         description: What the member is to this project
         optional: true
+  - name: packImpact
+    description: >-
+      The sdd_pack_impact workflow: what selecting (or updating to) a pack would change on the bound
+      project, writing nothing — its doctrine against wairon's defaults, which of its profiles would
+      govern, and the owner's-gate findings that change. A pack the project already applies exactly
+      as asked is measured as removed, and the answer says the findings are what the pack accounts
+      for now. Read-only: the local MCP server has no pack-selecting tool, so an agent proposes a
+      pack with this report and the human applies it with `wairon pack use`.
+    signature: 'packImpact(pack: string, version?: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: pack
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: An exact version; omitted, the latest installed
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-28T18:12:03.763Z'
+updatedAt: '2026-09-29T16:00:43.784Z'

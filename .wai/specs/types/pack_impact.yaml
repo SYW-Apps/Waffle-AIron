@@ -1,0 +1,75 @@
+kind: value-object
+id: pack_impact
+name: PackImpact
+description: >-
+  What one pack write would change, measured before it happens: the pack's doctrine against wairon's
+  defaults, which of its profiles would govern this project, and the findings that change on this
+  project if it is applied — a dry validate of the current configuration and of the candidate one,
+  neither written. The report shown before a pack is selected or updated (CLI, MCP, hosted) and by
+  `wairon pack impact`. It states changes and never judges them: nothing in it is a finding.
+fields:
+  - name: pack
+    type: string
+    description: The pack's name.
+    optional: false
+  - name: version
+    type: string
+    description: >-
+      The version the candidate resolves to (or the manifest declares); absent for an unversioned
+      pack.
+    optional: true
+  - name: replaces
+    type: string
+    description: The version currently applied under the same name, when the write replaces one (an update).
+    optional: true
+  - name: direction
+    type: string
+    description: >-
+      apply (the write adds or replaces the pack) | remove (it drops the pack; the findings read as
+      what the pack accounts for).
+    optional: false
+  - name: doctrine
+    type: DoctrineChange[]
+    description: The candidate pack's changes against wairon's defaults (extension_pack.changesAgainst).
+    optional: false
+  - name: previousDoctrine
+    type: DoctrineChange[]
+    description: >-
+      On an update: the replaced version's changes against the same defaults, so the report can show
+      what the new version adds and drops.
+    optional: true
+  - name: governing
+    type: string[]
+    description: >-
+      The pack's profiles that would govern something in this project under the candidate
+      configuration: the projectType, and each subsystem profile, that names one.
+    optional: false
+  - name: findings
+    type: FindingChanges
+    description: >-
+      The owner's-gate findings that differ between the current and the candidate configuration
+      (validation_result.changesTo).
+    optional: false
+  - name: before
+    type: ProjectVerdict
+    description: The totals of the current configuration's run.
+    optional: false
+  - name: after
+    type: ProjectVerdict
+    description: The totals of the candidate configuration's run.
+    optional: false
+methods:
+  - name: headline
+    signature: 'headline(): string'
+    returns: string
+    description: >-
+      This impact in one line: the pack (and version), its doctrine changes counted by kind
+      (loosened, raised, added, …), the introduced, resolved and regraded finding counts, and both
+      totals. Stated, never judged. What an unattended hosted policy write puts in its messages (a
+      reconcile's applied packs) and on an approval's executionSummary. Pure over the impact's own
+      fields.
+    sourcePath: src/models/pack-impact.ts
+    symbol: impactHeadline
+sourcePath: src/models/pack-impact.ts
+createdAt: '2026-09-29T15:50:59.377Z'
+updatedAt: '2026-09-29T21:33:44.248Z'

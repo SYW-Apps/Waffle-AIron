@@ -1,0 +1,51 @@
+kind: value-object
+id: pack_settings
+name: PackSettings
+description: >-
+  The settings one pack sets for a project governed by one of its profiles (or by none of them):
+  what a member that adopted the pack can deviate from. Derived from the pack's own manifest only,
+  never from what any project configured. Carries every profile-overridable setting
+  family_validator.deviations compares — severities, designDepth, and the profile's naming,
+  complexity and documentation overlays.
+fields:
+  - name: pack
+    type: string
+    description: The pack's name.
+    optional: false
+  - name: profile
+    type: string
+    description: >-
+      The pack profile these settings are read under; absent when none of the pack's profiles
+      governs, and then only the pack's added codes are settings.
+    optional: true
+  - name: severities
+    type: Map<string, string>
+    description: >-
+      Rule code → the severity (error | warning | notice | off) the pack gives it: the profile's
+      rules.sddRuleSeverity, then each assertion's namespaced code at its declared severity, then
+      each programmatic rule code at its default severity. The profile's entry wins on a code both
+      name.
+    optional: false
+  - name: designDepth
+    type: string
+    description: The profile's rules.designDepth, when it sets one.
+    optional: true
+  - name: naming
+    type: NamingRuleConfig
+    description: >-
+      The profile's rules.naming, when it sets any: the keys (and stereotypes entries) a member's
+      own rules.naming may replace.
+    optional: true
+  - name: complexity
+    type: ComplexityRuleConfig
+    description: The profile's rules.complexity, when it sets any.
+    optional: true
+  - name: documentation
+    type: DocumentationRuleConfig
+    description: The profile's rules.documentation, when it sets any.
+    optional: true
+methods: []
+sourcePath: src/models/pack-impact.ts
+symbol: PackSettings
+createdAt: '2026-09-29T15:50:20.251Z'
+updatedAt: '2026-09-29T16:40:57.989Z'

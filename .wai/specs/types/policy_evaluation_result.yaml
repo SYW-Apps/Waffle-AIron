@@ -58,7 +58,24 @@ fields:
       no loaded profile — a deliberate, resolvable, policy-compliant choice is reported here and
       left alone.
     optional: false
+  - name: impacts
+    type: PackImpact[]
+    description: >-
+      Per pack a reconcile applies (or, from an evaluation, would apply under auto_reconcile): its
+      impact on the project, measured before the write against the configuration as it stood
+      (pack_impact.measure with the resolved declarative content supplied). A reconcile is an
+      unattended policy write, so it shows no report beforehand; these are how its result states
+      what it changed. Empty when nothing is, or would be, applied.
+    optional: true
+  - name: doctrine
+    type: PackDoctrine[]
+    description: >-
+      evaluateInitRequest only: per required/default pack the init would apply, what it changes
+      against wairon's defaults — the doctrine half ALONE. There is deliberately no finding diff:
+      the project does not exist yet, so there is nothing to validate before or after. The executed
+      init reports the full impacts in its GovernedProjectCreation.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:58:56.094Z'
-updatedAt: '2026-09-19T11:07:13.293Z'
+updatedAt: '2026-09-29T16:14:34.984Z'

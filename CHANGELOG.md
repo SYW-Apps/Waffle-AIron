@@ -34,8 +34,10 @@ specs by its project id (one re-lock), and gives the deprecated reference and mo
 forms one release of grace. Stage 4 gives every cross-project edge one judge: a
 project's own gate reads only its own files and pins, `validate` at a parent becomes the
 family run (whose member checks can newly fail `--ci`), five codes escalate to errors, and
-`validateSddTree` is renamed `validateProject` with no alias. Nothing here is purely
-additive, so `[minor]` would understate it.
+`validateSddTree` is renamed `validateProject` with no alias. The governance stage makes
+every pack command that writes a project's packs show that pack's impact and ask first in a
+terminal (`--yes` for scripts), and adds three codes a parent's requirements can newly fail
+on. Nothing here is purely additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
 
@@ -597,6 +599,66 @@ locked: each project whose approval the writes staled is named, to be re-locked 
 - Scripts that called `validateSddTree` call `validateProject`.
 - An MCP client reading `sdd_validate_tree` sees an optional `projects` list and a
   `project` key on each finding in a family run.
+
+### Governance: a pack's impact before it applies, and packs a parent requires
+
+Packs exist to adjust wairon's checks and behaviour, and a pack may loosen or remove
+them by design — a pack for an automation platform has to. So wairon never judges
+what a pack changes. It makes installing one **intentional**: the impact is shown
+before the write, and a pack applies per project.
+
+- **`wairon pack impact <name>[@version]`** shows, writing nothing, the pack's doctrine
+  against wairon's defaults (rules loosened, raised, turned off or added; profiles,
+  stereotype fencing, edge licences, patterns, guarantee tokens and language tables),
+  the profiles of it that would govern this project, and the findings that change here
+  — a dry validate of the current and the candidate configuration, with both totals.
+  What it says the findings will be is what validation reports after the write.
+- **Every pack write asks first.** `pack use`, `pack unuse`, `pack add`, `pack remove`,
+  and `pack install` when it moves this project's floating selection print the report
+  and ask; anything but yes writes nothing. `--yes`, or a run with no terminal, writes
+  without it and says so. `wairon host packs install | remove --project` do the same
+  for a hosted project.
+- **MCP.** `sdd_pack_impact` (local, read-only) answers the report as structured
+  content; `sdd_add_member` answers what it applied. The hosted data plane adds
+  `sdd_host_pack_impact` (project:read, writes nothing).
+- **Hosted.** `POST /admin/projects/{id}/packs/{name}/impact` and `…/removal-impact`
+  (project:read, write nothing) and their web routes; the web UI shows the report
+  before it installs, adopts or removes a pack and writes only on confirm, says
+  plainly that an archive upload has no preview, shows what a reconcile would apply
+  and did apply, and shows what the instance policy applied to a new project. The
+  unattended policy writes carry their impacts: a policy evaluation and reconcile
+  (`impacts`), `setProjectType` (`impact`), an init request's evaluation (`doctrine`,
+  the doctrine half alone), and a policy-governed creation, which now answers a
+  `GovernedProjectCreation` — the unchanged record beside every pack's impact and the
+  governing profile's — through the MCP init, the policy portal and the web create,
+  audits the impacts, and records their headlines on an approval as its
+  `executionSummary`.
+- **`composition.requirePolicies`.** A parent requires packs of its members by semver
+  range, optionally one profile inside the pack. A member adopts by selecting the pack
+  itself. The family run judges it: `POLICY_NOT_ADOPTED` (error — missing, unpinned,
+  out of range, or the wrong profile) and `POLICY_DEVIATION` (notice — the member
+  changes one of the pack's settings; `--ci` never fails on it). A range that does not
+  parse is `POLICY_REQUIREMENT_INVALID` (error) at the requiring project's own gate. A
+  member's own gate never reads its parent's requirements, and a pack's loosening is
+  never a finding.
+- **Scaffolding.** `wairon member add`, `wairon init` in a subdirectory and
+  `sdd_add_member` write the parent's required packs into a new member once, pinned to
+  the highest installed version each range admits, and say what they applied.
+
+**Upgrading.**
+
+- **Pack commands now ask first in a terminal.** A script that runs `wairon pack use |
+  unuse | add | remove | install` or `wairon host packs install | remove --project`
+  with a terminal attached waits for an answer: pass `--yes`. Without a terminal (CI,
+  a pipe) they write as before and say they applied without showing the impact.
+- **Three new codes.** A parent that declares `composition.requirePolicies` can newly
+  fail its family run on `POLICY_NOT_ADOPTED`, and its own gate on
+  `POLICY_REQUIREMENT_INVALID`; `POLICY_DEVIATION` is a notice. Nothing reports them
+  until a project declares a requirement. Re-tune them in the requiring project's
+  `rules.sddRuleSeverity`.
+- **Hosted API clients.** `POST /web/projects`, the policy portal's init and
+  `executeApprovedInit` answer a `GovernedProjectCreation` (`record`, `packImpacts`,
+  `profileImpact`) instead of the bare record: read the record from `record`.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 

@@ -6,11 +6,15 @@ description: >-
 component: project_policy_portal
 methods:
   - name: initializeProjectWithProfile
-    description: Create a hosted project from an explicit ProjectInitRequest and profile selection.
+    description: >-
+      Create a hosted project from an explicit ProjectInitRequest and profile selection. Answers the
+      GovernedProjectCreation: the created record with the impact of every pack and of the
+      governing-profile step the policy applied, so the caller sees what the unattended policy write
+      changed.
     signature: >-
       initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
-      HostedProjectRecord
-    returns: HostedProjectRecord
+      GovernedProjectCreation
+    returns: GovernedProjectCreation
     params:
       - name: credential
         type: string
@@ -72,4 +76,4 @@ methods:
       path: /instance/pack-policy
 status: complete
 createdAt: '2026-07-08T21:59:56.662Z'
-updatedAt: '2026-07-09T20:53:13.403Z'
+updatedAt: '2026-09-29T16:16:04.680Z'

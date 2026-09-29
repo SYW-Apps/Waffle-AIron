@@ -44,6 +44,8 @@ export {
   listProjectPacks,
   installProjectPack,
   removeProjectPack,
+  previewProjectPack,
+  previewProjectPackRemoval,
 } from './packs.js';
 
 // Permission assignments (permission_admin_orchestrator).

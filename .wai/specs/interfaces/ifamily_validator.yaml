@@ -12,11 +12,14 @@ methods:
       Validate the bound project's family: the bound root and its members (all levels, or as many as
       a numeric `recursive` bounds), each by its own gate under its own configuration and prefixed
       with its project key, verbatim; then the composition findings of each project's externals;
-      then the family checks. A plain run narrows the request's reach to the bound root before any
-      read, so an external whose producer lies above the family is not composed and is counted in a
-      one-line hint instead; with `family` set the reach stays the request's (locally an explicit
-      walk up, hosted the credential's), never widened. The result is valid when no project's gate
-      and no family finding holds an error, and lists each project's totals.
+      then the family checks; then the governance checks (checkPolicies). A plain run narrows the
+      request's reach to the bound root before any read, so an external whose producer lies above
+      the family is not composed and is counted in a one-line hint instead; with `family` set the
+      reach stays the request's (locally an explicit walk up, hosted the credential's), never
+      widened. A requirement placed by a project above the bound root is not in the selection and is
+      not judged: governance, like composition, sees only what the run reaches. The result is valid
+      when no project's gate and no family or governance finding holds an error, and lists each
+      project's totals.
     signature: 'run(options: ValidationOptions): ValidationResult'
     returns: ValidationResult
     params:
@@ -108,6 +111,100 @@ methods:
       - code: PROJECT_ID_AMBIGUOUS
         severity: warning
         summary: 'A member has no usable id: its name yields no slug, or its declared id breaks the grammar'
+  - name: checkPolicies
+    description: >-
+      The governance checks over the root's graph (governance stage). Every selected project that
+      declares `composition.requirePolicies` requires those packs of every member below it in the
+      selection, at every level; the root's own requirements never apply to the root, and a
+      requiring project above the bound root is not in the selection and is not judged (a member's
+      `--family` run selects downward only). A requirement whose range does not parse is skipped
+      here — the requiring project's OWN gate reports it (extension_rules.packRequirements,
+      POLICY_REQUIREMENT_INVALID). Each member's adoption of each readable requirement is judged by
+      `adoption`, and each finding's severity is the REQUIRING project's rules.sddRuleSeverity
+      override, else the default — as the family codes are tuned. Nothing here reads the
+      requirements at a member's own gate, so a member's own verdict is the same with and without
+      them (member-gate-unchanged-by-requirements); nothing here compares a pack with wairon's
+      defaults, so a pack's loosening is never reported (pack-loosening-is-never-a-finding); and
+      nothing here depends on what the machine has installed, so the family verdict is the same from
+      every machine (location-independent).
+    signature: 'checkPolicies(family: ProjectFamily): ValidationIssue[]'
+    returns: ValidationIssue[]
+    params:
+      - name: family
+        type: ProjectFamily
+        description: >-
+          The family root's project graph: the selected projects, their directories and each
+          member's parent
+    findings: []
+  - name: adoption
+    description: >-
+      With one member's root bound: judge its adoption of the requirements one requiring project
+      places on it, from the member's committed files only — never from the version the machine
+      happens to resolve — so the verdict is location-independent. POLICY_NOT_ADOPTED (error) when:
+      the member has no entry for the pack (a selection by that name, or a legacy path reference
+      whose committed manifest carries it); the entry is a selection with no version pin (reason:
+      "unpinned — a family cannot judge a floating selection; pin a version"); the pinned version —
+      or, for a legacy path reference, its committed manifest's declared version — is outside the
+      range (an unversioned manifest is admitted by `*` only); or the requirement names a profile
+      and the member's projectType is another. The message names the requirement (pack, range,
+      profile, requiring project) and the member's entry. An adopted requirement's settings are then
+      compared by `deviations` (POLICY_DEVIATION). Answered at the default severities, stamped with
+      the member's key; checkPolicies applies the requiring project's overrides.
+    signature: >-
+      adoption(requiring: string, member: string, requirements: PackRequirement[]):
+      ValidationIssue[]
+    returns: ValidationIssue[]
+    params:
+      - name: requiring
+        type: string
+        description: >-
+          The key of the requiring project ('' for the family root): named in each message, and the
+          project whose sddRuleSeverity tunes each finding
+      - name: member
+        type: string
+        description: The key of the bound member, stamped on each finding as its project
+      - name: requirements
+        type: PackRequirement[]
+        description: The requiring project's valid requirements
+    findings:
+      - code: POLICY_NOT_ADOPTED
+        severity: error
+        summary: >-
+          A member does not select a pack a project above it requires, selects it outside the
+          required range, or is not governed by the required profile
+  - name: deviations
+    description: >-
+      With one member's root bound: every override the member makes against the settings an adopted
+      pack sets under its governing profile, as POLICY_DEVIATION (notice) — the complete list of
+      what a project can override against a profile in today's validator (src/core/rules/index.ts:
+      getRuleSeverity, effectiveDesignDepth, namingConfigFor, complexityConfigFor,
+      documentationConfigFor, getComponentProfile): rules.sddRuleSeverity per code the pack sets;
+      rules.designDepth and each subsystem's designDepth; each rules.naming key and each
+      rules.naming.stereotypes entry; each rules.complexity key; each rules.documentation key; each
+      subsystem `profile` other than the governing one; and each lint.allow on the member's specs
+      over a code the pack sets. A key the profile does not set is not a deviation, and nothing is
+      compared with wairon's defaults. Each names the setting, the pack's value and the member's,
+      and the requirement it concerns.
+    signature: >-
+      deviations(member: string, requirement: PackRequirement, settings: PackSettings):
+      ValidationIssue[]
+    returns: ValidationIssue[]
+    params:
+      - name: member
+        type: string
+        description: The key of the bound member, stamped on each finding
+      - name: requirement
+        type: PackRequirement
+        description: The adopted requirement, named in each message
+      - name: settings
+        type: PackSettings
+        description: What the adopted pack sets under the member's governing profile (extension_pack.settings)
+    findings:
+      - code: POLICY_DEVIATION
+        severity: notice
+        summary: >-
+          A member that adopted a required pack changes one of the pack's settings in its own
+          configuration or specs
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-09-28T18:11:33.129Z'
+updatedAt: '2026-09-29T16:08:27.605Z'

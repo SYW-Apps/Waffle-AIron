@@ -15,7 +15,8 @@ import {
   useToast,
 } from '../ui';
 import { UnitSelect } from '../components/UnitSelect';
-import type { OrganizationUnitRecord, ProjectRecord } from '../types';
+import { PackImpactSummary } from './ProjectOps';
+import type { GovernedProjectCreation, OrganizationUnitRecord, ProjectRecord } from '../types';
 
 function statusTone(status: string): 'ok' | 'warn' | 'neutral' {
   if (status === 'ready') return 'ok';
@@ -31,12 +32,53 @@ function CreateProjectModal(props: {
   const toast = useToast();
   const [id, setId] = useState('');
   const [unitId, setUnitId] = useState(props.units[0]?.id ?? '');
+  // What the instance policy applied at creation. The policy's packs are not the
+  // user's choice to confirm, so they are shown afterwards rather than asked about.
+  const [created, setCreated] = useState<GovernedProjectCreation | null>(null);
 
   async function create() {
-    await post('/web/projects', { id, unitId });
+    const creation = await post<GovernedProjectCreation>('/web/projects', { id, unitId });
     toast.ok(`Project “${id}” created`);
     props.onCreated();
-    props.onClose();
+    const applied = (creation.packImpacts?.length ?? 0) > 0 || creation.profileImpact !== undefined;
+    if (applied) setCreated(creation);
+    else props.onClose();
+  }
+
+  if (created) {
+    return (
+      <Modal
+        title={`Project “${created.record.id}” created`}
+        wide
+        onClose={props.onClose}
+        footer={
+          <Button variant="primary" onClick={props.onClose}>
+            Done
+          </Button>
+        }
+      >
+        <div className="stack-lg">
+          <p className="hint">
+            The instance pack policy applied these at creation, each measured before it was written. Changes are stated, never
+            judged — packs exist to adjust wairon's checks.
+          </p>
+          {created.packImpacts.length > 0 && (
+            <div className="stack-sm">
+              <strong>Packs applied</strong>
+              {created.packImpacts.map((impact) => (
+                <PackImpactSummary key={impact.pack} impact={impact} />
+              ))}
+            </div>
+          )}
+          {created.profileImpact && (
+            <div className="stack-sm">
+              <strong>Governing profile</strong>
+              <PackImpactSummary impact={created.profileImpact} />
+            </div>
+          )}
+        </div>
+      </Modal>
+    );
   }
 
   return (

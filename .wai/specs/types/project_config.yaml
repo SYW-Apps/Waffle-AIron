@@ -94,6 +94,18 @@ fields:
       through the registry's declareMember and importNames; the L1 `projectPath` form still loads
       for one release (DEPRECATED_MOUNT_FORM).
     optional: true
+  - name: composition
+    type: CompositionConfig
+    description: >-
+      What this project requires of the projects it contains when they are composed:
+      `requirePolicies`, the packs each member must select (by semver range, optionally one
+      profile). This project's own gate judges only its syntax (POLICY_REQUIREMENT_INVALID); the
+      family run judges members against it, and createMember reads it once when it scaffolds a new
+      member. No member's own gate reads it, so a member's verdict is the same with and without a
+      parent's requirement. Not part of the gate identity until stage 5. Written by hand. Coexists
+      with, and is never merged into, the hosted instance floor and profileSelection (see
+      CompositionConfig).
+    optional: true
 methods:
   - name: declaredPackNames
     signature: 'declaredPackNames(): string[]'
@@ -156,6 +168,24 @@ methods:
       written; an alias outside [a-z0-9-_]+, an empty or absolute path, an alias `externals` also
       declares, or a malformed `use` entry is recorded as the entry's problem rather than dropped.
       Empty when nothing is declared.
+  - name: withPack
+    signature: 'withPack(entry: PackSelection | string, remove?: boolean): ProjectConfig'
+    returns: ProjectConfig
+    description: >-
+      The configuration as it would read after one pack write, without writing it: a selection drops
+      every same-name selection and is appended last (the highest precedence), exactly as the
+      registry's upsertPackSelection writes it; a legacy path reference is appended only when
+      absent, exactly as registerPackRef writes it; with `remove`, the same-name selection (or that
+      exact path reference) is dropped instead, as removePackSelection / deregisterPackRef do. The
+      one reading of a pack write that the dry validate and the registry share, which is what makes
+      an impact report equal what the write then produces (impact-matches-apply).
+  - name: requiredPolicies
+    signature: 'requiredPolicies(): PackRequirement[]'
+    returns: PackRequirement[]
+    description: >-
+      The configuration's `composition.requirePolicies` in declaration order, a second requirement
+      for a pack already required dropped (the first one stands, and the family run reports nothing
+      about the duplicate). Empty when nothing is required.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-28T16:05:40.875Z'
+updatedAt: '2026-09-29T16:09:24.420Z'

@@ -538,7 +538,9 @@ methods:
   - name: addMember
     narrative:
       - stepNumber: 1
-        description: Scaffold the member project and declare it in `members` via core
+        description: >-
+          Scaffold the member project and declare it in `members` via core; the answer states the
+          required packs the new member was given and the requirements nothing installed satisfies
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: createMember
@@ -585,7 +587,35 @@ methods:
         type: return
         outcome: ValidationResult (owner's gate)
     symbol: sdd_validate_tree
+  - name: packImpact
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core adapter: does it apply the pack
+          exactly as asked?
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Build the candidate: the stored entry with `remove` when the pack is applied exactly as
+          asked, else the by-name selection (with the version when one was given)
+        type: local
+      - stepNumber: 3
+        description: >-
+          Measure it through the validator client adapter, writing nothing; a pack that does not
+          resolve answers the resolver's reason as the tool error
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 4
+        description: >-
+          Answer the impact as structured content, with a text rendering grouped by doctrine change,
+          governing profile and finding change
+        type: return
+        outcome: PackImpact
+    symbol: sdd_pack_impact
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-28T18:12:03.124Z'
+updatedAt: '2026-09-29T16:00:47.343Z'

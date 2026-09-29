@@ -2,7 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { runWithProjectRoot } from '../utils/fs.js';
+import { parseYaml } from '../utils/yaml.js';
 import type { ProjectConfig } from '../models/project.js';
+import { impactHeadline, type PackCandidate, type PackDoctrine, type PackImpact } from '../models/pack-impact.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedCreate } from './admin.js';
@@ -18,13 +20,14 @@ import type {
   AuditEvent,
   AuditRetentionPolicy,
   AvailableProfile,
+  GovernedProjectCreation,
   HostConfig,
-  HostedProjectRecord,
   HostExposurePolicy,
   IdentityProviderConfig,
   InstancePackPolicy,
   PackResolution,
   PolicyEvaluationResult,
+  ResolvedGlobalPack,
   Principal,
   PrincipalSubject,
   ProjectConfigView,
@@ -447,14 +450,64 @@ function installedPackNames(cfg: HostConfig, projectId: string, config: ProjectC
 }
 
 /** Vendor each resolved declarative pack into the project by its canonical name,
- *  registering the path reference each install reports. Resolution (across both
- *  server-global tiers, both pack forms) and the unresolved report are the pack
- *  registry's job — see executeApprovedResolveGlobalPacks. */
-function installResolvedPacks(cfg: HostConfig, projectId: string, root: string, resolution: PackResolution): void {
+ *  registering the path reference each install reports — measuring each one
+ *  first, against the configuration as it stands (after the packs this loop
+ *  already applied), and answering those impacts in application order. A policy
+ *  write is unattended, so nothing is shown first: the impacts are how its result
+ *  states what it changed. Resolution (across both server-global tiers, both pack
+ *  forms) and the unresolved report are the pack registry's job — see
+ *  executeApprovedResolveGlobalPacks. */
+function installResolvedPacks(cfg: HostConfig, projectId: string, root: string, resolution: PackResolution): PackImpact[] {
+  const impacts: PackImpact[] = [];
   for (const pack of resolution.resolved) {
+    impacts.push(measureResolvedPack(root, pack));
     const descriptor = packs.executeApprovedInstallProjectPack(cfg, projectId, pack.name, pack.content);
     registerPackRefAt(root, descriptor.ref);
   }
+  return impacts;
+}
+
+// ── pack impacts (governance stage) ─────────────────────────────────────────
+//
+// Every policy write that applies a pack measures it first through the host
+// validator adapter, writing nothing: the path reference the store would register
+// with the resolved declarative content supplied as the manifest (nothing is
+// vendored yet). The impacts ride the result and the audit event; nothing in them
+// is judged — a pack that loosens wairon's checks is reported like any other.
+
+/** A resolved pack's declarative content, read as the manifest a candidate supplies. */
+function manifestOfContent(content: string) {
+  return hostCore.parseDeclarativePack(parseYaml(content));
+}
+
+/** Measure applying one resolved server-global pack to the project, writing nothing. */
+function measureResolvedPack(root: string, pack: ResolvedGlobalPack): PackImpact {
+  const candidate: PackCandidate = { entry: `.wai/packs/${pack.name}.yaml`, manifest: manifestOfContent(pack.content) };
+  return runWithProjectRoot(root, () => hostValidator.measurePackImpact(candidate));
+}
+
+/** Measure a governing-profile write before it happens: the projectType, and the
+ *  pack the ensure step vendored to contribute it as the entry when it had to. */
+function measureProfileStep(root: string, projectType: string, adoptedPackRef?: string): PackImpact {
+  const candidate: PackCandidate = { projectType, ...(adoptedPackRef ? { entry: adoptedPackRef } : {}) };
+  return runWithProjectRoot(root, () => hostValidator.measurePackImpact(candidate));
+}
+
+/** One impact as the audit records it: its identity, its doctrine changes counted
+ *  by kind, its finding counts and both totals. The audit caps metadata, so the
+ *  finding lists themselves stay in the returned result. */
+function auditedImpact(impact: PackImpact): Record<string, unknown> {
+  const doctrine: Record<string, number> = {};
+  for (const c of impact.doctrine) doctrine[c.change] = (doctrine[c.change] ?? 0) + 1;
+  const totals = (v: PackImpact['before']) => ({ errors: v.errors, warnings: v.warnings, notices: v.notices });
+  return {
+    pack: impact.pack,
+    ...(impact.version ? { version: impact.version } : {}),
+    doctrine,
+    findings: { introduced: impact.findings.introduced.length, resolved: impact.findings.resolved.length, regraded: impact.findings.regraded.length },
+    before: totals(impact.before),
+    after: totals(impact.after),
+  };
 }
 
 /** The pack names a ProjectInitRequest's profile selection carries. */
@@ -783,7 +836,7 @@ function performInit(
   cfg: HostConfig,
   request: ProjectInitRequest,
   principal?: Principal,
-): HostedProjectRecord {
+): GovernedProjectCreation {
   const policy = effectivePolicy(cfg.dataDir);
 
   const evaluation = buildEvaluation({
@@ -814,7 +867,9 @@ function performInit(
     ...policy.defaultProjectPacks,
     ...requestPackNames(request),
   ]);
-  installResolvedPacks(cfg, record.id, root, packResolution);
+  // Each pack measured before its write (an unattended policy write: nothing is
+  // shown first, and the impacts are how the result states what it applied).
+  const packImpacts = installResolvedPacks(cfg, record.id, root, packResolution);
 
   const selectedBy = principal ? principalSubject(principal) : undefined;
   const selection = resolvedSelection(request, policy, selectedBy);
@@ -828,11 +883,14 @@ function performInit(
   const catalog = packs.executeApprovedListProjectProfiles(cfg, record.id, config);
   const appliedProfileId = firstApplicableProfileId(selection.profileIds, catalog);
   let appliedSource: string | undefined;
+  let profileImpact: PackImpact | undefined;
   if (appliedProfileId) {
     // Vendors the contributing pack when the profile comes only from the
     // server-global tiers; registering its reported reference is what makes the
     // written projectType really resolve.
     const application = packs.executeApprovedEnsureProfileInstalled(cfg, record.id, appliedProfileId, config);
+    // The governing-profile step, measured separately and before its writes.
+    profileImpact = measureProfileStep(root, application.profileId, application.adoptedPackRef);
     if (application.adoptedPackRef) registerPackRefAt(root, application.adoptedPackRef);
     setProjectTypeAt(root, application.profileId);
     appliedSource = application.source;
@@ -868,13 +926,17 @@ function performInit(
               }),
           ...(unapplied.length > 0 ? { unappliedProfileIds: unapplied } : {}),
           ...(packResolution.unresolved.length > 0 ? { unresolvedPacks: packResolution.unresolved } : {}),
+          // What the unattended init applied, beside the returned result.
+          packImpacts: packImpacts.map(auditedImpact),
+          ...(profileImpact ? { profileImpact: auditedImpact(profileImpact) } : {}),
         }),
       },
       principal?.tokenId,
     ),
   );
 
-  return record;
+  // The persisted record unchanged, beside what the policy applied.
+  return { record, packImpacts, ...(profileImpact ? { profileImpact } : {}) };
 }
 
 // ── orchestrator methods ─────────────────────────────────────────────────────
@@ -882,13 +944,14 @@ function performInit(
 /**
  * Authenticate the caller and authorize project creation (a project:create grant
  * or an instance-admin grant), then run the shared profile-aware initialization
- * body. Returns the created hosted project record.
+ * body. Returns the GovernedProjectCreation: the created record with the impact of
+ * every pack and of the governing-profile step the init applied.
  */
 export function initializeProjectWithProfile(
   cfg: HostConfig,
   credential: string | null,
   request: ProjectInitRequest,
-): HostedProjectRecord {
+): GovernedProjectCreation {
   const principal = requirePrincipal(cfg, credential);
   // Resolve project:create over the request's REQUIRED owner unit — the resolved
   // value must be yes (an approval-valued caller must use the execute-primary
@@ -909,7 +972,7 @@ export function initializeProjectWithProfile(
  * authentication (the caller has already enforced approval-based authorization).
  * Runs the shared initialization body. Never exposed on any portal.
  */
-export function executeApprovedInit(cfg: HostConfig, request: ProjectInitRequest): HostedProjectRecord {
+export function executeApprovedInit(cfg: HostConfig, request: ProjectInitRequest): GovernedProjectCreation {
   return performInit(cfg, request);
 }
 
@@ -920,14 +983,25 @@ export function executeApprovedInit(cfg: HostConfig, request: ProjectInitRequest
  * and unknown/disallowed profile ids. Never exposed on any portal.
  */
 export function evaluateInitRequest(cfg: HostConfig, request: ProjectInitRequest): PolicyEvaluationResult {
+  // Steps 1-3: the effective policy and the request judged against it.
   const policy = effectivePolicy(cfg.dataDir);
-  return buildEvaluation({
+  const evaluation = buildEvaluation({
     policy,
     presentPackNames: requestPackNames(request),
     selectedProfileIds: request.profileSelection?.profileIds ?? [],
     hasSelection: !!request.profileSelection,
     countMissingPacksAsViolation: false,
   });
+  // Step 4: the required/default packs the init would apply; an unresolvable name
+  // is left out here (the executed init reports it).
+  const resolution = packs.executeApprovedResolveGlobalPacks(requiredDefaultNames(policy));
+  // Steps 5-6: the doctrine half alone — no project exists yet, so there is
+  // nothing to validate and deliberately no finding diff.
+  const doctrine: PackDoctrine[] = resolution.resolved.map((pack) =>
+    hostValidator.measurePackDoctrine(manifestOfContent(pack.content)),
+  );
+  // Step 7.
+  return { ...evaluation, doctrine };
 }
 
 /**
@@ -960,15 +1034,27 @@ export function evaluateProjectPolicy(
   // satisfied. Report only — this method repairs nothing and writes nothing.
   const config = loadConfigAt(root);
   const selection = config?.profileSelection;
-  return buildEvaluation({
-    policy,
-    presentPackNames: installedPackNames(cfg, projectId, config),
-    selectedProfileIds: selection?.profileIds ?? [],
-    hasSelection: !!selection,
-    countMissingPacksAsViolation: true,
-    requiredDefaultResolution: packs.executeApprovedResolveGlobalPacks(requiredDefaultNames(policy)),
-    governingProfileId: governingProjectType(config),
-  });
+  const presentPackNames = installedPackNames(cfg, projectId, config);
+  const resolution = packs.executeApprovedResolveGlobalPacks(requiredDefaultNames(policy));
+  // Steps 11-12: what a reconcile would apply — each missing pack measured alone
+  // against the configuration as it stands, writing nothing.
+  const present = new Set(presentPackNames);
+  const impacts = resolution.resolved
+    .filter((pack) => !present.has(pack.name))
+    .map((pack) => measureResolvedPack(root, pack));
+  // Steps 13-14.
+  return {
+    ...buildEvaluation({
+      policy,
+      presentPackNames,
+      selectedProfileIds: selection?.profileIds ?? [],
+      hasSelection: !!selection,
+      countMissingPacksAsViolation: true,
+      requiredDefaultResolution: resolution,
+      governingProfileId: governingProjectType(config),
+    }),
+    impacts,
+  };
 }
 
 /**
@@ -1010,9 +1096,8 @@ export function reconcileProjectPolicy(
   const resolution = packs.executeApprovedResolveGlobalPacks(requiredDefaultNames(policy));
   const toApply = resolution.resolved.filter((p) => !installedSet.has(p.name));
   const appliedPackNames = toApply.map((p) => p.name);
-  if (toApply.length > 0) {
-    installResolvedPacks(cfg, projectId, root, { resolved: toApply, unresolved: [] });
-  }
+  // Steps 14-17: each pack measured before its write, then vendored and registered.
+  const impacts = toApply.length > 0 ? installResolvedPacks(cfg, projectId, root, { resolved: toApply, unresolved: [] }) : [];
 
   // The profile half runs whether or not a pack was missing: a broken governing
   // profile is its own defect. The configuration is reloaded after the pack
@@ -1035,6 +1120,10 @@ export function reconcileProjectPolicy(
     requiredDefaultResolution: resolution,
     governingProfileId: repair.governingProfileId,
   });
+  // What the unattended reconcile applied: each pack's impact, measured before its
+  // write, and its headline in the messages.
+  result.impacts = impacts;
+  for (const impact of impacts) result.messages.push(`Applied pack ${impactHeadline(impact)}`);
 
   tryAppendAudit(
     cfg,
@@ -1047,7 +1136,7 @@ export function reconcileProjectPolicy(
         target: projectId,
         projectId,
         metadata: JSON.stringify({
-          ...(appliedPackNames.length > 0 ? { appliedPackNames } : {}),
+          ...(appliedPackNames.length > 0 ? { appliedPackNames, impacts: impacts.map(auditedImpact) } : {}),
           ...(repair.repairedProfileId
             ? { repairedProfileId: repair.repairedProfileId, previousProfileId: repair.previousProfileId }
             : {}),
@@ -1148,6 +1237,9 @@ export function setProjectType(
   // projectType that would silently disable the whole profile doctrine is never
   // persisted and the previous one stands untouched.
   const application = packs.executeApprovedEnsureProfileInstalled(cfg, projectId, projectType, config);
+  // Step 8: before the configuration write, what it changes — an unattended policy
+  // write, so the impact is carried in the returned view rather than shown first.
+  const impact = measureProfileStep(root, application.profileId, application.adoptedPackRef);
   if (application.adoptedPackRef) registerPackRefAt(root, application.adoptedPackRef);
 
   setProjectTypeAt(root, application.profileId);
@@ -1175,6 +1267,7 @@ export function setProjectType(
     profileResolvable: true,
     unappliedProfileIds: remainder,
     overridingSubsystemIds: overriding,
+    impact,
   };
   if (application.adoptedPackName) view.adoptedPackName = application.adoptedPackName;
   return view;

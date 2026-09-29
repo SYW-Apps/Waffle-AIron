@@ -88,14 +88,14 @@ methods:
         targetMethod: resolveChainingParent
       - stepNumber: 12
         description: >-
-          When the caller asked for them, register the sixteen hosted data-plane tools — the four
-          execute-primary project-lifecycle tools, the four landscape discovery tools, the six
-          project-ops tools and the two tree-transfer tools — as ADVERTISEMENTS: name, description
-          and input schema so tools/list can show them, over one shared handler that only says the
-          tool is dispatched by the hosting data plane and is unavailable here. Nothing in this
-          subsystem implements them; the hosting request orchestrator serves every one of them
-          before a call reaches this server, which is why the handler fires only outside a hosted
-          request and is a refusal when it does
+          When the caller asked for them, register the seventeen hosted data-plane tools — the four
+          execute-primary project-lifecycle tools, the four landscape discovery tools, the seven
+          project-ops tools (the read-only sdd_host_pack_impact among them) and the two
+          tree-transfer tools — as ADVERTISEMENTS: name, description and input schema so tools/list
+          can show them, over one shared handler that only says the tool is dispatched by the
+          hosting data plane and is unavailable here. Nothing in this subsystem implements them; the
+          hosting request orchestrator serves every one of them before a call reaches this server,
+          which is why the handler fires only outside a hosted request and is a refusal when it does
         type: local
       - stepNumber: 13
         description: Return configured McpServer instance
@@ -189,4 +189,4 @@ methods:
         outcome: unreadable
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T06:17:06.256Z'
+updatedAt: '2026-09-29T21:29:44.123Z'

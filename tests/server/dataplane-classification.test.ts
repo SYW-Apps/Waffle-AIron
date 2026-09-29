@@ -12,6 +12,7 @@ import {
   isExplicitlyClassifiedTool,
   subprojectConfinementError,
   toolScope,
+  mcpChangeChannels,
 } from '../../src/server/request.js';
 
 // ---------------------------------------------------------------------------
@@ -86,6 +87,16 @@ describe('data-plane tool classification', () => {
     expect(subprojectConfinementError('proj', 'kid', {
       jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'sdd_rename_anything', arguments: {} },
     })).toBeUndefined();
+  });
+
+  it('classifies sdd_host_pack_impact on purpose: a record-level read the ops orchestrator gates, waking no channel', () => {
+    expect(isExplicitlyClassifiedTool('sdd_host_pack_impact')).toBe(true);
+    expect(toolScope('sdd_host_pack_impact')).toBe('record');
+    const call = { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'sdd_host_pack_impact', arguments: {} } };
+    const success = { jsonrpc: '2.0', id: 7, result: { content: [{ type: 'text', text: '{}' }] } };
+    expect(mcpChangeChannels(call, 'proj', success)).toEqual([]);
+    // Like every record-level tool it is refused to a credential narrowed to a member.
+    expect(subprojectConfinementError('proj', 'kid', call)?.result.isError).toBe(true);
   });
 
   it('still fails closed for a name nobody classified', () => {

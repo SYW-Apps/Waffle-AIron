@@ -129,6 +129,7 @@ export {
   moveMountToMembers,
   normalizeReferences,
 } from './provision.js';
+export type { MemberCreation } from './provision.js';
 
 // The tree's identity (approval_portal computeStateId) — what a lock is taken
 // against, and what a staleness check compares to.
@@ -196,6 +197,13 @@ export { detectDomainCandidates } from './detection.js';
 // shortcut the standard names by code. `wairon packs` goes through here.
 export { loadProjectExtensions, defaultPackSelections } from './extensions.js';
 
+// extension_portal loadExtensionsFor / packManifest (governance stage): the packs
+// a given configuration (and candidate) would apply, and the manifest one entry
+// resolves to — the dry run behind a pack impact reads both. Forwarded by
+// identity to the extension orchestrator's loadFor / manifestOf; both write nothing.
+export { loadFor as loadExtensionsFor, manifestOf as packManifest } from './extensions.js';
+export type { ExtensionPack } from './extensions.js';
+
 // The pack sources and entries (extension_portal globalPacksDir …
 // pinInstalledPacksAsSelections): where machine-wide packs live, what a
 // directory holds, a pack loaded on its own, a manifest judged as declarative,
@@ -209,6 +217,7 @@ export {
   packDirEntry,
   loadExtensionPacks,
   checkDeclarativePack,
+  parseDeclarativePack,
   packEntryRef,
   packEntryLabel,
   globalPacksEnabled,

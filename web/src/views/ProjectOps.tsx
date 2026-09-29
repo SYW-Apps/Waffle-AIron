@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { asList, download, get, post, postBinary } from '../api';
 import {
@@ -8,9 +8,11 @@ import {
   Button,
   ConfirmButton,
   DataTable,
+  ErrorNote,
   Field,
   Modal,
   Select,
+  Spinner,
   Tabs,
   TextInput,
   useAsync,
@@ -19,7 +21,208 @@ import {
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import { SharingTab } from './Sharing';
 import { SpecsTab } from './SpecsEditor';
-import type { GitBackingStatus, PackDescriptor, PolicyEvaluationResult, ProducerConfig, TreeImportResult } from '../types';
+import type {
+  DoctrineChange,
+  GitBackingStatus,
+  ImpactFinding,
+  PackDescriptor,
+  PackImpact,
+  PolicyEvaluationResult,
+  ProducerConfig,
+  TreeImportResult,
+} from '../types';
+
+// ── Pack impact ──────────────────────────────────────────────────────────────
+//
+// What a pack write changes, measured by the host before it happens and writing
+// nothing: the pack's doctrine against wairon's defaults (by the profile that
+// carries each change), the profiles that would govern this project, and the
+// findings that change with both totals. It states changes and never judges
+// them — packs exist to adjust wairon's checks, so a loosening reads like any
+// other change. Shared by the packs view (before install / adopt / remove), the
+// policy view (reconcile) and the new-project dialog (what the policy applied).
+
+const totalsLine = (v: PackImpact['before']): string => `${v.errors} errors · ${v.warnings} warnings · ${v.notices} notices`;
+
+function DoctrineList({ changes }: { changes: DoctrineChange[] }) {
+  if (changes.length === 0) return <p className="hint">No changes against wairon's defaults.</p>;
+  const groups = new Map<string, DoctrineChange[]>();
+  for (const c of changes) groups.set(c.profile ?? '', [...(groups.get(c.profile ?? '') ?? []), c]);
+  return (
+    <div className="stack-sm">
+      {[...groups].map(([profile, list]) => (
+        <div key={profile || '(pack-wide)'} className="cell-stack">
+          <strong>{profile === '' ? 'Pack-wide' : <>Profile <code>{profile}</code></>}</strong>
+          <ul className="finding-list">
+            {list.map((c, i) => (
+              <li key={i}>
+                <Badge tone={c.axis === 'rule' ? 'neutral' : 'accent'}>{c.axis} {c.change}</Badge> <code>{c.subject}</code>
+                {(c.from !== undefined || c.to !== undefined) && (
+                  <span className="hint"> ({c.from ?? '—'} → {c.to ?? '—'})</span>
+                )}
+                {c.reason && <span className="hint"> — {c.reason}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FindingLine({ mark, finding, note }: { mark: string; finding: ImpactFinding; note?: string }) {
+  const tone = finding.severity === 'error' ? 'bad' : finding.severity === 'warning' ? 'warn' : 'neutral';
+  return (
+    <li>
+      <code>{mark}</code> <Badge tone={tone}>{finding.severity}</Badge> <code>{finding.code}</code>
+      {finding.specId && <span className="subtle"> {finding.specId}</span>} {note ? <span className="hint">{note}</span> : finding.message}
+    </li>
+  );
+}
+
+/** The full impact report of one pack write. */
+export function PackImpactReport({ impact }: { impact: PackImpact }) {
+  const removal = impact.direction === 'remove';
+  const f = impact.findings;
+  return (
+    <div className="stack-lg">
+      <div className="cell-stack">
+        <strong>
+          {impact.pack}
+          {impact.version ? ` v${impact.version}` : ''}
+          {impact.replaces ? ` (replaces v${impact.replaces})` : ''}
+        </strong>
+        <span className="hint">
+          {removal
+            ? 'Measured as removed: the findings are what the pack accounts for on this project now.'
+            : 'Measured as applied. Nothing has been written. Changes are stated, never judged.'}
+        </span>
+      </div>
+      <div className="panel">
+        <h4>What it changes against wairon's defaults</h4>
+        <DoctrineList changes={impact.doctrine} />
+        {impact.previousDoctrine && (
+          <details>
+            <summary className="hint">What the replaced version{impact.replaces ? ` v${impact.replaces}` : ''} changed</summary>
+            <DoctrineList changes={impact.previousDoctrine} />
+          </details>
+        )}
+      </div>
+      <dl className="kv">
+        <dt>Governs here</dt>
+        <dd>{impact.governing.length > 0 ? impact.governing.map((p) => <code key={p}>{p} </code>) : <span className="hint">none of its profiles</span>}</dd>
+        <dt>Before</dt>
+        <dd>{totalsLine(impact.before)}</dd>
+        <dt>After</dt>
+        <dd>{totalsLine(impact.after)}</dd>
+      </dl>
+      <div className="panel">
+        <h4>
+          Findings on this project{removal ? ' once it no longer applies' : ''}: {f.introduced.length} introduced, {f.resolved.length} resolved,{' '}
+          {f.regraded.length} regraded
+        </h4>
+        {f.introduced.length + f.resolved.length + f.regraded.length === 0 ? (
+          <p className="hint">No finding changes.</p>
+        ) : (
+          <ul className="finding-list">
+            {f.introduced.map((i, k) => <FindingLine key={`i${k}`} mark="+" finding={i} />)}
+            {f.resolved.map((i, k) => <FindingLine key={`r${k}`} mark="−" finding={i} />)}
+            {f.regraded.map((r, k) => <FindingLine key={`g${k}`} mark="~" finding={r.finding} note={`was ${r.from}`} />)}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** One impact in a line, expandable to the full report. */
+export function PackImpactSummary({ impact }: { impact: PackImpact }) {
+  const f = impact.findings;
+  return (
+    <details className="panel">
+      <summary>
+        <strong>{impact.pack}{impact.version ? ` v${impact.version}` : ''}</strong>
+        <span className="hint">
+          {' '}— {impact.doctrine.length} doctrine change(s); findings {f.introduced.length} introduced, {f.resolved.length} resolved,{' '}
+          {f.regraded.length} regraded; {totalsLine(impact.before)} → {totalsLine(impact.after)}
+        </span>
+      </summary>
+      <PackImpactReport impact={impact} />
+    </details>
+  );
+}
+
+/**
+ * The confirm step every pack write goes through: the impact is measured first
+ * (`measure`), shown, and the write (`apply`) runs only when the user confirms.
+ * Cancelling writes nothing. With no `measure` the impact is unavailable, which
+ * the dialog says plainly — and it still asks.
+ */
+function PackWriteConfirm(props: {
+  title: string;
+  confirmLabel: string;
+  measure?: () => Promise<PackImpact>;
+  unavailable?: string;
+  apply: () => Promise<void>;
+  onClose: () => void;
+  onError: (message: string) => void;
+}) {
+  const [impact, setImpact] = useState<PackImpact | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const { measure } = props;
+  useEffect(() => {
+    if (!measure) return;
+    let live = true;
+    setImpact(null);
+    setError(null);
+    measure()
+      .then((d) => live && setImpact(d))
+      .catch((e: unknown) => live && setError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt]);
+  const ready = !measure || impact !== null;
+  return (
+    <Modal
+      title={props.title}
+      wide
+      onClose={props.onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={props.onClose}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            disabled={!ready}
+            onError={props.onError}
+            action={async () => {
+              await props.apply();
+              props.onClose();
+            }}
+          >
+            {props.confirmLabel}
+          </AsyncButton>
+        </>
+      }
+    >
+      {!measure ? (
+        <p className="hint">{props.unavailable ?? 'Impact not available for this write.'}</p>
+      ) : error ? (
+        <ErrorNote onRetry={() => setAttempt((n) => n + 1)}>Could not measure the impact: {error}. Nothing was written.</ErrorNote>
+      ) : impact ? (
+        <PackImpactReport impact={impact} />
+      ) : (
+        <div className="pad">
+          <Spinner /> <span className="hint">Measuring what this would change…</span>
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 // ── Packs ────────────────────────────────────────────────────────────────────
 
@@ -44,48 +247,104 @@ function PacksTab({ projectId }: { projectId: string }) {
   );
   const [adoptOpen, setAdoptOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [yamlOpen, setYamlOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [nameOverride, setNameOverride] = useState('');
+  const [yamlName, setYamlName] = useState('');
+  const [yamlContent, setYamlContent] = useState('');
+  // The pending pack write: its impact is shown first and it runs only on confirm.
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    confirmLabel: string;
+    measure?: () => Promise<PackImpact>;
+    unavailable?: string;
+    apply: () => Promise<void>;
+  } | null>(null);
 
   // Adoptable minus what's already installed here (match by name).
   const installedNames = new Set((packs.data ?? []).map((p) => p.name));
   const available = (adoptable.data ?? []).filter((p) => !installedNames.has(p.name));
 
-  async function adopt(name: string) {
-    await post('/web/projects/packs/adopt', { projectId, name });
-    toast.ok(`Added “${name}”`);
+  function refresh() {
     packs.reload();
     adoptable.reload();
   }
-  async function install() {
-    if (!file) return;
-    const headers: Record<string, string> = nameOverride.trim() ? { 'X-Wairon-Pack-Name': nameOverride.trim() } : {};
-    const d = await postBinary<PackDescriptor>(
-      `/web/projects/packs/upload?projectId=${enc}`,
-      file,
-      headers,
-    );
-    toast.ok(`Installed pack “${d.name}”`);
-    setUploadOpen(false);
-    setFile(null);
-    setNameOverride('');
-    packs.reload();
-    adoptable.reload();
+
+  // Adopt: the impact of adopting the server-global pack first (no content).
+  function adopt(name: string) {
+    setAdoptOpen(false);
+    setConfirm({
+      title: `Adopt “${name}” into ${projectId}?`,
+      confirmLabel: 'Adopt',
+      measure: () => post<PackImpact>('/web/projects/packs/impact', { projectId, name }),
+      apply: async () => {
+        await post('/web/projects/packs/adopt', { projectId, name });
+        toast.ok(`Added “${name}”`);
+        refresh();
+      },
+    });
   }
-  async function remove(n: string) {
-    await post('/web/projects/packs/remove', { projectId, name: n });
-    toast.ok('Pack removed');
-    packs.reload();
-    adoptable.reload();
+  // Install from YAML: the impact of exactly this content first.
+  function installYaml() {
+    const name = yamlName.trim();
+    const content = yamlContent;
+    setConfirm({
+      title: `Install “${name}” into ${projectId}?`,
+      confirmLabel: 'Install',
+      measure: () => post<PackImpact>('/web/projects/packs/impact', { projectId, name, content }),
+      apply: async () => {
+        const d = await post<PackDescriptor>('/web/projects/packs', { projectId, name, content });
+        toast.ok(`Installed pack “${d.name}”`);
+        setYamlOpen(false);
+        setYamlName('');
+        setYamlContent('');
+        refresh();
+      },
+    });
+  }
+  // Archive install: no preview exists for an archive — the dialog says so, and still asks.
+  function installArchive() {
+    const chosen = file;
+    if (!chosen) return;
+    setConfirm({
+      title: `Install ${chosen.name} into ${projectId}?`,
+      confirmLabel: 'Install',
+      unavailable: 'Impact not available for an archive; install its YAML or adopt it from the catalog to preview.',
+      apply: async () => {
+        const headers: Record<string, string> = nameOverride.trim() ? { 'X-Wairon-Pack-Name': nameOverride.trim() } : {};
+        const d = await postBinary<PackDescriptor>(`/web/projects/packs/upload?projectId=${enc}`, chosen, headers);
+        toast.ok(`Installed pack “${d.name}”`);
+        setUploadOpen(false);
+        setFile(null);
+        setNameOverride('');
+        refresh();
+      },
+    });
+  }
+  // Remove: what the pack accounts for now, first.
+  function remove(n: string) {
+    setConfirm({
+      title: `Remove “${n}” from ${projectId}?`,
+      confirmLabel: 'Remove',
+      measure: () => post<PackImpact>('/web/projects/packs/removal-impact', { projectId, name: n }),
+      apply: async () => {
+        await post('/web/projects/packs/remove', { projectId, name: n });
+        toast.ok('Pack removed');
+        refresh();
+      },
+    });
   }
 
   return (
     <div className="stack-lg">
       <div className="view-head">
-        <p className="hint">Declarative extension packs registered on this project.</p>
+        <p className="hint">Declarative extension packs registered on this project. Every install, adoption and removal shows what it would change first.</p>
         <div className="row-actions">
           <Button variant="ghost" onClick={() => setUploadOpen(true)} title="Upload a .wpack archive">
             Advanced: upload .wpack
+          </Button>
+          <Button variant="ghost" onClick={() => setYamlOpen(true)} title="Install a declarative pack from its YAML">
+            Install from YAML
           </Button>
           <Button variant="primary" onClick={() => setAdoptOpen(true)}>
             + Add from available
@@ -123,9 +382,9 @@ function PacksTab({ projectId }: { projectId: string }) {
                 width: '1%',
                 cell: (p) =>
                   p.scope === 'project' ? (
-                    <AsyncButton size="sm" variant="ghost" action={() => remove(p.name)} onError={toast.bad}>
+                    <Button size="sm" variant="ghost" onClick={() => remove(p.name)}>
                       Remove
-                    </AsyncButton>
+                    </Button>
                   ) : (
                     <span className="hint">inherited</span>
                   ),
@@ -167,9 +426,9 @@ function PacksTab({ projectId }: { projectId: string }) {
                       header: '',
                       width: '1%',
                       cell: (p) => (
-                        <AsyncButton size="sm" variant="primary" action={() => adopt(p.name)} onError={toast.bad}>
-                          Add
-                        </AsyncButton>
+                        <Button size="sm" variant="primary" onClick={() => adopt(p.name)}>
+                          Add…
+                        </Button>
                       ),
                     },
                   ]}
@@ -188,9 +447,9 @@ function PacksTab({ projectId }: { projectId: string }) {
               <Button variant="ghost" onClick={() => setUploadOpen(false)}>
                 Cancel
               </Button>
-              <AsyncButton variant="primary" action={install} onError={toast.bad} disabled={!file}>
-                Install
-              </AsyncButton>
+              <Button variant="primary" onClick={installArchive} disabled={!file}>
+                Install…
+              </Button>
             </>
           }
         >
@@ -206,6 +465,48 @@ function PacksTab({ projectId }: { projectId: string }) {
           </div>
         </Modal>
       )}
+      {yamlOpen && (
+        <Modal
+          title="Install a pack from YAML"
+          wide
+          onClose={() => setYamlOpen(false)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setYamlOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={installYaml} disabled={!yamlName.trim() || !yamlContent.trim()}>
+                Preview impact…
+              </Button>
+            </>
+          }
+        >
+          <div className="stack-lg">
+            <p className="hint">
+              A declarative pack (profiles, language and platform tables, assertions). You will see what it changes on this project
+              before anything is written.
+            </p>
+            <Field label="Pack name" hint="Letters, digits, dot, underscore, hyphen — the file it is vendored as.">
+              <TextInput value={yamlName} onChange={setYamlName} placeholder="my-org-conventions" />
+            </Field>
+            <Field label="Pack YAML">
+              <textarea className="input" rows={12} value={yamlContent} onChange={(e) => setYamlContent(e.target.value)} placeholder={'name: my-org-conventions\nprofiles:\n  backend:\n    rules: {}'} />
+            </Field>
+          </div>
+        </Modal>
+      )}
+      {confirm && (
+        <PackWriteConfirm
+          key={confirm.title}
+          title={confirm.title}
+          confirmLabel={confirm.confirmLabel}
+          measure={confirm.measure}
+          unavailable={confirm.unavailable}
+          apply={confirm.apply}
+          onClose={() => setConfirm(null)}
+          onError={toast.bad}
+        />
+      )}
     </div>
   );
 }
@@ -215,10 +516,15 @@ function PacksTab({ projectId }: { projectId: string }) {
 function PolicyTab({ projectId }: { projectId: string }) {
   const toast = useToast();
   const policy = useAsync<PolicyEvaluationResult>(() => get(`/web/projects/policy?projectId=${encodeURIComponent(projectId)}`), [projectId]);
+  // What the last reconcile applied, measured before each write. A reconcile is a
+  // policy write the user triggers but does not choose the packs of: the view shows
+  // what it would apply beside the button, and afterwards what it did apply.
+  const [applied, setApplied] = useState<PolicyEvaluationResult | null>(null);
 
   async function reconcile() {
-    await post('/web/projects/policy/reconcile', { projectId });
-    toast.ok('Reconciled to policy');
+    const result = await post<PolicyEvaluationResult>('/web/projects/policy/reconcile', { projectId });
+    setApplied(result);
+    toast.ok(result.impacts && result.impacts.length > 0 ? `Reconciled — applied ${result.impacts.length} pack(s)` : 'Reconciled to policy');
     policy.reload();
   }
 
@@ -237,6 +543,34 @@ function PolicyTab({ projectId }: { projectId: string }) {
               Reconcile to policy
             </AsyncButton>
           </div>
+          {d.impacts && d.impacts.length > 0 && (
+            <div className="panel">
+              <h4>Reconcile would apply</h4>
+              <p className="hint">
+                The instance policy's required and default packs this project does not have yet, each measured against the project as it
+                stands. Nothing has been written.
+              </p>
+              <div className="stack-sm">
+                {d.impacts.map((impact) => (
+                  <PackImpactSummary key={impact.pack} impact={impact} />
+                ))}
+              </div>
+            </div>
+          )}
+          {applied && (
+            <div className="panel">
+              <h4>Last reconcile applied</h4>
+              {applied.impacts && applied.impacts.length > 0 ? (
+                <div className="stack-sm">
+                  {applied.impacts.map((impact) => (
+                    <PackImpactSummary key={impact.pack} impact={impact} />
+                  ))}
+                </div>
+              ) : (
+                <p className="hint">No pack — the project already had every pack the policy requires.</p>
+              )}
+            </div>
+          )}
           {d.messages.length > 0 ? (
             <div className="panel">
               <h4>Findings</h4>

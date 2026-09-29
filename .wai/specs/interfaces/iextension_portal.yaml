@@ -193,6 +193,46 @@ methods:
         type: ComponentSpec[]
       - name: variantsById
         type: VariantDef[]
+  - name: loadExtensionsFor
+    description: >-
+      Published read: the packs that would govern the bound project under a given configuration (the
+      stored one or a candidate), with an optional candidate manifest merged in place of resolving
+      its entry. Forwarded to the extension orchestrator's loadFor; writes nothing.
+    signature: 'loadExtensionsFor(config: ProjectConfig, candidate?: PackCandidate): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: config
+        type: ProjectConfig
+        description: The configuration to load for
+      - name: candidate
+        type: PackCandidate
+        description: The pack write being measured, when its manifest is supplied
+        optional: true
+    guarantees:
+      - idempotent
+  - name: packManifest
+    description: >-
+      Published read: the manifest one pack entry resolves to, the loader's way, or null. Forwarded
+      to the extension orchestrator's manifestOf.
+    signature: 'packManifest(entry: PackSelection | string): ExtensionPack | null'
+    returns: ExtensionPack | null
+    params:
+      - name: entry
+        type: PackSelection | string
+        description: A by-name selection or a legacy path reference
+    guarantees:
+      - idempotent
+  - name: parseDeclarativePack
+    description: >-
+      Published read: a parsed manifest read as a declarative pack — the ExtensionPack the loader
+      would build from it, throwing the first schema error when it is not one. Forwarded to the
+      extension orchestrator.
+    signature: 'parseDeclarativePack(manifest: Json): ExtensionPack'
+    returns: ExtensionPack
+    params:
+      - name: manifest
+        type: Json
+        description: The parsed manifest document, untyped until this reads it
 lint:
   allow:
     - code: UNTYPED_SEAM
@@ -203,4 +243,4 @@ lint:
         no site, so this allow is spec-wide; it is the only untyped parameter on this contract.
 status: complete
 createdAt: '2026-09-25T17:33:10.144Z'
-updatedAt: '2026-09-25T21:33:31.915Z'
+updatedAt: '2026-09-29T21:27:50.265Z'

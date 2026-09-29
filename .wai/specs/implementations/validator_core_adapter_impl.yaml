@@ -158,6 +158,24 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: exportUsage
+  - name: loadExtensionsFor
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the core portal to load the packs a given configuration (and candidate) would
+          apply.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: loadExtensionsFor
+    detail: calls-only
+  - name: packManifest
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal to resolve one pack entry and read its manifest.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packManifest
+    detail: calls-only
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T17:16:52.955Z'
+updatedAt: '2026-09-29T15:52:29.380Z'

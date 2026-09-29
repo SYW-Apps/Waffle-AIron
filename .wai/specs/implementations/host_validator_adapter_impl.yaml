@@ -43,6 +43,20 @@ methods:
         targetComponent: validator_portal
         targetMethod: builtinProjectKinds
     detail: calls-only
+  - name: measurePackImpact
+    narrative:
+      - stepNumber: 1
+        description: Forward the measurement to the validator portal, under the project root the caller bound
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+  - name: measurePackDoctrine
+    narrative:
+      - stepNumber: 1
+        description: Forward the doctrine measurement to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackDoctrine
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-09-25T21:11:27.689Z'
+updatedAt: '2026-09-29T16:14:52.307Z'

@@ -173,6 +173,56 @@ methods:
         type: string
       - name: project
         type: string
+  - name: previewProjectPack
+    description: >-
+      Authenticate, require project:read over the project (the preview writes nothing, so reading
+      the project is the permission it needs; the install it previews still requires project:admin),
+      bind its scope, and measure — without writing anything — what installing a declarative pack
+      into it would change: the pack's doctrine against wairon's defaults, which of its profiles
+      would govern, and the findings that change on the project. With `content`, the pack is the
+      YAML an install would upload (parsed and code packs refused exactly as the install does, then
+      supplied as the candidate's manifest, since nothing is on disk yet); without it, the
+      server-global pack of that name an adoption would install. The report the admin UI, the admin
+      API and the hosted MCP tool show before installProjectPack / adoptProjectPack; the installs
+      themselves stay unattended writes and say they applied.
+    signature: >-
+      previewProjectPack(credential: string, project: string, name: string, content?: string):
+      PackImpact
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+        description: >-
+          The declarative pack YAML an install would upload; omitted, the server-global pack an
+          adoption would install
+        optional: true
+    guarantees:
+      - idempotent
+  - name: previewProjectPackRemoval
+    description: >-
+      Authenticate, require project:read over the project (the preview writes nothing), bind its
+      scope, and measure — without writing anything — what removing one of its registered packs
+      would change: the pack's registered path reference measured with `remove`, so the report reads
+      as what the pack accounts for now (its doctrine against wairon's defaults and the findings
+      that change once it no longer applies). What the admin UI, the admin API and `wairon host
+      packs remove` show before removeProjectPack. Rejects a name the project does not register.
+    signature: 'previewProjectPackRemoval(credential: string, project: string, name: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T18:46:52.736Z'
-updatedAt: '2026-09-15T21:03:04.719Z'
+updatedAt: '2026-09-29T16:16:39.736Z'

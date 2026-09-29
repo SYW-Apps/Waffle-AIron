@@ -198,6 +198,41 @@ rules (see [Extending wairon](extending-wairon.md)).
   `.wai/packs/` (files elsewhere are left in place); `--global` removes a
   machine-wide pack.
 
+`wairon packs` is the deprecated alias of `wairon pack`, whose selection
+commands (`install | uninstall | which | use | unuse | impact | bundle | sync`)
+are described in [Extending wairon](extending-wairon.md#installing-and-selecting-packs).
+
+### `wairon pack impact <name>[@version]` — and confirm before every pack write
+Packs exist to adjust wairon's checks and behaviour, and a pack may loosen or
+remove them by design (an automation platform cannot hold every concept a full
+backend can). So installing a pack is never judged — but it is always
+intentional, and its impact is shown first.
+
+`wairon pack impact` shows, writing nothing, what a pack changes on this
+project:
+
+- its **doctrine against wairon's defaults**, by the profile that carries each
+  change: rules loosened, raised, turned off or added; profiles added or a
+  builtin redefined; stereotypes removed or discouraged, edges licensed,
+  patterns, guarantee tokens and language tables added;
+- the **profiles of it that would govern** here (the `projectType` and each
+  subsystem profile that names one);
+- the **findings that change** on this project — introduced, resolved and
+  regraded, from a dry validate of the current and the candidate
+  configuration — with both totals.
+
+A pack this project does not apply (or applies at another version) is measured
+as applied; one it applies exactly as asked is measured as removed, so the
+report reads as what the pack accounts for now. Nothing in the report is a
+finding.
+
+Every command that selects, updates or removes a project's pack — `pack use`,
+`pack unuse`, `pack add`, `pack remove`, and `pack install` when it moves this
+project's floating selection — **shows the same report and asks before it
+writes**; anything but yes writes nothing. In a script, pass `-y, --yes`: the
+write happens without the report, and the command says it applied without
+showing it. A run with no terminal to ask on (CI, a pipe) behaves the same way.
+
 ### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>]`
 Generate architecture diagrams derived from the spec tree — living
 documentation from the same source of truth as the conformance gate. Every
@@ -272,6 +307,17 @@ without `::` is local.
 | `wairon member move <alias> <path>` | Move a member's directory and point its `members` entry there (a legacy L1 mount is moved into `members` first) |
 | `wairon member internalize <alias>` | Take a single-subsystem member back into this project: its specs move in, references across the old boundary become local ids, its `members` entry and `.wai/` go |
 | `wairon subsystem externalize <id> --path <dir>` | Turn an internal subsystem into a member at `<dir>`: its specs move there, it is declared in `members` under the subsystem id, and references across the new boundary are re-saved as `alias::name`. You move the source code; `wairon doctor --fix` adds the exports either side now needs |
+
+**Required packs.** A project may require packs of the members below it with
+`composition.requirePolicies` (see
+[Extending wairon](extending-wairon.md#governance--what-a-pack-changes-and-what-a-parent-requires)).
+`wairon member add` — and `wairon init` run in a subdirectory, which creates a
+member the same way — writes those packs into the new member's selection once,
+each pinned to the highest installed version its range admits, sets the
+`projectType` a requirement names, and prints what it applied and each
+requirement nothing installed satisfies. Scaffolding is an unattended pack write,
+so it shows no impact report; run `wairon pack impact <name>` at the member's
+root to see one.
 
 **Deprecated forms.** For one release wairon still reads, and reports: a leading
 `::` (`::shared::money`), `super::` (`super::sibling`), a member path
@@ -357,6 +403,18 @@ Runs **in-process** (no running server needed), so it works over SSH /
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
 | `wairon host lock --project <id>` | Validate-as-complete + write the state-scoped lock record |
+| `wairon host packs list [--project <id>]` | List the server-global packs, or one hosted project's |
+| `wairon host packs install --file <pack.yaml> [--name <n>] [--project <id>] [-y]` | Install a declarative pack server-wide, or into a hosted project. Into a project it first shows the pack's impact on that project (measured by the host, writing nothing) and asks; `--yes`, or no terminal, installs without the report and says so |
+| `wairon host packs remove --name <n> [--project <id>] [-y]` | Remove a pack; from a project it first shows what the pack accounts for there and asks, as install does |
+
+The hosted API and web UI preview the same way:
+`POST /admin/projects/{id}/packs/{name}/impact` (a declarative pack's YAML as
+`content`, or no body to preview adopting the server-global pack of that name)
+and `POST /admin/projects/{id}/packs/{name}/removal-impact`; both need
+`project:read` and write nothing. The hosted MCP data plane offers the same
+preview as `sdd_host_pack_impact`. The unattended hosted policy writes —
+reconcile, a project type change, and a policy-governed project creation —
+return the impact of every pack they applied in their results.
 
 ---
 

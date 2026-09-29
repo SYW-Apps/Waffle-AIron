@@ -83,6 +83,20 @@ methods:
         type: call
         targetComponent: family_validator
         targetMethod: run
+  - name: measurePackImpact
+    narrative:
+      - stepNumber: 1
+        description: Forward measurePackImpact to the pack impact workflow
+        type: call
+        targetComponent: pack_impact
+        targetMethod: measure
+  - name: measurePackDoctrine
+    narrative:
+      - stepNumber: 1
+        description: Forward measurePackDoctrine to the pack impact workflow
+        type: call
+        targetComponent: pack_impact
+        targetMethod: doctrine
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T18:11:54.946Z'
+updatedAt: '2026-09-29T16:14:49.338Z'

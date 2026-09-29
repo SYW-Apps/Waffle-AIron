@@ -8,7 +8,10 @@ description: >-
   applies to nothing until a project selects the pack by name. The legacy commands remain: add is
   ZIP-aware (a .wpack/.zip is safely extracted via the SDK into .wai/packs/<name>/ and the directory
   registered, a plain file/dir is vendored), list reads the merged set via the core portal, remove
-  deregisters + deletes a vendored pack.
+  deregisters + deletes a vendored pack. Every command that selects or updates a project's pack
+  (use, add, and an install that moves a floating selection) shows the pack's impact through the
+  validator portal BEFORE it writes and asks to apply; --yes or a run with no terminal applies
+  without the report and says so. `impact` shows the same report on demand.
 subsystem: sdd_cli
 componentType: Adapter
 owns: []
@@ -16,6 +19,7 @@ dependsOn:
   - sdk_portal
   - project_config_portal
   - extension_portal
+  - validator_portal
 status: complete
 createdAt: '2026-07-14T20:08:56.448Z'
-updatedAt: '2026-09-25T21:11:02.417Z'
+updatedAt: '2026-09-29T16:00:15.334Z'

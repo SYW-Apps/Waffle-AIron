@@ -283,7 +283,21 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: importProjectTree
+  - name: previewProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: previewProjectPack
+  - name: previewProjectPackRemoval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: previewProjectPackRemoval
 detail: calls-only
 status: complete
 createdAt: '2026-07-16T15:31:04.418Z'
-updatedAt: '2026-09-23T21:19:54.925Z'
+updatedAt: '2026-09-29T16:16:48.520Z'

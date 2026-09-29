@@ -30,7 +30,7 @@ import { canonicalize } from '../../utils/canonical-json.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { PackSelection, ProjectIdentity } from '../../models/project.js';
+import type { PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
 import type { CarriedFindingEntry, FindingParts } from './types.js';
 import {
   ArchProfile,
@@ -242,6 +242,8 @@ export interface BuildContextOptions {
   variants?: VariantDef[];
   /** The project's by-name pack selections (legacy path refs excluded); empty when absent. */
   packSelections?: PackSelection[];
+  /** The bound project's own composition.requirePolicies; empty when absent. */
+  packRequirements?: PackRequirement[];
   /** Stored surface snapshots for cross-tree/remote reference resolution. */
   surfaceSnapshots?: SurfaceSnapshot[];
   /** The validated root's identity against its lock (see RuleContext.projectIdentity); absent when none was resolved. */
@@ -993,7 +995,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     documentationConfigFor,
     namingConfigFor,
     isBuiltinType,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [] },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots,
     ...(opts.projectIdentity ? { projectIdentity: opts.projectIdentity } : {}),

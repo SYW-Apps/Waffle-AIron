@@ -258,7 +258,7 @@ describe('project policy orchestrator (sdd_host)', () => {
     setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['foo'], defaultProjectPacks: ['bar'] }));
 
     const unit = seedUnit(dataDir, 'happy-unit');
-    const rec = executeApprovedInit(cfg, { id: 'happy-proj', ownerUnitId: unit.id });
+    const { record: rec } = executeApprovedInit(cfg, { id: 'happy-proj', ownerUnitId: unit.id });
     expect(rec.id).toBe('happy-proj');
 
     // Packs really installed — asserted via the packs module list.
@@ -285,7 +285,7 @@ describe('project policy orchestrator (sdd_host)', () => {
     expect(() => initializeProjectWithProfile(cfg, writer, { id: 'nope-proj', ownerUnitId: unit.id })).toThrow(ForbiddenError);
     expect(existingProjectRoot(dataDir, 'nope-proj')).toBeNull();
 
-    const rec = initializeProjectWithProfile(cfg, creator, { id: 'creator-proj', ownerUnitId: unit.id });
+    const { record: rec } = initializeProjectWithProfile(cfg, creator, { id: 'creator-proj', ownerUnitId: unit.id });
     expect(existingProjectRoot(dataDir, 'creator-proj')).toBeTruthy();
     expect(readRawConfig(rec.rootPath).profileSelection.selectedBy.userId).toBe('u-cr');
   });
@@ -355,7 +355,7 @@ describe('project policy orchestrator (sdd_host)', () => {
     setPackPolicy(cfg, MASTER, samplePolicy({ requiredProfileIds: ['ddd'] }));
 
     const unit = seedUnit(dataDir, 'apply-unit');
-    const rec = executeApprovedInit(cfg, { id: 'apply-proj', ownerUnitId: unit.id });
+    const { record: rec } = executeApprovedInit(cfg, { id: 'apply-proj', ownerUnitId: unit.id });
 
     // The headline bug: the required profile now GOVERNS instead of being a name
     // recorded in profileSelection that nothing enforces.
@@ -403,7 +403,7 @@ describe('project policy orchestrator (sdd_host)', () => {
     seedProfilePack('hex', 'hex-doctrine', 'hexagonal');
 
     const unit = seedUnit(dataDir, 'two-unit');
-    const rec = executeApprovedInit(cfg, {
+    const { record: rec } = executeApprovedInit(cfg, {
       id: 'two-proj',
       ownerUnitId: unit.id,
       profileSelection: selection({ profileIds: ['ddd', 'hexagonal'] }),
@@ -615,7 +615,7 @@ describe('project policy orchestrator (sdd_host)', () => {
   it('a pack adopted AFTER init no longer erases the recorded profileSelection (schema round-trip regression)', () => {
     seedGlobalPack('foo');
     const unit = seedUnit(dataDir, 'rt-unit');
-    const rec = executeApprovedInit(cfg, {
+    const { record: rec } = executeApprovedInit(cfg, {
       id: 'rt-proj',
       ownerUnitId: unit.id,
       profileSelection: selection({ profileIds: ['frontend-reactive'] }),
@@ -828,7 +828,7 @@ describe('project policy portal (sdd_host http)', () => {
     const unit = seedUnit(dataDir, 'http-unit');
     const init = await api('POST', '/projects/init', { cred: MASTER, body: { id: 'http-proj', ownerUnitId: unit.id } });
     expect(init.status).toBe(201);
-    expect(init.json.id).toBe('http-proj');
+    expect(init.json.record.id).toBe('http-proj');
     expect(existingProjectRoot(dataDir, 'http-proj')).toBeTruthy();
 
     // GET /projects/{id}/policy/evaluation → 200.

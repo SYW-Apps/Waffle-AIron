@@ -51,9 +51,11 @@ methods:
         targetComponent: project_policy_orchestrator
         targetMethod: createGovernedProject
       - stepNumber: 6
-        description: Return the created hosted project record
+        description: >-
+          Return the GovernedProjectCreation: the created record with the impacts of every applied
+          pack and of the governing-profile step
         type: return
-        outcome: created hosted project record
+        outcome: GovernedProjectCreation
   - name: executeApprovedInit
     narrative:
       - stepNumber: 1
@@ -68,9 +70,11 @@ methods:
         targetComponent: project_policy_orchestrator
         targetMethod: createGovernedProject
       - stepNumber: 2
-        description: Return the created hosted project record
+        description: >-
+          Return the GovernedProjectCreation: the created record with the impacts of every applied
+          pack and of the governing-profile step
         type: return
-        outcome: created hosted project record
+        outcome: GovernedProjectCreation
   - name: evaluateInitRequest
     narrative:
       - stepNumber: 1
@@ -96,7 +100,32 @@ methods:
           availability), and human-readable messages. No side effects.
         type: local
       - stepNumber: 4
-        description: Return the policy evaluation result
+        description: >-
+          Resolve the policy's required/default pack name set (requiredGlobalPacks then
+          defaultProjectPacks) to their declarative content via the pack store — what the init would
+          apply; a name it cannot resolve is left out here (the executed init reports it)
+        type: call
+        targetComponent: pack_store
+        targetMethod: executeApprovedResolveGlobalPacks
+      - stepNumber: 5
+        description: For each resolved required/default pack
+        type: loop
+        loopKind: forEach
+        over: the resolution's resolved packs (canonical name + content)
+        endStep: 6
+      - stepNumber: 6
+        label: doctrine-pack
+        description: >-
+          For each resolved pack, parse its declarative content into a manifest and state what it
+          changes against wairon's defaults — the doctrine half alone: the project does not exist
+          yet, so there is nothing to validate and no finding diff
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackDoctrine
+      - stepNumber: 7
+        description: >-
+          Return the policy evaluation result with `doctrine` — each pack's changes against wairon's
+          defaults, and deliberately no finding diff
         type: return
         outcome: policy evaluation result
   - name: evaluateProjectPolicy
@@ -165,15 +194,33 @@ methods:
         targetMethod: executeApprovedResolveGlobalPacks
       - stepNumber: 11
         description: >-
+          For each resolved required/default pack not yet installed in the project — what a
+          reconcile would apply
+        type: loop
+        loopKind: forEach
+        over: the resolved packs not already installed (canonical name + content)
+        endStep: 12
+      - stepNumber: 12
+        label: measure-pack
+        description: >-
+          Measure what applying the pack would change on the project, writing nothing: its path
+          reference as the candidate, with the resolved declarative content supplied as the
+          manifest, each pack measured alone against the configuration as it stands
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 13
+        description: >-
           Evaluate the project's active packs and recorded profile selection against the effective
           policy USING THE RESOLUTION: compute missingPackNames (resolved required/default packs
           whose canonical name is absent from the project's installed packs), unresolvedPacks (the
           resolution's unresolved names — required/default packs with no server-global pack in
           either tier), blocked packs present, missing required profile ids, governingProfileId (the
           projectType the validator actually enforces), unappliedProfileIds (recorded selection ids
-          that are not governing), and human-readable messages. No side effects.
+          that are not governing), impacts (what applying each missing pack would change, measured
+          above), and human-readable messages. No side effects.
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: Return the policy evaluation result
         type: return
         outcome: policy evaluation result
@@ -253,7 +300,7 @@ methods:
           repaired independently of whether any pack was missing).
         type: branch
         condition: any resolved required/default pack is not yet installed in the project
-        onFalseStep: 17
+        onFalseStep: 18
       - stepNumber: 13
         description: >-
           Select the resolved packs whose canonical name is not already installed in the project;
@@ -264,29 +311,38 @@ methods:
         type: loop
         loopKind: forEach
         over: the resolved packs not already installed (canonical name + content)
-        endStep: 16
+        endStep: 17
       - stepNumber: 15
+        description: >-
+          Before the write, measure what applying this pack changes on the project: its path
+          reference as the candidate with the resolved declarative content supplied as the manifest,
+          against the configuration as it stands (after the packs this loop already applied). A
+          reconcile is unattended, so the impact is not shown first; it is carried in the result
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 16
         description: >-
           Vendor each resolved pack into the project by its canonical name via the pre-authorized
           entry, yielding its descriptor, whose ref is the path reference to register.
         type: call
         targetComponent: pack_store
         targetMethod: executeApprovedInstallProjectPack
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           Register that path reference in the project's configuration through the core adapter
           (appended only when absent).
         type: call
         targetComponent: host_core_adapter
         targetMethod: registerPackRef
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           Reload the configuration so the catalog and the profile judgement below see any packs just
           registered.
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 18
+      - stepNumber: 19
         description: >-
           List the profiles selectable for this project given the reloaded configuration (built-ins,
           its own registered packs, the server-global tiers) so the governing profile can be judged:
@@ -294,7 +350,7 @@ methods:
         type: call
         targetComponent: pack_store
         targetMethod: executeApprovedListProjectProfiles
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           Repair the governing profile, but only when it is broken or non-compliant: the policy
           requires profiles and none of the required ids governs, or the recorded projectType
@@ -305,29 +361,30 @@ methods:
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: repairGoverningProfile
-      - stepNumber: 20
+      - stepNumber: 21
         description: >-
           Reload the configuration as reconciliation left it — every registration written above —
           for the post-reconciliation report.
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 21
+      - stepNumber: 22
         description: >-
           Re-list the packs the reloaded configuration registers via the pre-authorized entry, for
           the post-reconciliation report.
         type: call
         targetComponent: pack_store
         targetMethod: executeApprovedListProjectPacks
-      - stepNumber: 22
+      - stepNumber: 23
         description: >-
           Build the PolicyEvaluationResult reflecting post-reconciliation state: remaining
           missingPackNames (against the re-listed packs), unresolvedPacks (the resolution's
           unresolved names), blocked packs present, missing required profile ids, governingProfileId
           (the projectType now in force), unappliedProfileIds (recorded selection ids that are not
-          governing), and human-readable messages.
+          governing), impacts (what each applied pack changed, measured before its write), and
+          human-readable messages that state each pack applied and its headline changes.
         type: local
-      - stepNumber: 23
+      - stepNumber: 24
         description: >-
           Append the redacted policy.reconcile audit event best-effort (noting the packs applied,
           any profile repair written to the governing projectType, and any required/default packs
@@ -335,7 +392,7 @@ methods:
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: appendAuditBestEffort
-      - stepNumber: 24
+      - stepNumber: 25
         description: Return the policy evaluation result
         type: return
         outcome: policy evaluation result
@@ -587,14 +644,24 @@ methods:
         targetMethod: executeApprovedEnsureProfileInstalled
       - stepNumber: 8
         description: >-
+          Before the configuration write, measure what it changes on the project: the candidate
+          carries the requested projectType and, when the ensure step vendored a contributing pack,
+          its adoptedPackRef as the entry (no entry otherwise — a projectType-only change).
+          setProjectType is an unattended policy write, so the impact is not shown first; it is
+          carried in the returned view
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 9
+        description: >-
           When the application carries an adoptedPackRef, register it; otherwise go straight to
           writing the projectType
         type: branch
         condition: >-
           the profile application carries an adoptedPackRef (the ensure step vendored a contributing
           pack)
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 11
+      - stepNumber: 10
         description: >-
           Register the application's adoptedPackRef — the adopted pack's vendored path reference, as
           the pack store reported it — in the project's configuration through the core adapter, so
@@ -602,7 +669,7 @@ methods:
         type: call
         targetComponent: host_core_adapter
         targetMethod: registerPackRef
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Write the ensured profile id as the project's projectType through the core adapter, which
           preserves every other config key, so validation resolves the project-level architectural
@@ -610,50 +677,51 @@ methods:
         type: call
         targetComponent: host_core_adapter
         targetMethod: setProjectType
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Fold the applied profile id to the FRONT of the recorded profileSelection taken from the
           loaded configuration, keeping the other recorded ids as the unapplied remainder and
           stamping selectedBy from the authenticated caller with selectedAt, so the recorded
           selection and the governing reality agree instead of drifting apart.
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Record the folded profileSelection in the project's configuration through the core
           adapter.
         type: call
         targetComponent: host_core_adapter
         targetMethod: recordProfileSelection
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Compute the gate identity as it stands now through the validator adapter: spec content,
           governing doctrine and consumed contract inputs
         type: call
         targetComponent: host_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Resolve the lock VERDICT through the shared authority, passing the gate identity just
           computed (locked only when a record exists AND its gate identity equals that one).
         type: call
         targetComponent: host_core_adapter
         targetMethod: readLockState
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Read the project's L1 subsystem specs to collect the subsystems declaring a profile of
           their own, which takes precedence over the project-level profile for their components.
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadSubsystemSpecs
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           Assemble the updated ProjectConfigView: the applied projectType, the locked flag (true
           only when the verdict is locked, with a stale flag when it is stale), profileSource from
           the ensure result, profileResolvable true (the write path guarantees resolvability),
           adoptedPackName when a pack had to be vendored, the unapplied recorded-selection
-          remainder, and the ids of the subsystems that override the project-level profile.
+          remainder, the ids of the subsystems that override the project-level profile, and the
+          impact measured before the write.
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: Return the updated project configuration view
         type: return
         outcome: the updated project configuration view
@@ -713,8 +781,17 @@ methods:
         type: loop
         loopKind: forEach
         over: the resolution's resolved packs (each carrying canonical name + content)
-        endStep: 11
+        endStep: 12
       - stepNumber: 10
+        description: >-
+          Before the write, measure what applying this pack changes on the new project: its path
+          reference as the candidate with the resolved declarative content supplied as the manifest
+          (the new project has a configuration and at most a bootstrap L0, so the doctrine half
+          carries the substance). Init is an unattended policy write: nothing is shown first
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 11
         description: >-
           Vendor each resolved declarative pack into the new project by its canonical name via the
           pre-authorized entry, yielding its descriptor, whose ref is the path reference to
@@ -722,14 +799,14 @@ methods:
         type: call
         targetComponent: pack_store
         targetMethod: executeApprovedInstallProjectPack
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Register that path reference in the new project's configuration through the core adapter
           (appended only when absent).
         type: call
         targetComponent: host_core_adapter
         targetMethod: registerPackRef
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Record the resolved ProjectProfileSelection (the request's selected profile ids plus the
           policy's required profile ids and required/default pack names, stamped selectedBy from the
@@ -737,14 +814,14 @@ methods:
         type: call
         targetComponent: host_core_adapter
         targetMethod: recordProfileSelection
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Load the new project's configuration as now written — the packs just registered and the
           recorded selection — for the catalog and the ensure step below.
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           List the profiles selectable for the new project given the loaded configuration —
           built-ins, the packs just registered in it, and the server-global tiers — so the recorded
@@ -752,21 +829,21 @@ methods:
         type: call
         targetComponent: pack_store
         targetMethod: executeApprovedListProjectProfiles
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Choose the profile to apply: the FIRST recorded selection id that is a known project kind
           or appears in the catalog. projectType takes exactly one profile, so any remaining ids
           stay recorded as the unapplied remainder — they belong on individual subsystems.
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           When no recorded id qualifies (an empty selection, or none the instance can resolve),
           leave the default projectType in place and carry the reason into the audit rather than
           failing the initialization.
         type: branch
         condition: a qualifying profile id was chosen
-        onFalseStep: 21
-      - stepNumber: 17
+        onFalseStep: 23
+      - stepNumber: 18
         description: >-
           Make the chosen profile resolvable for the new project given the loaded configuration,
           vendoring its contributing pack into the project (reported as adoptedPackName with its
@@ -774,7 +851,16 @@ methods:
         type: call
         targetComponent: pack_store
         targetMethod: executeApprovedEnsureProfileInstalled
-      - stepNumber: 18
+      - stepNumber: 19
+        description: >-
+          Measure the governing-profile step separately from the pack loop, before its writes: the
+          chosen profile as the candidate's projectType and, when the ensure step vendored a
+          contributing pack, its adoptedPackRef as the entry (no entry otherwise — a
+          projectType-only change). It becomes the result's profileImpact
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 20
         description: >-
           When the application carries an adoptedPackRef, register it; otherwise go straight to
           writing the projectType
@@ -782,8 +868,8 @@ methods:
         condition: >-
           the profile application carries an adoptedPackRef (the ensure step vendored a contributing
           pack)
-        onFalseStep: 20
-      - stepNumber: 19
+        onFalseStep: 22
+      - stepNumber: 21
         description: >-
           Register the application's adoptedPackRef — the adopted pack's vendored path reference, as
           the pack store reported it — in the new project's configuration through the core adapter,
@@ -791,25 +877,30 @@ methods:
         type: call
         targetComponent: host_core_adapter
         targetMethod: registerPackRef
-      - stepNumber: 20
+      - stepNumber: 22
         description: >-
           Write the applied profile id as the new project's projectType through the core adapter, so
           the recorded selection actually governs validation from the project's first day.
         type: call
         targetComponent: host_core_adapter
         targetMethod: setProjectType
-      - stepNumber: 21
+      - stepNumber: 23
         description: >-
           Append the redacted project.init.policy audit event best-effort (noting the applied
-          governing profile, any unapplied selection remainder, and any required/default packs the
-          instance could not resolve)
+          governing profile, any unapplied selection remainder, any required/default packs the
+          instance could not resolve, each applied pack's impact and the governing-profile impact —
+          kept beside the returned result, so the audit trail states what the unattended init
+          applied too)
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: appendAuditBestEffort
-      - stepNumber: 22
-        description: Return the created hosted project record
+      - stepNumber: 24
+        description: >-
+          Return the GovernedProjectCreation: the created hosted project record (the persisted
+          record, unchanged), the impact of every pack the loop applied, and the governing-profile
+          impact when a profile was applied
         type: return
-        outcome: created hosted project record
+        outcome: GovernedProjectCreation
     symbol: performInit
   - name: appendAuditBestEffort
     narrative:
@@ -915,4 +1006,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-09-23T21:19:55.484Z'
+updatedAt: '2026-09-29T16:16:02.803Z'
