@@ -171,6 +171,13 @@ methods:
         type: return
         outcome: ExtensionPack | null
     detail: calls-only
+  - name: parseDeclarativePack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: parseDeclarativePack
 status: complete
 createdAt: '2026-09-25T17:33:11.897Z'
-updatedAt: '2026-09-29T15:52:16.071Z'
+updatedAt: '2026-09-29T21:27:57.984Z'

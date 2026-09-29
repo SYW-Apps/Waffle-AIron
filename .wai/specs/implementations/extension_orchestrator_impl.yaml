@@ -500,7 +500,20 @@ methods:
         description: Answer the parsed manifest
         type: return
         outcome: ExtensionPack
+  - name: parseDeclarativePack
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse the manifest against the declarative-pack schema, its defaults filled in; a manifest
+          that does not match throws the first schema error
+        type: local
+      - stepNumber: 2
+        description: >-
+          Return it as an ExtensionPack with no programmatic rules — exactly what the loader reads
+          from a YAML pack on disk
+        type: return
+        outcome: ExtensionPack
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-09-29T15:51:56.605Z'
+updatedAt: '2026-09-29T21:27:56.698Z'

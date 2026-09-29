@@ -58,7 +58,18 @@ fields:
     type: ProjectVerdict
     description: The totals of the candidate configuration's run.
     optional: false
-methods: []
+methods:
+  - name: headline
+    signature: 'headline(): string'
+    returns: string
+    description: >-
+      This impact in one line: the pack (and version), its doctrine changes counted by kind
+      (loosened, raised, added, …), the introduced, resolved and regraded finding counts, and both
+      totals. Stated, never judged. What an unattended hosted policy write puts in its messages (a
+      reconcile's applied packs) and on an approval's executionSummary. Pure over the impact's own
+      fields.
+    sourcePath: src/models/pack-impact.ts
+    symbol: impactHeadline
 sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:59.377Z'
-updatedAt: '2026-09-29T16:41:19.695Z'
+updatedAt: '2026-09-29T21:33:44.248Z'

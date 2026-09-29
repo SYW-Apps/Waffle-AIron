@@ -222,6 +222,17 @@ methods:
         description: A by-name selection or a legacy path reference
     guarantees:
       - idempotent
+  - name: parseDeclarativePack
+    description: >-
+      Published read: a parsed manifest read as a declarative pack — the ExtensionPack the loader
+      would build from it, throwing the first schema error when it is not one. Forwarded to the
+      extension orchestrator.
+    signature: 'parseDeclarativePack(manifest: Json): ExtensionPack'
+    returns: ExtensionPack
+    params:
+      - name: manifest
+        type: Json
+        description: The parsed manifest document, untyped until this reads it
 lint:
   allow:
     - code: UNTYPED_SEAM
@@ -232,4 +243,4 @@ lint:
         no site, so this allow is spec-wide; it is the only untyped parameter on this contract.
 status: complete
 createdAt: '2026-09-25T17:33:10.144Z'
-updatedAt: '2026-09-29T15:52:13.547Z'
+updatedAt: '2026-09-29T21:27:50.265Z'

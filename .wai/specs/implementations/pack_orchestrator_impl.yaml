@@ -10,6 +10,8 @@ description: >-
   Installs are declarative-only; the store enforces the schema and rejects code packs.
 contract: ipack_orchestrator
 sourcePath: src/server/packs.ts
+injectedParams:
+  - cfg
 methods:
   - name: listGlobalPacks
     narrative:
@@ -576,15 +578,22 @@ methods:
       - stepNumber: 13
         label: measure
         description: >-
-          Build the candidate: the path reference the install or adoption would register under
-          .wai/packs/, with the parsed content supplied as its manifest (nothing is on disk yet)
-        type: local
+          Read the uploaded or resolved content as a declarative pack through the core adapter — the
+          manifest the candidate supplies, since nothing is on disk yet
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: parseDeclarativePack
       - stepNumber: 14
+        description: >-
+          Build the candidate: the path reference the install or adoption would register under
+          .wai/packs/, with that manifest supplied
+        type: local
+      - stepNumber: 15
         description: Measure it through the host validator adapter under the bound root, writing nothing
         type: call
         targetComponent: host_validator_adapter
         targetMethod: measurePackImpact
-      - stepNumber: 15
+      - stepNumber: 16
         description: Return the impact
         type: return
         outcome: PackImpact
@@ -647,4 +656,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-09-29T16:16:45.170Z'
+updatedAt: '2026-09-29T21:38:54.569Z'

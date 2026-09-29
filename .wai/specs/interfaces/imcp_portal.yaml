@@ -11,7 +11,7 @@ methods:
       MCP capabilities truthfully: resources and prompts advertise listChanged only because the
       long-lived stdio session actually emits list-changed notifications after a successful spec
       write that alters the agent topology or skill set (the stateless hosted transport advertises
-      none and stays correct-on-poll). A hosted caller may also ask for the sixteen hosted
+      none and stays correct-on-poll). A hosted caller may also ask for the seventeen hosted
       data-plane tools to be advertised in tools/list; they are discovery only, served by the
       hosting request orchestrator before any call reaches this server.
     signature: 'createMcpServer(hostedTools?: boolean): McpServer'
@@ -423,13 +423,13 @@ methods:
   - name: advertiseHostedTools
     description: >-
       Publish the hosted data plane's tools in this server's tool list without being able to execute
-      any of them. Sixteen `sdd_host_*` and `sdd_landscape_*` tools are registered here so an agent
-      can DISCOVER them; execution is intercepted upstream by the hosting request orchestrator,
-      which owns their contracts, and a handler reached outside a hosted request answers that it is
-      unavailable rather than doing anything. Modelled as one method rather than sixteen because
-      publishing a discovery list is one job — sixteen portal methods would claim this component
-      executes work it never touches, and would duplicate the hosted orchestrator's contract to say
-      it.
+      any of them. Seventeen `sdd_host_*` and `sdd_landscape_*` tools are registered here so an
+      agent can DISCOVER them; execution is intercepted upstream by the hosting request
+      orchestrator, which owns their contracts, and a handler reached outside a hosted request
+      answers that it is unavailable rather than doing anything. Modelled as one method rather than
+      seventeen because publishing a discovery list is one job — seventeen portal methods would
+      claim this component executes work it never touches, and would duplicate the hosted
+      orchestrator's contract to say it.
     signature: 'advertiseHostedTools(): void'
     returns: void
     params: []
@@ -549,4 +549,4 @@ methods:
       address: mcp tools/call sdd_pack_impact
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T16:00:50.243Z'
+updatedAt: '2026-09-29T21:29:49.594Z'

@@ -446,7 +446,11 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: createMember
       - stepNumber: 12
-        description: Report the member was created and stop
+        description: >-
+          Report the member was created and stop; when its configuration was created, state the
+          parent's required packs it applied (name and pinned version), the projectType it set, and
+          each requirement nothing installed satisfies, exactly as `wairon member add` does —
+          scaffolding is an unattended pack write, so it shows no impact report
         type: return
         outcome: member created
       - stepNumber: 13
@@ -2784,4 +2788,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-29T16:17:16.502Z'
+updatedAt: '2026-09-29T21:28:49.972Z'

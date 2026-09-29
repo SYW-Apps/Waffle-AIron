@@ -1224,7 +1224,7 @@ rules:
             at: 'WebSession'
             covers:
               - 'projects'
-      # 207 finding(s), 235 unit(s).
+      # 189 finding(s), 216 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of param-conformance on the signatures the contracts describe in
@@ -1674,97 +1674,6 @@ rules:
             at: 'inflateEntry'
             covers:
               - 'path'
-          - code: PARAM_NAME_MISMATCH
-            spec: pack_orchestrator_impl
-            at: 'adoptProjectPack'
-            covers:
-              - 'name'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'adoptProjectPack'
-            covers:
-              - 'name'
-          - code: PARAM_OPTIONALITY
-            spec: pack_orchestrator_impl
-            at: 'installGlobalPackArchive'
-            covers:
-              - 'name'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'installGlobalPackArchive'
-            covers:
-              - 'name'
-          - code: PARAM_NAME_MISMATCH
-            spec: pack_orchestrator_impl
-            at: 'installGlobalPack'
-            covers:
-              - 'content'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'installGlobalPack'
-            covers:
-              - 'content'
-          - code: PARAM_OPTIONALITY
-            spec: pack_orchestrator_impl
-            at: 'installProjectPackArchive'
-            covers:
-              - 'name'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'installProjectPackArchive'
-            covers:
-              - 'name'
-          - code: PARAM_NAME_MISMATCH
-            spec: pack_orchestrator_impl
-            at: 'installProjectPack'
-            covers:
-              - 'name'
-              - 'content'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'installProjectPack'
-            covers:
-              - 'content'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'listAdoptableProjectPacks'
-            covers:
-              - 'project'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'listAvailableProfiles'
-            covers:
-              - 'credential'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'listGlobalPacks'
-            covers:
-              - 'credential'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'listProjectPacks'
-            covers:
-              - 'project'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'listProjectProfiles'
-            covers:
-              - 'project'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'removeGlobalPack'
-            covers:
-              - 'name'
-          - code: PARAM_NAME_MISMATCH
-            spec: pack_orchestrator_impl
-            at: 'removeProjectPack'
-            covers:
-              - 'name'
-          - code: UNDECLARED_PARAM
-            spec: pack_orchestrator_impl
-            at: 'removeProjectPack'
-            covers:
-              - 'name'
           - code: UNDECLARED_PARAM
             spec: pack_source_adapter_impl
             at: 'readManifest'

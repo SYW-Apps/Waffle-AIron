@@ -246,8 +246,22 @@ methods:
         description: A by-name selection or a legacy path reference
     guarantees:
       - idempotent
+  - name: parseDeclarativePack
+    description: >-
+      Read a parsed manifest as a DECLARATIVE pack: the ExtensionPack the loader would build from it
+      (the declarative-pack schema's defaults filled in, no programmatic rules), exactly as a
+      vendored YAML pack is read from disk. Throws the first schema error when it is not one. How a
+      caller holding a pack's content before anything is on disk (a hosted preview, a policy write
+      measured before its vendoring) supplies it as a pack impact candidate's manifest. Writes
+      nothing.
+    signature: 'parseDeclarativePack(manifest: Json): ExtensionPack'
+    returns: ExtensionPack
+    params:
+      - name: manifest
+        type: Json
+        description: The parsed manifest document, untyped until this reads it
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-09-29T15:51:32.683Z'
+updatedAt: '2026-09-29T21:27:48.323Z'

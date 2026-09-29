@@ -7,7 +7,7 @@ description: >-
   with its impact measured before the write, and the impact of the governing-profile step, measured
   separately. Init is an unattended policy write, so nothing is shown beforehand; this is how its
   result states what it changed. The same impacts are also written to the project.init.policy audit
-  event. To be declared in src/server/types.ts beside HostedProjectRecord.
+  event. Declared in src/server/types.ts beside HostedProjectRecord.
 fields:
   - name: record
     type: HostedProjectRecord
@@ -28,5 +28,6 @@ fields:
       profile was requested.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-09-29T16:14:30.254Z'
-updatedAt: '2026-09-29T16:14:30.259Z'
+updatedAt: '2026-09-29T21:27:33.633Z'
