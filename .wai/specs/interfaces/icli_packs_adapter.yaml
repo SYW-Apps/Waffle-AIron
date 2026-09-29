@@ -32,14 +32,23 @@ methods:
     returns: void
     params: []
   - name: removePack
-    description: Deregister and delete a vendored pack by name.
-    signature: 'removePack(name: string, global: boolean): void'
+    description: >-
+      Deregister and delete a vendored pack by name (legacy `wairon pack remove`). For a project it
+      first shows the removal's impact (the matched path reference measured with `remove`) and asks;
+      declining deregisters and deletes nothing. Under --yes, or with no terminal, it removes and
+      says so without the report. `--global` removes a machine-wide file and selects nothing for any
+      project, so it shows no report.
+    signature: 'removePack(name: string, global: boolean, yes?: boolean): void'
     returns: void
     params:
       - name: name
         type: string
       - name: global
         type: boolean
+        optional: true
+      - name: 'yes'
+        type: boolean
+        description: Remove without showing the impact report
         optional: true
   - name: initPack
     description: >-
@@ -139,12 +148,18 @@ methods:
   - name: unusePack
     description: >-
       `wairon pack unuse <name>` — drop this project's selection of a pack. The pack stays installed
-      in the store; only this project stops applying it.
-    signature: 'unusePack(name: string): void'
+      in the store; only this project stops applying it. It first shows the removal's impact (the
+      stored selection measured with `remove`) and asks; declining writes nothing. Under --yes, or
+      with no terminal, it deselects and says so without the report.
+    signature: 'unusePack(name: string, yes?: boolean): void'
     returns: void
     params:
       - name: name
         type: string
+      - name: 'yes'
+        type: boolean
+        description: Deselect without showing the impact report
+        optional: true
   - name: bundlePack
     description: >-
       `wairon pack bundle [name] [--all]` — commit a copy of a selected pack under
@@ -195,4 +210,4 @@ methods:
         description: A pack name, or name@version.
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-09-29T16:00:05.848Z'
+updatedAt: '2026-09-29T16:10:18.257Z'

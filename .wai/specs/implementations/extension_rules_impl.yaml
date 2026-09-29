@@ -680,6 +680,32 @@ methods:
         type: local
     symbol: check
     exportedVia: assertionEndpointShapesRule
+  - name: packRequirements
+    sourcePath: src/core/rules/extension/pack-resolution.ts
+    narrative:
+      - stepNumber: 1
+        description: Walk every requirement the bound project's own configuration declares.
+        type: loop
+        loopKind: forEach
+        over: ctx.ext.packRequirements
+        endStep: 4
+      - stepNumber: 2
+        description: Does the range parse (pack_requirement.rangeProblem)?
+        type: branch
+        condition: the requirement names no pack, or its range has a problem
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report POLICY_REQUIREMENT_INVALID (error) naming the pack, quoting the range and the
+          unreadable token, and saying the family run cannot judge members against it until it
+          parses.
+        type: local
+      - stepNumber: 4
+        label: req_done
+        description: This requirement is judged.
+        type: local
+    symbol: check
+    exportedVia: packRequirementsRule
 status: complete
 createdAt: '2026-09-14T23:15:33.948Z'
-updatedAt: '2026-09-23T17:52:57.731Z'
+updatedAt: '2026-09-29T16:12:33.138Z'

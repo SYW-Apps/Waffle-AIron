@@ -228,31 +228,59 @@ methods:
         type: branch
         condition: a matching project pack was found
         onTrueStep: 13
-        onFalseStep: 17
+        onFalseStep: 22
       - stepNumber: 13
+        description: An unattended run (--yes, or no terminal) removes without the report
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 18
+        onFalseStep: 14
+      - stepNumber: 14
+        label: measure-removal
+        description: >-
+          Measure the removal before writing it: the matched path reference as the candidate with
+          `remove` — the pack's doctrine against wairon's defaults and the findings that change here
+          once it no longer applies
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 15
+        description: Print the impact report and ask whether to remove
+        type: local
+      - stepNumber: 16
+        description: Removing a pack is as intentional as adding one
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 18
+      - stepNumber: 17
+        description: Stop without deregistering or deleting anything
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 18
+        label: deregister
         description: >-
           Deregister exactly the matched legacy ref through the core portal; by-name selections are
           untouched.
         type: call
         targetComponent: project_config_portal
         targetMethod: deregisterPackRef
-      - stepNumber: 14
+      - stepNumber: 19
         description: Only vendored files are deleted.
         type: branch
         condition: >-
           the ref's resolved files lie inside .wai/packs (containment guard — never delete
           user-owned paths)
-        onTrueStep: 15
-        onFalseStep: 16
-      - stepNumber: 15
+        onTrueStep: 20
+        onFalseStep: 21
+      - stepNumber: 20
         description: Done.
         type: return
         outcome: deregistered and vendored files deleted (reported)
-      - stepNumber: 16
+      - stepNumber: 21
         description: Done, files preserved.
         type: return
         outcome: deregistered; files outside .wai/packs left in place (reported)
-      - stepNumber: 17
+      - stepNumber: 22
         description: Report and stop.
         type: return
         outcome: no matching project pack registered; error with exit code 1
@@ -518,36 +546,75 @@ methods:
         type: return
         outcome: not-a-project error (suggests wairon init); exit code 1, nothing written
       - stepNumber: 4
+        description: 'Read this project''s configuration: does it select a pack of that name?'
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: >-
+          Nothing to measure when nothing is selected (the deselect then reports not-selected), and
+          an unattended run (--yes, or no terminal) deselects without the report
+        type: branch
+        condition: no selection of that name, or the run is unattended
+        onTrueStep: 10
+        onFalseStep: 6
+      - stepNumber: 6
+        label: measure-removal
+        description: >-
+          Measure the removal before writing it: the stored selection as the candidate with `remove`
+          — the pack's doctrine against wairon's defaults and the findings that change here once it
+          no longer applies
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 7
+        description: Print the impact report and ask whether to deselect
+        type: local
+      - stepNumber: 8
+        description: Removing a pack is as intentional as adding one
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Stop without writing
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 10
+        label: deselect
         description: >-
           Deselect the pack: only same-name selections are dropped — legacy path refs are untouched
           — and nothing is written when none matched. The result says whether anything was dropped.
         type: call
         targetComponent: project_config_portal
         targetMethod: removePackSelection
-      - stepNumber: 5
+      - stepNumber: 11
         description: Only a selected pack can be deselected.
         type: branch
         condition: nothing was dropped
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
         description: Report that this project does not select a pack of that name.
         type: return
         outcome: not-selected error; exit code 1, nothing written
-      - stepNumber: 7
+      - stepNumber: 13
         description: >-
           Report the deselection: the pack remains installed in the store, and its profiles, rules,
-          and assertions no longer apply here.
+          and assertions no longer apply here; an unattended run adds that it applied without
+          showing the impact and names `wairon pack impact <name>`.
         type: return
         outcome: deselected
     detail: calls-only
     intent: >-
-      Refuses outside a wairon project (the core portal's projectConfigExists). Deselects the pack
-      through the core portal's removePackSelection, which drops only same-name selections — legacy
-      path refs are untouched, `pack remove` handles those — and writes nothing when none matched. A
-      false result is the "this project does not select a pack named" error with exit code 1;
-      otherwise it states plainly that the pack remains installed in the store while its profiles,
-      rules, and assertions no longer apply here.
+      Refuses outside a wairon project (the core portal's projectConfigExists). Unless the run is
+      unattended (--yes, or no terminal) and when the project selects a pack of that name, it
+      measures the removal through validator_portal.measurePackImpact (the stored selection with
+      `remove`), prints the report and asks — anything but yes returns with nothing written.
+      Deselects the pack through the core portal's removePackSelection, which drops only same-name
+      selections — legacy path refs are untouched, `pack remove` handles those — and writes nothing
+      when none matched. A false result is the "this project does not select a pack named" error
+      with exit code 1; otherwise it states plainly that the pack remains installed in the store
+      while its profiles, rules, and assertions no longer apply here.
   - name: bundlePack
     narrative:
       - stepNumber: 1
@@ -784,4 +851,4 @@ lint:
         limitation at the workspace-package boundary, in src/commands/packs.ts.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-09-29T16:00:11.949Z'
+updatedAt: '2026-09-29T16:10:14.880Z'

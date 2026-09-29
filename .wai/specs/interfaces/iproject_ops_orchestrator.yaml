@@ -477,7 +477,7 @@ methods:
     description: >-
       Forward to pack_orchestrator.previewProjectPack: what installing (content given) or adopting
       (content omitted) a declarative pack would change on the project, writing nothing
-      (project:admin over the project upstream).
+      (project:read over the project upstream).
     signature: >-
       previewProjectPack(credential: string, project: string, name: string, content?: string):
       PackImpact
@@ -496,4 +496,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-09-29T16:02:03.366Z'
+updatedAt: '2026-09-29T16:09:33.801Z'

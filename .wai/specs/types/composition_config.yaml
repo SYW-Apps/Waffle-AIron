@@ -3,10 +3,12 @@ id: composition_config
 name: CompositionConfig
 description: >-
   The `composition` block of project.yaml: what this project requires of the projects it contains
-  when they are composed. It governs nothing at this project's own gate and nothing at a member's
-  own gate (member-gate-unchanged-by-requirements); only the family run reads it, and createMember
-  reads it once when scaffolding a new member. It coexists with, and is never merged into, the two
-  hosted pack mechanisms: the hosted instance floor (InstancePackPolicy.requiredGlobalPacks /
+  when they are composed. At this project's own gate only its syntax is judged (pack-requirements:
+  POLICY_REQUIREMENT_INVALID for a range that does not parse); it governs nothing else there and
+  nothing at a member's own gate (member-gate-unchanged-by-requirements). The family run judges
+  members against it, and createMember reads it once when scaffolding a new member. It is not part
+  of the gate identity until stage 5. It coexists with, and is never merged into, the two hosted
+  pack mechanisms: the hosted instance floor (InstancePackPolicy.requiredGlobalPacks /
   defaultProjectPacks), which a hosted reconcile WRITES into every hosted project's packs and
   records in profileSelection, and the hosted profile selection, which records what a hosted policy
   workflow chose. A pack both require is satisfied by one selection in the member; neither mechanism
@@ -22,4 +24,4 @@ methods: []
 sourcePath: src/models/project.ts
 symbol: CompositionConfig
 createdAt: '2026-09-29T15:49:45.020Z'
-updatedAt: '2026-09-29T15:49:45.022Z'
+updatedAt: '2026-09-29T16:09:22.533Z'

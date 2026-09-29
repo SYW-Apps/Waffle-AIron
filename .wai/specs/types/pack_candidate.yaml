@@ -11,8 +11,11 @@ fields:
     type: PackSelection | string
     description: >-
       The selection `pack use` would record, or the legacy path reference `pack add` / a hosted
-      install or adopt would register.
-    optional: false
+      install or adopt would register. Absent only for a write that changes the projectType and
+      nothing else (a hosted setProjectType whose profile is builtin or whose pack is already
+      registered): then the doctrine half is empty and the findings half measures the projectType
+      change.
+    optional: true
   - name: manifest
     type: ExtensionPack
     description: >-
@@ -33,4 +36,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-09-29T15:50:47.325Z'
-updatedAt: '2026-09-29T15:56:22.468Z'
+updatedAt: '2026-09-29T16:11:02.115Z'

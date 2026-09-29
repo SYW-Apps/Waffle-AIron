@@ -37,13 +37,14 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
-          Is the pack's manifest supplied with the candidate (a hosted install whose YAML is not on
-          disk yet)?
+          Is there nothing to resolve — the manifest is supplied with the candidate (a hosted
+          install whose YAML is not on disk yet), or the candidate names no entry (a
+          projectType-only write, whose doctrine half is then empty)?
         type: branch
-        condition: the candidate supplies its manifest and does not remove
+        condition: the candidate supplies its manifest and does not remove, or names no entry
         onFalseStep: 7
       - stepNumber: 6
-        description: Use the supplied manifest
+        description: Use the supplied manifest, or none
         type: jump
         toStep: 10
       - stepNumber: 7
@@ -143,4 +144,4 @@ methods:
         outcome: PackImpact
 status: design
 createdAt: '2026-09-29T15:53:20.337Z'
-updatedAt: '2026-09-29T15:53:20.349Z'
+updatedAt: '2026-09-29T16:11:12.086Z'

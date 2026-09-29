@@ -115,15 +115,18 @@ methods:
     description: >-
       The governance checks over the root's graph (governance stage). Every selected project that
       declares `composition.requirePolicies` requires those packs of every member below it in the
-      selection, at every level; the root's own requirements never apply to the root. A requirement
-      whose range does not parse is POLICY_REQUIREMENT_INVALID (error) on the requiring project, and
-      is not judged further. Each member's adoption of each valid requirement is judged by
-      `adoption`. Each finding names the requiring project and its severity is THAT project's
-      rules.sddRuleSeverity override, else the default — as the family codes are tuned. Nothing here
-      reads the requirements at a member's own gate, so a member's own verdict is the same with and
-      without them (member-gate-unchanged-by-requirements); and nothing here compares a pack with
-      wairon's defaults, so a pack's loosening is never reported
-      (pack-loosening-is-never-a-finding).
+      selection, at every level; the root's own requirements never apply to the root, and a
+      requiring project above the bound root is not in the selection and is not judged (a member's
+      `--family` run selects downward only). A requirement whose range does not parse is skipped
+      here — the requiring project's OWN gate reports it (extension_rules.packRequirements,
+      POLICY_REQUIREMENT_INVALID). Each member's adoption of each readable requirement is judged by
+      `adoption`, and each finding's severity is the REQUIRING project's rules.sddRuleSeverity
+      override, else the default — as the family codes are tuned. Nothing here reads the
+      requirements at a member's own gate, so a member's own verdict is the same with and without
+      them (member-gate-unchanged-by-requirements); nothing here compares a pack with wairon's
+      defaults, so a pack's loosening is never reported (pack-loosening-is-never-a-finding); and
+      nothing here depends on what the machine has installed, so the family verdict is the same from
+      every machine (location-independent).
     signature: 'checkPolicies(family: ProjectFamily): ValidationIssue[]'
     returns: ValidationIssue[]
     params:
@@ -132,26 +135,20 @@ methods:
         description: >-
           The family root's project graph: the selected projects, their directories and each
           member's parent
-    findings:
-      - code: POLICY_REQUIREMENT_INVALID
-        severity: error
-        summary: A project's composition.requirePolicies names a pack range that does not parse
+    findings: []
   - name: adoption
     description: >-
       With one member's root bound: judge its adoption of the requirements one requiring project
-      places on it. POLICY_NOT_ADOPTED (error) when the member does not select the pack (by
-      selection name, or a legacy path reference whose loaded manifest carries the name); when the
-      version that governs it — the loaded pack's version, else its selection's pin — is outside the
-      range (a floating selection whose pack did not resolve is not judged here: the member's own
-      gate already reports it); or when the requirement names a profile and the member's projectType
-      is another. The message names the requirement (pack, range, profile, requiring project) and
-      the member's selection. POLICY_DEVIATION (notice) for each setting the member changes against
-      the adopted pack's settings (extension_pack.settings under the governing profile): a
-      rules.sddRuleSeverity entry for a code the pack sets, rules.designDepth or a subsystem's
-      designDepth other than the profile's, a subsystem `profile` other than the governing one, and
-      a lint.allow on any of the member's specs over a code the pack sets. Each deviation names the
-      setting, the pack's value and the member's. `--ci` never fails on a notice; a team raises it
-      with the requiring project's sddRuleSeverity. Answered at the default severities, stamped with
+      places on it, from the member's committed files only — never from the version the machine
+      happens to resolve — so the verdict is location-independent. POLICY_NOT_ADOPTED (error) when:
+      the member has no entry for the pack (a selection by that name, or a legacy path reference
+      whose committed manifest carries it); the entry is a selection with no version pin (reason:
+      "unpinned — a family cannot judge a floating selection; pin a version"); the pinned version —
+      or, for a legacy path reference, its committed manifest's declared version — is outside the
+      range (an unversioned manifest is admitted by `*` only); or the requirement names a profile
+      and the member's projectType is another. The message names the requirement (pack, range,
+      profile, requiring project) and the member's entry. An adopted requirement's settings are then
+      compared by `deviations` (POLICY_DEVIATION). Answered at the default severities, stamped with
       the member's key; checkPolicies applies the requiring project's overrides.
     signature: >-
       adoption(requiring: string, member: string, requirements: PackRequirement[]):
@@ -175,6 +172,34 @@ methods:
         summary: >-
           A member does not select a pack a project above it requires, selects it outside the
           required range, or is not governed by the required profile
+  - name: deviations
+    description: >-
+      With one member's root bound: every override the member makes against the settings an adopted
+      pack sets under its governing profile, as POLICY_DEVIATION (notice) — the complete list of
+      what a project can override against a profile in today's validator (src/core/rules/index.ts:
+      getRuleSeverity, effectiveDesignDepth, namingConfigFor, complexityConfigFor,
+      documentationConfigFor, getComponentProfile): rules.sddRuleSeverity per code the pack sets;
+      rules.designDepth and each subsystem's designDepth; each rules.naming key and each
+      rules.naming.stereotypes entry; each rules.complexity key; each rules.documentation key; each
+      subsystem `profile` other than the governing one; and each lint.allow on the member's specs
+      over a code the pack sets. A key the profile does not set is not a deviation, and nothing is
+      compared with wairon's defaults. Each names the setting, the pack's value and the member's,
+      and the requirement it concerns.
+    signature: >-
+      deviations(member: string, requirement: PackRequirement, settings: PackSettings):
+      ValidationIssue[]
+    returns: ValidationIssue[]
+    params:
+      - name: member
+        type: string
+        description: The key of the bound member, stamped on each finding
+      - name: requirement
+        type: PackRequirement
+        description: The adopted requirement, named in each message
+      - name: settings
+        type: PackSettings
+        description: What the adopted pack sets under the member's governing profile (extension_pack.settings)
+    findings:
       - code: POLICY_DEVIATION
         severity: notice
         summary: >-
@@ -182,4 +207,4 @@ methods:
           configuration or specs
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-09-29T15:55:31.677Z'
+updatedAt: '2026-09-29T16:08:27.605Z'

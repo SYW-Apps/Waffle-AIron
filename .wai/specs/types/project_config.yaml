@@ -99,10 +99,12 @@ fields:
     description: >-
       What this project requires of the projects it contains when they are composed:
       `requirePolicies`, the packs each member must select (by semver range, optionally one
-      profile). Read only by the family run and, once, by createMember when it scaffolds a new
-      member; this project's own gate and every member's own gate ignore it, so a member's verdict
-      is the same with and without a parent's requirement. Written by hand. Coexists with, and is
-      never merged into, the hosted instance floor and profileSelection (see CompositionConfig).
+      profile). This project's own gate judges only its syntax (POLICY_REQUIREMENT_INVALID); the
+      family run judges members against it, and createMember reads it once when it scaffolds a new
+      member. No member's own gate reads it, so a member's verdict is the same with and without a
+      parent's requirement. Not part of the gate identity until stage 5. Written by hand. Coexists
+      with, and is never merged into, the hosted instance floor and profileSelection (see
+      CompositionConfig).
     optional: true
 methods:
   - name: declaredPackNames
@@ -186,4 +188,4 @@ methods:
       about the duplicate). Empty when nothing is required.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-29T15:49:54.399Z'
+updatedAt: '2026-09-29T16:09:24.420Z'

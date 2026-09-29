@@ -515,20 +515,20 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Resolve the caller's project:admin permission over the target project — the permission the
-          install itself requires
+          Resolve the caller's project:read permission over the target project — the preview writes
+          nothing
         type: call
         targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
         type: branch
-        condition: the effective project:admin value is not yes
+        condition: the effective project:read value is not yes
         onFalseStep: 5
       - stepNumber: 4
         description: Reject the preview
         type: throw
-        error: Forbidden — previewing a project pack requires project:admin over the project
+        error: Forbidden — previewing a project pack requires project:read over the project
       - stepNumber: 5
         label: bind
         description: Bind and verify the target project's isolated root
@@ -592,4 +592,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-09-29T16:01:46.515Z'
+updatedAt: '2026-09-29T16:09:32.453Z'

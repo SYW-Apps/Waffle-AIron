@@ -5,11 +5,14 @@ description: >-
   One entry of a project's `composition.requirePolicies`: an extension pack the project requires of
   its members, by name and semver range, optionally narrowed to one profile inside that pack. It is
   a requirement, never a selection: nothing loads from it and nothing reads it at a member's own
-  gate. A member adopts it by selecting the pack in its own `extensions.packs` (the exact, digested
-  selection wairon already resolves and locks); the family run judges the adoption
-  (POLICY_NOT_ADOPTED, POLICY_DEVIATION) and createMember writes it into a new member's selection
-  once. Plain strings throughout, so a malformed range is REPORTED (POLICY_REQUIREMENT_INVALID),
-  never unreadable.
+  gate. Only requirements use ranges — a member's selection still pins exactly (a version, and
+  ideally an integrity digest), as pack-scoping's resolution requires, and a floating selection of a
+  required pack is POLICY_NOT_ADOPTED because a family cannot judge it. A member adopts the
+  requirement by selecting the pack in its own `extensions.packs`; the family run judges the
+  adoption (POLICY_NOT_ADOPTED, POLICY_DEVIATION) and createMember writes it into a new member's
+  selection once. Ranges are an npm-style subset evaluated with the store's own version comparator —
+  no semver dependency. Plain strings throughout, so a malformed range is REPORTED
+  (POLICY_REQUIREMENT_INVALID, on the requiring project's own gate), never unreadable.
 fields:
   - name: pack
     type: string
@@ -36,9 +39,10 @@ methods:
     description: >-
       Whether a concrete pack version satisfies this requirement's range: true when it matches any
       `||` alternative, each alternative being the conjunction of its comparators (caret, tilde and
-      x-ranges expanded to their >= / < bounds). A version or range that does not parse admits
-      nothing. Pure arithmetic over the two strings; it reuses the store's version comparator rather
-      than adding a semver dependency.
+      x-ranges expanded to their >= / < bounds). An unversioned pack (a manifest that declares no
+      version) is admitted by `*` alone. A version or range that does not parse admits nothing. Pure
+      arithmetic over the two strings; it reuses the store's version comparator rather than adding a
+      semver dependency.
   - name: rangeProblem
     signature: 'rangeProblem(): string | null'
     returns: string | null
@@ -48,4 +52,4 @@ methods:
 sourcePath: src/models/project.ts
 symbol: PackRequirement
 createdAt: '2026-09-29T15:49:40.299Z'
-updatedAt: '2026-09-29T15:49:40.307Z'
+updatedAt: '2026-09-29T16:09:08.868Z'

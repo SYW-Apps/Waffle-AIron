@@ -43,6 +43,14 @@ fields:
       Declared selections the extension loader could not resolve, each carrying the code the
       pack-resolution rule reports it under
     optional: false
+  - name: packRequirements
+    type: PackRequirement[]
+    description: >-
+      The bound project's OWN composition.requirePolicies (project_config.requiredPolicies), which
+      the pack-requirements rule checks for a readable range. Never a parent's: a project's gate
+      judges only what its own configuration states, and a parent's requirements reach a member only
+      in the family run (member-gate-unchanged-by-requirements). Empty when nothing is required.
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:56:56.419Z'
-updatedAt: '2026-09-14T23:22:52.727Z'
+updatedAt: '2026-09-29T16:07:21.677Z'

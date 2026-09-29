@@ -282,9 +282,9 @@ methods:
         label: pack_impact
         description: >-
           Dispatch the per-project pack impact preview (project = the BOUND project; name, and the
-          declarative content when installing, from arguments) — writes nothing; project:admin gated
-          upstream, as the install it previews. sdd_host_pack_install itself stays an unattended
-          write whose answer says it applied, without the report
+          declarative content when installing, from arguments) — writes nothing; project:read gated
+          upstream. sdd_host_pack_install itself stays an unattended write whose answer says it
+          applied, without the report
         type: call
         targetComponent: project_ops_orchestrator
         targetMethod: previewProjectPack
@@ -496,4 +496,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-29T16:03:34.959Z'
+updatedAt: '2026-09-29T16:09:35.286Z'

@@ -202,6 +202,25 @@ methods:
       - code: PACK_SOURCE_UNFETCHABLE
         severity: warning
         summary: Pack selection is neither bundled nor obtainable from a recorded source
+  - name: packRequirements
+    description: >-
+      Rule pack-requirements. Every requirement in the bound project's own
+      composition.requirePolicies must be readable: a pack name and a semver range that parses
+      (pack_requirement.rangeProblem). One that does not is POLICY_REQUIREMENT_INVALID, quoting the
+      range and the unreadable token — an error on the requiring project's own gate, because the
+      requirement is its own configuration and the family run cannot judge a member against it. It
+      judges only the syntax: whether members adopt the requirement is the family run's question
+      (family_validator.adoption), and nothing here reads a parent's requirements.
+    signature: 'packRequirements(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: POLICY_REQUIREMENT_INVALID
+        severity: error
+        summary: A project's composition.requirePolicies names a pack range that does not parse
 status: complete
 createdAt: '2026-09-14T06:07:43.654Z'
-updatedAt: '2026-09-18T20:21:15.616Z'
+updatedAt: '2026-09-29T16:07:25.072Z'
