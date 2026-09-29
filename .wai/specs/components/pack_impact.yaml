@@ -1,0 +1,28 @@
+id: pack_impact
+name: Pack Impact
+description: >-
+  Measures what one pack write would change on the bound project before it happens (governance
+  stage): the pack's doctrine against wairon's defaults, which of its profiles would govern, and the
+  owner's-gate findings that differ between the current configuration and the candidate one. The
+  candidate is never written: it is project_config.withPack over the loaded configuration — the same
+  reading the registry's write uses — and the dry validate runs spec_validator.validateProject with
+  every configuration input of the run taken from it (rules, projectType, pack selections and the
+  extensions loaded for it), so the report's finding changes equal what validation reports after the
+  write (impact-matches-apply). It judges nothing: a pack that loosens wairon's checks is reported
+  as changing them, never as a finding. Why a component of its own: it is the one workflow behind
+  every pre-write report (CLI, MCP, hosted) and `wairon pack impact`, and it must call the owner's
+  gate twice, which no rule and no pure computation may do. A workflow rather than a read
+  Orchestrator because the gate it calls is itself a workflow; it holds no state and writes nothing
+  — the rule registry it re-registers is the per-run registration every validation performs. The
+  pure halves live on the types: extension_pack.changesAgainst (doctrine vs defaults) and
+  validation_result.changesTo (the finding diff).
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_validator
+  - rule_repository
+  - validator_core_adapter
+status: design
+createdAt: '2026-09-29T15:52:45.933Z'
+updatedAt: '2026-09-29T15:52:45.945Z'

@@ -157,33 +157,60 @@ methods:
         error: a member path must resolve within the project root
       - stepNumber: 6
         description: >-
+          Read the declaring project's configuration through the project config Repository, for the
+          packs it requires of its members (project_config.requiredPolicies) — the bound project's
+          own requirements only: nothing above it is read
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 7
+        description: >-
           Scope the project root to the member directory, so the next reads and writes address the
           member project
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Check whether the member already has a configuration
         type: call
         targetComponent: project_config_repository
         targetMethod: exists
-      - stepNumber: 8
+      - stepNumber: 9
         description: 'Complete only what is missing: an existing configuration is never overwritten'
         type: branch
         condition: the member has no configuration
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 13
+      - stepNumber: 10
+        description: >-
+          List the packs installed in this wairon install's store, every version with its digest and
+          recorded origin
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: listInstalledPacks
+      - stepNumber: 11
+        description: >-
+          Scaffold the requirements, once: for each required pack pick the highest installed version
+          its range admits (pack_requirement.admits) and build the selection `pack use --pin`
+          records (name, that version, its digest, its origin when fetchable); a requirement no
+          installed version satisfies is collected as unadopted and nothing is written for it. When
+          exactly one adopted requirement names a profile, it becomes the member's projectType
+        type: local
+      - stepNumber: 12
         description: >-
           Write the member's default configuration, named after the alias (or the display name
-          given) and declaring the alias as its project id, through the project config Repository
+          given), declaring the alias as its project id, and carrying the scaffolded selections in
+          extensions.packs (and the required profile as projectType), through the project config
+          Repository. This is the only time a parent's requirements are written into a member:
+          afterwards they are the member's own selection, and an existing configuration is never
+          given any
         type: call
         targetComponent: project_config_repository
         targetMethod: create
-      - stepNumber: 10
+      - stepNumber: 13
         label: bootstrap_l0
         description: 'Keep an existing spec tree intact: bootstrap an L0 only for a member that has none'
         type: branch
         condition: the member has no L0 system spec
-        onFalseStep: 12
-      - stepNumber: 11
+        onFalseStep: 15
+      - stepNumber: 14
         description: >-
           Persist the member's bootstrap L0 system spec, creating its specs directory — its vision
           is the description given, else one line naming it a member of this project — so a fresh
@@ -191,10 +218,10 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 12
+      - stepNumber: 15
         description: Restore the declaring project's scope
         type: local
-      - stepNumber: 13
+      - stepNumber: 16
         label: declare
         description: >-
           Declare the member in the declaring project's `members` — the path as given, the
@@ -204,10 +231,12 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: declareMember
-      - stepNumber: 14
-        description: Member declared and its project ensured
+      - stepNumber: 17
+        description: Member declared and its project ensured; answer what was scaffolded
         type: return
-        outcome: member created
+        outcome: >-
+          member created: the MemberCreation (whether the configuration was created, the adopted
+          selections, the unadopted requirements, the projectType written)
     conformance: 'off'
   - name: moveMember
     sourcePath: src/core/provision.ts
@@ -1792,4 +1821,4 @@ methods:
         targetMethod: importNames
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T18:13:18.520Z'
+updatedAt: '2026-09-29T15:56:53.297Z'

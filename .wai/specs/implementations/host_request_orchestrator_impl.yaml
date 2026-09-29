@@ -97,6 +97,8 @@ methods:
             step: 33
           - value: sdd_host_import_tree
             step: 35
+          - value: sdd_host_pack_impact
+            step: 37
         defaultStep: 5
       - stepNumber: 5
         description: >-
@@ -108,7 +110,7 @@ methods:
       - stepNumber: 6
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 7
         description: >-
           Execute-or-request a project lock, passing the credential, the TOP project id, AND the
@@ -121,7 +123,7 @@ methods:
       - stepNumber: 8
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 9
         description: Get the approval-request status, passing the credential and request id
         type: call
@@ -130,7 +132,7 @@ methods:
       - stepNumber: 10
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 11
         description: >-
           Long-poll for a decision on the caller's approval request, passing the credential, request
@@ -141,7 +143,7 @@ methods:
       - stepNumber: 12
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 13
         description: Dispatch the reachable-projects discovery with currentProjectId = the bound project
         type: call
@@ -150,7 +152,7 @@ methods:
       - stepNumber: 14
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 15
         description: >-
           Dispatch the reachable-target interface discovery (currentProjectId = bound project,
@@ -161,7 +163,7 @@ methods:
       - stepNumber: 16
         description: Continue to shape the response (reachable-interfaces path)
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 17
         description: >-
           Dispatch the visibility-resolved discovery catalog (currentProjectId = the BOUND project;
@@ -172,7 +174,7 @@ methods:
       - stepNumber: 18
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 19
         description: >-
           Dispatch the contract-grade surface fetch (currentProjectId = the BOUND project;
@@ -183,7 +185,7 @@ methods:
       - stepNumber: 20
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 21
         description: >-
           Dispatch the per-project pack listing (project = the BOUND project) — project:read gated
@@ -194,7 +196,7 @@ methods:
       - stepNumber: 22
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 23
         description: >-
           Dispatch the per-project declarative pack install (project = the BOUND project,
@@ -205,7 +207,7 @@ methods:
       - stepNumber: 24
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 25
         description: >-
           Dispatch the pack/profile compliance evaluation (projectId = the BOUND project) —
@@ -216,7 +218,7 @@ methods:
       - stepNumber: 26
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 27
         description: >-
           Dispatch the pack/profile policy reconciliation (projectId = the BOUND project) —
@@ -227,7 +229,7 @@ methods:
       - stepNumber: 28
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 29
         description: >-
           Dispatch the producer projection run (project = the BOUND project, target from arguments)
@@ -238,7 +240,7 @@ methods:
       - stepNumber: 30
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 31
         description: >-
           Dispatch the deliberate .wai/-scoped commit+push (project = the BOUND project — the data
@@ -250,7 +252,7 @@ methods:
       - stepNumber: 32
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 33
         description: >-
           Export the BOUND tree as a .waitree archive, forwarding the bound subproject qualifier so
@@ -263,7 +265,7 @@ methods:
       - stepNumber: 34
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 35
         description: >-
           Import a base64-decoded .waitree archive into the BOUND tree, forwarding the bound
@@ -275,11 +277,25 @@ methods:
       - stepNumber: 36
         description: Continue to shape the response
         type: jump
-        toStep: 37
+        toStep: 39
       - stepNumber: 37
+        label: pack_impact
+        description: >-
+          Dispatch the per-project pack impact preview (project = the BOUND project; name, and the
+          declarative content when installing, from arguments) — writes nothing; project:admin gated
+          upstream, as the install it previews. sdd_host_pack_install itself stays an unattended
+          write whose answer says it applied, without the report
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: previewProjectPack
+      - stepNumber: 38
+        description: Continue to shape the response
+        type: jump
+        toStep: 39
+      - stepNumber: 39
         description: Shape the project-lifecycle or landscape result into the JSON-RPC tool response envelope
         type: local
-      - stepNumber: 38
+      - stepNumber: 40
         description: Return the JSON-RPC tool response envelope the caller sends
         type: return
         outcome: the JSON-RPC tool response envelope
@@ -480,4 +496,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-28T06:13:58.212Z'
+updatedAt: '2026-09-29T16:03:34.959Z'

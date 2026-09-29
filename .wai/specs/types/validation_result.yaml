@@ -32,7 +32,16 @@ fields:
       A family run only: one line per selected project (the root first, then its members in scan
       order) with its own gate's totals. Absent on the owner's gate.
     optional: true
-methods: []
+methods:
+  - name: changesTo
+    signature: 'changesTo(after: ValidationResult): FindingChanges'
+    returns: FindingChanges
+    description: >-
+      How `after` differs from this result, finding by finding: introduced (only in after), resolved
+      (only here) and regraded (in both, at another severity), each finding identified by code,
+      spec, site and its message with the severity word removed. Pure over the two results' own
+      issues; it never re-runs anything. The comparison behind a pack impact's dry validate. To be
+      realized as a free function (findingChanges) in src/models/pack-impact.ts.
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-28T18:11:46.221Z'
+updatedAt: '2026-09-29T15:56:26.170Z'

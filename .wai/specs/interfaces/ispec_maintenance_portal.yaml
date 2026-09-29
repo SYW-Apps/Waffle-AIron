@@ -185,10 +185,11 @@ methods:
   - name: createMember
     description: >-
       Published write: create a member of the bound project — scaffold its project (configuration
-      with the alias as its id, L0), each part only when absent, and declare it in `members`. Never
-      writes the L1 mount form. Routed through the core orchestrator.
-    signature: 'createMember(alias: string, path: string, description?: string): void'
-    returns: void
+      with the alias as its id, L0), each part only when absent, and declare it in `members`; a
+      newly created configuration also carries the bound project's required packs, once. Answers
+      what was scaffolded. Never writes the L1 mount form. Routed through the core orchestrator.
+    signature: 'createMember(alias: string, path: string, description?: string): MemberCreation'
+    returns: MemberCreation
     params:
       - name: alias
         type: string
@@ -202,4 +203,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-09-27T16:07:40.389Z'
+updatedAt: '2026-09-29T15:57:15.129Z'

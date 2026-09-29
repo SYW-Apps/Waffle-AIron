@@ -377,8 +377,12 @@ methods:
         targetMethod: createMember
       - stepNumber: 5
         description: >-
-          Print confirmation (the alias and the member's path) and next steps: design the member
-          from its own root, export what others consume from its L0
+          Print confirmation (the alias and the member's path); when the member's configuration was
+          created, state the required packs it applied (name and pinned version) and the projectType
+          it set, and name each requirement nothing installed satisfies with the `wairon pack
+          install` / `pack use` that adopts it — scaffolding is an unattended pack write, so it
+          shows no impact report. Then next steps: design the member from its own root, export what
+          others consume from its L0
         type: local
   - name: runInit
     sourcePath: src/commands/init.ts
@@ -758,6 +762,8 @@ methods:
             step: 23
           - value: sync
             step: 25
+          - value: impact
+            step: 27
         defaultStep: 12
       - stepNumber: 2
         label: doInit
@@ -815,7 +821,7 @@ methods:
         type: throw
         error: >-
           unknown pack action (expected init | build | install | uninstall | which | use | unuse |
-          bundle | sync | add | list | remove)
+          impact | bundle | sync | add | list | remove)
       - stepNumber: 13
         label: doInstall
         description: >-
@@ -888,6 +894,16 @@ methods:
         description: Done.
         type: return
         outcome: sync done
+      - stepNumber: 27
+        label: doImpact
+        description: Show what a pack would change on this project, writing nothing.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: impactPack
+      - stepNumber: 28
+        description: Done.
+        type: return
+        outcome: impact done
   - name: runLock
     narrative:
       - stepNumber: 1
@@ -2193,8 +2209,8 @@ methods:
           - value: install
             step: 8
           - value: remove
-            step: 14
-        defaultStep: 19
+            step: 19
+        defaultStep: 24
       - stepNumber: 3
         label: list
         description: Is a project named?
@@ -2231,55 +2247,79 @@ methods:
         type: branch
         condition: '--project is given'
         onTrueStep: 10
-        onFalseStep: 12
+        onFalseStep: 17
       - stepNumber: 10
+        description: 'An unattended run installs without the report: --yes, or no terminal to ask on'
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 15
+        onFalseStep: 11
+      - stepNumber: 11
+        label: preview_project
+        description: Measure the install on the hosted project before it happens, writing nothing
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: previewProjectPack
+      - stepNumber: 12
+        description: Print the impact report and ask whether to install
+        type: local
+      - stepNumber: 13
+        description: Installing a pack is intentional
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Return without installing
+        type: return
+        outcome: declined; nothing installed
+      - stepNumber: 15
         label: install_project
         description: Install the project packs via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: installProjectPack
-      - stepNumber: 11
-        description: Return after install
+      - stepNumber: 16
+        description: 'Return after install: an unattended run says it installed without showing the impact'
         type: return
         outcome: installed
-      - stepNumber: 12
+      - stepNumber: 17
         label: install_instance
         description: Install the instance packs via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: installGlobalPack
-      - stepNumber: 13
+      - stepNumber: 18
         description: Return after install
         type: return
         outcome: installed
-      - stepNumber: 14
+      - stepNumber: 19
         label: remove
         description: Is a project named?
         type: branch
         condition: '--project is given'
-        onTrueStep: 15
-        onFalseStep: 17
-      - stepNumber: 15
+        onTrueStep: 20
+        onFalseStep: 22
+      - stepNumber: 20
         label: remove_project
         description: Remove the project packs via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: removeProjectPack
-      - stepNumber: 16
+      - stepNumber: 21
         description: Return after remove
         type: return
         outcome: removed
-      - stepNumber: 17
+      - stepNumber: 22
         label: remove_instance
         description: Remove the instance packs via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: removeGlobalPack
-      - stepNumber: 18
+      - stepNumber: 23
         description: Return after remove
         type: return
         outcome: removed
-      - stepNumber: 19
+      - stepNumber: 24
         label: unknown
         description: Refuse an unknown action
         type: throw
@@ -2720,4 +2760,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-29T14:48:29.075Z'
+updatedAt: '2026-09-29T16:03:08.565Z'

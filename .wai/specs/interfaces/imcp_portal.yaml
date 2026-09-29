@@ -476,11 +476,13 @@ methods:
     description: >-
       Tool: create a member of the bound project — scaffold the member project at the path (its
       project.yaml declaring the alias as its project id, and its L0), each part only when absent,
-      and declare it in the bound project's project.yaml `members` with the description. Nothing is
-      written into the bound project's spec tree: a member is reached only as `alias::name` through
-      its own L0 exports.
-    signature: 'sdd_add_member(alias: string, path: string, description?: string): void'
-    returns: void
+      and declare it in the bound project's project.yaml `members` with the description. A newly
+      created member configuration also selects the bound project's required packs
+      (composition.requirePolicies), once; the answer states what was applied. Nothing is written
+      into the bound project's spec tree: a member is reached only as `alias::name` through its own
+      L0 exports.
+    signature: 'sdd_add_member(alias: string, path: string, description?: string): MemberCreation'
+    returns: MemberCreation
     params:
       - name: alias
         type: string
@@ -525,6 +527,26 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_internalize_member
+  - name: sdd_pack_impact
+    description: >-
+      Tool: what selecting (or updating to) an installed pack would change on the bound project,
+      writing nothing — the pack's doctrine against wairon's defaults (rules loosened, raised,
+      turned off or added; profiles, stereotype fencing, edge licenses, patterns, guarantees and
+      language tables added, redefined or removed), which of its profiles would govern, and the
+      findings that change here. Nothing in it is a finding.
+    signature: 'sdd_pack_impact(pack: string, version?: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: pack
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: An exact version; omitted, the latest installed
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_pack_impact
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T18:12:04.758Z'
+updatedAt: '2026-09-29T16:00:50.243Z'

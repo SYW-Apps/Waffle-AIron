@@ -56,6 +56,15 @@ fields:
       Omitted, a project that declares members runs its family and any other project runs its
       owner's gate.
     optional: true
+  - name: packSelections
+    type: PackSelection[]
+    description: >-
+      The by-name pack selections the pack rules (pack-resolution, pack-reproducibility) judge.
+      Omitted, the project's own stored selections are read. Given only by a dry run that judges a
+      candidate configuration it has not written (pack_impact.measure), together with that
+      candidate's rules, projectType and loaded extensions, so every configuration input of the run
+      is the candidate's and the verdict equals the one the write would then produce.
+    optional: true
 methods:
   - name: selectsFamily
     signature: 'selectsFamily(declaresMembers: boolean): boolean'
@@ -68,4 +77,4 @@ methods:
     sourcePath: src/models/validation-options.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-09-20T14:26:35.723Z'
-updatedAt: '2026-09-28T18:11:50.553Z'
+updatedAt: '2026-09-29T15:50:02.555Z'

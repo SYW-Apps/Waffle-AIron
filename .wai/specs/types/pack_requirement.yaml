@@ -1,0 +1,51 @@
+kind: value-object
+id: pack_requirement
+name: PackRequirement
+description: >-
+  One entry of a project's `composition.requirePolicies`: an extension pack the project requires of
+  its members, by name and semver range, optionally narrowed to one profile inside that pack. It is
+  a requirement, never a selection: nothing loads from it and nothing reads it at a member's own
+  gate. A member adopts it by selecting the pack in its own `extensions.packs` (the exact, digested
+  selection wairon already resolves and locks); the family run judges the adoption
+  (POLICY_NOT_ADOPTED, POLICY_DEVIATION) and createMember writes it into a new member's selection
+  once. Plain strings throughout, so a malformed range is REPORTED (POLICY_REQUIREMENT_INVALID),
+  never unreadable.
+fields:
+  - name: pack
+    type: string
+    description: The required pack's name, exactly as a PackSelection names it (e.g. acme/service-baseline).
+    optional: false
+  - name: version
+    type: string
+    description: >-
+      A semver range the member's pack version must satisfy: an exact version (1.2.0), a caret
+      (^1.2) or tilde (~1.2.3) range, an x-range (1.x, 1.2.*, *), a comparator set joined by spaces
+      (>=1.2.0 <2.0.0), or alternatives joined by `||`. Pre-release versions satisfy only a range
+      that names the same major.minor.patch with a pre-release tag, as npm reads them.
+    optional: false
+  - name: profile
+    type: string
+    description: >-
+      Optional: one profile inside the pack the member must be governed by (its projectType).
+      Omitted, any of the pack's profiles, or none, may govern.
+    optional: true
+methods:
+  - name: admits
+    signature: 'admits(version: string): boolean'
+    returns: boolean
+    description: >-
+      Whether a concrete pack version satisfies this requirement's range: true when it matches any
+      `||` alternative, each alternative being the conjunction of its comparators (caret, tilde and
+      x-ranges expanded to their >= / < bounds). A version or range that does not parse admits
+      nothing. Pure arithmetic over the two strings; it reuses the store's version comparator rather
+      than adding a semver dependency.
+  - name: rangeProblem
+    signature: 'rangeProblem(): string | null'
+    returns: string | null
+    description: >-
+      Why the range cannot be read — the first token that is neither a version, an x-range nor a
+      comparator — or null when it parses. What POLICY_REQUIREMENT_INVALID quotes.
+sourcePath: src/models/project.ts
+symbol: PackRequirement
+createdAt: '2026-09-29T15:49:40.299Z'
+updatedAt: '2026-09-29T15:49:40.307Z'

@@ -1,0 +1,25 @@
+kind: value-object
+id: composition_config
+name: CompositionConfig
+description: >-
+  The `composition` block of project.yaml: what this project requires of the projects it contains
+  when they are composed. It governs nothing at this project's own gate and nothing at a member's
+  own gate (member-gate-unchanged-by-requirements); only the family run reads it, and createMember
+  reads it once when scaffolding a new member. It coexists with, and is never merged into, the two
+  hosted pack mechanisms: the hosted instance floor (InstancePackPolicy.requiredGlobalPacks /
+  defaultProjectPacks), which a hosted reconcile WRITES into every hosted project's packs and
+  records in profileSelection, and the hosted profile selection, which records what a hosted policy
+  workflow chose. A pack both require is satisfied by one selection in the member; neither mechanism
+  reads the other. Stage 5 adds requireApprovedMembers beside it.
+fields:
+  - name: requirePolicies
+    type: PackRequirement[]
+    description: >-
+      The packs every member below this project (all levels, as far as a family run selects) must
+      select, each by semver range and optionally one profile. Empty or absent: nothing is required.
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+symbol: CompositionConfig
+createdAt: '2026-09-29T15:49:45.020Z'
+updatedAt: '2026-09-29T15:49:45.022Z'

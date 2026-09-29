@@ -35,6 +35,16 @@ methods:
       - name: options
         type: ValidationOptions
         description: 'The tool call''s switches: family, recursive, subsystem'
+  - name: measurePackImpact
+    description: >-
+      Forward to validator_portal.measurePackImpact: what one pack write would change on the bound
+      project, writing nothing.
+    signature: 'measurePackImpact(candidate: PackCandidate): PackImpact'
+    returns: PackImpact
+    params:
+      - name: candidate
+        type: PackCandidate
+        description: The pack write to measure
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T18:11:59.233Z'
+updatedAt: '2026-09-29T16:00:33.835Z'

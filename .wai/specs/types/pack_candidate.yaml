@@ -1,0 +1,36 @@
+kind: value-object
+id: pack_candidate
+name: PackCandidate
+description: >-
+  A pack write that has not happened yet, as an impact measurement is asked about it: which entry
+  would be written (or removed), and, for a hosted install whose content arrives with the request,
+  the manifest itself. The project it applies to is the bound one. To be declared in
+  src/models/pack-impact.ts.
+fields:
+  - name: entry
+    type: PackSelection | string
+    description: >-
+      The selection `pack use` would record, or the legacy path reference `pack add` / a hosted
+      install or adopt would register.
+    optional: false
+  - name: manifest
+    type: ExtensionPack
+    description: >-
+      The pack's manifest when it is not on disk yet (a hosted install whose YAML arrives in the
+      request). Given, it is merged at the entry's position instead of resolving the entry.
+    optional: true
+  - name: remove
+    type: boolean
+    description: >-
+      Measure dropping the entry instead of writing it: `pack unuse`, and `pack impact` on a pack
+      that is already applied exactly as asked (then the report is what the pack accounts for now).
+    optional: true
+  - name: projectType
+    type: string
+    description: >-
+      The projectType the same write also sets, when it does (a hosted install that governs the
+      project by the pack's profile). Omitted, the project's own stands.
+    optional: true
+methods: []
+createdAt: '2026-09-29T15:50:47.325Z'
+updatedAt: '2026-09-29T15:56:22.468Z'

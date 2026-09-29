@@ -507,14 +507,17 @@ methods:
         description: >-
           Build the rule context from the gathered inputs: the loaded specs and their lookup maps,
           the foreign surface snapshots, the pinned externals, the code model, the round-trip
-          findings, the known issue codes, the pack data, the project identity, the export tables,
-          the project graph and the export usages, and the lint-allow bookkeeping. Its
-          resolveCrossProject decides every cross-project reference's outcome before any severity;
-          its addIssue drops a finding on a spec a contained member owns, then applies the
-          designDepth gate, severity resolution (the project's sddRuleSeverity, else the governing
-          pack profile's, else the draft-context downgrade, else the rule default), a matching lint
-          allow or debt-register entry (an error is never silenced or carried), and attaches the
-          reference resolution a cross-project finding carries
+          findings, the known issue codes, the pack data (the by-name pack selections from the
+          options when a dry run supplies them, else the stored configuration's), the project
+          identity, the export tables, the project graph and the export usages, and the lint-allow
+          bookkeeping. Its resolveCrossProject decides every cross-project reference's outcome
+          before any severity; its addIssue drops a finding on a spec a contained member owns, then
+          applies the designDepth gate, severity resolution (the project's sddRuleSeverity, else the
+          governing pack profile's, else the draft-context downgrade, else the rule default), a
+          matching lint allow or debt-register entry (an error is never silenced or carried), and
+          attaches the reference resolution a cross-project finding carries. The configuration's
+          `composition` block is never read here: a parent's requirements do not reach any project's
+          own gate
         type: local
       - stepNumber: 35
         description: For each rule in the run sequence
@@ -560,4 +563,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T17:15:51.000Z'
+updatedAt: '2026-09-29T15:53:32.411Z'

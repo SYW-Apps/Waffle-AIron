@@ -16,44 +16,24 @@ methods:
         targetComponent: project_config_repository
         targetMethod: load
       - stepNumber: 2
-        description: >-
-          For each declared entry in the loaded configuration that is a by-name SELECTION rather
-          than a legacy path ref, resolve it against the committed bundle and then the pack store,
-          verifying a pinned integrity digest; an unresolvable selection is collected as a load
-          error instead of quietly reducing the governing rule set.
-        type: call
-        targetComponent: pack_store_adapter
-        targetMethod: resolveInstalledPack
+        description: An uninitialized project, or one whose configuration cannot be read, simply has no packs
+        type: branch
+        condition: there is no readable configuration
+        onFalseStep: 4
       - stepNumber: 3
-        description: Resolve the global packs directory.
-        type: call
-        targetComponent: pack_source_adapter
-        targetMethod: globalPacksDir
+        description: Answer the empty LoadedExtensions
+        type: return
+        outcome: empty
       - stepNumber: 4
+        label: load
         description: >-
-          Discover the global packs there when the loaded configuration enables machine-wide packs
-          (globalPacksEnabled — off by default) to seed the global-scoped refs, then append the
-          configuration's declared packs as project-scoped refs.
+          Load for the stored configuration with no candidate — the same loader a dry run uses over
+          a candidate configuration
         type: call
-        targetComponent: pack_source_adapter
-        targetMethod: discoverPacks
+        targetComponent: extension_orchestrator
+        targetMethod: loadFor
       - stepNumber: 5
-        description: Resolve each gathered ref (global then project) to a concrete load target.
-        type: call
-        targetComponent: pack_source_adapter
-        targetMethod: resolvePackRef
-      - stepNumber: 6
-        description: >-
-          Read each target's raw manifest, then parse/validate it against the pack schema and merge
-          it (project packs win on collision) into the accumulated result; a failed pack is recorded
-          as an EXTENSION_LOAD_ERROR.
-        type: call
-        targetComponent: pack_source_adapter
-        targetMethod: readManifest
-      - stepNumber: 7
-        description: >-
-          Return the merged LoadedExtensions — empty when the project declares no packs, has no
-          configuration, or its configuration cannot be read.
+        description: Return the merged LoadedExtensions
         type: return
         outcome: success
   - name: load
@@ -436,7 +416,91 @@ methods:
         description: Return the first schema error's message
         type: return
         outcome: refused
+  - name: loadFor
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each declared entry of the given configuration that is a by-name SELECTION — skipping
+          the candidate's own entry when the candidate supplies its manifest — resolve it against
+          the committed bundle and then the pack store, verifying a pinned integrity digest; an
+          unresolvable selection is collected under its own code instead of quietly reducing the
+          governing rule set.
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: resolveInstalledPack
+      - stepNumber: 2
+        description: Resolve the global packs directory.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: globalPacksDir
+      - stepNumber: 3
+        description: >-
+          Discover the global packs there when the configuration enables machine-wide packs
+          (globalPacksEnabled — off by default) to seed the global-scoped refs, then append the
+          configuration's declared packs as project-scoped refs, in declaration order.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: discoverPacks
+      - stepNumber: 4
+        description: Resolve each gathered ref (global then project) to a concrete load target.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: resolvePackRef
+      - stepNumber: 5
+        description: >-
+          Read each target's raw manifest, then parse/validate it against the pack schema and merge
+          it (project packs win on collision) into the accumulated result; at the candidate entry's
+          position a supplied manifest is merged instead of a read one. A failed pack is recorded as
+          an EXTENSION_LOAD_ERROR.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: readManifest
+      - stepNumber: 6
+        description: >-
+          Return the merged LoadedExtensions — empty when the configuration declares no packs and
+          enables none machine-wide.
+        type: return
+        outcome: success
+  - name: manifestOf
+    narrative:
+      - stepNumber: 1
+        description: Is the entry a by-name selection?
+        type: branch
+        condition: the entry is a selection, not a legacy path reference
+        onFalseStep: 5
+      - stepNumber: 2
+        description: >-
+          Resolve the selection against the committed bundle and then the pack store, verifying a
+          pinned integrity digest
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: resolveInstalledPack
+      - stepNumber: 3
+        description: 'Nothing resolved: answer null (the gate reports the same selection under its own code)'
+        type: branch
+        condition: the selection did not resolve
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Answer null
+        type: return
+        outcome: 'null'
+      - stepNumber: 5
+        label: path-ref
+        description: Resolve the legacy reference to a concrete load target against the project root
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: resolvePackRef
+      - stepNumber: 6
+        label: read
+        description: Read and parse the target's manifest; a read or parse failure answers null
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: readManifest
+      - stepNumber: 7
+        description: Answer the parsed manifest
+        type: return
+        outcome: ExtensionPack
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-09-25T21:08:40.745Z'
+updatedAt: '2026-09-29T15:51:56.605Z'

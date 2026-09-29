@@ -12,11 +12,14 @@ methods:
       Validate the bound project's family: the bound root and its members (all levels, or as many as
       a numeric `recursive` bounds), each by its own gate under its own configuration and prefixed
       with its project key, verbatim; then the composition findings of each project's externals;
-      then the family checks. A plain run narrows the request's reach to the bound root before any
-      read, so an external whose producer lies above the family is not composed and is counted in a
-      one-line hint instead; with `family` set the reach stays the request's (locally an explicit
-      walk up, hosted the credential's), never widened. The result is valid when no project's gate
-      and no family finding holds an error, and lists each project's totals.
+      then the family checks; then the governance checks (checkPolicies). A plain run narrows the
+      request's reach to the bound root before any read, so an external whose producer lies above
+      the family is not composed and is counted in a one-line hint instead; with `family` set the
+      reach stays the request's (locally an explicit walk up, hosted the credential's), never
+      widened. A requirement placed by a project above the bound root is not in the selection and is
+      not judged: governance, like composition, sees only what the run reaches. The result is valid
+      when no project's gate and no family or governance finding holds an error, and lists each
+      project's totals.
     signature: 'run(options: ValidationOptions): ValidationResult'
     returns: ValidationResult
     params:
@@ -108,6 +111,75 @@ methods:
       - code: PROJECT_ID_AMBIGUOUS
         severity: warning
         summary: 'A member has no usable id: its name yields no slug, or its declared id breaks the grammar'
+  - name: checkPolicies
+    description: >-
+      The governance checks over the root's graph (governance stage). Every selected project that
+      declares `composition.requirePolicies` requires those packs of every member below it in the
+      selection, at every level; the root's own requirements never apply to the root. A requirement
+      whose range does not parse is POLICY_REQUIREMENT_INVALID (error) on the requiring project, and
+      is not judged further. Each member's adoption of each valid requirement is judged by
+      `adoption`. Each finding names the requiring project and its severity is THAT project's
+      rules.sddRuleSeverity override, else the default — as the family codes are tuned. Nothing here
+      reads the requirements at a member's own gate, so a member's own verdict is the same with and
+      without them (member-gate-unchanged-by-requirements); and nothing here compares a pack with
+      wairon's defaults, so a pack's loosening is never reported
+      (pack-loosening-is-never-a-finding).
+    signature: 'checkPolicies(family: ProjectFamily): ValidationIssue[]'
+    returns: ValidationIssue[]
+    params:
+      - name: family
+        type: ProjectFamily
+        description: >-
+          The family root's project graph: the selected projects, their directories and each
+          member's parent
+    findings:
+      - code: POLICY_REQUIREMENT_INVALID
+        severity: error
+        summary: A project's composition.requirePolicies names a pack range that does not parse
+  - name: adoption
+    description: >-
+      With one member's root bound: judge its adoption of the requirements one requiring project
+      places on it. POLICY_NOT_ADOPTED (error) when the member does not select the pack (by
+      selection name, or a legacy path reference whose loaded manifest carries the name); when the
+      version that governs it — the loaded pack's version, else its selection's pin — is outside the
+      range (a floating selection whose pack did not resolve is not judged here: the member's own
+      gate already reports it); or when the requirement names a profile and the member's projectType
+      is another. The message names the requirement (pack, range, profile, requiring project) and
+      the member's selection. POLICY_DEVIATION (notice) for each setting the member changes against
+      the adopted pack's settings (extension_pack.settings under the governing profile): a
+      rules.sddRuleSeverity entry for a code the pack sets, rules.designDepth or a subsystem's
+      designDepth other than the profile's, a subsystem `profile` other than the governing one, and
+      a lint.allow on any of the member's specs over a code the pack sets. Each deviation names the
+      setting, the pack's value and the member's. `--ci` never fails on a notice; a team raises it
+      with the requiring project's sddRuleSeverity. Answered at the default severities, stamped with
+      the member's key; checkPolicies applies the requiring project's overrides.
+    signature: >-
+      adoption(requiring: string, member: string, requirements: PackRequirement[]):
+      ValidationIssue[]
+    returns: ValidationIssue[]
+    params:
+      - name: requiring
+        type: string
+        description: >-
+          The key of the requiring project ('' for the family root): named in each message, and the
+          project whose sddRuleSeverity tunes each finding
+      - name: member
+        type: string
+        description: The key of the bound member, stamped on each finding as its project
+      - name: requirements
+        type: PackRequirement[]
+        description: The requiring project's valid requirements
+    findings:
+      - code: POLICY_NOT_ADOPTED
+        severity: error
+        summary: >-
+          A member does not select a pack a project above it requires, selects it outside the
+          required range, or is not governed by the required profile
+      - code: POLICY_DEVIATION
+        severity: notice
+        summary: >-
+          A member that adopted a required pack changes one of the pack's settings in its own
+          configuration or specs
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-09-28T18:11:33.129Z'
+updatedAt: '2026-09-29T15:55:31.677Z'

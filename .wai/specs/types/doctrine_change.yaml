@@ -1,0 +1,55 @@
+kind: value-object
+id: doctrine_change
+name: DoctrineChange
+description: >-
+  One thing a pack changes against wairon's defaults, stated neutrally: a loosening is a change like
+  any other and is never a finding (pack-loosening-is-never-a-finding). Rule changes are scoped to
+  the profile that carries them, because a pack profile's rules apply only to what that profile
+  governs. To be declared in src/models/pack-impact.ts.
+fields:
+  - name: axis
+    type: string
+    description: rule | concept.
+    optional: false
+  - name: change
+    type: string
+    description: >-
+      For a rule: loosened (a lower severity than the default), raised (a higher one), off (turned
+      off), added (a code wairon does not have: an assertion or a programmatic rule), depth (the
+      profile's designDepth differs from narratives), inert (a profile severity for a code no loaded
+      rule reports, which therefore changes nothing — a family-run code included). For a concept:
+      added (a profile, pattern, guarantee token or language table wairon does not have), redefined
+      (a profile carrying a builtin profile's id), removed (a stereotype the profile forbids),
+      discouraged (a stereotype the profile discourages), licensed (a dependency edge the builtin
+      matrix refuses and the profile allows), gated (a flow construct the language table marks
+      unsupported).
+    optional: false
+  - name: subject
+    type: string
+    description: >-
+      What changed: the rule code, the profile/pattern/guarantee/language id, the stereotype, the
+      edge (from → to) or the flow construct.
+    optional: false
+  - name: profile
+    type: string
+    description: >-
+      The pack profile carrying the change; absent for a pack-wide change (an added code, pattern,
+      guarantee or language).
+    optional: true
+  - name: from
+    type: string
+    description: wairon's default for the subject (a severity or a depth), when it has one.
+    optional: true
+  - name: to
+    type: string
+    description: The pack's value for the subject, when it has one.
+    optional: true
+  - name: reason
+    type: string
+    description: >-
+      The reason the pack states for it (a forbidden or discouraged stereotype, a licensed edge, an
+      assertion), quoted.
+    optional: true
+methods: []
+createdAt: '2026-09-29T15:50:33.272Z'
+updatedAt: '2026-09-29T15:56:21.067Z'

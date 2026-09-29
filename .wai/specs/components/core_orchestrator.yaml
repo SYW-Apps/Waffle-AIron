@@ -15,6 +15,7 @@ dependsOn:
   - architecture_diagrams
   - project_config_repository
   - variant_registry_adapter
+  - extension_orchestrator
 lint:
   allow:
     - code: INCOHESIVE_METHODS
@@ -26,4 +27,4 @@ lint:
         would publish several entry points where the package deliberately has one.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-18T16:58:49.417Z'
+updatedAt: '2026-09-29T15:57:03.826Z'

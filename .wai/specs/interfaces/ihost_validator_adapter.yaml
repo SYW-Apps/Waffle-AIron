@@ -40,6 +40,16 @@ methods:
     signature: 'builtinProjectKinds(): string[]'
     returns: string[]
     params: []
+  - name: measurePackImpact
+    description: >-
+      Forward to validator_portal.measurePackImpact with the hosted project's root bound: what one
+      pack write would change on it, writing nothing.
+    signature: 'measurePackImpact(candidate: PackCandidate): PackImpact'
+    returns: PackImpact
+    params:
+      - name: candidate
+        type: PackCandidate
+        description: The pack write to measure
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-09-25T21:39:08.840Z'
+updatedAt: '2026-09-29T16:01:17.338Z'

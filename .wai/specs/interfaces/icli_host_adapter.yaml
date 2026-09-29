@@ -388,6 +388,24 @@ methods:
     signature: 'startHostServer(): void'
     returns: void
     params: []
+  - name: previewProjectPack
+    description: >-
+      Forward to the local admin portal: what installing a declarative pack into one hosted project
+      would change, writing nothing.
+    signature: >-
+      previewProjectPack(credential: string | null, project: string, name: string, content?:
+      string): PackImpact
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string | null
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+        optional: true
 status: complete
 createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-09-25T22:57:43.584Z'
+updatedAt: '2026-09-29T16:02:56.242Z'

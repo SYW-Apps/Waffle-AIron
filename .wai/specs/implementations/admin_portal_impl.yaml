@@ -221,6 +221,13 @@ methods:
         targetComponent: admin_orchestrator
         targetMethod: importProjectTree
     detail: calls-only
+  - name: previewProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: previewProjectPack
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-09-11T23:02:01.172Z'
+updatedAt: '2026-09-29T16:02:24.915Z'

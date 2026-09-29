@@ -5,7 +5,12 @@ description: >-
   A parsed extension-pack manifest — wairon's plugin unit. A declarative (YAML) pack carries data
   only (profiles, languages, skills, patterns, guarantees, instructions); a programmatic (JS) pack
   adds rules. Listed in project.yaml under extensions.packs, vendored into .wai/packs for
-  reproducibility.
+  reproducibility. Its two pure methods (settings, changesAgainst) are to be realized as free
+  functions (packSettings, doctrineChanges) in src/models/pack-impact.ts; the type claims no code
+  yet. Note what a pack cannot carry today: variants and new component kinds — variants come from
+  the project's and machine's variant files, not from packs, and pack-contributed stereotypes are
+  deferred — so a pack's concept changes are profiles, stereotype fencing, edge licenses, patterns,
+  guarantee tokens and language tables.
 fields:
   - name: name
     type: string
@@ -60,6 +65,34 @@ fields:
       is visible in review and removable — never silent authority over projects that never mentioned
       it.
     optional: false
-methods: []
+  - name: version
+    type: string
+    description: >-
+      The version the manifest declares, when it declares one. What a requirement's range is checked
+      against for a pack loaded from a legacy path reference, which carries no selection version.
+    optional: true
+methods:
+  - name: settings
+    signature: 'settings(profile: string | null): PackSettings'
+    returns: PackSettings
+    description: >-
+      The settings this pack sets for a project governed by `profile` (null, or a profile this pack
+      does not define: none of its profiles governs): the profile's rules.sddRuleSeverity and
+      rules.designDepth, then every assertion's namespaced code (<PACK>_<CODE>) at its declared
+      severity and every programmatic rule's codes at their default severities. Pure over the
+      manifest's own fields; what POLICY_DEVIATION compares a member's configuration with.
+  - name: changesAgainst
+    signature: 'changesAgainst(baseline: DoctrineBaseline): DoctrineChange[]'
+    returns: DoctrineChange[]
+    description: >-
+      Everything this pack changes against wairon's defaults, as neutral changes: per profile, each
+      rules.sddRuleSeverity entry against the baseline default (loosened, raised or off; a code the
+      baseline lacks is added), a designDepth other than narratives, each forbidden stereotype
+      (removed) and discouraged one (discouraged) with its reason, each allowedEdges license, and
+      the profile itself (added, or redefined when its id is a builtin profile); pack-wide, each
+      assertion and programmatic rule code (added), each pattern, guarantee token and language table
+      the baseline lacks (added) and each unsupportedFlow entry (gated). An entry equal to the
+      default is no change. Pure: the baseline is handed in, so the pack never reaches a registry to
+      learn what wairon's defaults are.
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-07-29T21:27:19.013Z'
+updatedAt: '2026-09-29T15:56:29.604Z'

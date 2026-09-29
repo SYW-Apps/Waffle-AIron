@@ -1452,6 +1452,32 @@ methods:
       transport: HTTP
       method: GET
       path: /web/openapi
+  - name: projectPackImpact
+    description: >-
+      Measure, writing nothing, what installing (content given) or adopting (content omitted) a
+      declarative pack would change on a project; forwards to
+      project_ops_orchestrator.previewProjectPack. The web UI shows it before projectPackInstall /
+      projectPackAdopt and asks to apply.
+    signature: >-
+      projectPackImpact(sessionId: string, project: string, name: string, content?: string):
+      PackImpact
+    returns: PackImpact
+    params:
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/packs/impact
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-09-26T00:00:30.409Z'
+updatedAt: '2026-09-29T16:02:39.007Z'

@@ -1,0 +1,48 @@
+kind: value-object
+id: doctrine_baseline
+name: DoctrineBaseline
+description: >-
+  wairon's defaults, precisely: what a project governs under with NO pack loaded. It is what a
+  pack's doctrine changes are measured against, so a report says what the pack changes about wairon,
+  not about some other pack. Built per call from the running wairon (pack_impact.measure), never
+  stored. To be declared in src/models/pack-impact.ts.
+fields:
+  - name: ruleDefaults
+    type: Map<string, string>
+    description: >-
+      Every builtin rule code → its default severity: rule_repository.knownIssueCodes() read right
+      after registerBuiltinRules(), before any pack rule is registered. The family-run codes are not
+      in it: they are tuned only by the owning project's own sddRuleSeverity, never by a profile, so
+      a pack profile naming one changes nothing (an inert change).
+    optional: false
+  - name: profiles
+    type: string[]
+    description: >-
+      The builtin profile ids (spec_validator.builtinProfileIds). A pack profile with one of these
+      ids REDEFINES that builtin for every project governed by it — without the project changing its
+      projectType.
+    optional: false
+  - name: projectKinds
+    type: string[]
+    description: The builtin composite project kinds (spec_validator.builtinProjectKinds).
+    optional: false
+  - name: stereotypes
+    type: string[]
+    description: >-
+      The authorable building blocks and patterns (Portal, Orchestrator, Supervisor, Actor, Store,
+      Index, Query, Registry, Adapter, Observer, Repository, and the UI View / FeatureComponent /
+      RouterComponent).
+    optional: false
+  - name: guarantees
+    type: string[]
+    description: 'The builtin guarantee tokens: idempotent, atomic, transactional, exactly-once.'
+    optional: false
+  - name: designDepth
+    type: string
+    description: >-
+      narratives — the depth that applies when neither the project, a subsystem nor a profile sets
+      one.
+    optional: false
+methods: []
+createdAt: '2026-09-29T15:50:26.284Z'
+updatedAt: '2026-09-29T15:56:19.569Z'

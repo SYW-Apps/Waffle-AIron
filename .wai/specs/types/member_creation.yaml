@@ -1,0 +1,39 @@
+kind: value-object
+id: member_creation
+name: MemberCreation
+description: >-
+  What creating a member wrote about packs: the declaring project's required packs it selected in
+  the new member, and the requirements it could not satisfy from what is installed. The answer a CLI
+  or MCP caller states ("applied ..."), since scaffolding is an unattended pack write and shows no
+  impact report.
+fields:
+  - name: configCreated
+    type: boolean
+    description: >-
+      Whether this call created the member's configuration. Only then were requirements scaffolded:
+      an existing configuration is the member's own and is never given selections.
+    optional: false
+  - name: adopted
+    type: PackSelection[]
+    description: >-
+      The selections written into the new member's extensions.packs, one per requirement, each
+      pinned to the highest installed version the range admits, with its digest and fetchable source
+      as `pack use --pin` records them.
+    optional: false
+  - name: unadopted
+    type: PackRequirement[]
+    description: >-
+      Requirements no installed version satisfies. Nothing is written for them; the next family run
+      reports each as POLICY_NOT_ADOPTED until the member selects the pack.
+    optional: false
+  - name: projectType
+    type: string
+    description: >-
+      The profile written as the new member's projectType, when exactly one adopted requirement
+      names a profile.
+    optional: true
+methods: []
+sourcePath: src/core/provision.ts
+symbol: MemberCreation
+createdAt: '2026-09-29T15:51:12.579Z'
+updatedAt: '2026-09-29T15:51:12.580Z'

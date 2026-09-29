@@ -161,6 +161,28 @@ methods:
         description: The producer's namespace in the family graph
     guarantees:
       - idempotent
+  - name: loadExtensionsFor
+    description: >-
+      The packs that would govern the bound project under a given configuration, with an optional
+      candidate manifest — through the core extension portal. Writes nothing.
+    signature: 'loadExtensionsFor(config: ProjectConfig, candidate?: PackCandidate): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: config
+        type: ProjectConfig
+        description: The configuration to load for
+      - name: candidate
+        type: PackCandidate
+        description: The pack write being measured, when its manifest is supplied
+        optional: true
+  - name: packManifest
+    description: The manifest one pack entry resolves to, or null — through the core extension portal.
+    signature: 'packManifest(entry: PackSelection | string): ExtensionPack | null'
+    returns: ExtensionPack | null
+    params:
+      - name: entry
+        type: PackSelection | string
+        description: A by-name selection or a legacy path reference
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T17:16:52.711Z'
+updatedAt: '2026-09-29T15:52:27.309Z'

@@ -173,6 +173,36 @@ methods:
         type: string
       - name: project
         type: string
+  - name: previewProjectPack
+    description: >-
+      Authenticate, require project:admin over the project (the permission the install itself
+      needs), bind its scope, and measure — without writing anything — what installing a declarative
+      pack into it would change: the pack's doctrine against wairon's defaults, which of its
+      profiles would govern, and the findings that change on the project. With `content`, the pack
+      is the YAML an install would upload (parsed and code packs refused exactly as the install
+      does, then supplied as the candidate's manifest, since nothing is on disk yet); without it,
+      the server-global pack of that name an adoption would install. The report the admin UI, the
+      admin API and the hosted MCP tool show before installProjectPack / adoptProjectPack; the
+      installs themselves stay unattended writes and say they applied.
+    signature: >-
+      previewProjectPack(credential: string, project: string, name: string, content?: string):
+      PackImpact
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+        description: >-
+          The declarative pack YAML an install would upload; omitted, the server-global pack an
+          adoption would install
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T18:46:52.736Z'
-updatedAt: '2026-09-15T21:03:04.719Z'
+updatedAt: '2026-09-29T16:01:22.911Z'

@@ -207,8 +207,47 @@ methods:
       - name: manifest
         type: Json
         description: The parsed manifest document, untyped until this judges it
+  - name: loadFor
+    description: >-
+      Load everything that would govern a project under the given configuration, which need not be
+      the stored one: exactly loadProjectExtensions' resolution and merge (machine-wide packs when
+      the configuration enables them, then its declared entries — legacy path refs and by-name
+      selections resolved against the bundle, then the store — project packs winning on collision,
+      an unresolvable selection recorded under its own code), over `config`'s entries. With a
+      candidate whose manifest is supplied, that manifest is merged at the candidate entry's
+      position instead of resolving the entry, so a hosted install can be measured before its YAML
+      is on disk. Writes nothing. The one loader both the stored run and a dry run use, which is
+      what keeps a dry validate equal to the run after the write.
+    signature: 'loadFor(config: ProjectConfig, candidate?: PackCandidate): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: config
+        type: ProjectConfig
+        description: >-
+          The configuration to load for: the stored one, or a candidate built with
+          project_config.withPack
+      - name: candidate
+        type: PackCandidate
+        description: The pack write being measured, when its manifest is supplied rather than on disk
+        optional: true
+    guarantees:
+      - idempotent
+  - name: manifestOf
+    description: >-
+      The manifest one pack entry resolves to, read the loader's way: a selection resolved against
+      the bundle then the store (a pinned integrity verified), a legacy path ref against the project
+      root. Null when it does not resolve or fails to parse — the caller reports why; the gate
+      already reports the same entry under its own code. Writes nothing.
+    signature: 'manifestOf(entry: PackSelection | string): ExtensionPack | null'
+    returns: ExtensionPack | null
+    params:
+      - name: entry
+        type: PackSelection | string
+        description: A by-name selection or a legacy path reference
+    guarantees:
+      - idempotent
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-09-25T21:08:40.634Z'
+updatedAt: '2026-09-29T15:51:32.683Z'

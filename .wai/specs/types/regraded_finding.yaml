@@ -1,0 +1,18 @@
+kind: value-object
+id: regraded_finding
+name: RegradedFinding
+description: >-
+  One finding both runs report, at a different severity in each. To be declared in
+  src/models/pack-impact.ts.
+fields:
+  - name: finding
+    type: ValidationIssue
+    description: The finding as the second run reports it.
+    optional: false
+  - name: from
+    type: string
+    description: 'Its severity in the first run: error | warning | notice.'
+    optional: false
+methods: []
+createdAt: '2026-09-29T15:50:10.756Z'
+updatedAt: '2026-09-29T15:56:16.747Z'

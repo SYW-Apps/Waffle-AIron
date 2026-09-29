@@ -147,6 +147,30 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: resolveVariantGuidance
+  - name: loadExtensionsFor
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator's loader over the given configuration and candidate.
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadFor
+      - stepNumber: 2
+        description: Return the merged LoadedExtensions to the caller.
+        type: return
+        outcome: success
+    detail: calls-only
+  - name: packManifest
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator, which resolves the entry and reads its manifest.
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: manifestOf
+      - stepNumber: 2
+        description: Return the manifest, or null.
+        type: return
+        outcome: ExtensionPack | null
+    detail: calls-only
 status: complete
 createdAt: '2026-09-25T17:33:11.897Z'
-updatedAt: '2026-09-25T21:08:34.081Z'
+updatedAt: '2026-09-29T15:52:16.071Z'
