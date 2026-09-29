@@ -120,6 +120,92 @@ Fetching happens **only** in `pack install <url>` and `pack sync` — never duri
 `validate`, `status`, `generate`, or an MCP call, because the core workflow is
 required to work offline.
 
+## Governance — what a pack changes, and what a parent requires
+
+**Packs may loosen wairon's checks, and that is by design.** Packs exist to
+adjust wairon's checks and behaviour: a pack for an automation or integration
+platform — system design on a far less capable runtime — may have to turn rules
+down or remove concepts that cannot exist there. A pack's loosening is never a
+finding. What wairon insists on is that installing a pack is **intentional**,
+that its **impact is understood** before it applies, and that it applies **per
+project**.
+
+### Pack impact: shown before every pack write
+
+```sh
+wairon pack impact appenser          # or appenser@1.2.0 — writes nothing
+```
+
+The report states, and never judges:
+
+- the pack's **doctrine against wairon's defaults** — per profile, each rule it
+  loosens, raises, turns off or adds and a design depth it changes; each profile
+  it adds (or builtin profile it redefines), stereotype it removes or
+  discourages and edge it licenses; pack-wide, the patterns, guarantee tokens,
+  language tables and assertion codes it adds;
+- which of its **profiles would govern** this project;
+- the **findings that change** on this project if it is applied — a dry
+  validate of the current and the candidate configuration, neither written —
+  introduced, resolved and regraded, with both totals. What the report says the
+  findings will be is what validation reports after the write.
+
+`pack use`, `pack unuse`, `pack add`, `pack remove`, and `pack install` when it
+moves this project's floating selection all show this report and **ask before
+writing**; anything but yes writes nothing. `-y, --yes` (or a run with no
+terminal, as in CI) writes without the report and says so. On the MCP server,
+`sdd_pack_impact` answers the same report read-only, so an agent can propose a
+pack and its human applies it with `wairon pack use`.
+
+A hosted instance does the same for its projects: the admin API, the web UI
+and the hosted MCP tool `sdd_host_pack_impact` preview an install, an adoption
+from the server-global catalog, or a removal with `project:read`, writing
+nothing, and the web UI asks before it writes (an uploaded `.wpack` archive has
+no preview yet, and the UI says so before asking). The hosted **policy** writes
+— reconcile, setting a project type, and creating a project under the instance
+pack policy — are unattended by nature, so they show nothing first; they return
+the impact of every pack they applied instead, and a policy-governed creation
+also records it in its audit event and, when it ran through an approval, on the
+approval as its `executionSummary`.
+
+### Requiring packs of members — `composition.requirePolicies`
+
+A project that contains others ([members](cli.md#members)) can require that
+they run with given packs:
+
+```yaml
+# the parent's .wai/project.yaml
+composition:
+  requirePolicies:
+    - pack: acme/service-baseline
+      version: ^1.2            # a semver range: 1.2.0, ^1.2, ~1.2.3, 1.x, >=1.2.0 <2.0.0, a || b, *
+      profile: service          # optional: the member must be governed by this profile of the pack
+```
+
+A member **adopts** a requirement by selecting the pack in its own
+`extensions.packs` — the same exact, digested selection `wairon pack use --pin`
+records; there is no separate policy format. `*` also admits a pack that
+declares no version. The hosted instance pack floor and hosted profile
+selections keep working beside it; neither reads the other.
+
+Requirements are judged **only in the family run** (`wairon validate` at a
+project that declares members, or `--family`). A member's own gate never reads
+its parent's requirements, so its verdict is the same with and without them.
+
+| Code | Severity | Meaning |
+|------|----------|---------|
+| `POLICY_NOT_ADOPTED` | error | A member does not select a required pack, selects it unpinned (a floating selection is judged by nothing a family can reproduce), outside the range, or is not governed by the required profile. The message names the requirement and the member's selection. |
+| `POLICY_DEVIATION` | notice | A member selects the pack but changes one of its settings in its own configuration — a rule severity, the design depth, a subsystem profile, a `lint.allow` over a rule the pack sets, or its naming, complexity or documentation settings. It names the setting, the pack's value and the member's. `--ci` never fails on it; a team that wants it to can raise it with `rules.sddRuleSeverity`. |
+| `POLICY_REQUIREMENT_INVALID` | error | The requiring project's own `composition.requirePolicies` names a range that does not parse — reported at that project's own gate. |
+
+The first two are tuned by the **requiring** project's `rules.sddRuleSeverity`.
+A pack's own loosening of wairon's defaults is never reported by any of them.
+
+`wairon member add`, and `wairon init` in a subdirectory, write the parent's
+required packs into a new member's selection **once**, at creation — each pinned
+to the highest installed version its range admits — and say what they applied
+and which requirement nothing installed satisfies. Afterwards the selection is
+the member's own.
+
 ## Installing packs (legacy vendoring)
 
 **Per project (recommended for repo doctrine):**
