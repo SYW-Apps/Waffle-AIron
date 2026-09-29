@@ -411,6 +411,23 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: previewProjectPackRemoval
+    description: >-
+      Measure, writing nothing, what removing one of a project's registered packs would change —
+      what `wairon host packs remove` shows before it removes.
+    signature: >-
+      previewProjectPackRemoval(credential: string | null, project: string, name: string):
+      PackImpact
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string | null
+      - name: project
+        type: string
+      - name: name
+        type: string
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-25T22:39:47.086Z'
-updatedAt: '2026-09-29T16:02:27.160Z'
+updatedAt: '2026-09-29T16:16:54.762Z'

@@ -32,7 +32,14 @@ fields:
     type: LockRecord
     description: The lock record, present when a project:lock completed.
     optional: true
+  - name: creation
+    type: GovernedProjectCreation
+    description: >-
+      A project:init executed in this call only: the created record with the impacts of every pack
+      and of the governing-profile step the init applied, so a caller sees what the unattended
+      policy write changed. Absent for a pending approval and for every other action.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-16T00:08:34.090Z'
-updatedAt: '2026-09-19T11:07:13.956Z'
+updatedAt: '2026-09-29T16:14:36.360Z'

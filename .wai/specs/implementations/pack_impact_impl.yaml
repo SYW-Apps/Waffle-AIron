@@ -142,6 +142,39 @@ methods:
         description: Answer the impact
         type: return
         outcome: PackImpact
+  - name: doctrine
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Register the builtin rules alone, so the registry holds wairon's own rule set and no
+          pack's
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 2
+        description: Read every builtin code with its default severity
+        type: call
+        targetComponent: rule_repository
+        targetMethod: knownIssueCodes
+      - stepNumber: 3
+        description: Read the builtin profile ids
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProfileIds
+      - stepNumber: 4
+        description: Read the builtin composite project kinds
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProjectKinds
+      - stepNumber: 5
+        description: >-
+          Compose the DoctrineBaseline exactly as measure does and state the manifest's changes
+          against it with extension_pack.changesAgainst
+        type: local
+      - stepNumber: 6
+        description: Answer the pack's name, declared version and changes
+        type: return
+        outcome: PackDoctrine
 status: design
 createdAt: '2026-09-29T15:53:20.337Z'
-updatedAt: '2026-09-29T16:11:12.086Z'
+updatedAt: '2026-09-29T16:14:46.094Z'

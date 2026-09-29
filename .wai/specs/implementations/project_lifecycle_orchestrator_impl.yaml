@@ -63,7 +63,10 @@ methods:
         targetComponent: project_policy_orchestrator
         targetMethod: executeApprovedInit
       - stepNumber: 10
-        description: Build a completed ProjectActionOutcome (action project:init)
+        description: >-
+          Build a completed ProjectActionOutcome (action project:init) carrying the init's
+          GovernedProjectCreation as `creation` — the record and the impact of every pack and of the
+          governing-profile step the policy applied
         type: local
       - stepNumber: 11
         description: Executed — continue to auditing
@@ -354,7 +357,9 @@ methods:
             step: 15
         defaultStep: 17
       - stepNumber: 13
-        description: Execute the approved initialization via the policy orchestrator's pre-authorized entry
+        description: >-
+          Execute the approved initialization via the policy orchestrator's pre-authorized entry;
+          its GovernedProjectCreation says what the init applied
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: executeApprovedInit
@@ -380,7 +385,10 @@ methods:
         type: throw
         error: unsupported approval kind
       - stepNumber: 18
-        description: Mark the approval completed once execution succeeded
+        description: >-
+          Mark the approval completed once execution succeeded; for a project:init, record the
+          applied packs' and governing profile's headline impacts on the approval as its
+          executionSummary, so the returned ApprovalRequest states what the init changed
         type: call
         targetComponent: approval_repository
         targetMethod: markCompleted
@@ -469,7 +477,8 @@ methods:
       - stepNumber: 12
         description: >-
           Execute the approved project initialization under pack policy via the policy
-          orchestrator's pre-authorized entry
+          orchestrator's pre-authorized entry; its GovernedProjectCreation says what the init
+          applied
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: executeApprovedInit
@@ -494,7 +503,10 @@ methods:
         type: throw
         error: unsupported approval kind
       - stepNumber: 17
-        description: Mark the approval completed once the privileged action has executed successfully
+        description: >-
+          Mark the approval completed once the privileged action has executed successfully; for a
+          project:init, record the applied packs' and governing profile's headline impacts on the
+          approval as its executionSummary
         type: call
         targetComponent: approval_repository
         targetMethod: markCompleted
@@ -520,7 +532,9 @@ methods:
         description: Record the audit append failure as a server diagnostic and continue
         type: local
       - stepNumber: 22
-        description: Return the execution outcome summary
+        description: >-
+          Return the execution outcome summary — for a project:init, including the executionSummary
+          of what the init applied
         type: return
         outcome: execution outcome summary
   - name: awaitApproval
@@ -575,4 +589,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-09-11T21:02:56.042Z'
+updatedAt: '2026-09-29T16:16:32.024Z'

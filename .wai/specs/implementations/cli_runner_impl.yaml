@@ -2210,7 +2210,7 @@ methods:
             step: 8
           - value: remove
             step: 19
-        defaultStep: 24
+        defaultStep: 29
       - stepNumber: 3
         label: list
         description: Is a project named?
@@ -2298,28 +2298,52 @@ methods:
         type: branch
         condition: '--project is given'
         onTrueStep: 20
-        onFalseStep: 22
+        onFalseStep: 27
       - stepNumber: 20
+        description: 'An unattended run removes without the report: --yes, or no terminal to ask on'
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 25
+        onFalseStep: 21
+      - stepNumber: 21
+        label: preview_removal
+        description: Measure the removal on the hosted project before it happens, writing nothing
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: previewProjectPackRemoval
+      - stepNumber: 22
+        description: Print the impact report and ask whether to remove
+        type: local
+      - stepNumber: 23
+        description: Removing a pack is as intentional as adding one
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 25
+      - stepNumber: 24
+        description: Return without removing
+        type: return
+        outcome: declined; nothing removed
+      - stepNumber: 25
         label: remove_project
         description: Remove the project packs via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: removeProjectPack
-      - stepNumber: 21
-        description: Return after remove
+      - stepNumber: 26
+        description: 'Return after remove: an unattended run says it removed without showing the impact'
         type: return
         outcome: removed
-      - stepNumber: 22
+      - stepNumber: 27
         label: remove_instance
         description: Remove the instance packs via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: removeGlobalPack
-      - stepNumber: 23
+      - stepNumber: 28
         description: Return after remove
         type: return
         outcome: removed
-      - stepNumber: 24
+      - stepNumber: 29
         label: unknown
         description: Refuse an unknown action
         type: throw
@@ -2760,4 +2784,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-29T16:03:08.565Z'
+updatedAt: '2026-09-29T16:17:16.502Z'

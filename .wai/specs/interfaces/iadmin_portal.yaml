@@ -372,6 +372,25 @@ methods:
       path: /admin/projects/{id}/packs/{name}/impact
     guarantees:
       - idempotent
+  - name: previewProjectPackRemoval
+    description: >-
+      Measure, writing nothing, what removing one of the project's registered packs would change —
+      what a client shows before DELETE /admin/projects/{id}/packs/{name}.
+    signature: 'previewProjectPackRemoval(credential: string, project: string, name: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{id}/packs/{name}/removal-impact
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-09-29T16:02:23.620Z'
+updatedAt: '2026-09-29T16:16:51.516Z'

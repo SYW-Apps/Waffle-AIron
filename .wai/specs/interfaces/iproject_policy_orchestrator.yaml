@@ -23,11 +23,13 @@ methods:
       projectType takes exactly one profile), and audit the initialization including the applied
       profile and any unapplied remainder. A selection no tier can resolve leaves the default
       projectType in place and is recorded in the audit rather than failing project creation.
-      Returns the created hosted project record.
+      Returns a GovernedProjectCreation: the created hosted project record (the persisted record,
+      unchanged) with the impact of every pack and of the governing-profile step the init applied —
+      an unattended policy write stating what it changed; the audit event carries the same impacts.
     signature: >-
       initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
-      HostedProjectRecord
-    returns: HostedProjectRecord
+      GovernedProjectCreation
+    returns: GovernedProjectCreation
     params:
       - name: credential
         type: string
@@ -118,9 +120,11 @@ methods:
       store's ensure seam; remaining ids recorded but unapplied; an entirely unresolvable selection
       leaves the default projectType and is reported in the audit rather than failing creation), and
       audits 'project.init.policy'. This is the single initialization body shared by the gated
-      portal path (initializeProjectWithProfile) and approval execution.
-    signature: 'executeApprovedInit(request: ProjectInitRequest): HostedProjectRecord'
-    returns: HostedProjectRecord
+      portal path (initializeProjectWithProfile) and approval execution. Returns the
+      GovernedProjectCreation (the persisted record with every applied pack's impact and the
+      governing-profile impact).
+    signature: 'executeApprovedInit(request: ProjectInitRequest): GovernedProjectCreation'
+    returns: GovernedProjectCreation
     params:
       - name: request
         type: ProjectInitRequest
@@ -130,8 +134,11 @@ methods:
       authenticated upstream): read the active pack policy (or the documented permissive default
       when unset) and evaluate the ProjectInitRequest against it — flagging a missing required
       profile selection, requested blocked packs, and unknown profile ids — returning a
-      PolicyEvaluationResult. Used by the project lifecycle orchestrator to gate a project-init
-      request before executing it or creating an approval; never exposed on any portal.
+      PolicyEvaluationResult. It also carries `doctrine`: for each required/default pack the init
+      would apply, what the pack changes against wairon's defaults — the doctrine half only, with no
+      finding diff, because the project does not exist yet. Used by the project lifecycle
+      orchestrator to gate a project-init request before executing it or creating an approval; never
+      exposed on any portal.
     signature: 'evaluateInitRequest(request: ProjectInitRequest): PolicyEvaluationResult'
     returns: PolicyEvaluationResult
     params:
@@ -189,15 +196,20 @@ methods:
       authentication and no authorization of its own, so it is never exposed on any portal.
       Validates the request against the active pack policy (throwing on violations under an
       enforcing policy), creates the hosted project through the admin plane's pre-authorized create
-      entry, applies and registers the instance's required/default declarative packs, records the
-      resolved ProjectProfileSelection, APPLIES that selection so it actually governs the new
-      project (the first recorded id the instance can resolve becomes projectType; the rest stay
-      recorded as the unapplied remainder), and audits 'project.init.policy' best-effort. A
+      entry, applies and registers the instance's required/default declarative packs (measuring each
+      before its write), records the resolved ProjectProfileSelection, APPLIES that selection so it
+      actually governs the new project (the first recorded id the instance can resolve becomes
+      projectType, the step measured separately before its writes; the rest stay recorded as the
+      unapplied remainder), and audits 'project.init.policy' best-effort with the impacts. A
       selection no tier can resolve leaves the default projectType in place and is reported in the
       audit rather than failing creation. When a principal is supplied the recorded selection and
-      the audit are attributed to that caller; the pre-authorized entry runs without one.
-    signature: 'createGovernedProject(request: ProjectInitRequest, principal?: Principal): HostedProjectRecord'
-    returns: HostedProjectRecord
+      the audit are attributed to that caller; the pre-authorized entry runs without one. Returns
+      the GovernedProjectCreation: the persisted record, unchanged, beside the pack impacts and the
+      governing-profile impact.
+    signature: >-
+      createGovernedProject(request: ProjectInitRequest, principal?: Principal):
+      GovernedProjectCreation
+    returns: GovernedProjectCreation
     params:
       - name: request
         type: ProjectInitRequest
@@ -263,4 +275,4 @@ methods:
         description: The redacted event to append
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-09-18T17:55:36.172Z'
+updatedAt: '2026-09-29T16:15:57.819Z'

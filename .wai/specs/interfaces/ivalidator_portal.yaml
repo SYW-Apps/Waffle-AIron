@@ -154,6 +154,18 @@ methods:
         description: The pack write to measure
     guarantees:
       - idempotent
+  - name: measurePackDoctrine
+    description: >-
+      What one pack changes against wairon's defaults, with no project to validate — the doctrine
+      half alone (an init request evaluated before the project exists). Writes nothing.
+    signature: 'measurePackDoctrine(manifest: ExtensionPack): PackDoctrine'
+    returns: PackDoctrine
+    params:
+      - name: manifest
+        type: ExtensionPack
+        description: The parsed pack manifest
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T15:53:48.649Z'
+updatedAt: '2026-09-29T16:14:48.062Z'

@@ -204,6 +204,25 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: previewProjectPackRemoval
+    description: >-
+      Authenticate, require project:read over the project (the preview writes nothing), bind its
+      scope, and measure — without writing anything — what removing one of its registered packs
+      would change: the pack's registered path reference measured with `remove`, so the report reads
+      as what the pack accounts for now (its doctrine against wairon's defaults and the findings
+      that change once it no longer applies). What the admin UI, the admin API and `wairon host
+      packs remove` show before removeProjectPack. Rejects a name the project does not register.
+    signature: 'previewProjectPackRemoval(credential: string, project: string, name: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T18:46:52.736Z'
-updatedAt: '2026-09-29T16:09:30.765Z'
+updatedAt: '2026-09-29T16:16:39.736Z'

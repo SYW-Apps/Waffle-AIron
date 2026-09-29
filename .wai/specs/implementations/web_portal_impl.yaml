@@ -994,7 +994,18 @@ methods:
         targetComponent: project_ops_orchestrator
         targetMethod: previewProjectPack
     detail: calls-only
+  - name: projectPackRemovalImpact
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the arguments the router decoded from the request to
+          project_ops_orchestrator.previewProjectPackRemoval, and hand back the impact for the
+          router to encode
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: previewProjectPackRemoval
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-09-29T16:02:39.466Z'
+updatedAt: '2026-09-29T16:17:03.705Z'

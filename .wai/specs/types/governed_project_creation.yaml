@@ -1,0 +1,32 @@
+kind: value-object
+id: governed_project_creation
+name: GovernedProjectCreation
+description: >-
+  What a policy-governed hosted initialization created and applied: the persisted project record
+  (unchanged; this wrapper is never stored), each required/default pack the instance policy applied
+  with its impact measured before the write, and the impact of the governing-profile step, measured
+  separately. Init is an unattended policy write, so nothing is shown beforehand; this is how its
+  result states what it changed. The same impacts are also written to the project.init.policy audit
+  event. To be declared in src/server/types.ts beside HostedProjectRecord.
+fields:
+  - name: record
+    type: HostedProjectRecord
+    description: The created project's persisted record, exactly as before.
+    optional: false
+  - name: packImpacts
+    type: PackImpact[]
+    description: >-
+      One per required/default declarative pack the init applied, in application order, each
+      measured against the new project's configuration as it stood before that pack's write. Empty
+      when the policy applied none.
+    optional: false
+  - name: profileImpact
+    type: PackImpact
+    description: >-
+      The governing-profile step, measured separately: the requested projectType, with the pack the
+      ensure step vendored to contribute it as the entry when it had to vendor one. Absent when no
+      profile was requested.
+    optional: true
+methods: []
+createdAt: '2026-09-29T16:14:30.254Z'
+updatedAt: '2026-09-29T16:14:30.259Z'

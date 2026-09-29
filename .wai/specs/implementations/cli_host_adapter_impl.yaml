@@ -263,6 +263,13 @@ methods:
         type: call
         targetComponent: local_admin_portal
         targetMethod: previewProjectPack
+  - name: previewProjectPackRemoval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: previewProjectPackRemoval
 status: complete
 createdAt: '2026-07-04T12:53:10.615Z'
-updatedAt: '2026-09-29T16:02:57.514Z'
+updatedAt: '2026-09-29T16:16:59.224Z'

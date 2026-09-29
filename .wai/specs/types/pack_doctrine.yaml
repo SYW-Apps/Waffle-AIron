@@ -1,0 +1,24 @@
+kind: value-object
+id: pack_doctrine
+name: PackDoctrine
+description: >-
+  The doctrine half of a pack impact, alone: what one pack changes against wairon's defaults
+  (extension_pack.changesAgainst), with no finding diff. Used where no project exists to validate —
+  an init request evaluated before the project is created. To be declared in
+  src/models/pack-impact.ts.
+fields:
+  - name: pack
+    type: string
+    description: The pack's name.
+    optional: false
+  - name: version
+    type: string
+    description: The version its manifest declares, when it declares one.
+    optional: true
+  - name: changes
+    type: DoctrineChange[]
+    description: Everything it changes against wairon's defaults, stated neutrally.
+    optional: false
+methods: []
+createdAt: '2026-09-29T16:14:33.041Z'
+updatedAt: '2026-09-29T16:14:33.043Z'

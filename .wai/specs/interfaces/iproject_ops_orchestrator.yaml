@@ -494,6 +494,21 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: previewProjectPackRemoval
+    description: >-
+      Forward to pack_orchestrator.previewProjectPackRemoval: what removing a registered pack would
+      change on the project, writing nothing (project:read over the project upstream).
+    signature: 'previewProjectPackRemoval(credential: string, project: string, name: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-09-29T16:09:33.801Z'
+updatedAt: '2026-09-29T16:16:47.114Z'

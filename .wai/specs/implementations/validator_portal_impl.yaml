@@ -90,6 +90,13 @@ methods:
         type: call
         targetComponent: pack_impact
         targetMethod: measure
+  - name: measurePackDoctrine
+    narrative:
+      - stepNumber: 1
+        description: Forward measurePackDoctrine to the pack impact workflow
+        type: call
+        targetComponent: pack_impact
+        targetMethod: doctrine
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T15:53:49.984Z'
+updatedAt: '2026-09-29T16:14:49.338Z'

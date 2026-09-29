@@ -588,8 +588,63 @@ methods:
         description: Return the impact
         type: return
         outcome: PackImpact
+  - name: previewProjectPackRemoval
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:read permission over the target project — the preview writes
+          nothing
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective project:read value is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the preview
+        type: throw
+        error: Forbidden — previewing a project pack removal requires project:read over the project
+      - stepNumber: 5
+        label: bind
+        description: Bind and verify the target project's isolated root
+        type: local
+      - stepNumber: 6
+        description: >-
+          Load the project configuration through the core adapter, to find the registration the
+          removal would drop (matched by stem or declared name, as removeProjectPack matches it)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: Only a registered pack can be removed
+        type: branch
+        condition: the project registers no pack of that name
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Reject the preview
+        type: throw
+        error: the project registers no pack of that name
+      - stepNumber: 9
+        label: measure
+        description: >-
+          Measure the removal through the host validator adapter under the bound root: the matched
+          path reference as the candidate with `remove`, writing nothing
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 10
+        description: Return the impact (direction remove)
+        type: return
+        outcome: PackImpact
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-09-29T16:09:32.453Z'
+updatedAt: '2026-09-29T16:16:45.170Z'

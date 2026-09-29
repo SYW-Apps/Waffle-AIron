@@ -339,11 +339,13 @@ methods:
     description: >-
       Create a hosted project from { id, unitId, profileSelection? } — the REQUIRED owner unit plus
       an optional profile selection; forwards to web_project_orchestrator.create, which routes
-      through the policy-aware initialization.
+      through the policy-aware initialization. Answers the created record with the impact of every
+      pack and of the governing-profile step the instance policy applied; the SPA shows them after
+      creation, since the policy's packs are not the user's choice to confirm.
     signature: >-
       projectCreate(sessionId: string, id: string, unitId: string, profileSelection:
-      ProjectProfileSelection): HostedProjectRecord
-    returns: HostedProjectRecord
+      ProjectProfileSelection): GovernedProjectCreation
+    returns: GovernedProjectCreation
     params:
       - name: sessionId
         type: string
@@ -657,7 +659,14 @@ methods:
   - name: projectPackInstall
     description: >-
       Install a declarative pack into a project; forwards to
-      project_ops_orchestrator.installProjectPack.
+      project_ops_orchestrator.installProjectPack. The SPA's confirm step (the project packs view,
+      web/src/views/ProjectOps.tsx — the SPA's views are not spec'd as View components, so the
+      behaviour is stated on the routes it drives): before calling this route it calls
+      projectPackImpact with the same name and content, shows the report — the pack's doctrine
+      changes against wairon's defaults grouped by profile, the profiles that would govern, and the
+      introduced, resolved and regraded findings with both totals — and calls this route only when
+      the user confirms; cancelling writes nothing. This route itself stays a plain write, so a
+      non-SPA client that skips the preview is an unattended write.
     signature: >-
       projectPackInstall(sessionId: string, project: string, name: string, content: string):
       PackDescriptor
@@ -678,7 +687,10 @@ methods:
   - name: projectPackRemove
     description: >-
       Remove one of a project's registered packs; forwards to
-      project_ops_orchestrator.removeProjectPack.
+      project_ops_orchestrator.removeProjectPack. The SPA's confirm step calls
+      projectPackRemovalImpact first, shows what the pack accounts for now (its doctrine and the
+      findings that change once it no longer applies) and removes only on confirmation; cancelling
+      writes nothing.
     signature: 'projectPackRemove(sessionId: string, project: string, name: string): void'
     returns: void
     params:
@@ -734,7 +746,9 @@ methods:
   - name: projectPolicyReconcile
     description: >-
       Reconcile one project against the instance pack policy; forwards to
-      project_ops_orchestrator.reconcileProjectPolicy.
+      project_ops_orchestrator.reconcileProjectPolicy. A policy write the user triggers but does not
+      choose the packs of: the SPA shows projectPolicyEvaluate's `impacts` (what reconcile would
+      apply) beside the button, and after the call shows the result's `impacts` — what it applied.
     signature: 'projectPolicyReconcile(sessionId: string, projectId: string): PolicyEvaluationResult'
     returns: PolicyEvaluationResult
     params:
@@ -1154,7 +1168,9 @@ methods:
     description: >-
       Install a declarative pack into a project from an uploaded .wpack archive (raw application/zip
       body). Forwards to project_ops_orchestrator.installProjectPackArchive. The ZIP-primary
-      counterpart of projectPackInstall.
+      counterpart of projectPackInstall. No impact preview exists for an archive upload yet: the
+      SPA's confirm step says so plainly ("impact not available for an archive; install its YAML or
+      adopt it from the catalog to preview") and asks before calling this route.
     signature: >-
       projectPackInstallArchive(sessionId: string, project: string, archive: bytes, name?: string):
       PackDescriptor
@@ -1205,7 +1221,9 @@ methods:
     description: >-
       Adopt a server-global pack into a project by name (no archive upload); forwards to
       project_ops_orchestrator.adoptProjectPack. The catalog counterpart of
-      projectPackInstall/projectPackInstallArchive.
+      projectPackInstall/projectPackInstallArchive. The SPA's confirm step calls projectPackImpact
+      with the name and no content first, shows the report and adopts only on confirmation;
+      cancelling writes nothing.
     signature: 'projectPackAdopt(sessionId: string, project: string, name: string): PackDescriptor'
     returns: PackDescriptor
     params:
@@ -1478,6 +1496,26 @@ methods:
       path: /web/projects/packs/impact
     guarantees:
       - idempotent
+  - name: projectPackRemovalImpact
+    description: >-
+      Measure, writing nothing, what removing one of a project's registered packs would change;
+      forwards to project_ops_orchestrator.previewProjectPackRemoval. The web UI shows it before
+      projectPackRemove and asks to remove.
+    signature: 'projectPackRemovalImpact(sessionId: string, project: string, name: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: sessionId
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/projects/packs/removal-impact
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-09-29T16:02:39.007Z'
+updatedAt: '2026-09-29T16:17:37.602Z'

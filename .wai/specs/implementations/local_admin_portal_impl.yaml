@@ -264,7 +264,14 @@ methods:
         type: call
         targetComponent: pack_orchestrator
         targetMethod: previewProjectPack
+  - name: previewProjectPackRemoval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: previewProjectPackRemoval
 detail: calls-only
 status: complete
 createdAt: '2026-09-25T22:40:16.874Z'
-updatedAt: '2026-09-29T16:02:34.451Z'
+updatedAt: '2026-09-29T16:16:56.112Z'

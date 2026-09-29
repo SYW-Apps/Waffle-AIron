@@ -28,6 +28,20 @@ methods:
           and the projectType it also sets
     guarantees:
       - idempotent
+  - name: doctrine
+    description: >-
+      The doctrine half alone, for a pack no project exists to validate against (an init request
+      evaluated before creation): builds wairon's defaults (DoctrineBaseline) exactly as measure
+      does and states the manifest's changes against them with extension_pack.changesAgainst. No
+      finding diff, no configuration read, nothing written.
+    signature: 'doctrine(manifest: ExtensionPack): PackDoctrine'
+    returns: PackDoctrine
+    params:
+      - name: manifest
+        type: ExtensionPack
+        description: The parsed pack manifest
+    guarantees:
+      - idempotent
 status: design
 createdAt: '2026-09-29T15:52:55.472Z'
-updatedAt: '2026-09-29T16:11:15.401Z'
+updatedAt: '2026-09-29T16:14:42.549Z'

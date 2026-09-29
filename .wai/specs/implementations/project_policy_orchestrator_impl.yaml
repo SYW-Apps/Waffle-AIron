@@ -51,9 +51,11 @@ methods:
         targetComponent: project_policy_orchestrator
         targetMethod: createGovernedProject
       - stepNumber: 6
-        description: Return the created hosted project record
+        description: >-
+          Return the GovernedProjectCreation: the created record with the impacts of every applied
+          pack and of the governing-profile step
         type: return
-        outcome: created hosted project record
+        outcome: GovernedProjectCreation
   - name: executeApprovedInit
     narrative:
       - stepNumber: 1
@@ -68,9 +70,11 @@ methods:
         targetComponent: project_policy_orchestrator
         targetMethod: createGovernedProject
       - stepNumber: 2
-        description: Return the created hosted project record
+        description: >-
+          Return the GovernedProjectCreation: the created record with the impacts of every applied
+          pack and of the governing-profile step
         type: return
-        outcome: created hosted project record
+        outcome: GovernedProjectCreation
   - name: evaluateInitRequest
     narrative:
       - stepNumber: 1
@@ -96,7 +100,32 @@ methods:
           availability), and human-readable messages. No side effects.
         type: local
       - stepNumber: 4
-        description: Return the policy evaluation result
+        description: >-
+          Resolve the policy's required/default pack name set (requiredGlobalPacks then
+          defaultProjectPacks) to their declarative content via the pack store — what the init would
+          apply; a name it cannot resolve is left out here (the executed init reports it)
+        type: call
+        targetComponent: pack_store
+        targetMethod: executeApprovedResolveGlobalPacks
+      - stepNumber: 5
+        description: For each resolved required/default pack
+        type: loop
+        loopKind: forEach
+        over: the resolution's resolved packs (canonical name + content)
+        endStep: 6
+      - stepNumber: 6
+        label: doctrine-pack
+        description: >-
+          For each resolved pack, parse its declarative content into a manifest and state what it
+          changes against wairon's defaults — the doctrine half alone: the project does not exist
+          yet, so there is nothing to validate and no finding diff
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackDoctrine
+      - stepNumber: 7
+        description: >-
+          Return the policy evaluation result with `doctrine` — each pack's changes against wairon's
+          defaults, and deliberately no finding diff
         type: return
         outcome: policy evaluation result
   - name: evaluateProjectPolicy
@@ -813,7 +842,7 @@ methods:
           failing the initialization.
         type: branch
         condition: a qualifying profile id was chosen
-        onFalseStep: 22
+        onFalseStep: 23
       - stepNumber: 18
         description: >-
           Make the chosen profile resolvable for the new project given the loaded configuration,
@@ -824,14 +853,23 @@ methods:
         targetMethod: executeApprovedEnsureProfileInstalled
       - stepNumber: 19
         description: >-
+          Measure the governing-profile step separately from the pack loop, before its writes: the
+          chosen profile as the candidate's projectType and, when the ensure step vendored a
+          contributing pack, its adoptedPackRef as the entry (no entry otherwise — a
+          projectType-only change). It becomes the result's profileImpact
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 20
+        description: >-
           When the application carries an adoptedPackRef, register it; otherwise go straight to
           writing the projectType
         type: branch
         condition: >-
           the profile application carries an adoptedPackRef (the ensure step vendored a contributing
           pack)
-        onFalseStep: 21
-      - stepNumber: 20
+        onFalseStep: 22
+      - stepNumber: 21
         description: >-
           Register the application's adoptedPackRef — the adopted pack's vendored path reference, as
           the pack store reported it — in the new project's configuration through the core adapter,
@@ -839,26 +877,30 @@ methods:
         type: call
         targetComponent: host_core_adapter
         targetMethod: registerPackRef
-      - stepNumber: 21
+      - stepNumber: 22
         description: >-
           Write the applied profile id as the new project's projectType through the core adapter, so
           the recorded selection actually governs validation from the project's first day.
         type: call
         targetComponent: host_core_adapter
         targetMethod: setProjectType
-      - stepNumber: 22
+      - stepNumber: 23
         description: >-
           Append the redacted project.init.policy audit event best-effort (noting the applied
           governing profile, any unapplied selection remainder, any required/default packs the
-          instance could not resolve, and each applied pack's impact — its doctrine changes against
-          wairon's defaults — so the unattended init states what it applied)
+          instance could not resolve, each applied pack's impact and the governing-profile impact —
+          kept beside the returned result, so the audit trail states what the unattended init
+          applied too)
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: appendAuditBestEffort
-      - stepNumber: 23
-        description: Return the created hosted project record
+      - stepNumber: 24
+        description: >-
+          Return the GovernedProjectCreation: the created hosted project record (the persisted
+          record, unchanged), the impact of every pack the loop applied, and the governing-profile
+          impact when a profile was applied
         type: return
-        outcome: created hosted project record
+        outcome: GovernedProjectCreation
     symbol: performInit
   - name: appendAuditBestEffort
     narrative:
@@ -964,4 +1006,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-09-29T16:12:20.342Z'
+updatedAt: '2026-09-29T16:16:02.803Z'

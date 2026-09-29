@@ -50,6 +50,16 @@ methods:
       - name: candidate
         type: PackCandidate
         description: The pack write to measure
+  - name: measurePackDoctrine
+    description: >-
+      Forward to validator_portal.measurePackDoctrine: one pack's changes against wairon's defaults,
+      with no project.
+    signature: 'measurePackDoctrine(manifest: ExtensionPack): PackDoctrine'
+    returns: PackDoctrine
+    params:
+      - name: manifest
+        type: ExtensionPack
+        description: The parsed pack manifest
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-09-29T16:01:17.338Z'
+updatedAt: '2026-09-29T16:14:51.080Z'

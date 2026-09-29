@@ -76,12 +76,14 @@ methods:
         targetComponent: project_policy_orchestrator
         targetMethod: initializeProjectWithProfile
       - stepNumber: 3
-        description: Return the created hosted project record
+        description: >-
+          Return the GovernedProjectCreation — the created record with what the policy applied,
+          which the web UI shows after creation (an unattended policy write states what it changed)
         type: return
-        outcome: created project record
+        outcome: GovernedProjectCreation
     detail: full
     symbol: createProject
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T20:36:25.016Z'
-updatedAt: '2026-09-23T21:20:18.945Z'
+updatedAt: '2026-09-29T16:16:11.219Z'

@@ -50,6 +50,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: measurePackImpact
+  - name: measurePackDoctrine
+    narrative:
+      - stepNumber: 1
+        description: Forward the doctrine measurement to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackDoctrine
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-09-29T16:01:18.974Z'
+updatedAt: '2026-09-29T16:14:52.307Z'
