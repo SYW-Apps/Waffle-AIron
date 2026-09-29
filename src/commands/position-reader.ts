@@ -117,11 +117,16 @@ function canonical(family: ProjectFamily, claim: Claim): string {
   return `${id}::${claim.localId}`;
 }
 
-/** Steps 4-5: a self-prefixed reference — the referring project's own id as its first segment. */
+/**
+ * Steps 4-5: a self-prefixed reference — the referring project's own id as its
+ * first segment, or, for a member that declares no id, the alias its parent
+ * declares it under (the id `doctor --fix` declares for it).
+ */
 function selfPrefix(family: ProjectFamily, ref: AuthoredReference, consumer: string): PositionalMatch | null {
-  const ownId = familyNode(family, consumer)?.id;
+  const node = familyNode(family, consumer);
+  const ownIds = [node?.id, node?.idSource !== 'declared' ? node?.mountAlias : undefined].filter((id): id is string => id !== undefined).map(nameKey);
   const [first, ...rest] = ref.authored.split(/::|\./);
-  if (!ownId || rest.length === 0 || nameKey(first) !== nameKey(ownId)) return null;
+  if (rest.length === 0 || !ownIds.includes(nameKey(first))) return null;
   const local = rest.join('::');
   const base = { consumer, specId: ref.specId, position: ref.position, authored: ref.authored };
   const held = [...family.owners].find(([key, owner]) => owner === consumer && nameKey(localOf(key, consumer)) === nameKey(local));

@@ -2598,6 +2598,10 @@ export class SpecWorkspace {
     // as a prefix binds locally too and is recorded as a self-prefix; every
     // other bare name in an importable position is set aside for the imports.
     const ownId = idOf(raw);
+    // A member that declares no id answers after `doctor --fix` to the alias its
+    // parent declares it under, so that alias used as a prefix names its own spec too.
+    const ownIds = [ownId, raw.record.config?.id === undefined ? raw.record.mountAlias : undefined]
+      .filter((id): id is string => id !== undefined).map(nameKey);
     const localKeys = new Set([
       ...index.subsystems, ...index.components, ...index.interfaces,
       ...index.implementations, ...index.types, ...index.groups,
@@ -2605,9 +2609,9 @@ export class SpecWorkspace {
     const rawTypes = index.types;
     const selfPrefixed = (value: string): string | undefined => {
       const dot = value.indexOf('.');
-      if (!ownId || dot <= 0 || value.includes('::')) return undefined;
+      if (ownIds.length === 0 || dot <= 0 || value.includes('::')) return undefined;
       const rest = value.slice(dot + 1);
-      return nameKey(value.slice(0, dot)) === nameKey(ownId) && rest && !rest.includes('.') ? rest : undefined;
+      return ownIds.includes(nameKey(value.slice(0, dot))) && rest && !rest.includes('.') ? rest : undefined;
     };
     const recordSelfPrefix = (specKey: string, position: string, value: string, local: string): void => {
       raw.record.authoredReferences.push({

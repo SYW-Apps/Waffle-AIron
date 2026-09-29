@@ -101,12 +101,13 @@ methods:
     description: >-
       Re-save one spec with every reference in its canonical stage-3 form: the writer's inverse
       applied to each in-memory value WITHOUT the authored-text carry, so a deprecated leading `::`,
-      `super::` or member-path reference — and a self-prefixed one, the project's own id as the
-      first segment, `registry::x` or the dotted `registry.x`, raw type positions included — is
-      written as a bare local id or `alias::publicName` and an alias form stays as it is. Targets
-      never change — only their spelling. Refuses a reference whose canonical form cannot be written
-      (bound outside or unresolved while carrying a deprecated form), naming it. Answers whether the
-      stored text changed; a spec already canonical writes nothing.
+      `super::` or member-path reference — and a self-prefixed one, the project's own id (for a
+      member that declares no id, also the alias its parent declares it under) as the first segment,
+      `registry::x` or the dotted `registry.x`, raw type positions included — is written as a bare
+      local id or `alias::publicName` and an alias form stays as it is. Targets never change — only
+      their spelling. Refuses a reference whose canonical form cannot be written (bound outside or
+      unresolved while carrying a deprecated form), naming it. Answers whether the stored text
+      changed; a spec already canonical writes nothing.
     signature: 'normalizeReferences(kind: string, id: string): boolean'
     returns: boolean
     params:
@@ -121,4 +122,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-09-29T13:59:33.009Z'
+updatedAt: '2026-09-29T14:31:27.828Z'

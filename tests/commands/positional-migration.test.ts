@@ -174,6 +174,20 @@ describe('stage 4 — the positional migration', () => {
     expect(isEmpty(at(f.top, () => plan()))).toBe(true);
   });
 
+  it('a member that declares no id: its alias used as a prefix is its own id after the fix, so the first plan rewrites it', () => {
+    const f = fresh();
+    // app answers to "app-screens" until the migration declares the alias its parent gives it, "app".
+    fs.writeFileSync(path.join(f.app, '.wai', 'project.yaml'), ['schemaVersion: 1.0.0', 'name: App Screens', 'externals:', '  shared: {}', 'targets: []',
+      `createdAt: '${STAMP}'`, `updatedAt: '${STAMP}'`, ''].join('\n'));
+    typeFile(f.app, 'panel', [{ name: 'state', type: 'app.screen-state' }]);
+    const planned = at(f.top, () => plan());
+    expect(planned.projects.find((p) => p.project === 'app-screens')?.idToWrite).toBe('app');
+    expect(planned.rewrites.filter((r) => r.form === 'self-prefix').map((r) => [r.from, r.to])).toContainEqual(['app.screen-state', 'screen-state']);
+    at(f.top, () => apply(planned));
+    expect(fs.readFileSync(path.join(f.app, '.wai', 'specs', 'types', 'panel.yaml'), 'utf8')).toContain('type: screen-state');
+    expect(isEmpty(at(f.top, () => plan()))).toBe(true);
+  });
+
   it('property: a named import a local spec would shadow is reported, never written', () => {
     const f = fresh();
     const planned = at(f.top, () => plan());

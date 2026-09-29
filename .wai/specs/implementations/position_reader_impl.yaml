@@ -35,7 +35,10 @@ methods:
         over: the references still open, in scan order
         endStep: 9
       - stepNumber: 4
-        description: Is its first segment (before `::` or `.`) the referring project's own id?
+        description: >-
+          Is its first segment (before `::` or `.`) the referring project's own id — or, for a
+          member that declares no id, the alias its parent declares it under, the id `doctor --fix`
+          declares for it?
         type: branch
         condition: the reference is prefixed with the referring project's own id
         onFalseStep: 7
@@ -83,4 +86,4 @@ methods:
         outcome: PositionalMatch[]
 status: complete
 createdAt: '2026-09-28T16:09:37.950Z'
-updatedAt: '2026-09-29T14:20:59.998Z'
+updatedAt: '2026-09-29T14:31:21.762Z'
