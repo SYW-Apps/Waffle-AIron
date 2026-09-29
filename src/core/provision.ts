@@ -40,7 +40,11 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import { declaredMembers, effectiveProjectId, EXTERNAL_ALIAS_RE, type ProjectConfig } from '../models/project.js';
+import { admits, declaredMembers, effectiveProjectId, requiredPolicies, EXTERNAL_ALIAS_RE, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+// extension_orchestrator: the installed packs a member's required packs are pinned from.
+import { listInstalledPacks } from './extensions.js';
+import type { InstalledPack } from './packstore.js';
+import { isNewerVersion } from '../utils/version.js';
 import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
 import {
   SpecIdSchema,
@@ -313,14 +317,62 @@ export function backfillChainedSubprojectConfigs(projectRoot: string): string[] 
 }
 
 /**
- * core_orchestrator.createMember — create a member of the bound project:
- * FULLY yet NON-DESTRUCTIVELY initialize the member project at the path (its
- * specs directory, project.yaml declaring the alias as its id, and an L0 —
- * each only when absent), then declare it in the bound project's `members`.
- * No L1 spec is written: a member carries no content in its parent.
- * Idempotent — a re-run with the same arguments writes nothing.
+ * member_creation — what creating a member wrote about packs: whether this call
+ * created the member's configuration (only then were requirements scaffolded),
+ * the selections written into it, the requirements nothing installed satisfies,
+ * and the projectType written.
  */
-export function createMember(alias: string, path: string, description?: string): void {
+export interface MemberCreation {
+  configCreated: boolean;
+  adopted: PackSelection[];
+  unadopted: PackRequirement[];
+  projectType?: string;
+}
+
+/** True for a source a fresh machine or CI runner could fetch. */
+const FETCHABLE_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+/**
+ * Step 11 of createMember: each requirement pinned to the highest installed
+ * version its range admits — the selection `pack use --pin` records — or
+ * collected as unadopted; the required profile as the projectType when exactly
+ * one adopted requirement names one.
+ */
+function scaffoldRequirements(requirements: PackRequirement[], installed: InstalledPack[]): Omit<MemberCreation, 'configCreated'> {
+  const adopted: PackSelection[] = [];
+  const unadopted: PackRequirement[] = [];
+  const profiles: string[] = [];
+  for (const requirement of requirements) {
+    let best: InstalledPack | null = null;
+    for (const pack of installed) {
+      if (pack.name !== requirement.pack || !admits(requirement, pack.version)) continue;
+      if (!best || isNewerVersion(best.version, pack.version)) best = pack;
+    }
+    if (!best) {
+      unadopted.push(requirement);
+      continue;
+    }
+    adopted.push({
+      name: best.name,
+      version: best.version,
+      integrity: best.digest,
+      ...(best.origin && FETCHABLE_RE.test(best.origin) ? { source: best.origin } : {}),
+    });
+    if (requirement.profile) profiles.push(requirement.profile);
+  }
+  return { adopted, unadopted, ...(profiles.length === 1 ? { projectType: profiles[0] } : {}) };
+}
+
+/**
+ * core_orchestrator.createMember — create a member of the bound project:
+ * scaffold its project (configuration declaring the alias as its project id,
+ * L0) at the path, each part only when absent, then declare it in `members`.
+ * When it creates the member's configuration it also writes the bound
+ * project's required packs into it once, each pinned to the highest installed
+ * version its range admits; a requirement nothing installed satisfies is
+ * returned as unadopted. Afterwards the selections are the member's own.
+ */
+export function createMember(alias: string, path: string, description?: string): MemberCreation {
   // Steps 1-2: guard the alias and the path.
   if (!EXTERNAL_ALIAS_RE.test(alias) || typeof path !== 'string' || path.trim() === '') {
     throw new WaironError(
@@ -333,23 +385,43 @@ export function createMember(alias: string, path: string, description?: string):
   // Steps 4-5: containment guard — absolute, ../-escaping and link-escaping
   // paths are refused before anything is scaffolded.
   const memberDir = assertContainedProjectPath(getProjectRoot(), relPath);
+  // Step 6: the declaring project's own requirements — nothing above it is read.
+  const requirements = requiredPolicies(projectConfigRepository.load() ?? {});
   // A bootstrapped L0's vision: the description given, else one line naming
   // the member of this project.
   const parentName = loadSystemSpec()?.name;
   const vision = description ?? `Member ${alias} of ${parentName ? `the ${parentName} project` : 'its parent project'}`;
-  // Steps 6-12: scoped to the member, complete only what is missing.
-  runWithProjectRoot(memberDir, () => {
+  // Steps 7-15: scoped to the member, complete only what is missing.
+  const creation = runWithProjectRoot(memberDir, (): MemberCreation => {
     ensureDir(aiPathsAt(memberDir).specsDir());
+    // Steps 8-9: an existing configuration is the member's own and is never given selections.
+    if (projectConfigRepository.exists()) {
+      ensureProjectInitialized(alias, alias, vision);
+      return { configCreated: false, adopted: [], unadopted: [] };
+    }
+    // Steps 10-11: the requirements, scaffolded once from what is installed.
+    const scaffold = scaffoldRequirements(requirements, listInstalledPacks());
+    // Step 12: the member's configuration, carrying the scaffolded selections.
+    const name = loadSystemSpec()?.name ?? alias;
+    const config = defaultProjectConfig(name, new Date().toISOString(), alias);
+    projectConfigRepository.create({
+      ...config,
+      ...(scaffold.projectType ? { projectType: scaffold.projectType } : {}),
+      ...(scaffold.adopted.length > 0 ? { extensions: { packs: scaffold.adopted, useGlobalPacks: false } } : {}),
+    });
+    // Steps 13-14: an L0 only for a member that has none.
     ensureProjectInitialized(alias, alias, vision);
+    return { configCreated: true, ...scaffold };
   });
-  // Step 13: declare it in `members`; an equal declaration writes nothing and
+  // Step 16: declare it in `members`; an equal declaration writes nothing and
   // a different one under the alias is refused.
   projectConfigRepository.declareMember(alias, {
     path: relPath,
     ...(description !== undefined ? { description } : {}),
   });
   invalidateSpecCache();
-  // Step 14: member declared and its project ensured.
+  // Step 17: member declared and its project ensured; what was scaffolded.
+  return creation;
 }
 
 /**

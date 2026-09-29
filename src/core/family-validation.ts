@@ -12,10 +12,23 @@ import {
 } from './validation.js';
 // validator_core_adapter and validator_surfaces_adapter: every name this
 // workflow takes from another subsystem lands on the adapter's own module.
-import { projectFamily, loadProjectConfig, readLockRecord } from './adapters/validator-core.js';
+import {
+  projectFamily,
+  loadProjectConfig,
+  readLockRecord,
+  loadProjectExtensions,
+  packManifest,
+  loadSubsystemSpecs,
+  loadComponentSpecs,
+  loadInterfaceSpecs,
+  loadImplementationSpecs,
+  loadTypeSpecs,
+} from './adapters/validator-core.js';
 import { getExternalsStatus } from './adapters/validator-surfaces.js';
 import { dependencyCycles, familyNode, type ExternalStatus, type ProjectFamily, type ProjectNode } from '../models/index.js';
-import type { ProjectConfig } from '../models/project.js';
+import { admits, rangeProblem, requiredPolicies, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { packSettings, type PackSettings } from '../models/pack-impact.js';
+import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +73,10 @@ const FAMILY_SEVERITY: Record<string, IssueSeverity> = {
   MEMBER_DRIFTED: 'warning',
   PROJECT_ID_DEFAULTED: 'notice',
   PROJECT_ID_AMBIGUOUS: 'warning',
+  // Governance: a required pack not adopted blocks; a member's deviation from
+  // an adopted pack's settings is visible and never fails --ci.
+  POLICY_NOT_ADOPTED: 'error',
+  POLICY_DEVIATION: 'notice',
 };
 
 /** The ceiling a run may read up to: none (the explicit local walk), or a root and whether the caller narrowed it. */
@@ -235,9 +252,11 @@ export function run(options: ValidationOptions): ValidationResult {
   }
   // Step 9: the family checks over the root's graph, narrowed to the selection.
   issues.push(...within(root, ceiling, () => checkMembers(narrowed(family, selected))));
-  // Step 10: the externals the reach left out.
+  // Step 10: the governance checks — each requiring project's requirements against the members below it.
+  issues.push(...within(root, ceiling, () => checkPolicies(narrowed(family, selected))));
+  // Step 11: the externals the reach left out.
   const hint = notSelectedHint(left);
-  // Step 11: the family verdict.
+  // Step 12: the family verdict.
   return {
     valid: issues.every((i) => i.severity !== 'error'),
     issues,
@@ -403,4 +422,231 @@ export function checkMembers(family: ProjectFamily): ValidationIssue[] {
   }
   // Step 8: resolved and returned.
   return out.filter((f): f is ValidationIssue => f !== null);
+}
+
+// ---- the governance checks -------------------------------------------------
+//
+// Each selected project that declares composition.requirePolicies requires
+// those packs of every selected member below it. Judged from the members'
+// committed files only, so the family verdict is the same on every machine;
+// nothing here reads the requirements at a member's own gate, and nothing
+// here compares a pack with wairon's defaults — a pack's own loosening of
+// wairon's checks is never a finding.
+
+/** How a requiring project reads in a finding. */
+function requiredBy(key: string): string {
+  return key === '' ? 'the family root' : `"${key}"`;
+}
+
+/** A requirement as a finding names it: pack, range and profile. */
+function requirementText(requirement: PackRequirement): string {
+  return `"${requirement.pack}" ${requirement.version}${requirement.profile ? ` (profile "${requirement.profile}")` : ''}`;
+}
+
+/** Whether `node` lies below `ancestor` in the graph, at any level. */
+function isBelow(family: ProjectFamily, node: ProjectNode, ancestor: string): boolean {
+  let at: ProjectNode | null = node;
+  while (at && at.parent !== undefined) {
+    if (at.parent === ancestor) return true;
+    at = familyNode(family, at.parent);
+  }
+  return false;
+}
+
+/** A governance finding at its default severity, stamped with the member's key. */
+function policyIssue(code: 'POLICY_NOT_ADOPTED' | 'POLICY_DEVIATION', message: string, member: string, specId?: string): ValidationIssue {
+  return { severity: FAMILY_SEVERITY[code], code, message, project: member, ...(specId !== undefined ? { specId } : {}) };
+}
+
+/** Step 9 of checkPolicies: one requiring project's findings at its own sddRuleSeverity, those it turned off dropped. */
+function tunedBy(config: ProjectConfig | null, issues: ValidationIssue[]): ValidationIssue[] {
+  const out: ValidationIssue[] = [];
+  for (const issue of issues) {
+    const tuned = finding(config, issue.code, issue.message, issue.project ?? '', issue.specId);
+    if (tuned) out.push(tuned);
+  }
+  return out;
+}
+
+/**
+ * ifamily_validator.checkPolicies — the governance checks over the root's
+ * graph. Every selected project that declares composition.requirePolicies
+ * requires those packs of every selected member below it; a requirement whose
+ * range does not parse is skipped here (the requiring project's own gate
+ * reports it). Each finding is at the REQUIRING project's sddRuleSeverity
+ * override, else its default.
+ */
+export function checkPolicies(family: ProjectFamily): ValidationIssue[] {
+  const out: ValidationIssue[] = [];
+  // Step 1: each selected project with members in the selection, root first.
+  for (const requirer of family.nodes) {
+    const members = family.nodes.filter((n) => isBelow(family, n, requirer.namespace));
+    if (members.length === 0) continue;
+    // Steps 2-4: its own configuration, and its requirements that parse.
+    const config = runWithProjectRoot(requirer.directory, configOrNull);
+    const valid = config ? requiredPolicies(config).filter((r) => r.pack.trim() !== '' && rangeProblem(r) === null) : [];
+    // Step 5: nothing valid is required here.
+    if (valid.length === 0) continue;
+    const caused: ValidationIssue[] = [];
+    // Steps 6-8: each member below it, judged with its own root bound.
+    for (const member of members) {
+      caused.push(...runWithProjectRoot(member.directory, () => judgeAdoption(requirer.namespace, member.namespace, valid)));
+    }
+    // Step 9: at this project's overrides.
+    out.push(...tunedBy(config, caused));
+  }
+  // Step 10.
+  return out;
+}
+
+/** The member's entry for a required pack: a selection of that name, else a legacy path reference whose committed manifest carries it. */
+interface AdoptedEntry {
+  entry: PackSelection | string;
+  /** The committed version: the selection's pin, or the legacy manifest's declared version. */
+  version?: string;
+  /** For a legacy path reference: its committed manifest's name. */
+  label: string;
+}
+
+/** Step 4 of adoption: the member's entry for the pack, read from its committed configuration and manifests. */
+function entryFor(config: ProjectConfig, loaded: LoadedExtensions, pack: string): AdoptedEntry | null {
+  const entries = config.extensions?.packs ?? [];
+  const selection = entries.find((e): e is PackSelection => typeof e !== 'string' && e.name === pack);
+  if (selection) return { entry: selection, ...(selection.version ? { version: selection.version } : {}), label: selection.version ? `${selection.name}@${selection.version}` : selection.name };
+  for (const ref of entries.filter((e): e is string => typeof e === 'string')) {
+    const committed = loaded.packs.find((p) => p.scope === 'project' && p.ref === ref && p.name === pack);
+    if (committed) return { entry: ref, ...(committed.version ? { version: committed.version } : {}), label: `${ref} (${committed.name}${committed.version ? `@${committed.version}` : ', unversioned'})` };
+  }
+  return null;
+}
+
+/**
+ * ifamily_validator.adoption — with one member's root bound: its adoption of
+ * the requirements one requiring project places on it, from its committed
+ * files only. POLICY_NOT_ADOPTED when it has no entry for the pack, the entry
+ * floats (no version pin), the committed version is outside the range, or the
+ * required profile does not govern it; an adopted requirement's settings are
+ * then compared by policyDeviations. Answered at the default severities.
+ */
+export function judgeAdoption(requiring: string, member: string, requirements: PackRequirement[]): ValidationIssue[] {
+  // Step 1: the member's own configuration.
+  const config = configOrNull();
+  if (!config) return [];
+  // Step 2: its packs, for the committed manifests its legacy references name.
+  const loaded = loadProjectExtensions();
+  const out: ValidationIssue[] = [];
+  const who = `The member ${named(member)}`;
+  // Step 3: each requirement.
+  for (const requirement of requirements) {
+    const wanted = `${requirementText(requirement)}, required by ${requiredBy(requiring)}`;
+    // Step 4: the member's entry for the pack.
+    const adopted = entryFor(config, loaded, requirement.pack);
+    // Steps 5-7: not selected at all.
+    if (!adopted) {
+      out.push(policyIssue('POLICY_NOT_ADOPTED', `${who} does not select the pack ${wanted}. Select it in the member's own configuration (\`wairon pack use ${requirement.pack}@<version> --pin\` at its root).`, member));
+      continue;
+    }
+    // Steps 8-10: a floating selection cannot be judged.
+    if (typeof adopted.entry !== 'string' && !adopted.entry.version) {
+      out.push(policyIssue('POLICY_NOT_ADOPTED', `${who} selects "${adopted.label}" for the pack ${wanted}, unpinned — a family cannot judge a floating selection; pin a version (\`wairon pack use ${requirement.pack}@<version> --pin\`).`, member));
+      continue;
+    }
+    // Steps 11-13: outside the range.
+    if (!admits(requirement, adopted.version)) {
+      out.push(policyIssue('POLICY_NOT_ADOPTED', `${who} selects "${adopted.label}", outside the range of the pack ${wanted}: ${adopted.version ? `version ${adopted.version} is not admitted by "${requirement.version}"` : `an unversioned pack is admitted by "*" only`}.`, member));
+      continue;
+    }
+    // Steps 14-16: the required profile does not govern.
+    if (requirement.profile && config.projectType !== requirement.profile) {
+      out.push(policyIssue('POLICY_NOT_ADOPTED', `${who} selects "${adopted.label}" for the pack ${wanted}, but is governed by "${config.projectType}", not the required profile "${requirement.profile}". Set its projectType to "${requirement.profile}".`, member));
+      continue;
+    }
+    // Steps 17-19: the adopted pack's manifest, the loader's way; one that did not load has no settings.
+    const manifest = packManifest(adopted.entry);
+    if (!manifest) continue;
+    // Step 20: the member's overrides against the pack's settings under the governing profile.
+    const governing = requirement.profile ?? (config.projectType in manifest.profiles ? config.projectType : null);
+    out.push(...policyDeviations(member, requirement, packSettings(manifest, governing)));
+    // Step 21: judged.
+  }
+  // Step 22.
+  return out;
+}
+
+/** A value as a finding quotes it. */
+function shown(value: unknown): string {
+  return typeof value === 'string' ? `"${value}"` : JSON.stringify(value);
+}
+
+/** One key-level overlay's deviations: each key the pack sets that the member replaces with another value. */
+function keyDeviations(label: string, packValues: Record<string, unknown> | undefined, memberValues: Record<string, unknown> | undefined): { setting: string; pack: unknown; member: unknown }[] {
+  const out: { setting: string; pack: unknown; member: unknown }[] = [];
+  for (const [key, value] of Object.entries(packValues ?? {})) {
+    if (value === undefined || key === 'stereotypes') continue;
+    const mine = memberValues?.[key];
+    if (mine !== undefined && JSON.stringify(mine) !== JSON.stringify(value)) out.push({ setting: `${label}.${key}`, pack: value, member: mine });
+  }
+  return out;
+}
+
+/** Every lint.allow on the member's specs, with the spec it sits on. */
+function lintAllows(): { specId: string; code: string; at?: string }[] {
+  const specs: { id: string; lint?: { allow?: { code: string; at?: string }[] } }[] = [
+    ...loadSubsystemSpecs(), ...loadComponentSpecs(), ...loadInterfaceSpecs(), ...loadImplementationSpecs(), ...loadTypeSpecs(),
+  ];
+  return specs.flatMap((s) => (s.lint?.allow ?? []).map((a) => ({ specId: s.id, code: a.code, ...(a.at !== undefined ? { at: a.at } : {}) })));
+}
+
+/**
+ * ifamily_validator.deviations — with one member's root bound: every override
+ * the member makes against the settings an adopted pack sets under its
+ * governing profile, as POLICY_DEVIATION (notice): rule severities, design
+ * depth (project and subsystem), naming, complexity and documentation keys, a
+ * subsystem profile other than the governing one, and each lint.allow over a
+ * code the pack sets. A key the profile does not set is not a deviation, and
+ * nothing is compared with wairon's defaults.
+ */
+export function policyDeviations(member: string, requirement: PackRequirement, settings: PackSettings): ValidationIssue[] {
+  // Steps 1-6: the member's configuration and specs.
+  const rules = configOrNull()?.rules;
+  const subsystems = loadSubsystemSpecs();
+  const allows = lintAllows();
+  const under = settings.profile ? `under its profile "${settings.profile}"` : 'with none of its profiles governing';
+  const about = `the pack "${requirement.pack}" (required ${requirement.version})`;
+  const deviation = (setting: string, pack: unknown, mine: unknown, specId?: string): ValidationIssue =>
+    policyIssue('POLICY_DEVIATION', `The member ${named(member)} adopted ${about} but changes ${setting}: the pack sets ${shown(pack)} ${under}, the member ${shown(mine)}. Visible, not blocking — the member's own configuration decides.`, member, specId);
+  const out: ValidationIssue[] = [];
+  // Step 7: rule severities the pack sets.
+  for (const [code, severity] of Object.entries(rules?.sddRuleSeverity ?? {})) {
+    const packs = settings.severities[code];
+    if (packs !== undefined && packs !== severity) out.push(deviation(`rules.sddRuleSeverity.${code}`, packs, severity));
+  }
+  // Step 8: design depth, the project's and each subsystem's.
+  if (settings.designDepth) {
+    if (rules?.designDepth && rules.designDepth !== settings.designDepth) out.push(deviation('rules.designDepth', settings.designDepth, rules.designDepth));
+    for (const s of subsystems) {
+      if (s.designDepth && s.designDepth !== settings.designDepth) out.push(deviation(`the designDepth of subsystem "${s.id}"`, settings.designDepth, s.designDepth, s.id));
+    }
+  }
+  // Step 9: naming (with each stereotypes entry), complexity and documentation keys.
+  const overlays = [
+    ...keyDeviations('rules.naming', settings.naming, rules?.naming),
+    ...keyDeviations('rules.naming.stereotypes', settings.naming?.stereotypes, rules?.naming?.stereotypes),
+    ...keyDeviations('rules.complexity', settings.complexity, rules?.complexity),
+    ...keyDeviations('rules.documentation', settings.documentation, rules?.documentation),
+  ];
+  for (const o of overlays) out.push(deviation(o.setting, o.pack, o.member));
+  // Step 10: a subsystem governed by another profile.
+  if (settings.profile) {
+    for (const s of subsystems) {
+      if (s.profile && s.profile !== settings.profile) out.push(deviation(`the profile of subsystem "${s.id}"`, settings.profile, s.profile, s.id));
+    }
+  }
+  // Step 11: each lint.allow over a code the pack sets.
+  for (const allow of allows) {
+    if (settings.severities[allow.code] === undefined) continue;
+    out.push(deviation(`a lint.allow of ${allow.code}${allow.at ? ` at "${allow.at}"` : ''} on "${allow.specId}"`, settings.severities[allow.code], 'allowed', allow.specId));
+  }
+  // Step 12.
+  return out;
 }

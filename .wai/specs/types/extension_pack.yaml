@@ -5,12 +5,12 @@ description: >-
   A parsed extension-pack manifest — wairon's plugin unit. A declarative (YAML) pack carries data
   only (profiles, languages, skills, patterns, guarantees, instructions); a programmatic (JS) pack
   adds rules. Listed in project.yaml under extensions.packs, vendored into .wai/packs for
-  reproducibility. Its two pure methods (settings, changesAgainst) are to be realized as free
-  functions (packSettings, doctrineChanges) in src/models/pack-impact.ts; the type claims no code
-  yet. Note what a pack cannot carry today: variants and new component kinds — variants come from
-  the project's and machine's variant files, not from packs, and pack-contributed stereotypes are
-  deferred — so a pack's concept changes are profiles, stereotype fencing, edge licenses, patterns,
-  guarantee tokens and language tables.
+  reproducibility. Its two pure methods (settings, changesAgainst) are realized as free functions
+  (packSettings, doctrineChanges) in src/models/pack-impact.ts; the type's own declaration
+  (ExtensionPack in src/core/extensions.ts) is not claimed yet. Note what a pack cannot carry today:
+  variants and new component kinds — variants come from the project's and machine's variant files,
+  not from packs, and pack-contributed stereotypes are deferred — so a pack's concept changes are
+  profiles, stereotype fencing, edge licenses, patterns, guarantee tokens and language tables.
 fields:
   - name: name
     type: string
@@ -81,6 +81,8 @@ methods:
       rules.designDepth, then every assertion's namespaced code (<PACK>_<CODE>) at its declared
       severity and every programmatic rule's codes at their default severities. Pure over the
       manifest's own fields; what POLICY_DEVIATION compares a member's configuration with.
+    sourcePath: src/models/pack-impact.ts
+    symbol: packSettings
   - name: changesAgainst
     signature: 'changesAgainst(baseline: DoctrineBaseline): DoctrineChange[]'
     returns: DoctrineChange[]
@@ -94,5 +96,7 @@ methods:
       the baseline lacks (added) and each unsupportedFlow entry (gated). An entry equal to the
       default is no change. Pure: the baseline is handed in, so the pack never reaches a registry to
       learn what wairon's defaults are.
+    sourcePath: src/models/pack-impact.ts
+    symbol: doctrineChanges
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-09-29T15:56:29.604Z'
+updatedAt: '2026-09-29T16:41:28.916Z'

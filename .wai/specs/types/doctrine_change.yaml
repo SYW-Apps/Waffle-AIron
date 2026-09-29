@@ -5,7 +5,7 @@ description: >-
   One thing a pack changes against wairon's defaults, stated neutrally: a loosening is a change like
   any other and is never a finding (pack-loosening-is-never-a-finding). Rule changes are scoped to
   the profile that carries them, because a pack profile's rules apply only to what that profile
-  governs. To be declared in src/models/pack-impact.ts.
+  governs.
 fields:
   - name: axis
     type: string
@@ -51,5 +51,6 @@ fields:
       assertion), quoted.
     optional: true
 methods: []
+sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:33.272Z'
-updatedAt: '2026-09-29T15:56:21.067Z'
+updatedAt: '2026-09-29T16:41:15.301Z'

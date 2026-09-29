@@ -6,8 +6,7 @@ description: >-
   defaults, which of its profiles would govern this project, and the findings that change on this
   project if it is applied — a dry validate of the current configuration and of the candidate one,
   neither written. The report shown before a pack is selected or updated (CLI, MCP, hosted) and by
-  `wairon pack impact`. It states changes and never judges them: nothing in it is a finding. To be
-  declared in src/models/pack-impact.ts.
+  `wairon pack impact`. It states changes and never judges them: nothing in it is a finding.
 fields:
   - name: pack
     type: string
@@ -60,5 +59,6 @@ fields:
     description: The totals of the candidate configuration's run.
     optional: false
 methods: []
+sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:59.377Z'
-updatedAt: '2026-09-29T15:56:24.390Z'
+updatedAt: '2026-09-29T16:41:19.695Z'

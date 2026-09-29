@@ -5,7 +5,7 @@ description: >-
   wairon's defaults, precisely: what a project governs under with NO pack loaded. It is what a
   pack's doctrine changes are measured against, so a report says what the pack changes about wairon,
   not about some other pack. Built per call from the running wairon (pack_impact.measure), never
-  stored. To be declared in src/models/pack-impact.ts.
+  stored.
 fields:
   - name: ruleDefaults
     type: Map<string, string>
@@ -44,5 +44,6 @@ fields:
       one.
     optional: false
 methods: []
+sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:26.284Z'
-updatedAt: '2026-09-29T15:56:19.569Z'
+updatedAt: '2026-09-29T16:41:13.846Z'

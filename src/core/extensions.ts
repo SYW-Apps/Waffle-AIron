@@ -9,7 +9,8 @@ import { projectConfigRepository } from '../config/project-config.js';
 import { isNewerVersion } from '../utils/version.js';
 import { compareOrdinal } from '../utils/canonical-json.js';
 import type { SddRule } from './rules/types.js';
-import { RulesConfigSchema, type PackSelection } from '../models/project.js';
+import { RulesConfigSchema, type PackSelection, type ProjectConfig } from '../models/project.js';
+import type { PackCandidate } from '../models/pack-impact.js';
 // The store is a sibling adapter; both modules reach each other only inside
 // function bodies, so the import cycle never runs at module-init time.
 import { resolveInstalledPack, packStoreDir, listInstalledPacks, computePackDigest } from './packstore.js';
@@ -21,6 +22,10 @@ import { resolveInstalledPack, packStoreDir, listInstalledPacks, computePackDige
 // `wairon packs add|remove` comes through here, never through ./packstore.js.
 import { installPackFromDirectory, uninstallPack } from './packstore.js';
 export { installPackFromDirectory, uninstallPack };
+// The store listing, published for the core orchestrator's member scaffolding
+// (createMember picks each required pack's highest installed version), so the
+// orchestrator reaches the store through this component, never the adapter.
+export { listInstalledPacks };
 
 // ---------------------------------------------------------------------------
 // Extension packs — wairon's plugin surface.
@@ -267,6 +272,13 @@ export const DeclarativePackSchema = z.object({
   applyByDefault: z.boolean().default(false),
 });
 export type DeclarativePack = z.infer<typeof DeclarativePackSchema>;
+
+/**
+ * extension_pack — a parsed pack manifest as the loader reads it: the
+ * declarative document with any programmatic rules attached (empty for a
+ * declarative pack).
+ */
+export type ExtensionPack = DeclarativePack & { rules: SddRule[] };
 
 /** A pack skill tagged with the pack that ships it (provenance for install + `skills list`) and the absolute path to its SKILL.md. */
 export type LoadedPackSkill = PackSkill & { pack: string; packVersion?: string; sourcePath: string };
@@ -541,7 +553,7 @@ export function resolvePackRef(ref: string, projectRoot: string): string {
  * module from the project root and its default/module export used. A read/require/
  * parse failure propagates to the caller, which records an EXTENSION_LOAD_ERROR.
  */
-export function readManifest(target: string, projectRoot: string): DeclarativePack & { rules: SddRule[] } {
+export function readManifest(target: string, projectRoot: string): ExtensionPack {
   if (isYamlPath(target)) {
     const raw = readYamlFile(target);
     if (raw == null) throw new Error('file not found or empty');
@@ -572,17 +584,31 @@ export function readManifest(target: string, projectRoot: string): DeclarativePa
 
 export function loadExtensionPacks(refs: PackRef[], projectRoot: string): LoadedExtensions {
   const out = emptyExtensions();
-  for (const { ref, scope } of refs) {
-    try {
-      const target = resolvePackRef(ref, projectRoot);
-      const manifest = readManifest(target, projectRoot);
-      mergePack(out, manifest, ref, scope, path.dirname(target));
-      for (const r of manifest.rules) out.rules.push(r);
-    } catch (e) {
-      out.errors.push(`Extension pack "${ref}" failed to load: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
+  for (const ref of refs) loadRefInto(out, ref, projectRoot);
   return out;
+}
+
+/** One ref to load, or — for a candidate whose manifest is supplied — the manifest to merge in its place. */
+interface LoadItem extends PackRef {
+  manifest?: ExtensionPack;
+}
+
+/** Load one ref into the accumulated result; a failure is recorded as a load error, never thrown. */
+function loadRefInto(out: LoadedExtensions, { ref, scope, manifest: supplied }: LoadItem, projectRoot: string): void {
+  try {
+    if (supplied) {
+      // A manifest supplied with a candidate (not on disk yet) is merged at its entry's position.
+      mergePack(out, supplied, ref, scope, path.resolve(projectRoot, ref));
+      for (const r of supplied.rules) out.rules.push(r);
+      return;
+    }
+    const target = resolvePackRef(ref, projectRoot);
+    const manifest = readManifest(target, projectRoot);
+    mergePack(out, manifest, ref, scope, path.dirname(target));
+    for (const r of manifest.rules) out.rules.push(r);
+  } catch (e) {
+    out.errors.push(`Extension pack "${ref}" failed to load: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /**
@@ -594,33 +620,68 @@ export function loadExtensions(packRefs: string[], projectRoot: string): LoadedE
 }
 
 /**
- * Load everything governing the current project: globally installed packs
- * (unless `extensions.useGlobalPacks: false`), then the packs declared in
- * the project's config — project packs win on collision. Used by
- * validateProject when the caller doesn't inject extensions explicitly;
- * an uninitialized project simply has none.
+ * extension_orchestrator.loadProjectExtensions — load everything governing the
+ * current project: the stored configuration loaded by loadFor, the same loader
+ * a dry run uses over a candidate configuration. Used by validateProject when
+ * the caller doesn't inject extensions explicitly; an uninitialized project,
+ * or one whose configuration cannot be read, simply has none.
  */
 export function loadProjectExtensions(): LoadedExtensions {
+  // Step 1: the stored configuration.
+  let config: ProjectConfig | null;
   try {
-    const config = projectConfigRepository.load();
-    // An uninitialized project simply has no packs.
-    if (!config) return emptyExtensions();
-    const projectRoot = getProjectRoot();
-    const refs: PackRef[] = [];
-    const unresolved: PackSelectionFailure[] = [];
+    config = projectConfigRepository.load();
+  } catch {
+    config = null;
+  }
+  // Steps 2-3: no readable configuration, no packs.
+  if (!config) return emptyExtensions();
+  // Steps 4-5: the one loader.
+  return loadFor(config);
+}
 
-    // Off by default: a project's doctrine is what the project declares.
+/** Whether a configured entry is the candidate's own entry (the same selection name, or the same path). */
+function isCandidateEntry(entry: string | PackSelection, candidate: PackCandidate | undefined): boolean {
+  const target = candidate?.entry;
+  if (target === undefined) return false;
+  if (typeof target === 'string') return entry === target;
+  return typeof entry !== 'string' && entry.name === target.name;
+}
+
+/**
+ * extension_orchestrator.loadFor — load everything that would govern a project
+ * under the given configuration, which need not be the stored one: machine-wide
+ * packs when the configuration enables them, then its declared entries (legacy
+ * path refs, and by-name selections resolved against the bundle then the
+ * store), project packs winning on collision, an unresolvable selection
+ * recorded under its own code. With a candidate whose manifest is supplied,
+ * that manifest is merged at the candidate entry's position instead of
+ * resolving the entry. Writes nothing. Never throws.
+ */
+export function loadFor(config: ProjectConfig, candidate?: PackCandidate): LoadedExtensions {
+  try {
+    const projectRoot = getProjectRoot();
+    const refs: LoadItem[] = [];
+    const unresolved: PackSelectionFailure[] = [];
+    const supplied = candidate?.manifest && !candidate.remove ? candidate.manifest : undefined;
+
+    // Steps 2-3: machine-wide packs first — off by default, a project's doctrine is what it declares.
     if (globalPacksEnabled(config)) {
       for (const ref of discoverPacks(globalPacksDir())) refs.push({ ref, scope: 'global' });
     }
 
     for (const entry of config.extensions?.packs ?? []) {
+      // Step 5 (candidate half): a supplied manifest stands in for its entry.
+      if (supplied && isCandidateEntry(entry, candidate)) {
+        refs.push({ ref: packEntryLabel(entry), scope: 'project', manifest: supplied });
+        continue;
+      }
       // Legacy path/module ref — resolved as it always was.
       if (typeof entry === 'string') {
         refs.push({ ref: entry, scope: 'project' });
         continue;
       }
-      // A SELECTION: resolve it to a concrete pack, or record why it could not be.
+      // Step 1: a SELECTION resolved to a concrete pack, or why it could not be.
       const resolution = resolveSelection(entry, projectRoot);
       // A ref and a finding are not exclusive: drift resolves AND reports.
       if (resolution.ref) refs.push({ ref: resolution.ref, scope: 'project' });
@@ -628,20 +689,51 @@ export function loadProjectExtensions(): LoadedExtensions {
     }
 
     if (refs.length === 0 && unresolved.length === 0) return emptyExtensions();
-    const loaded = loadExtensionPacks(refs, projectRoot);
+    // Steps 4-5: each ref resolved, read, parsed and merged.
+    const loaded = emptyExtensions();
+    for (const item of refs) loadRefInto(loaded, item, projectRoot);
     // A pack extending a builtin skill that does not exist is a LOUD failure, not
     // a silently-dropped section: an older wairon must never quietly not-apply a
     // newer pack's doctrine (the same rule the assertion kinds follow).
     for (const problem of skillExtendErrors(loaded.skills)) loaded.errors.push(problem);
     // A declared-but-unresolvable pack is reported under its OWN code (absent /
     // wrong version / wrong content) rather than as a generic load error, because
-    // the remedies differ. Still error severity, still surfaced by validate,
-    // status, lock, generate, and every sdd_* MCP call — never a silent skip:
-    // validation must not appear clean while the declared doctrine is absent.
+    // the remedies differ. Never a silent skip: validation must not appear clean
+    // while the declared doctrine is absent.
     loaded.selectionFailures.push(...unresolved);
+    // Step 6.
     return loaded;
   } catch {
     return emptyExtensions();
+  }
+}
+
+/**
+ * extension_orchestrator.manifestOf — the manifest one pack entry resolves to,
+ * read the loader's way: a selection resolved against the bundle then the
+ * store (a pinned integrity verified), a legacy path ref against the project
+ * root. Null when it does not resolve or fails to parse. Writes nothing.
+ */
+export function manifestOf(entry: string | PackSelection): ExtensionPack | null {
+  const projectRoot = getProjectRoot();
+  let ref: string;
+  // Step 1: a by-name selection?
+  if (typeof entry !== 'string') {
+    // Step 2: resolved against the bundle, then the store.
+    const resolution = resolveSelection(entry, projectRoot);
+    // Steps 3-4: nothing resolved.
+    if (!resolution.ref) return null;
+    ref = resolution.ref;
+  } else {
+    ref = entry;
+  }
+  try {
+    // Step 5: the concrete load target. Step 6: its manifest.
+    const target = resolvePackRef(ref, projectRoot);
+    // Step 7.
+    return readManifest(target, projectRoot);
+  } catch {
+    return null;
   }
 }
 

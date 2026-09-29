@@ -40,7 +40,11 @@ import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes 
 // callers reach it through the portal.
 export { validateComponentCandidate } from './rules/candidate.js';
 import type { LoadedExtensions } from './extensions.js';
-import { projectIdentity, type PackSelection, type ProjectIdentity } from '../models/project.js';
+import { projectIdentity, requiredPolicies, type PackRequirement, type PackSelection, type ProjectIdentity } from '../models/project.js';
+// pack_impact: the pre-write pack measurement the portal forwards to.
+import * as packImpact from './pack-impact.js';
+import type { PackCandidate, PackDoctrine, PackImpact } from '../models/pack-impact.js';
+import type { ExtensionPack } from './extensions.js';
 import { computeGateIdentity, type GateConfig } from './rules/gate-identity.js';
 import { BUILTIN_PROFILES, PROJECT_KINDS, type IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
@@ -54,6 +58,20 @@ import type { StateId } from './statehash.js';
 function projectPackSelections(): PackSelection[] {
   try {
     return (loadProjectConfig()?.extensions?.packs ?? []).filter((e): e is PackSelection => typeof e !== 'string');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The bound project's OWN composition.requirePolicies, for the
+ * pack-requirements rule to check their syntax. Never a parent's: a parent's
+ * requirements reach a member only in the family run. Never throws.
+ */
+function boundPackRequirements(): PackRequirement[] {
+  try {
+    const config = loadProjectConfig();
+    return config ? requiredPolicies(config) : [];
   } catch {
     return [];
   }
@@ -341,6 +359,13 @@ export interface ValidationOptions {
    * other project runs its owner's gate (validation_options.selectsFamily).
    */
   family?: boolean;
+  /**
+   * The by-name pack selections the pack rules judge. Omitted, the project's
+   * own stored selections are read. Given only by a dry run that judges a
+   * candidate configuration it has not written (pack_impact.measure), together
+   * with that candidate's rules, projectType and loaded extensions.
+   */
+  packSelections?: PackSelection[];
 }
 
 /**
@@ -388,14 +413,16 @@ export function validateProject(
   let scopeSubsystem: string | undefined;
   let extensions: LoadedExtensions | undefined;
   let treatAllAsComplete = false;
+  let packSelections: PackSelection[] | undefined;
 
-  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions || 'family' in rulesOrOptions)) {
+  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions || 'family' in rulesOrOptions || 'packSelections' in rulesOrOptions)) {
     const opts = rulesOrOptions as ValidationOptions;
     rules = opts.rules;
     projectType = opts.projectType ?? 'backend';
     scopeSubsystem = opts.scopeSubsystem;
     extensions = opts.extensions;
     treatAllAsComplete = opts.treatAllAsComplete ?? false;
+    packSelections = opts.packSelections;
   }
   extensions ??= loadProjectExtensions();
 
@@ -576,8 +603,11 @@ export function validateProject(
       projectFamily: family,
       exportUsages,
       pinnedExternals,
-      // By-name selections only: a legacy path ref pins nothing to check.
-      packSelections: projectPackSelections(),
+      // By-name selections only: a legacy path ref pins nothing to check. A dry
+      // run supplies its candidate's; otherwise the stored ones.
+      packSelections: packSelections ?? projectPackSelections(),
+      // The bound project's own requirements, for their syntax only.
+      packRequirements: boundPackRequirements(),
       projectIdentity: boundProjectIdentity(),
       surfaceSnapshots,
       codeModel,
@@ -680,6 +710,26 @@ export function validateAsComplete(options?: ValidationOptions): ValidationResul
  */
 export function validateFamily(options: ValidationOptions): ValidationResult {
   return familyValidator.run(options);
+}
+
+/**
+ * ivalidator_portal.measurePackImpact — what one pack write would change on
+ * the bound project, measured before it happens: the pack's doctrine against
+ * wairon's defaults, the profiles of it that would govern, and the owner's-gate
+ * findings that differ between the current and the candidate configuration.
+ * Writes nothing. Forwarded to the pack impact workflow.
+ */
+export function measurePackImpact(candidate: PackCandidate): PackImpact {
+  return packImpact.measure(candidate);
+}
+
+/**
+ * ivalidator_portal.measurePackDoctrine — what one pack changes against
+ * wairon's defaults, with no project to validate. Writes nothing. Forwarded to
+ * the pack impact workflow.
+ */
+export function measurePackDoctrine(manifest: ExtensionPack): PackDoctrine {
+  return packImpact.doctrine(manifest);
 }
 
 /**

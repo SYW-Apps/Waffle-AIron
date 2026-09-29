@@ -4,8 +4,7 @@ name: PackDoctrine
 description: >-
   The doctrine half of a pack impact, alone: what one pack changes against wairon's defaults
   (extension_pack.changesAgainst), with no finding diff. Used where no project exists to validate —
-  an init request evaluated before the project is created. To be declared in
-  src/models/pack-impact.ts.
+  an init request evaluated before the project is created.
 fields:
   - name: pack
     type: string
@@ -20,5 +19,6 @@ fields:
     description: Everything it changes against wairon's defaults, stated neutrally.
     optional: false
 methods: []
+sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T16:14:33.041Z'
-updatedAt: '2026-09-29T16:14:33.043Z'
+updatedAt: '2026-09-29T16:41:20.892Z'

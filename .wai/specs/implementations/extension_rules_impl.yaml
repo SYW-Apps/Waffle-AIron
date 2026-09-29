@@ -681,7 +681,7 @@ methods:
     symbol: check
     exportedVia: assertionEndpointShapesRule
   - name: packRequirements
-    sourcePath: src/core/rules/extension/pack-resolution.ts
+    sourcePath: src/core/rules/extension/pack-requirements.ts
     narrative:
       - stepNumber: 1
         description: Walk every requirement the bound project's own configuration declares.
@@ -708,4 +708,4 @@ methods:
     exportedVia: packRequirementsRule
 status: complete
 createdAt: '2026-09-14T23:15:33.948Z'
-updatedAt: '2026-09-29T16:12:33.138Z'
+updatedAt: '2026-09-29T16:40:51.989Z'

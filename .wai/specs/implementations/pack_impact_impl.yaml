@@ -10,6 +10,7 @@ description: >-
   re-registers is per-run state every validation rebuilds.
 contract: ipack_impact
 sourcePath: src/core/pack-impact.ts
+simPath: tests/core/pack-impact.test.ts
 methods:
   - name: measure
     narrative:
@@ -133,12 +134,19 @@ methods:
         targetMethod: validateProject
       - stepNumber: 20
         description: >-
+          Read the bound project's subsystem specs, for the profiles they name (the governing half
+          of the report)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 21
+        description: >-
           Diff the two verdicts with validation_result.changesTo; name the pack's profiles that
           govern something under the candidate (its projectType and each subsystem profile that
           names one); record both runs' totals, the direction (apply or remove) and, on an update,
           the replaced version
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         description: Answer the impact
         type: return
         outcome: PackImpact
@@ -175,6 +183,6 @@ methods:
         description: Answer the pack's name, declared version and changes
         type: return
         outcome: PackDoctrine
-status: design
+status: complete
 createdAt: '2026-09-29T15:53:20.337Z'
-updatedAt: '2026-09-29T16:14:46.094Z'
+updatedAt: '2026-09-29T16:52:55.734Z'

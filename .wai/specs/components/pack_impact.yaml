@@ -23,6 +23,6 @@ dependsOn:
   - spec_validator
   - rule_repository
   - validator_core_adapter
-status: design
+status: complete
 createdAt: '2026-09-29T15:52:45.933Z'
-updatedAt: '2026-09-29T15:52:45.945Z'
+updatedAt: '2026-09-29T16:41:33.397Z'

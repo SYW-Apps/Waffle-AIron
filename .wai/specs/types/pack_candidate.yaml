@@ -4,8 +4,7 @@ name: PackCandidate
 description: >-
   A pack write that has not happened yet, as an impact measurement is asked about it: which entry
   would be written (or removed), and, for a hosted install whose content arrives with the request,
-  the manifest itself. The project it applies to is the bound one. To be declared in
-  src/models/pack-impact.ts.
+  the manifest itself. The project it applies to is the bound one.
 fields:
   - name: entry
     type: PackSelection | string
@@ -35,5 +34,6 @@ fields:
       project by the pack's profile). Omitted, the project's own stands.
     optional: true
 methods: []
+sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:47.325Z'
-updatedAt: '2026-09-29T16:11:02.115Z'
+updatedAt: '2026-09-29T16:41:12.462Z'

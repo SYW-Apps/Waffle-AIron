@@ -18,6 +18,7 @@ import {
   type ExternalDeclaration,
   type MemberDeclaration,
   memberDeclarationOf,
+  withPack,
 } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
@@ -802,19 +803,21 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       }
       save(config);
     },
+    // The four pack writes read the change through project_config.withPack —
+    // the same reading a pack impact's dry run measures, so the report and the
+    // write cannot disagree about what the configuration becomes.
     upsertPackSelection(selection) {
       const config = current();
       const existing = packsOf(config);
-      const without = existing.filter((entry) => typeof entry === 'string' || entry.name !== selection.name);
-      save(withPacks(config, [...without, selection]));
-      return without.length !== existing.length;
+      const replaced = existing.some((entry) => typeof entry !== 'string' && entry.name === selection.name);
+      save(withPacks(config, packsOf(withPack(config, selection))));
+      return replaced;
     },
     removePackSelection(packName) {
       const config = current();
       const existing = packsOf(config);
-      const remaining = existing.filter((entry) => typeof entry === 'string' || entry.name !== packName);
-      if (remaining.length === existing.length) return false;
-      save(withPacks(config, remaining));
+      if (!existing.some((entry) => typeof entry !== 'string' && entry.name === packName)) return false;
+      save(withPacks(config, packsOf(withPack(config, { name: packName }, true))));
       return true;
     },
     setProjectType(projectType) {
@@ -830,17 +833,14 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     },
     registerPackRef(ref) {
       const config = current();
-      const packs = packsOf(config);
-      if (packs.includes(ref)) return false;
-      save(withPacks(config, [...packs, ref]));
+      if (packsOf(config).includes(ref)) return false;
+      save(withPacks(config, packsOf(withPack(config, ref))));
       return true;
     },
     deregisterPackRef(ref) {
       const config = current();
-      const packs = packsOf(config);
-      const remaining = packs.filter((entry) => entry !== ref);
-      if (remaining.length === packs.length) return false;
-      save(withPacks(config, remaining));
+      if (!packsOf(config).includes(ref)) return false;
+      save(withPacks(config, packsOf(withPack(config, ref, true))));
       return true;
     },
     markSelectionsBundled(bundled) {

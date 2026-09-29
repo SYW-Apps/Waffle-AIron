@@ -4,7 +4,9 @@ name: PackSettings
 description: >-
   The settings one pack sets for a project governed by one of its profiles (or by none of them):
   what a member that adopted the pack can deviate from. Derived from the pack's own manifest only,
-  never from what any project configured. To be declared in src/models/pack-impact.ts.
+  never from what any project configured. Carries every profile-overridable setting
+  family_validator.deviations compares — severities, designDepth, and the profile's naming,
+  complexity and documentation overlays.
 fields:
   - name: pack
     type: string
@@ -28,6 +30,22 @@ fields:
     type: string
     description: The profile's rules.designDepth, when it sets one.
     optional: true
+  - name: naming
+    type: NamingRuleConfig
+    description: >-
+      The profile's rules.naming, when it sets any: the keys (and stereotypes entries) a member's
+      own rules.naming may replace.
+    optional: true
+  - name: complexity
+    type: ComplexityRuleConfig
+    description: The profile's rules.complexity, when it sets any.
+    optional: true
+  - name: documentation
+    type: DocumentationRuleConfig
+    description: The profile's rules.documentation, when it sets any.
+    optional: true
 methods: []
+sourcePath: src/models/pack-impact.ts
+symbol: PackSettings
 createdAt: '2026-09-29T15:50:20.251Z'
-updatedAt: '2026-09-29T15:56:18.029Z'
+updatedAt: '2026-09-29T16:40:57.989Z'

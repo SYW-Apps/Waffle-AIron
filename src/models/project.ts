@@ -2,6 +2,7 @@ import * as path from 'path';
 import { z } from 'zod';
 import { CustomTargetSchema } from './agent.js';
 import { ExecutionConfigSchema } from './execution.js';
+import { isNewerVersion } from '../utils/version.js';
 
 // ---------------------------------------------------------------------------
 // Project configuration — lives at .wai/project.yaml
@@ -484,6 +485,34 @@ export const MemberDeclarationSchema = z.object({
 });
 export type MemberDeclaration = z.infer<typeof MemberDeclarationSchema>;
 
+/** A value read as a plain string: absent is empty, anything else its text. */
+const plainString = z.preprocess((v) => (v === undefined || v === null ? '' : String(v)), z.string());
+
+/**
+ * pack_requirement — one entry of `composition.requirePolicies`: a pack the
+ * project requires of its members, by name and semver range, optionally one
+ * profile inside it. A requirement, never a selection: nothing loads from it.
+ * Plain strings throughout, so a malformed range is REPORTED
+ * (POLICY_REQUIREMENT_INVALID), never unreadable.
+ */
+export const PackRequirementSchema = z.object({
+  pack: plainString,
+  version: plainString,
+  profile: z.string().optional(),
+});
+export type PackRequirement = z.infer<typeof PackRequirementSchema>;
+
+/**
+ * composition_config — what this project requires of the projects it contains
+ * when they are composed. Judged in the family run; its own gate checks only
+ * the syntax of its requirements. Coexists with, and is never merged into, the
+ * hosted instance floor and profileSelection.
+ */
+export const CompositionConfigSchema = z.object({
+  requirePolicies: z.array(PackRequirementSchema).optional(),
+});
+export type CompositionConfig = z.infer<typeof CompositionConfigSchema>;
+
 export const ProjectConfigSchema = z.object({
   /**
    * Schema version — used to detect incompatible config formats in future
@@ -524,6 +553,16 @@ export const ProjectConfigSchema = z.object({
    * `projectPath` mount still loads for one release (DEPRECATED_MOUNT_FORM).
    */
   members: z.record(z.union([z.string(), MemberDeclarationSchema])).optional(),
+
+  /**
+   * What this project requires of the projects it contains when they are
+   * composed: `requirePolicies`, the packs each member must select (by semver
+   * range, optionally one profile). This project's own gate judges only its
+   * syntax (POLICY_REQUIREMENT_INVALID); the family run judges members against
+   * it, and createMember reads it once when it scaffolds a new member. No
+   * member's own gate reads it. Written by hand.
+   */
+  composition: CompositionConfigSchema.optional(),
 
   /**
    * The type/profile of the project, which configures targeted guidelines, rules,
@@ -665,6 +704,200 @@ export function declaredPackNames(config: Pick<ProjectConfig, 'extensions' | 'pr
 /** The profile ids a configuration's profile selection records, deduplicated; never `projectType`. */
 export function declaredProfileIds(config: Pick<ProjectConfig, 'profileSelection'>): string[] {
   return [...new Set(config.profileSelection?.profileIds ?? [])];
+}
+
+/** One entry of `extensions.packs`: a by-name selection or a legacy path reference. */
+export type PackEntry = PackSelection | string;
+
+/**
+ * project_config.withPack — the configuration as it would read after one pack
+ * write, without writing it: a selection drops every same-name selection and
+ * is appended last (the highest precedence), a legacy path reference is
+ * appended only when absent; with `remove`, the same-name selection (or that
+ * exact path reference) is dropped instead. The one reading of a pack write
+ * the dry validate and the registry share (impact-matches-apply).
+ */
+export function withPack(config: ProjectConfig, entry: PackEntry, remove = false): ProjectConfig {
+  const packs = config.extensions?.packs ?? [];
+  const same = (e: PackEntry): boolean => (typeof entry === 'string' ? e === entry : typeof e !== 'string' && e.name === entry.name);
+  const others = packs.filter((e) => !same(e));
+  let next: PackEntry[];
+  if (remove) next = others;
+  else if (typeof entry === 'string') next = packs.includes(entry) ? packs : [...packs, entry];
+  else next = [...others, entry];
+  return { ...config, extensions: { useGlobalPacks: false, ...config.extensions, packs: next } };
+}
+
+/**
+ * project_config.requiredPolicies — `composition.requirePolicies` in
+ * declaration order, a second requirement for a pack already required dropped
+ * (the first stands). Empty when nothing is required.
+ */
+export function requiredPolicies(config: Pick<ProjectConfig, 'composition'>): PackRequirement[] {
+  const seen = new Set<string>();
+  const out: PackRequirement[] = [];
+  for (const requirement of config.composition?.requirePolicies ?? []) {
+    if (seen.has(requirement.pack)) continue;
+    seen.add(requirement.pack);
+    out.push(requirement);
+  }
+  return out;
+}
+
+// ── pack_requirement: an npm-style semver subset ────────────────────────────
+//
+// Ranges are evaluated with the store's own version comparator
+// (utils/version.isNewerVersion) — no semver dependency. Supported: an exact
+// version, caret (^1.2) and tilde (~1.2.3) ranges, x-ranges (1.x, 1.2.*, *),
+// comparator sets joined by spaces (>=1.2.0 <2.0.0), and `||` alternatives.
+
+/** A concrete version: major.minor.patch with an optional pre-release tag. */
+interface ConcreteVersion { major: number; minor: number; patch: number; pre?: string }
+
+/** One comparator of an alternative, its version always concrete. */
+interface Comparator { op: '>=' | '>' | '<' | '<=' | '='; version: ConcreteVersion }
+
+/** One `||` alternative: its comparators (empty: any version), and whether it is the bare any-range. */
+interface Alternative { comparators: Comparator[]; any: boolean }
+
+const CONCRETE_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+const PARTIAL_RE = /^v?(\d+|[xX*])(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+const OPERATOR_RE = /^(>=|<=|>|<|=|\^|~)/;
+
+function concrete(v: string): ConcreteVersion | null {
+  const m = CONCRETE_RE.exec(v.trim());
+  if (!m) return null;
+  return { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]), ...(m[4] ? { pre: m[4] } : {}) };
+}
+
+const text = (v: ConcreteVersion): string => `${v.major}.${v.minor}.${v.patch}${v.pre ? `-${v.pre}` : ''}`;
+
+/** -1, 0 or 1 — through the store's comparator, so a range reads versions the way the store orders them. */
+function compare(a: ConcreteVersion, b: ConcreteVersion): number {
+  if (isNewerVersion(text(a), text(b))) return -1;
+  if (isNewerVersion(text(b), text(a))) return 1;
+  return 0;
+}
+
+/** A partial version: each part a number, or null for a wildcard or an absent part. */
+interface PartialVersion { major: number | null; minor: number | null; patch: number | null; pre?: string }
+
+function partial(v: string): PartialVersion | null {
+  const m = PARTIAL_RE.exec(v);
+  if (!m) return null;
+  const num = (s: string | undefined): number | null => (s === undefined || /^[xX*]$/.test(s) ? null : Number(s));
+  const major = num(m[1]);
+  const minor = major === null ? null : num(m[2]);
+  const patch = minor === null ? null : num(m[3]);
+  // A pre-release tag belongs to a full version only.
+  if (m[4] && patch === null) return null;
+  return { major, minor, patch, ...(m[4] ? { pre: m[4] } : {}) };
+}
+
+const cv = (major: number, minor: number, patch: number, pre?: string): ConcreteVersion => ({ major, minor, patch, ...(pre ? { pre } : {}) });
+
+/** The upper bound of a partial's wildcard span: 1 → 2.0.0, 1.2 → 1.3.0. */
+function nextOf(p: PartialVersion): ConcreteVersion {
+  if (p.minor === null) return cv(p.major! + 1, 0, 0);
+  return cv(p.major!, p.minor + 1, 0);
+}
+
+/** One operator token expanded into its comparators; null when it cannot be read. */
+function expand(token: string): Comparator[] | null {
+  const opMatch = OPERATOR_RE.exec(token);
+  const op = opMatch ? opMatch[1] : '';
+  const p = partial(token.slice(op.length));
+  if (!p) return null;
+  const low = cv(p.major ?? 0, p.minor ?? 0, p.patch ?? 0, p.pre);
+  const exact = p.patch !== null;
+  if (p.major === null) return op === '<' || op === '>' ? [{ op: '<', version: cv(0, 0, 0) }] : [];
+  switch (op) {
+    case '':
+    case '=':
+      return exact ? [{ op: '=', version: low }] : [{ op: '>=', version: low }, { op: '<', version: nextOf(p) }];
+    case '^': {
+      const upper = p.major > 0 || p.minor === null ? cv(p.major + 1, 0, 0)
+        : p.minor > 0 || p.patch === null ? cv(0, p.minor + 1, 0)
+          : cv(0, 0, p.patch + 1);
+      return [{ op: '>=', version: low }, { op: '<', version: upper }];
+    }
+    case '~':
+      return [{ op: '>=', version: low }, { op: '<', version: p.minor === null ? cv(p.major + 1, 0, 0) : cv(p.major, p.minor + 1, 0) }];
+    case '>=':
+      return [{ op: '>=', version: low }];
+    case '<':
+      return [{ op: '<', version: low }];
+    case '>':
+      return exact ? [{ op: '>', version: low }] : [{ op: '>=', version: nextOf(p) }];
+    case '<=':
+      return exact ? [{ op: '<=', version: low }] : [{ op: '<', version: nextOf(p) }];
+    default:
+      return null;
+  }
+}
+
+/** The range read into alternatives, or the first token that cannot be read. */
+function readRange(range: string): { alternatives: Alternative[] } | { problem: string } {
+  if (range.trim() === '') return { problem: 'the range is empty' };
+  const alternatives: Alternative[] = [];
+  for (const raw of range.split('||')) {
+    // An operator written apart from its version (">= 1.2.0") is one token.
+    const tokens = raw.trim().split(/\s+/).filter((t) => t !== '');
+    const joined: string[] = [];
+    for (const t of tokens) {
+      if (joined.length > 0 && /^(>=|<=|>|<|=|\^|~)$/.test(joined[joined.length - 1])) joined[joined.length - 1] += t;
+      else joined.push(t);
+    }
+    const comparators: Comparator[] = [];
+    for (const token of joined) {
+      const expanded = expand(token);
+      if (!expanded) return { problem: `"${token}" is neither a version, an x-range nor a comparator` };
+      comparators.push(...expanded);
+    }
+    alternatives.push({ comparators, any: joined.length === 0 || (joined.length === 1 && /^[xX*]$/.test(joined[0])) });
+  }
+  return { alternatives };
+}
+
+function satisfies(version: ConcreteVersion, c: Comparator): boolean {
+  const d = compare(version, c.version);
+  switch (c.op) {
+    case '=': return d === 0;
+    case '>=': return d >= 0;
+    case '>': return d > 0;
+    case '<': return d < 0;
+    case '<=': return d <= 0;
+  }
+}
+
+/**
+ * pack_requirement.rangeProblem — why the range cannot be read (the first
+ * token that is neither a version, an x-range nor a comparator), or null when
+ * it parses. What POLICY_REQUIREMENT_INVALID quotes.
+ */
+export function rangeProblem(requirement: Pick<PackRequirement, 'version'>): string | null {
+  const read = readRange(requirement.version);
+  return 'problem' in read ? read.problem : null;
+}
+
+/**
+ * pack_requirement.admits — whether a concrete pack version satisfies the
+ * requirement's range: true when it matches any `||` alternative, each the
+ * conjunction of its comparators. An unversioned pack (undefined or empty) is
+ * admitted by `*` alone; a pre-release only by an alternative naming the same
+ * major.minor.patch with a pre-release tag. A version or range that does not
+ * parse admits nothing.
+ */
+export function admits(requirement: Pick<PackRequirement, 'version'>, version?: string): boolean {
+  const read = readRange(requirement.version);
+  if ('problem' in read) return false;
+  if (version === undefined || version.trim() === '') return read.alternatives.some((a) => a.any);
+  const v = concrete(version);
+  if (!v) return false;
+  return read.alternatives.some((alt) => {
+    if (v.pre && !alt.comparators.some((c) => c.version.pre && c.version.major === v.major && c.version.minor === v.minor && c.version.patch === v.patch)) return false;
+    return alt.comparators.every((c) => satisfies(v, c));
+  });
 }
 
 // ── project_config identity ─────────────────────────────────────────────────

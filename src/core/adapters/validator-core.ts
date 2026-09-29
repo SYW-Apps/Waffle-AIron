@@ -32,4 +32,8 @@ export {
   // The project graph and the export usages the family rules judge.
   projectFamily,
   exportUsage,
+  // The pack loader over a candidate configuration, and one entry's manifest:
+  // what the pack impact's dry run and the family's adoption checks read.
+  loadExtensionsFor,
+  packManifest,
 } from '../index.js';
