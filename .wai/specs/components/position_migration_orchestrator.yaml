@@ -22,6 +22,6 @@ dependsOn:
   - cli_core_adapter
   - cli_surfaces_client_adapter
   - position_reader
-status: design
+status: complete
 createdAt: '2026-09-27T10:45:24.909Z'
-updatedAt: '2026-09-28T16:13:13.030Z'
+updatedAt: '2026-09-29T13:57:54.681Z'

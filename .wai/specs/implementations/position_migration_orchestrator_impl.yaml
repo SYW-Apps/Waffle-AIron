@@ -110,21 +110,22 @@ methods:
           no rewrite is a rewrite-unavailable finding saying why
         type: local
       - stepNumber: 13
-        label: held-back
-        description: >-
-          Hold back every rewrite planned in a spec that also holds a deprecated reference the
-          loader binds with no canonical text: the re-save refuses that spec whole, so its rewrites
-          wait with it, named in its rewrite-unavailable finding
-        type: local
-      - stepNumber: 14
         label: positional
         description: >-
-          Stage 4's positional step. Load every type of the family as the top's scan sees them — the
-          graph handed in already carries every unresolved bare name and self-prefixed form among
-          its authored references, and every project's table
+          Stage 4's positional step, over the graph's authored references the owner's scope leaves
+          to it: every bare name no import supplies (unresolved) and every self-prefixed form (the
+          project's own id as the first segment, `registry.x` or `registry::x`). With none, the step
+          is skipped. Load every type of the family as the top's scan sees them
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadTypeSpecs
+      - stepNumber: 14
+        description: >-
+          Read every project's resolved L0 export table: a name a project already exports is matched
+          on its public name first
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveProjectExports
       - stepNumber: 15
         description: Match those references by position — the same match the upgrade report explains
         type: call
@@ -140,12 +141,22 @@ methods:
           imported). The migration never writes a named import a local spec of the consumer would
           shadow (the same nameKey): that name is an import-shadowed finding naming the local spec,
           and its references are left as they are. self-prefix: a rewrite to the bare local id (form
-          self-prefix). ambiguous: a positional-ambiguous finding listing every candidate and what
-          each tie-break rule left, the reference left as it is — a person picks. Two imports that
-          would supply one bare name to one consumer are both dropped for that name and reported
-          (import-collision). none: nothing — a genuine dangling reference, which the gate reports
+          self-prefix). ambiguous: one positional-ambiguous finding per (consumer, name) listing
+          every candidate, every spec writing it and what each tie-break rule left, the references
+          left as they are — a person picks. Imports that would supply one bare name to one consumer
+          twice — two planned, or a planned one beside a named `use` of another alias the consumer
+          already holds — are dropped for that name and reported (import-collision). none: nothing —
+          a genuine dangling reference, which the gate reports
         type: local
       - stepNumber: 17
+        label: held-back
+        description: >-
+          Hold back every rewrite planned in a spec that also holds a reference the loader binds
+          with no canonical text — a deprecated form bound outside or unresolved, or a bare name no
+          planned import makes resolve: the re-save refuses that spec whole, so its rewrites wait
+          with it, named in its rewrite-unavailable finding
+        type: local
+      - stepNumber: 18
         description: 'Answer the plan: members, rewrites, imports and findings'
         type: return
         outcome: PositionMigrationPlan
@@ -236,6 +247,6 @@ methods:
         type: return
         outcome: PositionMigrationResult
 detail: full
-status: design
+status: complete
 createdAt: '2026-09-27T10:45:51.006Z'
-updatedAt: '2026-09-28T16:22:23.654Z'
+updatedAt: '2026-09-29T13:57:53.129Z'

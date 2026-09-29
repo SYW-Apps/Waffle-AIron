@@ -109,8 +109,12 @@ describe('the upgrade report — verdict_changes.explain', () => {
       ['', 'UNDEFINED_TYPE_REFERENCE', 'shared::index-value', 'members.shared.use: [index-value]'],
       ['app', 'UNDEFINED_TYPE_REFERENCE', 'shared::waffler-error', 'externals.shared.use: [waffler-error]'],
     ]);
-    // `WafflerError` keys onto both shared and ui, both declared, both exporting: a person picks — unclassified, counted.
+    // `WafflerError` keys onto both shared and ui, both declared, both exporting: a person picks — unclassified, counted,
+    // and listed with every candidate; `ghost::thing` names a project nobody declares, which is not a positional candidate.
     expect(report.unclassified).toBeGreaterThan(0);
+    expect(report.unmatched.map((m) => [m.consumer, m.specId, m.authored, m.kind, [...(m.candidates ?? [])].sort()])).toEqual([
+      ['', 'report', 'WafflerError', 'ambiguous', ['shared::waffler-error', 'ui::waffler_error']],
+    ]);
   });
 
   it('every finding of every covered gate is either classed or counted', () => {
@@ -142,6 +146,8 @@ describe('the upgrade report — verdict_changes.explain', () => {
     expect(printed).toContain('the lock predates stage 4');
     expect(printed).toContain('members.shared.use: [index-value]');
     expect(printed).toMatch(/\d+ finding\(s\) could not be attributed to stage 4/);
+    expect(printed).toContain('Positional matches no rule decides (1)');
+    expect(printed).toMatch(/report: "WafflerError" matches shared::waffler-error and ui::waffler_error/);
     expect(printed).toContain('Nothing was written.');
     expect(state(f.top)).toEqual(before);
     await expect(runDoctor({ report: 'composed-validation', fix: true })).rejects.toThrow(DoctorOptionsError);

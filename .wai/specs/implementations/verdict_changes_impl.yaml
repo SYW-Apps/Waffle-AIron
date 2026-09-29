@@ -117,16 +117,16 @@ methods:
         description: >-
           An import match is positional, with resolvedAs and the fix: the `use` line, and the export
           and the external when the producer or the consumer lacks them; a self-prefix match is
-          positional with the bare local id as its rewrite; ambiguous and none are counted
-          unclassified, their candidates listed
+          positional with the bare local id as its rewrite; an ambiguous or none match is counted
+          unclassified and listed in unmatched with its candidates
         type: local
       - stepNumber: 18
         label: report
         description: >-
-          Return the report: per project its totals, the classified entries grouped by code, and the
-          unclassified count
+          Return the report: per project its totals, the classified entries grouped by code, the
+          unclassified count, and the unmatched positional candidates
         type: return
         outcome: UpgradeReport
 status: complete
 createdAt: '2026-09-28T06:16:03.117Z'
-updatedAt: '2026-09-28T18:12:16.466Z'
+updatedAt: '2026-09-29T13:54:48.739Z'

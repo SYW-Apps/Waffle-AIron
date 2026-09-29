@@ -68,6 +68,12 @@ export interface UpgradeReport {
   entries: UpgradeReportEntry[];
   /** Today's findings the report cannot attribute to stage 4 — counted, never explained away. */
   unclassified: number;
+  /**
+   * Every positional candidate the family top's match could not explain on its
+   * own — ambiguous (with every candidate and why no tie-break rule chose) or
+   * none — listed so a person can pick; each is also counted in unclassified.
+   */
+  unmatched: PositionalMatch[];
 }
 
 /**
@@ -205,13 +211,17 @@ function importRewrite(top: ProjectFamily, m: PositionalMatch): string {
   return parts.join('; ');
 }
 
-/** Step 17: a positional finding's entry, or null when no match explains it. */
-function positionalEntry(issue: ValidationIssue, covered: Covered, top: ProjectFamily, matches: PositionalMatch[]): UpgradeReportEntry | null {
+/** Step 17: the match that explains a positional candidate, or null when the top's match holds none for it. */
+function matchOf(issue: ValidationIssue, covered: Covered, top: ProjectFamily, matches: PositionalMatch[]): PositionalMatch | null {
   const topNode = top.nodes.find((n) => dirKey(n.directory) === dirKey(covered.node.directory));
   if (!topNode || !issue.specId) return null;
   const specKey = keyIn(topNode.namespace, issue.specId);
-  const m = matches.find((x) => x.consumer === topNode.namespace && x.specId === specKey && issue.message.includes(`"${x.authored}"`));
-  if (!m || (m.kind !== 'import' && m.kind !== 'self-prefix')) return null;
+  return matches.find((x) => x.consumer === topNode.namespace && x.specId === specKey && issue.message.includes(`"${x.authored}"`)) ?? null;
+}
+
+/** Step 17: a positional finding's entry, for an import or self-prefix match. */
+function positionalEntry(issue: ValidationIssue, covered: Covered, top: ProjectFamily, m: PositionalMatch): UpgradeReportEntry {
+  const topNode = top.nodes.find((n) => dirKey(n.directory) === dirKey(covered.node.directory))!;
   const base = { project: covered.node.namespace, code: issue.code, severity: issue.severity, specId: issue.specId, reason: 'positional' as const };
   if (m.kind === 'self-prefix') {
     return { ...base, resolvedAs: `${topNode.id ?? topNode.namespace}::${m.target}`, rewrite: `${m.authored} -> ${m.target}` };
@@ -231,6 +241,7 @@ export function explain(): UpgradeReport {
   const family = projectFamily();
   const covered: Covered[] = [];
   const entries: UpgradeReportEntry[] = [];
+  const unmatched: PositionalMatch[] = [];
   const candidates: { issue: ValidationIssue; covered: Covered }[] = [];
   let unclassified = 0;
   // Step 2: each covered project, root first.
@@ -251,13 +262,18 @@ export function explain(): UpgradeReport {
     // Steps 11-16: matched at the family's top.
     const root = family.nodes.find((n) => n.namespace === '')?.directory ?? '';
     const { top, matches } = matchAtTop(root);
-    // Step 17: each candidate's entry; one no match explains is unclassified.
+    // Step 17: each candidate's entry; an ambiguous or unmatched one is
+    // unclassified, and listed with its candidates for a person to pick.
     for (const { issue, covered: c } of candidates) {
-      const entry = positionalEntry(issue, c, top, matches);
-      if (entry) entries.push(entry);
-      else unclassified++;
+      const m = matchOf(issue, c, top, matches);
+      if (m && (m.kind === 'import' || m.kind === 'self-prefix')) {
+        entries.push(positionalEntry(issue, c, top, m));
+        continue;
+      }
+      unclassified++;
+      if (m && !unmatched.includes(m)) unmatched.push(m);
     }
   }
   // Step 18: the report.
-  return { projects: covered.map((c) => c.line), entries, unclassified };
+  return { projects: covered.map((c) => c.line), entries, unclassified, unmatched };
 }

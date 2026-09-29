@@ -26,6 +26,6 @@ dependsOn:
   - cli_authoring_adapter
   - cli_surfaces_client_adapter
   - position_migration_orchestrator
-status: design
+status: complete
 createdAt: '2026-09-26T21:12:18.987Z'
-updatedAt: '2026-09-28T16:13:09.123Z'
+updatedAt: '2026-09-29T13:57:55.106Z'

@@ -52,6 +52,6 @@ methods:
         description: The confirmed plan, whose stage-1 writes the chaining migration has already applied
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-09-27T10:45:32.019Z'
-updatedAt: '2026-09-28T16:14:22.257Z'
+updatedAt: '2026-09-29T13:57:52.569Z'

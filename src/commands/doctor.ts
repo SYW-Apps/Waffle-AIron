@@ -651,6 +651,13 @@ function printUpgradeReport(report: UpgradeReport): void {
   }
   if (report.entries.length === 0) console.log('  No finding is new for a reason stage 4 introduced.');
   console.log(`  ${report.unclassified} finding(s) could not be attributed to stage 4.`);
+  if (report.unmatched.length > 0) {
+    console.log(`  ${chalk.bold('Positional matches no rule decides')} (${report.unmatched.length}) — counted above; a person picks:`);
+    for (const m of report.unmatched) {
+      const what = m.kind === 'ambiguous' ? `matches ${(m.candidates ?? []).join(' and ')} (${m.reason})` : `matches nothing in the family${m.reason ? ` (${m.reason})` : ''}`;
+      console.log(`    ${reportLabel(m.consumer)} ${m.specId}: "${m.authored}" ${what}`);
+    }
+  }
 }
 
 /**
@@ -702,10 +709,10 @@ function printApplied(written: string[], relock: string[]): void {
   for (const dir of relock) console.log(`      ${dir}`);
 }
 
-/** How many writes the plan holds: ids, L0s, entries, externals, pins, mounts, rewrites and family pins. */
+/** How many writes the plan holds: ids, L0s, entries, externals, imports, pins, mounts, rewrites and family pins. */
 function pendingCount(migration: ChainingMigrationPlan): number {
   return migration.rewrites.length + migration.projects.reduce((n, p) => n + (p.idToWrite ? 1 : 0) + (p.createsSystem ? 1 : 0)
-    + p.exports.length + p.externals.length + p.pins.length + p.members.length + p.supersededPins.length, 0);
+    + p.exports.length + p.externals.length + p.imports.length + p.pins.length + p.members.length + p.supersededPins.length, 0);
 }
 
 /** The totals the report ends with — the P1 probe's counts. */
@@ -717,19 +724,25 @@ function chainingTotals(migration: ChainingMigrationPlan): string {
     `${sum((p) => (p.createsSystem ? 1 : 0))} L0(s) to create`,
     `${entries} L0 entr${entries === 1 ? 'y' : 'ies'}`,
     `${sum((p) => p.externals.length)} external(s)`,
+    `${sum((p) => p.imports.length)} import(s)`,
     `${sum((p) => p.pins.length)} pin(s)`,
     `${sum((p) => p.members.length)} mount(s) to move`,
     `${migration.rewrites.length} rewrite(s)`,
     `${sum((p) => p.supersededPins.length)} family pin(s) to delete`,
     `${sum((p) => p.droppedKeys.length)} dropped key(s)`,
+    `${migration.newDependencies.length} new dependenc${migration.newDependencies.length === 1 ? 'y' : 'ies'}`,
     `${migration.findings.length} finding(s)`,
   ].join(', ');
 }
 
-/** The plan per project, then every rewrite, every finding and the totals. */
+/** The new dependencies first, then the plan per project, then every rewrite, every finding and the totals. */
 function printChainingPlan(migration: ChainingMigrationPlan): void {
   console.log(chalk.bold('Chaining migration'));
   console.log(chalk.gray(`  family root: ${migration.familyRoot}${migration.whole ? '' : ' (partial: a hop above was out of reach)'}`));
+  if (migration.newDependencies.length > 0) {
+    console.log(`  ${icon('warn')} ${chalk.bold(`New dependencies (${migration.newDependencies.length})`)} — edges no external or pin had before, added exactly as the specs resolve today; whether each should exist is yours to decide:`);
+    for (const d of migration.newDependencies) console.log(`      ${chalk.bold(d)}`);
+  }
   if (chainingMigration.isEmpty(migration)) console.log('  Nothing to migrate.');
   for (const p of migration.projects) printProjectMigration(p);
   printRewrites(migration);
@@ -755,7 +768,11 @@ function printProjectMigration(p: ProjectMigration): void {
     const why = x.reason === 'legacy-pin' ? 'replaces the stage-1 family pin of' : 'its references cross into';
     console.log(`    external: ${x.alias}: {} — ${why} ${projectLabel(x.producer)}`);
   }
-  if (p.pins.length > 0) console.log(`    pin: ${p.pins.join(', ')}`);
+  for (const i of p.imports) {
+    const needs = [i.exportPlanned ? 'its export planned above' : undefined, i.declaresExternal ? 'its external planned above' : undefined].filter(Boolean);
+    console.log(`    use: ${i.alias}: [${i.name}] — ${i.target}, ${i.reason}; resolves ${i.references.length} reference(s)${needs.length > 0 ? `, with ${needs.join(' and ')}` : ''}`);
+  }
+  if (p.pins.length > 0) console.log(`    pin (last): ${p.pins.join(', ')}`);
   for (const m of p.members) {
     const described = m.description !== undefined ? ', its description carried' : '';
     const carried = m.carried.length > 0 ? `; carries ${m.carried.length} L0 entr${m.carried.length === 1 ? 'y' : 'ies'} into ${projectLabel(m.member)}` : '';
@@ -778,7 +795,7 @@ function describeEntry(e: PlannedExport): string {
   ].filter((x) => x !== undefined).join(', ');
   const why = e.reason === 'mount'
     ? `carried from its legacy mount${e.publishAtL1 ? `, published at L1 in ${e.from} first (its subsystem does not publish it yet)` : ''}`
-    : `${e.from === undefined ? 'its own project-level type, ' : ''}for ${e.consumers.map(projectLabel).join(', ')}${e.members.length > 0 ? `, reaching ${e.members.join(', ')}` : ''}`;
+    : `${e.from === undefined ? 'its own project-level type, ' : ''}${e.reason === 'positional' ? 'positional, ' : ''}for ${e.consumers.map(projectLabel).join(', ')}${e.members.length > 0 ? `, reaching ${e.members.join(', ')}` : ''}`;
   return `{ ${item} } as "${e.publicName}" — ${why}`;
 }
 

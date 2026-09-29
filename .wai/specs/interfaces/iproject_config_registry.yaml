@@ -161,8 +161,9 @@ methods:
       Declare one external under an alias in `externals`. Refuses an alias outside [a-z0-9-_]+ and a
       declaration whose producer id breaks the project-id grammar; refuses when the alias is already
       declared with a DIFFERENT declaration, so a declaration a person wrote is never overwritten.
-      The same declaration again writes nothing. Covers `doctor --fix`'s chaining migration. Returns
-      whether it wrote.
+      The same declaration again writes nothing — and a declaration that states no `use` is the same
+      as a held one that differs only in its `use` imports (importNames' state, which it leaves
+      alone). Covers `doctor --fix`'s chaining migration. Returns whether it wrote.
     signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): boolean'
     returns: boolean
     params:
@@ -244,4 +245,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-09-28T17:17:04.397Z'
+updatedAt: '2026-09-29T13:56:00.930Z'

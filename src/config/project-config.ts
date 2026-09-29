@@ -911,7 +911,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       const config = current();
       const existing = config.externals?.[alias];
       if (existing !== undefined) {
-        if (sameValue(existing, declaration)) return false;
+        if (sameValue(heldBinding(existing, declaration), declaration)) return false;
         throw new WaironError(
           `Refusing to declare the external "${alias}" at ${root} as ${JSON.stringify(declaration)}: `
           + `it is already declared as ${JSON.stringify(existing)}, and a declaration a person wrote is never overwritten.`,
@@ -979,6 +979,16 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       return true;
     },
   };
+}
+
+/**
+ * What of a held external a declaration is compared with: a declaration that
+ * states no `use` leaves the imports alone (they are importNames' state), so
+ * the producer binding is the same when all but the held imports agree.
+ */
+function heldBinding(existing: unknown, declaration: { use?: unknown }): unknown {
+  if (declaration.use !== undefined || typeof existing !== 'object' || existing === null) return existing;
+  return Object.fromEntries(Object.entries(existing).filter(([key]) => key !== 'use'));
 }
 
 /** A member's value as it is written: the shorthand when it carries only a path, else the long form. */

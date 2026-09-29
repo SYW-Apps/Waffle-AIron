@@ -813,11 +813,16 @@ function bareRawReferences(kind: ReferenceKind, spec: unknown): { position: stri
   return out;
 }
 
-/** Each qualified name inside a type string passed through `map`, the rest of the string untouched. */
+/**
+ * Each qualified name inside a type string passed through `map`, the rest of
+ * the string untouched: the `::` forms, and the dotted `project.name` form a
+ * self-prefixed reference is written in (stage 4 records it; stage 3's
+ * re-save missed it). A name the mapper does not know comes back as it was.
+ */
 function mapTypeNames(typeStr: string | undefined, map: ReferenceMapper): string | undefined {
   if (typeStr === undefined) return undefined;
   return typeStr.replace(
-    /(^|[^A-Za-z0-9_:-])((?:::)?[A-Za-z0-9_][A-Za-z0-9_-]*(?:::[A-Za-z0-9_][A-Za-z0-9_-]*)+)/g,
+    /(^|[^A-Za-z0-9_:.-])((?:::)?[A-Za-z0-9_][A-Za-z0-9_-]*(?:(?:::[A-Za-z0-9_][A-Za-z0-9_-]*)+|(?:\.[A-Za-z0-9_][A-Za-z0-9_-]*)+))/g,
     (_m, lead: string, name: string) => `${lead}${map('type', name)}`,
   );
 }

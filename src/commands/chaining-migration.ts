@@ -8,7 +8,7 @@ import { ChainingMigrationRefusedError } from '../utils/errors.js';
 // The stage-3 share — retiring position — is its own orchestrator; bound as a
 // namespace so each call names the contract method it reaches.
 import * as position from './position-migration.js';
-import type { PlannedMember, PlannedRewrite } from './position-migration.js';
+import type { PlannedImport, PlannedMember, PlannedRewrite } from './position-migration.js';
 import { EXTERNAL_ALIAS_RE, PROJECT_ID_RE } from '../models/project.js';
 import { declares, familyNode, type CrossProjectReference, type ProjectFamily, type ProjectNode } from '../models/project-family.js';
 import { exportTargetKey, type ResolvedExport, type ResolvedExportTable } from '../models/exports.js';
@@ -23,12 +23,16 @@ import type { ComponentSpec, InterfaceSpec, SubsystemSpec, SystemSpec, TypeSpec 
 // L0 entries producers lack (re-exports, and the own `{ typeDef }` of a
 // project-level type), the minimal L0 of a producer that has none, the
 // externals consumers must declare, the aliases to pin once all of that is
-// written — and, through the position migration, the legacy mounts to move
-// into `members` and the deprecated references to rewrite. It writes nothing.
-// apply(plan) writes exactly that, in a fixed order — ids, exports, externals,
-// pins, then position — each under its project's binding, and locks nothing:
-// every project whose approval the writes staled is named for its own human
-// to re-lock.
+// written (every declared family external never pinned among them) — and,
+// through the position migration, the legacy mounts to move into `members`,
+// the deprecated and self-prefixed references to rewrite and stage 4's
+// positional `use` imports, with the exports and externals those need. Every
+// consumer → producer edge it introduces is listed as a new dependency. It
+// writes nothing. apply(plan) writes exactly that, in a fixed order — ids,
+// exports, externals, then position (members, imports, rewrites, superseded
+// pins), and pins LAST, so every snapshot projects the final spelling — each
+// under its project's binding, and locks nothing: every project whose approval
+// the writes staled is named for its own human to re-lock.
 //
 // It holds no state: the plan is a value its caller holds between the two. It
 // lives in sdd_cli because it composes three planes — the core's configuration
@@ -46,7 +50,8 @@ export interface ChainingMigrationFinding {
    * target-missing | name-taken | narrowed | subsystem-reference |
    * alias-invalid | alias-taken | project-absent | member-absent |
    * family-partial | mount-field-conflict | mount-field-unhomed |
-   * rewrite-unavailable
+   * rewrite-unavailable | positional-ambiguous | import-shadowed |
+   * import-collision
    */
   kind: string;
   /** The namespace of the project it concerns ('' is the family's top root). */
@@ -81,7 +86,7 @@ export interface PlannedExport {
   type?: string;
   /** The details a carried mount entry declared. */
   details?: string;
-  /** reference | mount */
+  /** reference | mount | positional */
   reason: string;
   /** A carried entry whose component its member subsystem does not publish yet: apply publishes it at L1 first. */
   publishAtL1?: boolean;
@@ -95,7 +100,7 @@ export interface PlannedExternal {
   project: string;
   /** The producer's namespace in the family graph. */
   producer: string;
-  /** reference | legacy-pin */
+  /** reference | legacy-pin | positional */
   reason: string;
 }
 
@@ -123,6 +128,8 @@ export interface ProjectMigration {
   members: PlannedMember[];
   /** Keys the stored L0 carries that its schema does not know, which the first gated L0 write drops. */
   droppedKeys: string[];
+  /** The `use` entries apply adds (stage 4's positional step), in alias then name order. */
+  imports: PlannedImport[];
 }
 
 /** chaining_migration_plan — the migration of one family, planned and not yet applied. */
@@ -137,6 +144,8 @@ export interface ChainingMigrationPlan {
   findings: ChainingMigrationFinding[];
   /** Every reference apply rewrites out of a deprecated form: projects in walk order, then spec, then position. */
   rewrites: PlannedRewrite[];
+  /** Every consumer → producer edge the plan introduces that no external and no pin had before, with its reference count. */
+  newDependencies: string[];
 }
 
 /** chaining_migration_report — the answer of applying a plan. */
@@ -165,7 +174,7 @@ export function blocked(migration: ChainingMigrationPlan): boolean {
 
 function hasWrites(p: ProjectMigration): boolean {
   return p.idToWrite !== undefined || p.createsSystem || p.exports.length > 0 || p.externals.length > 0 || p.pins.length > 0
-    || p.members.length > 0 || p.supersededPins.length > 0;
+    || p.members.length > 0 || p.supersededPins.length > 0 || p.imports.length > 0;
 }
 
 // ── plan ────────────────────────────────────────────────────────────────────
@@ -227,13 +236,13 @@ function planFamily(top: string, whole: boolean): ChainingMigrationPlan {
   decideIds(ctx);
   // Steps 9-17: the crossings.
   planCrossings(ctx);
-  // Steps 18-20: the stage-1 pins.
+  // Steps 18-21: the stage-1 pins, and the declared externals never pinned.
   convertLegacyPins(ctx);
-  // Step 21: the retirement of position, merged.
+  // Step 22: the retirement of position, merged, and the new dependencies.
   mergePosition(ctx);
-  // Steps 22-23: what the L0 writes would drop.
+  // Steps 23-24: what the L0 writes would drop.
   findDroppedKeys(ctx);
-  // Steps 24-25: the projects with something to write, in walk order.
+  // Step 25: the projects with something to write, in walk order.
   return settle(ctx, top, whole);
 }
 
@@ -243,7 +252,7 @@ function entryOf(ctx: Planning, node: ProjectNode): ProjectMigration {
   if (!entry) {
     entry = {
       project: node.namespace, directory: node.directory, exports: [], externals: [], pins: [], supersededPins: [],
-      createsSystem: false, members: [], droppedKeys: [],
+      createsSystem: false, members: [], droppedKeys: [], imports: [],
     };
     ctx.projects.set(node.namespace, entry);
   }
@@ -357,7 +366,7 @@ function planPair(ctx: Planning, consumer: string, producer: string): void {
   const table = core.resolveProjectExports(producer || undefined);
   // Steps 12-15.
   let entries = false;
-  for (const ref of usage.unexported) entries = planEntry(ctx, producerNode, ref, table) || entries;
+  for (const ref of usage.unexported) entries = planEntry(ctx, producerNode, ref, table, 'reference') === 'planned' || entries;
   // Step 16.
   const alias = declares(ctx.family, consumer, producer)
     ? declaredAlias(consumerNode, producer)
@@ -386,8 +395,11 @@ interface ReferenceTarget {
   source?: string;
 }
 
-/** Steps 13-15 for one reference; true when an entry was planned or merged. */
-function planEntry(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, table: ResolvedExportTable): boolean {
+/** What planning a reference's entry came to: planned (or merged), present already, or refused with a finding. */
+type EntryOutcome = 'planned' | 'present' | 'refused';
+
+/** Steps 13-15 for one reference. */
+function planEntry(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, table: ResolvedExportTable, reason: string): EntryOutcome {
   // Step 13: the spec the reference targets, for the subsystem that owns it.
   const target = targetOf(ref);
   if (!target) {
@@ -397,8 +409,8 @@ function planEntry(ctx: Planning, producer: ProjectNode, ref: CrossProjectRefere
     return report(ctx, 'subsystem-reference', ref, `${ref.specId} re-exports ${label(producer.namespace)}'s subsystem "${target.id}" wholesale — no L0 entry short of exporting it expresses that; rewrite the reference to name the items it uses`);
   }
   // Steps 14-15: a project-level type needs no L1 publication; any other item follows its subsystem's table.
-  if (target.source === undefined) return decideOwnType(ctx, producer, ref, target, table);
-  return decideEntry(ctx, producer, ref, target, table, core.resolveSubsystemExports(target.source));
+  if (target.source === undefined) return decideOwnType(ctx, producer, ref, target, table, reason);
+  return decideEntry(ctx, producer, ref, target, table, core.resolveSubsystemExports(target.source), reason);
 }
 
 /** Step 13: the component, type or subsystem a reference names, or null. */
@@ -415,24 +427,24 @@ function targetOf(ref: CrossProjectReference): ReferenceTarget | null {
 }
 
 /** Step 15 for a project-level type: its own `{ typeDef }` entry, the crate-root `pub struct`. */
-function decideOwnType(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, target: ReferenceTarget, table: ResolvedExportTable): boolean {
+function decideOwnType(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, target: ReferenceTarget, table: ResolvedExportTable, reason: string): EntryOutcome {
   const key = targetKey(target);
-  if (table.entries.some((e) => exportTargetKey(e) === key)) return false;
+  if (table.entries.some((e) => exportTargetKey(e) === key)) return 'present';
   const local = localIn(producer.namespace, target.id);
   const taken = table.entries.find((e) => e.publicName === local && exportTargetKey(e) !== key)
     ?? entryOf(ctx, producer).exports.find((e) => e.publicName === local && (e.component ?? e.typeDef) !== local);
   if (taken) {
     return report(ctx, 'name-taken', ref, `"${local}" already names another item in ${label(producer.namespace)} — export the type "${target.id}" under a name a person chooses`);
   }
-  mergeEntry(entryOf(ctx, producer), target, undefined, local, local, ref);
-  return true;
+  mergeEntry(entryOf(ctx, producer), target, undefined, local, local, ref, reason);
+  return 'planned';
 }
 
 /** Step 15: plan or merge the producer's entry for the reference, or report why not. */
 function decideEntry(
   ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, target: ReferenceTarget,
-  table: ResolvedExportTable, published: ResolvedExportTable,
-): boolean {
+  table: ResolvedExportTable, published: ResolvedExportTable, reason: string,
+): EntryOutcome {
   const key = targetKey(target);
   const at = published.entries.filter((e) => exportTargetKey({ ...e, interface: undefined }) === key);
   if (at.length === 0) {
@@ -440,7 +452,7 @@ function decideEntry(
   }
   // Exported already: a reference that only lacked its declaration needs no entry (its external is planned below).
   const exported = table.entries.filter((e) => exportTargetKey({ ...e, interface: undefined }) === key);
-  if (exported.length > 0 && reachableThrough(exported, ref)) return false;
+  if (exported.length > 0 && reachableThrough(exported, ref)) return 'present';
   if (exported.length > 0 || !reachableThrough(at, ref)) {
     return report(ctx, 'narrowed', ref, `"${target.id}" is exported under a narrowing that does not declare "${ref.member ?? 'what the reference reaches'}" — widen the narrowing or reach another member`);
   }
@@ -451,8 +463,8 @@ function decideEntry(
   if (taken) {
     return report(ctx, 'name-taken', ref, `"${publicName}" already names another item in ${label(producer.namespace)} — export "${target.id}" under a name a person chooses`);
   }
-  mergeEntry(entryOf(ctx, producer), target, localIn(producer.namespace, target.source!), local, publicName, ref);
-  return true;
+  mergeEntry(entryOf(ctx, producer), target, localIn(producer.namespace, target.source!), local, publicName, ref, reason);
+  return 'planned';
 }
 
 /** Whether some L1 entry for the item would let the reference's member through. */
@@ -472,12 +484,15 @@ function localIn(namespace: string, id: string): string {
   return namespace && id.startsWith(`${namespace}::`) ? id.slice(namespace.length + 2) : id;
 }
 
-function mergeEntry(entry: ProjectMigration, target: ReferenceTarget, from: string | undefined, item: string, publicName: string, ref: CrossProjectReference): void {
+function mergeEntry(
+  entry: ProjectMigration, target: ReferenceTarget, from: string | undefined, item: string, publicName: string,
+  ref: CrossProjectReference, reason: string,
+): void {
   let planned = entry.exports.find((e) => e.from === from && e.interface === undefined && (target.kind === 'type' ? e.typeDef : e.component) === item);
   if (!planned) {
     planned = {
       ...(from !== undefined ? { from } : {}), ...(target.kind === 'type' ? { typeDef: item } : { component: item }),
-      publicName, audience: 'project', consumers: [], members: [], reason: 'reference',
+      publicName, audience: 'project', consumers: [], members: [], reason,
     };
     entry.exports.push(planned);
   }
@@ -493,9 +508,9 @@ function addSorted(list: string[], value: string): void {
   }
 }
 
-function report(ctx: Planning, kind: string, ref: CrossProjectReference, detail: string): false {
+function report(ctx: Planning, kind: string, ref: CrossProjectReference, detail: string): 'refused' {
   ctx.findings.push({ kind, project: ref.producer, detail, reference: ref, blocking: false });
-  return false;
+  return 'refused';
 }
 
 /**
@@ -523,19 +538,22 @@ function planExternal(ctx: Planning, consumer: ProjectNode, producer: string, re
   return { alias, planned: true };
 }
 
-// ── steps 18-20: the stage-1 pins ───────────────────────────────────────────
+// ── steps 18-21: the stage-1 pins, and the externals never pinned ──────────
 
 function convertLegacyPins(ctx: Planning): void {
-  // Step 18: each chained member.
+  // Step 18: each node of the graph.
   for (const node of ctx.family.nodes) {
-    if (node.parent === undefined) continue;
-    // Step 19: the member's vendored surfaces, with their family role.
-    const pins = runWithProjectRoot(node.directory, () => surfaces.listFamilyPins());
-    // Step 20: every family pin is superseded; the parent pin converts first.
-    for (const pin of pins) {
-      addSorted(entryOf(ctx, node).supersededPins, pin.key);
-      if (pin.role === 'parent') convertParentPin(ctx, node, node.parent);
+    if (node.parent !== undefined) {
+      // Step 19: a chained member's vendored surfaces, with their family role.
+      const pins = runWithProjectRoot(node.directory, () => surfaces.listFamilyPins());
+      // Step 20: every family pin is superseded; the parent pin converts first.
+      for (const pin of pins) {
+        addSorted(entryOf(ctx, node).supersededPins, pin.key);
+        if (pin.role === 'parent') convertParentPin(ctx, node, node.parent);
+      }
     }
+    // Step 21.
+    pinNeverPinned(ctx, node);
   }
 }
 
@@ -547,7 +565,22 @@ function convertParentPin(ctx: Planning, member: ProjectNode, parent: string): v
   if (alias !== undefined) addPin(ctx, member, alias.alias);
 }
 
-// ── step 21: the retirement of position ────────────────────────────────────
+/**
+ * Step 21: a family external a project declared before the migration ran and
+ * never pinned is pinned with the rest — its gate has nothing to judge the
+ * references against until it is. A pinned one is left alone: re-pinning a
+ * changed producer would hide the change the family run reports.
+ */
+function pinNeverPinned(ctx: Planning, node: ProjectNode): void {
+  if (node.externals.every((e) => e.sourceKind !== 'family')) return;
+  // Its declared externals and their lock entries, under its binding.
+  const listed = runWithProjectRoot(node.directory, () => surfaces.listExternals());
+  for (const external of listed) {
+    if (external.sourceKind === 'family' && external.lock === undefined) addPin(ctx, node, external.alias);
+  }
+}
+
+// ── step 22: the retirement of position ────────────────────────────────────
 
 function mergePosition(ctx: Planning): void {
   const planned = position.plan(ctx.family);
@@ -565,11 +598,65 @@ function mergePosition(ctx: Planning): void {
     if (node) entryOf(ctx, node);
   }
   ctx.findings.push(...planned.findings);
+  // Stage 4's positional imports, each with the export and the external it needs.
+  for (const planned_ of planned.imports) mergeImport(ctx, planned_);
   // A producer that gains an entry and has no L0 gets a minimal one first.
   for (const node of ctx.family.nodes) {
     const entry = ctx.projects.get(node.namespace);
     if (entry && entry.exports.length > 0 && !node.hasSystem) entry.createsSystem = true;
   }
+}
+
+/**
+ * One positional import: the export it names merged into the producer's
+ * entries (reason positional, checked exactly as a reference's entry is), the
+ * external planned when the consumer does not declare the producer (reason
+ * positional) with a pin, and the import into the consumer's share. An import
+ * whose export or external is refused is dropped: the refusal is the finding.
+ */
+function mergeImport(ctx: Planning, planned: PlannedImport): void {
+  const consumer = familyNode(ctx.family, planned.consumer);
+  const producer = familyNode(ctx.family, planned.producer);
+  if (!consumer || !producer) return;
+  const localId = planned.target.slice(planned.target.indexOf('::') + 2);
+  if (planned.exportPlanned) {
+    const [specId, position, ...authored] = planned.references[0].split(' ');
+    const ref: CrossProjectReference = {
+      specId, position, target: `${producer.namespace ? `${producer.namespace}::` : ''}${localId}`,
+      consumer: consumer.namespace, producer: producer.namespace, authored: authored.join(' '),
+    };
+    if (planEntry(ctx, producer, ref, core.resolveProjectExports(producer.namespace || undefined), 'positional') === 'refused') return;
+  }
+  let alias = planned.alias;
+  if (planned.declaresExternal) {
+    const declared = planExternal(ctx, consumer, producer.namespace, 'positional');
+    if (declared === undefined) return;
+    alias = declared.alias;
+  }
+  if (planned.declaresExternal || consumer.externals.some((e) => e.alias === alias)) addPin(ctx, consumer, alias);
+  entryOf(ctx, consumer).imports.push({ ...planned, alias });
+}
+
+/**
+ * Step 22: every consumer → producer edge the plan introduces that no external
+ * and no pin of the consumer had before, with its reference count — listed,
+ * never blocking, no layering guessed. A stage-1 parent pin converted to an
+ * external is no new edge: the pin was there.
+ */
+function newDependencies(ctx: Planning): string[] {
+  const lines: string[] = [];
+  const name = (ns: string): string => ctx.projects.get(ns)?.id ?? familyNode(ctx.family, ns)?.id ?? (ns || 'the top root');
+  for (const entry of ctx.projects.values()) {
+    for (const external of entry.externals) {
+      if (external.reason === 'legacy-pin') continue;
+      const references = new Set([
+        ...ctx.family.references.filter((r) => r.consumer === entry.project && r.producer === external.producer).map((r) => `${r.specId} ${r.position} ${r.authored}`),
+        ...entry.imports.filter((i) => i.producer === external.producer).flatMap((i) => i.references),
+      ]).size;
+      lines.push(`${name(entry.project)} now depends on ${name(external.producer)} (${references} reference${references === 1 ? '' : 's'})`);
+    }
+  }
+  return lines;
 }
 
 /** A carried mount entry, unless an entry for the same item is planned already. */
@@ -593,14 +680,14 @@ function spelledWithPlannedAlias(ctx: Planning, rewrite: PlannedRewrite): Planne
   return alias === undefined || !rewrite.to.includes('::') ? rewrite : { ...rewrite, to: `${alias}${rest}` };
 }
 
-// ── steps 22-23: what the L0 writes would drop ──────────────────────────────
+// ── steps 23-24: what the L0 writes would drop ──────────────────────────────
 
 function findDroppedKeys(ctx: Planning): void {
-  // Step 22: each project that gains L0 entries and already has an L0.
+  // Step 23: each project that gains L0 entries and already has an L0.
   for (const node of ctx.family.nodes) {
     const entry = ctx.projects.get(node.namespace);
     if (!entry || entry.exports.length === 0 || !node.hasSystem) continue;
-    // Step 23: the one L0 delta, dry-run through the gated seam under the project's binding.
+    // Step 24: the one L0 delta, dry-run through the gated seam under the project's binding.
     entry.droppedKeys = runWithProjectRoot(node.directory, () => dryRunStrippedKeys(entry));
   }
 }
@@ -614,7 +701,7 @@ function dryRunStrippedKeys(entry: ProjectMigration): string[] {
   }
 }
 
-// ── step 24 ─────────────────────────────────────────────────────────────────
+// ── step 25 ─────────────────────────────────────────────────────────────────
 
 function settle(ctx: Planning, top: string, whole: boolean): ChainingMigrationPlan {
   const projects: ProjectMigration[] = [];
@@ -624,6 +711,7 @@ function settle(ctx: Planning, top: string, whole: boolean): ChainingMigrationPl
     if (!entry || (!hasWrites(entry) && !rewritten.has(node.namespace))) continue;
     entry.exports.sort((a, b) => compare(a.from ?? '', b.from ?? '') || compare(a.component ?? a.typeDef ?? '', b.component ?? b.typeDef ?? ''));
     entry.externals.sort((a, b) => compare(a.alias, b.alias));
+    entry.imports.sort((a, b) => compare(a.alias, b.alias) || compare(a.name, b.name));
     entry.pins.sort();
     projects.push(entry);
   }
@@ -632,7 +720,7 @@ function settle(ctx: Planning, top: string, whole: boolean): ChainingMigrationPl
   // The rewrites, projects in walk order, then spec, then position.
   const rank = (ns: string): number => ctx.family.nodes.findIndex((n) => n.namespace === ns);
   const rewrites = [...ctx.rewrites].sort((a, b) => rank(a.project) - rank(b.project) || compare(a.specId, b.specId) || compare(a.position, b.position));
-  return { familyRoot: top, whole, projects, findings: ctx.findings, rewrites };
+  return { familyRoot: top, whole, projects, findings: ctx.findings, rewrites, newDependencies: newDependencies(ctx) };
 }
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -676,12 +764,12 @@ export function apply(plan: ChainingMigrationPlan): ChainingMigrationReport {
   for (const p of projects.filter((q) => q.exports.length > 0)) runWithProjectRoot(p.directory, () => addEntries(p, mountDescription(plan, p.project), log));
   // Steps 17-19.
   for (const p of projects.filter((q) => q.externals.length > 0)) runWithProjectRoot(p.directory, () => declareExternals(p, log));
-  // Steps 20-22.
-  for (const p of projects.filter((q) => q.pins.length > 0)) runWithProjectRoot(p.directory, () => pin(p, log));
-  // Step 23: then retire position — members, rewrites, the superseded family pins.
+  // Step 20: then retire position — members, imports, rewrites, the superseded family pins.
   const retired = position.apply(plan);
   retired.written.forEach((w) => log.file(w));
   retired.relock.forEach((d) => log.stale(d));
+  // Steps 21-23: pins LAST, projected from the final spelling.
+  for (const p of projects.filter((q) => q.pins.length > 0)) runWithProjectRoot(p.directory, () => pin(p, log));
   // Steps 24-25.
   return { plan, applied: true, written: log.written, relock: log.relock };
 }
@@ -766,7 +854,7 @@ function declareExternals(p: ProjectMigration, log: WriteLog): void {
   }
 }
 
-/** Step 22: an unchanged snapshot is not rewritten; an unreachable producer keeps its previous pin. */
+/** Step 23: an unchanged snapshot is not rewritten; an unreachable producer keeps its previous pin. */
 function pin(p: ProjectMigration, log: WriteLog): void {
   for (const pinned of surfaces.pinExternals(p.pins)) {
     if (pinned.outcome !== 'pinned') continue;

@@ -246,16 +246,17 @@ describe('stage 2c — the chaining migration', () => {
     expect(codesOf(after, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXPORT_INVALID')).toEqual([]);
     // The same verdict from the child.
     expect(codesOf(at(f.dispatch, () => validateProject()), 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([]);
-    // Written in order: ids, L0 specs, externals, pins; the producers' and the consumer's locks are stale.
+    // Written in order: ids, L0 specs, externals; the producers' and the consumer's locks are stale.
     const rel = report.written.map((w) => path.relative(f.root, w).split(path.sep).join('/'));
     expect(rel).toEqual([
       '.wai/project.yaml', 'packages/billing/.wai/project.yaml', 'packages/dispatch/.wai/project.yaml',
       '.wai/specs/.index.yaml', 'packages/billing/.wai/specs/.index.yaml',
-      'packages/dispatch/.wai/externals/billing.yaml', 'packages/dispatch/.wai/externals.lock.yaml', 'packages/dispatch/.wai/externals/fleetworks.yaml',
       // Then position: the mounts moved into the top's `members`, dispatch's references rewritten.
       '.wai/specs: subsystem billing', '.wai/specs: subsystem dispatch',
       'packages/dispatch/.wai/specs: interface iroute-planner', 'packages/dispatch/.wai/specs: component route-planner',
       'packages/dispatch/.wai/specs: implementation route-planner-impl',
+      // Pins LAST, projected from the final spelling (stage 4).
+      'packages/dispatch/.wai/externals/billing.yaml', 'packages/dispatch/.wai/externals.lock.yaml', 'packages/dispatch/.wai/externals/fleetworks.yaml',
     ]);
     // A raw position is rewritten too: the parameter type and the display signature beside it.
     const contract = fs.readFileSync(path.join(f.dispatch, '.wai', 'specs', 'interfaces', 'iroute-planner.yaml'), 'utf8');
@@ -364,7 +365,7 @@ describe('stage 2c — the chaining migration', () => {
   it('doctor: a plain run counts what is pending; --fix --yes applies it, and the run after is clean', async () => {
     const f = family();
     const plain = await doctorCli(f.dispatch);
-    expect(plain.stdout).toMatch(/Chaining: 14 pending \(3 id\(s\), 0 L0\(s\) to create, 2 L0 entries, 2 external\(s\), 2 pin\(s\), 2 mount\(s\) to move, 3 rewrite\(s\), 0 family pin\(s\) to delete, 0 dropped key\(s\), 0 finding\(s\)\)/);
+    expect(plain.stdout).toMatch(/Chaining: 14 pending \(3 id\(s\), 0 L0\(s\) to create, 2 L0 entries, 2 external\(s\), 0 import\(s\), 2 pin\(s\), 2 mount\(s\) to move, 3 rewrite\(s\), 0 family pin\(s\) to delete, 0 dropped key\(s\), 2 new dependencies, 0 finding\(s\)\)/);
     const fixed = await doctorCli(f.dispatch, '--fix', '--yes');
     expect(fixed.stdout).toContain('Applied the chaining migration: 13 file(s) written.');
     expect(fixed.stdout).toContain('Re-lock each with `wairon lock`');

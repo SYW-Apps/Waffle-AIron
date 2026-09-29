@@ -22,7 +22,9 @@ methods:
         onTrueStep: 3
         onFalseStep: 5
       - stepNumber: 3
-        description: Validate the ATTACHED project's tree on the instance instead.
+        description: >-
+          Validate the ATTACHED project's tree on the instance instead, forwarding --family: the
+          instance runs the family run within the credential's reach and never beyond it.
         type: call
         targetComponent: remote_orchestrator
         targetMethod: validateAttached
@@ -1402,8 +1404,9 @@ methods:
         description: >-
           Print it per project — the lock's totals beside today's when the lock predates stage 4,
           then the entries grouped by code with their reasons and rewrites, then how many findings
-          it could not attribute — and say plainly that the lock records totals only, so this is not
-          a per-code diff. Nothing is written
+          it could not attribute and, after that count, every positional candidate no tie-break rule
+          decides (ambiguous, with each candidate, or matching nothing) — and say plainly that the
+          lock records totals only, so this is not a per-code diff. Nothing is written
         type: return
         outcome: composed-validation report printed
       - stepNumber: 7
@@ -2717,4 +2720,4 @@ lint:
         steps, which is the point.
 status: design
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T16:22:43.784Z'
+updatedAt: '2026-09-29T13:54:54.397Z'

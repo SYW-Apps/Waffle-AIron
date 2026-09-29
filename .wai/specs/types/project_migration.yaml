@@ -41,8 +41,10 @@ fields:
   - name: pins
     type: string[]
     description: >-
-      The aliases apply pins once every write is done: each planned external, and each existing one
-      whose producer gains entries this project uses.
+      The aliases apply pins LAST, once every other write is done: each planned external, each
+      existing one whose producer gains entries or through which the project gains imports, and each
+      family external the project declared before the migration and never pinned (a pinned one is
+      never re-pinned here: that would hide a producer's change).
     optional: false
   - name: supersededPins
     type: string[]
@@ -85,4 +87,4 @@ fields:
 methods: []
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:11:55.782Z'
-updatedAt: '2026-09-28T16:10:58.193Z'
+updatedAt: '2026-09-29T13:55:59.198Z'

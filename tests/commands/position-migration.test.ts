@@ -143,18 +143,19 @@ describe('stage 3 — the position migration over the reference family', () => {
     const report = at(f.top, () => apply(plan()));
     expect(rel(f.top, report.written)).toEqual([
       'core/transpiler/.wai/project.yaml',
-      'core/transpiler/.wai/externals/core.yaml',
-      'core/transpiler/.wai/externals.lock.yaml',
       '.wai/project.yaml',
       '.wai/specs: subsystem shared',
       '.wai/specs: component app-worker',
       'core/transpiler/.wai/specs: component lowering-core',
+      // Pins LAST (stage 4): the external the migration declares, and core's
+      // `shared` and shared's `core`, declared before it ran and never pinned.
+      'core/.wai/externals/shared.yaml',
+      'core/.wai/externals.lock.yaml',
+      'core/transpiler/.wai/externals/core.yaml',
+      'core/transpiler/.wai/externals.lock.yaml',
+      'shared/.wai/externals/core.yaml',
+      'shared/.wai/externals.lock.yaml',
     ]);
-    // The migration pins the externals it declares; core's `shared` and shared's
-    // `core`, declared before it ran, are pinned by a person (wave C: `doctor
-    // --fix` pins last).
-    at(f.core, () => pinExternals());
-    at(f.shared, () => pinExternals());
     for (const root of [f.top, f.core, f.transpiler, f.shared]) {
       const after = at(root, () => validateProject());
       expect(codes(after, 'DEPRECATED_REFERENCE_FORM', 'DEPRECATED_MOUNT_FORM', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_UNRESOLVED')).toEqual([]);
@@ -298,9 +299,8 @@ describe('stage 3 — the wave-B follow-ups', () => {
     const f = family;
     at(f.top, () => apply(plan()));
     // transpiler declares its parent core, shared declares its sibling core: each producer lies above its
-    // root, so its own gate judges it against its pin (stage 4) — unpinned, unresolved; pinned, clean.
-    expect(codes(at(f.shared, () => validateProject()), 'EXTERNAL_UNRESOLVED')).toEqual(['EXTERNAL_UNRESOLVED @-']);
-    at(f.shared, () => pinExternals());
+    // root, so its own gate judges it against its pin (stage 4) — and the migration pinned both, the one
+    // shared declared before it ran included.
     for (const root of [f.transpiler, f.shared]) expect(codes(at(root, () => validateProject()), 'EXTERNAL_UNRESOLVED')).toEqual([]);
     // A misspelled declaration is still reported from the member's own root …
     runWithProjectRoot(f.shared, () => projectConfigRepository.declareExternal('nowhere', {}));
