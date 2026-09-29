@@ -143,6 +143,66 @@ export interface PolicyEvaluationResult {
   blockedPackNames: string[];
   missingProfileIds: string[];
   messages: string[];
+  /** Per pack a reconcile applied (or, from an evaluation, would apply): its
+   *  impact, measured before the write. */
+  impacts?: PackImpact[];
+}
+
+// ── Pack impact (governance) ─────────────────────────────────────────────────
+// What one pack write changes, measured before it happens and writing nothing.
+// It states changes and never judges them: packs exist to adjust wairon's
+// checks, and a loosening is a change like any other.
+
+/** One thing a pack changes against wairon's defaults. */
+export interface DoctrineChange {
+  axis: 'rule' | 'concept';
+  change: string;
+  subject: string;
+  profile?: string;
+  from?: string;
+  to?: string;
+  reason?: string;
+}
+
+/** One validation finding, as a pack impact lists it. */
+export interface ImpactFinding {
+  code: string;
+  severity: string;
+  message: string;
+  specId?: string;
+}
+
+/** One project run's totals. */
+export interface ImpactTotals {
+  valid: boolean;
+  errors: number;
+  warnings: number;
+  notices: number;
+}
+
+export interface PackImpact {
+  pack: string;
+  version?: string;
+  replaces?: string;
+  direction: 'apply' | 'remove';
+  doctrine: DoctrineChange[];
+  previousDoctrine?: DoctrineChange[];
+  governing: string[];
+  findings: {
+    introduced: ImpactFinding[];
+    resolved: ImpactFinding[];
+    regraded: { finding: ImpactFinding; from: string }[];
+  };
+  before: ImpactTotals;
+  after: ImpactTotals;
+}
+
+/** What a policy-governed create applied: the record, each pack's impact and the
+ *  governing-profile step's impact. */
+export interface GovernedProjectCreation {
+  record: ProjectRecord;
+  packImpacts: PackImpact[];
+  profileImpact?: PackImpact;
 }
 
 export interface ProducerConfig {
