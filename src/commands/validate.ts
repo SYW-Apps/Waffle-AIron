@@ -6,11 +6,12 @@ import { ProjectNotInitializedError } from '../utils/errors.js';
 // The core reads this adapter makes land on the core portals: the configuration,
 // the agent registry, and the legacy spec filenames a migration would rename.
 import { loadProjectConfig, loadRegistry, findLegacySpecFiles } from '../core/index.js';
-import { declaredMembers, type CarriedDebt } from '../models/project.js';
+import { declaredMembers, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
+import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
 import {
-  validateRegistry, validateProjectConfig, validateAsComplete, validateProject, validateFamily, computeGateStateId,
-  type ValidationIssue, type ValidationResult,
+  validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId,
+  type ValidationIssue, type ValidationResult, type ValidationOptions,
 } from '../core/validation.js';
 
 // ---------------------------------------------------------------------------
@@ -39,7 +40,27 @@ import {
 // project's own gate verbatim, the composition of each project's externals and
 // the family checks), republished as the adapter's forward to the validator
 // portal.
-export { validateAsComplete, computeGateStateId, validateProject, validateFamily };
+export { validateAsComplete, computeGateStateId };
+
+/** cli_validator_adapter.validateProject — the owner's gate, forwarded to the validator portal. */
+export function validateProject(options?: ValidationOptions, projectType?: string): ValidationResult {
+  return ownersGate(options, projectType);
+}
+
+/** cli_validator_adapter.validateFamily — the family run, forwarded to the validator portal. */
+export function validateFamily(options: ValidationOptions): ValidationResult {
+  return familyRun(options);
+}
+
+/** cli_validator_adapter.validateRegistry — the registry's topology rules, forwarded to the validator portal. */
+export function validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult {
+  return registryRules(registry, rules);
+}
+
+/** cli_validator_adapter.validateProjectConfig — the configuration check, forwarded to the validator portal. */
+export function validateProjectConfig(config: ProjectConfig): ValidationResult {
+  return configRules(config);
+}
 
 export interface ValidateOptions {
   ci?: boolean; // treat warnings as errors (for CI pipelines); notices never fail

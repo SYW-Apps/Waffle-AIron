@@ -204,7 +204,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     try {
       const cfg = loadProjectConfig();
       if (!cfg) throw new ProjectNotInitializedError();
-      const result = validateProject(cfg.rules, cfg.projectType);
+      const result = validateProject({ rules: cfg.rules, projectType: cfg.projectType });
       const errs = result.issues.filter((i) => i.severity === 'error').length;
       const warns = result.issues.filter((i) => i.severity === 'warning').length;
       // Notices are counted and named, but alone they leave the check passing.
