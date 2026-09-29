@@ -578,8 +578,8 @@ export function listFamilyPins(): FamilyPin[] {
 /** The code on every comparison that could not be made — never a pass. */
 const CHECK_UNAVAILABLE = 'EXTERNAL_CHECK_UNAVAILABLE';
 
-/** Why nothing outside the family can be used or compared in stage 2. */
-const OUTSIDE_FAMILY = 'no stage-2 reference form reaches a project outside the family, so nothing it exports can be used or compared until stage 3\'s `alias::name`';
+/** Why a producer outside the family has no used members to compare here. */
+const OUTSIDE_FAMILY = 'the producer is outside the family, so the scan cannot map this project\'s references onto its live table here — the owner\'s gate judges each use against the pin (`wairon validate`)';
 
 /** An alias the project does not declare, named to pin: refused before anything is written. */
 export class UnknownExternalAliasError extends Error {
