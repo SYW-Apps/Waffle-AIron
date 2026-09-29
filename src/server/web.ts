@@ -43,6 +43,7 @@ import type { LockRecord } from '../core/lockfile.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import type { ProducerConfig } from '../producers/index.js';
+import type { PackImpact } from '../models/pack-impact.js';
 import type {
   ApiKeyRecord,
   ApprovalDecision,
@@ -51,6 +52,7 @@ import type {
   AuditQuery,
   AvailableProfile,
   GitBackingBinding,
+  GovernedProjectCreation,
   HostConfig,
   HostedProjectRecord,
   HostedUserRecord,
@@ -3067,14 +3069,16 @@ function projectList(cfg: HostConfig, sessionId: string): HostedProjectRecord[] 
 /** Create a project placed in the REQUIRED owner unit, optionally with a
  *  profile selection; forwards to web_project_orchestrator.createProject, which
  *  routes through the policy-aware initialization (missing/unknown unit and
- *  policy violations reject upstream). */
+ *  policy violations reject upstream). Answers the GovernedProjectCreation: the
+ *  record with the impact of every pack and of the governing-profile step the
+ *  instance policy applied, which the SPA shows after creation. */
 function projectCreate(
   cfg: HostConfig,
   sessionId: string,
   id: string,
   unitId: string,
   profileSelection?: ProjectProfileSelection,
-): HostedProjectRecord {
+): GovernedProjectCreation {
   return webproject.createProject(cfg, sessionId, id, unitId, profileSelection);
 }
 
@@ -3179,6 +3183,19 @@ function opsListAdoptableProjectPacks(cfg: HostConfig, sessionId: string, projec
 }
 function opsAdoptProjectPack(cfg: HostConfig, sessionId: string, project: string, name: string): PackDescriptor {
   return projectops.adoptProjectPack(cfg, sessionId, project, name);
+}
+/** POST /web/projects/packs/impact { projectId, name, content? } — what installing
+ *  (content given) or adopting (content omitted) a declarative pack would change,
+ *  writing nothing (project:read); forwards to project_ops_orchestrator. The SPA
+ *  shows it before projectPackInstall / projectPackAdopt and asks. */
+function projectPackImpact(cfg: HostConfig, sessionId: string, project: string, name: string, content?: string): PackImpact {
+  return projectops.previewProjectPack(cfg, sessionId, project, name, content);
+}
+/** POST /web/projects/packs/removal-impact { projectId, name } — what removing a
+ *  registered pack would change, writing nothing (project:read); the SPA shows it
+ *  before projectPackRemove and asks. */
+function projectPackRemovalImpact(cfg: HostConfig, sessionId: string, project: string, name: string): PackImpact {
+  return projectops.previewProjectPackRemoval(cfg, sessionId, project, name);
 }
 function opsGetPackPolicy(cfg: HostConfig, sessionId: string): InstancePackPolicy {
   return projectops.getPackPolicy(cfg, sessionId);
@@ -3520,6 +3537,16 @@ export async function handleWebRequest(
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
         opsRemoveProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''));
         return sendJson(res, 200, { ok: true });
+      }
+      // POST /web/projects/packs/impact { projectId, name, content? } — the impact
+      // of an install (content) or an adoption (no content), writing nothing (project:read).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'impact') {
+        const content = typeof body?.content === 'string' ? body.content : undefined;
+        return sendJson(res, 200, projectPackImpact(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''), content));
+      }
+      // POST /web/projects/packs/removal-impact { projectId, name } — the impact of a removal, writing nothing.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'removal-impact') {
+        return sendJson(res, 200, projectPackRemovalImpact(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? '')));
       }
       // GET /web/projects/packs/adoptable?projectId= — the server-global catalog
       // the project may adopt from (project:read).

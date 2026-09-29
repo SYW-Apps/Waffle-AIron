@@ -2460,7 +2460,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
 }
 
 // ---------------------------------------------------------------------------
-// mcp_portal.advertiseHostedTools — ONE method for the sixteen sdd_host_* and
+// mcp_portal.advertiseHostedTools — ONE method for the seventeen sdd_host_* and
 // sdd_landscape_* entries, because publishing a discovery list is one job.
 // Execution is intercepted upstream by the hosting request orchestrator, which
 // owns their contracts; these registrations exist so an MCP client can FIND the
@@ -2522,6 +2522,13 @@ function advertiseHostedTools(server: McpServer, options: McpServerOptions): voi
       inputSchema: {
         name: z.string().describe('Pack name (letters, digits, dot, underscore, hyphen)'),
         content: z.string().describe('The declarative pack YAML content'),
+      },
+    }, hostedStub);
+    reg<{ name: string; content?: string }>(server, 'sdd_host_pack_impact', {
+      description: "Hosted project ops: measure, writing nothing, what installing a DECLARATIVE pack (content given) or adopting the server-global pack of that name (content omitted) would change on the BOUND project — the pack's doctrine against wairon's defaults (rules loosened, raised, turned off or added; profiles and concepts added, redefined or removed), which of its profiles would govern, and the findings that change. Show it to your human before sdd_host_pack_install, which applies without it. Nothing in it is a finding: packs exist to adjust wairon's checks. Requires project:read over the project.",
+      inputSchema: {
+        name: z.string().describe('Pack name (letters, digits, dot, underscore, hyphen); the server-global pack to adopt when content is omitted'),
+        content: z.string().optional().describe('The declarative pack YAML an install would upload; omitted, the server-global pack an adoption would vendor'),
       },
     }, hostedStub);
     reg<Record<string, never>>(server, 'sdd_host_policy_evaluate', {

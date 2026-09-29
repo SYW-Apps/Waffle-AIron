@@ -248,3 +248,24 @@ export function findingChanges(before: ValidationResult, after: ValidationResult
   const resolved = [...pending.values()].flat();
   return { introduced, resolved, regraded };
 }
+
+// ---- pack_impact.headline --------------------------------------------------
+
+/**
+ * pack_impact.headline — the impact in one line: the pack (and version), its
+ * doctrine changes counted by kind, the introduced / resolved / regraded
+ * finding counts and both totals. Stated, never judged. What an unattended
+ * hosted policy write puts in its messages and on an approval's
+ * executionSummary.
+ */
+export function impactHeadline(impact: PackImpact): string {
+  const kinds = new Map<string, number>();
+  for (const c of impact.doctrine) kinds.set(c.change, (kinds.get(c.change) ?? 0) + 1);
+  const doctrine = impact.doctrine.length === 0
+    ? 'no doctrine changes'
+    : `${impact.doctrine.length} doctrine change(s) (${[...kinds].map(([k, n]) => `${n} ${k}`).join(', ')})`;
+  const f = impact.findings;
+  const totals = (v: ProjectVerdict): string => `${v.errors} error(s), ${v.warnings} warning(s), ${v.notices} notice(s)`;
+  return `${impact.pack}${impact.version ? ` v${impact.version}` : ''}: ${doctrine}; findings ${f.introduced.length} introduced, ` +
+    `${f.resolved.length} resolved, ${f.regraded.length} regraded; ${totals(impact.before)} before, ${totals(impact.after)} after`;
+}

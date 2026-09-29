@@ -49,6 +49,7 @@ export {
   discoverPacks,
   loadExtensionPacks,
   checkDeclarativePack,
+  parseDeclarativePack,
   packEntryRef,
   packEntryLabel,
   // A member's path resolved within the root that declares it — the hosted

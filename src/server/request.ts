@@ -165,13 +165,16 @@ const LANDSCAPE_DISCOVERY_TOOLS = new Set<string>([
   'sdd_landscape_get_project_surface',
 ]);
 
-/** The six hosted project-ops tools the data plane handles directly, routing
+/** The seven hosted project-ops tools the data plane handles directly, routing
  *  them to the project ops orchestrator — ALWAYS bound to THE one authorized
  *  project (instance-level operations are deliberately absent from the data
- *  plane). Each is permission-rules-gated upstream by its owning orchestrator. */
+ *  plane). Each is permission-rules-gated upstream by its owning orchestrator:
+ *  sdd_host_pack_impact is a READ there (project:read — it measures and writes
+ *  nothing), so it is absent from MUTATING_HOST_TOOLS and wakes no channel. */
 const PROJECT_OPS_TOOLS = new Set<string>([
   'sdd_host_pack_list',
   'sdd_host_pack_install',
+  'sdd_host_pack_impact',
   'sdd_host_policy_evaluate',
   'sdd_host_policy_reconcile',
   'sdd_host_produce',
@@ -575,6 +578,18 @@ export async function dispatchProjectLifecycleTool(
           projectId,
           String(args.name ?? ''),
           String(args.content ?? ''),
+        );
+        break;
+      case 'sdd_host_pack_impact':
+        // The per-project pack impact preview: name, and the declarative content
+        // when installing, from arguments; writes nothing (project:read upstream).
+        // sdd_host_pack_install itself stays an unattended write that says it applied.
+        value = projectops.previewProjectPack(
+          cfg,
+          credential,
+          projectId,
+          String(args.name ?? ''),
+          typeof args.content === 'string' ? args.content : undefined,
         );
         break;
       case 'sdd_host_policy_evaluate':

@@ -175,6 +175,8 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/projects/packs/upload',
   '/web/projects/packs/remove',
   '/web/projects/packs/adopt',
+  '/web/projects/packs/impact',
+  '/web/projects/packs/removal-impact',
   '/web/projects/tree/import',
   '/web/projects/policy/reconcile',
   '/web/projects/producers',
@@ -551,6 +553,17 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
       if (req.method === 'DELETE' && parts.length === 5 && parts[3] === 'packs') {
         packs.removeProjectPack(cfg, cred, parts[2], parts[4]);
         return sendJson(res, 200, { ok: true });
+      }
+      // POST /admin/projects/{id}/packs/{name}/impact — what installing the YAML in
+      // the body (or, with no body content, adopting the server-global pack) would
+      // change; POST …/removal-impact — what removing it would. Both write nothing
+      // (project:read), and are what a client shows before the PUT / DELETE above.
+      if (req.method === 'POST' && parts.length === 6 && parts[3] === 'packs' && parts[5] === 'impact') {
+        const content = typeof body?.content === 'string' ? body.content : undefined;
+        return sendJson(res, 200, packs.previewProjectPack(cfg, cred, parts[2], parts[4], content));
+      }
+      if (req.method === 'POST' && parts.length === 6 && parts[3] === 'packs' && parts[5] === 'removal-impact') {
+        return sendJson(res, 200, packs.previewProjectPackRemoval(cfg, cred, parts[2], parts[4]));
       }
     }
 

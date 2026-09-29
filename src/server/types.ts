@@ -1,5 +1,6 @@
 import type { LockRecord } from '../core/lockfile.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
+import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
 
 // ---------------------------------------------------------------------------
 // Hosting value types (sdd_host)
@@ -377,6 +378,12 @@ export interface ApprovalRequest {
   decidedAt?: string;
   decidedBy?: PrincipalSubject;
   decisionReason?: string;
+  /** Set when an approved project:init is executed: one line per pack the
+   *  instance policy applied and for the governing-profile step, each with its
+   *  headline doctrine changes and finding totals (from the init's
+   *  GovernedProjectCreation). The full impacts are in the project.init.policy
+   *  audit event. Absent for every other kind and before execution. */
+  executionSummary?: string;
 }
 
 /** A decision supplied by an authorized user/admin for a pending approval request. */
@@ -460,6 +467,15 @@ export interface PolicyEvaluationResult {
   unappliedProfileIds: string[];
   /** Human-readable findings for summaries and UI. */
   messages: string[];
+  /** Per pack a reconcile applies (or, from an evaluation, would apply): its
+   *  impact on the project, measured before the write against the configuration
+   *  as it stood. A reconcile is an unattended policy write, so these are how its
+   *  result states what it changed. Empty when nothing is, or would be, applied. */
+  impacts?: PackImpact[];
+  /** evaluateInitRequest only: per required/default pack the init would apply,
+   *  what it changes against wairon's defaults — the doctrine half alone (no
+   *  project exists yet to validate). */
+  doctrine?: PackDoctrine[];
 }
 
 /** A server-global declarative pack resolved to its content for vendoring into a
@@ -1002,6 +1018,10 @@ export interface ProjectConfigView {
   /** Ids of subsystems declaring a profile of their own, which therefore takes
    *  precedence over the project-level profile for their components. */
   overridingSubsystemIds?: string[];
+  /** Returned by setProjectType only: what the write changed on the project — the
+   *  new governing profile (and the pack registered to contribute it, when one
+   *  was) measured before the write. */
+  impact?: PackImpact;
 }
 
 /** The pre-auth login-options projection the login screen renders from: which
@@ -1044,6 +1064,17 @@ export interface HostedProjectRecord {
   /** Derived (not persisted on the record): the project's home unit — its
    *  'owner' placement — populated when the record is listed for display. */
   unitId?: string;
+}
+
+/** What a policy-governed hosted initialization created and applied: the
+ *  persisted record (unchanged; this wrapper is never stored), each
+ *  required/default pack the policy applied with its impact measured before the
+ *  write, and the governing-profile step's impact, measured separately. Init is
+ *  an unattended policy write: this is how its result states what it changed. */
+export interface GovernedProjectCreation {
+  record: HostedProjectRecord;
+  packImpacts: PackImpact[];
+  profileImpact?: PackImpact;
 }
 
 /** Runtime exposure posture for a hosted instance: which control-plane surfaces
@@ -1135,6 +1166,9 @@ export interface ProjectActionOutcome {
   approval?: ApprovalRequest;
   /** The lock record, present when a project:lock completed. */
   lock?: LockRecord;
+  /** A project:init executed in this call only: the created record with the
+   *  impacts of every pack and of the governing-profile step the init applied. */
+  creation?: GovernedProjectCreation;
 }
 
 /** A verified short-lived capability to view one project's diagram in a browser —

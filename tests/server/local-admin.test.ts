@@ -69,6 +69,8 @@ const PORTAL_SOURCES: Record<string, string> = {
   listProjectPacks: 'packs',
   installProjectPack: 'packs',
   removeProjectPack: 'packs',
+  previewProjectPack: 'packs',
+  previewProjectPackRemoval: 'packs',
   setAssignment: 'permissionadmin',
   removeAssignment: 'permissionadmin',
   listAssignments: 'permissionadmin',

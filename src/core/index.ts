@@ -217,6 +217,7 @@ export {
   packDirEntry,
   loadExtensionPacks,
   checkDeclarativePack,
+  parseDeclarativePack,
   packEntryRef,
   packEntryLabel,
   globalPacksEnabled,

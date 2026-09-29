@@ -7,6 +7,7 @@ import * as gitbacking from './gitbacking.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import type { ProducerConfig } from '../producers/index.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
+import type { PackImpact } from '../models/pack-impact.js';
 import type {
   AuditEvent,
   AuditQuery,
@@ -105,6 +106,24 @@ export function listAdoptableProjectPacks(cfg: HostConfig, credential: string | 
 
 export function adoptProjectPack(cfg: HostConfig, credential: string | null, project: string, name: string): PackDescriptor {
   return packs.adoptProjectPack(cfg, credential, project, name);
+}
+
+/** What installing (content given) or adopting (content omitted) a declarative
+ *  pack would change on the project, writing nothing (project:read upstream). */
+export function previewProjectPack(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  name: string,
+  content?: string,
+): PackImpact {
+  return packs.previewProjectPack(cfg, credential, project, name, content);
+}
+
+/** What removing a registered pack would change on the project, writing nothing
+ *  (project:read upstream). */
+export function previewProjectPackRemoval(cfg: HostConfig, credential: string | null, project: string, name: string): PackImpact {
+  return packs.previewProjectPackRemoval(cfg, credential, project, name);
 }
 
 // ── pack/profile policy ───────────────────────────────────────────────────────

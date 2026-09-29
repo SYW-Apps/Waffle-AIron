@@ -4,6 +4,7 @@ import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { parseYaml } from '../utils/yaml.js';
 import type { PackScope } from '../core/extensions.js';
 import type { PackSelection, ProjectConfig } from '../models/project.js';
+import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import * as hostCore from './adapters/core.js';
 import * as hostValidator from './adapters/validator.js';
 import * as hostSdk from './adapters/sdk.js';
@@ -626,6 +627,79 @@ export function installProjectPack(cfg: HostConfig, credential: string | null, p
     const descriptor = storeInstallProjectPack(name, content);
     hostCore.registerPackRef(descriptor.ref);
     return descriptor;
+  });
+}
+
+// ── pack_orchestrator: pack impact previews (governance stage) ────────────────
+//
+// What an install, an adoption or a removal would change on a project, measured
+// before it happens and writing nothing: the pack's doctrine against wairon's
+// defaults, which of its profiles would govern, and the findings that change.
+// A preview writes nothing, so project:read over the project is the permission
+// it needs (the write it previews still requires project:admin). The installs
+// themselves stay plain writes; a client shows the preview first and asks.
+
+/** The content an install would upload, or the server-global pack an adoption
+ *  would install: its canonical name and its declarative content. */
+function previewSource(name: string, content: string | undefined): { name: string; content: string } {
+  // Steps 6-9: uploaded content is judged exactly as the install judges it.
+  if (content !== undefined) {
+    assertName(name);
+    assertDeclarative(content);
+    return { name, content };
+  }
+  // Steps 10-12: the server-global pack an adoption would vendor.
+  const resolved = executeApprovedResolveGlobalPacks([name]).resolved[0];
+  if (!resolved) throw new Error(`no such server-global pack "${name}" — cannot preview adopting a pack the instance does not carry`);
+  assertName(resolved.name);
+  return { name: resolved.name, content: resolved.content };
+}
+
+/**
+ * Preview installing (content given) or adopting (content omitted) a
+ * declarative pack: require project:read over the project, bind its root, read
+ * the content as a declarative pack through the core adapter (nothing is on disk
+ * yet, so it is the candidate's manifest), and measure the path reference the
+ * write would register through the host validator adapter. Writes nothing.
+ */
+export function previewProjectPack(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  name: string,
+  content?: string,
+): PackImpact {
+  // Steps 1-4: project:read over the project.
+  requireCap(cfg, credential, 'project:read', 'project', project, 'Forbidden — previewing a project pack requires project:read over the project');
+  // Step 5: the project's isolated root.
+  return runWithProjectRoot(boundProject(cfg, project), () => {
+    const source = previewSource(name, content);
+    // Step 13: the content read as a declarative pack — the candidate's manifest.
+    const manifest = hostCore.parseDeclarativePack(parseYaml(source.content));
+    // Step 14: the path reference the install or adoption would register.
+    const candidate: PackCandidate = { entry: `.wai/packs/${source.name}.yaml`, manifest };
+    // Steps 15-16: measured under the bound root, writing nothing.
+    return hostValidator.measurePackImpact(candidate);
+  });
+}
+
+/**
+ * Preview removing one of a project's registered packs: require project:read
+ * over the project, bind its root, find the registration the removal would drop
+ * (as removeProjectPack matches it; an unregistered name is rejected), and
+ * measure dropping it — what the pack accounts for now. Writes nothing.
+ */
+export function previewProjectPackRemoval(cfg: HostConfig, credential: string | null, project: string, name: string): PackImpact {
+  // Steps 1-4: project:read over the project.
+  requireCap(cfg, credential, 'project:read', 'project', project, 'Forbidden — previewing a project pack removal requires project:read over the project');
+  // Step 5: the project's isolated root.
+  return runWithProjectRoot(boundProject(cfg, project), () => {
+    assertName(name);
+    // Steps 6-8: the registration the removal would drop.
+    const match = findPackRegistration(hostCore.loadProjectConfig(), name);
+    if (!match) throw new Error(`Project has no registered pack named "${name}".`);
+    // Steps 9-10: measured as removed, writing nothing.
+    return hostValidator.measurePackImpact({ entry: match, remove: true });
   });
 }
 

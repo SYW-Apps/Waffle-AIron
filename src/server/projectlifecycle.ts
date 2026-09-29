@@ -12,6 +12,7 @@ import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedLock, hostedApprover } from './admin.js';
 import type { ApproverIdentity } from '../models/lock.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
+import { impactHeadline } from '../models/pack-impact.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
 import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds } from './authorization.js';
 import type {
@@ -19,6 +20,7 @@ import type {
   ApprovalDecision,
   AuditEvent,
   AuditRetentionPolicy,
+  GovernedProjectCreation,
   HostConfig,
   Principal,
   PrincipalSubject,
@@ -281,7 +283,8 @@ export function initializeProject(
   const effective = authorize(cfg.dataDir, principal, PROJECT_CREATE_CAPABILITY, 'unit', request.ownerUnitId);
   switch (effective.value) {
     case 'yes': {
-      const rec = executeApprovedInit(cfg, request);
+      const creation = executeApprovedInit(cfg, request);
+      const rec = creation.record;
       tryAppendAudit(
         cfg,
         buildAuditEvent(principal, 'lifecycle.completed', 'info', {
@@ -290,10 +293,13 @@ export function initializeProject(
           metadata: JSON.stringify({ kind: 'project:init' }),
         }),
       );
+      // A completed outcome carrying the creation: the record and the impact of
+      // every pack and of the governing-profile step the unattended init applied.
       return {
         status: 'completed',
         action: 'project:init',
         summary: `Initialized project "${rec.id}" under the active pack policy.`,
+        creation,
       };
     }
     case 'no':
@@ -575,8 +581,9 @@ export function decideRequest(
   // executeApprovedRequest.
   let final = decided;
   if (decided.status === 'approved') {
-    executeApproved(cfg, decided);
-    markApprovalCompleted(cfg.dataDir, decided.id);
+    const executed = executeApproved(cfg, decided);
+    // A project:init records what it applied on the approval as its executionSummary.
+    markApprovalCompleted(cfg.dataDir, decided.id, executed.executionSummary);
     final = getApprovalRequestById(cfg.dataDir, decided.id) ?? decided;
   }
 
@@ -592,10 +599,27 @@ export function decideRequest(
   return final;
 }
 
+/** What an executed approval did: the human-readable outcome and, for a
+ *  project:init, the summary of what the unattended init applied. */
+interface ApprovedExecution {
+  outcome: string;
+  executionSummary?: string;
+}
+
+/** An executed project:init's GovernedProjectCreation as an approval's
+ *  executionSummary: one headline per pack the policy applied and one for the
+ *  governing-profile step. The full impacts are in the project.init.policy audit. */
+function executionSummaryOf(creation: GovernedProjectCreation): string {
+  const lines = creation.packImpacts.map((impact) => `Applied pack ${impactHeadline(impact)}`);
+  if (creation.profileImpact) lines.push(`Governing profile — ${impactHeadline(creation.profileImpact)}`);
+  return lines.length > 0 ? lines.join('\n') : 'The instance policy applied no pack and no governing profile.';
+}
+
 /** Dispatch an APPROVED request to its pre-authorized execution entry point by
- *  kind, returning the human-readable outcome. Shared by decideRequest's
+ *  kind, returning the human-readable outcome (and, for a project:init, the
+ *  executionSummary of what it applied). Shared by decideRequest's
  *  auto-execution and the manual executeApprovedRequest retry path. */
-function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
+function executeApproved(cfg: HostConfig, req: ApprovalRequest): ApprovedExecution {
   switch (req.kind) {
     case 'project:init': {
       if (!req.payload) {
@@ -608,8 +632,11 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
       // request's own profile selection — so an init approved under a permissive
       // policy still fails here if the policy has since flipped to enforcing.
       const init = JSON.parse(req.payload) as ProjectInitRequest;
-      const rec = executeApprovedInit(cfg, init);
-      return `Initialized project "${rec.id}" under the active pack policy.`;
+      const creation = executeApprovedInit(cfg, init);
+      return {
+        outcome: `Initialized project "${creation.record.id}" under the active pack policy.`,
+        executionSummary: executionSummaryOf(creation),
+      };
     }
     case 'project:lock': {
       // Forward the qualifier the requester was confined to, so approving a
@@ -620,7 +647,7 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
       // have the authority, and the decision is what conferred it. The requester
       // is not lost — the ApprovalRequest and the audit event both carry them.
       const lock = executeApprovedLock(cfg, req.projectId ?? '', hostedApprover(req.decidedBy), scope);
-      return `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}).`;
+      return { outcome: `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}).` };
     }
     default:
       throw new Error(`Unsupported approval kind "${req.kind}".`);
@@ -659,9 +686,10 @@ export function executeApprovedRequest(
     throw new Error(`Approval request "${req.id}" expired at ${req.expiresAt} and can no longer be executed.`);
   }
 
-  const outcome = executeApproved(cfg, req);
+  const executed = executeApproved(cfg, req);
 
-  markApprovalCompleted(cfg.dataDir, req.id);
+  // A project:init records what it applied on the approval as its executionSummary.
+  markApprovalCompleted(cfg.dataDir, req.id, executed.executionSummary);
 
   tryAppendAudit(
     cfg,
@@ -672,7 +700,8 @@ export function executeApprovedRequest(
     }),
   );
 
-  return outcome;
+  // The outcome summary — for a project:init, including what the init applied.
+  return executed.executionSummary ? `${executed.outcome}\n${executed.executionSummary}` : executed.outcome;
 }
 
 /**

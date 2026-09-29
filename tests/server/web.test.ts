@@ -1781,7 +1781,7 @@ describe('web project orchestrator (sdd_host)', () => {
     // placed) — the create routes through the POLICY-AWARE initialization, so
     // the instance pack policy applies to web creates exactly as to MCP init.
     const unit = seedUnit(dataDir, 'team');
-    const rec = webproject.createProject(cfg, superAdmin(), 'new-proj', unit.id);
+    const { record: rec } = webproject.createProject(cfg, superAdmin(), 'new-proj', unit.id);
     expect(rec.id).toBe('new-proj');
     expect(listProjectRecords(dataDir).some((r) => r.id === 'new-proj')).toBe(true);
 
@@ -1924,7 +1924,7 @@ describe('web project routes over HTTP (sdd_host)', () => {
       body: JSON.stringify({ id: 'made-here', unitId: unit.id }),
     });
     expect(created.status).toBe(201);
-    expect(JSON.parse(created.body).id).toBe('made-here');
+    expect(JSON.parse(created.body).record.id).toBe('made-here');
     expect(listProjectRecords(dataDir).some((r) => r.id === 'made-here')).toBe(true);
     expect(listProjectPlacements(dataDir, 'made-here').map((p) => p.unitId)).toEqual([unit.id]);
   }, 20_000);

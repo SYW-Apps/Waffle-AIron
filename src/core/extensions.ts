@@ -320,6 +320,22 @@ export function checkDeclarativePack(manifest: unknown): string | null {
   return result.success ? null : (result.error.issues[0]?.message ?? 'shape mismatch');
 }
 
+/**
+ * extension_orchestrator.parseDeclarativePack — read a parsed manifest as a
+ * DECLARATIVE pack: the ExtensionPack the loader builds from a YAML pack on
+ * disk (the schema's defaults filled in, no programmatic rules). Throws the
+ * first schema error when it is not one. How a caller holding a pack's content
+ * before anything is on disk (a hosted preview, a policy write measured before
+ * its vendoring) supplies it as a pack impact candidate's manifest.
+ */
+export function parseDeclarativePack(manifest: unknown): ExtensionPack {
+  // Step 1: the schema, its defaults filled in; a mismatch throws its first error.
+  const result = DeclarativePackSchema.safeParse(manifest);
+  if (!result.success) throw new Error(result.error.issues[0]?.message ?? 'shape mismatch');
+  // Step 2: as the loader reads a YAML pack — no programmatic rules.
+  return { ...result.data, rules: [] };
+}
+
 /** Does this project apply machine-wide packs on top of its own selections? */
 export function globalPacksEnabled(config: { extensions?: { useGlobalPacks?: boolean } }): boolean {
   return config.extensions?.useGlobalPacks ?? GLOBAL_PACKS_DEFAULT;
