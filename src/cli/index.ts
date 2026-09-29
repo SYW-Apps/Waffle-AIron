@@ -28,7 +28,7 @@ import { runDiagram } from '../commands/diagram.js';
 import { listRules } from '../commands/rules.js';
 import { listPatterns } from '../commands/patterns.js';
 import { listVariants } from '../commands/adapters/variants.js';
-import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack, syncPacks } from '../commands/packs.js';
+import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack, syncPacks, impactPack } from '../commands/packs.js';
 import {
   runServe,
   runDev,
@@ -100,7 +100,7 @@ program
   .action(async (opts) => {
     await runInit({ yes: opts.yes });
     for (const source of opts.pack as string[]) {
-      await addPack(source);
+      await addPack(source, false, opts.yes);
     }
   });
 
@@ -379,28 +379,31 @@ async function runVariants(): Promise<void> {
   await listVariants();
 }
 async function runPacks(action: string, arg?: string, opts: { global?: boolean } = {}): Promise<void> {
-  if (action === 'add') await addPack(arg!, opts);
+  if (action === 'add') await addPack(arg!, opts.global);
   else if (action === 'list') await listPacks();
-  else if (action === 'remove') await removePack(arg!, opts);
+  else if (action === 'remove') await removePack(arg!, opts.global);
 }
 async function runPack(
   action: string,
   arg?: string,
-  opts: { global?: boolean; kind?: string; dir?: string; skill?: boolean; out?: string; source?: string; bundle?: boolean; pin?: boolean; all?: boolean } = {},
+  opts: { global?: boolean; kind?: string; dir?: string; skill?: boolean; out?: string; source?: string; bundle?: boolean; pin?: boolean; all?: boolean; yes?: boolean } = {},
 ): Promise<void> {
+  // --yes passes through to the commands that select, update or remove a
+  // project's pack; without it they show the pack's impact and ask first.
   if (action === 'init') await initPack(arg!, { kind: opts.kind === 'code' ? 'code' : 'declarative', dir: opts.dir, skill: opts.skill });
   else if (action === 'build') await buildPack(arg ?? '.', { out: opts.out });
-  else if (action === 'add') await addPack(arg!, { global: opts.global });
+  else if (action === 'add') await addPack(arg!, opts.global, opts.yes);
   else if (action === 'list') await listPacks();
-  else if (action === 'remove') await removePack(arg!, { global: opts.global });
-  else if (action === 'install') await installPack(arg!);
+  else if (action === 'remove') await removePack(arg!, opts.global, opts.yes);
+  else if (action === 'install') await installPack(arg!, opts.yes);
   else if (action === 'uninstall') await uninstallStorePack(arg!);
   else if (action === 'which') await whichPack(arg!);
-  else if (action === 'use') await usePack(arg!, { source: opts.source, bundle: opts.bundle, pin: opts.pin });
-  else if (action === 'unuse') await unusePack(arg!);
+  else if (action === 'use') await usePack(arg!, { source: opts.source, bundle: opts.bundle, pin: opts.pin, yes: opts.yes });
+  else if (action === 'unuse') await unusePack(arg!, opts.yes);
   else if (action === 'bundle') await bundlePack(arg, { all: opts.all });
   else if (action === 'sync') await syncPacks();
-  else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | bundle | sync | add | list | remove)');
+  else if (action === 'impact') await impactPack(arg!);
+  else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | impact | bundle | sync | add | list | remove)');
 }
 
 // ---------------------------------------------------------------------------
@@ -466,9 +469,10 @@ packCmd
 
 packCmd
   .command('install <source>')
-  .description('Install a pack into this wairon install\'s store (a .wpack/.zip or a pack directory). Applies to NOTHING until a project selects it')
-  .action(async (source: string) => {
-    await runPack('install', source);
+  .description('Install a pack into this wairon install\'s store (a .wpack/.zip or a pack directory). Applies to NOTHING until a project selects it — unless this project selects it floating, then its impact is shown first')
+  .option('-y, --yes', 'install without showing the impact report (an update of a floating selection)')
+  .action(async (source: string, opts) => {
+    await runPack('install', source, { yes: opts.yes });
   });
 
 packCmd
@@ -484,8 +488,16 @@ packCmd
   .option('--source <url>', 'record an explicit fetch URL (overrides the origin recorded at install time)')
   .option('--pin', 'freeze the resolved version and its content digest instead of tracking latest installed')
   .option('--bundle', 'mark for committing a copy under .wai/packs/ so the repo needs no machine setup')
+  .option('-y, --yes', 'apply without showing the impact report')
   .action(async (name: string, opts) => {
-    await runPack('use', name, { source: opts.source, bundle: opts.bundle, pin: opts.pin });
+    await runPack('use', name, { source: opts.source, bundle: opts.bundle, pin: opts.pin, yes: opts.yes });
+  });
+
+packCmd
+  .command('impact <name>')
+  .description('Show what a pack changes (name or name@version), writing nothing: its doctrine against wairon\'s defaults, the profiles that would govern here, and the findings that change on this project')
+  .action(async (name: string) => {
+    await runPack('impact', name);
   });
 
 packCmd
@@ -506,8 +518,9 @@ packCmd
 packCmd
   .command('unuse <name>')
   .description('Deselect a pack for this project (it stays installed in the store)')
-  .action(async (name: string) => {
-    await runPack('unuse', name);
+  .option('-y, --yes', 'deselect without showing the impact report')
+  .action(async (name: string, opts) => {
+    await runPack('unuse', name, { yes: opts.yes });
   });
 
 packCmd
@@ -521,8 +534,9 @@ packCmd
   .command('add <source>')
   .description('Install a pack: a .wpack/.zip is extracted + registered, a plain file/dir is vendored; --global installs machine-wide')
   .option('-g, --global', 'install into the global packs folder (WAIRON_PACKS_DIR or ~/.wairon/packs)')
+  .option('-y, --yes', 'apply without showing the impact report')
   .action(async (source: string, opts) => {
-    await runPack('add', source, { global: opts.global });
+    await runPack('add', source, { global: opts.global, yes: opts.yes });
   });
 
 packCmd
@@ -538,8 +552,9 @@ packCmd
   .alias('rm')
   .description('Deregister a pack by name (deletes vendored files under .wai/packs); --global removes a machine-wide pack')
   .option('-g, --global', 'remove from the global packs folder')
+  .option('-y, --yes', 'remove without showing the impact report')
   .action(async (name: string, opts) => {
-    await runPack('remove', name, { global: opts.global });
+    await runPack('remove', name, { global: opts.global, yes: opts.yes });
   });
 
 // ---------------------------------------------------------------------------

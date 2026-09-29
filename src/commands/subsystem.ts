@@ -11,6 +11,7 @@ import {
   internalizeMember,
   projectConfigExists,
 } from './adapters/core.js';
+import type { MemberCreation } from '../core/index.js';
 
 // ---------------------------------------------------------------------------
 // member commands — the projects this project contains
@@ -69,6 +70,22 @@ function shown(memberPath: string): string {
   return path.relative(process.cwd(), path.resolve(getProjectRoot(), memberPath)) || '.';
 }
 
+/**
+ * What scaffolding applied: the required packs written into a new member's
+ * configuration (an unattended pack write, so no impact report is shown), the
+ * projectType it set, and each requirement nothing installed satisfies.
+ */
+function reportMemberPacks(creation: MemberCreation): void {
+  if (!creation.configCreated) return;
+  for (const selection of creation.adopted) {
+    logger.info(`Applied the required pack ${selection.name}@${selection.version} to its new configuration (pinned, with its digest) — no impact report is shown for scaffolding; see it with \`wairon pack impact ${selection.name}\` at the member's root.`);
+  }
+  if (creation.projectType) logger.info(`Set its projectType to "${creation.projectType}", the profile the requirement names.`);
+  for (const requirement of creation.unadopted) {
+    logger.warn(`No installed version of "${requirement.pack}" satisfies ${requirement.version}: nothing was written for it, and the family run reports POLICY_NOT_ADOPTED until the member adopts it — \`wairon pack install <source>\`, then \`wairon pack use ${requirement.pack}@<version> --pin\` at the member's root.`);
+  }
+}
+
 export async function runMemberAdd(alias: string, memberPath: string, options: MemberAddOptions = {}): Promise<void> {
   logger.header('wairon member add');
   // Step 1: an initialized project.
@@ -78,10 +95,11 @@ export async function runMemberAdd(alias: string, memberPath: string, options: M
     throw new WaironError('a path is required: wairon member add <alias> <path>');
   }
   // Step 4: scaffold the member and declare it in `members`.
-  createMember(alias, memberPath, options.description);
-  // Step 5: the confirmation and next steps.
+  const creation = createMember(alias, memberPath, options.description);
+  // Step 5: the confirmation, what was applied, and next steps.
   logger.success(`Added member "${alias}" → ${memberPath} (declared in project.yaml \`members\`)`);
   logger.info(`Scaffolded its project at ${shown(memberPath)} — its project id is "${alias}".`);
+  reportMemberPacks(creation);
   logger.info(`Design it from its own root, and export what others consume from its L0; reference it here as ${alias}::<name>.`);
 }
 

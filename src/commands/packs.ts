@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
+import inquirer from 'inquirer';
 import { scaffoldPack, buildPack as sdkBuildPack, extractPack } from '@wairon/sdk';
 import type { PackScaffoldRequest, PackBuildResult, PackExtractionResult } from '@wairon/sdk';
 import { logger } from '../utils/logger.js';
@@ -9,6 +10,10 @@ import { getProjectRoot } from '../utils/fs.js';
 import { downloadFile } from '../utils/download.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import type { PackSelection } from '../models/project.js';
+import { isNewerVersion } from '../utils/version.js';
+// validator_portal: the pack impact every pack-selecting command shows before it writes.
+import { measurePackImpact } from '../core/validation.js';
+import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import {
   discoverPacks,
   globalPacksDir,
@@ -37,6 +42,7 @@ import {
   upsertPackSelection,
   removePackSelection,
   markSelectionsBundled,
+  packManifest,
 } from '../core/index.js';
 
 // ---------------------------------------------------------------------------
@@ -106,7 +112,8 @@ function isArchiveRef(source: string): boolean {
   return /\.(wpack|zip)$/i.test(source);
 }
 
-export async function addPack(source: string, options: { global?: boolean } = {}): Promise<void> {
+export async function addPack(source: string, global?: boolean, yes?: boolean): Promise<void> {
+  const options = { global, yes };
   // ZIP-aware: a .wpack/.zip source is inspected + safely extracted via the SDK
   // and its DIRECTORY registered; a plain file/dir source falls through to the
   // unchanged vendoring path below.
@@ -147,8 +154,12 @@ export async function addPack(source: string, options: { global?: boolean } = {}
 
   const root = getProjectRoot();
   const relRef = `.wai/packs/${path.basename(abs)}`;
+  // Steps 11-15: the impact before anything is vendored or registered — the
+  // probed manifest supplied as the candidate, since nothing is on disk yet.
+  if (!unattended(options.yes) && !(await confirmPackWrite({ entry: relRef }, abs, `Apply the pack "${probe.name}" to this project?`))) return;
   const dest = path.join(root, '.wai', 'packs', path.basename(abs));
   if (path.resolve(dest) !== abs) {
+
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.cpSync(abs, dest, { recursive: true, force: true });
   }
@@ -160,6 +171,7 @@ export async function addPack(source: string, options: { global?: boolean } = {}
     logger.success(`Pack "${probe.name}" already registered — refreshed ${relRef} from the source.`);
   }
   logger.info(`${describe(probe)} — commit .wai/ so CI and every clone enforce it.`);
+  if (unattended(options.yes)) sayAppliedUnseen(probe.name ?? path.basename(abs), relRef);
 }
 
 /**
@@ -170,7 +182,7 @@ export async function addPack(source: string, options: { global?: boolean } = {}
  * loaded before anything is registered, so a malformed/unsafe archive fails
  * cleanly and leaves no partial registration.
  */
-async function addPackFromArchive(source: string, options: { global?: boolean }): Promise<void> {
+async function addPackFromArchive(source: string, options: { global?: boolean; yes?: boolean }): Promise<void> {
   const abs = path.resolve(source);
   if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
     logger.error(`Pack archive "${source}" does not exist.`);
@@ -193,35 +205,47 @@ async function addPackFromArchive(source: string, options: { global?: boolean })
     baseDir = path.join(getProjectRoot(), '.wai', 'packs');
   }
 
-  // Extract into a staging directory first; the pack's own name (and thus its
-  // final directory) is only known from the extraction result's manifest.
+  // Extract into a staging directory OUTSIDE the project first: the pack's own
+  // name (and thus its final directory) is only known from the extraction
+  // result's manifest, and nothing may land in the project before the impact
+  // was shown and accepted.
   const bytes = fs.readFileSync(abs);
-  fs.mkdirSync(baseDir, { recursive: true });
-  const staging = fs.mkdtempSync(path.join(baseDir, '.wpack-staging-'));
+  const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-wpack-staging-'));
+  const dropStaging = (): void => { try { fs.rmSync(staging, { recursive: true, force: true }); } catch { /* temp */ } };
   let result: PackExtractionResult;
   try {
     result = extractPack(bytes, staging);
   } catch (err) {
-    fs.rmSync(staging, { recursive: true, force: true });
+    dropStaging();
     logger.error(`Failed to extract pack archive "${path.basename(abs)}": ${err instanceof Error ? err.message : String(err)}`);
     process.exitCode = 1;
     return;
   }
 
-  // Relocate the extracted tree to <name>/ (replacing any prior copy).
+  // Probe-verify the extracted pack loads BEFORE placing or registering anything.
   const name = result.name;
-  const destDir = path.join(baseDir, name);
-  if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
-  fs.renameSync(staging, destDir);
-
-  // Probe-verify the extracted pack loads BEFORE registering anything.
-  const probe = probePack(destDir, path.dirname(destDir), scope);
+  const probe = probePack(staging, path.dirname(staging), scope);
   if (probe.error) {
-    fs.rmSync(destDir, { recursive: true, force: true });
+    dropStaging();
     logger.error(probe.error);
     process.exitCode = 1;
     return;
   }
+
+  // The impact before anything is placed or registered, for a project.
+  const relRef = `.wai/packs/${name}`;
+  if (!options.global && !unattended(options.yes)
+    && !(await confirmPackWrite({ entry: relRef }, staging, `Apply the pack "${probe.name ?? name}" to this project?`))) {
+    dropStaging();
+    return;
+  }
+
+  // Relocate the extracted tree to <name>/ (replacing any prior copy).
+  const destDir = path.join(baseDir, name);
+  fs.mkdirSync(baseDir, { recursive: true });
+  if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
+  fs.cpSync(staging, destDir, { recursive: true });
+  dropStaging();
 
   if (options.global) {
     logger.success(`Installed pack "${probe.name ?? name}" globally: ${destDir}`);
@@ -230,7 +254,7 @@ async function addPackFromArchive(source: string, options: { global?: boolean })
   }
 
   // Register the DIRECTORY ref, exactly like vendoring registers a ref.
-  const relRef = `.wai/packs/${name}`;
+  if (unattended(options.yes)) sayAppliedUnseen(probe.name ?? name, relRef);
   if (registerPackRef(relRef)) {
     logger.success(`Installed pack "${probe.name ?? name}" into ${relRef} and registered it in .wai/project.yaml.`);
   } else {
@@ -320,7 +344,7 @@ async function fetchArchive(url: string): Promise<string> {
 }
 
 /** `wairon pack install <source>` — install into the store; applies to nothing until selected. */
-export async function installPack(source: string): Promise<void> {
+export async function installPack(source: string, yes?: boolean): Promise<void> {
   let sourceDir: string;
   let origin: string;
   let cleanup: string | null = null;
@@ -341,8 +365,10 @@ export async function installPack(source: string): Promise<void> {
     try { fs.rmSync(path.dirname(archive), { recursive: true, force: true }); } catch { /* temp */ }
     if (!extracted) return;
     try {
+      const update = await confirmFloatingUpdate(extracted.dir, yes);
+      if (update === 'declined') return;
       const installed = installPackFromDirectory(extracted.dir, source);
-      reportInstalled(installed, source);
+      reportInstalled(installed, source, update, yes);
     } catch (e) {
       logger.error(e instanceof Error ? e.message : String(e));
       process.exitCode = 1;
@@ -380,7 +406,9 @@ export async function installPack(source: string): Promise<void> {
   }
 
   try {
-    reportInstalled(installPackFromDirectory(sourceDir, origin), origin);
+    const update = await confirmFloatingUpdate(sourceDir, yes);
+    if (update === 'declined') return;
+    reportInstalled(installPackFromDirectory(sourceDir, origin), origin, update, yes);
   } catch (e) {
     logger.error(e instanceof Error ? e.message : String(e));
     process.exitCode = 1;
@@ -389,13 +417,48 @@ export async function installPack(source: string): Promise<void> {
   }
 }
 
+/**
+ * Steps 3-9 of installPack: an install is an update in disguise when this
+ * project's selection of the same name floats and the new version would become
+ * the latest installed — then this project's doctrine changes. Shows that
+ * impact (the extracted manifest supplied for the floating selection) and asks,
+ * unless the run is unattended. Answers whether the install moves this
+ * project's floating selection, or 'declined'.
+ */
+async function confirmFloatingUpdate(sourceDir: string, yes?: boolean): Promise<boolean | 'declined'> {
+  if (!projectConfigExists()) return false;
+  const manifest = packManifest(sourceDir);
+  if (!manifest) return false;
+  // Step 3: does this project select the name floating?
+  const floating = (loadProjectConfig()?.extensions?.packs ?? [])
+    .find((e): e is PackSelection => typeof e !== 'string' && e.name === manifest.name && !e.version);
+  // Step 4: the version a floating selection resolves to today.
+  const latest = resolveInstalledPack(manifest.name);
+  const becomesLatest = !latest || !manifest.version || latest.version === manifest.version || isNewerVersion(latest.version, manifest.version);
+  // Step 5: only an install that moves this project's floating selection is an update.
+  if (!floating || !becomesLatest) return false;
+  if (unattended(yes)) return true;
+  // Steps 6-9: measured before the store write, and asked.
+  const impact = measureOrReport({ entry: floating, manifest });
+  if (!impact) return 'declined';
+  printImpact(impact);
+  if (await askToApply(`Install ${manifest.name}${manifest.version ? ` v${manifest.version}` : ''}? This project's floating selection would resolve to it.`)) return true;
+  logger.info('Nothing was installed.');
+  return 'declined';
+}
+
 /** Report a successful store install, and whether it can be reproduced elsewhere. */
-function reportInstalled(installed: InstalledPack, origin: string): void {
+function reportInstalled(installed: InstalledPack, origin: string, movedFloating: boolean = false, yes?: boolean): void {
   logger.success(`Installed ${installed.name} v${installed.version} into the pack store.`);
   console.log(`  ${chalk.dim(installed.path)}`);
   console.log(`  ${chalk.dim(installed.digest)}`);
   logger.blank();
-  logger.info(`This applies to NOTHING yet — a project opts in with: ${chalk.cyan(`wairon pack use ${installed.name}`)}`);
+  if (movedFloating) {
+    logger.info(`This project selects "${installed.name}" without a version pin, so its selection now resolves to v${installed.version}.`);
+    if (unattended(yes)) logger.info(`Applied without showing the impact — see it with ${chalk.cyan(`wairon pack impact ${installed.name}`)}.`);
+  } else {
+    logger.info(`This applies to NOTHING yet — a project opts in with: ${chalk.cyan(`wairon pack use ${installed.name}`)}`);
+  }
   if (!isUrl(origin)) {
     logger.warn('Installed from a local path, so no fetchable source was recorded — CI and a fresh clone cannot obtain it. Bundle it into the project, or record a URL when selecting it.');
   }
@@ -467,7 +530,7 @@ function printInstalled(pack: InstalledPack, latestByDefault: boolean): void {
  */
 export async function usePack(
   spec: string,
-  options: { source?: string; bundle?: boolean; pin?: boolean } = {},
+  options: { source?: string; bundle?: boolean; pin?: boolean; yes?: boolean } = {},
 ): Promise<void> {
   if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first.');
@@ -484,11 +547,25 @@ export async function usePack(
     return;
   }
 
+  // Step 7: the selection to record.
   const recorded = options.source ?? resolved.origin;
   const selection = buildSelection(resolved, { ...options, pinVersion: version !== undefined });
+  // Steps 8-12: the impact before anything is written, and the question.
+  if (!unattended(options.yes)) {
+    const impact = measureOrReport({ entry: selection });
+    if (!impact) return;
+    printImpact(impact);
+    if (!(await askToApply(`Apply the pack "${resolved.name}" to this project?`))) {
+      logger.info('Nothing was written.');
+      return;
+    }
+  }
+  // Step 13: recorded — project_config.withPack's reading, the one the report measured.
   const reselected = upsertPackSelection(selection);
 
+  // Step 14.
   logger.success(`${reselected ? 'Re-selected' : 'Selected'} pack "${resolved.name}"${selection.version ? ` v${selection.version}` : ' (latest installed)'} for this project.`);
+  if (unattended(options.yes)) logger.info(`Applied without showing the impact — see it with ${chalk.cyan(`wairon pack impact ${resolved.name}`)}.`);
   if (options.bundle) {
     logger.info('Marked for bundling — run `wairon pack bundle` to commit a copy under .wai/packs/ so the repo needs no machine setup.');
   }
@@ -693,19 +770,35 @@ export async function bundlePack(name?: string, options: { all?: boolean } = {})
 }
 
 /** `wairon pack unuse <name>` — deselect a pack for this project (it stays installed). */
-export async function unusePack(name: string): Promise<void> {
+export async function unusePack(name: string, yes?: boolean): Promise<void> {
+  // Steps 1-3: inside a project.
   if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first.');
     process.exitCode = 1;
     return;
   }
+  // Step 4: does it select a pack of that name?
+  const stored = (loadProjectConfig()?.extensions?.packs ?? []).find((e): e is PackSelection => typeof e !== 'string' && e.name === name);
+  // Steps 5-9: the removal's impact, and the question — unless nothing is selected or the run is unattended.
+  if (stored && !unattended(yes)) {
+    const impact = measureOrReport({ entry: stored, remove: true });
+    if (!impact) return;
+    printImpact(impact);
+    if (!(await askToApply(`Stop applying the pack "${name}" to this project?`))) {
+      logger.info('Nothing was written.');
+      return;
+    }
+  }
+  // Steps 10-12: deselect.
   if (!removePackSelection(name)) {
     logger.error(`This project does not select a pack named "${name}".`);
     process.exitCode = 1;
     return;
   }
+  // Step 13.
   logger.success(`Deselected pack "${name}" — it remains installed in the store.`);
   logger.info('Its profiles, rules, and assertions no longer apply to this project; re-validate to see the change.');
+  if (unattended(yes)) logger.info(`Applied without showing the impact — see what the pack accounted for with ${chalk.cyan(`wairon pack impact ${name}`)} before deselecting next time.`);
 }
 
 /** Split `name` or `name@version`. */
@@ -760,7 +853,8 @@ export async function listPacks(): Promise<void> {
   logger.info('Rules from packs show up in `wairon rules list`; add packs with `wairon pack add <source> [--global]`.');
 }
 
-export async function removePack(name: string, options: { global?: boolean } = {}): Promise<void> {
+export async function removePack(name: string, global?: boolean, yes?: boolean): Promise<void> {
+  const options = { global, yes };
   if (options.global) {
     for (const ref of discoverPacks(globalPacksDir())) {
       const probe = probePack(ref, path.dirname(ref), 'global');
@@ -790,7 +884,18 @@ export async function removePack(name: string, options: { global?: boolean } = {
     const ref = entry;
     const probe = probePack(ref, root, 'project');
     if (probe.name === name || ref === name || path.basename(ref) === name) {
+      // Steps 13-17: removing a pack is as intentional as adding one.
+      if (!unattended(options.yes)) {
+        const impact = measureOrReport({ entry: ref, remove: true });
+        if (!impact) return;
+        printImpact(impact);
+        if (!(await askToApply(`Remove the pack "${probe.name ?? name}" from this project?`))) {
+          logger.info('Nothing was deregistered or deleted.');
+          return;
+        }
+      }
       deregisterPackRef(ref);
+      if (unattended(options.yes)) sayAppliedUnseen(probe.name ?? name, ref, true);
       // Delete vendored files, but never paths outside .wai/packs (the ref
       // may point at a location the user owns).
       const resolved = path.resolve(root, ref);
@@ -806,4 +911,144 @@ export async function removePack(name: string, options: { global?: boolean } = {
   }
   logger.error(`No project pack named "${name}" registered. See \`wairon packs list\`.`);
   process.exitCode = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Pack impact — what a pack write would change, shown before it happens.
+//
+// Installing a pack is intentional and its impact must be understood, so every
+// command that selects, updates or removes a project's pack shows the report
+// first and asks. `--yes`, or a run with no terminal to ask on, applies without
+// it and says so. The report states changes and never judges them: a pack that
+// loosens wairon's checks is a change like any other, never a finding.
+// ---------------------------------------------------------------------------
+
+/** An unattended run: --yes, or no terminal to ask on. */
+function unattended(yes?: boolean): boolean {
+  return yes === true || !process.stdin.isTTY || !process.stdout.isTTY;
+}
+
+/** Ask whether to apply; anything but yes is no. */
+async function askToApply(message: string): Promise<boolean> {
+  const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
+    { type: 'confirm', name: 'confirmed', message, default: false },
+  ]);
+  return confirmed === true;
+}
+
+/** Measure a candidate through the validator portal; a failure is reported and answers null (nothing is written). */
+function measureOrReport(candidate: PackCandidate): PackImpact | null {
+  try {
+    return measurePackImpact(candidate);
+  } catch (e) {
+    logger.error(`${e instanceof Error ? e.message : String(e)} Nothing was written.`);
+    process.exitCode = 1;
+    return null;
+  }
+}
+
+/** Measure a pack whose manifest is not in the project yet (read from `source`), print the report and ask. */
+async function confirmPackWrite(candidate: PackCandidate, source: string, question: string): Promise<boolean> {
+  const manifest = packManifest(source);
+  if (!manifest) {
+    logger.error(`Could not read the pack at ${source} to measure its impact. Nothing was written.`);
+    process.exitCode = 1;
+    return false;
+  }
+  const impact = measureOrReport({ ...candidate, manifest });
+  if (!impact) return false;
+  printImpact(impact);
+  if (await askToApply(question)) return true;
+  logger.info('Nothing was vendored or registered.');
+  return false;
+}
+
+/** The line an unattended legacy pack write ends with. */
+function sayAppliedUnseen(name: string, ref: string, removed = false): void {
+  logger.info(`${removed ? 'Removed' : 'Applied'} ${ref} without showing the impact (--yes, or no terminal) — ${removed ? 'it no longer applies here' : `see it with ${chalk.cyan(`wairon pack impact`)} on a selection, or re-run \`wairon pack add ${name}\` in a terminal`}.`);
+}
+
+const SEVERITY_COLOR: Record<string, (s: string) => string> = { error: chalk.red, warning: chalk.yellow, notice: chalk.cyan };
+
+/** One doctrine change as a report line. */
+function changeLine(c: PackImpact['doctrine'][number]): string {
+  const range = c.from !== undefined || c.to !== undefined ? chalk.dim(` (${c.from ?? '—'} → ${c.to ?? '—'})`) : '';
+  return `    ${c.axis} ${chalk.bold(c.change)}: ${c.subject}${range}${c.reason ? chalk.dim(` — ${c.reason}`) : ''}`;
+}
+
+/** The doctrine changes grouped by the profile carrying them (pack-wide first). */
+function printDoctrine(changes: PackImpact['doctrine']): void {
+  if (changes.length === 0) console.log(chalk.dim('    (no changes against wairon\'s defaults)'));
+  const groups = new Map<string, PackImpact['doctrine']>();
+  for (const c of changes) groups.set(c.profile ?? '', [...(groups.get(c.profile ?? '') ?? []), c]);
+  for (const [profile, list] of groups) {
+    console.log(`  ${profile === '' ? 'pack-wide' : `profile ${chalk.bold(profile)}`}`);
+    for (const c of list) console.log(changeLine(c));
+  }
+}
+
+/** The report: the doctrine against wairon's defaults, the governing profiles, the finding changes and both totals. */
+function printImpact(impact: PackImpact): void {
+  const removal = impact.direction === 'remove';
+  logger.blank();
+  console.log(chalk.bold(`Pack impact — ${impact.pack}${impact.version ? ` v${impact.version}` : ''}${impact.replaces ? ` (replaces v${impact.replaces})` : ''}`));
+  console.log(chalk.dim(removal
+    ? '  Measured as removed: the findings below are what the pack accounts for on this project now.'
+    : '  Measured as applied. Nothing has been written. Changes are stated, never judged.'));
+  console.log(chalk.bold('\n  What it changes against wairon\'s defaults'));
+  printDoctrine(impact.doctrine);
+  if (impact.previousDoctrine) {
+    console.log(chalk.bold(`\n  What the replaced version${impact.replaces ? ` v${impact.replaces}` : ''} changed`));
+    printDoctrine(impact.previousDoctrine);
+  }
+  console.log(`\n  Governs here: ${impact.governing.length > 0 ? impact.governing.join(', ') : chalk.dim('none of its profiles')}`);
+  const f = impact.findings;
+  console.log(chalk.bold(`\n  Findings on this project${removal ? ' once it no longer applies' : ''}: ${f.introduced.length} introduced, ${f.resolved.length} resolved, ${f.regraded.length} regraded`));
+  const line = (mark: string, severity: string, code: string, specId: string | undefined, message: string): void =>
+    console.log(`    ${mark} ${(SEVERITY_COLOR[severity] ?? chalk.white)(severity)} [${code}]${specId ? chalk.dim(` ${specId}`) : ''} ${message}`);
+  for (const i of f.introduced) line('+', i.severity, i.code, i.specId, i.message);
+  for (const i of f.resolved) line('-', i.severity, i.code, i.specId, i.message);
+  for (const r of f.regraded) line('~', r.finding.severity, r.finding.code, r.finding.specId, chalk.dim(`was ${r.from}`));
+  const totals = (v: PackImpact['before']): string => `${v.errors} error(s), ${v.warnings} warning(s), ${v.notices} notice(s)`;
+  console.log(`\n  Before: ${totals(impact.before)}\n  After:  ${totals(impact.after)}`);
+  logger.blank();
+}
+
+/**
+ * `wairon pack impact <name>[@version]` — show, on demand and writing nothing,
+ * what a pack changes: its doctrine against wairon's defaults, which of its
+ * profiles would govern this project, and the findings that change here. For a
+ * pack this project does not apply (or applies at another version) it measures
+ * applying the requested one as `pack use` would record it; for one it applies
+ * exactly as asked, it measures removing it: what the pack accounts for now.
+ */
+export async function impactPack(spec: string): Promise<void> {
+  // Steps 1-3: an impact is measured on a project.
+  if (!projectConfigExists()) {
+    logger.error('Not inside a wairon project — run `wairon init` first.');
+    process.exitCode = 1;
+    return;
+  }
+  // Steps 4-6: only an installed pack can be measured.
+  const { name, version } = parseNameAtVersion(spec);
+  const resolved = resolveInstalledPack(name, version);
+  if (!resolved) {
+    logger.error(`No pack "${spec}" is installed in the store (${packStoreDir()}). Install it first: wairon pack install <source>`);
+    const names = [...new Set(listInstalledPacks().map((p) => p.name))];
+    if (names.length) logger.info(`Installed: ${names.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  // Step 7: does this project apply it exactly as asked?
+  const stored = (loadProjectConfig()?.extensions?.packs ?? []).find((e): e is PackSelection => typeof e !== 'string' && e.name === name);
+  const exact = stored !== undefined && (stored.version ?? '') === (version ?? '');
+  // Step 8: the stored entry removed, or the selection `pack use` would record.
+  const candidate: PackCandidate = exact
+    ? { entry: stored, remove: true }
+    : { entry: buildSelection(resolved, { pinVersion: version !== undefined }) };
+  // Step 9: measured, writing nothing.
+  const impact = measureOrReport(candidate);
+  if (!impact) return;
+  // Step 10.
+  printImpact(impact);
 }
