@@ -1,0 +1,26 @@
+kind: value-object
+id: external_composition
+name: ExternalComposition
+description: >-
+  What composing one project's externals against their live producers produced
+  (family_validator.compose): the composition findings, and the aliases of the externals whose
+  producer lay outside the run's reach and were therefore not composed — the family run counts those
+  in its one-line hint instead of raising a finding.
+subsystem: sdd_validator
+fields:
+  - name: findings
+    type: ValidationIssue[]
+    description: >-
+      EXTERNAL_INCOMPATIBLE, EXTERNAL_DRIFTED and EXTERNAL_CHECK_UNAVAILABLE on the project's
+      externals, each at the project's own severity and stamped with its key
+    optional: false
+  - name: notSelected
+    type: string[]
+    description: >-
+      The aliases of the externals whose producer lay outside the run's reach: never read, never
+      judged, counted in the run's hint
+    optional: false
+methods: []
+sourcePath: src/core/family-validation.ts
+createdAt: '2026-09-28T18:11:27.152Z'
+updatedAt: '2026-09-28T18:11:27.161Z'

@@ -34,9 +34,12 @@ fields:
     optional: false
   - name: form
     type: string
-    description: 'leading | super | path: the deprecated form rewritten.'
+    description: >-
+      leading | super | path | self-prefix: the deprecated form rewritten. self-prefix is the
+      referring project's own id used as a prefix (`registry.advisory-channel` inside registry),
+      rewritten to the bare local id by stage 4's positional step.
     optional: false
 methods: []
 sourcePath: src/commands/position-migration.ts
 createdAt: '2026-09-27T10:44:27.609Z'
-updatedAt: '2026-09-27T17:05:35.231Z'
+updatedAt: '2026-09-28T16:10:59.631Z'

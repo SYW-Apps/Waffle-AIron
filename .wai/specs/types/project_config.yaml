@@ -73,23 +73,26 @@ fields:
       The other projects this project consumes, keyed by alias — the first segment of its
       `alias::name` references. Each value is an ExternalDeclaration; the alias defaults the
       producer id, and a producer is found through the family (parent, members' siblings) or an
-      explicit source.path. A member needs no declaration: its `members` key is its alias. An alias
-      both here and under `members` is a problem of both declarations. Read by the scan and the
-      project graph. Written by hand, or by `doctor --fix`'s chaining migration through the
-      registry's declareExternal, which adds an alias and never overwrites one.
+      explicit source.path. Its `use` imports producer names so they may be written bare: a bare
+      name resolves to a local spec first, then to a name exactly one import supplies. A member
+      needs no declaration: its `members` key is its alias. An alias both here and under `members`
+      is a problem of both declarations. Read by the scan and the project graph. Written by hand, or
+      by `doctor --fix` through the registry's declareExternal (adds an alias, never overwrites one)
+      and importNames (adds names to an alias's `use`).
     optional: true
   - name: members
     type: Map<string, MemberDeclaration | string>
     description: >-
       The projects this project contains, keyed by alias: `billing: services/billing` (shorthand,
       the value is the path relative to this root) or `ledger: { path: services/ledger, description:
-      ... }` (long form, a MemberDeclaration). A member is not a subsystem of this project: it has
-      no L1 spec here and carries no content here; this project reaches it only as `alias::name`,
-      through the member's own L0 export table, like any other consumer. Its path must lie inside
-      this project (containment is decided against the declaring root). Together with `externals` it
-      is this project's alias table, and one alias names one project. Written by hand, or by `doctor
-      --fix`'s chaining migration through the registry's declareMember, which moves a legacy L1
-      `projectPath` mount here; the L1 form still loads for one release (DEPRECATED_MOUNT_FORM).
+      ..., use: [...] }` (long form, a MemberDeclaration). A member is not a subsystem of this
+      project: it has no L1 spec here and carries no content here; this project reaches it only as
+      `alias::name`, through the member's own L0 export table, like any other consumer — or bare,
+      for the names the long form's `use` imports. Its path must lie inside this project
+      (containment is decided against the declaring root). Together with `externals` it is this
+      project's alias table, and one alias names one project. Written by hand, or by `doctor --fix`
+      through the registry's declareMember and importNames; the L1 `projectPath` form still loads
+      for one release (DEPRECATED_MOUNT_FORM).
     optional: true
 methods:
   - name: declaredPackNames
@@ -139,18 +142,20 @@ methods:
     returns: DeclaredExternal[]
     description: >-
       The configuration's `externals`, one DeclaredExternal per alias in declaration order: the
-      producer id is the entry's `project`, else the alias; the source path is copied as written; an
-      alias outside [a-z0-9-_]+, an alias `members` also declares, or a producer id outside the
-      project-id grammar is recorded as the entry's problem rather than dropped. Empty when nothing
-      is declared.
+      producer id is the entry's `project`, else the alias; the source path is copied as written;
+      `use` is deduplicated in first-seen order; an alias outside [a-z0-9-_]+, an alias `members`
+      also declares, a producer id outside the project-id grammar, or a `use` entry that is neither
+      `*` nor a public name is recorded as the entry's problem rather than dropped. Empty when
+      nothing is declared.
   - name: declaredMembers
     signature: 'declaredMembers(): DeclaredMember[]'
     returns: DeclaredMember[]
     description: >-
       The configuration's `members`, one DeclaredMember per alias in declaration order, the
-      shorthand read as `{ path }`: the path and description copied as written; an alias outside
-      [a-z0-9-_]+, an empty or absolute path, or an alias `externals` also declares is recorded as
-      the entry's problem rather than dropped. Empty when nothing is declared.
+      shorthand read as `{ path }` with no imports: the path, description and `use` copied as
+      written; an alias outside [a-z0-9-_]+, an empty or absolute path, an alias `externals` also
+      declares, or a malformed `use` entry is recorded as the entry's problem rather than dropped.
+      Empty when nothing is declared.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-27T10:41:12.293Z'
+updatedAt: '2026-09-28T16:05:40.875Z'

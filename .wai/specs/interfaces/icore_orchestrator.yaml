@@ -121,13 +121,17 @@ methods:
       become `<parent id>::name` (the member gains an `externals` entry for the parent when it has
       any), a `super::` the moved subtree wrote becomes `<project id>::name` by the project it lands
       in, and the parent's L0 entries that re-exported the subsystem now re-export the member by
-      alias. The exports those references need on either side are new content, left to `wairon
-      doctor --fix` (its chaining migration adds them through the gated seam); until then
-      EXTERNAL_NOT_EXPORTED (notice) names each. The moved subsystem's own key becomes `<id>::<id>`.
-      Throws if the subsystem is missing or is already a member, if the path does not resolve
-      strictly within the owning project root (absolute, ../-escaping and link-escaping paths are
-      rejected), or if a moved `super::` climbs beyond the bound root's reach, before anything
-      moves. Source code is not moved.
+      alias. So that the tree passes the owner's gate on either side (stage 4), what now crosses the
+      boundary is declared: each side exports what the other references in it — a type through its
+      subsystem and its L0, a component its subsystem already publishes through its L0 (one it does
+      not publish stays EXTERNAL_NOT_EXPORTED: making a component public is a design decision, never
+      a move's side effect) — and a bare type name the moving side no longer owns, a union member's
+      included, is imported by name (`use`) from the side that owns it now, so the text stays as
+      written. The moved subsystem's own key becomes `<id>::<id>`. Throws if the subsystem is
+      missing or is already a member, if the path does not resolve strictly within the owning
+      project root (absolute, ../-escaping and link-escaping paths are rejected), or if a moved
+      `super::` climbs beyond the bound root's reach, before anything moves. Source code is not
+      moved.
     signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
     returns: void
   - name: internalizeMember
@@ -791,6 +795,22 @@ methods:
         description: The spec's in-memory key, from the family's top root
     guarantees:
       - idempotent
+  - name: importNames
+    description: >-
+      Add public names to the `use` of the bound project's external or member under an alias,
+      through the project config Repository: refused for a malformed name or an undeclared alias, a
+      no-op for names already imported. Returns whether it wrote.
+    signature: 'importNames(alias: string, names: string[]): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external or member alias
+      - name: names
+        type: string[]
+        description: The public names to import, or `*`
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T17:03:59.906Z'
+updatedAt: '2026-09-28T18:12:57.622Z'

@@ -18,7 +18,7 @@ import {
   externalizeSubsystem,
   internalizeMember,
 } from '../../src/core/provision.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -96,7 +96,7 @@ function everyTypeRef(root: string): string[] {
 function findings(root: string): string[] {
   invalidateSpecCache();
   setProjectRoot(root);
-  return validateSddTree().issues.map((i) => `${i.severity} ${i.code} @${i.specId}`).sort();
+  return validateProject().issues.map((i) => `${i.severity} ${i.code} @${i.specId}`).sort();
 }
 
 /**
@@ -224,9 +224,7 @@ describe('a migration leaves a union type reference exactly as written', () => {
     // The rewrite qualifies the ids it can match WHOLE: bare `invoice` becomes
     // `billing::invoice`. A union is never equal to a bare id, so every union is
     // left exactly as written — INCLUDING the ones whose member is in the rename
-    // map. That is not a dangling reference: a type ref matches by name as a
-    // SUFFIX of the qualified id, whichever namespace the naming spec sits in,
-    // so the unqualified `invoice` inside the union still resolves.
+    // map.
     externalizeSubsystem('billing', 'sub/billing');
     invalidateSpecCache();
     setProjectRoot(root);
@@ -236,8 +234,17 @@ describe('a migration leaves a union type reference exactly as written', () => {
       many: FIELD_UNION,             // a union: left verbatim
       index: PARAM_UNION,            // a generic inside a union: left verbatim
     });
-    // And no type reference started failing to resolve because of it.
-    expect(findings(root).filter((f) => f.includes('TYPE'))).toEqual(typeFindingsBefore);
+    // Stage 4 retired the family-wide suffix match: the bare `invoice` left
+    // inside a union reaches the member's type only through a `use` import —
+    // which externalize declares, exporting the type from the member, so the
+    // union stays verbatim and no type reference starts failing.
+    expect(findings(root).filter((f) => f.includes('TYPE') && !typeFindingsBefore.includes(f))).toEqual([]);
+    const parent = readYamlFile(path.join(root, '.wai', 'project.yaml')) as any;
+    expect(parent.members.billing.use).toEqual(['invoice']);
+    const memberL0 = readYamlFile(path.join(root, 'sub', 'billing', '.wai', 'specs', '.index.yaml')) as any;
+    expect(memberL0.publicInterfaces).toEqual([{ typeDef: 'invoice', audience: 'project' }]);
+    // And the parent's owner's gate holds no error the move introduced.
+    expect(findings(root).filter((f) => f.startsWith('error '))).toEqual([]);
   });
 
   it('internalizing it back leaves them alone too', () => {

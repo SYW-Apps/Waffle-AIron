@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { validateSddTree, validateAsComplete, type ValidationIssue } from '../../src/core/validation.js';
+import { validateProject, validateAsComplete, type ValidationIssue } from '../../src/core/validation.js';
 import { buildRuleContext } from '../../src/core/rules/index.js';
 import { validateComponentCandidate } from '../../src/core/rules/candidate.js';
 import { runLock } from '../../src/commands/lock.js';
@@ -109,11 +109,11 @@ afterEach(() => {
 describe('resolving a code to notice', () => {
   it('reports an error-default code set to notice as a notice, and leaves the result valid', () => {
     project({ status: 'complete' });
-    const baseline = validateSddTree();
+    const baseline = validateProject();
     expect(find(baseline.issues, 'MISSING_ENDPOINT').map((i) => i.severity)).toEqual(['error']);
     expect(baseline.valid).toBe(false);
 
-    const noticed = validateSddTree({ rules: rulesOf({ MISSING_ENDPOINT: 'notice' }) });
+    const noticed = validateProject({ rules: rulesOf({ MISSING_ENDPOINT: 'notice' }) });
     expect(find(noticed.issues, 'MISSING_ENDPOINT').map((i) => i.severity)).toEqual(['notice']);
     // A notice never makes the tree invalid.
     expect(noticed.valid).toBe(true);
@@ -121,18 +121,18 @@ describe('resolving a code to notice', () => {
 
   it('raises a notice back to warning or error, and silences it with off', () => {
     project({ status: 'complete' });
-    expect(find(validateSddTree({ rules: rulesOf({ MISSING_ENDPOINT: 'warning' }) }).issues, 'MISSING_ENDPOINT')
+    expect(find(validateProject({ rules: rulesOf({ MISSING_ENDPOINT: 'warning' }) }).issues, 'MISSING_ENDPOINT')
       .map((i) => i.severity)).toEqual(['warning']);
-    expect(find(validateSddTree({ rules: rulesOf({ MISSING_ENDPOINT: 'error' }) }).issues, 'MISSING_ENDPOINT')
+    expect(find(validateProject({ rules: rulesOf({ MISSING_ENDPOINT: 'error' }) }).issues, 'MISSING_ENDPOINT')
       .map((i) => i.severity)).toEqual(['error']);
-    expect(find(validateSddTree({ rules: rulesOf({ MISSING_ENDPOINT: 'off' }) }).issues, 'MISSING_ENDPOINT')).toEqual([]);
+    expect(find(validateProject({ rules: rulesOf({ MISSING_ENDPOINT: 'off' }) }).issues, 'MISSING_ENDPOINT')).toEqual([]);
   });
 
   it('keeps a notice a notice in draft context: the draft downgrade never raises one', () => {
     project({ status: 'draft' });
     // Control: draft softens the error default to a warning.
-    expect(find(validateSddTree().issues, 'MISSING_ENDPOINT').map((i) => i.severity)).toEqual(['warning']);
-    const issue = find(validateSddTree({ rules: rulesOf({ MISSING_ENDPOINT: 'notice' }) }).issues, 'MISSING_ENDPOINT');
+    expect(find(validateProject().issues, 'MISSING_ENDPOINT').map((i) => i.severity)).toEqual(['warning']);
+    const issue = find(validateProject({ rules: rulesOf({ MISSING_ENDPOINT: 'notice' }) }).issues, 'MISSING_ENDPOINT');
     expect(issue.map((i) => i.severity)).toEqual(['notice']);
     expect(issue[0].draftContext).toBe(true);
   });
@@ -166,21 +166,21 @@ describe('lint.allow and notices', () => {
   it('an allow silences a notice, and is counted as used', () => {
     project({ status: 'draft', subsystemLint: allow });
     const rules = rulesOf({ DRAFT_SUBSYSTEM_WARNING: 'notice' });
-    const { issues } = validateSddTree({ rules });
+    const { issues } = validateProject({ rules });
     expect(find(issues, 'DRAFT_SUBSYSTEM_WARNING')).toEqual([]);
     expect(find(issues, 'UNUSED_LINT_ALLOW')).toEqual([]);
   });
 
   it('control: without the allow the notice is reported', () => {
     project({ status: 'draft' });
-    const { issues } = validateSddTree({ rules: rulesOf({ DRAFT_SUBSYSTEM_WARNING: 'notice' }) });
+    const { issues } = validateProject({ rules: rulesOf({ DRAFT_SUBSYSTEM_WARNING: 'notice' }) });
     expect(find(issues, 'DRAFT_SUBSYSTEM_WARNING').map((i) => i.severity)).toEqual(['notice']);
   });
 
   it('a stale allow for a notice code is reported like any stale allow', () => {
     // Complete: DRAFT_SUBSYSTEM_WARNING cannot fire, so the allow matches nothing.
     project({ status: 'complete', subsystemLint: allow });
-    const { issues } = validateSddTree({ rules: rulesOf({ DRAFT_SUBSYSTEM_WARNING: 'notice' }) });
+    const { issues } = validateProject({ rules: rulesOf({ DRAFT_SUBSYSTEM_WARNING: 'notice' }) });
     const stale = find(issues, 'UNUSED_LINT_ALLOW');
     expect(stale).toHaveLength(1);
     expect(stale[0].specId).toBe('sub-a');

@@ -60,8 +60,9 @@ fields:
   - name: reason
     type: string
     description: >-
-      reference | mount: planned because references land on it, or carried from a legacy mount's
-      publicInterfaces.
+      reference | mount | positional: planned because references land on it, carried from a legacy
+      mount's publicInterfaces, or planned because bare references elsewhere in the family reached
+      it only by position and now import it (stage 4).
     optional: false
   - name: interface
     type: string
@@ -80,4 +81,4 @@ fields:
 methods: []
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:11:40.727Z'
-updatedAt: '2026-09-27T17:15:21.470Z'
+updatedAt: '2026-09-28T16:11:02.439Z'

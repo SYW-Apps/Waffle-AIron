@@ -89,14 +89,19 @@ methods:
   - name: validateAttached
     description: >-
       Run validation against the ATTACHED hosted project's tree and return its report, for a
-      checkout that has no local tree to validate.
-    signature: 'validateAttached(target: RemoteTarget, subsystem?: string): Json'
+      checkout that has no local tree to validate. With family, ask the instance for the family run
+      (`wairon validate --family`); it composes within the credential's reach and never beyond it.
+    signature: 'validateAttached(target: RemoteTarget, subsystem?: string, family?: boolean): Json'
     returns: Json
     params:
       - name: target
         type: remote_target
       - name: subsystem
         type: string
+        optional: true
+      - name: family
+        type: boolean
+        description: Ask for the family run explicitly, as `validate --family` does locally
         optional: true
   - name: statusAttached
     description: Read the completeness dashboard of the ATTACHED hosted project's tree.
@@ -169,4 +174,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-08-12T18:31:56.292Z'
-updatedAt: '2026-08-12T19:21:57.664Z'
+updatedAt: '2026-09-29T13:54:56.248Z'

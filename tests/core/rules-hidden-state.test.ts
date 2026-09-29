@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
     proj.source('src/orch.ts', STATEFUL_ORCH);
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'HIDDEN_STATE');
+      const found = byCode(validateProject(), 'HIDDEN_STATE');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('"sessionCache"');
@@ -116,7 +116,7 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'HIDDEN_STATE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'HIDDEN_STATE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -135,7 +135,7 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'HIDDEN_STATE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'HIDDEN_STATE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -155,7 +155,7 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
     proj.source('src/orch.ts', STATEFUL_ORCH);
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'HIDDEN_STATE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'HIDDEN_STATE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -167,7 +167,7 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
     proj.source('src/orch.py', 'session_cache = {}\n\ndef run_flow(id):\n    session_cache[id] = 1\n');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'HIDDEN_STATE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'HIDDEN_STATE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -180,7 +180,7 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
     proj.source('src/commands/run-flow.ts', STATEFUL_ORCH);
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'HIDDEN_STATE');
+      const found = byCode(validateProject(), 'HIDDEN_STATE');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('"src/commands/run-flow.ts"');
       expect(found[0].specId).toBe('impl-flow-orch');
@@ -199,7 +199,7 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
     proj.source('src/actor.ts', ['let queued = 0;', 'export function printLabel(): void { queued += 1; }'].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'HIDDEN_STATE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'HIDDEN_STATE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -217,7 +217,7 @@ describe('HIDDEN_STATE — mutable module state in logic-only files', () => {
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'HIDDEN_STATE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'HIDDEN_STATE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

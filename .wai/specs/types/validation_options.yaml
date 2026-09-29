@@ -5,8 +5,10 @@ description: >-
   What a validation run is allowed to vary. The contract used to read `validateSddTree():
   ValidationResult` with the description "Performs full SDD tree validation" — six words for a
   function with seven switches, three of which change whether a finding is an error or does not fire
-  at all. A reader could not have learned from the design that the lock gate and an ordinary
-  validate are the same function called differently.
+  at all. Since stage 4 the same options drive two functions, the owner's gate (validateProject) and
+  the family run (validateFamily), and selectsFamily is the one reading of which a caller asked for;
+  the crossTree switch that suppressed findings for a run that could not see the other side is gone
+  with resolve-through-parent.
 fields:
   - name: rules
     type: RulesConfig
@@ -25,8 +27,10 @@ fields:
   - name: recursive
     type: boolean | number
     description: >-
-      Whether to descend into chained subprojects, and how deep. True descends all the way; a number
-      bounds it.
+      At a project that declares members: whether the run is the family run over it and its members
+      (true, the default), how many member levels that family run selects (a number), or the owner's
+      gate alone (false). The owner's gate reads its contained members' export tables whatever this
+      says — its own references into them are judged there — and never judges a member's specs.
     optional: true
   - name: extensions
     type: LoadedExtensions
@@ -43,13 +47,25 @@ fields:
       lock`. The flip must happen INSIDE the run, because invalidating the spec cache discards any
       status set beforehand.
     optional: true
-  - name: crossTree
-    type: '''off'''
+  - name: family
+    type: boolean
     description: >-
-      Suppress the findings that can only be judged across a chained tree boundary, for a run that
-      cannot see the other side.
+      Ask for the family run explicitly (`validate --family`, MCP `family: true`). At a member this
+      is the one way to compose its externals against their live producers: the walk up to them is
+      then explicit, and still reach-gated (hosted, the credential's reach; it never widens it).
+      Omitted, a project that declares members runs its family and any other project runs its
+      owner's gate.
     optional: true
-methods: []
+methods:
+  - name: selectsFamily
+    signature: 'selectsFamily(declaresMembers: boolean): boolean'
+    returns: boolean
+    description: >-
+      Whether these options ask for the family run rather than the owner's gate: true when `family`
+      is set, or when the bound project declares members and `recursive` is not false. The one
+      reading of the flags every caller (CLI validate, the MCP validate tool, doctor) shares, so the
+      choice cannot drift between them.
+    sourcePath: src/models/validation-options.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-09-20T14:26:35.723Z'
-updatedAt: '2026-09-20T14:26:35.733Z'
+updatedAt: '2026-09-28T18:11:50.553Z'

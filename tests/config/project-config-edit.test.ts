@@ -219,6 +219,11 @@ describe('stage 2c — the registry\'s deliberate identity and dependency declar
     expect(() => repo.declareExternal('billing', { project: 'billing-v2' })).toThrow(/never overwritten/);
     expect(repo.declareExternal('crm', { project: 'crm' })).toBe(true);
     expect(repo.load()?.externals).toEqual({ billing: {}, crm: { project: 'crm' } });
+    // The `use` imports are importNames' state: a declaration stating none is the same declaration.
+    expect(repo.importNames('billing', ['invoice'])).toBe(true);
+    expect(repo.declareExternal('billing', {})).toBe(false);
+    expect(() => repo.declareExternal('billing', { use: ['ledger'] })).toThrow(/never overwritten/);
+    expect(repo.load()?.externals?.billing).toEqual({ use: ['invoice'] });
   });
 
   it('refuses a project with no configuration', () => {

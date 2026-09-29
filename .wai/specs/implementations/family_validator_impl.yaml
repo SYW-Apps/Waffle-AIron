@@ -1,0 +1,186 @@
+id: family_validator_impl
+name: Family Validator Implementation
+description: >-
+  The family run over the bound root's graph, in src/core/family-validation.ts. Reach is granted by
+  binding each selected project's root under a ceiling: a plain run narrows it to the family root,
+  `--family` keeps the request's (none locally, the credential's hosted), and nothing widens it. The
+  composition's out-of-reach externals are counted for the run's hint; the family codes are tuned by
+  the owning project's sddRuleSeverity (the consumer for composition, the root for the member
+  checks) and lint.allow never applies to them, because they name no spec.
+contract: ifamily_validator
+sourcePath: src/core/family-validation.ts
+simPath: tests/core/family-validation.test.ts
+methods:
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph through the core adapter: the root, the members it
+          contains (depth-bounded by a numeric `recursive`), their keys and directories, the
+          cross-project references and the identity and membership problems. This is the selection;
+          nothing above the bound root is in it
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: >-
+          Grant reach before any further read: unless the options ask for the family explicitly,
+          narrow the request's reach ceiling to the bound root, so composing an external never reads
+          a producer above the family. With `family` set, keep the request's reach unchanged —
+          locally the walk up is then explicit, hosted it is the credential's — and never widen it
+        type: local
+      - stepNumber: 3
+        description: For each selected project, the root first
+        type: loop
+        loopKind: forEach
+        over: the selected projects of the graph, root first, then members in scan order
+        endStep: 8
+      - stepNumber: 4
+        description: Bind the project's root for the next calls, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 5
+        description: >-
+          Read the project's own configuration through the core adapter: its own rule severities and
+          projectType judge it, never the root's
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 6
+        label: own-gate
+        description: >-
+          Run the project's own gate with its own configuration and the run's scope and strictness —
+          the same call its own `validate` makes, so its verdict here is its verdict everywhere
+        type: call
+        targetComponent: spec_validator
+        targetMethod: validateProject
+      - stepNumber: 7
+        description: Compose the project's externals against their live producers in reach
+        type: call
+        targetComponent: family_validator
+        targetMethod: compose
+      - stepNumber: 8
+        description: >-
+          Carry the project's own findings verbatim, each stamped with the project's key (spec ids
+          shown under it), add the composition findings, and record the project's totals
+        type: local
+      - stepNumber: 9
+        description: Run the family checks over the root's graph
+        type: call
+        targetComponent: family_validator
+        targetMethod: checkMembers
+      - stepNumber: 10
+        description: >-
+          When externals were left out because their producers lie outside the reach, add a one-line
+          hint counting them and naming `validate --family` from the member that declares them
+        type: local
+      - stepNumber: 11
+        description: >-
+          Return the family verdict: valid when no project's gate and no family finding holds an
+          error, with every project's totals
+        type: return
+        outcome: ValidationResult
+  - name: compose
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read, through the surfaces adapter, each of the bound project's externals compared at
+          signature level with its live producer: per used member unchanged, changed, removed,
+          unlocked or unavailable, whether the producer drifted from its pin, and whether it lay out
+          of reach (then it was never read)
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 2
+        description: >-
+          Read the bound project's configuration through the core adapter for its own severity
+          overrides
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: For each external's status
+        type: loop
+        loopKind: forEach
+        over: the statuses, in declaration order
+        endStep: 8
+      - stepNumber: 4
+        description: Is the producer out of reach?
+        type: branch
+        condition: the status is outOfReach
+        onFalseStep: 7
+      - stepNumber: 5
+        description: 'Record it as not selected — no finding: the run did not reach it'
+        type: local
+      - stepNumber: 6
+        description: Next external
+        type: jump
+        toStep: 8
+      - stepNumber: 7
+        label: judge
+        description: >-
+          Turn the status into findings on the consumer's external: each used member changed or
+          removed is EXTERNAL_INCOMPATIBLE (naming the member, what the lock recorded and what the
+          live table now holds); a drifted producer with every used member unchanged is one
+          EXTERNAL_DRIFTED; each unavailable or unlocked use is EXTERNAL_CHECK_UNAVAILABLE with its
+          reason — never a pass. Each severity is the project's own sddRuleSeverity override, else
+          the code default
+        type: local
+      - stepNumber: 8
+        label: next
+        description: The external is judged
+        type: local
+      - stepNumber: 9
+        description: Return the composition findings, with the aliases of the externals not selected
+        type: return
+        outcome: ValidationIssue[]
+  - name: checkMembers
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Report the graph's member problems: each member-absent problem as MEMBER_NOT_FOUND (naming
+          the declaring project, the alias and the path); each id-collision as PROJECT_ID_COLLISION
+          (pointing at consumption: one member, several consumers); each defaulted member as
+          PROJECT_ID_DEFAULTED, naming the name slug it answers to now and its alias as the id to
+          declare (doctor --fix writes it); each member with no id as PROJECT_ID_AMBIGUOUS
+        type: local
+      - stepNumber: 2
+        description: >-
+          Find the loops of the selection with project_family.dependencyCycles and report each as
+          PROJECT_DEPENDENCY_CYCLE on each project in it, with the references that make each edge,
+          cheapest first
+        type: local
+      - stepNumber: 3
+        description: For each present member
+        type: loop
+        loopKind: forEach
+        over: the graph's members that loaded
+        endStep: 7
+      - stepNumber: 4
+        description: Bind the member's root for the next calls, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 5
+        description: >-
+          Compute the member's own gate identity — its tree, doctrine, externals lock and pins,
+          never an ancestor's
+        type: call
+        targetComponent: spec_validator
+        targetMethod: computeGateStateId
+      - stepNumber: 6
+        description: Read the member's lock record through the core adapter
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 7
+        description: >-
+          No record is MEMBER_UNAPPROVED; a record whose identity differs from the one just computed
+          is MEMBER_DRIFTED. The root's own lock is not a family finding
+        type: local
+      - stepNumber: 8
+        description: >-
+          Resolve each finding's severity with the root's sddRuleSeverity override, else the code
+          default, and return them
+        type: return
+        outcome: ValidationIssue[]
+status: complete
+createdAt: '2026-09-28T06:06:31.589Z'
+updatedAt: '2026-09-28T18:14:21.202Z'

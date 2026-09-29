@@ -206,8 +206,13 @@ describe('remote attachment', () => {
     const token = adminToken('demo');
     const target = { url, projectId: 'demo', token };
 
-    const report = (await validateAttached(target)) as { errors?: unknown[] };
+    const report = (await validateAttached(target)) as { errors?: unknown[]; projects?: unknown[] };
     expect(Array.isArray(report.errors)).toBe(true);
+    expect(report.projects).toBeUndefined();
+    // `validate --family` reaches the instance too: the family run answers one line per project it selected.
+    const family = (await validateAttached(target, undefined, true)) as { errors?: unknown[]; projects?: { key: string }[] };
+    expect(Array.isArray(family.errors)).toBe(true);
+    expect(family.projects?.map((p) => p.key)).toEqual(['']);
 
     const status = await statusAttached(target);
     expect(status.length).toBeGreaterThan(0);

@@ -206,7 +206,21 @@ methods:
     calls:
       - project_config_store.read
       - project_config_store.write
+  - name: importNames
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses a name that is neither `*` nor a public name of [a-z0-9-_]+ before reading anything.
+      Reads the configuration through the store, refusing when the project has none, and refuses an
+      alias that neither `externals` nor `members` declares, naming the alias and the project root.
+      Appends to that declaration's `use` every given name it does not already hold (none when it
+      holds `*`), keeping the names a person wrote in their order; a shorthand member becomes its
+      long form `{ path, use }`. When nothing is new, returns false and writes nothing; otherwise
+      writes the configuration back through the store, which keeps every comment, and returns true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-27T10:55:11.088Z'
+updatedAt: '2026-09-28T17:17:05.109Z'

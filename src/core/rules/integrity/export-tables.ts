@@ -22,12 +22,12 @@ import { isDraftSubsystem } from '../../../models/index.js';
 export const exportTablesRule: SddRule = {
   name: 'export-tables',
   description:
-    "Every level's export table must resolve the way a module resolver resolves `export … from`: one public name binds one target (EXPORT_ID_DUPLICATE when two wildcards — or two explicit entries — bind a name to different targets; the name is left out), no chain leads back to itself (EXPORT_CYCLE — an error for a named chain that never reaches a component or type, a warning for a wildcard cycle, which resolves to its union), every entry names a source and an item that exist, that the source exports and, for an own type, that the level owns — a subsystem-owned type at L1, a project-level type (no subsystem) for an L0 `{ typeDef }` without `from` — under a public name of [a-z0-9-_]+ (EXPORT_INVALID), every re-exported component can serve a boundary caller — a Portal, a gateway being a Portal variant, or an Observer for events (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports), and an L0 entry that re-exports a member's or an external's export never declares a wider audience than that export has (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. The rule judges the facts the export resolver recorded in the scan — for the bound root's table and every member's — and resolves nothing itself.",
+    "Every level's export table must resolve the way a module resolver resolves `export … from`: one public name binds one target (EXPORT_ID_DUPLICATE when two wildcards — or two explicit entries — bind a name to different targets, or two public names share one nameKey, since a bare import could not tell them apart; the name is left out), no chain leads back to itself (EXPORT_CYCLE — an error for a named chain that never reaches a component or type, a warning for a wildcard cycle, which resolves to its union), every entry names a source and an item that exist, that the source exports and, for an own type, that the level owns — a subsystem-owned type at L1, a project-level type (no subsystem) for an L0 `{ typeDef }` without `from` — under a public name of [a-z0-9-_]+ (EXPORT_INVALID), every re-exported component can serve a boundary caller — a Portal, a gateway being a Portal variant, or an Observer for events (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports; an error since stage 4), and an L0 entry that re-exports a member's or an external's export never declares a wider audience than that export has (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. The rule judges the facts the export resolver recorded in the scan — for the bound root's table and every contained member's — and resolves nothing itself.",
   codes: [
     { code: 'EXPORT_ID_DUPLICATE', defaultSeverity: 'error', summary: "One public name bound to different targets by two wildcard re-exports or two explicit entries" },
     { code: 'EXPORT_CYCLE', defaultSeverity: 'error', summary: "A re-export chain leads back to itself (a warning for a wildcard cycle, which resolves to its union)" },
-    { code: 'EXPORT_INVALID', defaultSeverity: 'notice', summary: "An export entry names a missing source or item, an item its source does not export or its level does not own, or a malformed public name" },
-    { code: 'EXPORT_UNCONSUMABLE', defaultSeverity: 'notice', summary: "An exported component no boundary caller may reach: neither a Portal nor an Observer" },
+    { code: 'EXPORT_INVALID', defaultSeverity: 'error', summary: "An export entry names a missing source or item, an item its source does not export or its level does not own, or a malformed public name" },
+    { code: 'EXPORT_UNCONSUMABLE', defaultSeverity: 'error', summary: "An exported component no boundary caller may reach: neither a Portal nor an Observer" },
     { code: 'EXPORT_WIDENS_AUDIENCE', defaultSeverity: 'error', summary: "An L0 entry declares a wider audience than the member or external export it re-exports" },
   ],
   check(ctx) {
@@ -62,11 +62,11 @@ export const exportTablesRule: SddRule = {
             break;
           case 'invalid':
             // Steps 12-13.
-            ctx.addIssue('notice', 'EXPORT_INVALID', `${where} ${problem.detail}.`, table.owner, draft);
+            ctx.addIssue('error', 'EXPORT_INVALID', `${where} ${problem.detail}.`, table.owner, draft);
             break;
           case 'unconsumable':
             // Steps 14-15.
-            ctx.addIssue('notice', 'EXPORT_UNCONSUMABLE', `${where}: ${problem.detail}.`, table.owner, draft);
+            ctx.addIssue('error', 'EXPORT_UNCONSUMABLE', `${where}: ${problem.detail}.`, table.owner, draft);
             break;
           case 'widens':
             // Step 16: a re-export can narrow reach, never widen it.

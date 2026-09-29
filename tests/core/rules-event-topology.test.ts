@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ describe('event-topology — every topic needs both ends', () => {
     proj.component('flow-orch', 'sub-a', 'Orchestrator');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(byCode(res, 'UNCONSUMED_TOPIC')).toHaveLength(0);
       expect(byCode(res, 'UNSOURCED_SUBSCRIPTION')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -96,7 +96,7 @@ describe('event-topology — every topic needs both ends', () => {
     proj.component('flow-orch', 'sub-a', 'Orchestrator', EMITTER);
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'UNCONSUMED_TOPIC');
+      const found = byCode(validateProject(), 'UNCONSUMED_TOPIC');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('orders.events');
@@ -110,7 +110,7 @@ describe('event-topology — every topic needs both ends', () => {
     proj.component('flow-orch', 'sub-a', 'Orchestrator');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'UNSOURCED_SUBSCRIPTION');
+      const found = byCode(validateProject(), 'UNSOURCED_SUBSCRIPTION');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('orders.events');
     } finally { proj.cleanup(); }
@@ -123,7 +123,7 @@ describe('event-topology — every topic needs both ends', () => {
     proj.component('order-observer', 'sub-a', 'Observer', `${SUBSCRIBER}\ndependsOn: [flow-orch]`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(byCode(res, 'UNCONSUMED_TOPIC')).toHaveLength(0);
       expect(byCode(res, 'UNSOURCED_SUBSCRIPTION')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -157,7 +157,7 @@ describe('event-topology — every topic needs both ends', () => {
     ].join('\n'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(byCode(res, 'UNSOURCED_SUBSCRIPTION')).toHaveLength(0);
       expect(byCode(res, 'UNCONSUMED_TOPIC')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -169,7 +169,7 @@ describe('event-topology — every topic needs both ends', () => {
     proj.component('flow-orch', 'sub-a', 'Orchestrator', `${EMITTER}\nlint:\n  allow:\n    - code: UNCONSUMED_TOPIC\n      reason: consumed by the external billing platform, not by this tree`);
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNCONSUMED_TOPIC')).toHaveLength(0);
+      expect(byCode(validateProject(), 'UNCONSUMED_TOPIC')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -195,7 +195,7 @@ describe('open entrypoint kinds — cyclic/interrupt/scheduled root the walker',
     ].join('\n'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(byCode(res, 'UNUSED_COMPONENT')).toHaveLength(0);
       expect(byCode(res, 'INVALID_LIFECYCLE_ENTRYPOINT')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -212,7 +212,7 @@ describe('open entrypoint kinds — cyclic/interrupt/scheduled root the walker',
     proj.component('flow-orch', 'sub-a', 'Orchestrator');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'INVALID_LIFECYCLE_ENTRYPOINT').length).toBeGreaterThan(0);
+      expect(byCode(validateProject(), 'INVALID_LIFECYCLE_ENTRYPOINT').length).toBeGreaterThan(0);
     } finally { proj.cleanup(); }
   });
 });

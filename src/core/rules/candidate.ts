@@ -86,7 +86,7 @@ export function validateComponentCandidate(
   registerBuiltinRules();
   if (opts.extensions?.rules?.length) registerPackRules(opts.extensions.rules);
   // Every code the registered rules and the loaded declarative assertions can
-  // report, gathered as validateSddTree gathers them, so any rule reading the
+  // report, gathered as validateProject gathers them, so any rule reading the
   // context's known codes sees the same set.
   const knownCodes = new Set([
     ...knownIssueCodes().map((rc) => rc.code),

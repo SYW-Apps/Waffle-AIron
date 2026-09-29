@@ -1,0 +1,65 @@
+kind: value-object
+id: positional_match
+name: PositionalMatch
+description: >-
+  What one reference the owner's gate leaves unresolved matched by POSITION in the family's top scan
+  — the reading stage 4 retired — and the explicit form that replaces it. The one answer both the
+  upgrade report (verdict_changes) and the positional migration step read, so what the report
+  explains is exactly what the migration writes.
+subsystem: sdd_cli
+fields:
+  - name: consumer
+    type: string
+    description: The key of the project whose spec holds the reference
+    optional: false
+  - name: specId
+    type: string
+    description: The spec holding it
+    optional: false
+  - name: position
+    type: string
+    description: Where in the spec (as AuthoredReference.position)
+    optional: false
+  - name: authored
+    type: string
+    description: The reference as written
+    optional: false
+  - name: kind
+    type: string
+    description: >-
+      import (a bare name another project supplies: plan the import, and the export and the external
+      when missing) | self-prefix (the consumer's own id used as a prefix,
+      `registry.advisory-channel` or `registry::x`: rewrite to the bare local id) | ambiguous (the
+      name keys onto public names or types of several projects: a person picks, reported, never
+      guessed) | none (nothing in the family matches: a genuine dangling reference)
+    optional: false
+  - name: producer
+    type: string
+    description: 'For import: the producer''s key'
+    optional: true
+  - name: target
+    type: string
+    description: 'For import: the canonical target `<producer id>::<local id>`; for self-prefix: the local id'
+    optional: true
+  - name: publicName
+    type: string
+    description: 'For import: the producer''s existing public name for the target, when it has one'
+    optional: true
+  - name: candidates
+    type: string[]
+    description: 'For ambiguous: every `<producer id>::<id>` the name keyed onto'
+    optional: true
+  - name: reason
+    type: string
+    description: >-
+      For import, why this producer was chosen — printed beside every automatic choice in the plan
+      and the report: only-match (exactly one other project has the name) | declared-producer
+      (several do; exactly one is a member or external the referring project already declares) |
+      already-exported (several do and the declared rule left none or several; exactly one of them
+      already exports the name as a public name). For ambiguous, why no rule chose: which candidates
+      each rule left.
+    optional: true
+methods: []
+sourcePath: src/commands/position-reader.ts
+createdAt: '2026-09-28T16:09:03.266Z'
+updatedAt: '2026-09-28T18:12:36.459Z'

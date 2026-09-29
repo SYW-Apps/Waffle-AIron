@@ -2,13 +2,11 @@ import { SddRule } from '../types.js';
 import { ambiguityMessage } from '../../../models/index.js';
 
 // ---------------------------------------------------------------------------
-// A narrative target this tree does not contain: can the reference be pinned
-// to exactly one declared contract? Three outcomes, one per code — the stored
-// surface snapshots single one out (nothing to report here; what that surface
-// exposes is surface-reference-backing's), they expose the name with several
-// disagreeing contracts (SURFACE_REF_AMBIGUOUS), or none covers it, which is a
-// warning for a reference that points outside this loading root and the error a
-// local typo has always got.
+// A narrative target this tree does not contain: either it leaves the project,
+// and the owner's resolution decides — resolved is surface-reference-backing's,
+// foreign snapshots that disagree are SURFACE_REF_AMBIGUOUS here, and any other
+// outcome is project-boundaries' single finding — or it is a local id that
+// names nothing, the typo it always was.
 //
 // One resolution path serves every entry kind. Call, dispatch and register
 // steps differ only in the verb their finding reads with and in the clause an
@@ -18,11 +16,10 @@ import { ambiguityMessage } from '../../../models/index.js';
 export const crossTreeReferencesRule: SddRule = {
   name: 'cross-tree-references',
   description:
-    'A narrative call, dispatch or register target that is not a component of this tree must resolve against the stored surface snapshots to exactly one declared contract. Snapshots that expose the name with disagreeing contracts leave the reference ambiguous; no snapshot at all is a warning for a reference that points outside this loading root (only the parent project can verify it) and the error a genuine local typo has always got.',
+    "A narrative call, dispatch or register target that is not a component of this tree either leaves the project — and then its resolution (resolveCrossProject) decides: resolved is surface-reference-backing's, foreign snapshots that disagree are SURFACE_REF_AMBIGUOUS here, and every other outcome is project-boundaries' single finding — or it is a local id that names nothing, the INVALID_TARGET_COMPONENT_REFERENCE typo it always was. The CROSS_TREE_REF_UNRESOLVED warning (\"only the parent project can verify it\") is retired: no reference is left for a parent to judge.",
   codes: [
-    { code: 'INVALID_TARGET_COMPONENT_REFERENCE', defaultSeverity: 'error', summary: 'Call/register step targets a non-existent component' },
-    { code: 'CROSS_TREE_REF_UNRESOLVED', defaultSeverity: 'warning', summary: 'Cross-tree reference (super::/:: form) with no surface snapshot covering it — only the parent project can verify it' },
-    { code: 'SURFACE_REF_AMBIGUOUS', defaultSeverity: 'error', summary: 'Cross-tree call/dispatch/register target matched by surface snapshots of several providers with different contracts' },
+    { code: 'INVALID_TARGET_COMPONENT_REFERENCE', defaultSeverity: 'error', summary: "Call/register step targets a non-existent component" },
+    { code: 'SURFACE_REF_AMBIGUOUS', defaultSeverity: 'error', summary: "Cross-tree call/dispatch/register target matched by surface snapshots of several providers with different contracts" },
   ],
   check(ctx) {
     for (const impl of ctx.implementations) {
@@ -49,25 +46,12 @@ export const crossTreeReferencesRule: SddRule = {
             : step.type === 'register' ? 'registers callback'
               : 'calls';
 
-          // An unresolved reference that points OUTSIDE this loading root — a
-          // chained subproject opened standalone physically does not contain its
-          // parent's specs, so the edge is only verifiable from the parent. That
-          // is a known-honest state, not a spec defect: warn with its own code
-          // instead of raising the same error a genuine typo gets. This covers
-          // the explicit relative forms (super::/::) AND a qualified reference
-          // whose leading namespace segment is not a subsystem in THIS tree —
-          // e.g. `waffler_core::x` authored from a parent root, where
-          // `waffler_core` is not present when validating from the child dir.
-          const isCrossTreeForm = ctx.isExternalNamespaceRef(target);
-          // A reference made from inside a chained mount that the loader collapsed
-          // at this root may resolve against the snapshots that mount holds; one
-          // they do not cover keeps the error it always had.
-          const isCollapsedForm = !isCrossTreeForm && fromSubsystem !== undefined
-            && ctx.isCollapsedCrossTreeRef(target, fromSubsystem);
-
-          if (isCrossTreeForm || isCollapsedForm) {
+          // A reference that leaves the project carries the owner's
+          // resolution; a local id that names nothing has none.
+          const resolution = ctx.resolveCrossProject(impl.id, 'narrative', target);
+          if (resolution) {
             const resolved = ctx.resolveSurfaceRef(target, fromSubsystem);
-            if (resolved.kind === 'ambiguous') {
+            if (resolution.outcome === 'ambiguous' && resolved.kind === 'ambiguous') {
               ctx.addIssue(
                 'error',
                 'SURFACE_REF_AMBIGUOUS',
@@ -80,32 +64,22 @@ export const crossTreeReferencesRule: SddRule = {
                 ),
                 impl.id,
                 isDraftCtx,
+                resolution,
               );
-              continue;
             }
-            // Resolved: the reference names one declared contract. Whether that
-            // contract backs what the step asks of it is
-            // surface-reference-backing's.
-            if (resolved.kind === 'resolved') continue;
+            // Resolved is surface-reference-backing's; forbidden, missing and
+            // unavailable are project-boundaries' single finding.
+            continue;
           }
 
-          if (isCrossTreeForm) {
-            ctx.addIssue(
-              'warning',
-              'CROSS_TREE_REF_UNRESOLVED',
-              `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} cross-tree component "${target}" (step ${step.stepNumber}), and no surface snapshot covers it — validate from the parent project, pin the family surfaces ("wairon surface pin"), or import the producing project's surface.`,
-              impl.id,
-              isDraftCtx,
-            );
-          } else {
-            ctx.addIssue(
-              'error',
-              'INVALID_TARGET_COMPONENT_REFERENCE',
-              `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} component "${target}" which does not exist (step ${step.stepNumber}).`,
-              impl.id,
-              isDraftCtx,
-            );
-          }
+          const hint = ctx.importHint(target);
+          ctx.addIssue(
+            'error',
+            'INVALID_TARGET_COMPONENT_REFERENCE',
+            `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} component "${target}" which does not exist (step ${step.stepNumber}).${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}`,
+            impl.id,
+            isDraftCtx,
+          );
         }
       }
     }

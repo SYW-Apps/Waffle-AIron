@@ -1,7 +1,11 @@
 kind: value-object
 id: validation_result
 name: ValidationResult
-description: Aggregate outcome of a validation run over the spec tree or registry
+description: >-
+  Aggregate outcome of a validation run: the owner's gate over one project (validateProject), or a
+  family run (validateFamily) that carries every selected project's own verdict verbatim beside the
+  composition and family findings. Nothing in it depends on where the run was started:
+  resolve-through-parent and its resolvedThrough marker are gone (stage 4).
 fields:
   - name: valid
     type: boolean
@@ -13,13 +17,22 @@ fields:
     type: ValidationIssue[]
     description: All findings (errors, warnings and notices) collected during the run
     optional: false
-  - name: resolvedThrough
-    type: ResolvedThrough
+  - name: hint
+    type: string
     description: >-
-      Present when a chained subproject's verdict was resolved through its parent: the root it was
-      validated at and the mount chain it was scoped to.
+      One line, never a finding. The owner's gate: present when the project declares externals,
+      saying that `validate --family` composes them against their live producers — the gate itself
+      judged them against the pins alone. A family run: present when externals were left out because
+      their producers lie outside the run's reach, counting them and naming `validate --family` from
+      the project that declares them.
+    optional: true
+  - name: projects
+    type: ProjectVerdict[]
+    description: >-
+      A family run only: one line per selected project (the root first, then its members in scan
+      order) with its own gate's totals. Absent on the owner's gate.
     optional: true
 methods: []
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-26T14:48:49.392Z'
+updatedAt: '2026-09-28T18:11:46.221Z'

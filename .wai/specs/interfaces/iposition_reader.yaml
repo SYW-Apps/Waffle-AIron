@@ -1,0 +1,48 @@
+id: iposition_reader
+name: Position Reader Interface
+description: The shared positional match behind the upgrade report and the positional migration step.
+component: position_reader
+methods:
+  - name: match
+    description: >-
+      For each unresolved reference (a bare name the owner's scan could bind neither locally nor
+      through an import, or one prefixed with the referring project's own id — or, for a member that
+      declares no id, the alias its parent declares it under, which `doctor --fix` declares as its
+      id): a self-prefixed one is self-prefix, targeting the bare local id when the project has that
+      spec. A bare name is compared by reference_resolution.nameKey against every OTHER project of
+      the family: its public names (a contained member's or the family's L0 tables) and the types it
+      owns that no table exports — the retired suffix match. Exactly one project matching is import
+      (reason only-match), naming the producer, the canonical target and the existing public name
+      when there is one. Several projects matching are decided by two rules, in order: prefer the
+      one the referring project declares (declared-producer); failing that, among the candidates
+      left prefer the one that exports the name as a public name (already-exported). Otherwise it is
+      ambiguous, listing every candidate and what each rule left — a person picks. It decides in
+      rounds, as a re-run after the migration applies would: "declares" counts a member or external,
+      a project its `alias::name` references already reach (the migration declares it) and a
+      producer an earlier round's import declares; "exports" counts a name an earlier round's import
+      makes the producer export. Every automatic choice carries its reason. None is none. Never
+      consults anything but what it is handed, never resolves for validation.
+    signature: >-
+      match(unresolved: AuthoredReference[], family: ProjectFamily, tables: ResolvedExportTable[],
+      types: TypeSpec[]): PositionalMatch[]
+    returns: PositionalMatch[]
+    params:
+      - name: unresolved
+        type: AuthoredReference[]
+        description: >-
+          The references to read, from the family top's scan: form import with binding unresolved,
+          and self-prefixed forms
+      - name: family
+        type: ProjectFamily
+        description: 'The family top''s graph: every project''s key, id and alias table'
+      - name: tables
+        type: ResolvedExportTable[]
+        description: Every project's resolved L0 export table
+      - name: types
+        type: TypeSpec[]
+        description: Every type the family top's scan loaded, keyed by project
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-28T16:09:32.534Z'
+updatedAt: '2026-09-29T14:31:25.341Z'

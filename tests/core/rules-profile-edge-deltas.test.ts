@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ describe('profile edge-deltas — allowedEdges license matrix exceptions', () =>
     proj.component('position-store', 'Store', 'sim', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: deliberate standalone ECS component array');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'DEPENDENCY_CLASS_VIOLATION')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
@@ -89,7 +89,7 @@ describe('profile edge-deltas — allowedEdges license matrix exceptions', () =>
     proj.component('rate-store', 'Store', 'billing', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: test fixture');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'DEPENDENCY_CLASS_VIOLATION')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
@@ -101,7 +101,7 @@ describe('profile edge-deltas — allowedEdges license matrix exceptions', () =>
     proj.component('position-store', 'Store', 'sim', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: deliberate standalone ECS component array');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'ARCHITECTURE_VIOLATION_VIEW_DEP')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -114,7 +114,7 @@ describe('profile edge-deltas — allowedEdges license matrix exceptions', () =>
     proj.component('rate-store', 'Store', 'billing', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: test fixture');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_NON_ADAPTER')).toBe(true);
     } finally { proj.cleanup(); }
   });

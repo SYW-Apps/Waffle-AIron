@@ -15,7 +15,7 @@ import {
 } from '../models/index.js';
 import { buildCanvasModel, renderCanvasHtml, type CanvasModel } from './canvas.js';
 import { generateDrawioXml, generateExcalidrawScene } from './diagram-export.js';
-import { validateSddTree, type ValidationIssue } from './validation.js';
+import { validateProject, type ValidationIssue } from './validation.js';
 import { projectConfigRepository } from '../config/project-config.js';
 // Pure interface types for the web UI graph payload. Type-only import: erased at
 // compile time, so this adds no runtime core→server coupling.
@@ -55,7 +55,7 @@ function diagramIssues(): ValidationIssue[] {
   try {
     const config = projectConfigRepository.load();
     if (!config) return [];
-    return validateSddTree({ rules: config.rules, projectType: config.projectType }).issues;
+    return validateProject({ rules: config.rules, projectType: config.projectType }).issues;
   } catch {
     return [];
   }

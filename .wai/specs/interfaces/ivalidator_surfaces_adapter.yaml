@@ -1,22 +1,30 @@
 id: ivalidator_surfaces_adapter
 name: Validator Surfaces Adapter Interface
-description: Surface-snapshot loading for validation-time resolution of cross-tree and remote references.
+description: >-
+  The validator's hop into sdd_surfaces: the bound root's own foreign surface snapshots and its
+  pinned externals for the owner's gate, and the externals status a family run composes from.
 component: validator_surfaces_adapter
 methods:
   - name: listSnapshots
     description: All surface snapshots available to this project, via the surface portal.
     signature: 'listSnapshots(): SurfaceSnapshot[]'
     returns: SurfaceSnapshot[]
-  - name: listMountSnapshots
+  - name: listPinnedExternals
     description: >-
-      The surface snapshots held inside each chained mount, keyed by mount namespace, via the
-      surface portal — so a reference made FROM inside a mount resolves against the contracts that
-      mount imported, and only such a reference.
-    signature: 'listMountSnapshots(mounts: string[]): MountSurfaceSnapshots[]'
-    returns: MountSurfaceSnapshots[]
-    params:
-      - name: mounts
-        type: string[]
+      The bound project's declared externals with their lock entries and pinned snapshots, via the
+      surface portal — the owner's gate judges references into other projects against these alone.
+    signature: 'listPinnedExternals(): PinnedExternal[]'
+    returns: PinnedExternal[]
+    params: []
+  - name: getExternalsStatus
+    description: >-
+      Each declared external of the bound project compared at signature level with its live
+      producer, via the surface portal — what a family run turns into EXTERNAL_INCOMPATIBLE,
+      EXTERNAL_DRIFTED and EXTERNAL_CHECK_UNAVAILABLE. The caller must gate on reach itself: a
+      producer outside the request's reach comes back outOfReach, unread.
+    signature: 'getExternalsStatus(): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params: []
 status: complete
 createdAt: '2026-07-10T23:14:09.299Z'
-updatedAt: '2026-09-25T21:33:44.658Z'
+updatedAt: '2026-09-28T17:16:58.367Z'

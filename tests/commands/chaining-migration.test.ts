@@ -10,7 +10,7 @@ import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { saveSnapshot } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
-import { validateSddTree, validateAsComplete, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, validateFamily, validateAsComplete, type ValidationResult } from '../../src/core/validation.js';
 import { ChainingMigrationRefusedError, DoctorOptionsError } from '../../src/utils/errors.js';
 import { plan, apply, isEmpty, blocked } from '../../src/commands/chaining-migration.js';
 import { runDoctor } from '../../src/commands/doctor.js';
@@ -219,35 +219,44 @@ describe('stage 2c — the chaining migration', () => {
   it('property: defaulted-id-is-stable — after apply every id is declared, equal to the plan\'s, and PROJECT_ID_DEFAULTED is gone', () => {
     const f = family();
     const planned = at(f.root, () => plan());
-    expect(codesOf(at(f.root, () => validateSddTree()), 'PROJECT_ID_DEFAULTED')).toHaveLength(3);
+    // Stage 4: the root's own gate judges its own id; its members' ids are the
+    // family run's (family_validator.checkMembers), each naming its alias.
+    expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_DEFAULTED')).toHaveLength(1);
+    const memberLevel = (res: ValidationResult): string[] => res.issues
+      .filter((i) => i.code === 'PROJECT_ID_DEFAULTED' && i.message.includes('member project keyed')).map((i) => i.project ?? '-').sort();
+    expect(memberLevel(at(f.root, () => validateFamily({})))).toHaveLength(2);
     const report = at(f.root, () => apply(planned));
     expect(report.applied).toBe(true);
-    expect(codesOf(at(f.root, () => validateSddTree()), 'PROJECT_ID_DEFAULTED', 'PROJECT_ID_AMBIGUOUS', 'PROJECT_ID_CHANGED')).toEqual([]);
+    expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_DEFAULTED', 'PROJECT_ID_AMBIGUOUS', 'PROJECT_ID_CHANGED')).toEqual([]);
+    expect(codesOf(at(f.root, () => validateFamily({})), 'PROJECT_ID_DEFAULTED', 'PROJECT_ID_AMBIGUOUS', 'PROJECT_ID_CHANGED', 'PROJECT_ID_COLLISION')).toEqual([]);
     for (const p of planned.projects) expect(idOf(p.directory)).toBe(p.id);
   });
 
   it('after apply the migrated references are declared and exported: EXTERNAL_UNDECLARED and EXTERNAL_NOT_EXPORTED are gone', () => {
     const f = family();
-    const before = at(f.root, () => validateSddTree());
-    expect(codesOf(before, 'EXTERNAL_UNDECLARED')).toEqual([
-      'EXTERNAL_UNDECLARED @dispatch-service::iroute-planner', 'EXTERNAL_UNDECLARED @dispatch-service::route-planner', 'EXTERNAL_UNDECLARED @dispatch-service::route-planner-impl',
+    // Dispatch's references are its own gate's (stage 4): the parent reports none of them.
+    expect(codesOf(at(f.root, () => validateProject()), 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
+    const before = at(f.dispatch, () => validateProject());
+    // From its own root its `super::` forms name no alias: nothing to judge them against yet.
+    expect(codesOf(before, 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([
+      'EXTERNAL_CHECK_UNAVAILABLE @iroute-planner', 'EXTERNAL_CHECK_UNAVAILABLE @route-planner', 'EXTERNAL_CHECK_UNAVAILABLE @route-planner-impl',
     ]);
-    expect(codesOf(before, 'EXTERNAL_NOT_EXPORTED')).toHaveLength(3);
     const report = at(f.root, () => apply(plan()));
-    const after = at(f.root, () => validateSddTree());
+    const after = at(f.root, () => validateProject());
     expect(codesOf(after, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXPORT_INVALID')).toEqual([]);
     // The same verdict from the child.
-    expect(codesOf(at(f.dispatch, () => validateSddTree()), 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
-    // Written in order: ids, L0 specs, externals, pins; the producers' and the consumer's locks are stale.
+    expect(codesOf(at(f.dispatch, () => validateProject()), 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([]);
+    // Written in order: ids, L0 specs, externals; the producers' and the consumer's locks are stale.
     const rel = report.written.map((w) => path.relative(f.root, w).split(path.sep).join('/'));
     expect(rel).toEqual([
       '.wai/project.yaml', 'packages/billing/.wai/project.yaml', 'packages/dispatch/.wai/project.yaml',
       '.wai/specs/.index.yaml', 'packages/billing/.wai/specs/.index.yaml',
-      'packages/dispatch/.wai/externals/billing.yaml', 'packages/dispatch/.wai/externals.lock.yaml', 'packages/dispatch/.wai/externals/fleetworks.yaml',
       // Then position: the mounts moved into the top's `members`, dispatch's references rewritten.
       '.wai/specs: subsystem billing', '.wai/specs: subsystem dispatch',
       'packages/dispatch/.wai/specs: interface iroute-planner', 'packages/dispatch/.wai/specs: component route-planner',
       'packages/dispatch/.wai/specs: implementation route-planner-impl',
+      // Pins LAST, projected from the final spelling (stage 4).
+      'packages/dispatch/.wai/externals/billing.yaml', 'packages/dispatch/.wai/externals.lock.yaml', 'packages/dispatch/.wai/externals/fleetworks.yaml',
     ]);
     // A raw position is rewritten too: the parameter type and the display signature beside it.
     const contract = fs.readFileSync(path.join(f.dispatch, '.wai', 'specs', 'interfaces', 'iroute-planner.yaml'), 'utf8');
@@ -295,7 +304,7 @@ describe('stage 2c — the chaining migration', () => {
     expect(codesOf(gate, 'PROJECT_ID_CHANGED')).toEqual([]);
     const relocked = await at(f.billing, () => runLock({ yes: true }, gate));
     expect(relocked?.projectId).toBe('billing-service');
-    expect(codesOf(at(f.root, () => validateSddTree()), 'PROJECT_ID_CHANGED', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
+    expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_CHANGED', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
   });
 
   it('a family only partly in reach blocks apply before its first write', () => {
@@ -356,7 +365,7 @@ describe('stage 2c — the chaining migration', () => {
   it('doctor: a plain run counts what is pending; --fix --yes applies it, and the run after is clean', async () => {
     const f = family();
     const plain = await doctorCli(f.dispatch);
-    expect(plain.stdout).toMatch(/Chaining: 14 pending \(3 id\(s\), 0 L0\(s\) to create, 2 L0 entries, 2 external\(s\), 2 pin\(s\), 2 mount\(s\) to move, 3 rewrite\(s\), 0 family pin\(s\) to delete, 0 dropped key\(s\), 0 finding\(s\)\)/);
+    expect(plain.stdout).toMatch(/Chaining: 14 pending \(3 id\(s\), 0 L0\(s\) to create, 2 L0 entries, 2 external\(s\), 0 import\(s\), 2 pin\(s\), 2 mount\(s\) to move, 3 rewrite\(s\), 0 family pin\(s\) to delete, 0 dropped key\(s\), 2 new dependencies, 0 finding\(s\)\)/);
     const fixed = await doctorCli(f.dispatch, '--fix', '--yes');
     expect(fixed.stdout).toContain('Applied the chaining migration: 13 file(s) written.');
     expect(fixed.stdout).toContain('Re-lock each with `wairon lock`');

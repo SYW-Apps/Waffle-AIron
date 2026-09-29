@@ -1,11 +1,12 @@
 id: position_migration_orchestrator_impl
 name: Position Migration Orchestrator Implementation
 description: >-
-  Plans the mount moves and reference rewrites from the family's graph, and applies them after the
-  chaining migration's stage-2 writes: members under each parent's binding, rewrites under the
-  family's top binding (each spec addressed by the key it answers to once the plan's ids are
-  declared), family-pin deletion under each member's binding; the caller's binding is restored on
-  every path.
+  Plans the mount moves, reference rewrites and stage 4's positional imports and self-prefix
+  rewrites from the family's graph (the positional match is position_reader's), and applies them
+  after the chaining migration's ids, exports and externals and before its pins: members under each
+  parent's binding, imports under each consumer's, rewrites under the family's top binding (each
+  spec addressed by the key it answers to once the plan's ids are declared), family-pin deletion
+  under each member's binding; the caller's binding is restored on every path.
 contract: iposition_migration_orchestrator
 sourcePath: src/commands/position-migration.ts
 methods:
@@ -109,14 +110,59 @@ methods:
           no rewrite is a rewrite-unavailable finding saying why
         type: local
       - stepNumber: 13
+        label: positional
+        description: >-
+          Stage 4's positional step, over the graph's authored references the owner's scope leaves
+          to it: every bare name no import supplies (unresolved) and every self-prefixed form (the
+          project's own id as the first segment, `registry.x` or `registry::x`). With none, the step
+          is skipped. Load every type of the family as the top's scan sees them
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 14
+        description: >-
+          Read every project's resolved L0 export table: a name a project already exports is matched
+          on its public name first
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 15
+        description: >-
+          Match those references by position — the same match the upgrade report explains, which
+          decides in rounds what a re-run after apply would decide (a producer the consumer will
+          declare, and a name a producer will export, count as declared and exported), so the
+          migration stays idempotent
+        type: call
+        targetComponent: position_reader
+        targetMethod: match
+      - stepNumber: 16
+        label: plan-matches
+        description: >-
+          Plan from each match. import: an import of the public name on the consumer's alias for the
+          producer (its existing external or member alias, else the producer's id, marked
+          declaresExternal), one entry per (consumer, alias, name) listing every reference it
+          resolves and the reason the producer was chosen, marked exportPlanned when the producer
+          exports the target under no public name (its default public name is then the one
+          imported). The migration never writes a named import a local spec of the consumer would
+          shadow (the same nameKey): that name is an import-shadowed finding naming the local spec,
+          and its references are left as they are. self-prefix: a rewrite to the bare local id (form
+          self-prefix). ambiguous: one positional-ambiguous finding per (consumer, name) listing
+          every candidate, every spec writing it and what each tie-break rule left, the references
+          left as they are — a person picks. Imports that would supply one bare name to one consumer
+          twice — two planned, or a planned one beside a named `use` of another alias the consumer
+          already holds — are dropped for that name and reported (import-collision). none: nothing —
+          a genuine dangling reference, which the gate reports
+        type: local
+      - stepNumber: 17
         label: held-back
         description: >-
-          Hold back every rewrite planned in a spec that also holds a deprecated reference the
-          loader binds with no canonical text: the re-save refuses that spec whole, so its rewrites
-          wait with it, named in its rewrite-unavailable finding
+          Hold back every rewrite planned in a spec that also holds a reference the loader binds
+          with no canonical text — a deprecated form bound outside or unresolved, or a bare name no
+          planned import makes resolve: the re-save refuses that spec whole, so its rewrites wait
+          with it, named in its rewrite-unavailable finding
         type: local
-      - stepNumber: 14
-        description: 'Answer the plan: members, rewrites and findings'
+      - stepNumber: 18
+        description: 'Answer the plan: members, rewrites, imports and findings'
         type: return
         outcome: PositionMigrationPlan
   - name: apply
@@ -138,19 +184,40 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: moveMountToMembers
       - stepNumber: 3
+        label: imports
+        description: >-
+          Then the positional imports — after the moves, so an import on a legacy mount's alias
+          finds it declared under `members`, and after the chaining migration wrote the exports and
+          the externals they name
+        type: loop
+        loopKind: forEach
+        over: each project's planned imports, grouped per alias
+        endStep: 5
+      - stepNumber: 4
+        description: Bind the consumer's root
+        type: local
+      - stepNumber: 5
+        label: import
+        description: >-
+          Add the alias's planned names to its `use` in the consumer's project.yaml — names already
+          imported write nothing, and nothing a person wrote is removed or reordered
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: importNames
+      - stepNumber: 6
         description: >-
           Bind the family's top root: the deprecated forms bind from there, so every rewrite is read
           and written where its target is still found. A spec is addressed by the key it answers to
           now — its project's planned id where the plan declared one
         type: local
-      - stepNumber: 4
+      - stepNumber: 7
         label: rewrites
         description: Rewrite the planned references, one spec at a time
         type: loop
         loopKind: forEach
         over: the plan's rewrites grouped by spec
-        endStep: 5
-      - stepNumber: 5
+        endStep: 8
+      - stepNumber: 8
         label: normalize
         description: >-
           Re-save the spec with every reference in its canonical form, raw positions included; a
@@ -158,30 +225,33 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: normalizeReferences
-      - stepNumber: 6
+      - stepNumber: 9
         label: pins
-        description: Delete the superseded family pins last, once the externals that replace them are pinned
+        description: >-
+          Delete the superseded stage-1 family pins last in this migration, once the externals that
+          replace them are declared — nothing reads them since stage 3; the chaining migration pins
+          the externals after this, from the final spelling
         type: loop
         loopKind: forEach
         over: each project's superseded pins
-        endStep: 7
-      - stepNumber: 7
+        endStep: 10
+      - stepNumber: 10
         label: unpin
         description: Under the project's binding, remove the pin's snapshot; one already gone writes nothing
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: removeSnapshot
-      - stepNumber: 8
+      - stepNumber: 11
         description: >-
           Restore the caller's binding. Collect every write in write order and every project whose
           approval the writes staled: a parent whose `members` changed and L1 mount went, a project
           whose spec files were rewritten, a member whose pins went (gate inputs)
         type: local
-      - stepNumber: 9
+      - stepNumber: 12
         description: Answer the writes and the projects to re-lock
         type: return
         outcome: PositionMigrationResult
 detail: full
 status: complete
 createdAt: '2026-09-27T10:45:51.006Z'
-updatedAt: '2026-09-27T17:32:55.757Z'
+updatedAt: '2026-09-29T14:20:42.923Z'

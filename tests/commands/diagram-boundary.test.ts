@@ -19,7 +19,7 @@ import { runDiagram } from '../../src/commands/diagram.js';
 // The command used to build its own artifacts: buildCanvasModel and
 // renderCanvasHtml out of ../core/canvas.js, the two encoders out of
 // ../core/diagram-export.js, the Mermaid generators out of ../core/diagram.js,
-// and validateSddTree out of ../core/validation.js — four sdd_core modules
+// and validateProject out of ../core/validation.js — four sdd_core modules
 // reached straight from a command, while core_portal.renderDiagram(format)
 // existed for exactly this. `wairon host demo` made the same reach for its
 // seeded-tree census.

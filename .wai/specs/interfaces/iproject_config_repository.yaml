@@ -220,6 +220,21 @@ methods:
         description: The member's alias
     guarantees:
       - idempotent
+  - name: importNames
+    description: >-
+      Add public names to the `use` of the external or member under an alias (forwarded to the
+      registry); a no-op for names already imported. Returns whether it wrote.
+    signature: 'importNames(alias: string, names: string[]): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external or member alias
+      - name: names
+        type: string[]
+        description: The public names to import, or `*`
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-09-27T10:55:13.507Z'
+updatedAt: '2026-09-28T17:17:05.648Z'

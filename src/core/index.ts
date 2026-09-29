@@ -386,6 +386,9 @@ export {
   // portal's setId IS the orchestrator's setProjectId, by identity.
   setProjectId as setId,
   declareExternal,
+  // project_config_portal importNames: stage 4's `use` imports, which
+  // `doctor --fix`'s positional step writes.
+  importNames,
 } from './specs.js';
 
 // The project_config type's own behaviour, for callers deriving from a loaded configuration.

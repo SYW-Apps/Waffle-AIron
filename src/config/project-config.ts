@@ -11,6 +11,7 @@ import {
   ProjectConfigSchema,
   PROJECT_ID_RE,
   EXTERNAL_ALIAS_RE,
+  USE_ENTRY_RE,
   type ProjectConfig,
   type PackSelection,
   type ProjectProfileSelection,
@@ -63,6 +64,7 @@ export interface ProjectConfigRepository {
   declareMember(alias: string, declaration: MemberDeclaration): boolean;
   setMemberPath(alias: string, path: string): boolean;
   removeMember(alias: string): boolean;
+  importNames(alias: string, names: string[]): boolean;
 }
 
 /** iproject_config_index — the read half of the facade. */
@@ -909,7 +911,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       const config = current();
       const existing = config.externals?.[alias];
       if (existing !== undefined) {
-        if (sameValue(existing, declaration)) return false;
+        if (sameValue(heldBinding(existing, declaration), declaration)) return false;
         throw new WaironError(
           `Refusing to declare the external "${alias}" at ${root} as ${JSON.stringify(declaration)}: `
           + `it is already declared as ${JSON.stringify(existing)}, and a declaration a person wrote is never overwritten.`,
@@ -942,6 +944,18 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       save({ ...config, members: { ...config.members, [alias]: written } });
       return true;
     },
+    importNames(alias, names) {
+      // Refused before anything is read: a name that is neither `*` nor a public name.
+      assertUseEntries(alias, names, root);
+      const config = current();
+      const held = heldImports(config, alias, root);
+      // Append-only and idempotent: only names not already imported, in the
+      // order given, after the ones a person wrote; `*` already imports them all.
+      const added = held.includes('*') ? [] : [...new Set(names)].filter((n) => !held.includes(n));
+      if (added.length === 0) return false;
+      save(withImports(config, alias, [...held, ...added]));
+      return true;
+    },
     setMemberPath(alias, memberPath) {
       assertMemberPath(alias, memberPath, root);
       const config = current();
@@ -967,9 +981,48 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
   };
 }
 
+/**
+ * What of a held external a declaration is compared with: a declaration that
+ * states no `use` leaves the imports alone (they are importNames' state), so
+ * the producer binding is the same when all but the held imports agree.
+ */
+function heldBinding(existing: unknown, declaration: { use?: unknown }): unknown {
+  if (declaration.use !== undefined || typeof existing !== 'object' || existing === null) return existing;
+  return Object.fromEntries(Object.entries(existing).filter(([key]) => key !== 'use'));
+}
+
 /** A member's value as it is written: the shorthand when it carries only a path, else the long form. */
 function memberValue(declaration: MemberDeclaration): string | MemberDeclaration {
-  return declaration.description === undefined ? declaration.path : { path: declaration.path, description: declaration.description };
+  if (declaration.description === undefined && declaration.use === undefined) return declaration.path;
+  return {
+    path: declaration.path,
+    ...(declaration.description !== undefined ? { description: declaration.description } : {}),
+    ...(declaration.use !== undefined ? { use: declaration.use } : {}),
+  };
+}
+
+/** Refuse a `use` entry that is neither `*` nor a public name, before anything is read. */
+function assertUseEntries(alias: string, names: string[], root: string): void {
+  const bad = names.find((n) => !USE_ENTRY_RE.test(n));
+  if (bad !== undefined) {
+    throw new WaironError(`Refusing to import "${bad}" through "${alias}" at ${root}: a \`use\` entry is \`*\` or a public name of [a-z0-9-_]+.`);
+  }
+}
+
+/** The `use` an external or member under an alias holds now; refused for an alias neither declares. */
+function heldImports(config: ProjectConfig, alias: string, root: string): string[] {
+  const external = config.externals?.[alias];
+  if (external !== undefined) return external.use ?? [];
+  const member = config.members?.[alias];
+  if (member !== undefined) return memberDeclarationOf(member).use ?? [];
+  throw new WaironError(`Refusing to import through "${alias}" at ${root}: neither \`externals\` nor \`members\` declares "${alias}".`);
+}
+
+/** The configuration with the alias's `use` replaced; a shorthand member becomes its long form to hold it. */
+function withImports(config: ProjectConfig, alias: string, use: string[]): ProjectConfig {
+  const external = config.externals?.[alias];
+  if (external !== undefined) return { ...config, externals: { ...config.externals, [alias]: { ...external, use } } };
+  return { ...config, members: { ...config.members, [alias]: { ...memberDeclarationOf(config.members![alias]), use } } };
 }
 
 /** Refuse an empty or absolute member path before anything is read. */
@@ -1060,6 +1113,7 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     declareMember(alias, declaration) { return registry.declareMember(alias, declaration); },
     setMemberPath(alias, memberPath) { return registry.setMemberPath(alias, memberPath); },
     removeMember(alias) { return registry.removeMember(alias); },
+    importNames(alias, names) { return registry.importNames(alias, names); },
   };
 }
 
@@ -1095,4 +1149,5 @@ export const projectConfigRepository: ProjectConfigRepository = {
   declareMember(alias, declaration) { return bound().declareMember(alias, declaration); },
   setMemberPath(alias, memberPath) { return bound().setMemberPath(alias, memberPath); },
   removeMember(alias) { return bound().removeMember(alias); },
+  importNames(alias, names) { return bound().importNames(alias, names); },
 };

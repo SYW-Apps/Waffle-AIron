@@ -38,7 +38,7 @@ import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../
 import { checkSkillFreshness, exportSddSkills } from './adapters/skills.js';
 // A configuration's enabled targets are the project_config type's own behaviour.
 import { activeTargetTypes } from '../models/project.js';
-import { computeGateStateId, validateSddTree } from './validate.js';
+import { computeGateStateId, validateProject } from './validate.js';
 // The approver's own projection, taken from the models rather than from
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
 // a command has no business reaching a Store to get it.
@@ -49,6 +49,9 @@ import { claudeMcpConfigPath } from './mcp.js';
 import * as chainingMigration from './chaining-migration.js';
 import type { ChainingMigrationPlan, PlannedExport, ProjectMigration } from './chaining-migration.js';
 import type { PlannedRewrite } from './position-migration.js';
+// The stage-4 upgrade report: what the owner's gate changed in each verdict.
+import * as verdictChanges from './verdict-changes.js';
+import type { UpgradeReport } from './verdict-changes.js';
 
 /** The bound project's enabled targets; none for a project without a configuration. */
 function enabledTargets(): string[] {
@@ -124,7 +127,7 @@ function mcpEntryHealth(settingsPath: string): { mark: Mark; note: string } {
 export interface DoctorOptions {
   /** Apply the repairs before the report: the fixed steps, then the chaining migration once confirmed. */
   fix?: boolean;
-  /** Print one section's plan and nothing else, writing nothing. `chaining` is the one section. */
+  /** Print one section's report and nothing else, writing nothing: `chaining` or `composed-validation`. */
   report?: string;
   /** Answer the chaining migration's confirmation for a non-interactive run. */
   yes?: boolean;
@@ -201,7 +204,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     try {
       const cfg = loadProjectConfig();
       if (!cfg) throw new ProjectNotInitializedError();
-      const result = validateSddTree(cfg.rules, cfg.projectType);
+      const result = validateProject({ rules: cfg.rules, projectType: cfg.projectType });
       const errs = result.issues.filter((i) => i.severity === 'error').length;
       const warns = result.issues.filter((i) => i.severity === 'warning').length;
       // Notices are counted and named, but alone they leave the check passing.
@@ -579,14 +582,28 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
 
 // ── the chaining migration ──────────────────────────────────────────────────
 
-/** Steps 2-5: `--report chaining` alone prints the plan per project and writes nothing. */
+/** Steps 1-8: `--report <section>` alone prints that section and writes nothing. */
 function reportOnly(options: DoctorOptions): void {
+  // Steps 2-3: only a lone `--report` of a known section.
   if (options.fix) {
     throw new DoctorOptionsError('--report prints a plan and writes nothing, so it never combines with --fix.');
   }
-  if (options.report !== 'chaining') {
-    throw new DoctorOptionsError(`--report knows one section, \`chaining\`; "${options.report}" is not one.`);
+  if (options.report !== 'chaining' && options.report !== 'composed-validation') {
+    throw new DoctorOptionsError(`--report knows two sections, \`chaining\` and \`composed-validation\`; "${options.report}" is not one.`);
   }
+  // Step 4: which section?
+  if (options.report === 'composed-validation') {
+    // Steps 5-6: what stage 4 changed in each project's verdict.
+    const report = verdictChanges.explain();
+    logger.blank();
+    console.log(`${chalk.bold('wairon doctor --report composed-validation')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
+    logger.blank();
+    printUpgradeReport(report);
+    console.log(chalk.gray('Nothing was written.'));
+    logger.blank();
+    return;
+  }
+  // Steps 7-8: the chaining plan.
   const migration = chainingMigration.plan();
   logger.blank();
   console.log(`${chalk.bold('wairon doctor --report chaining')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
@@ -594,6 +611,53 @@ function reportOnly(options: DoctorOptions): void {
   printChainingPlan(migration);
   console.log(chalk.gray('Nothing was written.'));
   logger.blank();
+}
+
+/** How a project key reads in the report. */
+function reportLabel(key: string): string {
+  return key === '' ? '(this project)' : key;
+}
+
+/**
+ * Step 6: the upgrade report per project — the lock's totals beside today's
+ * (attributed to the upgrade only when the lock predates stage 4) — then the
+ * entries grouped by code with their reasons and rewrites, then how many
+ * findings it could not attribute. The lock records totals only, and the
+ * report says so: this is not a per-code diff.
+ */
+function printUpgradeReport(report: UpgradeReport): void {
+  console.log(chalk.bold('Composed validation: what stage 4 changed'));
+  console.log(chalk.gray('  A lock records totals only (errors, warnings, notices) and the validator version that took it — nothing per code — so this is not a per-code diff. Today\'s findings are classed by a reason computed now.'));
+  for (const p of report.projects) {
+    const locked = p.lockedTotals ? `locked by v${p.lockedBy}: ${p.lockedTotals}` : 'never locked';
+    const attribution = p.lockedTotals
+      ? (p.predatesStage4 ? ' — the lock predates stage 4, so a difference is the upgrade\'s' : ' — the lock was taken by a stage-4 validator, so a difference is not the upgrade\'s')
+      : '';
+    console.log(`  ${reportLabel(p.key)}: ${locked}; today (as-complete): ${p.currentTotals}${attribution}`);
+  }
+  const byCode = new Map<string, UpgradeReport['entries']>();
+  for (const e of report.entries) byCode.set(e.code, [...(byCode.get(e.code) ?? []), e]);
+  for (const [code, entries] of [...byCode].sort(([a], [b]) => a.localeCompare(b))) {
+    console.log(`  ${chalk.bold(code)} (${entries.length})`);
+    for (const e of entries) {
+      const where = `${reportLabel(e.project)}${e.specId ? ` ${e.specId}` : ''}`;
+      const reason = e.reason === 'escalated'
+        ? 'escalated: a stage-2 notice that is an error since stage 4'
+        : e.reason === 'pinned'
+          ? 'pinned: judged against the project\'s own pin, no longer through the parent\'s live tree'
+          : `positional: the family's top matches it${e.resolvedAs ? ` to ${e.resolvedAs}` : ''} by position, which is how it passed before${e.rewrite ? ` — the migration writes ${e.rewrite}` : ''}`;
+      console.log(`    ${e.severity} ${where}: ${reason}`);
+    }
+  }
+  if (report.entries.length === 0) console.log('  No finding is new for a reason stage 4 introduced.');
+  console.log(`  ${report.unclassified} finding(s) could not be attributed to stage 4.`);
+  if (report.unmatched.length > 0) {
+    console.log(`  ${chalk.bold('Positional matches no rule decides')} (${report.unmatched.length}) — counted above; a person picks:`);
+    for (const m of report.unmatched) {
+      const what = m.kind === 'ambiguous' ? `matches ${(m.candidates ?? []).join(' and ')} (${m.reason})` : `matches nothing in the family${m.reason ? ` (${m.reason})` : ''}`;
+      console.log(`    ${reportLabel(m.consumer)} ${m.specId}: "${m.authored}" ${what}`);
+    }
+  }
 }
 
 /**
@@ -645,10 +709,10 @@ function printApplied(written: string[], relock: string[]): void {
   for (const dir of relock) console.log(`      ${dir}`);
 }
 
-/** How many writes the plan holds: ids, L0s, entries, externals, pins, mounts, rewrites and family pins. */
+/** How many writes the plan holds: ids, L0s, entries, externals, imports, pins, mounts, rewrites and family pins. */
 function pendingCount(migration: ChainingMigrationPlan): number {
   return migration.rewrites.length + migration.projects.reduce((n, p) => n + (p.idToWrite ? 1 : 0) + (p.createsSystem ? 1 : 0)
-    + p.exports.length + p.externals.length + p.pins.length + p.members.length + p.supersededPins.length, 0);
+    + p.exports.length + p.externals.length + p.imports.length + p.pins.length + p.members.length + p.supersededPins.length, 0);
 }
 
 /** The totals the report ends with — the P1 probe's counts. */
@@ -660,19 +724,25 @@ function chainingTotals(migration: ChainingMigrationPlan): string {
     `${sum((p) => (p.createsSystem ? 1 : 0))} L0(s) to create`,
     `${entries} L0 entr${entries === 1 ? 'y' : 'ies'}`,
     `${sum((p) => p.externals.length)} external(s)`,
+    `${sum((p) => p.imports.length)} import(s)`,
     `${sum((p) => p.pins.length)} pin(s)`,
     `${sum((p) => p.members.length)} mount(s) to move`,
     `${migration.rewrites.length} rewrite(s)`,
     `${sum((p) => p.supersededPins.length)} family pin(s) to delete`,
     `${sum((p) => p.droppedKeys.length)} dropped key(s)`,
+    `${migration.newDependencies.length} new dependenc${migration.newDependencies.length === 1 ? 'y' : 'ies'}`,
     `${migration.findings.length} finding(s)`,
   ].join(', ');
 }
 
-/** The plan per project, then every rewrite, every finding and the totals. */
+/** The new dependencies first, then the plan per project, then every rewrite, every finding and the totals. */
 function printChainingPlan(migration: ChainingMigrationPlan): void {
   console.log(chalk.bold('Chaining migration'));
   console.log(chalk.gray(`  family root: ${migration.familyRoot}${migration.whole ? '' : ' (partial: a hop above was out of reach)'}`));
+  if (migration.newDependencies.length > 0) {
+    console.log(`  ${icon('warn')} ${chalk.bold(`New dependencies (${migration.newDependencies.length})`)} — edges no external or pin had before, added exactly as the specs resolve today; whether each should exist is yours to decide:`);
+    for (const d of migration.newDependencies) console.log(`      ${chalk.bold(d)}`);
+  }
   if (chainingMigration.isEmpty(migration)) console.log('  Nothing to migrate.');
   for (const p of migration.projects) printProjectMigration(p);
   printRewrites(migration);
@@ -698,7 +768,12 @@ function printProjectMigration(p: ProjectMigration): void {
     const why = x.reason === 'legacy-pin' ? 'replaces the stage-1 family pin of' : 'its references cross into';
     console.log(`    external: ${x.alias}: {} — ${why} ${projectLabel(x.producer)}`);
   }
-  if (p.pins.length > 0) console.log(`    pin: ${p.pins.join(', ')}`);
+  for (const i of p.imports) {
+    const needs = [i.exportPlanned ? 'its export planned above' : undefined, i.declaresExternal ? 'its external planned above' : undefined].filter(Boolean);
+    const byPlan = i.reason === 'declared-producer' && p.externals.some((x) => x.alias === i.alias) ? ' (declared by this plan)' : '';
+    console.log(`    use: ${i.alias}: [${i.name}] — ${i.target}, ${i.reason}${byPlan}; resolves ${i.references.length} reference(s)${needs.length > 0 ? `, with ${needs.join(' and ')}` : ''}`);
+  }
+  if (p.pins.length > 0) console.log(`    pin (last): ${p.pins.join(', ')}`);
   for (const m of p.members) {
     const described = m.description !== undefined ? ', its description carried' : '';
     const carried = m.carried.length > 0 ? `; carries ${m.carried.length} L0 entr${m.carried.length === 1 ? 'y' : 'ies'} into ${projectLabel(m.member)}` : '';
@@ -721,7 +796,7 @@ function describeEntry(e: PlannedExport): string {
   ].filter((x) => x !== undefined).join(', ');
   const why = e.reason === 'mount'
     ? `carried from its legacy mount${e.publishAtL1 ? `, published at L1 in ${e.from} first (its subsystem does not publish it yet)` : ''}`
-    : `${e.from === undefined ? 'its own project-level type, ' : ''}for ${e.consumers.map(projectLabel).join(', ')}${e.members.length > 0 ? `, reaching ${e.members.join(', ')}` : ''}`;
+    : `${e.from === undefined ? 'its own project-level type, ' : ''}${e.reason === 'positional' ? 'positional, ' : ''}for ${e.consumers.map(projectLabel).join(', ')}${e.members.length > 0 ? `, reaching ${e.members.join(', ')}` : ''}`;
   return `{ ${item} } as "${e.publicName}" — ${why}`;
 }
 

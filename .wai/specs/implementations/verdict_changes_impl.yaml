@@ -1,0 +1,132 @@
+id: verdict_changes_impl
+name: Verdict Changes Implementation
+description: >-
+  The stage-4 upgrade report, in src/commands/verdict-changes.ts. STAGE4_FIRST_VERSION names the
+  first validator build that judges with the owner's gate; a lock taken by an older one predates
+  stage 4. A finding is pinned when its resolution names a producer the project does not contain
+  (its own pin judged it), positional when the family top's positional match explains it (import or
+  self-prefix), and unclassified otherwise — an ambiguous or unmatched candidate included.
+contract: iverdict_changes
+sourcePath: src/commands/verdict-changes.ts
+methods:
+  - name: explain
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph through the core adapter: the bound project and the
+          members it contains are the projects the report covers
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: For each covered project
+        type: loop
+        loopKind: forEach
+        over: the graph's projects, root first
+        endStep: 9
+      - stepNumber: 3
+        description: Bind the project's root for the next calls, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 4
+        description: >-
+          Read its own configuration through the core adapter: its rule severities and projectType
+          judge it, as they judged the gate its lock recorded
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: >-
+          Run its owner's gate as-complete — the strictness the lock's totals were taken at, so the
+          two are comparable
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 6
+        description: Compute its gate identity now
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 7
+        description: >-
+          Read its lock through the core adapter: the record's validationResult totals and
+          validatorVersion — all the lock holds about a past verdict
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: readLockState
+      - stepNumber: 8
+        description: >-
+          Record the project's line: the lock's totals and version (absent when never locked),
+          today's totals, and whether the lock predates the stage-4 release — only then is a
+          difference in totals attributed to the upgrade
+        type: local
+      - stepNumber: 9
+        description: >-
+          Classify today's findings: EXTERNAL_NOT_EXPORTED, EXPORT_INVALID, EXPORT_UNCONSUMABLE,
+          TRUSTED_LINK_CROSSES_PROJECT and EXTERNAL_UNDECLARED are escalated; a cross-project
+          finding whose resolution was judged against the project's pin is pinned; an unresolved
+          reference (UNDEFINED_TYPE_REFERENCE, INVALID_DEPENDENCY_REFERENCE,
+          INVALID_TARGET_COMPONENT_REFERENCE) and a self-prefixed deprecated form are positional
+          candidates; everything else is counted unclassified
+        type: local
+      - stepNumber: 10
+        description: Are there positional candidates to explain?
+        type: branch
+        condition: any covered project has a positional candidate
+        onFalseStep: 18
+      - stepNumber: 11
+        description: >-
+          Walk up to the family's top, one hop at a time — explicit, because the report was asked
+          for, and reach-gated: a request that may not read above its root stops here
+        type: loop
+        condition: a chaining parent is reachable from the root reached so far
+        loopKind: while
+        endStep: 12
+      - stepNumber: 12
+        description: >-
+          Find the chaining parent of the root reached so far through the core adapter's reach-gated
+          detection
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 13
+        description: >-
+          With the top bound, read the family's graph through the core adapter — every project's
+          key, id, alias table and authored references, among them the unresolved bare names and the
+          self-prefixed forms
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 14
+        description: Read every project's resolved L0 export table through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 15
+        description: Load every type of the family as the top's scan sees them
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 16
+        description: >-
+          Match the candidates by position — the same match the positional migration step writes
+          from
+        type: call
+        targetComponent: position_reader
+        targetMethod: match
+      - stepNumber: 17
+        description: >-
+          An import match is positional, with resolvedAs and the fix: the `use` line, and the export
+          and the external when the producer or the consumer lacks them; a self-prefix match is
+          positional with the bare local id as its rewrite; an ambiguous or none match is counted
+          unclassified and listed in unmatched with its candidates
+        type: local
+      - stepNumber: 18
+        label: report
+        description: >-
+          Return the report: per project its totals, the classified entries grouped by code, the
+          unclassified count, and the unmatched positional candidates
+        type: return
+        outcome: UpgradeReport
+status: complete
+createdAt: '2026-09-28T06:16:03.117Z'
+updatedAt: '2026-09-29T13:54:48.739Z'

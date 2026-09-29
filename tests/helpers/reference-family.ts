@@ -4,6 +4,7 @@ import * as path from 'path';
 import { writeSpecFile } from '../../src/core/spec-files.js';
 import {
   ComponentSpecSchema,
+  ImplementationSpecSchema,
   InterfaceSpecSchema,
   SubsystemSpecSchema,
   SystemSpecSchema,
@@ -175,6 +176,161 @@ export function buildReferenceFamily(): ReferenceFamily {
   };
   return {
     top, shared, core, transpiler, specFiles,
+    cleanup: () => fs.rmSync(top, { recursive: true, force: true }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The import family (stage 4): bare names bound through declared `use` imports.
+//
+//   vocab (top, the bound root)            id vocab
+//   ├── shared   `members:` entry          id shared — exports the types
+//   │                                        `waffler-error` and `index-value`
+//   ├── ui       `members:` entry          id ui     — ALSO exports a type keyed
+//   │                                        `waffler-error` (the ambiguity)
+//   └── app      `members:` entry          id app    — consumes shared as an
+//                                            `externals` entry (a sibling), so
+//                                            from its own root it is judged
+//                                            against its pin
+//
+// The top's own type `report` names `WafflerError` bare in a field — nameKey
+// normalization is what makes that `waffler-error`. Each scenario rewrites the
+// top's (or app's) project.yaml to declare the imports it is about.
+// ---------------------------------------------------------------------------
+
+export interface ImportFamily {
+  top: string;
+  shared: string;
+  ui: string;
+  app: string;
+  /** Rewrite the top's project.yaml `members` (long forms allowed). */
+  setTopMembers(members: Record<string, unknown>): void;
+  /** Rewrite app's project.yaml `externals`. */
+  setAppExternals(externals: Record<string, unknown>): void;
+  /** Add a type of the top's own. */
+  addTopType(id: string, fields: { name: string; type: string }[]): void;
+  /** Rewrite a field type of shared's `host-record` (a reference inside the producer). */
+  setSharedRecordField(type: string): void;
+  cleanup(): void;
+}
+
+/** Build the import family in a fresh temp directory. */
+export function buildImportFamily(): ImportFamily {
+  const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-imfam-'));
+  const shared = path.join(top, 'shared');
+  const ui = path.join(top, 'ui');
+  const app = path.join(top, 'app');
+  const members = { shared: 'shared', ui: 'ui', app: 'app' };
+
+  projectYaml(top, ['id: vocab', 'name: Vocab', 'members:', '  shared: shared', '  ui: ui', '  app: app']);
+  system(top, 'Vocab');
+  subsystem(top, 'Vocab', 'reporting');
+  type(specs(top, 'types', 'report.yaml'), 'report', [{ name: 'failure', type: 'WafflerError' }]);
+
+  projectYaml(shared, ['id: shared', 'name: Shared']);
+  system(shared, 'Shared', [
+    { typeDef: 'waffler-error', audience: 'project' },
+    { typeDef: 'index-value', audience: 'project' },
+    { typeDef: 'host-record', audience: 'project' },
+  ]);
+  type(specs(shared, 'types', 'waffler-error.yaml'), 'waffler-error', [{ name: 'message', type: 'string' }]);
+  type(specs(shared, 'types', 'index-value.yaml'), 'index-value', [{ name: 'value', type: 'number' }]);
+  type(specs(shared, 'types', 'host-record.yaml'), 'host-record', [{ name: 'index', type: 'index-value' }]);
+
+  projectYaml(ui, ['id: ui', 'name: Ui']);
+  system(ui, 'Ui', [{ typeDef: 'waffler_error', audience: 'project' }]);
+  type(specs(ui, 'types', 'waffler_error.yaml'), 'waffler_error', [{ name: 'banner', type: 'string' }]);
+
+  projectYaml(app, ['id: app', 'name: App', 'externals:', '  shared: {}']);
+  system(app, 'App');
+  subsystem(app, 'App', 'screens');
+  type(specs(app, 'types', 'screen-state.yaml'), 'screen-state', [{ name: 'error', type: 'WafflerError' }, { name: 'record', type: 'shared::host-record' }]);
+
+  const rewriteConfig = (dir: string, lines: string[]): void => projectYaml(dir, lines);
+  const yamlBlock = (key: string, value: Record<string, unknown>): string[] => {
+    const out = [`${key}:`];
+    for (const [alias, v] of Object.entries(value)) {
+      out.push(typeof v === 'string' ? `  ${alias}: ${v}` : `  ${alias}: ${JSON.stringify(v)}`);
+    }
+    return out;
+  };
+  return {
+    top, shared, ui, app,
+    setTopMembers: (m) => rewriteConfig(top, ['id: vocab', 'name: Vocab', ...yamlBlock('members', { ...members, ...m })]),
+    setAppExternals: (e) => rewriteConfig(app, ['id: app', 'name: App', ...yamlBlock('externals', e)]),
+    addTopType: (id, fields) => type(specs(top, 'types', `${id}.yaml`), id, fields),
+    setSharedRecordField: (t) => type(specs(shared, 'types', 'host-record.yaml'), 'host-record', [{ name: 'index', type: t }]),
+    cleanup: () => fs.rmSync(top, { recursive: true, force: true }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The contract family (stage 4, wave B): one producer, one consumer, siblings.
+//
+//   house (top, the bound root)            id house
+//   ├── ledger   `members:` entry          id ledger  — exports its `books`
+//   │                                        portal `ledger-portal`: post(amount)
+//   │                                        and balance()
+//   └── billing  `members:` entry          id billing — declares `ledger` as an
+//                                            external and calls
+//                                            `ledger::ledger-portal` post
+//
+// What the family run composes: billing's lock records the `post` it uses; a
+// rename of `post` is EXTERNAL_INCOMPATIBLE, a change to the unused `balance`
+// is EXTERNAL_DRIFTED. billing's own gate judges against its pin either way.
+// ---------------------------------------------------------------------------
+
+export interface ContractFamily {
+  top: string;
+  ledger: string;
+  billing: string;
+  /** Rewrite ledger's portal contract: the method names and balance's return type. */
+  setLedgerContract(postName: string, balanceReturns?: string): void;
+  /** Rewrite a member's project.yaml (lines between the schema version and the targets). */
+  setConfig(dir: string, lines: string[]): void;
+  cleanup(): void;
+}
+
+/** Build the contract family in a fresh temp directory. */
+export function buildContractFamily(): ContractFamily {
+  const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ctfam-'));
+  const ledger = path.join(top, 'ledger');
+  const billing = path.join(top, 'billing');
+
+  projectYaml(top, ['id: house', 'name: House', 'members:', '  ledger: ledger', '  billing: billing']);
+  system(top, 'House');
+  subsystem(top, 'House', 'front');
+
+  projectYaml(ledger, ['id: ledger', 'name: Ledger']);
+  system(ledger, 'Ledger', [{ from: 'books', component: 'ledger-portal', audience: 'project' }]);
+  subsystem(ledger, 'Ledger', 'books', { publicInterfaces: [{ type: 'Custom', details: 'The ledger surface', component: 'ledger-portal' }] });
+  component(ledger, 'books', 'ledger-portal', 'Portal');
+  const setLedgerContract = (postName: string, balanceReturns = 'number'): void => contract(ledger, 'books', 'ledger-portal', [
+    { name: postName, description: 'Post an amount', signature: `${postName}(amount: number): void`, returns: 'void',
+      params: [{ name: 'amount', type: 'number', description: 'The amount' }] },
+    { name: 'balance', description: 'The balance', signature: `balance(): ${balanceReturns}`, returns: balanceReturns, params: [] },
+  ]);
+  setLedgerContract('post');
+
+  projectYaml(billing, ['id: billing', 'name: Billing', 'externals:', '  ledger: {}']);
+  system(billing, 'Billing');
+  subsystem(billing, 'Billing', 'invoicing');
+  component(billing, 'invoicing', 'invoice-poster', 'Adapter', ['ledger::ledger-portal']);
+  contract(billing, 'invoicing', 'invoice-poster', [
+    { name: 'settle', description: 'Settle an invoice', signature: 'settle(amount: number): void', returns: 'void',
+      params: [{ name: 'amount', type: 'number', description: 'The amount' }] },
+  ]);
+  writeSpecFile(specs(billing, 'invoicing', 'invoice-poster', '.implementation.yaml'), ImplementationSpecSchema.parse({
+    id: 'invoice-poster-impl', name: 'invoice-poster-impl', description: 'Posts through the ledger', contract: 'iinvoice-poster',
+    methods: [{ name: 'settle', narrative: [
+      { stepNumber: 1, description: 'Post the amount to the ledger', type: 'call', targetComponent: 'ledger::ledger-portal', targetMethod: 'post' },
+    ] }],
+    status: 'complete', createdAt: STAMP, updatedAt: STAMP,
+  }));
+
+  return {
+    top, ledger, billing, setLedgerContract,
+    setConfig: (dir, lines) => projectYaml(dir, lines),
     cleanup: () => fs.rmSync(top, { recursive: true, force: true }),
   };
 }

@@ -1,34 +1,21 @@
 /**
- * Chained-subproject resolution (the post-rule pass in src/core/validation.ts;
- * step-20 semantics in .wai/specs/implementations/spec_validator_impl.yaml).
+ * A chained child judged by its OWN gate (stage 4 — validateProject in
+ * src/core/validation.ts; resolveCrossProject in src/core/rules/index.ts).
  *
  * Documented intent:
- *  - When the VALIDATED ROOT is a chained subproject of a DISCOVERABLE, LOADABLE
- *    parent (the loader's findChainingParent walks UP the filesystem from the
- *    root looking for an ancestor project whose subsystem projectPath resolves
- *    to this exact root), references this root cannot resolve are judged
- *    THROUGH that parent: the top root is validated scoped to the mount chain
- *    and its findings are renamed into the child's own ids — so an edge the
- *    parent rejects is the same error from the child, and the raw cross-tree
- *    warning gives way to that verdict.
- *  - When the parent is discoverable but cannot be loaded, every reference keeps
- *    its raw verdict: a cross-tree form stays a CROSS_TREE_REF_UNRESOLVED warning
- *    that --ci does not waive, and a typo stays an error. Nothing is rewritten
- *    and no notice is prepended — a child that cannot be judged through its
- *    parent pins its family surfaces or fails its gate.
+ *  - The owner's gate judges a project from its own files alone. A chained
+ *    child is never resolved through its parent: the same reference gets the
+ *    same verdict whether the parent is on disk and loadable, on disk and
+ *    broken, or absent (no-softening-by-location, location-independent).
+ *  - A deprecated `super::` form names no alias of the child, so it has
+ *    nothing to be judged against: EXTERNAL_CHECK_UNAVAILABLE (warning), never
+ *    a pass and never the typo-grade INVALID_* error.
+ *  - Written `alias::name` through a declared external the child has pinned,
+ *    the reference resolves against the pin and nothing is unavailable.
  *
- * The top-level and snapshot-covered boundaries of CROSS_TREE_REF_UNRESOLVED
- * are pinned in references-cross-tree.fixtures.ts.
- *
- * These fixtures need the VALIDATED ROOT itself to be a chained child of an
- * ANCESTOR project, which the plain harness layout cannot express (fixture
- * trees materialize at a fresh OS-temp root whose ancestors are bare temp
- * dirs). They use the harness's `validateFromSubdir` seam: the PARENT project
- * (with the `projectPath` mount subsystem) materializes at the temp root as
- * usual, the CHILD project is laid down under `tree.files`, and the validated
- * root is bound to the child directory. The fallback fire additionally
- * overrides the parent's own L0 through `tree.files`, so the parent is found but
- * cannot be loaded.
+ * These fixtures bind the VALIDATED ROOT to the child with the harness's
+ * `validateFromSubdir` seam: the parent (with its legacy `projectPath` mount)
+ * materializes at the temp root, the child under `tree.files`.
  */
 import * as yaml from 'js-yaml';
 import { defineRuleFixture } from '../harness.js';
@@ -128,50 +115,80 @@ const unloadableParentTree = () => {
   return { ...tree, files: { ...tree.files, '.wai/specs/.index.yaml': 'name: FleetWorks\n' } };
 };
 
+/** The child declares the family's top as an external and holds its pin: the hub, written `fleet::telemetry-hub`. */
+const pinnedChildTree = () => {
+  const tree = chainedChildTree();
+  const child = 'packages/edge-telemetry/.wai';
+  const hubSnapshot = {
+    projectName: 'FleetWorks', projectId: 'fleetworks', origin: 'generated', generatedAt: TS,
+    interfaces: [{
+      id: 'telemetry-hub', name: 'Telemetry Hub', component: 'telemetry-hub', audience: 'project', type: 'MessageBus', componentType: 'Portal',
+      details: 'Family-wide telemetry ingestion surface.',
+      methods: [{ name: 'streamTelemetry', description: 'Ingest one telemetry batch.', signature: 'streamTelemetry(): void', returns: 'void' }],
+    }],
+    types: [],
+  };
+  const files: Record<string, string> = {
+    ...tree.files,
+    [`${child}/project.yaml`]: dumpSpec({
+      name: 'edge-telemetry-child',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules: {},
+      externals: { fleet: { project: 'fleetworks' } },
+    }),
+    [`${child}/externals.lock.yaml`]: yaml.dump({ externals: { fleet: { project: 'fleetworks', snapshot: '.wai/externals/fleet.yaml', digest: 'sha256:pinned', used: {} } } }),
+    [`${child}/externals/fleet.yaml`]: yaml.dump(hubSnapshot, { noRefs: true, lineWidth: 200 }),
+  };
+  for (const [file, text] of Object.entries(files)) {
+    if (file.endsWith('telemetry-forwarder.yaml') || file.endsWith('telemetry_forwarder_impl.yaml')) {
+      files[file] = text.split('super::telemetry-hub').join('fleet::telemetry-hub');
+    }
+  }
+  return { ...tree, files };
+};
+
 export default [
   // -------------------------------------------------------------------------
-  // Resolved THROUGH the parent — a loadable parent judges the child's edges
+  // The child's own gate: a deprecated form naming no alias is unavailable,
+  // with the parent loadable or not — the same verdict either way.
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'INVALID_DEPENDENCY_REFERENCE',
-    severity: 'error',
-    anchoredTo: 'telemetry-forwarder',
-    expectFire: true,
-    scenario:
-      'A chained edge-telemetry subproject depends on super::telemetry-hub while its FleetWorks parent is on disk and defines no telemetry-hub, so the dependency is judged through the parent as an invalid reference, reported under the child id.',
-    tree: chainedChildTree(),
-  }),
-
-  defineRuleFixture({
-    code: 'INVALID_TARGET_COMPONENT_REFERENCE',
-    severity: 'error',
-    anchoredTo: 'telemetry_forwarder_impl',
-    expectFire: true,
-    scenario:
-      'A chained edge-telemetry subproject calls streamTelemetry on super::telemetry-hub while its FleetWorks parent is on disk and defines no telemetry-hub, so the call target is judged through the parent as an invalid component reference, reported under the child id.',
-    tree: chainedChildTree(),
-  }),
-
-  defineRuleFixture({
-    code: 'CROSS_TREE_REF_UNRESOLVED',
-    expectFire: false,
-    reason:
-      'With a loadable parent on disk the reference is judged through the parent, so the raw cross-tree warning gives way to the verdict of the parent (the invalid-reference errors above) instead of standing beside it.',
-    scenario:
-      'A chained edge-telemetry subproject whose FleetWorks parent loads calls super::telemetry-hub and is judged through the parent, leaving no raw cross-tree warning behind.',
-    tree: chainedChildTree(),
-  }),
-
-  // -------------------------------------------------------------------------
-  // No usable parent — the raw verdict stands
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'CROSS_TREE_REF_UNRESOLVED',
+    code: 'EXTERNAL_CHECK_UNAVAILABLE',
     severity: 'warning',
     anchoredTo: 'telemetry-forwarder',
     expectFire: true,
     scenario:
-      'A chained edge-telemetry subproject depends on super::telemetry-hub with no vendored snapshot covering it, below a discoverable parent whose own spec tree cannot be loaded, so there is nothing to resolve through and the reference keeps its raw cross-tree warning instead of being rewritten into a waived one.',
+      'A chained edge-telemetry subproject depends on super::telemetry-hub while its loadable FleetWorks parent is on disk; its own gate never walks up, and the deprecated form names no alias, so there is nothing to judge the dependency against.',
+    tree: chainedChildTree(),
+  }),
+
+  defineRuleFixture({
+    code: 'EXTERNAL_CHECK_UNAVAILABLE',
+    severity: 'warning',
+    anchoredTo: 'telemetry_forwarder_impl',
+    expectFire: true,
+    scenario:
+      'The same edge-telemetry subproject below a parent whose own spec tree cannot be loaded calls streamTelemetry on super::telemetry-hub — the same unavailable verdict as with a healthy parent, neither softened nor hardened by where it lies.',
     tree: unloadableParentTree(),
+  }),
+
+  defineRuleFixture({
+    code: 'INVALID_TARGET_COMPONENT_REFERENCE',
+    expectFire: false,
+    reason:
+      'A reference that leaves the project is judged once, by project-boundaries, with its resolution; it is never mistaken for a local typo.',
+    scenario:
+      'A chained edge-telemetry subproject calls streamTelemetry on super::telemetry-hub, a reference that leaves the project rather than a misspelled local component.',
+    tree: chainedChildTree(),
+  }),
+
+  defineRuleFixture({
+    code: 'EXTERNAL_CHECK_UNAVAILABLE',
+    expectFire: false,
+    reason:
+      'The child declares the family top as an external and holds its pin, so `fleet::telemetry-hub` is judged against the pinned contract and resolves.',
+    scenario:
+      'The edge-telemetry subproject writes the hub as fleet::telemetry-hub through its declared, pinned external and calls streamTelemetry, which the pinned FleetWorks contract exposes.',
+    tree: pinnedChildTree(),
   }),
 ];

@@ -14,13 +14,20 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: listSnapshots
-  - name: listMountSnapshots
+  - name: listPinnedExternals
     narrative:
       - stepNumber: 1
-        description: Call listMountSnapshots on the surface portal
+        description: Call listPinnedExternals on the surface portal
         type: call
         targetComponent: surface_portal
-        targetMethod: listMountSnapshots
+        targetMethod: listPinnedExternals
+  - name: getExternalsStatus
+    narrative:
+      - stepNumber: 1
+        description: Call getExternalsStatus on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: getExternalsStatus
 status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-09-25T21:33:44.765Z'
+updatedAt: '2026-09-28T17:16:59.162Z'

@@ -19,7 +19,7 @@ import {
 } from '../../src/core/specs.js';
 import { renameComponent } from '../../src/core/provision.js';
 import { writeLegacyMount } from '../helpers/legacy-mount.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -107,7 +107,7 @@ function snapshot(dir: string): Record<string, string> {
 function findings(root: string, renamedIds: Record<string, string> = {}): string[] {
   invalidateSpecCache();
   setProjectRoot(root);
-  return validateSddTree().issues
+  return validateProject().issues
     .map((i) => `${i.severity} ${i.code} @${renamedIds[i.specId ?? ''] ?? i.specId}`)
     .sort();
 }

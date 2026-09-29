@@ -34,13 +34,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadTypeSpecs
-  - name: resolveSubprojectForNamespace
-    narrative:
-      - stepNumber: 1
-        description: Forward mount resolution to the core subsystem's published portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: resolveSubprojectForNamespace
   - name: computeStateId
     narrative:
       - stepNumber: 1
@@ -71,4 +64,4 @@ methods:
         targetMethod: resolveExternals
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-09-27T10:43:43.673Z'
+updatedAt: '2026-09-28T06:04:46.915Z'

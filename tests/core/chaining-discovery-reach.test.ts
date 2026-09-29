@@ -5,11 +5,9 @@ import * as path from 'path';
 
 // ---------------------------------------------------------------------------
 // Discovering a chained subproject's parent is itself a read above the bound
-// root, so it sits behind the same reach gate as resolving through that parent.
-//
-// A request narrowed to the child reads nothing above its root — not the
-// parent's verdict, and not the parent's spec files just to learn whether a
-// parent exists. And no request probes above its own top project root.
+// root. Since stage 4 the owner's gate never walks up at all, so validating a
+// child reads nothing above its root whatever the request's reach; the
+// reach-gated detection itself still probes nothing above the top root.
 // ---------------------------------------------------------------------------
 
 const { probed } = vi.hoisted(() => ({ probed: [] as string[] }));
@@ -37,7 +35,7 @@ import {
   invalidateSpecCache, workspaceFor, resolveChainingParent,
 } from '../../src/core/specs.js';
 import { writeLegacyMount } from '../helpers/legacy-mount.js';
-import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -96,7 +94,7 @@ function validateBound(boundRoot: string, topRoot: string, parentReach: boolean)
   invalidateSpecCache();
   probed.length = 0;
   runWithProjectBinding(boundRoot, { topRoot, parentReach }, () => {
-    result = validateSddTree();
+    result = validateProject();
   });
   return result!;
 }
@@ -111,14 +109,19 @@ describe('parent discovery sits behind the reach gate', () => {
     root = undefined;
   });
 
-  it('a credential that reaches the top project discovers the parent and resolves through it (the control)', () => {
+  it('no-discovery-standalone: even a credential that reaches the top project reads nothing above the child (stage 4)', () => {
     const fam = family();
     root = fam.root;
 
-    const result = validateBound(fam.kidDir, fam.root, true);
+    const reaching = validateBound(fam.kidDir, fam.root, true);
+    const narrowed = validateBound(fam.kidDir, fam.root, false);
 
-    expect(probedSpecsOf(fam.root)).toBe(true);
-    expect(result.resolvedThrough?.root).toBe(fam.root);
+    // The owner's gate never walks up: the parent's spec tree is never probed,
+    // whatever the reach, and the verdict is the same with or without it.
+    expect(probedSpecsOf(fam.root)).toBe(false);
+    const verdict = (r: ValidationResult) => r.issues.map((i) => `${i.severity} ${i.code} ${i.specId ?? ''}`).sort();
+    expect(verdict(reaching)).toEqual(verdict(narrowed));
+    expect(verdict(reaching)).toContain('warning EXTERNAL_CHECK_UNAVAILABLE k-orch');
   });
 
   it('a credential narrowed to the child never reads the parent spec tree, not even to discover it', () => {
@@ -127,7 +130,7 @@ describe('parent discovery sits behind the reach gate', () => {
 
     const result = validateBound(fam.kidDir, fam.root, false);
 
-    expect(result.resolvedThrough).toBeUndefined();
+    expect(result.hint).toBeUndefined();
     expect(probedSpecsOf(fam.root)).toBe(false);
   });
 
@@ -137,7 +140,7 @@ describe('parent discovery sits behind the reach gate', () => {
 
     const result = validateBound(fam.kidDir, fam.kidDir, true);
 
-    expect(result.resolvedThrough).toBeUndefined();
+    expect(result.hint).toBeUndefined();
     expect(probedSpecsOf(fam.root)).toBe(false);
   });
 

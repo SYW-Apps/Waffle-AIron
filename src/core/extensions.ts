@@ -38,7 +38,7 @@ export { installPackFromDirectory, uninstallPack };
 //     exported rule API. Loaded via createRequire from the project root
 //     (Node resolution semantics for module ids).
 //
-// Packs load identically in the CLI and the MCP server: validateSddTree
+// Packs load identically in the CLI and the MCP server: validateProject
 // auto-loads them from project config unless the caller passes its own
 // LoadedExtensions (the programmatic-wrapper path). A pack that fails to
 // load becomes an EXTENSION_LOAD_ERROR issue — never a silent skip.
@@ -597,7 +597,7 @@ export function loadExtensions(packRefs: string[], projectRoot: string): LoadedE
  * Load everything governing the current project: globally installed packs
  * (unless `extensions.useGlobalPacks: false`), then the packs declared in
  * the project's config — project packs win on collision. Used by
- * validateSddTree when the caller doesn't inject extensions explicitly;
+ * validateProject when the caller doesn't inject extensions explicitly;
  * an uninitialized project simply has none.
  */
 export function loadProjectExtensions(): LoadedExtensions {

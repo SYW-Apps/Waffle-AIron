@@ -35,7 +35,7 @@ for (const err of extensions.errors) {
   process.exit(2);
 }
 
-const result = wairon.validateSddTree({ extensions });
+const result = wairon.validateProject({ extensions });
 
 const errors = result.issues.filter((i) => i.severity === 'error');
 const warnings = result.issues.filter((i) => i.severity === 'warning');

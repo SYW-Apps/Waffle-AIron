@@ -491,11 +491,14 @@ const wairon = require('waffle-airon'); // this repo, built
 wairon.setProjectRoot(projectDir);
 const extensions = wairon.loadExtensions([...packPathsOrModuleIds], projectDir);
 // extensions.errors: string[] — surface these; don't run "open"
-const result = wairon.validateSddTree({ extensions });
+const result = wairon.validateProject({ extensions });
 ```
 
 An explicitly passed `extensions` takes precedence over config/global
-auto-loading. The relevant exported API: `validateSddTree(options)`,
+auto-loading. The relevant exported API: `validateProject(options)` (the
+owner's gate: one project from its own files), `validateFamily(options)` (the
+family run: every member's own gate verbatim, the composition of each
+project's externals against their live producers, and the family checks),
 `loadExtensions`, `loadExtensionPacks`, `loadProjectExtensions`,
 `globalPacksDir`, `discoverPacks`, `setProjectRoot`, the `SddRule` /
 `RuleContext` / `LoadedExtensions` / `DeclarativePack` types, `SDD_RULES`,

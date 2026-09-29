@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { loadProjectConfig } from '../../src/core/index.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import * as hostCore from '../../src/server/adapters/core.js';
 import { installGlobalPack } from '../../src/server/packs.js';
@@ -28,7 +28,7 @@ import type { HostConfig } from '../../src/server/types.js';
 // naming, complexity) never applied, and the only trace was an UNKNOWN_PROFILE
 // warning nobody was looking at. So this test drives the hosted write path and
 // then reads the VALIDATOR's verdict through the same path the hosted data
-// plane uses (project config -> validateSddTree with its rules + projectType).
+// plane uses (project config -> validateProject with its rules + projectType).
 // ---------------------------------------------------------------------------
 
 const ADMIN = 'test-admin-secret';
@@ -109,7 +109,7 @@ describe('Stage D — a selected pack profile actually governs the project (sdd_
       invalidateSpecCache();
       const config = loadProjectConfig();
       if (!config) throw new Error(`hosted project "${projectId}" has no configuration`);
-      const res = validateSddTree({ rules: config.rules, projectType: config.projectType });
+      const res = validateProject({ rules: config.rules, projectType: config.projectType });
       return {
         codes: res.issues.map((i) => i.code),
         specIdsFor: (code: string) => res.issues.filter((i) => i.code === code).map((i) => i.specId),

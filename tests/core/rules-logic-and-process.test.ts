@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree, validateComponentCandidate } from '../../src/core/validation.js';
+import { validateProject, validateComponentCandidate } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import type { ComponentSpec } from '../../src/models/index.js';
 
@@ -56,7 +56,7 @@ function createTempProject() {
     validate: (): Issue[] => {
       vi.spyOn(process, 'cwd').mockReturnValue(tempDir);
       try {
-        return validateSddTree().issues as Issue[];
+        return validateProject().issues as Issue[];
       } finally {
         invalidateSpecCache();
         vi.restoreAllMocks();
@@ -72,7 +72,7 @@ const on = (issues: Issue[], specId: string, codes: ReadonlySet<string>) =>
 
 /** Every code the dependency and pattern rules can report. */
 const SHAPE_CODES: ReadonlySet<string> = new Set([
-  'INVALID_DEPENDENCY_REFERENCE', 'CROSS_TREE_REF_UNRESOLVED', 'SURFACE_REF_AMBIGUOUS',
+  'INVALID_DEPENDENCY_REFERENCE', 'EXTERNAL_CHECK_UNAVAILABLE', 'SURFACE_REF_AMBIGUOUS',
   'CROSS_SUBSYSTEM_NON_ADAPTER', 'CROSS_SUBSYSTEM_PRIVATE_ACCESS', 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL',
   'ARCHITECTURE_VIOLATION_PORTAL_DEP', 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP',
   'ARCHITECTURE_VIOLATION_STORE_DEP', 'ARCHITECTURE_VIOLATION_REGISTRY_DEP', 'ARCHITECTURE_VIOLATION_ADAPTER_DEP',

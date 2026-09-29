@@ -15,7 +15,7 @@ import { buildCanvasModel } from '../../src/core/canvas.js';
 import { moveMountToMembers } from '../../src/core/provision.js';
 import { deleteMount } from '../../src/core/specs.js';
 import * as yaml from 'js-yaml';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { buildReferenceFamily, type ReferenceFamily } from '../helpers/reference-family.js';
 
 // ---------------------------------------------------------------------------
@@ -123,10 +123,12 @@ describe('reference family: the loader without position', () => {
 
   it('makes a local id that shadows an alias visible, and keeps the member reachable (shadowing-reachable)', () => {
     family = buildReferenceFamily();
+    // The shadowing is core's own finding: its gate reports it, the parent's never does (stage 4).
+    bind(family.core);
+    const shadow = validateProject().issues.filter((i) => i.code === 'LOCAL_ID_SHADOWS_PROJECT');
+    expect(shadow.map((i) => [i.severity, i.specId])).toEqual([['warning', 'transpiler']]);
     bind(family.top);
-    const issues = validateSddTree().issues;
-    const shadow = issues.filter((i) => i.code === 'LOCAL_ID_SHADOWS_PROJECT');
-    expect(shadow.map((i) => [i.severity, i.specId])).toEqual([['warning', 'core::transpiler']]);
+    expect(validateProject().issues.filter((i) => i.code === 'LOCAL_ID_SHADOWS_PROJECT')).toEqual([]);
     // `transpiler::lowering-portal` from core still reaches the member.
     expect(dependsOnOf('core::engine-portal')).toEqual(['transpiler::lowering-portal']);
     expect(loadSubsystemSpecs().map((s) => s.id)).toContain('core::transpiler');
@@ -150,15 +152,18 @@ describe('reference family: the loader without position', () => {
   it('reports the family findings stage 3 introduces', () => {
     family = buildReferenceFamily();
     bind(family.top);
-    const issues = validateSddTree().issues;
+    const issues = validateProject().issues;
     const of = (code: string) => issues.filter((i) => i.code === code);
+    // The top's own findings only: its legacy mount and its own deprecated form.
     expect(of('DEPRECATED_MOUNT_FORM').map((i) => i.specId)).toEqual(['shared']);
-    expect(of('DUPLICATE_SPEC_ID').map((i) => [i.severity, i.specId])).toEqual([['error', 'shared::mode']]);
-    // core, transpiler and shared are one strongly connected set: one loop, on each.
-    expect(of('PROJECT_DEPENDENCY_CYCLE').map((i) => i.specId).sort()).toEqual(['core', 'shared', 'transpiler']);
-    expect(of('DEPRECATED_REFERENCE_FORM').map((i) => i.message.match(/writes "([^"]+)"/)?.[1]).sort())
-      .toEqual(['::core::engine-portal', '::core::engine-portal', 'core::transpiler::lowering-portal', 'super::engine-portal']);
-    expect(of('PROJECT_ID_COLLISION')).toEqual([]);
+    expect(of('DEPRECATED_REFERENCE_FORM').map((i) => i.message.match(/writes "([^"]+)"/)?.[1]).sort()).toEqual(['::core::engine-portal']);
+    // A member's findings are its own gate's (stage 4): shared's duplicate id, transpiler's forms.
+    expect(of('DUPLICATE_SPEC_ID')).toEqual([]);
+    bind(family.shared);
+    expect(validateProject().issues.filter((i) => i.code === 'DUPLICATE_SPEC_ID').map((i) => [i.severity, i.specId])).toEqual([['error', 'mode']]);
+    bind(family.transpiler);
+    expect(validateProject().issues.filter((i) => i.code === 'DEPRECATED_REFERENCE_FORM').map((i) => i.message.match(/writes "([^"]+)"/)?.[1]).sort())
+      .toEqual(['::core::engine-portal', 'core::transpiler::lowering-portal', 'super::engine-portal']);
   });
 
   it('draws a project node per member, its specs under it, ids honest', () => {
@@ -188,7 +193,7 @@ describe('reference family: the loader without position', () => {
     bind(family.top);
     const shared = projectFamilyGraph().nodes.find((n) => n.namespace === 'shared')!;
     expect(shared.mountForm).toBe('members');
-    expect(validateSddTree().issues.filter((i) => i.code === 'DEPRECATED_MOUNT_FORM')).toEqual([]);
+    expect(validateProject().issues.filter((i) => i.code === 'DEPRECATED_MOUNT_FORM')).toEqual([]);
     // Moved already: nothing to write.
     expect(moveMountToMembers('shared')).toBe(false);
     expect(() => moveMountToMembers('nowhere')).toThrow(/no legacy L1 mount/);

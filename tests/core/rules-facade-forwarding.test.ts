@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository facades', 
     ]);
     proj.activate();
     try {
-      expect(facadeIssues(validateSddTree())).toHaveLength(0);
+      expect(facadeIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -130,7 +130,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository facades', 
     proj.facadeImpl([]);
     proj.activate();
     try {
-      expect(facadeIssues(validateSddTree())).toHaveLength(0);
+      expect(facadeIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -149,7 +149,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository facades', 
     ]);
     proj.activate();
     try {
-      const found = facadeIssues(validateSddTree());
+      const found = facadeIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].specId).toBe('impl-record-repository');
@@ -167,7 +167,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository facades', 
     ]);
     proj.activate();
     try {
-      const found = facadeIssues(validateSddTree());
+      const found = facadeIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('"local"');
     } finally { proj.cleanup(); }
@@ -185,7 +185,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository facades', 
     ]);
     proj.activate();
     try {
-      const found = facadeIssues(validateSddTree());
+      const found = facadeIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('record-exporter');
     } finally { proj.cleanup(); }
@@ -210,7 +210,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository facades', 
     ]);
     proj.activate();
     try {
-      expect(facadeIssues(validateSddTree())).toHaveLength(0);
+      expect(facadeIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

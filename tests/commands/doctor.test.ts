@@ -23,7 +23,7 @@ import * as validateAdapter from '../../src/commands/validate.js';
 // check, Stereotypes section and Lock section route through the CLI core
 // adapter (cli_core_adapter: projectConfigExists, retireSpecialists,
 // readLockState) and the CLI validator adapter (cli_validator_adapter:
-// validateSddTree, computeGateStateId), not a direct core import.
+// validateProject, computeGateStateId), not a direct core import.
 //
 // The report phase is exercised in-process (mocking the two adapter modules
 // as spies that still forward to the real implementation, so routing can be
@@ -48,7 +48,7 @@ vi.mock('../../src/commands/validate.js', async (importOriginal) => {
   return {
     ...actual,
     computeGateStateId: vi.fn(actual.computeGateStateId),
-    validateSddTree: vi.fn(actual.validateSddTree),
+    validateProject: vi.fn(actual.validateProject),
   };
 });
 
@@ -167,7 +167,7 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     // Routed through the CLI core and validator adapters, not a direct core import.
     expect(vi.mocked(subsystemAdapter.projectConfigExists)).toHaveBeenCalled();
     expect(vi.mocked(subsystemAdapter.retireSpecialists)).toHaveBeenCalledWith(false);
-    expect(vi.mocked(validateAdapter.validateSddTree)).toHaveBeenCalled();
+    expect(vi.mocked(validateAdapter.validateProject)).toHaveBeenCalled();
   });
 
   it('the Project check reports "not a wairon project" through the CLI core adapter, for a folder with no configuration', async () => {

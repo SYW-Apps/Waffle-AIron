@@ -18,7 +18,16 @@ fields:
       An explicit place to find the producer; without one it is found through the family (parent,
       members, siblings).
     optional: true
+  - name: use
+    type: string[]
+    description: >-
+      The producer's public names this project imports, so its specs may name them bare, like `use`
+      in code: `['*']` imports every public name the producer exports to this project,
+      `[waffler-error, index-value]` only those. Omitted or empty imports nothing, and every
+      reference into the producer is written `alias::name`. A listed name must be one of the
+      producer's public names (IMPORT_UNRESOLVED otherwise).
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-26T17:39:15.516Z'
-updatedAt: '2026-09-26T17:39:15.518Z'
+updatedAt: '2026-09-28T16:05:23.009Z'

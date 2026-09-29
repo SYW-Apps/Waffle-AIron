@@ -680,12 +680,12 @@ methods:
       - stepNumber: 2
         description: Is there an identity to judge?
         type: branch
-        condition: >-
-          the context carries no project identity (no readable configuration, or the parent's
-          verdict on a chained child)
+        condition: the context carries no project identity (no readable configuration)
         onFalseStep: 4
       - stepNumber: 3
-        description: 'No identity of the root''s own to judge: go on to the family''s'
+        description: >-
+          No identity of the root's own to judge: judged (a member's id is the family run's check,
+          family_validator.checkMembers)
         type: jump
         toStep: 10
       - stepNumber: 4
@@ -724,30 +724,6 @@ methods:
           re-lock
         type: local
       - stepNumber: 10
-        label: family
-        description: >-
-          Read the family's identity problems from the project graph in the rule context
-          (ctx.projectFamily); a candidate run carries none
-        type: local
-      - stepNumber: 11
-        description: For each family identity problem
-        type: loop
-        loopKind: forEach
-        over: the graph's id-collision, no-id and defaulted problems
-        endStep: 12
-      - stepNumber: 12
-        label: family-reported
-        description: >-
-          Report by the problem's kind: a defaulted member is PROJECT_ID_DEFAULTED (notice), naming
-          the member, the name slug it answers to now, and its alias as the id to declare in its
-          .wai/project.yaml (doctor --fix writes it); an id-collision is PROJECT_ID_COLLISION
-          (error) naming the id and each member resolving to it with where its id came from
-          (declared or name), and that a project is contained once — to use one project in two
-          roles, keep one member and let the other consumers declare it as an external; a member
-          with no id at all is PROJECT_ID_AMBIGUOUS (warning). The bound root's own defaulted and
-          no-id cases are left to the steps above, so each is reported once
-        type: local
-      - stepNumber: 13
         label: judged
         description: The identity is judged
         type: return
@@ -831,9 +807,10 @@ methods:
       - stepNumber: 12
         label: invalid
         description: >-
-          Report EXPORT_INVALID (notice) with the problem's detail: the missing source or item, the
-          item the source does not export, the own item the level does not own, or the public name
-          that breaks [a-z0-9-_]+
+          Report EXPORT_INVALID (error since stage 4, when the owner's gate judges every entry
+          exactly) with the problem's detail: the missing source or item, the item the source does
+          not export, the own item the level does not own, or the public name that breaks
+          [a-z0-9-_]+
         type: local
       - stepNumber: 13
         description: Next problem
@@ -842,9 +819,9 @@ methods:
       - stepNumber: 14
         label: unconsumable
         description: >-
-          Report EXPORT_UNCONSUMABLE (notice), naming the public name and the target's stereotype:
-          only a Portal (a gateway is a Portal variant) or an Observer can serve a caller across the
-          boundary
+          Report EXPORT_UNCONSUMABLE (error since stage 4), naming the public name and the target's
+          stereotype: only a Portal (a gateway is a Portal variant) or an Observer can serve a
+          caller across the boundary
         type: local
       - stepNumber: 15
         description: Next problem
@@ -889,10 +866,8 @@ methods:
         type: loop
         loopKind: forEach
         over: >-
-          the graph's authored references whose form is leading, super or path and whose text
-          changes — a path-form reference whose rewrite equals what was written (`shared::x` from a
-          project that has not declared `shared` yet) becomes canonical by declaring the external
-          alone, which is EXTERNAL_UNDECLARED's to say
+          the bound root's authored references in a leading, super or path form, and its bare names
+          whose first segment (before `::` or `.`) is the project's own id (a self-prefix)
         endStep: 5
       - stepNumber: 5
         label: reported
@@ -926,17 +901,21 @@ methods:
         outcome: no graph
       - stepNumber: 4
         label: each-external
-        description: For each external every project of the family declares
+        description: >-
+          For each external the bound project declares (a contained member's declarations are its
+          own gate's: the findings name no spec, so the rule selects the bound root's node instead
+          of relying on the owner filter)
         type: loop
         loopKind: forEach
-        over: every node's bound externals
+        over: the bound root node's bound externals
         endStep: 7
       - stepNumber: 5
         description: Is it unresolved?
         type: branch
         condition: >-
-          the external's sourceKind is unresolved, and it is not an external of the bound root the
-          chaining climb bound from the family's top (ctx.climbBoundExternals)
+          the external's sourceKind is unresolved, and the bound root holds no pin for it
+          (ctx.pinnedExternals has no entry and snapshot for the alias): a pin is what its gate
+          judges against, and nothing is climbed to find the producer
         onFalseStep: 7
       - stepNumber: 6
         description: >-
@@ -948,9 +927,52 @@ methods:
         type: local
       - stepNumber: 7
         label: checked
-        description: The external is checked
+        description: The external's declaration is checked
         type: local
       - stepNumber: 8
+        label: each-import
+        description: >-
+          For each name an external or member of the bound project imports by name (a `*` imports
+          whatever is exported, so it lists nothing to check)
+        type: loop
+        loopKind: forEach
+        over: the named `use` entries of the bound root's externals and members
+        endStep: 13
+      - stepNumber: 9
+        description: >-
+          Is it exported? Look the name up by nameKey among the public names the producer exports to
+          this project: a contained member's resolved L0 table, an external's pinned snapshot
+          (ctx.pinnedExternals) — an external with no pin is skipped here, its references already
+          report EXTERNAL_CHECK_UNAVAILABLE
+        type: branch
+        condition: the producer's table is known and carries no public name with that nameKey
+        onFalseStep: 11
+      - stepNumber: 10
+        label: unimported
+        description: >-
+          Report IMPORT_UNRESOLVED (error) naming the declaring project, the alias, the name and the
+          closest public names the producer does export
+        type: local
+      - stepNumber: 11
+        label: shadow-check
+        description: >-
+          Does a spec of the bound project itself share the name's nameKey (its own components,
+          interfaces and types from the rule context)?
+        type: branch
+        condition: the project owns a spec whose id has the name's nameKey
+        onFalseStep: 13
+      - stepNumber: 12
+        label: shadowed
+        description: >-
+          Report IMPORT_SHADOWED_BY_LOCAL (error) naming the declaring project, the alias, the name
+          and the local spec that hides it: every bare reference binds the local spec, so the named
+          import never takes effect — rename one, or drop the import
+        type: local
+      - stepNumber: 13
+        label: import-checked
+        description: The import is checked
+        type: local
+      - stepNumber: 14
         description: Every declaration is judged
         type: return
         outcome: judged
@@ -1058,4 +1080,4 @@ methods:
     exportedVia: memberDeclarationsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-27T17:04:16.552Z'
+updatedAt: '2026-09-28T18:13:27.380Z'

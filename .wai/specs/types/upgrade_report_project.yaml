@@ -1,0 +1,38 @@
+kind: value-object
+id: upgrade_report_project
+name: UpgradeReportProject
+description: >-
+  One project's totals in the upgrade report: what its last lock recorded and what its owner's gate
+  says now.
+subsystem: sdd_cli
+fields:
+  - name: key
+    type: string
+    description: The project's key ('' for the bound root)
+    optional: false
+  - name: lockedBy
+    type: string
+    description: >-
+      The validator version that took the project's lock (lock.validatorVersion); absent when the
+      project was never locked
+    optional: true
+  - name: lockedTotals
+    type: string
+    description: >-
+      The lock's validationResult totals — errors, warnings, notices — as recorded (an as-complete
+      run); absent when never locked
+    optional: true
+  - name: currentTotals
+    type: string
+    description: Today's as-complete owner's gate totals, comparable with the lock's
+    optional: false
+  - name: predatesStage4
+    type: boolean
+    description: >-
+      Whether the lock was taken by a validator older than the stage-4 release: only then is a
+      difference in totals attributed to the upgrade
+    optional: false
+methods: []
+sourcePath: src/commands/verdict-changes.ts
+createdAt: '2026-09-28T06:15:25.650Z'
+updatedAt: '2026-09-28T18:12:38.758Z'

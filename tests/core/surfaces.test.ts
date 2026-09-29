@@ -24,7 +24,7 @@ import {
 } from '../../src/core/surfaces.js';
 import { computeStateIdAt, loadSystemSpec } from '../../src/core/specs.js';
 import { toOpenApi, toOpenApiSet, fromOpenApi, isOpenApiDocument } from '../../src/core/openapi.js';
-import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import type {
@@ -434,9 +434,9 @@ describe('standalone-child validation against pinned parent snapshots', () => {
 
     // Standalone child context.
     setProjectRoot(childDir);
-    const res = validateSddTree();
+    const res = validateProject();
     const codes = res.issues.map(i => i.code);
-    expect(codes).not.toContain('CROSS_TREE_REF_UNRESOLVED');
+    expect(codes).not.toContain('EXTERNAL_CHECK_UNAVAILABLE');
     expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
     expect(codes).not.toContain('INVALID_TARGET_COMPONENT_REFERENCE');
     expect(codes).not.toContain('CROSS_SUBSYSTEM_NON_ADAPTER');
@@ -454,7 +454,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     } as ImplementationSpec);
     invalidateSpecCache();
     setProjectRoot(childDir);
-    const res2 = validateSddTree();
+    const res2 = validateProject();
     const notExposed = res2.issues.filter(i => i.code === 'SURFACE_REF_NOT_EXPOSED');
     expect(notExposed).toHaveLength(1);
     expect(notExposed[0].message).toMatch(/noSuchMethod.*root-system/s);
@@ -472,7 +472,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     } as Partial<ComponentSpec>));
     invalidateSpecCache();
     setProjectRoot(childDir);
-    const res = validateSddTree();
+    const res = validateProject();
     const violation = res.issues.filter(i => i.code === 'CROSS_SUBSYSTEM_NON_ADAPTER' && i.message.includes('rogue-orch'));
     expect(violation).toHaveLength(1);
     // The ref RESOLVED against a vendored snapshot, so even in a chained
@@ -482,7 +482,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     expect(res.valid).toBe(false);
   });
 
-  it('a cross-tree ref nothing covers is judged by the parent — a real INVALID_DEPENDENCY_REFERENCE, not a waived warning', () => {
+  it("a cross-tree ref nothing covers is unavailable in the child's own gate — never resolved through the parent, never a pass", () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     saveComponentSpec(component('mystery-adapter', 'transpiler', {
@@ -490,16 +490,13 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     } as Partial<ComponentSpec>));
     invalidateSpecCache();
     setProjectRoot(childDir);
-    const res = validateSddTree();
-    // The parent is on disk, so the reference is judged there: no snapshot and
-    // no component answers to it, which is simply an invalid dependency. It used
-    // to become one UNVERIFIED_EXTERNAL_REF warning that --ci waived.
-    const invalid = res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
-    expect(invalid.map(i => [i.specId, i.severity])).toEqual([['mystery-adapter', 'error']]);
-    const codes = res.issues.map(i => i.code);
-    expect(codes).not.toContain('CROSS_TREE_REF_UNRESOLVED');
-    expect(res.resolvedThrough?.scope).toBe('transpiler');
-    expect(res.valid).toBe(false);
+    const res = validateProject();
+    // The parent is on disk, but the owner's gate never walks up to it (stage
+    // 4): a deprecated form naming no alias has nothing to be judged against.
+    const unavailable = res.issues.filter(i => i.code === 'EXTERNAL_CHECK_UNAVAILABLE');
+    expect(unavailable.map(i => [i.specId, i.severity])).toEqual([['mystery-adapter', 'warning']]);
+    expect(unavailable[0].resolution?.outcome).toBe('unavailable');
+    expect(res.issues.map(i => i.code)).not.toContain('INVALID_DEPENDENCY_REFERENCE');
   });
 
   it("a chained child's source paths are its own: a file missing from its root is an error, never downgraded", () => {
@@ -520,7 +517,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     } as ImplementationSpec);
     invalidateSpecCache();
     setProjectRoot(childDir);
-    const res = validateSddTree();
+    const res = validateProject();
     const missing = res.issues.filter(i => i.code === 'MISSING_SOURCE_FILE');
     expect(missing).toHaveLength(1);
     // It used to be downgraded to a warning --ci waived.
@@ -613,7 +610,7 @@ describe('cross-tree references are matched by the provider they name', () => {
   function verdict(root: string): ValidationResult {
     invalidateSpecCache();
     setProjectRoot(root);
-    return validateSddTree();
+    return validateProject();
   }
 
   /** The findings of one code as `severity @specId`, sorted. */
@@ -632,20 +629,19 @@ describe('cross-tree references are matched by the provider they name', () => {
       expect(finding.message).toContain('"root-system::billing"');
       expect(finding.message).toContain('"root-system::archive"');
       expect(finding.message).not.toContain('root-system::ledger');
-      expect(finding.surfaceResolved).toBeUndefined();
+      // The ambiguity is the verdict: it carries the resolution that decided it.
+      expect(finding.resolution?.outcome).toBe('ambiguous');
     }
     const codes = res.issues.map((i) => i.code);
     expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
-    expect(codes).not.toContain('CROSS_TREE_REF_UNRESOLVED');
+    expect(codes).not.toContain('EXTERNAL_CHECK_UNAVAILABLE');
     expect(res.valid).toBe(false);
   });
 
-  it('from the parent root, where the reference collapses to a bare id, the same pins are just as ambiguous', () => {
+  it("from the parent root the child's references are the child's own gate's — the parent reports none of them", () => {
     const res = verdict(family('super::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).root);
 
-    expect(findings(res, 'SURFACE_REF_AMBIGUOUS')).toEqual([
-      'error @kid::invoice-client', 'error @kid::invoice-client-impl', 'error @kid::invoice-client-impl',
-    ]);
+    expect(findings(res, 'SURFACE_REF_AMBIGUOUS')).toEqual([]);
     expect(findings(res, 'SURFACE_REF_NOT_EXPOSED')).toEqual([]);
   });
 
@@ -675,9 +671,7 @@ describe('cross-tree references are matched by the provider they name', () => {
       family('super::ledger::invoice-portal', 'fetchInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir,
     ));
 
-    expect(findings(res, 'CROSS_TREE_REF_UNRESOLVED')).toEqual([
-      'warning @invoice-client', 'warning @invoice-client-impl', 'warning @invoice-client-impl',
-    ]);
+    expect(findings(res, 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual(['warning @invoice-client', 'warning @invoice-client-impl']);
     const codes = res.issues.map((i) => i.code);
     expect(codes).not.toContain('SURFACE_REF_AMBIGUOUS');
     expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
@@ -818,16 +812,16 @@ describe('surface projection over the resolved export table', () => {
     expect(snap.interfaces.some((e) => e.id === 'ledger-entry')).toBe(false);
   });
 
-  it('drops an entry the resolver cannot bind, and reports it through validate as a notice', () => {
+  it('drops an entry the resolver cannot bind, and reports it through validate as an error (stage 4)', () => {
     buildExporting();
     const system = loadSystemSpec()!;
     saveSystemSpec({ ...system, publicInterfaces: [...(system.publicInterfaces ?? []), { id: 'ghost-api', type: 'REST', details: 'nothing behind it' }] });
     invalidateSpecCache();
     setProjectRoot(rootDir);
     expect(projectOwnSurface('project').interfaces.some((e) => e.id === 'ghost-api')).toBe(false);
-    const result = validateSddTree();
+    const result = validateProject();
     const invalid = result.issues.filter((i) => i.code === 'EXPORT_INVALID');
-    expect(invalid.map((i) => i.severity)).toEqual(['notice']);
+    expect(invalid.map((i) => i.severity)).toEqual(['error']);
     expect(invalid[0].message).toContain('ghost-api');
   });
 });

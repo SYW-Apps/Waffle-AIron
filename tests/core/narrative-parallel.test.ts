@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache, updateSpec, saveSpec, saveInterfaceSpec, saveImplementationSpec, loadImplementationSpec } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { stepGraph } from '../../src/models/index.js';
@@ -60,7 +60,7 @@ describe('stepGraph parallel successor semantics', () => {
   });
 });
 
-describe('narrative control-flow parallel/detach soundness (via validateSddTree)', () => {
+describe('narrative control-flow parallel/detach soundness (via validateProject)', () => {
   let proj: string | undefined;
   afterEach(() => {
     invalidateSpecCache();
@@ -107,7 +107,7 @@ describe('narrative control-flow parallel/detach soundness (via validateSddTree)
   }
 
   const flowIssues = (codes: string[]) => {
-    const res = validateSddTree();
+    const res = validateProject();
     return res.issues.filter(i => codes.includes(i.code));
   };
 
@@ -344,7 +344,7 @@ describe('language gating of parallel/detach via pack tables', () => {
         '        type: local',
       ].join('\n'));
       vi.spyOn(process, 'cwd').mockReturnValue(proj);
-      const res = validateSddTree();
+      const res = validateProject();
       const foreign = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_FLOW');
       expect(foreign.some(i => i.message.includes('parallel step'))).toBe(true);
       expect(foreign.some(i => i.message.includes('fire-and-forget'))).toBe(true);

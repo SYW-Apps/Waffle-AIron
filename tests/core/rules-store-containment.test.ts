@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ describe('UNOWNED_STORE — a Store belongs inside a Repository', () => {
     proj.component('loose-store', 'Store');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'UNOWNED_STORE');
+      const found = byCode(validateProject(), 'UNOWNED_STORE');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('recommended shape for held state is a Repository');
@@ -81,7 +81,7 @@ describe('UNOWNED_STORE — a Store belongs inside a Repository', () => {
     proj.component('unit-repository', 'Repository', 'owns: [unit-store, unit-registry, unit-index]');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNOWNED_STORE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'UNOWNED_STORE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -90,7 +90,7 @@ describe('UNOWNED_STORE — a Store belongs inside a Repository', () => {
     proj.component('loose-store', 'Store', 'lint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: transitional — repository lands with the next subsystem pass');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNOWNED_STORE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'UNOWNED_STORE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -102,7 +102,7 @@ describe('Store-target boundary violations prescribe the fix and forbid the shor
     proj.component('resolver', 'Orchestrator', 'dependencyClass: read\ndependsOn: [loose-store]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'DEPENDENCY_CLASS_VIOLATION');
+      const found = byCode(validateProject(), 'DEPENDENCY_CLASS_VIOLATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('wrap "loose-store" in a Repository pattern');
       expect(found[0].message).toContain('depend on that Repository facade');
@@ -116,7 +116,7 @@ describe('Store-target boundary violations prescribe the fix and forbid the shor
     proj.component('front-portal', 'Portal', 'portalType: Custom\ndependsOn: [loose-store]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP');
+      const found = byCode(validateProject(), 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('through an Orchestrator');
       expect(found[0].message).toContain('Never resolve this by merging');
@@ -129,7 +129,7 @@ describe('Store-target boundary violations prescribe the fix and forbid the shor
     proj.component('resolver', 'Orchestrator', 'dependencyClass: read\ndependsOn: [flow-orch]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'DEPENDENCY_CLASS_VIOLATION');
+      const found = byCode(validateProject(), 'DEPENDENCY_CLASS_VIOLATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).not.toContain('Repository pattern (owns');
       expect(found[0].message).not.toContain('Never resolve this by merging');

@@ -31,8 +31,11 @@ member binds only what that member exports from its own L0, and `doctor --fix` a
 before it applies the chaining migration (`--yes` in a script). Stage 3 renames and
 removes the mount writers' commands and tools with no aliases, re-keys every member's
 specs by its project id (one re-lock), and gives the deprecated reference and mount
-forms one release of grace. Nothing here is purely additive, so `[minor]` would
-understate it.
+forms one release of grace. Stage 4 gives every cross-project edge one judge: a
+project's own gate reads only its own files and pins, `validate` at a parent becomes the
+family run (whose member checks can newly fail `--ci`), five codes escalate to errors, and
+`validateSddTree` is renamed `validateProject` with no alias. Nothing here is purely
+additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
 
@@ -473,6 +476,127 @@ whose approval the writes staled; re-lock each once with `wairon lock`. Proven o
 of a sixteen-project family: 15 mounts moved, 334 references rewritten, 169 family pins
 deleted, and `DEPRECATED_REFERENCE_FORM` / `DEPRECATED_MOUNT_FORM` / `EXTERNAL_UNDECLARED`
 at zero afterwards.
+
+### One judge per edge: the owner's gate and the family run
+
+Stage 4 of the chained-subsystems work. A project's verdict no longer depends on where
+it is validated from: every cross-project edge has exactly one judge.
+
+- **The owner's gate — `validateProject`.** It judges a project from its own files
+  alone: its specs, its configuration, its code, its lock, its pinned externals
+  (`.wai/externals.lock.yaml` and the snapshots) and the export tables of the members
+  it contains. It never walks up to a parent, never reads a sibling and discovers
+  nothing, so a project gets the same verdict from every root, with or without its
+  family on disk. A reference into another project is judged against the pin, and
+  every such finding carries how it resolved — `resolved`, `missing`, `ambiguous`,
+  `unavailable` or `forbidden` — with the owner, the call site, the canonical target
+  and the digest it was judged against. A contained member's own specs are its own
+  gate's; a parent never re-judges them. A project with externals prints one line
+  saying `validate --family` composes them.
+- **The family run — `validateFamily`.** `wairon validate` at a project that declares
+  members, `wairon validate --family` anywhere, and `sdd_validate_tree` with
+  `family: true` (or at a parent). Every selected project's own gate is carried
+  verbatim under its key, with its totals; then each project's externals are composed
+  against their live producers — `EXTERNAL_INCOMPATIBLE` (error: a used method or type
+  changed or vanished, judged on canonical digests, bare names imported through `use`
+  included), `EXTERNAL_DRIFTED` (notice: the producer changed, nothing used did),
+  `EXTERNAL_CHECK_UNAVAILABLE` (warning: nothing to compare, never a pass) — and the
+  family checks run over the graph: `MEMBER_NOT_FOUND` and `PROJECT_ID_COLLISION`
+  (errors), `MEMBER_UNAPPROVED`, `MEMBER_DRIFTED` (the member's own lock is stale) and
+  `PROJECT_DEPENDENCY_CYCLE` (warnings), and a member's defaulted or missing id
+  (`PROJECT_ID_DEFAULTED` naming its alias, `PROJECT_ID_AMBIGUOUS`). A family code is
+  tuned by the owning project's `rules.sddRuleSeverity` — the consumer for a
+  composition finding, the root for a member check; `lint.allow` does not reach them,
+  because they name no spec. An unrelated member's failure changes nothing about
+  another member's verdict.
+- **Reach.** A plain run reads nothing above the project it was started at: an
+  external whose producer lies above is counted in a one-line hint instead of failing.
+  `--family` makes the walk up explicit. Hosted, the run keeps the credential's reach
+  and never widens it; `validate --family` in an attached checkout asks the instance for
+  it.
+- **Declared imports.** An external or a member may import names:
+  `externals: { shared: { use: [waffler-error] } }` (or `use: ['*']`). A bare name
+  resolves to a local spec first, then to an exported public name of an alias that
+  imports it; two imports supplying one name is `IMPORT_AMBIGUOUS`, an explicit import
+  colliding with a local name `IMPORT_SHADOWED_BY_LOCAL`, a name no import supplies
+  `IMPORT_UNRESOLVED`. The case- and punctuation-insensitive suffix match across every
+  type in the scan is gone.
+- **Escalated to errors**, now that a project's own gate can judge them exactly:
+  `EXTERNAL_NOT_EXPORTED`, `EXPORT_INVALID`, `EXPORT_UNCONSUMABLE`,
+  `TRUSTED_LINK_CROSSES_PROJECT` and `EXTERNAL_UNDECLARED` (an unknown `x::y` among
+  them).
+- **Deleted, with no `--legacy`:** resolve-through-parent and everything that existed
+  for it — `CROSS_TREE_REF_UNRESOLVED`, the `resolvedThrough` and `crossTree` fields,
+  the mount-pool lookups and the `project-cycles` rule (its check is the family run's
+  now). The project-identity rule judges the bound project's own id only; a member's
+  id is a family check.
+- **Library.** `validateSddTree` is renamed `validateProject`, with no alias, and
+  `validateFamily` is exported beside it.
+- **`externalize` leaves a tree that passes.** Moving a subsystem into a member now
+  exports what crosses the new boundary on each side (a type through its subsystem and
+  the L0, a component its subsystem already publishes through the L0) and imports by
+  name (`use`) each bare type the moving side no longer owns — a union member
+  included — so the text stays as written. A component its subsystem does not publish
+  is not made public by a move; `EXTERNAL_NOT_EXPORTED` keeps naming it.
+
+**The upgrade report.** `wairon doctor --report composed-validation` says what stage 4
+changed in each project's verdict, and writes nothing. A lock records totals only, so it
+puts each project's lock totals and validator version beside today's as-complete totals
+— attributed to the upgrade only when the lock predates stage 4 — and classes today's
+findings by a reason it can compute: **escalated** (one of the codes above),
+**pinned** (a reference now judged against the project's own pin), and **positional**
+(a reference the family's top still matches by position, with what it matched and the
+`use` line, export or external it needs — the same match the positional migration
+writes from). What it cannot attribute is counted, never explained away; a positional
+candidate no rule decides is listed with every candidate for a person to pick.
+
+**The positional migration.** `wairon doctor --report chaining` plans it and writes
+nothing; `wairon doctor --fix` prints the same plan, asks (`--yes` in a script) and
+applies it. For every reference that resolved before stage 4 only by position it writes
+the explicit form stage 4 needs, from the same match the upgrade report explains:
+
+- a **named `use` import** — `externals: { shared: { use: [waffler-error] } }`, or on the
+  member alias — with the reason the producer was chosen (`only-match`,
+  `declared-producer`, `already-exported`; a producer this plan itself declares is marked
+  so), the export the producer lacks (reason `positional`) and the external the consumer
+  lacks, pinned;
+- a **self-prefixed reference** (`registry.x`, `registry::x` in the project called
+  registry — for a member that declares no id, also the alias its parent gives it)
+  rewritten to its bare local id, raw type positions included;
+- nothing it would have to guess: a name no tie-break rule decides is
+  `positional-ambiguous` (every candidate listed — a person picks), a named import a local
+  spec would shadow is `import-shadowed` and never written, and two imports supplying one
+  bare name are `import-collision`.
+
+The match decides in rounds, as a re-run after apply would: a producer the consumer
+declares — or will, because it already reaches it by `alias::name` or an earlier round's
+import declares it — is a declared producer. So the migration is idempotent: the second
+plan is empty. The plan **opens with every new cross-project dependency** it adds
+("waffler_core now depends on waffler_ui (61 references)") — listed, never blocking, no
+layering guessed; whether the edge should exist is the reader's call. Apply writes ids,
+exports and externals, then the member moves, imports, rewrites and stage-1 pin
+deletions, and **pins last** — every family external declared before the migration and
+never pinned included — so every snapshot projects the final spelling. Nothing is
+locked: each project whose approval the writes staled is named, to be re-locked with
+`wairon lock` at its own root.
+
+**Upgrading.**
+
+- Run `wairon doctor --report composed-validation` first: it names what is new and why.
+- **`validate` at a parent is now the family run**: `--ci` fails on its warnings as on
+  any other — an unlocked or drifted member (`MEMBER_UNAPPROVED`, `MEMBER_DRIFTED`)
+  among them — until each member is locked at its own root, or the code is re-tuned in
+  the parent's `rules.sddRuleSeverity`. `--no-recursive` runs the parent's own gate
+  alone.
+- **A bare name another project supplies needs a `use` import**, and a reference into
+  another project needs the producer to export it and the consumer to declare and pin
+  it. Run `wairon doctor --report chaining` at the family's top, read the new
+  dependencies it lists first, then `wairon doctor --fix` to write them all; settle what
+  it reports for a person (`positional-ambiguous`, `import-shadowed`, `import-collision`)
+  by hand, and re-lock each project it names.
+- Scripts that called `validateSddTree` call `validateProject`.
+- An MCP client reading `sdd_validate_tree` sees an optional `projects` list and a
+  `project` key on each finding in a family run.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 

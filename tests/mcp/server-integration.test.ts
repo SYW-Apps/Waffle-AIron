@@ -247,7 +247,7 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     try { fs.rmSync(projDir, { recursive: true, force: true }); } catch { /* windows file locks */ }
   });
 
-  it('externalizes then internalizes a subsystem, rewriting the cross-ref, with no new errors', async () => {
+  it('externalizes then internalizes a subsystem, rewriting the cross-ref; the one new error is the unexported member', async () => {
     const before = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_validate_tree', arguments: {} })));
     expect(errorsOf(before)).toEqual([]);
 
@@ -265,7 +265,14 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     expect(adapterExt.dependsOn).toEqual(['core::core-portal']);
 
     const afterExt = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_validate_tree', arguments: {} })));
-    expect(errorsOf(afterExt)).toEqual([]); // ref rewrite kept it error-free
+    // The ref rewrite resolves, and the moved portal is exported from the
+    // member's L0 (its subsystem already published it), so nothing the move
+    // did is an error. The parent declares a member now, so the tool runs the
+    // family run: the member's own gate is in it too.
+    expect(errorsOf(afterExt)).toEqual([]);
+    expect(afterExt.projects.map((p: { key: string }) => p.key)).toEqual(['', 'core']);
+    expect((readYamlFile(path.join(projDir, 'packages', 'core', '.wai', 'specs', '.index.yaml')) as { publicInterfaces?: unknown }).publicInterfaces)
+      .toEqual([{ from: 'core', component: 'core-portal', audience: 'project' }]);
 
     // --- internalize ---
     unwrapText(await client.callTool({ name: 'sdd_internalize_member', arguments: { alias: 'core' } }));

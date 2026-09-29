@@ -36,9 +36,12 @@ function climb(bound: string): { top: string; whole: boolean } {
     top = path.resolve(parent.parentRoot);
   }
   // A request narrowed to its own root reads nothing above it: the family
-  // above the bound root could not be looked at.
+  // above the bound root could not be looked at. Neither could it when the
+  // caller narrowed the ceiling itself (a family run without --family) and the
+  // climb stopped at that ceiling.
   const reach = getRequestParentReach();
-  return { top, whole: !(reach && !reach.parentReach) };
+  const stoppedAtNarrowedCeiling = !!reach?.narrowed && reach.topRoot !== undefined && dirKey(top) === dirKey(reach.topRoot);
+  return { top, whole: !(reach && !reach.parentReach) && !stoppedAtNarrowedCeiling };
 }
 
 /** The consumer's node: the one whose directory is the bound root. */

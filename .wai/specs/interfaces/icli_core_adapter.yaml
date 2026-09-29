@@ -629,6 +629,28 @@ methods:
         type: string
         description: What the member is to this project
         optional: true
+  - name: loadTypeSpecs
+    description: >-
+      Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
+      members' included (keyed by project id)
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
+    params: []
+  - name: importNames
+    description: >-
+      Forward to project_config_portal.importNames: add public names to the `use` of an external or
+      member of the bound project
+    signature: 'importNames(alias: string, names: string[]): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external or member alias
+      - name: names
+        type: string[]
+        description: The public names to import, or `*`
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T16:07:39.085Z'
+updatedAt: '2026-09-28T17:17:08.502Z'

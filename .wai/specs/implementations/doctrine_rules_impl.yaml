@@ -94,14 +94,14 @@ methods:
         cases:
           - value: missing
             step: 4
-          - value: unpinned
-            step: 6
           - value: ambiguous
             step: 8
           - value: surface
             step: 10
           - value: cross-subsystem
             step: 13
+          - value: cross-project
+            step: 6
         defaultStep: 1
       - stepNumber: 4
         label: invalidReference
@@ -114,11 +114,12 @@ methods:
         type: jump
         toStep: 1
       - stepNumber: 6
-        label: unpinnedCrossTree
+        label: crossProjectUnresolved
         description: >-
-          Report CROSS_TREE_REF_UNRESOLVED (warning, on edge.from.id; draft context
-          edge.draftContext) naming the component and edge.ref: validate from the parent project,
-          pin the family surfaces (wairon surface pin), or import the producing project's surface
+          The edge leaves the project and resolveCrossProject did not resolve it (forbidden, missing
+          or unavailable): project-boundaries reports it once, with its resolution. Nothing is
+          reported here — the retired CROSS_TREE_REF_UNRESOLVED warning and its advice to validate
+          from the parent are gone
         type: local
       - stepNumber: 7
         description: Continue with the next edge
@@ -139,7 +140,8 @@ methods:
       - stepNumber: 10
         label: surfaceCrosser
         description: >-
-          A snapshot declares the remote surface: is the depending component something other than an
+          A contract entry declares the remote surface — a contained member's live table, a declared
+          external's pin, or a foreign snapshot: is the depending component something other than an
           Adapter?
         type: branch
         condition: edge.from.componentType is not Adapter
@@ -147,9 +149,9 @@ methods:
       - stepNumber: 11
         description: >-
           Report CROSS_SUBSYSTEM_NON_ADAPTER (error, on edge.from.id; draft context
-          edge.draftContext; surfaceResolved true, so it keeps full strength in a chained
-          subproject) naming the component, its componentType, edge.ref and the snapshot's
-          projectName: only a local client Adapter may cross a project boundary
+          edge.draftContext; carrying the edge's resolution) naming the component, its
+          componentType, edge.ref and the producing project: only a local client Adapter may cross a
+          project boundary
         type: local
       - stepNumber: 12
         description: Continue with the next edge
@@ -1174,102 +1176,6 @@ methods:
     sourcePath: src/core/rules/doctrine/project-boundaries.ts
     narrative:
       - stepNumber: 1
-        description: >-
-          Read the project graph and the export usages from the rule context (ctx.projectFamily,
-          ctx.exportUsages)
-        type: local
-      - stepNumber: 2
-        description: Is there a graph to read?
-        type: branch
-        condition: the context carries no project graph (a candidate run)
-        onFalseStep: 4
-      - stepNumber: 3
-        description: 'Nothing to judge: report nothing'
-        type: return
-        outcome: no graph
-      - stepNumber: 4
-        label: references
-        description: For each cross-project reference
-        type: loop
-        loopKind: forEach
-        over: the graph's cross-project references
-        endStep: 7
-      - stepNumber: 5
-        description: Does the consumer declare the producer?
-        type: branch
-        condition: >-
-          the reference bound to the producer through one of the consumer's aliases —
-          ProjectFamily.declares(consumer, producer): the producer is a direct member (either
-          declaration form), or one of the consumer's externals resolves to it
-        onTrueStep: 7
-        onFalseStep: 6
-      - stepNumber: 6
-        description: >-
-          Report EXTERNAL_UNDECLARED (notice) on the referring spec, in its draft context, naming
-          the position, the reference as written, the producer's id and key, and the `externals`
-          entry that would declare it (a member needs none; a parent or sibling does) — after which
-          the reference is written `alias::name`
-        type: local
-      - stepNumber: 7
-        label: declared
-        description: The reference's declaration is judged
-        type: local
-      - stepNumber: 8
-        description: For each unexported reference of every usage
-        type: loop
-        loopKind: forEach
-        over: the unexported references of the context's export usages
-        endStep: 9
-      - stepNumber: 9
-        label: exported
-        description: >-
-          Report EXTERNAL_NOT_EXPORTED (notice) on the referring spec, in its draft context, naming
-          the reference as written, the target it reached and the producer, and that another project
-          may reach it only through a public name of the producer's L0 table whose audience covers
-          the referrer — export it from the producer's L0 (audience project reaches the family; a
-          project-level type takes one own `{ typeDef }` entry) and reach it by that name
-        type: local
-      - stepNumber: 10
-        description: For each subsystem's trustedLinks entries
-        type: loop
-        loopKind: forEach
-        over: every loaded subsystem's trustedLinks entries
-        endStep: 14
-      - stepNumber: 11
-        description: >-
-          Find the project the link lands in: ProjectFamily.producerOf(the link as written, from the
-          declaring subsystem's project) — the loader leaves trustedLinks raw, so it is read here
-          the way the scan binds a reference: a bare subsystem id is local, `alias::sub` lands in
-          the project the alias names
-        type: local
-      - stepNumber: 12
-        description: Does the link stay inside its project?
-        type: branch
-        condition: the producer is unknown, or is the project that owns the declaring subsystem
-        onTrueStep: 14
-        onFalseStep: 13
-      - stepNumber: 13
-        description: >-
-          Report TRUSTED_LINK_CROSSES_PROJECT (notice) on the declaring subsystem, in its draft
-          context, naming the linked subsystem and its project: a trusted link waives the
-          client-Adapter shim inside one project and cannot pierce a project boundary; reach the
-          other project through its exports
-        type: local
-      - stepNumber: 14
-        label: linked
-        description: The link is judged
-        type: local
-      - stepNumber: 15
-        description: Every boundary is judged
-        type: return
-        outcome: judged
-    detail: full
-    symbol: check
-    exportedVia: projectBoundariesRule
-  - name: projectCycles
-    sourcePath: src/core/rules/doctrine/project-cycles.ts
-    narrative:
-      - stepNumber: 1
         description: Read the project graph from the rule context (ctx.projectFamily)
         type: local
       - stepNumber: 2
@@ -1282,30 +1188,121 @@ methods:
         type: return
         outcome: no graph
       - stepNumber: 4
-        description: 'Find the loops: ProjectFamily.dependencyCycles()'
-        type: local
-      - stepNumber: 5
-        label: loops
-        description: For each loop
+        label: references
+        description: >-
+          For each reference the bound project's own specs write with `::`, and each bare name it
+          binds through a `use` import (the graph's authored references whose spec the bound root
+          owns — a contained member's references are its own gate's)
         type: loop
         loopKind: forEach
-        over: the loops, each once
-        endStep: 6
-      - stepNumber: 6
-        label: reported
+        over: the bound project's own authored references
+        endStep: 14
+      - stepNumber: 5
         description: >-
-          Report PROJECT_DEPENDENCY_CYCLE (warning) on each project of the loop (its key; the bound
-          root as the tree), naming the loop in order and, for each edge, the cross-project
-          references that make it (consumer spec, position, the reference as written) — the edges
-          with the fewest references first, since those are the cheapest to move
+          Take the reference's resolution from ctx.resolveCrossProject(spec, position, reference as
+          written) — decided before any severity from the project's own files: its scan, its
+          contained members' tables and its pins
         type: local
+      - stepNumber: 6
+        description: What did it resolve to?
+        type: switch
+        'on': the resolution's outcome (a local reference has none)
+        cases:
+          - value: forbidden
+            step: 7
+          - value: missing
+            step: 9
+          - value: unavailable
+            step: 13
+          - value: ambiguous
+            step: 11
+        defaultStep: 14
       - stepNumber: 7
-        description: Every loop is reported
+        label: undeclared
+        description: >-
+          Report EXTERNAL_UNDECLARED (error) on the referring spec, in its draft context, carrying
+          the resolution: the position, the reference as written, and — when the first segment names
+          a project of the scan — the producer's id and the `externals` entry that would declare it;
+          otherwise that the segment is none of this project's subsystems, aliases or foreign
+          providers
+        type: local
+      - stepNumber: 8
+        description: Next reference
+        type: jump
+        toStep: 14
+      - stepNumber: 9
+        label: unexported
+        description: >-
+          Report EXTERNAL_NOT_EXPORTED (error) on the referring spec, in its draft context, carrying
+          the resolution: the reference as written, the target and the producer, whether the table
+          read was a contained member's live one or the external's pin (with its digest), and the
+          remedy — export it from the producer's L0 (a project-level type takes one own `{ typeDef
+          }` entry) and re-pin, or reach it by a name the producer exports
+        type: local
+      - stepNumber: 10
+        description: Next reference
+        type: jump
+        toStep: 14
+      - stepNumber: 11
+        label: ambiguousImport
+        description: >-
+          Report IMPORT_AMBIGUOUS (error) on the referring spec, in its draft context, carrying the
+          resolution: the bare name, each alias whose `use` supplies it and whether by name or by
+          `*`, and the remedy — write it `alias::name`, or narrow a `use` so one import supplies it
+        type: local
+      - stepNumber: 12
+        description: Next reference
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        label: unavailable
+        description: >-
+          Report EXTERNAL_CHECK_UNAVAILABLE (warning) on the referring spec, in its draft context,
+          carrying the resolution and its reason — no pin (run `wairon externals pin`), an
+          unreadable pin, a member absent on disk, or a deprecated form naming no alias (run `wairon
+          doctor --fix`). Never a pass
+        type: local
+      - stepNumber: 14
+        label: judged
+        description: The reference is judged
+        type: local
+      - stepNumber: 15
+        description: For each subsystem's trustedLinks entries
+        type: loop
+        loopKind: forEach
+        over: every subsystem the bound project owns, and its trustedLinks entries
+        endStep: 19
+      - stepNumber: 16
+        description: >-
+          Find the project the link lands in: ProjectFamily.producerOf(the link as written, from the
+          declaring subsystem's project) — the loader leaves trustedLinks raw, so it is read here
+          the way the scan binds a reference: a bare subsystem id is local, `alias::sub` lands in
+          the project the alias names
+        type: local
+      - stepNumber: 17
+        description: Does the link stay inside its project?
+        type: branch
+        condition: the producer is unknown, or is the project that owns the declaring subsystem
+        onTrueStep: 19
+        onFalseStep: 18
+      - stepNumber: 18
+        description: >-
+          Report TRUSTED_LINK_CROSSES_PROJECT (error) on the declaring subsystem, in its draft
+          context, naming the linked subsystem and its project: a trusted link waives the
+          client-Adapter shim inside one project and cannot pierce a project boundary; reach the
+          other project through its exports
+        type: local
+      - stepNumber: 19
+        label: linked
+        description: The link is judged
+        type: local
+      - stepNumber: 20
+        description: Every boundary is judged
         type: return
         outcome: judged
     detail: full
     symbol: check
-    exportedVia: projectCyclesRule
+    exportedVia: projectBoundariesRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-27T12:17:46.746Z'
+updatedAt: '2026-09-28T17:16:44.452Z'

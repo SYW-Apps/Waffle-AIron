@@ -1,6 +1,7 @@
 import * as path from 'path';
 import {
   declaredExternals,
+  declaredMembers,
   effectiveProjectId,
   parseDeclaredCall,
   producerOf,
@@ -73,6 +74,10 @@ function makeNodes(roots: ScannedProjectRoot[]): ProjectNode[] {
       members: roots.filter((r) => r.parent === root.namespace && r.namespace !== root.namespace).map((r) => r.namespace),
       aliases: root.aliases,
       externals: [],
+      imports: root.config ? [
+        ...declaredMembers(root.config).filter((m) => !m.problem).map((m) => ({ alias: m.alias, section: 'members' as const, use: m.use })),
+        ...declaredExternals(root.config).filter((e) => !e.problem).map((e) => ({ alias: e.alias, section: 'externals' as const, use: e.use })),
+      ] : [],
     };
   });
 }

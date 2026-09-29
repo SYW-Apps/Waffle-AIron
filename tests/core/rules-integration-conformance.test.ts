@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     proj.source('src/b.ts', body('orchb'));
     proj.activate();
     try {
-      expect(simIssues(validateSddTree())).toHaveLength(0);
+      expect(simIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -109,7 +109,7 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/a.js';\nrunorcha();\n");
     proj.activate();
     try {
-      const found = simIssues(validateSddTree());
+      const found = simIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('MISSING_INTEGRATION_SIM');
       expect(found[0].specId).toBe('impl-orch-c');
@@ -129,7 +129,7 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     proj.source('src/b.ts', body('orchb'));
     proj.activate();
     try {
-      const found = simIssues(validateSddTree()).filter(i => i.code === 'SIM_FILE_MISSING');
+      const found = simIssues(validateProject()).filter(i => i.code === 'SIM_FILE_MISSING');
       expect(found).toHaveLength(2);
       expect(found.find(i => i.specId === 'impl-orch-a')!.message).toContain('resolves to no file');
       expect(found.find(i => i.specId === 'impl-orch-b')!.message).toContain('escapes the project root');
@@ -147,7 +147,7 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     proj.source('tests/integration/a.sim.ts', 'export const nothing = 1;\n');
     proj.activate();
     try {
-      const found = simIssues(validateSddTree()).filter(i => i.code === 'UNWIRED_INTEGRATION_SIM');
+      const found = simIssues(validateProject()).filter(i => i.code === 'UNWIRED_INTEGRATION_SIM');
       expect(found).toHaveLength(1);
       expect(found[0].specId).toBe('impl-orch-a');
       expect(found[0].message).toContain("the component's own module");
@@ -172,7 +172,7 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/a.js';\nrunorcha();\n");
     proj.activate();
     try {
-      expect(simIssues(validateSddTree())).toHaveLength(0);
+      expect(simIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -233,7 +233,7 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     ].join('\n'));
     proj.activate();
     try {
-      expect(simIssues(validateSddTree()).filter(i => i.code === 'SIM_PATH_UNCOVERED')).toHaveLength(0);
+      expect(simIssues(validateProject()).filter(i => i.code === 'SIM_PATH_UNCOVERED')).toHaveLength(0);
     } finally { proj.cleanup(); }
 
     const proj2 = createTempProject();
@@ -243,7 +243,7 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     ].join('\n'));
     proj2.activate();
     try {
-      const found = simIssues(validateSddTree()).filter(i => i.code === 'SIM_PATH_UNCOVERED');
+      const found = simIssues(validateProject()).filter(i => i.code === 'SIM_PATH_UNCOVERED');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('invalid-payload');
       expect(found[0].message).toContain('sim:orch-a.ingest:invalid-payload');
@@ -259,7 +259,7 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     ].join('\n'));
     proj.activate();
     try {
-      expect(simIssues(validateSddTree()).filter(i => i.code === 'SIM_PATH_UNCOVERED')).toHaveLength(0);
+      expect(simIssues(validateProject()).filter(i => i.code === 'SIM_PATH_UNCOVERED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -277,7 +277,7 @@ describe('integration conformance — subsystem adoption + wiring proof', () => 
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/a.js';\nrunorcha();\n");
     proj.activate();
     try {
-      expect(simIssues(validateSddTree()).filter(i => i.code === 'MISSING_INTEGRATION_SIM')).toHaveLength(0);
+      expect(simIssues(validateProject()).filter(i => i.code === 'MISSING_INTEGRATION_SIM')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -313,7 +313,7 @@ describe('integration conformance — a component\'s own modules are all its fil
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/commands/run-a.js';\nrunorcha();\n");
     proj.activate();
     try {
-      expect(unwired(validateSddTree())).toHaveLength(0);
+      expect(unwired(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -329,7 +329,7 @@ describe('integration conformance — a component\'s own modules are all its fil
     proj.source('tests/integration/a.sim.ts', "import { runorcha } from '../../src/a.js';\nrunorcha();\n");
     proj.activate();
     try {
-      expect(unwired(validateSddTree())).toHaveLength(0);
+      expect(unwired(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -345,7 +345,7 @@ describe('integration conformance — a component\'s own modules are all its fil
     proj.source('tests/integration/a.sim.ts', "import { runorchb } from '../../src/b.js';\nrunorchb();\n");
     proj.activate();
     try {
-      const found = unwired(validateSddTree());
+      const found = unwired(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain("the component's own module (src/a.ts | src/commands/run-a.ts)");
     } finally { proj.cleanup(); }

@@ -107,33 +107,6 @@ methods:
         type: call
         targetComponent: surface_repository
         targetMethod: removeSnapshot
-  - name: listMountSnapshots
-    narrative:
-      - stepNumber: 1
-        description: For each chained mount namespace
-        type: loop
-        loopKind: forEach
-        over: mount namespaces
-        endStep: 4
-      - stepNumber: 2
-        description: >-
-          Resolve the mount's namespace to its project root through the core; a mount that does not
-          resolve (missing, or escaping the project root) contributes nothing
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: resolveSubprojectForNamespace
-      - stepNumber: 3
-        description: Read every snapshot stored at that mount's root
-        type: call
-        targetComponent: surface_repository
-        targetMethod: listSnapshots
-      - stepNumber: 4
-        description: Record the mount's snapshots under its namespace, skipping a mount that holds none
-        type: local
-      - stepNumber: 5
-        description: Return the per-mount snapshots
-        type: return
-        outcome: MountSurfaceSnapshots[]
   - name: pinExternals
     sourcePath: src/core/surfaces.ts
     narrative:
@@ -329,7 +302,9 @@ methods:
           Report every locked used member — or, when none is locked, the external itself — as
           unavailable with EXTERNAL_CHECK_UNAVAILABLE and the reason: unresolved (the external's
           problem), unreachable (why its root could not be read), or, for a producer outside the
-          family, that no stage-2 reference form reaches outside the family. Never a pass
+          family, that no stage-2 reference form reaches outside the family. A producer whose root
+          lies outside the request's reach is also marked outOfReach, and was never read. Never a
+          pass
         type: local
       - stepNumber: 11
         label: reported
@@ -380,6 +355,41 @@ methods:
         description: Answer the family pins in key order
         type: return
         outcome: FamilyPin[]
+  - name: listPinnedExternals
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's declared externals from its configuration through the core — the
+          aliases and producer ids only; no producer is bound and nothing is climbed
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Read the externals lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 3
+        description: For each declared alias
+        type: loop
+        loopKind: forEach
+        over: the declared aliases, in declaration order
+        endStep: 5
+      - stepNumber: 4
+        description: Read its pinned snapshot, if the lock holds an entry for it
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readSnapshot
+      - stepNumber: 5
+        description: >-
+          Record the alias with its producer id, the lock entry and the snapshot — or the problem:
+          never pinned, the snapshot file missing, or the snapshot unreadable
+        type: local
+      - stepNumber: 6
+        description: Answer the pins in declaration order
+        type: return
+        outcome: PinnedExternal[]
 lint:
   allow:
     - code: UNDECLARED_COLOCATED_CALL
@@ -394,4 +404,4 @@ lint:
         replaced listExternalInterfaces, whose entry for it was retired with it.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-27T12:21:08.820Z'
+updatedAt: '2026-09-28T18:12:05.205Z'

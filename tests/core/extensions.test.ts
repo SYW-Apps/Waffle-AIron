@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { loadProjectExtensions } from '../../src/core/extensions.js';
 import { listSkillResources } from '../../src/core/skills.js';
@@ -92,7 +92,7 @@ describe('extension packs', () => {
     proj.writeSpec('component', 'worker-a', 'schemaVersion: 1.0.0\nid: worker-a\nname: worker-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Actor');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PROFILE_FORBIDDEN_STEREOTYPE' && i.specId === 'worker-a')).toBe(true);
       expect(res.issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
     } finally { proj.cleanup(); }
@@ -128,7 +128,7 @@ methods:
       - { stepNumber: 4, description: done, type: return, outcome: success }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const flow = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_FLOW');
       expect(flow.some(i => i.specId === 'impl-orch-a' && i.message.includes('router'))).toBe(true);
     } finally { proj.cleanup(); }
@@ -139,7 +139,7 @@ methods:
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem\nprofile: make-automation');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNKNOWN_PROFILE' && i.specId === 'sub-a')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -159,7 +159,7 @@ methods:
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PACK_RULE_FIRED' && i.specId === 'sub-a')).toBe(true);
       expect(res.issues.some(i => i.code === 'UNKNOWN_LINT_ALLOW_CODE')).toBe(false);
     } finally { proj.cleanup(); }
@@ -188,7 +188,7 @@ lint:
       reason: acknowledged for the test`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PACK_RULE_FIRED')).toBe(false);
       expect(res.issues.some(i => i.code === 'UNKNOWN_LINT_ALLOW_CODE')).toBe(false);
       expect(res.issues.some(i => i.code === 'UNUSED_LINT_ALLOW')).toBe(false);
@@ -208,7 +208,7 @@ profiles:
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem\nprofile: org-profile');
     proj.activate();
     try {
-      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
+      expect(validateProject().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
     } finally {
       proj.cleanup();
       delete process.env.WAIRON_PACKS_DIR;
@@ -237,7 +237,7 @@ profiles:
     proj2.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem\nprofile: org-profile');
     proj2.activate();
     try {
-      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE' && i.specId === 'sub-a')).toBe(true);
+      expect(validateProject().issues.some(i => i.code === 'UNKNOWN_PROFILE' && i.specId === 'sub-a')).toBe(true);
     } finally {
       proj2.cleanup();
       delete process.env.WAIRON_PACKS_DIR;
@@ -271,7 +271,7 @@ profiles:
     try {
       // The global pack's profile does NOT resolve — the project never asked for
       // it, so referencing its profile is an unknown profile.
-      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(true);
+      expect(validateProject().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(true);
     } finally {
       proj.cleanup();
       delete process.env.WAIRON_PACKS_DIR;
@@ -284,7 +284,7 @@ profiles:
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const err = res.issues.find(i => i.code === 'EXTENSION_LOAD_ERROR');
       expect(err).toBeDefined();
       expect(err!.severity).toBe('error');
@@ -322,7 +322,7 @@ patterns:
   - id: org/missing-pattern`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNKNOWN_PATTERN_REF' && i.specId === 'unknown-a')).toBe(true);
       expect(res.issues.some(i => i.code === 'UNKNOWN_PATTERN_REF' && i.specId === 'known-a')).toBe(false);
     } finally { proj.cleanup(); }
@@ -348,7 +348,7 @@ patterns:
     version: 2.0.0`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PATTERN_VERSION_MISMATCH' && i.specId === 'comp-a')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -414,7 +414,7 @@ guidance: Fan-out emitter; reuse the shared publisher helper.
     proj.writeSpec('component', 'unknown-v', 'schemaVersion: 1.0.0\nid: unknown-v\nname: unknown-v\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: nope');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNKNOWN_VARIANT' && i.specId === 'unknown-v')).toBe(true);
       expect(res.issues.some(i => i.code === 'VARIANT_BASE_MISMATCH' && i.specId === 'bad-base')).toBe(true);
       expect(res.issues.some(i => (i.code === 'UNKNOWN_VARIANT' || i.code === 'VARIANT_BASE_MISMATCH') && i.specId === 'pub-a')).toBe(false);

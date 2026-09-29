@@ -12,8 +12,11 @@ methods:
       re-export is followed to its canonical target, subsystems in dependency order, and wildcards
       are expanded; a wildcard cycle resolves to its union. Explicit and own entries shadow a name a
       wildcard brings in, the same target under one name twice is no conflict, and a name two
-      wildcards bring from different targets is left out. Every problem — duplicate, cycle, invalid,
-      unconsumable — is returned as a fact on the table it concerns.
+      wildcards bring from different targets is left out. Two public names bound to different
+      targets that share one reference_resolution.nameKey (`waffler-error` and `waffler_error`) are
+      a duplicate too — a bare import could not tell them apart — and both are left out. Every
+      problem — duplicate, cycle, invalid, unconsumable — is returned as a fact on the table it
+      concerns.
     signature: >-
       subsystemTables(subsystems: SubsystemSpec[], components: ComponentSpec[], interfaces:
       InterfaceSpec[], types: TypeSpec[]): Map<string, ResolvedExportTable>
@@ -44,7 +47,10 @@ methods:
       table), or a member or external by alias (through that producer's table in the sources — a
       producer still on the resolution path is a named-cycle problem, one the scan did not read is
       an invalid problem); an entry declaring a wider audience than the export it re-exports is a
-      widens problem. A project with no L0 answers an empty table.
+      widens problem. Two public names bound to different targets that share one
+      reference_resolution.nameKey are a duplicate problem (EXPORT_ID_DUPLICATE) and both are left
+      out, exactly as two wildcards binding one name are: a consumer's bare `use` import compares by
+      that key and could not tell them apart. A project with no L0 answers an empty table.
     signature: >-
       projectTable(system: SystemSpec | null, subsystems: SubsystemSpec[], components:
       ComponentSpec[], interfaces: InterfaceSpec[], types: TypeSpec[], subsystemTables: Map<string,
@@ -76,4 +82,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-27T10:34:29.431Z'
-updatedAt: '2026-09-27T12:17:44.995Z'
+updatedAt: '2026-09-28T17:16:49.271Z'

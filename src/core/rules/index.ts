@@ -19,7 +19,14 @@ import {
   sameContract,
   typeMatchesRef,
   isOwnComponentEntry,
+  nameKey,
+  type AuthoredReference,
+  type PinnedExternal,
+  type ReferenceResolution,
 } from '../../models/index.js';
+import type { ResolvedExportTable } from '../../models/exports.js';
+import { createHash } from 'crypto';
+import { canonicalize } from '../../utils/canonical-json.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
@@ -245,10 +252,8 @@ export interface BuildContextOptions {
   projectFamily?: import('../../models/project-family.js').ProjectFamily;
   /** The export usage of every connected project pair (see RuleContext.exportUsages); absent on a candidate run. */
   exportUsages?: import('../../models/exports.js').ExportUsage[];
-  /** The externals the chaining climb bound (see RuleContext.climbBoundExternals); absent when none. */
-  climbBoundExternals?: string[];
-  /** Snapshots each chained mount holds, keyed by mount namespace (see RuleContext.mountSurfaceSnapshots). */
-  mountSurfaceSnapshots?: import('./types.js').MountSurfaceSnapshots[];
+  /** The bound project's declared externals with their lock entries and pinned snapshots (see RuleContext.pinnedExternals). */
+  pinnedExternals?: PinnedExternal[];
   /** Source-code model for structural conformance; empty when not built. */
   codeModel?: CodeModel;
   /** The writer's round-trip dry-run findings for the in-scope specs, gathered by the caller (see RuleContext.roundTripIssues). */
@@ -297,7 +302,6 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   }
 
   const surfaceSnapshots = opts.surfaceSnapshots ?? [];
-  const mountSurfaceSnapshots = opts.mountSurfaceSnapshots ?? [];
 
   const isSpecInScope = makeScopeFilter({ components, interfaces, implementations, types, scopeSubsystem });
 
@@ -363,31 +367,6 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     return 'backend';
   };
 
-  // Every alias any project of the family declares, with the keys it names.
-  const aliasTargets = new Map<string, string[]>();
-  for (const node of opts.projectFamily?.nodes ?? []) {
-    for (const [alias, key] of node.aliases) {
-      if (key === '' || key === alias) continue;
-      aliasTargets.set(alias, [...new Set([...(aliasTargets.get(alias) ?? []), key])]);
-    }
-  }
-
-  const isTypeResolved = (ref: string, generics: Set<string>): boolean => {
-    const refLower = ref.toLowerCase();
-    if (BUILTIN_TYPES.has(refLower)) return true;
-    if (generics.has(refLower)) return true;
-
-    if (types.some(spec => typeMatchesRef(spec, ref))) return true;
-    // A type named through an alias (`billing::money`, `billing.money`) is read
-    // the way the scan reads a reference, without position: the alias names a
-    // project by the alias table, whose key need not be the alias itself (a
-    // member with no declared id is keyed by its name slug).
-    const [first, ...rest] = ref.split(/::|\./);
-    if (!rest.length) return false;
-    return (aliasTargets.get(first) ?? []).some((key) =>
-      types.some(spec => typeMatchesRef(spec, `${key}::${rest.join('::')}`)));
-  };
-
   const targetLanguageFor =(subsystemId: string | undefined): string | undefined => {
     if (subsystemId) {
       const sub = subsystems.find(s => s.id === subsystemId);
@@ -396,15 +375,17 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     return system.targetLanguage ? normalizeLanguage(system.targetLanguage) : undefined;
   };
 
-  // ---- members and cross-project references ---------------------------------
+  // ---- the bound project, its members, its imports and its pins -------------
+  //
+  // The owner's gate (stage 4): everything below is read from the bound
+  // project's own files — its scan (its own specs and the export tables of the
+  // members it contains), its configuration's `use` imports, its externals lock
+  // and its pinned snapshots. Nothing above the bound root is consulted, and no
+  // name is ever matched family-wide.
 
-  // Every member's key, and each member's enclosing members (its parent chain
-  // below the bound root). From the project graph when the run has one; a
-  // candidate run knows the members only by the snapshots it gathered.
   const family = opts.projectFamily;
-  const memberKeys: string[] = family
-    ? family.nodes.filter((n) => n.namespace !== '').map((n) => n.namespace)
-    : mountSurfaceSnapshots.map((m) => m.namespace);
+  const pinnedExternals = opts.pinnedExternals ?? [];
+  const memberKeys: string[] = family ? family.nodes.filter((n) => n.namespace !== '').map((n) => n.namespace) : [];
   /** The member that owns a key: its owner in the graph, else the longest member key prefixing it. */
   const memberOf = (key: string): string | undefined => {
     const owner = family?.owners.get(key);
@@ -417,75 +398,265 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   };
 
   const isInChainedSubproject = (subsystemId: string): boolean => memberOf(subsystemId) !== undefined;
+  /**
+   * Whether a finding's spec is one a contained member owns: its owner in the
+   * graph, else a key strictly under a member's key. A member's own key names
+   * the bound project's declaration of it (a legacy mount, a member entry),
+   * which this project's gate judges.
+   */
+  const ownedByMember = (specId: string): boolean => {
+    const owner = family?.owners.get(specId);
+    if (owner !== undefined) return owner !== '';
+    return memberKeys.some((k) => specId.startsWith(`${k}::`));
+  };
+
+  const boundNode = family?.nodes.find((n) => n.namespace === '');
+  const ownerId = boundNode?.id ?? '';
+  const nodeOf = (key: string | undefined) => (key === undefined ? undefined : family?.nodes.find((n) => n.namespace === key));
+  const projectTableOf = (key: string): ResolvedExportTable | undefined =>
+    (opts.exportTables ?? []).find((t) => t.level === 'project' && t.owner === key && key !== '');
+  const digestOf = (value: unknown): string => `sha256:${createHash('sha256').update(canonicalize(value)).digest('hex')}`;
+
+  /** One import of the bound project: the alias, where it is declared, what it imports and what it is judged against. */
+  interface Supplier {
+    alias: string;
+    section: 'externals' | 'members';
+    star: boolean;
+    names: Set<string>;
+    /** A contained member's live table, or a scanned external's. */
+    table?: ResolvedExportTable;
+    /** A declared external's pin, when its producer is outside the scan. */
+    pin?: PinnedExternal;
+  }
+  const suppliers: Supplier[] = (boundNode?.imports ?? []).map((i) => {
+    const key = boundNode?.aliases.get(i.alias);
+    const table = key !== undefined ? projectTableOf(key) : undefined;
+    const pin = key === undefined ? pinnedExternals.find((p) => p.alias === i.alias) : undefined;
+    return {
+      alias: i.alias, section: i.section, star: i.use.includes('*'),
+      names: new Set(i.use.filter((u) => u !== '*').map(nameKey)),
+      ...(table ? { table } : {}), ...(pin ? { pin } : {}),
+    };
+  });
+  /** Whether a supplier has anything to judge against: a live table, or a readable pin. */
+  const judgeable = (s: Supplier): boolean => s.table !== undefined || s.pin?.snapshot !== undefined;
+  /** The public name a supplier exports under a nameKey, for a component or a type. */
+  const exportedBy = (s: Supplier, key: string, kind: 'component' | 'type'): string | undefined => {
+    if (s.table) return s.table.entries.find((e) => e.kind === kind && nameKey(e.publicName) === key)?.publicName;
+    const snap = s.pin?.snapshot;
+    if (!snap) return undefined;
+    const ids = kind === 'type' ? (snap.exportedTypes ?? []).map((t) => t.id) : snap.interfaces.map((e) => e.id);
+    return ids.find((id) => nameKey(id) === key);
+  };
 
   /**
-   * The members enclosing a subsystem, outermost first: the member that owns it
-   * and, above it, every member that declares that one, up to the bound root.
+   * A bare name through the bound project's imports: an explicit name beats a
+   * `*`; one supplier resolves, two are ambiguous; a supplier with nothing to
+   * judge against leaves it unavailable; no supplier at all is none.
    */
-  const enclosingMounts = (subsystemId: string): string[] => {
-    const nearest = memberOf(subsystemId);
-    if (nearest === undefined) return [];
-    const chain = [nearest];
-    for (let node = family?.nodes.find((n) => n.namespace === nearest); node?.parent; node = family?.nodes.find((n) => n.namespace === node!.parent)) {
-      chain.unshift(node.parent);
+  const importOf = (name: string, kind: 'component' | 'type'):
+    { outcome: 'resolved' | 'ambiguous' | 'unavailable' | 'none'; supplier?: Supplier; publicName?: string; via: string } => {
+    const key = nameKey(name);
+    const offers = (s: Supplier): boolean => !judgeable(s) || exportedBy(s, key, kind) !== undefined;
+    const explicit = suppliers.filter((s) => s.names.has(key) && offers(s));
+    const pool = explicit.length > 0 ? explicit : suppliers.filter((s) => s.star && offers(s));
+    const known = pool.filter(judgeable);
+    const unknown = pool.filter((s) => !judgeable(s));
+    const via = pool.map((s) => `${s.alias} (${s.names.has(key) ? 'by name' : 'by *'})`).join(', ');
+    if (pool.length === 0) return { outcome: 'none', via };
+    if ((explicit.length > 0 && pool.length > 1) || known.length > 1) return { outcome: 'ambiguous', via };
+    if (unknown.length > 0) return { outcome: 'unavailable', via, supplier: unknown[0] };
+    return { outcome: 'resolved', supplier: known[0], publicName: exportedBy(known[0], key, kind), via };
+  };
+
+  const importHint = (name: string): string | null => {
+    const key = nameKey(name);
+    for (const s of suppliers) {
+      if (s.star || s.names.has(key)) continue;
+      const publicName = exportedBy(s, key, 'type') ?? exportedBy(s, key, 'component');
+      if (publicName) return `${s.section}.${s.alias}.use: [${publicName}]`;
     }
-    return chain.filter((k) => k !== '');
+    return null;
   };
 
-  const outsideBound = new Set((family?.authoredReferences ?? []).filter((r) => r.binding === 'outside').map((r) => r.authored));
-  const isExternalNamespaceRef = (ref: string): boolean => {
-    if (ref.startsWith('::') || ref.startsWith('super::')) return true;
-    if (outsideBound.has(ref)) return true;
-    const sep = ref.indexOf('::');
-    if (sep === -1) return false; // a bare unresolved id is a local typo, not cross-tree
-    const first = ref.slice(0, sep);
-    return !subsystemIds.has(first) && memberOf(ref) === undefined;
+  /** The bound project's own types — the only ones a bare name resolves to locally. */
+  const ownTypes = types.filter((t) => memberOf(t.id) === undefined);
+  const aliasOf = (segment: string): Supplier | undefined => suppliers.find((s) => s.alias === segment);
+  const authoredTypeRefs = new Set((family?.authoredReferences ?? [])
+    .filter((r) => r.position === 'type' && r.binding !== 'local' && memberOf(r.specId) === undefined)
+    .map((r) => r.authored));
+
+  const isTypeResolved = (ref: string, generics: Set<string>): boolean => {
+    const refLower = ref.toLowerCase();
+    if (BUILTIN_TYPES.has(refLower)) return true;
+    if (generics.has(refLower)) return true;
+    // Local first: the bound project's own types, compared by nameKey per segment.
+    if (ownTypes.some(spec => typeMatchesRef(spec, ref))) return true;
+    const [first, ...rest] = ref.split(/::|\./);
+    if (!rest.length) {
+      // A bare name through the imports; any outcome but none is
+      // project-boundaries' single finding (or no finding at all).
+      return importOf(ref, 'type').outcome !== 'none';
+    }
+    // The project's own id used as a prefix is its own name (a deprecated form).
+    if (ownerId && nameKey(first) === nameKey(ownerId)) return ownTypes.some((spec) => typeMatchesRef(spec, rest.join('::')));
+    // A `::` reference the scan recorded as leaving the project is project-boundaries' to judge.
+    if (ref.includes('::') && authoredTypeRefs.has(ref)) return true;
+    // `alias.name`: a public type of that project, the same way.
+    const via = aliasOf(first);
+    return via !== undefined && rest.length === 1 && exportedBy(via, nameKey(rest[0]), 'type') !== undefined;
   };
 
-  // A reference made from inside a member was authored to leave it when the
-  // scan bound it into a project other than the member that owns fromSubsystem.
-  const isCollapsedCrossTreeRef = (ref: string, fromSubsystem: string): boolean => {
-    const nearest = memberOf(fromSubsystem);
-    return nearest !== undefined && ref !== nearest && memberOf(ref) !== nearest;
-  };
-
-  // A hit means the edge is validated against the DECLARED contract instead of
-  // falling back to the unresolvable warning. When the matching snapshots of the
-  // first pool that has any disagree on the contract, the reference is ambiguous:
-  // picking whichever loaded first would judge the edge against a contract its
-  // author may never have meant.
-  const resolveSurfaceRef = (ref: string, fromSubsystem?: string): SurfaceRefResolution => {
+  /** A foreign reference against the bound root's own foreign snapshots, matched by provider. */
+  const foreignSurfaceRef = (ref: string): SurfaceRefResolution => {
     const segments = ref.split('::').filter(seg => seg && seg !== 'super');
     const local = segments.pop();
     if (!local) return { kind: 'unresolved' };
     const provider = segments.pop();
-    // For a reference made from inside a member, the snapshots the members
-    // enclosing it hold come first, nearest member first — what the member
-    // authored against, exactly as it resolves from its own root — then the
-    // bound root's own. A member's snapshots are never consulted for a
-    // reference made outside it.
-    const mountPools = fromSubsystem
-      ? enclosingMounts(fromSubsystem)
-        .reverse()
-        .map((ns) => mountSurfaceSnapshots.find((m) => m.namespace === ns)?.snapshots ?? [])
-      : [];
-    for (const pool of [...mountPools, surfaceSnapshots]) {
-      const candidates: { snapshot: SurfaceSnapshot; entry: SurfaceContractEntry }[] = [];
-      for (const snapshot of pool) {
-        if (provider !== undefined && !isProvidedBy(snapshot, provider)) continue;
-        // An entry is found by its public name alone: a renamed or narrowed
-        // export answers to its name, never to its backing component.
-        const entry = snapshot.interfaces.find(e => e.id === local);
-        if (entry) candidates.push({ snapshot, entry });
-      }
-      if (candidates.length === 0) continue;
-      const [first] = candidates;
-      if (candidates.every((c) => sameContract(c.entry, first.entry))) {
-        return { kind: 'resolved', ...first };
-      }
-      return { kind: 'ambiguous', providers: [...new Set(candidates.map((c) => c.snapshot.projectName))] };
+    const candidates: { snapshot: SurfaceSnapshot; entry: SurfaceContractEntry }[] = [];
+    for (const snapshot of surfaceSnapshots) {
+      if (provider !== undefined && !isProvidedBy(snapshot, provider)) continue;
+      // An entry is found by its public name alone: a renamed or narrowed
+      // export answers to its name, never to its backing component.
+      const entry = snapshot.interfaces.find(e => e.id === local);
+      if (entry) candidates.push({ snapshot, entry });
     }
-    return { kind: 'unresolved' };
+    if (candidates.length === 0) return { kind: 'unresolved' };
+    const [first] = candidates;
+    if (candidates.every((c) => sameContract(c.entry, first.entry))) return { kind: 'resolved', ...first };
+    return { kind: 'ambiguous', providers: [...new Set(candidates.map((c) => c.snapshot.projectName))] };
+  };
+
+  // The contract entry a reference leaving the bound project lands on: a
+  // declared external's pin (by alias, or through a `use` import), else the
+  // bound root's own foreign snapshots. No member's snapshots are consulted.
+  const resolveSurfaceRef = (ref: string): SurfaceRefResolution => {
+    const segments = ref.split('::');
+    const pinOf = (s: Supplier | undefined): SurfaceSnapshot | undefined => s?.pin?.snapshot;
+    if (segments.length === 2) {
+      const snapshot = pinOf(aliasOf(segments[0]));
+      if (snapshot) {
+        const entry = snapshot.interfaces.find((e) => e.id === segments[1]);
+        return entry ? { kind: 'resolved', snapshot, entry } : { kind: 'unresolved' };
+      }
+    }
+    if (segments.length === 1) {
+      const imported = importOf(ref, 'component');
+      const snapshot = imported.outcome === 'resolved' ? pinOf(imported.supplier) : undefined;
+      const entry = snapshot?.interfaces.find((e) => e.id === imported.publicName);
+      if (snapshot && entry) return { kind: 'resolved', snapshot, entry };
+    }
+    return foreignSurfaceRef(ref);
+  };
+
+  // Every reference the scan recorded, by spec, position and either its text or its bound key.
+  const authoredIndex = new Map<string, AuthoredReference>();
+  for (const r of family?.authoredReferences ?? []) {
+    for (const text of [r.authored, r.resolved]) {
+      const k = `${r.specId}\u0000${r.position}\u0000${text}`;
+      if (!authoredIndex.has(k)) authoredIndex.set(k, r);
+    }
+  }
+
+  /** The owner's resolution of one recorded reference, before any severity; null for one that stays inside the project. */
+  const resolutionOf = (r: AuthoredReference): ReferenceResolution | null => {
+    const kind: 'component' | 'type' = r.position === 'type' ? 'type' : 'component';
+    const base = { owner: ownerId, callSite: `${r.specId} (${r.position})` };
+    const producer = nodeOf(r.producer);
+    const producerId = producer?.id ?? r.producer ?? '';
+    const liveDigest = (): { inputDigest?: string } => {
+      const table = r.producer !== undefined ? projectTableOf(r.producer) : undefined;
+      return table ? { inputDigest: digestOf(table.entries) } : {};
+    };
+    const unavailable = (reason: string) => ({ ...base, outcome: 'unavailable' as const, canonicalTarget: r.authored, reason });
+    switch (r.binding) {
+      case 'local':
+        return null;
+      case 'exported':
+        if (r.producer === '' || r.producer === undefined) return null;
+        return {
+          ...base, outcome: 'resolved', canonicalTarget: `${producerId}::${r.publicName}`, ...liveDigest(),
+          reason: `"${r.authored}" lands on the public name "${r.publicName}" of project "${producerId}"`,
+          ...(r.importedVia ? { importedVia: r.importedVia } : {}),
+        };
+      case 'unexported':
+        return {
+          ...base, outcome: 'missing', canonicalTarget: `${producerId}::${r.resolved.split('::').pop()}`, ...liveDigest(),
+          reason: `project "${producerId}" exports no public name for "${r.authored}" in its live L0 table`,
+        };
+      case 'undeclared':
+        return {
+          ...base, outcome: 'forbidden', canonicalTarget: `${producerId}::${r.resolved.split('::').pop()}`,
+          reason: `"${r.authored}" reaches project "${producerId}", which this project declares neither as a member nor as an external`,
+        };
+      case 'ambiguous':
+        return {
+          ...base, outcome: 'ambiguous', canonicalTarget: r.authored, importedVia: r.importedVia,
+          reason: `two imports supply the bare name "${r.authored}": ${r.importedVia}`,
+        };
+      case 'unresolved': {
+        if (r.form === 'import') return null;
+        const foreign = foreignSurfaceRef(r.authored);
+        if (foreign.kind === 'resolved') {
+          return { ...base, outcome: 'resolved', canonicalTarget: `${foreign.snapshot.projectId ?? foreign.snapshot.projectName}::${foreign.entry.id}`, reason: `"${r.authored}" lands on a foreign surface snapshot` };
+        }
+        if (foreign.kind === 'ambiguous') {
+          return { ...base, outcome: 'ambiguous', canonicalTarget: r.authored, reason: `the foreign snapshots of ${foreign.providers.map((p) => `"${p}"`).join(', ')} expose "${r.authored}" with different contracts` };
+        }
+        if (r.form === 'leading' || r.form === 'super') return unavailable(`the deprecated form "${r.authored}" names no alias of this project, so there is nothing to judge it against — run \`wairon doctor --fix\``);
+        return {
+          ...base, outcome: 'forbidden', canonicalTarget: r.authored,
+          reason: `the first segment of "${r.authored}" is none of this project's subsystems, aliases or foreign providers`,
+        };
+      }
+      case 'outside': {
+        if (r.form === 'import') {
+          const imported = importOf(r.authored, kind);
+          if (imported.outcome === 'none') return null;
+          if (imported.outcome === 'ambiguous') return { ...base, outcome: 'ambiguous', canonicalTarget: r.authored, importedVia: imported.via, reason: `two imports supply the bare name "${r.authored}": ${imported.via}` };
+          if (imported.outcome === 'unavailable') return unavailable(`the import through "${imported.supplier!.alias}" has nothing to be judged against: ${imported.supplier!.pin?.problem ?? 'no pin'}`);
+          const s = imported.supplier!;
+          return {
+            ...base, outcome: 'resolved', canonicalTarget: `${s.pin?.project ?? s.alias}::${imported.publicName}`,
+            ...(s.pin?.entry ? { inputDigest: s.pin.entry.digest } : {}), importedVia: imported.via,
+            reason: `"${r.authored}" is the public name "${imported.publicName}" imported through "${s.alias}"`,
+          };
+        }
+        const segments = r.authored.split('::');
+        if (r.form === 'alias' && segments.length === 2) {
+          const [alias, name] = segments;
+          const member = suppliers.find((s) => s.alias === alias && s.section === 'members');
+          if (member && !member.table) return unavailable(`the member "${alias}" is absent on disk, so its export table cannot be read`);
+          const pin = pinnedExternals.find((p) => p.alias === alias);
+          if (!pin?.snapshot) return unavailable(pin?.problem ?? `the external "${alias}" was never pinned (run \`wairon externals pin\`)`);
+          const ids = kind === 'type' ? (pin.snapshot.exportedTypes ?? []).map((t) => t.id) : pin.snapshot.interfaces.map((e) => e.id);
+          const found = ids.includes(name);
+          return {
+            ...base, outcome: found ? 'resolved' : 'missing', canonicalTarget: `${pin.project}::${name}`,
+            ...(pin.entry ? { inputDigest: pin.entry.digest } : {}),
+            reason: found
+              ? `"${r.authored}" lands on the public name "${name}" of the pinned snapshot of "${pin.project}"`
+              : `the pinned snapshot of "${pin.project}" (digest ${pin.entry?.digest ?? 'unknown'}) exports no ${kind === 'type' ? 'type' : 'public name'} "${name}"`,
+          };
+        }
+        const foreign = foreignSurfaceRef(r.authored);
+        if (foreign.kind === 'resolved') {
+          return { ...base, outcome: 'resolved', canonicalTarget: `${foreign.snapshot.projectId ?? foreign.snapshot.projectName}::${foreign.entry.id}`, reason: `"${r.authored}" lands on a foreign surface snapshot` };
+        }
+        if (foreign.kind === 'ambiguous') {
+          return { ...base, outcome: 'ambiguous', canonicalTarget: r.authored, reason: `the foreign snapshots of ${foreign.providers.map((p) => `"${p}"`).join(', ')} expose "${r.authored}" with different contracts` };
+        }
+        return unavailable(`the deprecated form "${r.authored}" reaches above this project, and no alias of it names its target — run \`wairon doctor --fix\``);
+      }
+      default:
+        return null;
+    }
+  };
+
+  const resolveCrossProject = (specId: string, position: string, reference: string): ReferenceResolution | null => {
+    if (memberOf(specId) !== undefined) return null;
+    const r = authoredIndex.get(`${specId}\u0000${position}\u0000${reference}`);
+    return r ? resolutionOf(r) : null;
   };
 
   // ---- contract methods, rule configs and the type vocabulary ---------------
@@ -660,9 +831,12 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     message: string,
     specId?: string,
     isDraftContext?: boolean,
-    surfaceResolved?: boolean,
+    resolution?: ReferenceResolution,
     parts?: FindingParts,
   ): void => {
+    // A finding on a spec a contained member owns is that member's own gate's,
+    // judged under its own configuration — never this project's.
+    if (specId && ownedByMember(specId)) return;
     if (scopeSubsystem && specId && !isSpecInScope(specId)) {
       return;
     }
@@ -736,16 +910,15 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     // Carry the draft/design provenance onto the issue (only when true, to keep
     // issues clean) so command-level policy can classify draft-related warnings
     // without re-deriving spec status. The rule stays fully emitted/visible.
-    // surfaceResolved provenance rides along the same way: it tells the
-    // chained-subproject pass this finding was verified against a vendored
-    // snapshot and must keep full strength.
+    // A finding about a cross-project reference carries its resolution, the
+    // structured answer decided before this severity.
     issues.push({
       severity,
       code,
       message: text,
       specId,
       ...(isDraftContext ? { draftContext: true } : {}),
-      ...(surfaceResolved ? { surfaceResolved: true } : {}),
+      ...(resolution ? { resolution } : {}),
     });
   };
 
@@ -805,9 +978,9 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     targetLanguageFor,
     isSpecInScope,
     isInChainedSubproject,
-    isExternalNamespaceRef,
-    isCollapsedCrossTreeRef,
     resolveSurfaceRef,
+    resolveCrossProject,
+    importHint,
     interfaceMethodsOf,
     codeIndex,
     realizationIndex,
@@ -827,8 +1000,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ...(opts.exportTables ? { exportTables: opts.exportTables } : {}),
     ...(opts.projectFamily ? { projectFamily: opts.projectFamily } : {}),
     ...(opts.exportUsages ? { exportUsages: opts.exportUsages } : {}),
-    ...(opts.climbBoundExternals ? { climbBoundExternals: opts.climbBoundExternals } : {}),
-    mountSurfaceSnapshots,
+    pinnedExternals,
     codeModel: opts.codeModel ?? emptyCodeModel(),
     roundTripIssues: opts.roundTripIssues,
     lintAllows,

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree, type ValidationIssue } from '../../src/core/validation.js';
+import { validateProject, type ValidationIssue } from '../../src/core/validation.js';
 import { buildCodeModel } from '../../src/core/source-analysis.js';
 import { buildRuleContext } from '../../src/core/rules/index.js';
 import { knownIssueCodes, registerBuiltinRules, registerPackRules } from '../../src/core/rules/repository.js';
@@ -108,7 +108,7 @@ describe('structural conformance — file level', () => {
     proj.impl('orch-a', `sourcePath: src/gone.ts\nmethods:\n${INTENT('runFlow')}`);
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('MISSING_SOURCE_FILE');
       expect(found[0].severity).toBe('error');
@@ -123,7 +123,7 @@ describe('structural conformance — file level', () => {
     proj.impl('orch-a', `sourcePath: ../outside.ts\nmethods:\n${INTENT('runFlow')}`);
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code)).toEqual(['SOURCE_PATH_ESCAPES_ROOT']);
       expect(found[0].severity).toBe('error');
     } finally { proj.cleanup(); }
@@ -136,7 +136,7 @@ describe('structural conformance — file level', () => {
     proj.impl('orch-a', `methods:\n${INTENT('runFlow')}`);
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_PATH']);
       expect(found[0].severity).toBe('warning');
     } finally { proj.cleanup(); }
@@ -155,7 +155,7 @@ describe('structural conformance — file level', () => {
     proj.impl('orch-a', '');
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_PATH']);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('names no source file at all');
@@ -175,7 +175,7 @@ describe('structural conformance — file level', () => {
     proj.impl('orch-a', '');
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -187,7 +187,7 @@ describe('structural conformance — file level', () => {
     proj.activate();
     try {
       // The external source-of-record stands in for a local sourcePath — nothing to check.
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -198,7 +198,7 @@ describe('structural conformance — file level', () => {
     proj.impl('orch-a', `methods:\n${INTENT('runFlow')}`);
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree()).map(i => i.code)).toEqual(['MISSING_SOURCE_PATH']);
+      expect(conformanceIssues(validateProject()).map(i => i.code)).toEqual(['MISSING_SOURCE_PATH']);
     } finally { proj.cleanup(); }
   });
 
@@ -209,7 +209,7 @@ describe('structural conformance — file level', () => {
     proj.impl('orch-a', `status: draft\nsourcePath: src/gone.ts\nmethods:\n${INTENT('runFlow')}`);
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found).toHaveLength(1);
       // completeness-classed: error downgrades to warning in a draft context
       expect(found[0].severity).toBe('warning');
@@ -227,7 +227,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj.source('src/orch.ts', 'export function runFlow(): void {}\nexport function stopFlow(): void {}\n');
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -239,7 +239,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj.source('src/orch.ts', 'export function runFlow(): void {}\n');
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('UNREALIZED_METHOD');
       expect(found[0].message).toContain('"vanished"');
@@ -262,7 +262,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     ].join('\n'));
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -277,7 +277,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj.source('src/portal.ts', "export function runFlow(): void {}\nregisterTool('toolCall', () => runFlow());\nfunction registerTool(name: string, fn: () => void): void { fn(); }\n");
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -289,7 +289,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj.source('src/orch.ts', "export const label = 'ghostly';\n");
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].code).toBe('UNREALIZED_METHOD');
       expect(found[0].message).toContain('weak string/word anchor');
@@ -304,7 +304,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj.source('src/store.ts', 'export function saveSnapshot(): void {}\n');
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -316,7 +316,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj.source('src/generated.ts', '// generated artifact — names mangled\n');
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
 
     const proj2 = createTempProject();
@@ -325,7 +325,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj2.impl('orch-a', `conformance: off\nsourcePath: src/gone.ts\nmethods:\n${INTENT('generatedThing')}`);
     proj2.activate();
     try {
-      expect(conformanceIssues(validateSddTree()).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(conformanceIssues(validateProject()).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
     } finally { proj2.cleanup(); }
   });
 
@@ -341,7 +341,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj.source('src/index.ts', "export * from './impl.js';\n");
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -356,7 +356,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj.source('src/shared.ts', 'export function sharedThing(): void {}\n');
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -375,7 +375,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('src/commands/lock.ts', 'export function readLockFile(): void {}\n');
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code)).toEqual(['UNREALIZED_METHOD']);
       expect(found[0].message).toContain('"lockSpecs"');
       expect(found[0].message).toContain('"src/commands/lock.ts"');
@@ -391,7 +391,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('src/commands/lock.ts', 'export function lockSpecs(): void {}\n');
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -403,7 +403,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
       expect(found[0].severity).toBe('error');
       expect(found[0].specId).toBe('impl-cli-orch');
@@ -420,7 +420,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('src/commands/lock.ts', 'export function readLockFile(): void {}\n');
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_FILE', 'UNREALIZED_METHOD']);
       const unrealized = found.find(i => i.code === 'UNREALIZED_METHOD')!;
       expect(unrealized.message).toContain('"lockSpecs"');
@@ -436,7 +436,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('src/cli.ts', 'export function printBanner(): void {}\n');
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_FILE', 'UNREALIZED_METHOD']);
       const unrealized = found.find(i => i.code === 'UNREALIZED_METHOD')!;
       expect(unrealized.message).toContain('"listTargets"');
@@ -453,7 +453,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('native/bundle.node', 'MZ\u0000\u0003bundle\u0000');
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code).sort()).toEqual(['CONFORMANCE_ANALYSIS_SKIPPED', 'SOURCE_PATH_ESCAPES_ROOT']);
       const escaped = found.find(i => i.code === 'SOURCE_PATH_ESCAPES_ROOT')!;
       expect(escaped.message).toContain('method "lockSpecs"');
@@ -472,7 +472,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree()).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(conformanceIssues(validateProject()).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
     } finally { proj.cleanup(); }
   });
 
@@ -485,7 +485,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('src/commands/lock.ts', 'export function lockSpecs(): void {}\n');
     proj.activate();
     try {
-      expect(conformanceIssues(validateSddTree())).toHaveLength(0);
+      expect(conformanceIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -498,7 +498,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('src/commands/lock.ts', 'export function readLockFile(): void {}\n');
     proj.activate();
     try {
-      const found = conformanceIssues(validateSddTree());
+      const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_PATH', 'UNREALIZED_METHOD']);
       const missingPath = found.find(i => i.code === 'MISSING_SOURCE_PATH')!;
       expect(missingPath.message).toContain('"listTargets", "unlockSpecs"');
@@ -542,7 +542,7 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
     proj.source('src/audit.ts', "export function auditInvoice(report: (code: string) => void): void {\n  report('INVOICE_TOTAL_MISMATCH');\n  report('TAX_ID_MISSING');\n}\n");
     proj.activate();
     try {
-      const found = findingIssues(validateSddTree());
+      const found = findingIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].specId).toBe('impl-audit-orch');
@@ -562,7 +562,7 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
     proj.source('src/audit.ts', "export function auditInvoice(report: (code: string) => void): void {\n  report('INVOICE_TOTAL_MISMATCH');\n  report('MISSING_TAX_ID');\n}\n");
     proj.activate();
     try {
-      expect(findingIssues(validateSddTree())).toHaveLength(0);
+      expect(findingIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -576,7 +576,7 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
     proj.source('src/commands/audit-invoice.ts', "export function auditInvoice(report: (code: string) => void): void {\n  report('TAX_ID_MISSING');\n}\n");
     proj.activate();
     try {
-      const found = findingIssues(validateSddTree());
+      const found = findingIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('"src/commands/audit-invoice.ts"');
     } finally { proj.cleanup(); }
@@ -590,7 +590,7 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
     proj.source('src/audit.ts', "// reports MISSING_TAX_ID\nconst MISSING_TAX_ID = 42;\nexport function auditInvoice(report: (code: number) => void): void {\n  report(MISSING_TAX_ID);\n}\n");
     proj.activate();
     try {
-      expect(findingIssues(validateSddTree())).toHaveLength(1);
+      expect(findingIssues(validateProject())).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 
@@ -602,7 +602,7 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
     proj.source('src/audit.ts', 'export function auditInvoice(): void {}\n');
     proj.activate();
     try {
-      expect(findingIssues(validateSddTree())).toHaveLength(0);
+      expect(findingIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -614,7 +614,7 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
     proj.source('src/audit.ts', "export const legacyCodes = ['MISSING_TAX_ID'];\n");
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(conformanceIssues(res).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
       expect(findingIssues(res)).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -659,9 +659,9 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
     proj.source('src/audit.ts', 'export function auditInvoice(): void {}\n');
     proj.activate();
     try {
-      expect(findingIssues(validateSddTree())).toHaveLength(1);
+      expect(findingIssues(validateProject())).toHaveLength(1);
       invalidateSpecCache();
-      const gated = validateSddTree({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) });
+      const gated = validateProject({ rules: RulesConfigSchema.parse({ designDepth: 'interfaces' }) });
       expect(findingIssues(gated)).toHaveLength(0);
     } finally { proj.cleanup(); }
   });

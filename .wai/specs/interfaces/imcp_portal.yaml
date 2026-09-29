@@ -100,11 +100,17 @@ methods:
       address: mcp tools/call sdd_write_narrative
   - name: sdd_validate_tree
     description: >-
-      Tool: validate the SDD tree and answer with every finding, split into errors, warnings and
-      notices (three separate lists, in the structured content and the text block alike). Notices
-      never make the tree invalid. Optionally narrowed to one subsystem, and optionally descending
-      into members.
-    signature: 'sdd_validate_tree(subsystem?: string, recursive?: boolean): ValidationResult'
+      Tool: validate and answer with every finding, split into errors, warnings and notices (three
+      separate lists, in the structured content and the text block alike). Notices never make the
+      tree invalid. At a project that declares members it is the family run — every selected
+      project's own gate verbatim under its project key, the composition of each project's externals
+      against their live producers, and the family checks — unless `recursive` is false, which asks
+      for the owner's gate alone; at any other project it is the owner's gate, unless `family` is
+      true. The hosted data plane serves this same tool, so a hosted verdict is the same function's:
+      a member-qualified credential binds the member root and gets the member's own gate (its family
+      run composes only within the credential's reach). Optionally narrowed to one subsystem, or to
+      one member by its key.
+    signature: 'sdd_validate_tree(subsystem?: string, recursive?: boolean, family?: boolean): ValidationResult'
     returns: ValidationResult
     params:
       - name: subsystem
@@ -113,7 +119,15 @@ methods:
         optional: true
       - name: recursive
         type: boolean
-        description: Descend into the members this project declares
+        description: >-
+          At a project that declares members: false asks for the owner's gate alone instead of the
+          family run
+        optional: true
+      - name: family
+        type: boolean
+        description: >-
+          Ask for the family run at any project; at a member this composes its externals against
+          their live producers, within the request's reach
         optional: true
     endpoint:
       transport: Custom
@@ -513,4 +527,4 @@ methods:
       address: mcp tools/call sdd_internalize_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T10:58:24.906Z'
+updatedAt: '2026-09-28T18:12:04.758Z'

@@ -89,11 +89,11 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 250 files / 4313 tests |
+| `npx vitest run` | 256 files / 4350 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
 | `npm run build` | clean |
-| `node dist/cli/index.js validate` | 0 errors, 0 warnings |
-| `node dist/cli/index.js validate --ci` | 0 errors, 0 warnings |
+| `node dist/cli/index.js validate` | 0 errors, 0 warnings, 0 notices; register 367 findings / 485 units |
+| `node dist/cli/index.js validate --ci` | passes |
 
 The counts are a floor, not a target — they move as the suite grows, so update
 this table when they do. `validate` also prints the **conformance debt register**

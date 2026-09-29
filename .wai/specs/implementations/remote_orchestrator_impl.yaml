@@ -223,7 +223,9 @@ methods:
   - name: validateAttached
     narrative:
       - stepNumber: 1
-        description: Validate the attached project's tree on the instance.
+        description: >-
+          Validate the attached project's tree on the instance, forwarding family when --family was
+          given.
         type: call
         targetComponent: cli_remote_adapter
         targetMethod: validateRemoteTree
@@ -289,4 +291,4 @@ methods:
         targetMethod: readCredential
 status: complete
 createdAt: '2026-08-12T18:32:48.928Z'
-updatedAt: '2026-09-17T20:35:31.292Z'
+updatedAt: '2026-09-29T13:54:59.701Z'

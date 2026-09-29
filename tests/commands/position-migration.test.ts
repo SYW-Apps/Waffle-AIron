@@ -17,7 +17,8 @@ import {
 import { projectFamilyGraph } from '../../src/core/project-family.js';
 import { externalizeSubsystem, internalizeMember, moveMember } from '../../src/core/provision.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { validateSddTree, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, type ValidationResult } from '../../src/core/validation.js';
+import { pinExternals } from '../../src/core/surfaces.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import { plan, apply, isEmpty, blocked } from '../../src/commands/chaining-migration.js';
 import { runDoctor } from '../../src/commands/doctor.js';
@@ -134,22 +135,29 @@ describe('stage 3 — the position migration over the reference family', () => {
 
   it('after apply: no deprecated form, no mount form, and the migrated references are declared and exported', () => {
     const f = fresh();
-    const before = at(f.top, () => validateSddTree());
-    expect(codes(before, 'DEPRECATED_REFERENCE_FORM')).toHaveLength(4);
+    const before = at(f.top, () => validateProject());
+    // Each project's own gate reports its own forms (stage 4): the top one, transpiler three.
+    expect(codes(before, 'DEPRECATED_REFERENCE_FORM')).toHaveLength(1);
+    expect(codes(at(f.transpiler, () => validateProject()), 'DEPRECATED_REFERENCE_FORM')).toHaveLength(3);
     expect(codes(before, 'DEPRECATED_MOUNT_FORM')).toEqual(['DEPRECATED_MOUNT_FORM @shared']);
-    expect(codes(before, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toHaveLength(2);
     const report = at(f.top, () => apply(plan()));
     expect(rel(f.top, report.written)).toEqual([
       'core/transpiler/.wai/project.yaml',
-      'core/transpiler/.wai/externals/core.yaml',
-      'core/transpiler/.wai/externals.lock.yaml',
       '.wai/project.yaml',
       '.wai/specs: subsystem shared',
       '.wai/specs: component app-worker',
       'core/transpiler/.wai/specs: component lowering-core',
+      // Pins LAST (stage 4): the external the migration declares, and core's
+      // `shared` and shared's `core`, declared before it ran and never pinned.
+      'core/.wai/externals/shared.yaml',
+      'core/.wai/externals.lock.yaml',
+      'core/transpiler/.wai/externals/core.yaml',
+      'core/transpiler/.wai/externals.lock.yaml',
+      'shared/.wai/externals/core.yaml',
+      'shared/.wai/externals.lock.yaml',
     ]);
     for (const root of [f.top, f.core, f.transpiler, f.shared]) {
-      const after = at(root, () => validateSddTree());
+      const after = at(root, () => validateProject());
       expect(codes(after, 'DEPRECATED_REFERENCE_FORM', 'DEPRECATED_MOUNT_FORM', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_UNRESOLVED')).toEqual([]);
     }
     // The member entry carries the mount's description; no L1 document is left.
@@ -208,7 +216,7 @@ describe('stage 3 — the position migration over the reference family', () => {
     at(f.top, () => apply(plan()));
     const siblings = [f.shared, f.core];
     const hashes = siblings.map(dirHash);
-    const verdicts = siblings.map((root) => at(root, () => validateSddTree().issues.map((i) => `${i.code}|${i.specId}|${i.message}`).sort()));
+    const verdicts = siblings.map((root) => at(root, () => validateProject().issues.map((i) => `${i.code}|${i.specId}|${i.message}`).sort()));
     // The parent renames its alias for core — one key in its own project.yaml, in place, nothing else.
     const config = path.join(f.top, '.wai', 'project.yaml');
     const text = fs.readFileSync(config, 'utf8');
@@ -216,8 +224,8 @@ describe('stage 3 — the position migration over the reference family', () => {
     fs.writeFileSync(config, text.replace(/^ {2}core: core$/m, '  engine-core: core'));
     expect(siblings.map(dirHash)).toEqual(hashes);
     // shared reaches core by its own external (the producer's project id), never the parent's alias.
-    expect(siblings.map((root) => at(root, () => validateSddTree().issues.map((i) => `${i.code}|${i.specId}|${i.message}`).sort()))).toEqual(verdicts);
-    const fromTop = at(f.top, () => validateSddTree());
+    expect(siblings.map((root) => at(root, () => validateProject().issues.map((i) => `${i.code}|${i.specId}|${i.message}`).sort()))).toEqual(verdicts);
+    const fromTop = at(f.top, () => validateProject());
     expect(codes(fromTop, 'EXTERNAL_UNDECLARED', 'EXTERNAL_UNRESOLVED').filter((c) => !/@(app-shell|app-worker)$/.test(c))).toEqual([]);
   });
 });
@@ -290,17 +298,20 @@ describe('stage 3 — the wave-B follow-ups', () => {
     family = buildReferenceFamily();
     const f = family;
     at(f.top, () => apply(plan()));
-    // transpiler declares its parent core, shared declares its sibling core: each producer lies above its root.
-    for (const root of [f.transpiler, f.shared]) expect(codes(at(root, () => validateSddTree()), 'EXTERNAL_UNRESOLVED')).toEqual([]);
+    // transpiler declares its parent core, shared declares its sibling core: each producer lies above its
+    // root, so its own gate judges it against its pin (stage 4) — and the migration pinned both, the one
+    // shared declared before it ran included.
+    for (const root of [f.transpiler, f.shared]) expect(codes(at(root, () => validateProject()), 'EXTERNAL_UNRESOLVED')).toEqual([]);
     // A misspelled declaration is still reported from the member's own root …
     runWithProjectRoot(f.shared, () => projectConfigRepository.declareExternal('nowhere', {}));
-    expect(codes(at(f.shared, () => validateSddTree()), 'EXTERNAL_UNRESOLVED')).toEqual(['EXTERNAL_UNRESOLVED @-']);
+    expect(codes(at(f.shared, () => validateProject()), 'EXTERNAL_UNRESOLVED')).toEqual(['EXTERNAL_UNRESOLVED @-']);
     // … and a request that may not read above its root cannot climb: its own scan's verdict stands.
     const narrowed = runWithProjectBinding(f.transpiler, { topRoot: f.transpiler, parentReach: false }, () => {
       invalidateSpecCache();
-      return validateSddTree();
+      return validateProject();
     });
-    expect(codes(narrowed, 'EXTERNAL_UNRESOLVED')).toEqual(['EXTERNAL_UNRESOLVED @-']);
+    // Stage 4: the pin is what it is judged against, so the reach changes nothing.
+    expect(codes(narrowed, 'EXTERNAL_UNRESOLVED')).toEqual([]);
   });
 });
 
@@ -396,7 +407,7 @@ describe('stage 3 — the chaining migration steps it gained', () => {
     const libL0 = yaml.load(fs.readFileSync(path.join(f.lib, '.wai', 'specs', '.index.yaml'), 'utf8')) as Record<string, unknown>;
     expect(libL0.status).toBeUndefined();
     expect(libL0.publicInterfaces).toEqual([{ from: 'core', component: 'lib-portal', type: 'RPC', details: 'The library surface', audience: 'project' }]);
-    const after = at(f.root, () => validateSddTree());
+    const after = at(f.root, () => validateProject());
     expect(codes(after, 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_UNDECLARED', 'EXPORT_INVALID', 'DEPRECATED_MOUNT_FORM')).toEqual([]);
     expect(isEmpty(at(f.app, () => plan()))).toBe(true);
   });

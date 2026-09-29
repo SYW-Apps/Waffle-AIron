@@ -95,12 +95,13 @@ methods:
       the SOURCE subsystem (the published-Portal target requirement applies either way). A published
       surface may also name the subsystems it serves (a publicInterfaces entry's consumers): a
       component every one of whose entries names consumers may be depended on only from those
-      subsystems, which is how a provider keeps a surface — the raw spec writes — away from a door
-      that must not reach it. A reference that names nothing in this tree is resolved against the
-      stored surface snapshots: a hit is a DECLARED remote portal and the same Adapter requirement
-      applies to it, snapshots of several providers that disagree make the reference ambiguous, and
-      a reference authored to leave this root that no snapshot covers warns instead of erroring.
-      Boundary rules are never relaxed by a pack profile.
+      subsystems. An edge into another project is judged on the contract entry it resolves to
+      (resolveSurfaceRef — a contained member's live table, a declared external's pin, or a foreign
+      snapshot): the same Adapter requirement applies to it, and foreign snapshots of several
+      providers that disagree make it SURFACE_REF_AMBIGUOUS. An edge into another project that does
+      not resolve is reported once, by project-boundaries, with its resolution — never here, and
+      never as the retired CROSS_TREE_REF_UNRESOLVED warning. A bare id that names nothing is
+      INVALID_DEPENDENCY_REFERENCE. Boundary rules are never relaxed by a pack profile.
     signature: 'subsystemBoundaryDependencies(ctx: RuleContext): void'
     returns: void
     params:
@@ -111,9 +112,6 @@ methods:
       - code: INVALID_DEPENDENCY_REFERENCE
         severity: error
         summary: dependsOn names a non-existent component
-      - code: CROSS_TREE_REF_UNRESOLVED
-        severity: warning
-        summary: 'Cross-tree dependsOn (super::/:: form) with no surface snapshot covering it'
       - code: SURFACE_REF_AMBIGUOUS
         severity: error
         summary: >-
@@ -361,18 +359,26 @@ methods:
         summary: Pattern facade narrative is not a single call to an owned member
   - name: projectBoundaries
     description: >-
-      Rule project-boundaries. Every project is a crate of its own (decision 9): another project
-      reaches it only through its L0 exports, and only as a dependency it declared. A reference that
-      reaches another project the referring project neither declares as a member nor as an external
-      — found only by a deprecated form or a family project id — is EXTERNAL_UNDECLARED; a reference
-      that reaches another project at anything but a public name of its resolved L0 table whose
-      audience covers the referrer — an L1-published or internal component, a method outside the
-      entry's narrowing, a type the producer exports only inside a signature's closure — is
-      EXTERNAL_NOT_EXPORTED; and a trustedLinks entry that names a subsystem of another project
-      (`alias::sub`) is TRUSTED_LINK_CROSSES_PROJECT, since a sanctioned fast lane stays inside one
-      project. A reference is one of the positions CrossProjectReference lists, judged from what the
-      scan bound it to (project graph and export usages); a reference bound as outside is left to
-      the resolve-through-parent verdict.
+      Rule project-boundaries. The one judge of every cross-project reference the bound project
+      writes (decision 9 — every project is a crate of its own, reached only through its L0 exports
+      and only as a dependency it declared). It reads each of the project's own references from the
+      project graph — `::` forms and bare names bound through `use` imports alike — takes its
+      resolution from resolveCrossProject, decided before any severity from the project's own files
+      alone, and reports every outcome but resolved once, carrying the resolution: forbidden is
+      EXTERNAL_UNDECLARED (the reference reaches a project the referrer declares neither as a member
+      nor as an external, or names a first segment that is none of its subsystems, aliases or
+      foreign providers); missing is EXTERNAL_NOT_EXPORTED (the producer's table — a contained
+      member's live one, or the external's pin — has no public name covering the referrer, or not
+      the used method, or exports the type only inside a signature's closure); an ambiguous import
+      is IMPORT_AMBIGUOUS (two imports supply one bare name: two explicit `use` names, or two `*`
+      with no explicit one — name it `alias::name` or narrow a `use`); unavailable is
+      EXTERNAL_CHECK_UNAVAILABLE (no pin, an unreadable pin, a member absent on disk, or a
+      deprecated form naming no alias — never a pass). A bare name no import supplies is not this
+      rule's: it is the unresolved-reference finding it always was, with rule_context.importHint
+      appended. A trustedLinks entry naming a subsystem of another project (`alias::sub`) is
+      TRUSTED_LINK_CROSSES_PROJECT: a sanctioned fast lane stays inside one project. Stage 4 makes
+      the three stage-2 notices errors now that the owner's gate judges them exactly; a reference is
+      never left to a parent's verdict.
     signature: 'projectBoundaries(ctx: RuleContext): void'
     returns: void
     params:
@@ -381,37 +387,29 @@ methods:
         description: The validation run's shared read model and issue sink
     findings:
       - code: EXTERNAL_UNDECLARED
-        severity: notice
+        severity: error
         summary: >-
-          A reference reaches another project that the referring project neither mounts nor declares
-          as an external
+          A reference reaches another project the referring project declares neither as a member nor
+          as an external, or names a first segment that is none of its subsystems, aliases or
+          foreign providers
       - code: EXTERNAL_NOT_EXPORTED
-        severity: notice
+        severity: error
         summary: >-
-          A reference reaches another project at anything but a public name whose audience covers
-          the referrer
+          A reference reaches another project at anything but a public name, or a member of one,
+          whose audience covers the referrer
       - code: TRUSTED_LINK_CROSSES_PROJECT
-        severity: notice
+        severity: error
         summary: A trustedLinks entry names a subsystem of another project
-  - name: projectCycles
-    description: >-
-      Rule project-cycles. Projects that depend on each other in a loop cannot be approved or
-      released one at a time: each needs the other's contract first. Every loop in the project
-      dependency graph (ProjectFamily.dependencyCycles: an edge per cross-project reference or L0
-      re-export from a member or external; containment is no edge) is PROJECT_DEPENDENCY_CYCLE,
-      reported once per loop on each project in it, naming the loop and, for each edge that closes
-      it, the references that make the edge — so a person can see which few references to move. A
-      warning in stage 3; stage 5's approval pins need an acyclic graph and raise it to an error.
-    signature: 'projectCycles(ctx: RuleContext): void'
-    returns: void
-    params:
-      - name: ctx
-        type: RuleContext
-        description: The validation run's shared read model and issue sink
-    findings:
-      - code: PROJECT_DEPENDENCY_CYCLE
+      - code: EXTERNAL_CHECK_UNAVAILABLE
         severity: warning
-        summary: Projects of the family depend on each other in a loop
+        summary: >-
+          A reference into another project has nothing to be judged against: no pin, an unreadable
+          pin, a member absent on disk, or a deprecated form naming no alias
+      - code: IMPORT_AMBIGUOUS
+        severity: error
+        summary: >-
+          Two `use` imports supply one bare name: two explicit names, or two `*` imports with no
+          explicit one
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-09-27T10:41:26.446Z'
+updatedAt: '2026-09-28T17:16:43.887Z'

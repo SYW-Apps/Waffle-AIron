@@ -61,6 +61,8 @@ export {
   approvalRecord,
   setId as setProjectId,
   declareExternal,
+  importNames,
+  loadTypeSpecs,
   // Stage 3: a legacy mount moved into `members`, and a spec's references
   // written in their canonical form.
   moveMountToMembers,

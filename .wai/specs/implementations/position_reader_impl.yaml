@@ -1,0 +1,89 @@
+id: position_reader_impl
+name: Position Reader Implementation
+description: >-
+  The positional match, pure, in src/commands/position-reader.ts. It decides in rounds: a producer
+  the referring project will declare once the migration applies (one it already reaches by
+  `alias::name`, or one an earlier round's import declares) counts as declared, and a name an
+  earlier round's import makes a producer export counts as exported — what a re-run after apply
+  decides, so the migration it plans is idempotent.
+contract: iposition_reader
+sourcePath: src/commands/position-reader.ts
+methods:
+  - name: match
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Index the family once by nameKey: every public name of every project's table, and every
+          type each project owns, each with its project key and canonical target. Seed what each
+          project declares with the producers its `alias::name` references already reach — the
+          migration declares each of those
+        type: local
+      - stepNumber: 2
+        label: rounds
+        description: Match in rounds, each over the references the rounds before left ambiguous
+        type: loop
+        condition: >-
+          the last round's imports declared a producer or exported a name that was not so before,
+          and a reference is still ambiguous
+        loopKind: doWhile
+        endStep: 10
+      - stepNumber: 3
+        label: each
+        description: For each reference still open
+        type: loop
+        loopKind: forEach
+        over: the references still open, in scan order
+        endStep: 9
+      - stepNumber: 4
+        description: >-
+          Is its first segment (before `::` or `.`) the referring project's own id — or, for a
+          member that declares no id, the alias its parent declares it under, the id `doctor --fix`
+          declares for it?
+        type: branch
+        condition: the reference is prefixed with the referring project's own id
+        onFalseStep: 7
+      - stepNumber: 5
+        description: Answer self-prefix targeting the bare local id when the project holds that spec, else none
+        type: local
+      - stepNumber: 6
+        description: Next reference
+        type: jump
+        toStep: 9
+      - stepNumber: 7
+        label: bare
+        description: >-
+          Look the name's key up among the OTHER projects: their public names and the types they own
+          that no table exports, together — a project holding both counts once, by its public name.
+          The two tie-break rules need both kinds in one candidate set: already-exported can only
+          choose between a project that exports the name and one that merely owns it
+        type: local
+      - stepNumber: 8
+        description: >-
+          Classify: one project is import with reason only-match (producer, canonical target,
+          existing public name if any); several are narrowed first to the projects the referring
+          project declares — as a member or an external, by an `alias::name` reference the migration
+          declares, or through an earlier round's import — one left is import with reason
+          declared-producer; then, among those left (all of them when none is declared), to the ones
+          that export the name, earlier rounds' exports included — one left is import with reason
+          already-exported; otherwise ambiguous, with every candidate and what each rule left; none
+          is none
+        type: local
+      - stepNumber: 9
+        label: matched
+        description: The reference is matched
+        type: local
+      - stepNumber: 10
+        label: learn
+        description: >-
+          What this round's imports leave behind once applied: each import's producer declared by
+          its consumer, and the name exported under its default public name where the producer
+          exported none. An import a spec of the consumer would shadow is never written, so it
+          teaches nothing
+        type: local
+      - stepNumber: 11
+        description: Answer the matches in scan order, each as its last round decided it
+        type: return
+        outcome: PositionalMatch[]
+status: complete
+createdAt: '2026-09-28T16:09:37.950Z'
+updatedAt: '2026-09-29T14:31:21.762Z'

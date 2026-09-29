@@ -40,7 +40,10 @@ methods:
     signature: 'writeNarrative(spec: ImplementationSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
   - name: validateTree
-    description: Run the architecture-conformance gate and return the result
+    description: >-
+      Run the architecture-conformance gate and return the result: the family run or the owner's
+      gate, as validation_options.selectsFamily reads the tool's flags — the same choice `wairon
+      validate` makes
     signature: 'validateTree(): ValidationResult'
     returns: ValidationResult
   - name: getStatus
@@ -306,4 +309,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-27T10:58:21.740Z'
+updatedAt: '2026-09-28T18:12:03.763Z'

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/b.ts', body('storeb'));
     proj.activate();
     try {
-      const found = depIssues(validateSddTree());
+      const found = depIssues(validateProject());
       expect(found.map(i => i.code)).toContain('UNDECLARED_DEPENDENCY');
       expect(found.find(i => i.code === 'UNDECLARED_DEPENDENCY')?.specId).toBe('impl-orch-a');
     } finally { proj.cleanup(); }
@@ -113,7 +113,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/b.ts', body('storeb'));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree())).toHaveLength(0);
+      expect(depIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -128,7 +128,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/portal.ts', body('portalp'));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree())).toHaveLength(0);
+      expect(depIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -144,7 +144,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/b.ts', body('storeb', "import { runorcha } from './a.js';\nvoid runorcha;\n"));
     proj.activate();
     try {
-      const found = depIssues(validateSddTree());
+      const found = depIssues(validateProject());
       expect(found.map(i => i.code)).toContain('UNDECLARED_DEPENDENCY');
       expect(found.find(i => i.code === 'UNDECLARED_DEPENDENCY')?.specId).toBe('impl-store-b');
     } finally { proj.cleanup(); }
@@ -160,7 +160,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/b.ts', body('storeb', 'export interface Thing { id: string }\n'));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
+      expect(depIssues(validateProject()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
     } finally { proj.cleanup(); }
   });
 
@@ -180,7 +180,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/a/adapter.ts', body('adaptera', "import { runinnerb } from '../b/inner.js';\nruninnerb();\n"));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
+      expect(depIssues(validateProject()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
     } finally { proj.cleanup(); }
   });
 
@@ -198,7 +198,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/adapter.ts', body('dbadapter'));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
+      expect(depIssues(validateProject()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
     } finally { proj.cleanup(); }
   });
 
@@ -215,7 +215,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/registry.ts', body('custregistry', "import { runcuststore } from './store.js';\nvoid runcuststore;\n"));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
+      expect(depIssues(validateProject()).map(i => i.code)).not.toContain('UNDECLARED_DEPENDENCY');
     } finally { proj.cleanup(); }
   });
 
@@ -229,7 +229,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/b.ts', body('storeb'));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree())).toHaveLength(0);
+      expect(depIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -246,7 +246,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     proj.source('src/b.ts', body('storeb'));
     proj.activate();
     try {
-      const issues = validateSddTree();
+      const issues = validateProject();
       expect(depIssues(issues).map(i => i.code)).toContain('UNDECLARED_DEPENDENCY');
       const stale = issues.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW');
       expect(stale).toHaveLength(1);
@@ -266,7 +266,7 @@ describe('dependency conformance — UNREALIZED_DEPENDENCY', () => {
     proj.source('src/b.ts', body('storeb'));
     proj.activate();
     try {
-      const found = depIssues(validateSddTree());
+      const found = depIssues(validateProject());
       expect(found.map(i => i.code)).toEqual(['UNREALIZED_DEPENDENCY']);
       expect(found[0].specId).toBe('impl-orch-a');
     } finally { proj.cleanup(); }
@@ -281,7 +281,7 @@ describe('dependency conformance — UNREALIZED_DEPENDENCY', () => {
     proj.source('src/shared.ts', body('orcha', body('storeb')));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree())).toHaveLength(0);
+      expect(depIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -296,7 +296,7 @@ describe('dependency conformance — UNREALIZED_DEPENDENCY', () => {
     proj.source('src/orch.ts', body('orcha', body('portalp')));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree())).toHaveLength(0);
+      expect(depIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -310,7 +310,7 @@ describe('dependency conformance — UNREALIZED_DEPENDENCY', () => {
     proj.source('src/b.ts', body('storeb'));
     proj.activate();
     try {
-      const found = depIssues(validateSddTree());
+      const found = depIssues(validateProject());
       expect(found).toHaveLength(1);
       expect((found[0] as { draftContext?: boolean }).draftContext).toBe(true);
     } finally { proj.cleanup(); }
@@ -344,7 +344,7 @@ describe('dependency conformance — a component maps to every file its implemen
     proj.source('src/b.ts', body('storeb'));
     proj.activate();
     try {
-      const found = depIssues(validateSddTree()).filter(i => i.code === 'UNDECLARED_DEPENDENCY');
+      const found = depIssues(validateProject()).filter(i => i.code === 'UNDECLARED_DEPENDENCY');
       expect(found).toHaveLength(1);
       expect(found[0].specId).toBe('impl-orch-a');
       expect(found[0].message).toContain('"src/commands/run-a.ts"');
@@ -362,7 +362,7 @@ describe('dependency conformance — a component maps to every file its implemen
     proj.source('src/b.ts', body('storeb'));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree())).toHaveLength(0);
+      expect(depIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -377,7 +377,7 @@ describe('dependency conformance — a component maps to every file its implemen
     proj.source('src/store/put.ts', body('storeb'));
     proj.activate();
     try {
-      expect(depIssues(validateSddTree())).toHaveLength(0);
+      expect(depIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

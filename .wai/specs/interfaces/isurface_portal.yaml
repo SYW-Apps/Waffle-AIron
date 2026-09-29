@@ -56,15 +56,6 @@ methods:
     params:
       - name: projectName
         type: string
-  - name: listMountSnapshots
-    description: >-
-      The surface snapshots each chained mount holds in its own .wai/surfaces/, keyed by the mount's
-      namespace. Pure 1:1 forward.
-    signature: 'listMountSnapshots(mounts: string[]): MountSurfaceSnapshots[]'
-    returns: MountSurfaceSnapshots[]
-    params:
-      - name: mounts
-        type: string[]
   - name: pinExternals
     description: >-
       Pin the bound project's declared externals (the named aliases, else all): snapshots under
@@ -98,6 +89,14 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: listPinnedExternals
+    description: >-
+      The bound project's declared externals, each with its lock entry and pinned snapshot, read
+      from its own .wai/externals files only — what the owner's gate judges a reference into another
+      project against. Pure 1:1 forward.
+    signature: 'listPinnedExternals(): PinnedExternal[]'
+    returns: PinnedExternal[]
+    params: []
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-09-27T10:42:59.689Z'
+updatedAt: '2026-09-28T17:17:00.147Z'

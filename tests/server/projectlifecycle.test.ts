@@ -494,10 +494,10 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(lock!.projectId).toBe('hosted-baseline');
   });
 
-  it('a qualified lock REFUSES a child boundary violation only its parent can see — judged through the parent', () => {
-    // A hosted subproject lock gates on errors. It used to pass here: from the
-    // child's own root the crossing into the parent came back as a waived warning,
-    // and nothing hosted ever delivered the surfaces that might have caught it.
+  it("a qualified lock REFUSES the child's undeclared reference into its parent — judged from the child's own files", () => {
+    // A hosted subproject lock gates on errors. The child's gate judges its own
+    // references from its own files (stage 4): a reference into a project it
+    // declares neither as a member nor as an external is EXTERNAL_UNDECLARED.
     const { parent, child } = seedChainedSubproject('confine-violation', 'billing');
     const stamp = ["createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'"];
     const writeLines = (file: string, lines: string[]): void => {
@@ -514,7 +514,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
       'id: k-core', 'name: k-core', 'description: the child domain', 'parentSystem: billing', ...stamp]);
     writeLines(path.join(child, '.wai', 'specs', 'components', 'k-orch.yaml'), [
       'id: k-orch', 'name: k-orch', 'description: crosses into the parent', 'subsystem: k-core',
-      'componentType: Orchestrator', 'owns: []', "dependsOn: ['super::parent-portal']", ...stamp]);
+      'componentType: Orchestrator', 'owns: []', "dependsOn: ['parent::parent-portal']", ...stamp]);
     invalidateSpecCache();
 
     let refused: LockValidationError | undefined;
@@ -525,7 +525,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     }
 
     expect(refused).toBeInstanceOf(LockValidationError);
-    expect(refused!.errors.map((e) => `${e.code} @${e.specId}`)).toContain('CROSS_SUBSYSTEM_NON_ADAPTER @k-orch');
+    expect(refused!.errors.map((e) => `${e.code} @${e.specId}`)).toContain('EXTERNAL_UNDECLARED @k-orch');
     // Nothing was frozen.
     expect(fs.existsSync(lockPathOf(child))).toBe(false);
   });

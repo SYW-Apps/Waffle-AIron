@@ -25,8 +25,15 @@ methods:
       dryRun?: boolean }): Promise<void>
     returns: Promise<void>
   - name: runValidate
-    description: Runs architectural validations on project configs and spec trees
-    signature: 'runValidate(options: { ci?: boolean }): Promise<void>'
+    description: >-
+      `wairon validate`: the registry, project-config and spec-tree checks. At a project that
+      declares members the spec-tree check is the family run (every project's own gate verbatim, the
+      composition of each project's externals and the family checks) unless --no-recursive asks for
+      the owner's gate alone; at any other project it is the owner's gate unless --family asks for
+      the family run, which composes its externals against their live producers within reach.
+    signature: >-
+      runValidate(options: { ci?: boolean; subsystem?: string; recursive?: boolean; family?: boolean
+      }): Promise<void>
     returns: Promise<void>
   - name: runList
     description: Lists all dynamically resolved agents
@@ -271,12 +278,15 @@ methods:
   - name: runDoctor
     description: >-
       `wairon doctor`: a health check of the project (initialization and configuration, spec
-      conformance, the chaining migration still pending, generated guides and skills, the lock, MCP
-      registration). With --fix it applies the repairs it can — regenerating stale guides, context
-      and skills, registering the MCP server, retiring Specialists into Orchestrators — and then the
-      chaining migration, which it prints and applies only after confirmation (--yes answers it for
-      a non-interactive run; without either nothing of it is written). With --report chaining it
-      prints the chaining plan per project and changes nothing; that never combines with --fix.
+      conformance by its owner's gate, the chaining migration still pending, generated guides and
+      skills, the lock, MCP registration). With --fix it applies the repairs it can — regenerating
+      stale guides, context and skills, registering the MCP server, retiring Specialists into
+      Orchestrators — and then the chaining migration, which it prints and applies only after
+      confirmation (--yes answers it for a non-interactive run; without either nothing of it is
+      written). With --report chaining it prints the chaining plan per project; with --report
+      composed-validation it prints what stage 4 changed in each project's verdict (today's gate
+      against the totals its lock recorded, and every new finding with its reason) — either report
+      changes nothing and never combines with --fix.
     signature: 'runDoctor(options?: DoctorOptions): Promise<void>'
     returns: Promise<void>
     params:
@@ -499,4 +509,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T10:59:02.922Z'
+updatedAt: '2026-09-29T14:48:28.588Z'

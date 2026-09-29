@@ -18,12 +18,13 @@ fields:
   - name: reach
     type: string
     description: >-
-      Where the ref lands, decided once so no rule re-derives it. The six answers are exhaustive:
-      internal (a component of the source's own subsystem), cross-subsystem (a component of a peer
-      subsystem in this tree), surface (a vendored surface snapshot declares it), ambiguous
-      (snapshots of several providers expose the name with different contracts, so none of them may
-      judge the edge), unpinned (authored to leave this root, and no snapshot covers it) and missing
-      (nothing in this tree or its snapshots names it)
+      Where the ref lands: internal (a component of this tree in the source's subsystem),
+      cross-subsystem (a component of this tree in another subsystem), surface (it leaves the
+      project and resolves to a declared contract entry — a declared external's pin or a foreign
+      surface snapshot), ambiguous (foreign snapshots of several providers expose the name with
+      different contracts, so none of them may judge the edge), cross-project (it leaves the project
+      and does not resolve — forbidden, missing, unavailable or an ambiguous import —
+      project-boundaries' single finding) and missing (a local id that names nothing)
     optional: false
   - name: to
     type: ComponentSpec
@@ -56,7 +57,13 @@ fields:
       idiom, declared with a reason. It is carried on the edge because the matrix is five rules:
       repeated per rule, a licensed edge would escape some of them and not others
     optional: false
+  - name: resolution
+    type: ReferenceResolution
+    description: >-
+      The owner's resolution of an edge that leaves the project (rule_context.resolveCrossProject);
+      set for a surface, ambiguous or cross-project edge only
+    optional: true
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T01:06:24.794Z'
-updatedAt: '2026-09-19T11:07:06.717Z'
+updatedAt: '2026-09-28T17:16:15.599Z'

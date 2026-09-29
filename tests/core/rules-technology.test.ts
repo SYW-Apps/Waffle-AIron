@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ describe('technology boundary rules', () => {
     proj.component('orch-a', 'Orchestrator');
     proj.activate();
     try {
-      expect(techIssues(validateSddTree())).toHaveLength(0);
+      expect(techIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -132,7 +132,7 @@ componentType: Portal
 portalType: HTTP_API`);
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'billing-portal')).toBe(true);
       expect(issues.some(i => i.specId === 'impl-cust-store')).toBe(false);
       expect(issues.some(i => i.specId === 'impl-cust-adapter')).toBe(false);
@@ -155,7 +155,7 @@ methods:
     returns: "Promise<void>"`);
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'VENDOR_NAME_IN_CONTRACT' && i.specId === 'icust-adapter')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -185,7 +185,7 @@ methods:
       - { stepNumber: 1, description: coordinate the workflow, type: local }`);
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'TECH_ON_LOGIC_COMPONENT' && i.specId === 'impl-orch-a')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -216,7 +216,7 @@ methods:
     proj.component('rogue-orch', 'Orchestrator', 'dependsOn: [mysql-adapter]');
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'rogue-orch')).toBe(true);
       // The adapter itself (id contains the token) is in scope — never flagged.
       expect(issues.some(i => i.specId === 'mysql-adapter')).toBe(false);
@@ -236,7 +236,7 @@ fields:
     type: string`);
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'mysql_row')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -257,7 +257,7 @@ lint:
       reason: legacy naming, cleanup tracked separately`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(techIssues(res).some(i => i.specId === 'billing-portal')).toBe(false);
       expect(res.issues.some(i => i.code === 'UNUSED_LINT_ALLOW' && i.specId === 'billing-portal')).toBe(false);
     } finally { proj.cleanup(); }
@@ -285,7 +285,7 @@ componentType: Portal
 portalType: HTTP_API`);
     proj.activate();
     try {
-      expect(techIssues(validateSddTree())).toHaveLength(0);
+      expect(techIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -316,7 +316,7 @@ methods:
       - { stepNumber: 1, description: coordinate the billing cycle, type: local }`);
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'impl-billing-orch')).toBe(true);
     } finally { proj.cleanup(); }
   });

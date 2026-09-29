@@ -41,8 +41,10 @@ fields:
   - name: pins
     type: string[]
     description: >-
-      The aliases apply pins once every write is done: each planned external, and each existing one
-      whose producer gains entries this project uses.
+      The aliases apply pins LAST, once every other write is done: each planned external, each
+      existing one whose producer gains entries or through which the project gains imports, and each
+      family external the project declared before the migration and never pinned (a pinned one is
+      never re-pinned here: that would hide a producer's change).
     optional: false
   - name: supersededPins
     type: string[]
@@ -74,7 +76,15 @@ fields:
       shared), each as `path: value`. Printed with the plan and covered by its one confirmation, so
       nothing is dropped silently; empty when there are none or the project gains no L0 entry.
     optional: false
+  - name: imports
+    type: PlannedImport[]
+    description: >-
+      The `use` entries apply adds to this project's externals and members (stage 4's positional
+      step): one per (alias, public name), each listing every bare reference it makes resolve, in
+      alias then name order. Written through the registry's importNames after the external it names
+      is declared.
+    optional: false
 methods: []
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:11:55.782Z'
-updatedAt: '2026-09-27T11:01:45.081Z'
+updatedAt: '2026-09-29T13:55:59.198Z'

@@ -13,7 +13,7 @@ import {
   invalidateSpecCache,
   getLoaderIssues,
 } from '../../src/core/specs.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { getStatusReport } from '../../src/core/status.js';
 
 const now = new Date().toISOString();
@@ -472,7 +472,7 @@ describe('recursive subproject loading and namespacing', () => {
     invalidateSpecCache();
 
     // Check validation output with scopeSubsystem
-    const valResultFiltered = validateSddTree({ scopeSubsystem: 'billing::invoice' });
+    const valResultFiltered = validateProject({ scopeSubsystem: 'billing::invoice' });
     // Filtered validation should focus on child subsystem and run without failing on root subsystem missing specs or other root issues.
     expect(valResultFiltered.issues.some(i => i.specId === 'billing')).toBe(false);
 

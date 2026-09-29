@@ -17,7 +17,6 @@ import { externalDeclarationsRule } from './integrity/external-declarations.js';
 import { referenceFormsRule } from './integrity/reference-forms.js';
 import { memberDeclarationsRule } from './integrity/member-declarations.js';
 import { projectBoundariesRule } from './doctrine/project-boundaries.js';
-import { projectCyclesRule } from './doctrine/project-cycles.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractSymmetryRule } from './narrative/contract-symmetry.js';
 import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
@@ -230,7 +229,6 @@ export const SDD_RULES: SddRule[] = [
   referenceFormsRule,
   memberDeclarationsRule,
   projectBoundariesRule,
-  projectCyclesRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
   // reader sees the broken edge finding next to the unused-detection fallout

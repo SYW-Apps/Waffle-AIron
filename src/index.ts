@@ -54,7 +54,7 @@ export { activeTargetTypes } from './core/skills.js';
 // is a deliberate break of a documented API; losing one because a Portal
 // stopped starring a module is not.
 // ---------------------------------------------------------------------------
-export { validateSddTree } from './core/validation.js';
+export { validateProject, validateFamily } from './core/validation.js';
 export {
   loadExtensions,
   loadExtensionPacks,

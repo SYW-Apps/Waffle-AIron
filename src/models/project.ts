@@ -457,6 +457,13 @@ export const ExternalDeclarationSchema = z.object({
   /** The producer's project id; defaults to the alias. Plain string: a malformed id is REPORTED, never unreadable. */
   project: z.string().optional(),
   source: ExternalSourceSchema.optional(),
+  /**
+   * The producer's public names this project imports, so its specs may name
+   * them bare: `['*']` imports every public name the producer exports to this
+   * project, `[waffler-error]` only those. Plain strings: a malformed entry is
+   * REPORTED (the declaration's problem), never unreadable.
+   */
+  use: z.array(z.string()).optional(),
 });
 export type ExternalDeclaration = z.infer<typeof ExternalDeclarationSchema>;
 
@@ -472,6 +479,8 @@ export const MemberDeclarationSchema = z.object({
   path: z.string(),
   /** What the member is to this project, in the declaring project's words. */
   description: z.string().optional(),
+  /** The member's public names this project imports, exactly as an external's `use`. */
+  use: z.array(z.string()).optional(),
 });
 export type MemberDeclaration = z.infer<typeof MemberDeclarationSchema>;
 
@@ -764,16 +773,33 @@ export interface DeclaredExternal {
   sourcePath?: string;
   /** Why the declaration cannot be used as written. */
   problem?: string;
+  /** The declaration's `use` as written, deduplicated in first-seen order; empty when it imports nothing. */
+  use: string[];
+}
+
+/** One `use` entry: `*`, or a public name of [a-z0-9-_]+. */
+export const USE_ENTRY_RE = /^(\*|[a-z0-9_-]+)$/;
+
+/** A `use` list deduplicated in first-seen order, and the first malformed entry's problem, if any. */
+function readUse(alias: string, use: unknown): { use: string[]; problem?: string } {
+  const list = Array.isArray(use) ? use.map((u) => String(u)) : [];
+  const deduped = [...new Set(list)];
+  const bad = deduped.find((u) => !USE_ENTRY_RE.test(u));
+  return {
+    use: deduped,
+    ...(bad !== undefined ? { problem: `the \`use\` of "${alias}" lists "${bad}", which is neither \`*\` nor a public name ([a-z0-9-_]+)` } : {}),
+  };
 }
 
 /**
  * project_config.declaredExternals — the configuration's `externals`, one
- * DeclaredExternal per alias in declaration order. A malformed alias or
- * producer id is recorded as the entry's problem, never dropped.
+ * DeclaredExternal per alias in declaration order. A malformed alias,
+ * producer id or `use` entry is recorded as the entry's problem, never dropped.
  */
 export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Partial<Pick<ProjectConfig, 'members'>>): DeclaredExternal[] {
   return Object.entries(config.externals ?? {}).map(([alias, declaration]) => {
     const project = declaration?.project ?? alias;
+    const imports = readUse(alias, declaration?.use);
     const problem = !EXTERNAL_ALIAS_RE.test(alias)
       ? (PROJECT_ID_RE.test(alias)
         ? `the alias "${alias}" is not a reference name ([a-z0-9-_]+) — a dotted producer id needs an explicit alias, e.g. \`${alias.replace(/\./g, '-')}: { project: ${alias} }\``
@@ -782,12 +808,13 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Par
         ? `the alias "${alias}" is also declared under \`members\` — one alias names one project`
         : !PROJECT_ID_RE.test(project)
           ? `the producer id "${project}" breaks the project-id grammar`
-          : undefined;
+          : imports.problem;
     return {
       alias,
       project,
       ...(declaration?.source?.path !== undefined ? { sourcePath: declaration.source.path } : {}),
       ...(problem ? { problem } : {}),
+      use: imports.use,
     };
   });
 }
@@ -808,6 +835,8 @@ export interface DeclaredMember {
   description?: string;
   /** Why the declaration cannot be used as written. */
   problem?: string;
+  /** The long form's `use` as written, deduplicated in first-seen order; empty for the shorthand and when it imports nothing. */
+  use: string[];
 }
 
 /** A `members` value read the way both forms mean it. */
@@ -825,6 +854,7 @@ export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 
   return Object.entries(config.members ?? {}).map(([alias, value]) => {
     const declaration = memberDeclarationOf(value);
     const written = typeof declaration?.path === 'string' ? declaration.path : '';
+    const imports = readUse(alias, declaration?.use);
     const problem = !EXTERNAL_ALIAS_RE.test(alias)
       ? `the member alias "${alias}" breaks [a-z0-9-_]+`
       : written.trim() === ''
@@ -833,12 +863,13 @@ export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 
           ? `the member "${alias}" declares the absolute path "${written}" — a member path is relative to the project declaring it`
           : config.externals?.[alias] !== undefined
             ? `the alias "${alias}" is also declared under \`externals\` — one alias names one project`
-            : undefined;
+            : imports.problem;
     return {
       alias,
       path: written,
       ...(declaration?.description !== undefined ? { description: declaration.description } : {}),
       ...(problem ? { problem } : {}),
+      use: imports.use,
     };
   });
 }

@@ -214,8 +214,9 @@ methods:
       - idempotent
   - name: exportUsage
     description: >-
-      Forward 1:1 to the Export Index: one consumer's references into one producer, mapped onto the
-      producer's public names (used) or not (unexported).
+      Forward 1:1 to the Export Index: one consumer's references into one producer — `alias::name`
+      references and bare names bound through its `use` imports alike — mapped onto the producer's
+      public names (used) or not (unexported).
     signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
     returns: ExportUsage
     params:
@@ -267,4 +268,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T11:02:33.373Z'
+updatedAt: '2026-09-28T17:16:50.517Z'

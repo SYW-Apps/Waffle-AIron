@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ methods:
     intent: Pops the oldest pending job from the backing store; returns null on an empty queue. No locking — single consumer by design.`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const flowIssues = res.issues.filter(i => ['MALFORMED_FLOW_STEP', 'INVALID_STEP_JUMP', 'UNREACHABLE_STEP', 'MISSING_NARRATIVE', 'INTENT_FLOOR'].includes(i.code));
       expect(flowIssues).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -147,7 +147,7 @@ methods:
       - { stepNumber: 4, description: dangling jump, type: jump, toStep: 99 }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const cs = codes(res);
       expect(cs).toContain('MALFORMED_FLOW_STEP');
       expect(cs).toContain('INVALID_STEP_JUMP');
@@ -196,7 +196,7 @@ methods:
       - { stepNumber: 4, description: done, type: return, outcome: success }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const cs = codes(res);
       expect(cs).toContain('REGION_OVERLAP');       // loop 1..3 vs try 2..4 interleave
       expect(cs).toContain('JUMP_INTO_REGION');     // step 6 jumps to 3, inside the loop body
@@ -233,7 +233,7 @@ methods:
       - { stepNumber: 5, description: all done, type: return, outcome: success }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const structural = res.issues.filter(i => ['REGION_OVERLAP', 'JUMP_INTO_REGION', 'FALLTHROUGH_INTO_HANDLER', 'BACKWARD_JUMP'].includes(i.code));
       expect(structural).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -265,7 +265,7 @@ methods:
       - { stepNumber: 3, description: dead code after the terminator, type: local }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const unreachable = res.issues.filter(i => i.code === 'UNREACHABLE_STEP');
       expect(unreachable).toHaveLength(1);
       expect(unreachable[0].message).toContain('step(s) 3');
@@ -279,7 +279,7 @@ describe('type shape rules', () => {
     proj.writeSpec('type', 'ghost-shape', 'kind: value-object\nid: ghost-shape\nname: GhostShape\ndescription: a placeholder\nfields: []\nmethods: []');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const hollow = res.issues.filter(i => i.code === 'HOLLOW_TYPE');
       expect(hollow).toHaveLength(1);
       expect(hollow[0].specId).toBe('ghost-shape');
@@ -304,7 +304,7 @@ lint:
     proj.writeSpec('type', 'other-hollow', 'kind: value-object\nid: other-hollow\nname: OtherHollow\ndescription: d\nfields: []\nmethods: []');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const hollow = res.issues.filter(i => i.code === 'HOLLOW_TYPE');
       expect(hollow).toHaveLength(1); // only the spec WITHOUT the allow
       expect(hollow[0].specId).toBe('other-hollow');
@@ -328,7 +328,7 @@ lint:
       reason: trying to silence an architecture error`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toHaveLength(1); // error survives
       expect(res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW')).toHaveLength(0); // but the allow matched
       expect(res.valid).toBe(false);
@@ -353,7 +353,7 @@ lint:
       reason: it used to be hollow but is filled now`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const unknown = res.issues.filter(i => i.code === 'UNKNOWN_LINT_ALLOW_CODE');
       const stale = res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW');
       expect(unknown).toHaveLength(1);
@@ -398,7 +398,7 @@ methods:
     proj.writeSpec('implementation', 'impl-orch-u', implBody('impl-orch-u', 'iorch-u'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const flow = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_FLOW');
       expect(flow).toHaveLength(3); // try + doWhile + throw, only in the rust subsystem
       expect(flow.every(i => i.specId === 'impl-orch-r')).toBe(true);
@@ -450,7 +450,7 @@ methods:
   - name: read`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const floor = res.issues.filter(i => i.code === 'INTENT_FLOOR');
       expect(floor).toHaveLength(1);
       expect(floor[0].severity).toBe('warning'); // stereotype-defaulted, not declared
@@ -500,7 +500,7 @@ methods:
   - name: read`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'INTENT_FLOOR')).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'MISSING_NARRATIVE')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -535,7 +535,7 @@ methods:
     detail: intent`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const missing = res.issues.filter(i => i.code === 'MISSING_NARRATIVE');
       const floor = res.issues.filter(i => i.code === 'INTENT_FLOOR');
       expect(missing).toHaveLength(1);
@@ -620,7 +620,7 @@ methods:
     const proj = declaredCallTree('\n    calls: [orch-g.process]');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'UNUSED_COMPONENT')).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'UNUSED_METHOD')).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'INTENT_FLOOR')).toHaveLength(0);
@@ -631,7 +631,7 @@ methods:
     const proj = declaredCallTree();
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'UNUSED_COMPONENT').map(i => i.specId)).toEqual(['orch-g']);
       expect(res.issues.filter(i => i.code === 'INTENT_FLOOR')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -641,7 +641,7 @@ methods:
     const proj = declaredCallTree('\n    calls: [orch-g, orch-g.absent, stranger.process]');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'MALFORMED_DECLARED_CALL')).toHaveLength(1);
       expect(res.issues.filter(i => i.code === 'INVALID_TARGET_METHOD_REFERENCE')).toHaveLength(1);
       // "stranger" is no component of this tree: that is cross-tree-references'

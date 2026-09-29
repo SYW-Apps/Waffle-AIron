@@ -17,8 +17,8 @@ describe('project_config.declaredMembers', () => {
         ledger: { path: 'services/ledger', description: 'The ledger of record' },
       },
     }))).toEqual([
-      { alias: 'billing', path: 'services/billing' },
-      { alias: 'ledger', path: 'services/ledger', description: 'The ledger of record' },
+      { alias: 'billing', path: 'services/billing', use: [] },
+      { alias: 'ledger', path: 'services/ledger', description: 'The ledger of record', use: [] },
     ]);
   });
 

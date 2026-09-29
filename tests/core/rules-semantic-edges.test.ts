@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ describe('dispatch tables (UNSERVED_CAPABILITY family)', () => {
     });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(issuesWith(res, 'UNSERVED_CAPABILITY')).toHaveLength(0);
       expect(issuesWith(res, 'DISPATCH_ON_NON_PORTAL')).toHaveLength(0);
       expect(issuesWith(res, 'UNDECLARED_DISPATCH_TARGET')).toHaveLength(0);
@@ -120,7 +120,7 @@ describe('dispatch tables (UNSERVED_CAPABILITY family)', () => {
     dispatchFixture(proj); // no table — the historic blind spot, now visible
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       // Nothing statically reaches shadow-server without the table.
       const unusedComponent = issuesWith(res, 'UNUSED_COMPONENT').map(i => i.message).join('\n');
       expect(unusedComponent).toMatch(/shadow-server/);
@@ -134,7 +134,7 @@ describe('dispatch tables (UNSERVED_CAPABILITY family)', () => {
     });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const found = issuesWith(res, 'UNSERVED_CAPABILITY').map(i => i.message).join('\n');
       expect(found).toMatch(/no-such-comp/);
       expect(found).toMatch(/noSuchMethod/);
@@ -159,7 +159,7 @@ methods:
     returns: "void"`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(codesOf(res)).toContain('DISPATCH_ON_NON_PORTAL');
       expect(codesOf(res)).toContain('DUPLICATE_CAPABILITY');
       expect(codesOf(res)).toContain('UNDECLARED_DISPATCH_TARGET');
@@ -186,7 +186,7 @@ methods:
     returns: "void"`);
     proj.activate();
     try {
-      expect(codesOf(validateSddTree())).toContain('DISPATCH_CROSS_SUBSYSTEM');
+      expect(codesOf(validateProject())).toContain('DISPATCH_CROSS_SUBSYSTEM');
     } finally { proj.cleanup(); }
   });
 
@@ -225,7 +225,7 @@ methods:
       - { stepNumber: 2, description: dispatch with no capability at all, type: dispatch, targetComponent: pkg-portal }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const unserved = issuesWith(res, 'UNSERVED_CAPABILITY').map(i => i.message).join('\n');
       expect(unserved).toMatch(/nobody\.serves\.this/);
       expect(unserved).not.toMatch(/shadow_module\.get.*does not serve/);
@@ -256,7 +256,7 @@ methods:
     returns: "void"`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const invalid = issuesWith(res, 'INVALID_LIFECYCLE_ENTRYPOINT').map(i => i.message).join('\n');
       expect(invalid).toMatch(/no-such-comp/);
       expect(invalid).toMatch(/noSuchMethod/);
@@ -329,7 +329,7 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     durabilityFixture(proj, { durability: 'durable', lifecycle: true, hydrateCallsLoad: true });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(issuesWith(res, 'MISSING_HYDRATION')).toHaveLength(0);
       expect(issuesWith(res, 'MISSING_EFFECT_TAG')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -340,7 +340,7 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     durabilityFixture(proj, { durability: 'durable', lifecycle: true, hydrateCallsLoad: false });
     proj.activate();
     try {
-      const found = issuesWith(validateSddTree(), 'MISSING_HYDRATION');
+      const found = issuesWith(validateProject(), 'MISSING_HYDRATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).toMatch(/state-store/);
     } finally { proj.cleanup(); }
@@ -351,7 +351,7 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     durabilityFixture(proj, { durability: 'durable', lifecycle: false, hydrateCallsLoad: true });
     proj.activate();
     try {
-      const found = issuesWith(validateSddTree(), 'MISSING_HYDRATION');
+      const found = issuesWith(validateProject(), 'MISSING_HYDRATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).toMatch(/no subsystem declares a lifecycle init entrypoint/);
     } finally { proj.cleanup(); }
@@ -362,14 +362,14 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     durabilityFixture(proj, { durability: 'ram-projection', lifecycle: false, hydrateCallsLoad: false });
     proj.activate();
     try {
-      expect(issuesWith(validateSddTree(), 'MISSING_HYDRATION')).toHaveLength(0);
+      expect(issuesWith(validateProject(), 'MISSING_HYDRATION')).toHaveLength(0);
     } finally { proj.cleanup(); }
 
     const proj2 = createTempProject();
     durabilityFixture(proj2, { durability: 'durable', lifecycle: true, hydrateCallsLoad: true, tagEffects: false });
     proj2.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(issuesWith(res, 'MISSING_EFFECT_TAG').length).toBeGreaterThan(0);
       // Untagged methods mean no declared writes — the round-trip rule stays quiet rather than guessing.
       expect(issuesWith(res, 'MISSING_HYDRATION')).toHaveLength(0);
@@ -380,7 +380,7 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     proj3.component('some-orch', 'Orchestrator', 'durability: durable');
     proj3.activate();
     try {
-      expect(codesOf(validateSddTree())).toContain('DURABILITY_ON_NON_STORE');
+      expect(codesOf(validateProject())).toContain('DURABILITY_ON_NON_STORE');
     } finally { proj3.cleanup(); }
   });
 });
@@ -442,7 +442,7 @@ methods:
     try {
       // The init flow reaches the portal but never READS the store — the
       // table binding alone must not satisfy the round-trip.
-      const found = issuesWith(validateSddTree(), 'MISSING_HYDRATION');
+      const found = issuesWith(validateProject(), 'MISSING_HYDRATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).toMatch(/state-store/);
     } finally { proj.cleanup(); }
@@ -475,7 +475,7 @@ methods:
       - { stepNumber: 1, description: route the capability, type: dispatch, targetComponent: pkg-portal, capability: shadow_module.get, assertsGuarantees: [exactly-once] }`);
     proj.activate();
     try {
-      const found = issuesWith(validateSddTree(), 'NARRATIVE_SEMANTIC_UNBACKED');
+      const found = issuesWith(validateProject(), 'NARRATIVE_SEMANTIC_UNBACKED');
       expect(found.map(f => f.message).join('\n')).toMatch(/exactly-once.*shadow-server\.getModule/s);
     } finally { proj.cleanup(); }
   });
@@ -497,7 +497,7 @@ methods:
     returns: "void"`);
     proj.activate();
     try {
-      expect(codesOf(validateSddTree())).toContain('LIFECYCLE_CROSS_SUBSYSTEM');
+      expect(codesOf(validateProject())).toContain('LIFECYCLE_CROSS_SUBSYSTEM');
     } finally { proj.cleanup(); }
   });
 
@@ -507,7 +507,7 @@ methods:
     proj.component('super', 'Orchestrator');
     proj.activate();
     try {
-      expect(codesOf(validateSddTree())).toContain('RESERVED_ID_SEGMENT');
+      expect(codesOf(validateProject())).toContain('RESERVED_ID_SEGMENT');
     } finally { proj.cleanup(); }
     // NAMESPACE_SHADOWING needs a subproject-resident id — covered structurally:
     // a qualified id whose local segment equals a root subsystem id.
@@ -547,7 +547,7 @@ methods:
     try {
       // The portal's Json envelope is the sanctioned pattern once the
       // per-capability typing lives in the table.
-      expect(issuesWith(validateSddTree(), 'UNTYPED_SEAM')).toHaveLength(0);
+      expect(issuesWith(validateProject(), 'UNTYPED_SEAM')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -588,7 +588,7 @@ methods:
       - { name: bag, type: Json }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const seams = issuesWith(res, 'UNTYPED_SEAM');
       expect(seams).toHaveLength(1);
       expect(seams[0].message).toMatch(/invoke/);
@@ -652,7 +652,7 @@ methods:
     intent: Writes the configuration record into the persisted backing file, replacing the previous version atomically; fails with a StorageError when the file cannot be written.`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const claims = issuesWith(res, 'UNREALIZED_CLAIM');
       expect(claims).toHaveLength(1);
       expect(claims[0].message).toMatch(/applyConfig/);

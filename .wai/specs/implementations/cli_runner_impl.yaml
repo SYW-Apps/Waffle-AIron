@@ -22,7 +22,9 @@ methods:
         onTrueStep: 3
         onFalseStep: 5
       - stepNumber: 3
-        description: Validate the ATTACHED project's tree on the instance instead.
+        description: >-
+          Validate the ATTACHED project's tree on the instance instead, forwarding --family: the
+          instance runs the family run within the credential's reach and never beyond it.
         type: call
         targetComponent: remote_orchestrator
         targetMethod: validateAttached
@@ -1369,94 +1371,126 @@ methods:
         description: With --report, print one section's plan and nothing else
         type: branch
         condition: '--report was given'
-        onFalseStep: 6
+        onFalseStep: 9
       - stepNumber: 2
-        description: Only a lone `--report chaining` is a report
+        description: >-
+          Only a lone `--report <section>` is a report, and the sections are `chaining` and
+          `composed-validation`
         type: branch
-        condition: '--fix was given too, or the section is not `chaining` (the one section)'
+        condition: '--fix was given too, or the section is neither `chaining` nor `composed-validation`'
         onFalseStep: 4
       - stepNumber: 3
         description: >-
           Refuse the flags, naming them: --report prints and writes nothing, so it never combines
-          with --fix, and chaining is the only section
+          with --fix, and the known sections are chaining and composed-validation
         type: throw
         error: DoctorOptionsError
       - stepNumber: 4
+        label: report-section
+        description: Which section?
+        type: branch
+        condition: the section is `composed-validation`
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Explain what stage 4 changed in each project's verdict: today's as-complete owner's gates
+          against the totals and validator version their locks recorded, and every new finding with
+          its reason (escalated, pinned, positional — the last with what the family's top matched
+          and the rewrite)
+        type: call
+        targetComponent: verdict_changes
+        targetMethod: explain
+      - stepNumber: 6
+        description: >-
+          Print it per project — the lock's totals beside today's when the lock predates stage 4,
+          then the entries grouped by code with their reasons and rewrites, then how many findings
+          it could not attribute and, after that count, every positional candidate no tie-break rule
+          decides (ambiguous, with each candidate, or matching nothing) — and say plainly that the
+          lock records totals only, so this is not a per-code diff. Nothing is written
+        type: return
+        outcome: composed-validation report printed
+      - stepNumber: 7
         label: report-chaining
         description: Plan the chaining migration of the family
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: plan
-      - stepNumber: 5
+      - stepNumber: 8
         description: >-
-          Print the plan per project, each item once: the id to declare, the minimal L0 to create,
-          the L0 entries to add with the consumers each serves (own `{ typeDef }` entries and
-          mount-carried entries marked), every key the first L0 write will drop from the stored file
+          Print the plan per project, each item once, OPENING with the new dependencies it
+          introduces (one prominent line per consumer → producer edge no external or pin had before,
+          with its reference count — "waffler_core now depends on waffler_ui (96 references)";
+          listed, never blocking): the id to declare, the minimal L0 to create, the L0 entries to
+          add with the consumers each serves (own `{ typeDef }` entries, mount-carried and
+          positional entries marked), every key the first L0 write will drop from the stored file
           (droppedKeys, e.g. `status: draft`) under a line saying they will be removed, the
-          externals to declare, the aliases to pin, the legacy mounts moved into `members` with
-          every field they carry or retire, and the superseded family pins as ONE line per project
-          with their count; then every reference rewrite (from → to, grouped per project and spec),
-          every finding once, and the totals (the P1 probe's counts). The plan is computed without
-          projecting any sibling surface, so no projector message reaches it. Nothing is written
+          externals to declare, the `use` imports to add with the reason each producer was chosen
+          (only-match, declared-producer, already-exported), the aliases to pin, the legacy mounts
+          moved into `members` with every field they carry or retire, and the superseded family pins
+          as ONE line per project with their count; then every reference rewrite (from → to, grouped
+          per project and spec), every finding once (positional-ambiguous with each candidate,
+          import-shadowed, import-collision among them), and the totals. The plan is computed
+          without projecting any sibling surface, so no projector message reaches it. Nothing is
+          written
         type: return
         outcome: chaining plan reported
-      - stepNumber: 6
+      - stepNumber: 9
         label: fix
         description: With --fix, apply the repairs before the report, so the report shows the repaired state
         type: branch
         condition: '--fix was given'
-        onFalseStep: 24
-      - stepNumber: 7
+        onFalseStep: 27
+      - stepNumber: 10
         description: 'Read the configuration: the fixes need an initialized project whose configuration is valid'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 8
+      - stepNumber: 11
         description: Skip the fixes otherwise, warning when the configuration is invalid; the report flags both
         type: branch
         condition: the project is initialized and its configuration is valid
-        onFalseStep: 24
-      - stepNumber: 9
+        onFalseStep: 27
+      - stepNumber: 12
         description: >-
           Rebuild the derived context documents through the core adapter, each written only if it
           changed
         type: call
         targetComponent: cli_core_adapter
         targetMethod: syncContextFiles
-      - stepNumber: 10
+      - stepNumber: 13
         description: Re-export the SDD skills for the active targets
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 11
+      - stepNumber: 14
         description: >-
           Re-inject the local AI guides for the active targets through the core adapter, recording
           which files were written so the report can name them
         type: call
         targetComponent: cli_core_adapter
         targetMethod: reinjectLocalGuides
-      - stepNumber: 12
+      - stepNumber: 15
         description: >-
           Pin the installed-but-unapplied packs as explicit selections for a project that never
           declared a position on machine-wide packs, and print the names recorded
         type: call
         targetComponent: cli_core_adapter
         targetMethod: pinInstalledPacksAsSelections
-      - stepNumber: 13
+      - stepNumber: 16
         description: >-
           List the spec files stored under a legacy name and rename each to the name the current
           layout expects
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findLegacySpecFiles
-      - stepNumber: 14
+      - stepNumber: 17
         description: >-
           Write a project configuration for each chained subproject with specs but none, and print
           the directories repaired
         type: call
         targetComponent: cli_core_adapter
         targetMethod: backfillChainedSubprojectConfigs
-      - stepNumber: 15
+      - stepNumber: 18
         description: >-
           Retire the Specialists with apply true: each becomes an Orchestrator with the
           dependencyClass its dependencies decide, and each Specialist-based variant rebases onto
@@ -1465,7 +1499,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 16
+      - stepNumber: 19
         description: >-
           Repair the narrative steps carrying a field their own type cannot have, with apply true:
           each foreign field is dropped and nothing else about the step changes; print what was
@@ -1473,7 +1507,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 17
+      - stepNumber: 20
         label: chaining
         description: >-
           Plan the chaining migration — the last spec-touching fix: after the configuration
@@ -1483,23 +1517,23 @@ methods:
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: plan
-      - stepNumber: 18
+      - stepNumber: 21
         description: 'Nothing to migrate: go on without asking'
         type: branch
         condition: the plan has something to write
-        onFalseStep: 22
-      - stepNumber: 19
+        onFalseStep: 25
+      - stepNumber: 22
         description: >-
           Print the plan per project as --report chaining does, then ask to apply it. --yes answers
           yes; a run with no terminal to ask and no --yes, or a no, skips the migration and writes
           none of it — every other fix above has already run, as it always has
         type: local
-      - stepNumber: 20
+      - stepNumber: 23
         description: Only a confirmed plan is applied
         type: branch
         condition: the person confirmed, or --yes was given
-        onFalseStep: 22
-      - stepNumber: 21
+        onFalseStep: 25
+      - stepNumber: 24
         description: >-
           Apply the confirmed plan and print each file written; then name every project whose lock
           the writes staled, pointing at `wairon lock` — re-locking is the human's, and nothing
@@ -1508,61 +1542,61 @@ methods:
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: apply
-      - stepNumber: 22
+      - stepNumber: 25
         label: mcp
         description: Register or repair the MCP server for each active backend
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
-      - stepNumber: 23
+      - stepNumber: 26
         description: >-
           For a Gemini or Antigravity target, remove the legacy global Antigravity plugin whose name
           collides with the MCP server
         type: local
-      - stepNumber: 24
+      - stepNumber: 27
         label: report
         description: 'Project: is this an initialized wairon project?'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
-      - stepNumber: 25
+      - stepNumber: 28
         description: Stop at a folder that is not a wairon project
         type: branch
         condition: the project is not initialized
-        onFalseStep: 27
-      - stepNumber: 26
+        onFalseStep: 30
+      - stepNumber: 29
         description: Report it, naming `wairon init`, print the summary and exit non-zero
         type: return
         outcome: not a wairon project
-      - stepNumber: 27
+      - stepNumber: 30
         label: config
         description: Report whether the configuration is valid, and read its active targets
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 28
+      - stepNumber: 31
         description: 'Spec filenames: list the spec files still stored under a legacy name'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findLegacySpecFiles
-      - stepNumber: 29
+      - stepNumber: 32
         description: 'Chained subprojects: list the ones with specs but no project.yaml'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findChainingSubprojectsMissingConfig
-      - stepNumber: 30
+      - stepNumber: 33
         description: >-
           Report whether the system spec is present, whether the spec filenames are current, and any
           chained subproject with specs but no project.yaml
         type: local
-      - stepNumber: 31
+      - stepNumber: 34
         description: >-
           Spec tree: with a system spec and a valid configuration, run the conformance gate and
           report its error, warning and notice counts; notices alone leave the check passing
         type: call
         targetComponent: cli_validator_adapter
-        targetMethod: validateSddTree
-      - stepNumber: 32
+        targetMethod: validateProject
+      - stepNumber: 35
         description: >-
           Stereotypes: plan the Specialist retirement with apply false and report each Specialist
           with the dependencyClass it would take as an Orchestrator, and each variant to rebase,
@@ -1570,7 +1604,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 33
+      - stepNumber: 36
         description: >-
           Narrative steps: plan the foreign-field repair with apply false and report each step
           carrying a field its own type cannot have — the implementation, the method, the step and
@@ -1578,7 +1612,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 34
+      - stepNumber: 37
         description: >-
           Chaining: plan the migration and report how much is pending — ids, L0s, entries,
           externals, pins, mounts to move, references to rewrite, family pins to delete and findings
@@ -1588,14 +1622,14 @@ methods:
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: plan
-      - stepNumber: 35
+      - stepNumber: 38
         description: >-
           Ask where the derived context documents live, so the staleness check reports on the
           generated pair and never on the two a person wrote
         type: call
         targetComponent: cli_core_adapter
         targetMethod: derivedDocPaths
-      - stepNumber: 36
+      - stepNumber: 39
         description: >-
           Generated files and skills: read the version each one was stamped with and compare it
           against the running build, so a file written by an older wairon is reported as stale
@@ -1603,19 +1637,19 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readStampVersion
-      - stepNumber: 37
+      - stepNumber: 40
         description: >-
           Skills: for each active target, compare the installed SDD skills with what an export would
           write now, reporting the missing and stale ones
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: checkSkillFreshness
-      - stepNumber: 38
+      - stepNumber: 41
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 39
+      - stepNumber: 42
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
           frozen, warning when it predates per-spec approval; a stale one warns to re-lock; a
@@ -1623,25 +1657,25 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
-      - stepNumber: 40
+      - stepNumber: 43
         description: >-
           Extension packs: diagnose the project's pack situation — unresolved selections, installed
           packs not applied, packs applied from the machine-wide store
         type: call
         targetComponent: cli_core_adapter
         targetMethod: diagnoseProjectPacks
-      - stepNumber: 41
+      - stepNumber: 44
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed but not applied, and those applied from
           the machine-wide store
         type: local
-      - stepNumber: 42
+      - stepNumber: 45
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and flag a legacy global Antigravity plugin
         type: local
-      - stepNumber: 43
+      - stepNumber: 46
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -2686,4 +2720,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T15:28:03.332Z'
+updatedAt: '2026-09-29T14:48:29.075Z'

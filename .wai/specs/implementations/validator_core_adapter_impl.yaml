@@ -88,20 +88,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: consumedContractInputs
-  - name: resolveChainingParent
-    narrative:
-      - stepNumber: 1
-        description: Call resolveChainingParent on the spec tree portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: resolveChainingParent
-  - name: findChainingParent
-    narrative:
-      - stepNumber: 1
-        description: Call findChainingParent on the spec tree portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: findChainingParent
   - name: settledSpecPaths
     narrative:
       - stepNumber: 1
@@ -174,4 +160,4 @@ methods:
         targetMethod: exportUsage
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T17:44:36.055Z'
+updatedAt: '2026-09-28T17:16:52.955Z'

@@ -392,6 +392,20 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: createMember
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadTypeSpecs on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadTypeSpecs
+  - name: importNames
+    narrative:
+      - stepNumber: 1
+        description: Call importNames on the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: importNames
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T11:02:30.564Z'
+updatedAt: '2026-09-28T17:17:09.799Z'

@@ -262,9 +262,10 @@ export function storedCredentialFor(url: string): string | null {
 // ── remote_orchestrator: the attached counterparts of local commands ────────
 
 /** Validate the ATTACHED project's tree on the instance. */
-export async function validateAttached(target: RemoteTarget, subsystem?: string): Promise<unknown> {
-  // Step 1: forward to the remote adapter.
-  return validateRemoteTree(target, subsystem);
+export async function validateAttached(target: RemoteTarget, subsystem?: string, family?: boolean): Promise<unknown> {
+  // Step 1: forward to the remote adapter — `--family` included; the instance
+  // composes within the credential's reach and never beyond it.
+  return validateRemoteTree(target, subsystem, family);
 }
 
 /** Read the ATTACHED project's completeness dashboard. */

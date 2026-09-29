@@ -11,10 +11,13 @@
  *  - EXPORT_CYCLE: a named re-export chain that leads back to itself without
  *    reaching the item is an error; two subsystems re-exporting each other
  *    through wildcards resolve to the union and are a warning.
- *  - EXPORT_INVALID (notice): an entry whose item its source does not export,
- *    or an L0 entry that names no source at all.
- *  - EXPORT_UNCONSUMABLE (notice): a re-export whose target no caller across
- *    the boundary may reach — neither a Portal nor an Observer.
+ *  - EXPORT_ID_DUPLICATE also covers two public names of one producer that
+ *    share a nameKey (`rates`, `Rates`, `ra_tes` read alike): a bare `use`
+ *    import compares by that key and could not tell them apart (stage 4).
+ *  - EXPORT_INVALID (error since stage 4): an entry whose item its source does
+ *    not export, or an L0 entry that names no source at all.
+ *  - EXPORT_UNCONSUMABLE (error since stage 4): a re-export whose target no
+ *    caller across the boundary may reach — neither a Portal nor an Observer.
  *  - A re-export is not an own item: the public-surface rules do not accuse
  *    it of publishing a foreign component.
  */
@@ -102,6 +105,30 @@ export default [
     },
   }),
 
+  defineRuleFixture({
+    code: 'EXPORT_ID_DUPLICATE',
+    severity: 'error',
+    anchoredTo: 'storefront',
+    expectFire: true,
+    scenario:
+      'The storefront facade exports the carrier rate portal as "carrier-rates" and the quote portal as "carrier_rates" — two names that read as one to a bare `use` import, bound to different portals.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { ...CARRIERS, publicInterfaces: [RATES] },
+        { ...PRICING, publicInterfaces: [QUOTES] },
+        {
+          ...STOREFRONT,
+          publicInterfaces: [
+            { from: 'carriers', component: 'carrier-rate-portal', as: 'carrier-rates' },
+            { from: 'pricing', component: 'quote-portal', as: 'carrier_rates' },
+          ],
+        },
+      ],
+      components: [CARRIER_RATE_PORTAL, QUOTE_PORTAL],
+    },
+  }),
+
   // -------------------------------------------------------------------------
   // EXPORT_CYCLE
   // -------------------------------------------------------------------------
@@ -160,7 +187,7 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'EXPORT_INVALID',
-    severity: 'notice',
+    severity: 'error',
     anchoredTo: 'storefront',
     expectFire: true,
     scenario:
@@ -176,7 +203,7 @@ export default [
   }),
   defineRuleFixture({
     code: 'EXPORT_INVALID',
-    severity: 'notice',
+    severity: 'error',
     anchoredTo: 'ParcelHub',
     expectFire: true,
     scenario:
@@ -208,7 +235,7 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'EXPORT_UNCONSUMABLE',
-    severity: 'notice',
+    severity: 'error',
     anchoredTo: 'storefront',
     expectFire: true,
     scenario:
