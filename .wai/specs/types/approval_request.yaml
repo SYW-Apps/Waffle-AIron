@@ -19,7 +19,11 @@ fields:
     optional: false
   - name: status
     type: string
-    description: 'Lifecycle status: "pending", "approved", "denied", "expired", "completed", or "cancelled".'
+    description: >-
+      Lifecycle status: "pending", "approved", "denied", "expired", "completed", or "cancelled". An
+      approved request is cancelled when its execution refused because the request no longer
+      describes what would be done (a project:lock whose gateStateId no longer matches the tree);
+      executionSummary then says why, and the requester asks again.
     optional: false
   - name: requestedBy
     type: PrincipalSubject
@@ -80,7 +84,9 @@ fields:
       (from the init's GovernedProjectCreation), so whoever reads the approval — getApprovalStatus,
       awaitApproval, the decider — sees what the unattended init changed. The full impacts are in
       the init's GovernedProjectCreation; the project.init.policy audit event records a compact
-      form. Absent for every other kind and before execution.
+      form. On a CANCELLED request it records why the approved execution refused instead (a
+      project:lock: "the design changed since it was requested (requested <id>, now <id>); request
+      the lock again"). Absent for every other kind and before execution.
     optional: true
   - name: gateStateId
     type: string
@@ -89,10 +95,10 @@ fields:
       captured when the request was created and rendered `<algorithm>:<digest>`. The approved
       execution refuses when the tree's gate identity no longer matches it — an approver decides
       about the design the requester asked about, and an approval must never certify a design nobody
-      asked to have approved. Absent on a request created before stage 5, which executes against the
-      tree as it then stands.
+      asked to have approved — and the request is cancelled with that reason. Absent on a request
+      created before stage 5, which executes against the tree as it then stands.
     optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:44.031Z'
-updatedAt: '2026-09-30T05:48:14.135Z'
+updatedAt: '2026-09-30T16:35:53.332Z'

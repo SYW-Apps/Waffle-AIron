@@ -75,6 +75,22 @@ methods:
     params:
       - name: now
         type: string
+  - name: cancel
+    description: >-
+      Cancel an approved request whose privileged workflow refused because the request no longer
+      describes what would be done (a project:lock whose pinned gate identity moved), recording the
+      reason on it as its executionSummary. Only an approved request may be cancelled; a cancelled
+      request is never executed.
+    signature: 'cancel(id: string, reason: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: id
+        type: string
+      - name: reason
+        type: string
+        description: Why the approved request can no longer execute, recorded on the cancelled request
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-09T07:19:42.563Z'
-updatedAt: '2026-09-29T21:27:41.081Z'
+updatedAt: '2026-09-30T16:35:42.137Z'
