@@ -10,6 +10,9 @@ import { assertProjectInitialized } from '../config/paths.js';
 // and `sdd_get_status` disagreed about whether the tree had moved away from its
 // lock. There is one renderer now, and this file only says what the colours are.
 import { getStatusReport, approvalVerdict } from './adapters/core.js';
+// The pin tree: every project's approval state, computed by the validator at
+// that project's own root, so a member's state here is the one its own status prints.
+import { familyApprovals } from './validate.js';
 import type { StatusDecor, StatusOptions } from '../core/status.js';
 
 // ---------------------------------------------------------------------------
@@ -90,14 +93,29 @@ function withoutTrailingNewline(text: string): string {
   return text.endsWith('\n') ? text.slice(0, -1) : text;
 }
 
+/** The member levels the pin tree covers: as far as the report follows members. */
+function depthOf(recursive: boolean | number | undefined): number | undefined {
+  if (recursive === false) return 0;
+  return typeof recursive === 'number' ? recursive : undefined;
+}
+
 export async function runStatus(options: StatusOptions = {}): Promise<void> {
   // Step 1: refuse outside a wairon project — a dashboard of nothing would read
   // like an empty tree rather than like the wrong directory.
   assertProjectInitialized();
 
-  // Step 2: ask the core adapter for the completeness report, handing it the
-  // terminal's colours as roles.
-  const report = getStatusReport(options, TERMINAL_DECOR);
+  // Step 2: ask the validator for the pin tree, each project at its own root.
+  // A tree that will not load has no states to print: the report below says why.
+  let approvals;
+  try {
+    approvals = familyApprovals(depthOf(options.recursive));
+  } catch {
+    approvals = undefined;
+  }
+
+  // Step 3: ask the core adapter for the completeness report with the pin
+  // tree, handing it the terminal's colours as roles.
+  const report = getStatusReport({ ...options, approvals }, TERMINAL_DECOR);
 
   // Step 3: decide whether the tree could be reported on at all.
   if (report.failed) {
@@ -114,7 +132,7 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
   // Step 6: ask what the lock says about this tree. The same verdict the MCP
   // report carries — the CLI is where a human actually looks, so it must not be
   // the surface that stays quiet.
-  const lock = approvalVerdict();
+  const lock = approvalVerdict(approvals);
 
   // Step 7: print the verdict, choosing severity from whether it reports drift
   // rather than by matching its wording — which is why the verdict answers a
