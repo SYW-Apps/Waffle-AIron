@@ -13,7 +13,7 @@ import { computeGateStateId, validateAsComplete } from '../../src/server/adapter
 import { registerProjectRecord } from '../../src/server/projects.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { setAssignment } from '../../src/server/permissions.js';
-import { getApprovalRequestById } from '../../src/server/approvals.js';
+import { decideApprovalRequest, getApprovalRequestById } from '../../src/server/approvals.js';
 import { runWithProjectRoot, setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { readLockRecordAt, type LockRecord } from '../../src/core/lockfile.js';
@@ -311,14 +311,14 @@ describe('hosted approval requests pin the gate identity at request time', () =>
   }
 
   /** A pending project:lock request from a requester who needs approval, and a decider who may decide. */
-  function requestLock(subproject?: string): { id: string; gateStateId?: string; decider: string } {
+  function requestLock(subproject?: string): { id: string; gateStateId?: string; requester: string; decider: string } {
     const requester = mintToken('rq', 'u-requester');
     allow('u-requester', 'project:write', 'approval');
     const outcome = lockProject(cfg, requester, 'top', subproject);
     expect(outcome.status).toBe('pending-approval');
     const decider = mintToken('dc', 'u-decider');
     allow('u-decider', 'approval:decide', 'yes');
-    return { id: outcome.approval!.id, gateStateId: outcome.approval!.gateStateId, decider };
+    return { id: outcome.approval!.id, gateStateId: outcome.approval!.gateStateId, requester, decider };
   }
 
   const approve = (decider: string, requestId: string) => decideRequest(cfg, decider, {
@@ -342,25 +342,64 @@ describe('hosted approval requests pin the gate identity at request time', () =>
     expect(pin(readLockRecordAt(fam.top)!)).toBe(gateStateId);
   });
 
-  it('moved: the approved execution refuses, says why, writes nothing, and the retry path refuses too', () => {
+  const MOVED_REASON =
+    /the design changed since it was requested \(requested sha256\+\S+:[0-9a-f]{64}, now sha256\+\S+:[0-9a-f]{64}\); request the lock again/;
+
+  /** The request ended cancelled, saying why — what getApprovalStatus and awaitApproval readers see. */
+  function expectCancelled(id: string): void {
+    const req = getApprovalRequestById(dataDir, id)!;
+    expect(req.status).toBe('cancelled');
+    expect(req.executionSummary).toMatch(MOVED_REASON);
+  }
+
+  /** A fresh request for the tree as it now stands is approved and executes. */
+  function expectFreshRequestSucceeds(): void {
+    const fresh = requestLock();
+    expect(approve(fresh.decider, fresh.id).status).toBe('completed');
+    expect(pin(readLockRecordAt(fam.top)!)).toBe(fresh.gateStateId);
+  }
+
+  it("moved (auto-execute): the decision's execution refuses, the request ends cancelled with the reason, nothing is written", () => {
     const { id, decider } = requestLock();
     touch(fam.top, 'edited after the request');
 
-    expect(() => approve(decider, id)).toThrow(/design changed since the lock was requested.*requester asks again/);
+    expect(() => approve(decider, id)).toThrow(MOVED_REASON);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
-    // The decision stands; the execution did not happen, so it is approved, not completed.
-    expect(getApprovalRequestById(dataDir, id)!.status).toBe('approved');
+    expectCancelled(id);
+    // Cancelled is final: the retry path refuses it rather than trying again.
+    const { requester } = requestLock();
+    expect(() => executeApprovedRequest(cfg, requester, id)).toThrow(/cancelled, not approved/);
 
-    const requester = mintToken('rq2', 'u-requester');
-    expect(() => executeApprovedRequest(cfg, requester, id)).toThrow(/design changed since the lock was requested/);
+    expectFreshRequestSucceeds();
+  });
+
+  it('moved (retry path): executeApprovedRequest cancels the approved request with the same reason', () => {
+    const { id, requester } = requestLock();
+    // Approved but not yet executed: the decision recorded without its auto-execution.
+    decideApprovalRequest(dataDir, { requestId: id, approved: true, decidedBy: subject('u-decider'), decidedAt: new Date().toISOString() });
+    touch(fam.top, 'edited after the approval');
+
+    expect(() => executeApprovedRequest(cfg, requester, id)).toThrow(MOVED_REASON);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
+    expectCancelled(id);
+
+    expectFreshRequestSucceeds();
   });
 
   it('a member moving after the request moves the parent\'s identity too, and refuses', () => {
     const { id, decider } = requestLock();
     executeApprovedLock(cfg, 'top', APPROVER, 'sib');
     invalidateSpecCache();
-    expect(() => approve(decider, id)).toThrow(/design changed since the lock was requested/);
+    expect(() => approve(decider, id)).toThrow(MOVED_REASON);
+    expect(fs.existsSync(lockFile(fam.top))).toBe(false);
+    expectCancelled(id);
+  });
+
+  it('a direct executeApprovedLock with a stale expected identity says why, writes nothing', () => {
+    const expected = gateIdentity(cfg, 'top');
+    touch(fam.top, 'edited after the identity was taken');
+    expect(() => executeApprovedLock(cfg, 'top', APPROVER, undefined, expected))
+      .toThrow(/design changed since the lock was requested \(requested .*, now .*\); request the lock again\. Nothing was written/);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
   });
 });

@@ -297,6 +297,18 @@ class LockRefusedError extends Error {
   }
 }
 
+/**
+ * The refusal of a lock requested about a design that has since moved. It
+ * carries both identities, so the approval workflow can cancel the request
+ * with the reason; its name stays LockRefusedError, which the portals map.
+ */
+class RequestedDesignMovedError extends LockRefusedError {
+  constructor(readonly requested: string, readonly now: string) {
+    super(`The design changed since the lock was requested (requested ${requested}, now ${now}); `
+      + 'request the lock again. Nothing was written.');
+  }
+}
+
 /** A gate identity rendered the way requests and member pins store it. */
 function renderIdentity(stateId: StateId): string {
   return `${stateId.algorithm}:${stateId.digest}`;
@@ -373,11 +385,8 @@ export function executeApprovedLock(
 /** Refuse, writing nothing, when the lock was requested about a different design. */
 function refuseUnrequestedDesign(captured: StateId, expected: string | undefined): void {
   if (expected === undefined || renderIdentity(captured) === expected) return;
-  throw new LockRefusedError(
-    'The design changed since the lock was requested — approving now would certify a design nobody asked '
-      + `to have approved (requested at ${expected}, now ${renderIdentity(captured)}). Nothing was written; `
-      + 'the requester asks again.',
-  );
+  // Approving now would certify a design nobody asked to have approved.
+  throw new RequestedDesignMovedError(expected, renderIdentity(captured));
 }
 
 /** The design half of the as-complete run, or a refusal naming its errors. */

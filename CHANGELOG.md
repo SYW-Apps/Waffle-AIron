@@ -711,8 +711,10 @@ its members through their own approvals.
   the web lock, and an approved `project:lock` request) runs the same flow and
   writes the same format-2 record; its outcome states the code findings beside the
   claim. A **lock request pins the gate identity** of the tree it is about
-  (`ApprovalRequest.gateStateId`), and the approved execution refuses when the tree
-  moved after the request, saying so, and writes nothing — the requester asks
+  (`ApprovalRequest.gateStateId`). When the tree moved after the request, the
+  approved execution refuses and writes nothing, and the request ends `cancelled`
+  with the reason on it (`executionSummary`: *the design changed since it was
+  requested (requested …, now …); request the lock again*) — the requester asks
   again. A request made before stage 5 carries no identity and executes against the
   tree as it stands. The HTTP admin and web planes answer a refused lock with 409.
 
@@ -736,8 +738,9 @@ its members through their own approvals.
 - **`generate` no longer cascades.** A script that relied on `generate` at a parent
   writing every member's files runs `wairon generate --family`.
 - **Hosted lock requests refuse if the tree moved after the request.** An approver
-  who approves a stale request sees the refusal; the request stays approved, not
-  completed, and the requester files a new one. Hosted API clients that call the
+  who approves a stale request sees the refusal, and the request is cancelled with
+  the reason (never left approved and un-executable until it expires); the
+  requester files a new one. Hosted API clients that call the
   lock may now receive 409 for a refusal that is not a validation failure.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move

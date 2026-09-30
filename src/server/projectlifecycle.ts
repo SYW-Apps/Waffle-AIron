@@ -5,6 +5,7 @@ import {
   getApprovalRequestById,
   listApprovalRequests,
   markApprovalCompleted,
+  cancelApprovalRequest,
   expirePendingApprovals,
 } from './approvals.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
@@ -655,13 +656,10 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): ApprovedExecuti
       // subproject-scoped request freezes THAT child tree — an approval must never
       // widen the scope its requester was bound to.
       const scope = readSubprojectScope(req);
-      // The DECIDER is the approver: in the approval path the requester did not
-      // have the authority, and the decision is what conferred it. The requester
-      // is not lost — the ApprovalRequest and the audit event both carry them.
       // The request's gateStateId is the expected identity: an approval never
       // certifies a design other than the one requested (a request without one,
       // created before stage 5, executes against the tree as it stands).
-      const lock = executeApprovedLock(cfg, req.projectId ?? '', hostedApprover(req.decidedBy), scope, req.gateStateId);
+      const lock = lockAsRequested(cfg, req, scope);
       return {
         outcome: `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}). ${codeBesideClaim(lock)}.`,
       };
@@ -669,6 +667,36 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): ApprovedExecuti
     default:
       throw new Error(`Unsupported approval kind "${req.kind}".`);
   }
+}
+
+/**
+ * Execute an approved project:lock through the admin plane, forwarding the
+ * confined qualifier and the request's gateStateId as the expected identity.
+ * When the design moved after the request, the request is CANCELLED with the
+ * reason recorded on it (never left approved and un-executable until it
+ * expires), and the refusal says the same; the requester asks again.
+ */
+function lockAsRequested(cfg: HostConfig, req: ApprovalRequest, scope: string | undefined): LockRecord {
+  try {
+    // The DECIDER is the approver: in the approval path the requester did not
+    // have the authority, and the decision is what conferred it. The requester
+    // is not lost — the ApprovalRequest and the audit event both carry them.
+    return executeApprovedLock(cfg, req.projectId ?? '', hostedApprover(req.decidedBy), scope, req.gateStateId);
+  } catch (err) {
+    const moved = designMovedSince(err);
+    if (!moved) throw err;
+    const reason = `the design changed since it was requested (requested ${moved.requested}, now ${moved.now}); `
+      + 'request the lock again';
+    cancelApprovalRequest(cfg.dataDir, req.id, reason);
+    throw new Error(`Approval request "${req.id}" was cancelled: ${reason}.`);
+  }
+}
+
+/** The two identities of a lock refused because its requested design moved, or null for any other failure. */
+function designMovedSince(err: unknown): { requested: string; now: string } | null {
+  if (!(err instanceof Error) || err.name !== 'LockRefusedError') return null;
+  const { requested, now } = err as Error & { requested?: unknown; now?: unknown };
+  return typeof requested === 'string' && typeof now === 'string' ? { requested, now } : null;
 }
 
 /**

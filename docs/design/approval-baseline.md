@@ -158,8 +158,9 @@ Two things get strictly better than the ratchet:
    members; a lock never does).
 
 A hosted lock runs the same steps. A hosted lock *request* also records the
-gate identity it was made about, and the approved execution refuses if the tree
-moved after the request.
+gate identity it was made about; if the tree moved after the request, the
+approved execution refuses, writes nothing, and cancels the request with the
+reason.
 
 A scoped approval (`--subsystem x`) approves **only what it covers**; everything
 outside keeps the approval it already had. Whole-tree capture under a scoped
