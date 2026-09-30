@@ -82,23 +82,34 @@ Windows would otherwise report every spec as drifted on a Linux CI runner. The
 defect was unreachable while the record was machine-local — sharing it is what
 made it live.
 
-### It is per project root, and children are pinned
+### It is per project root, and members are pinned by their subjects
 
-Every `.wai` owns its own lock record, including each chained subproject. A
-parent's approval never freezes a child's in-flight work, and a child cloned on
-its own carries its approval with it.
+Every `.wai` owns its own lock record, including each member project. A
+parent's approval never freezes a member's in-flight work, a member cloned on
+its own carries its approval with it, and a parent lock writes nothing below
+itself.
 
-What crosses between them is a **pin**: a parent approval records each mounted
-child's approved `StateId`, the way a git submodule pins a commit. So a child
-editing its own specs does not appear in the parent's diff — the decisions are
-separate — but the parent still sees the child *move*:
+What crosses between them is a **composition subject**: the `stateId` in the
+member's own lock record, read and never recomputed. Each direct member's
+subject is an input of the parent's gate identity, and the parent's record
+(format 2) lists it under `members` with the member's state as the parent saw
+it — `approved` (its lock matches its tree), `drifted` (it has a lock, its tree
+changed) or `never` (no lock). Approval is transitive by hashing: a member's
+subject already includes its own members' subjects, so nothing recurses into a
+member's files. A member editing its own specs does not appear in the parent's
+diff or move the parent's identity — the decisions are separate — until the
+member re-locks; then its subject moves and the parent's approval reads stale.
+`wairon status` prints the pin tree (each member's state from its own root,
+and whether the parent's pin `matches`, has `moved`, or is `unpinned`).
 
-```
-1 chained child project(s) moved since approval: billing.
-```
+A parent may require its members' approvals with
+`composition.requireApprovedMembers: true`: its lock then refuses while a
+direct member is drifted or never approved, naming each. By default it proceeds
+and records their states.
 
-A child with no approval of its own contributes no pin. A parent can only
-record a decision the child's owner actually made.
+This replaced a stage-1 `children` map that copied each child's `StateId` into
+the parent's record without ever re-verifying it; `children` is still read for
+one release and never written.
 
 ### Settledness is derived, not stored
 
@@ -128,12 +139,27 @@ Two things get strictly better than the ratchet:
 
 ## What `lock` does now
 
-1. Validate as complete (full strictness, no draft relaxation, mutates nothing).
-2. Report what moved since the last approval, and which children moved.
-3. Ask.
-4. Record the approval — a digest per spec — on `.wai/lock.json`, together with
-   who approved and how that identity was established.
-5. Regenerate the derived topology.
+1. Capture the gate identity (own specs, design doctrine, declared inputs,
+   `composition`, each direct member's subject).
+2. Validate as complete (full strictness, no draft relaxation, mutates nothing).
+   Only the **design** half may refuse; code-conformance results are recorded
+   beside the claim (`code`, with the analyzer that produced them) and enforced
+   by `validate --ci`, not by the lock.
+3. Report what moved since the last approval, the code results, and each direct
+   member's state; refuse under `composition.requireApprovedMembers` if a member
+   is not approved.
+4. Ask.
+5. Confirm the gate identity is still the captured one (refuse, writing nothing,
+   if an input moved while the lock ran).
+6. Record the approval — a digest per own spec, `members`, `code` — on
+   `.wai/lock.json` (format 2), together with who approved and how that identity
+   was established.
+7. Regenerate this project's derived topology (`generate --family` walks the
+   members; a lock never does).
+
+A hosted lock runs the same steps. A hosted lock *request* also records the
+gate identity it was made about, and the approved execution refuses if the tree
+moved after the request.
 
 A scoped approval (`--subsystem x`) approves **only what it covers**; everything
 outside keeps the approval it already had. Whole-tree capture under a scoped
