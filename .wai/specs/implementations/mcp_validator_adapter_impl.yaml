@@ -34,6 +34,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: measurePackImpact
+  - name: familyApprovals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal's pin tree
+        type: call
+        targetComponent: validator_portal
+        targetMethod: familyApprovals
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T16:00:40.673Z'
+updatedAt: '2026-09-30T05:54:11.857Z'

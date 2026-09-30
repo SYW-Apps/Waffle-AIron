@@ -142,7 +142,13 @@ function coverProject(node: ProjectNode, family: ProjectFamily): Covered {
     const line: UpgradeReportProject = {
       key: node.namespace,
       ...(record ? { lockedBy: record.validatorVersion } : {}),
-      ...(record ? { lockedTotals: totals(record.validationResult.errors, record.validationResult.warnings, record.validationResult.notices) } : {}),
+      // A format-2 record counts the design half and the code half apart; the
+      // run below counts both, so the locked totals add them back together.
+      ...(record ? { lockedTotals: totals(
+        record.validationResult.errors + (record.code?.errors ?? 0),
+        record.validationResult.warnings + (record.code?.warnings ?? 0),
+        record.validationResult.notices === undefined ? undefined : record.validationResult.notices + (record.code?.notices ?? 0),
+      ) } : {}),
       currentTotals: totals(count('error'), count('warning'), count('notice')),
       predatesStage4: record ? predatesStage4(record.validatorVersion) : false,
     };

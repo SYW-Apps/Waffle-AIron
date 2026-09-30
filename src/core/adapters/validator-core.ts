@@ -18,7 +18,11 @@ export {
   dryRunSerializeSpecs,
   loadProjectExtensions,
   loadProjectConfig,
-  computeStateId,
+  // The bound project's OWN content identity (the gate identity's content
+  // half) and another root's lock record (a direct member's, for its
+  // composition subject; a member's parent's, for its pin).
+  computeOwnStateId,
+  approvalRecord,
   consumedContractInputs,
   settledSpecPaths,
   readLockRecord,

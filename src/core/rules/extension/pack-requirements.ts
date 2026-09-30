@@ -14,6 +14,7 @@ import { rangeProblem } from '../../../models/project.js';
  */
 export const packRequirementsRule: SddRule = {
   name: 'pack-requirements',
+  judges: 'design',
   description:
     'Every requirement in the bound project\'s own composition.requirePolicies must be readable: a pack name and a semver range that parses (pack_requirement.rangeProblem). One that does not is POLICY_REQUIREMENT_INVALID, quoting the range and the unreadable token — an error on the requiring project\'s own gate, because the requirement is its own configuration and the family run cannot judge a member against it. It judges only the syntax: whether members adopt the requirement is the family run\'s question (family_validator.adoption), and nothing here reads a parent\'s requirements.',
   codes: [

@@ -406,7 +406,10 @@ describe('git-backed projects (sdd_git)', () => {
     const rec = admin.lockProject(cfg, ADMIN, 'demo');
     const subject = git(['log', '-1', '--pretty=%s', 'wairon/work'], root);
     expect(subject).toContain('wairon lock: demo @');
-    expect(subject).toContain(rec.stateId);
+    // The identity rendered `<algorithm>:<digest>`. The message used to
+    // interpolate the StateId OBJECT ("[object Object]"), and this assertion,
+    // handed the object, passed against that string.
+    expect(subject).toContain(`${rec.stateId.algorithm}:${rec.stateId.digest}`);
   });
 
   it('getGitBinding reports scoped dirtiness and the sync setting; configureGitSync persists it', () => {

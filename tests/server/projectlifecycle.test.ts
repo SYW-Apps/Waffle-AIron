@@ -418,9 +418,11 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(fs.existsSync(lockPathOf(child))).toBe(false);
   });
 
-  it('a hosted lock pins each member the bound tree declares, in `members` or the legacy form', () => {
-    // A member is never a subsystem (stage 3), so the pins come from the project
-    // graph: the hosted lock used to hand the subsystem specs over and pin nothing.
+  it('a hosted lock certifies each member\'s subject through its gate identity, in `members` or the legacy form, and never writes `children`', () => {
+    // A member is never a subsystem (stage 3), so the members come from the
+    // project graph. Stage 5: each direct member's recorded subject is part of
+    // the parent's gate identity and is recorded in `members`; the legacy
+    // `children` copy is never written.
     seedProject('hosted-pins');
     const root = existingProjectRoot(dataDir, 'hosted-pins')!;
     runWithProjectRoot(root, () => {
@@ -437,7 +439,18 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     invalidateSpecCache();
 
     const parent = executeApprovedLock(cfg, 'hosted-pins', TEST_APPROVER);
-    expect(parent.children).toEqual({ billing: pinOf(billing.stateId), claims: pinOf(claims.stateId) });
+    expect(parent.children).toBeUndefined();
+    expect(parent.format).toBe(2);
+    expect(parent.members).toMatchObject({
+      billing: { subject: pinOf(billing.stateId), state: 'approved' },
+      claims: { subject: pinOf(claims.stateId), state: 'approved' },
+    });
+    expect(pinOf(billing.stateId)).not.toBe(pinOf(claims.stateId));
+    // A member re-approving moves the parent's gate identity: the parent's lock is stale.
+    const memberLock = path.join(root, 'packages', 'billing', '.wai', 'lock.json');
+    fs.writeFileSync(memberLock, JSON.stringify({ ...billing, stateId: { ...billing.stateId, digest: 'f'.repeat(64) } }));
+    invalidateSpecCache();
+    expect(runWithProjectRoot(root, () => computeGateStateId())).not.toEqual(parent.stateId);
   });
 
   it('a hosted lock records the approval and writes NOTHING into the spec tree', () => {
@@ -486,7 +499,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(Object.keys(lock!.specs!).length).toBeGreaterThan(0);
     // The record carries the validator's gate identity, the one every staleness
     // check later compares against.
-    expect(lock!.stateId.algorithm).toBe('sha256+content+doctrine+inputs');
+    expect(lock!.stateId.algorithm).toBe('sha256+content+doctrine+inputs+members');
     expect(lock!.stateId).toEqual(runWithProjectRoot(root, () => computeGateStateId()));
     // Hosted creation declared the hosted project id as the project's id, and
     // the lock records the id it approved.

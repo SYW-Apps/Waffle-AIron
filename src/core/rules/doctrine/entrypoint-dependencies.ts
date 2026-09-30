@@ -10,6 +10,7 @@ import { isPureLogic, stereotypeOf, storeResolutionHint } from './stereotype-ter
  */
 export const entrypointDepsRule: SddRule = {
   name: 'entrypoint-dependencies',
+  judges: 'design',
   description:
     'Judges the edges at the system\'s entry points and its process layer. Portals and Observers are top-level entry points and subscribers, so nothing may depend on them — and that is the edge\'s one finding, which is why no other matrix rule judges it. Downward, a Portal dispatches to Orchestrators and may READ through Indexes and Repository facades but never reaches Store/Registry/Query or an Adapter, while an Observer forwards to one Orchestrator or Supervisor over a message-bus Adapter. A View stays a passive presenter. A Supervisor reaches data only through workflows, and a component depending on a live Actor must also depend on a Supervisor that supervises it.',
   codes: [

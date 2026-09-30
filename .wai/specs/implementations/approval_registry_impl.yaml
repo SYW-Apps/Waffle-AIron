@@ -1,8 +1,8 @@
 id: approval_registry_impl
 name: Approval Registry Implementation
 description: >-
-  Write path for hosted approval requests: create pending, record decisions, mark completed, and
-  expire overdue. Owns the pending-and-unexpired state invariants and the decision stamping;
+  Write path for hosted approval requests: create pending, record decisions, mark completed, cancel,
+  and expire overdue. Owns the pending-and-unexpired state invariants and the decision stamping;
   performs no authorization.
 contract: iapproval_registry
 sourcePath: src/server/approvals.ts
@@ -47,7 +47,16 @@ methods:
       persistence failures leave the previous set fully intact.
     calls:
       - approval_store.replaceAll
+  - name: cancel
+    narrative: []
+    intent: >-
+      Locate the request by id — failing with a not-found error when absent — and transition it to
+      cancelled only from an approved status (any other status is a validation error), recording the
+      supplied reason as its executionSummary, then persist via write-temp-then-rename and refresh
+      the store. A cancelled request is final and is never executed.
+    calls:
+      - approval_store.replaceAll
 detail: intent
 status: complete
 createdAt: '2026-07-09T19:31:03.633Z'
-updatedAt: '2026-09-29T21:27:42.421Z'
+updatedAt: '2026-09-30T16:35:44.215Z'

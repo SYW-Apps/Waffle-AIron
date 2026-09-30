@@ -5,12 +5,14 @@ import {
   getApprovalRequestById,
   listApprovalRequests,
   markApprovalCompleted,
+  cancelApprovalRequest,
   expirePendingApprovals,
 } from './approvals.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { executeApprovedLock, hostedApprover } from './admin.js';
+import { executeApprovedLock, gateIdentity, hostedApprover } from './admin.js';
 import type { ApproverIdentity } from '../models/lock.js';
+import type { LockRecord } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { impactHeadline } from '../models/pack-impact.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
@@ -346,11 +348,22 @@ export function lockProject(
       return {
         status: 'completed',
         action: 'project:lock',
-        summary: `Locked project "${projectId}"${subprojectSuffix(subproject)} (status: ${lock.status}).`,
+        summary: `Locked project "${projectId}"${subprojectSuffix(subproject)} (status: ${lock.status}). ${codeBesideClaim(lock)}.`,
         lock,
       };
     },
   });
+}
+
+/**
+ * The line a hosted lock outcome states beside its claim: the code-conformance
+ * findings the lock recorded (`code`) with the analyzer that produced them.
+ * They never refuse the lock — CI enforces code conformance, not the lock.
+ */
+function codeBesideClaim(lock: LockRecord): string {
+  if (!lock.code) return 'code: no code analysis recorded';
+  return `code: ${lock.code.errors} errors recorded beside the claim (${lock.code.warnings} warnings; `
+    + `analyzer ${lock.code.analyzer.validatorVersion}, grade ${lock.code.analyzer.grade})`;
 }
 
 /** The completed-outcome summary fragment naming the confined child tree, empty
@@ -403,14 +416,11 @@ function readSubprojectScope(req: ApprovalRequest): string | undefined {
  *  pending request), differing only in the kind, wording, and execution.
  *
  *  A subproject qualifier is CLOSED OVER by opts.execute (the yes path) and is
- *  deliberately absent from this body: the permission resolved here and the audit
- *  event appended below anchor at the TOP project id, exactly as before. The
- *  APPROVAL path likewise carries no qualifier — an ApprovalRequest records only
- *  `projectId`, so a request queued from a qualified credential describes, and on
- *  approval executes, the WHOLE project (its summary says so). Confining the
- *  approval path would need a qualifier field on ApprovalRequest, i.e. a spec
- *  change; until then a qualified credential should hold a yes-valued
- *  project:write. */
+ *  deliberately absent from the permission check: the permission resolved here
+ *  and the audit event appended below anchor at the TOP project id. The APPROVAL
+ *  path records the qualifier on the request's payload (subprojectScopePayload)
+ *  and pins the gate identity of the tree the request is about (gateStateId), so
+ *  the approved execution stays confined and refuses a tree that moved since. */
 function lifecycleAction(
   cfg: HostConfig,
   credential: string | null,
@@ -458,12 +468,15 @@ function lifecycleAction(
       // (the same payload mechanism a project:init request uses to carry its
       // execution input) so executeApproved forwards it, and name the subproject
       // in the summary so an approver sees the real scope before deciding.
+      // Pin the design the request is about: the approved execution refuses a
+      // tree whose gate identity moved after this moment.
+      const gateStateId = gateIdentity(cfg, projectId, opts.subproject);
       const pending = buildPendingRequest(
         principal,
         opts.action,
         `${opts.verb} project ${projectId}${subprojectSuffix(opts.subproject)}`,
         projectId,
-        subprojectScopePayload(opts.subproject),
+        { ...subprojectScopePayload(opts.subproject), gateStateId },
       );
       return createPendingOutcome(cfg, principal, pending, opts.action);
     }
@@ -643,15 +656,47 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): ApprovedExecuti
       // subproject-scoped request freezes THAT child tree — an approval must never
       // widen the scope its requester was bound to.
       const scope = readSubprojectScope(req);
-      // The DECIDER is the approver: in the approval path the requester did not
-      // have the authority, and the decision is what conferred it. The requester
-      // is not lost — the ApprovalRequest and the audit event both carry them.
-      const lock = executeApprovedLock(cfg, req.projectId ?? '', hostedApprover(req.decidedBy), scope);
-      return { outcome: `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}).` };
+      // The request's gateStateId is the expected identity: an approval never
+      // certifies a design other than the one requested (a request without one,
+      // created before stage 5, executes against the tree as it stands).
+      const lock = lockAsRequested(cfg, req, scope);
+      return {
+        outcome: `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}). ${codeBesideClaim(lock)}.`,
+      };
     }
     default:
       throw new Error(`Unsupported approval kind "${req.kind}".`);
   }
+}
+
+/**
+ * Execute an approved project:lock through the admin plane, forwarding the
+ * confined qualifier and the request's gateStateId as the expected identity.
+ * When the design moved after the request, the request is CANCELLED with the
+ * reason recorded on it (never left approved and un-executable until it
+ * expires), and the refusal says the same; the requester asks again.
+ */
+function lockAsRequested(cfg: HostConfig, req: ApprovalRequest, scope: string | undefined): LockRecord {
+  try {
+    // The DECIDER is the approver: in the approval path the requester did not
+    // have the authority, and the decision is what conferred it. The requester
+    // is not lost — the ApprovalRequest and the audit event both carry them.
+    return executeApprovedLock(cfg, req.projectId ?? '', hostedApprover(req.decidedBy), scope, req.gateStateId);
+  } catch (err) {
+    const moved = designMovedSince(err);
+    if (!moved) throw err;
+    const reason = `the design changed since it was requested (requested ${moved.requested}, now ${moved.now}); `
+      + 'request the lock again';
+    cancelApprovalRequest(cfg.dataDir, req.id, reason);
+    throw new Error(`Approval request "${req.id}" was cancelled: ${reason}.`);
+  }
+}
+
+/** The two identities of a lock refused because its requested design moved, or null for any other failure. */
+function designMovedSince(err: unknown): { requested: string; now: string } | null {
+  if (!(err instanceof Error) || err.name !== 'LockRefusedError') return null;
+  const { requested, now } = err as Error & { requested?: unknown; now?: unknown };
+  return typeof requested === 'string' && typeof now === 'string' ? { requested, now } : null;
 }
 
 /**

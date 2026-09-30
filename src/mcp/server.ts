@@ -72,7 +72,7 @@ import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 import { pinExternals, getExternalsStatus } from './adapters/surfaces.js';
-import { validateProject, validateRegistry, validateFamily, measurePackImpact } from './adapters/validator.js';
+import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals } from './adapters/validator.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredMembers } from '../models/project.js';
@@ -2347,9 +2347,21 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // data plane, where sdd_get_status answered "Cannot find module" instead
         // of the dashboard. The source module moved; the reason it must be bound
         // at the top of the file did not.
+        // Step 1: the pin tree — this project's own approval state and each
+        // member's, every one computed at that project's OWN root, so the
+        // states printed here are the ones status prints from the member's
+        // root (status-agrees). The hosted data plane has already bound a
+        // root within the credential's reach.
+        let approvals;
+        try {
+          approvals = familyApprovals(recursive === false ? 0 : undefined);
+        } catch {
+          approvals = undefined; // a tree that will not load: the report says why
+        }
         const report = getStatusReport({
           subsystem,
           recursive: recursive ?? true,
+          approvals,
         });
         // The text goes out whether or not the tree loaded. A client asking
         // after status most needs to hear that it will NOT load, and unlike
@@ -2363,7 +2375,7 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // specs, so a tree that has drifted from its approval is the single most
         // important thing this answer can carry — and silence reads exactly like
         // being current, which is what this tool used to answer.
-        const verdict = approvalVerdict();
+        const verdict = approvalVerdict(approvals);
         return text(`${family}${report.text}${verdict.text}`);
       } catch (e) {
         return errText(String(e));

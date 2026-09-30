@@ -25,6 +25,7 @@ function carriedFields(mount: Record<string, unknown>): string[] {
 
 export const memberDeclarationsRule: SddRule = {
   name: 'member-declarations',
+  judges: 'design',
   description:
     "A project declares its members in project.yaml `members`; a member is not a subsystem and carries no content in its parent. The L1 form — a subsystem carrying projectPath — still loads for one release and is reported (DEPRECATED_MOUNT_FORM), naming the mount, its path, the `members` entry that replaces it, and every field it carries that `doctor --fix` will move into the member (or stop on); a mount whose alias `members` also declares is reported as ignored. It reads the project graph's nodes and their legacy mounts.",
   codes: [

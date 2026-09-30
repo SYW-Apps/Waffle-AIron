@@ -14,6 +14,7 @@ import { walk, type WalkSeed } from '../narrative-graph-projector.js';
  */
 export const reachabilityRule: SddRule = {
   name: 'unused-detection',
+  judges: 'design',
   description:
     'Walks the narrative execution graph (call steps, register handoffs, dispatch-table routing, lifecycle flows) from every entrypoint (Portal/Observer/published component/lifecycle entrypoint/invokedBy-declared method) and flags components and methods no execution chain reaches. An interface method declaring invokedBy (a real caller outside the modeled graph) seeds the walk, so its narrative propagates reachability; a declaration the INTERNAL walk (without those seeds) already reaches is stale and is reported.',
   codes: [

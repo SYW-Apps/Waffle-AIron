@@ -17,6 +17,7 @@ import { SddRule } from '../types.js';
 
 export const narrativeReachabilityRule: SddRule = {
   name: 'narrative-reachability',
+  judges: 'design',
   description:
     'Every step of an L5 narrative must be reachable from the first step following fall-through and jumps, and the loop/try/parallel regions it declares must nest or stay disjoint — interleaved regions map onto no structured code. Judged over the step graph, and only for a narrative whose step configuration is sound (narrative-step-config reports the rest).',
   codes: [

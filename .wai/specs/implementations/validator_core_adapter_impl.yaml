@@ -74,13 +74,6 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
-  - name: computeStateId
-    narrative:
-      - stepNumber: 1
-        description: Call computeStateId on core portal
-        type: call
-        targetComponent: approval_portal
-        targetMethod: computeStateId
   - name: consumedContractInputs
     narrative:
       - stepNumber: 1
@@ -176,6 +169,20 @@ methods:
         targetComponent: extension_portal
         targetMethod: packManifest
     detail: calls-only
+  - name: computeOwnStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal's own-tree content identity
+        type: call
+        targetComponent: approval_portal
+        targetMethod: computeOwnStateId
+  - name: approvalRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal's record read under the given root
+        type: call
+        targetComponent: approval_portal
+        targetMethod: approvalRecord
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T15:52:29.380Z'
+updatedAt: '2026-09-30T05:56:51.379Z'

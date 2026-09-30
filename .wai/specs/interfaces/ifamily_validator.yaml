@@ -75,12 +75,13 @@ methods:
       member with no usable id is PROJECT_ID_AMBIGUOUS (warning) — the family half of project
       identity, moved here from the project-identity rule, which judges only the bound project's own
       id. Projects of the selection that depend on each other in a loop are PROJECT_DEPENDENCY_CYCLE
-      (warning until stage 5), reported once per loop on each project in it with the references that
-      close each edge. A present member with no lock is MEMBER_UNAPPROVED, and one whose lock no
-      longer matches its own gate identity is MEMBER_DRIFTED (warnings, decision #11: `--ci` at the
-      parent fails until the member is locked or its severity is lowered; a parent lock that refuses
-      is stage 5). Each finding's severity is the root's rules.sddRuleSeverity override, else the
-      default.
+      (warning), reported once per loop on each project in it with the references that close each
+      edge. A present member whose approval state (approvals) is never is MEMBER_UNAPPROVED, and one
+      that is drifted is MEMBER_DRIFTED — warnings, and they stay warnings in stage 5 (decision
+      #11): `--ci` at the parent fails until the member is locked or its severity is lowered, and a
+      parent that wants its own lock to refuse sets composition.requireApprovedMembers. A member
+      drifted only by the stage-5 identity upgrade says so in the message. Each finding's severity
+      is the root's rules.sddRuleSeverity override, else the default.
     signature: 'checkMembers(family: ProjectFamily): ValidationIssue[]'
     returns: ValidationIssue[]
     params:
@@ -205,6 +206,28 @@ methods:
         summary: >-
           A member that adopted a required pack changes one of the pack's settings in its own
           configuration or specs
+  - name: approvals
+    description: >-
+      The bound project's pin tree: the approval state of the bound root and of each member within
+      `depth` levels of its project graph (all levels when omitted), each computed at that project's
+      OWN root — its lock record against its own gate identity recomputed there — so the answer
+      about a project is the same whichever root asked (status-agrees). Per member also: its
+      composition subject (its record's stateId), whether its staleness is only the stage-5 identity
+      upgrade, and how its parent's lock pinned it (matches | moved | unpinned, read from the
+      parent's record `members`, or its legacy `children` for one release). A declared member with
+      no project on disk is `never`. Reads each project's own tree once and writes nothing; the
+      caller must gate on reach itself before it asks about a family.
+    signature: 'approvals(depth?: number): ProjectApproval[]'
+    returns: ProjectApproval[]
+    params:
+      - name: depth
+        type: number
+        description: >-
+          How many member levels below the bound root to include: 1 = the direct members (what a
+          lock records), omitted = every level (what status prints)
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-09-29T16:08:27.605Z'
+updatedAt: '2026-09-30T05:52:20.499Z'

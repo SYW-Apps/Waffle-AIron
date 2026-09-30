@@ -23,6 +23,7 @@ import { SddRule } from '../types.js';
  */
 export const narrativeDetailRule: SddRule = {
   name: 'narrative-detail',
+  judges: 'design',
   description:
     'The narrative detail dial: each method resolves to full | calls-only | intent (method override → spec default → stereotype default). full requires a narrative; intent-level methods without a narrative must specify behavior as non-trivial prose (L4 intent or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit declarations are held to their promise as errors; stereotype-defaulted gaps surface as warnings. An honest lint over declarations — it never claims the narrative or the prose is CORRECT.',
   codes: [

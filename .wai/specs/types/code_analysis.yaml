@@ -1,0 +1,39 @@
+kind: value-object
+id: code_analysis
+name: CodeAnalysis
+description: >-
+  The code-conformance half of a validation run, summarized apart from the design half: which
+  analyzer ran, which finding codes are its, and how many of each severity it reported. A
+  ValidationResult carries it so a caller can partition the run (ValidationResult.designOnly); a
+  LockRecord carries it as `code`, beside the approval claim and never inside it, so an analyzer
+  upgrade reads as new evidence rather than as a design change.
+fields:
+  - name: analyzer
+    type: AnalyzerIdentity
+    description: >-
+      The analyzer that produced these results: validator version, code-conformance doctrine digest,
+      weakest analysis grade.
+    optional: false
+  - name: codes
+    type: string[]
+    description: >-
+      Every finding code a code-judging rule declares (SddRule.judges = code), sorted. Present on a
+      ValidationResult so designOnly can partition its issues by code; left out of a lock record,
+      where it would be noise the analyzer identity already pins.
+    optional: true
+  - name: errors
+    type: number
+    description: Code-conformance findings at error severity.
+    optional: false
+  - name: warnings
+    type: number
+    description: Code-conformance findings at warning severity.
+    optional: false
+  - name: notices
+    type: number
+    description: Code-conformance findings at notice severity.
+    optional: false
+methods: []
+sourcePath: src/models/lock.ts
+createdAt: '2026-09-30T05:47:24.483Z'
+updatedAt: '2026-09-30T06:12:20.044Z'

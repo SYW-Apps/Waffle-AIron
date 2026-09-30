@@ -65,6 +65,16 @@ methods:
         type: local
       - stepNumber: 9
         description: >-
+          When the options carry the pin tree (options.approvals, computed by the validator at each
+          project's own root and handed in — this component cannot compute a gate identity), mark
+          each `[Project]` line with that member's approval state (approved | drifted | never,
+          `re-lock once` for an upgrade-only drift) and how its parent's lock pinned it (matches |
+          moved | unpinned), and close the report with the root's own state. States are read, never
+          recomputed here, so the report from a parent and from the member agree by construction
+          (status-agrees). Without approvals the report shows no states
+        type: local
+      - stepNumber: 10
+        description: >-
           Answer the report as text, not failed. One renderer, so the terminal and the MCP status
           tool cannot drift into disagreeing about what this tree contains — which they did, for as
           long as each had its own copy
@@ -73,4 +83,4 @@ methods:
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-09-27T10:58:15.895Z'
+updatedAt: '2026-09-30T05:56:09.243Z'

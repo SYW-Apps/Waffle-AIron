@@ -37,6 +37,7 @@ import { RuleContext, SddRule } from '../types.js';
 
 export const unclaimedSourceRule: SddRule = {
   name: 'unclaimed-source',
+  judges: 'code',
   description:
     'Code↔spec Level 1, asked the other way round: every source file under the project\'s declared source roots must be named by some spec — an implementation\'s sourcePath, a method\'s, a simPath, or a type\'s — or be carried in the frozen `rules.conformance.unclaimed` list. A pure re-export barrel declares nothing of its own and only republishes other modules, so it has no code to claim and is exempt (exact grade only: a weaker grade cannot tell a barrel from a file it failed to parse). Declaring no source roots leaves the check silent, which is what makes it opt-in; the unclaimed list is a one-way debt register, so an entry the walk no longer finds unclaimed must be deleted and the list can only shrink.',
   codes: [

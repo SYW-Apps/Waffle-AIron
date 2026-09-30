@@ -92,15 +92,6 @@ methods:
       above the bound root.
     signature: 'findChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef | null
-  - name: listChainedRoots
-    description: >-
-      Every member root beneath the bound project, as project-relative directories in walk order
-      (recursing through members' members, either declaration form). The downward companion to
-      findChainingParent, and the roots half of inspectChainedRoots.
-    signature: 'listChainedRoots(): string[]'
-    returns: string[]
-    guarantees:
-      - idempotent
   - name: invalidateCache
     description: >-
       Drop the cached spec index, for callers that changed the tree on disk outside the save paths
@@ -268,4 +259,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T17:16:50.517Z'
+updatedAt: '2026-09-30T05:57:00.580Z'

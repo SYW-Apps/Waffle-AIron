@@ -9,6 +9,7 @@ import { SddRule } from '../types.js';
  */
 export const uniqueInvariantIdsRule: SddRule = {
   name: 'unique-invariant-ids',
+  judges: 'design',
   description:
     'An entity\'s declared invariant ids must be unique within the entity: a narrative step asserts an invariant by "<type-id>.<invariant-id>", so a repeated id makes one assertion stand for two properties and satisfying either silences both.',
   codes: [

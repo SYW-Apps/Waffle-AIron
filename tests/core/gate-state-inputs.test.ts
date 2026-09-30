@@ -122,7 +122,9 @@ describe('the gate identity digests consumed surface snapshots', () => {
     expect(stateIdEquals(before, after)).toBe(false);
   });
 
-  it('swapping a CHAINED MOUNT\'s stored snapshot changes computeGateStateId', () => {
+  // Stage 5: a member's inputs are its own gate's. They reach the parent only
+  // through the member's composition subject, which moves when the member re-locks.
+  it('swapping a MEMBER\'s stored snapshot leaves the parent\'s computeGateStateId alone', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
     writeLegacyMount(
@@ -140,7 +142,7 @@ describe('the gate identity digests consumed surface snapshots', () => {
     writeRawSnapshot(kidRoot, 'peer-b.yaml', snapshotYaml({ projectName: 'peer-b', detail: 'v2' }));
     const after = computeGateStateId();
 
-    expect(stateIdEquals(before, after)).toBe(false);
+    expect(stateIdEquals(before, after)).toBe(true);
   });
 
   it('re-saving the same content under a new generatedAt/stateId/origin does not change it', () => {
@@ -175,10 +177,10 @@ describe('the gate identity digests consumed surface snapshots', () => {
     expect(stateIdEquals(before, after)).toBe(true);
   });
 
-  it('the algorithm is sha256+content+doctrine+inputs', () => {
+  it('the algorithm is sha256+content+doctrine+inputs+members', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
-    expect(computeGateStateId().algorithm).toBe('sha256+content+doctrine+inputs');
+    expect(computeGateStateId().algorithm).toBe('sha256+content+doctrine+inputs+members');
   });
 
   it('a lock record carrying the retired sha256+doctrine+inputs identity reads STALE, never locked', () => {

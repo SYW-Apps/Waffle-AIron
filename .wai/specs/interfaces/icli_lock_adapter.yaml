@@ -1,26 +1,45 @@
 id: icli_lock_adapter
 name: CLI Lock Adapter Interface
 description: >-
-  Contract for the lock record: the commit-scoped record carrying the approved spec content and the
-  tree's gate identity, and the read-only verdict on whether that record still covers the design on
-  disk. Callers of the WRITE gate on an as-complete validation FIRST — this adapter never locks an
-  invalid tree on its own authority. The READ decides nothing about legality: a tree can be approved
-  and illegal, or legal and unapproved, and `wairon validate` answers the other question.
+  Contract for the lock record: the commit-scoped record carrying one project's approval — its gate
+  identity, its own spec digests, its direct members' subjects and states, and the code results
+  beside the claim — and the read-only verdict on whether that record still covers the design on
+  disk. Callers of the WRITE gate on the design half of an as-complete validation FIRST and capture
+  the gate identity before it — this adapter never locks an invalid design on its own authority, and
+  it refuses to write when the identity moved while the lock ran. The READ decides nothing about
+  legality: a tree can be approved and illegal, or legal and unapproved, and `wairon validate`
+  answers the other question.
 component: cli_lock_adapter
 methods:
   - name: lockTree
     description: >-
-      Write the (scope-filtered) lock record: the approval, one digest per approved spec, and the
-      tree's current gate identity from the validator (spec content plus the governing doctrine and
-      consumed contract inputs, so a later doctrine change invalidates the lock by state mismatch
-      exactly as a spec edit does). Writes nothing into the spec tree. Returns the written record.
-    signature: 'lockTree(subsystem?: string): LockRecord'
-    returns: LockRecord
+      Summarize what the human is approving (own specs changed since the last approval; each direct
+      member's approval state and whether its pin moved), refuse when
+      composition.requireApprovedMembers is set and a direct member is drifted or never approved
+      (naming each, writing nothing), confirm with the human (skipped under --yes), then —
+      immediately before writing — recompute the gate identity and refuse when it differs from the
+      one the caller captured before validation. Writes a format-2 record: stateId = the captured
+      identity, the approval (one digest per OWN spec), `members` (each direct member's subject and
+      state), `code` (the code-conformance results and analyzer identity, beside the claim),
+      validationResult = the design half's counts, and the project's effective id. Never writes
+      `children`, never writes anything into the spec tree or below this project. Returns the
+      written record, or null when the human declined.
+    signature: 'lockTree(options: LockOptions, gate: ValidationResult, captured: StateId): LockRecord | null'
+    returns: LockRecord | null
     params:
-      - name: subsystem
-        type: string
-        description: Optional subsystem id narrowing the lock scope (matches the CLI --subsystem flag).
-        optional: true
+      - name: options
+        type: LockOptions
+        description: >-
+          CLI flags: --yes (skip confirmation), --subsystem (scope narrowing of the approved
+          digests)
+      - name: gate
+        type: ValidationResult
+        description: >-
+          The as-complete result the caller gated on; its design half is counted as validationResult
+          and its analysis recorded as `code`
+      - name: captured
+        type: StateId
+        description: The gate identity the caller captured BEFORE validating — what the record certifies
   - name: checkApproval
     description: >-
       The verdict `wairon lock-check` exits on: obtain the tree's gate identity from the validator
@@ -28,17 +47,25 @@ methods:
       decision.
 
 
+
       The GATE identity, not the per-spec content digests the same record carries: the digests
       answer "has this file changed since you approved it", so a whitespace-only edit would move
-      them and demand a re-lock. The gate identity hashes the parsed tree and the governing
-      doctrine, and answers "has the DESIGN changed" — the only question a merge gate is entitled to
-      refuse on.
+      them and demand a re-lock. The gate identity hashes the parsed own tree, the governing design
+      doctrine, the declared inputs, `composition` and the direct members' subjects, and answers
+      "has the approved DESIGN or anything it was approved under changed" — the only question a
+      merge gate is entitled to refuse on. Code-conformance results are not part of it, so an
+      analyzer upgrade never fails this gate.
 
 
-      `stale` refuses at every strictness. `unlocked` is the opt-in seam and passes with a notice
-      unless `strict` is asked for, so a project that never locks cannot start failing because it
-      upgraded. A repository with no spec tree is reported as such rather than crashing or being
-      mistaken for an unapproved one.
+
+      `stale` refuses at every strictness. A stale verdict that is only the stage-5 identity upgrade
+      (LockStatus.upgraded) still refuses — the old identity cannot be recomputed, so nothing proves
+      the design unchanged — but says so plainly: "the gate identity gained inputs in stage 5",
+      whether any own spec file changed since the approval (from the per-spec digests), and that one
+      re-lock clears it. `unlocked` is the opt-in seam and passes with a notice unless `strict` is
+      asked for, so a project that never locks cannot start failing because it upgraded. A
+      repository with no spec tree is reported as such rather than crashing or being mistaken for an
+      unapproved one.
     signature: 'checkApproval(strict: boolean): ApprovalCheck'
     returns: ApprovalCheck
     params:
@@ -50,4 +77,4 @@ methods:
         optional: false
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-09-19T12:24:29.159Z'
+updatedAt: '2026-09-30T05:54:45.439Z'

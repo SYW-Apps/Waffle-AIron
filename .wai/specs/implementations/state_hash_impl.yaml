@@ -57,6 +57,59 @@ methods:
         type: return
         outcome: StateId
     symbol: computeStateId
+  - name: ownTree
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Load type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: Read the scan's project graph for the owner of every spec key
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 8
+        description: >-
+          Keep only the specs the bound root owns (owner key empty). A member's specs carry the
+          member's key and are left out: they are that member's lock's, and reach this project's
+          gate identity only as the member's composition subject
+        type: local
+      - stepNumber: 9
+        description: >-
+          Put each kind into identity order exactly as compute does (by id, then canonical content,
+          compared by codepoint), canonicalize, and digest with sha256 in hex
+        type: local
+      - stepNumber: 10
+        description: 'Return the StateId {algorithm: ''sha256'', digest}'
+        type: return
+        outcome: StateId (own content)
+    symbol: computeOwnStateId
 status: complete
 createdAt: '2026-07-04T12:54:31.981Z'
-updatedAt: '2026-09-19T13:14:26.172Z'
+updatedAt: '2026-09-30T05:49:02.458Z'

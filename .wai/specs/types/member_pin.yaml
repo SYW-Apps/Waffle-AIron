@@ -1,0 +1,38 @@
+kind: value-object
+id: member_pin
+name: MemberPin
+description: >-
+  One direct member as a parent's lock recorded it (LockRecord.members, keyed by the alias the
+  parent declares it under): the member's composition subject and its approval state at the moment
+  the parent locked. A record of the member's owner's decision, never of the member's specs: the
+  parent copies what the member's own lock says and never writes below itself. Replaces the stage-1
+  `children` StateId copy, which was taken without checking that the child's lock still matched its
+  tree.
+subsystem: sdd_core
+fields:
+  - name: project
+    type: string
+    description: >-
+      The member's effective project id when the parent locked, so a later alias rename (stage 6)
+      can still be matched to the project it pinned. Absent when the member had no usable id.
+    optional: true
+  - name: subject
+    type: string
+    description: >-
+      The member's composition subject: the gate identity its OWN lock record carries (`stateId`,
+      rendered `<algorithm>:<digest>`), which already covers that member's direct members' subjects.
+      Absent when the member carries no lock (state never): a parent can only record a decision the
+      member's owner actually made.
+    optional: true
+  - name: state
+    type: string
+    description: >-
+      approved | drifted | never, as it stood when the parent locked: approved = the member's lock
+      matches the member's own gate identity recomputed at its own root; drifted = it has a lock and
+      its gate identity moved since; never = no lock (including a declared member with no project on
+      disk). Recorded beside the subject, never hashed into the parent's identity.
+    optional: false
+methods: []
+sourcePath: src/core/lockfile.ts
+createdAt: '2026-09-30T05:47:05.631Z'
+updatedAt: '2026-09-30T06:12:15.984Z'

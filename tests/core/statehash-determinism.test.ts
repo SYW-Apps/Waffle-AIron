@@ -228,23 +228,23 @@ describe('gate identity — ordinal, not locale-aware', () => {
    * the ordinal order's digest, and a localeCompare sort of the same two rules
    * produces a different one.
    */
-  const PINNED_GATE_DIGEST = 'cbda97f9a35987d05d439f8a446b9e7259c9eb1160fd1f9608b8a6117d068e4e';
+  const PINNED_GATE_DIGEST = '42b178c4d1d94cea91fae60c14d9af4a86c1906d1242b3e2d71ce89de8eb764f';
 
   const rules = [fixtureRule('zz-a', 'ZZ_DASH'), fixtureRule('zz_a', 'ZZ_UNDERSCORE')];
 
   it('digests a hyphen/underscore rule pair in codepoint order', () => {
-    expect(computeGateIdentity(CONTENT, emptyExtensions(), rules, [], {}).digest).toBe(PINNED_GATE_DIGEST);
+    expect(computeGateIdentity(CONTENT, emptyExtensions(), rules, [], {}, {}).digest).toBe(PINNED_GATE_DIGEST);
   });
 
   it('does not depend on the order the rules were registered in', () => {
-    const forward = computeGateIdentity(CONTENT, emptyExtensions(), rules, [], {});
-    const backward = computeGateIdentity(CONTENT, emptyExtensions(), [...rules].reverse(), [], {});
+    const forward = computeGateIdentity(CONTENT, emptyExtensions(), rules, [], {}, {});
+    const backward = computeGateIdentity(CONTENT, emptyExtensions(), [...rules].reverse(), [], {}, {});
     expect(backward.digest).toBe(forward.digest);
   });
 
   it('does not depend on the order the consumed contract inputs were gathered in', () => {
-    const forward = computeGateIdentity(CONTENT, emptyExtensions(), rules, ['b-key', 'a_key'], {});
-    const backward = computeGateIdentity(CONTENT, emptyExtensions(), rules, ['a_key', 'b-key'], {});
+    const forward = computeGateIdentity(CONTENT, emptyExtensions(), rules, ['b-key', 'a_key'], {}, {});
+    const backward = computeGateIdentity(CONTENT, emptyExtensions(), rules, ['a_key', 'b-key'], {}, {});
     expect(backward.digest).toBe(forward.digest);
   });
 });

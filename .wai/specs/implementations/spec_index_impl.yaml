@@ -178,31 +178,6 @@ methods:
         description: Return the parsed type specs
         type: return
         outcome: TypeSpec[]
-  - name: listChainedRoots
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Read the bound project's member declarations as the scan reads them — its `members`
-          entries and, for one release, its legacy L1 mounts (top-level subsystems carrying
-          projectPath)
-        type: call
-        targetComponent: spec_file_store
-        targetMethod: listTree
-      - stepNumber: 2
-        description: >-
-          Resolve each member's path against the project that declares it, under the containment
-          guard against THAT project's root (lexically and through links), and skip a member whose
-          directory does not exist
-        type: local
-      - stepNumber: 3
-        description: >-
-          Recurse into each existing member root the same way, prefixing its own members with the
-          member's project-relative path, so nested members contribute every level
-        type: local
-      - stepNumber: 4
-        description: Return the project-relative roots in walk order
-        type: return
-        outcome: string[]
   - name: resolveSubprojectForNamespace
     narrative: []
     detail: intent
@@ -412,4 +387,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-28T17:16:51.781Z'
+updatedAt: '2026-09-30T05:57:03.206Z'

@@ -24,6 +24,7 @@ import { SddRule } from '../types.js';
  */
 export const lintAllowsRule: SddRule = {
   name: 'lint-allows',
+  judges: 'design',
   description:
     'Per-spec lint suppressions (lint.allow) must name real issue codes and actually suppress a finding — unknown codes and stale allows are flagged. An allow covers exactly the occurrence it names: a finding that reports a site is silenced only by an allow whose `at` is that site, a finding that reports none only by an allow that names none, and an aggregating finding only by an allow whose `covers` lists every unit it reports — a unit nobody listed is named back as new instead of inheriting a decision taken about its neighbours. So a coarse allow left on a rule that names sites, and an allow whose site the run no longer reports, are both UNUSED_LINT_ALLOW, and the finding names the sites that did fire. Allows silence warnings and notices; errors always surface.',
   codes: [

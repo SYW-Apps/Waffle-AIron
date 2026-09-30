@@ -10,6 +10,7 @@ import { assertionsOfKind, matchesSelector, reportAssertion } from './declared-a
 
 export const assertionForbiddenEdgesRule: SddRule = {
   name: 'assertion-forbidden-edges',
+  judges: 'design',
   description:
     'Evaluates the `forbid-edge` assertions loaded packs declare: for every component matching the assertion\'s from-selector, every dependsOn/owns id whose target matches the to-selector is reported. Findings carry the pack\'s namespaced code (<PACK>_<CODE>) and its stated reason; severity is the pack\'s declaration (project sddRuleSeverity still wins, and error downgrades to warning in draft context). The codes are the packs\' own, so no fixed code list applies.',
   // Static codes are unknown here — packs bring their own. The validator

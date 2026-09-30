@@ -1,8 +1,8 @@
 id: iapproval_registry
 name: Approval Registry Interface
 description: >-
-  Private write-path contract for creating, deciding, completing, and expiring hosted approval
-  requests. The registry owns the pending-and-unexpired state invariants and the
+  Private write-path contract for creating, deciding, completing, cancelling, and expiring hosted
+  approval requests. The registry owns the pending-and-unexpired state invariants and the
   decidedBy/decidedAt/decisionReason stamping; it performs no authorization (the self-approval check
   is the orchestrator's job).
 component: approval_registry
@@ -59,6 +59,23 @@ methods:
     params:
       - name: now
         type: string
+  - name: cancel
+    description: >-
+      Transition an approved request to cancelled when its privileged workflow refused because the
+      request no longer describes what would be done (a project:lock whose pinned gate identity
+      moved), recording why as its executionSummary in the same write; only an approved request may
+      be cancelled. A cancelled request is final: it is never executed, and the requester asks
+      again.
+    signature: 'cancel(id: string, reason: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: id
+        type: string
+      - name: reason
+        type: string
+        description: Why the approved request can no longer execute, recorded on it as its executionSummary
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-09T19:30:39.410Z'
-updatedAt: '2026-09-29T21:27:39.375Z'
+updatedAt: '2026-09-30T16:35:36.520Z'

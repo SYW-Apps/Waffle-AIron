@@ -58,6 +58,7 @@ function holdersAt(ctx: RuleContext, level: 'component' | 'interface' | 'impleme
 
 export const assertionRequiredFieldsRule: SddRule = {
   name: 'assertion-required-fields',
+  judges: 'design',
   description:
     'Evaluates the `require-field` assertions loaded packs declare: at the assertion\'s level (component / interface / implementation), every spec whose owning component matches the on-selector must declare the named field — a top-level spec field or an `ext.*` path — and, when the assertion states a closed value set, hold one of those values. Findings carry the pack\'s namespaced code (<PACK>_<CODE>) and its stated reason; severity is the pack\'s declaration (project sddRuleSeverity still wins, and error downgrades to warning in draft context). The codes are the packs\' own, so no fixed code list applies.',
   // Static codes are unknown here — packs bring their own. The validator

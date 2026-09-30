@@ -74,6 +74,14 @@ export const AgentRecordSchema = z.object({
   /** Rendered implementation guidance for this agent's variant-tagged components (deep variant integration); empty when none. */
   variantGuidance: z.string().optional(),
 
+  /**
+   * A member project's delegating owner only: the ids of the member's own
+   * agents, each qualified `<alias>::<agentId>`, resolved from the member's
+   * topology at the member's own root. REFERENCES, never copies: nothing of the
+   * member's agents is rendered into this layer (one level deep, ids only).
+   */
+  delegatesTo: z.array(z.string()).optional(),
+
   /** Why this agent was created — the architectural reason for its existence */
   creationReason: z.string(),
 
@@ -128,6 +136,14 @@ export const AgentBriefSchema = z.object({
 
   /** Rendered variant guidance, also folded into instructions */
   variantGuidance: z.string().optional(),
+
+  /**
+   * Set only on a brief for a member's agent (an id qualified `<alias>::`): the
+   * member's directory relative to the root the brief was asked from. The
+   * brief was composed at that root, and its ownedPaths and readPaths are
+   * re-expressed under this prefix so the fence is correct from the asking root.
+   */
+  root: z.string().optional(),
 
   /**
    * The resource shape of this agent's work, and the allowance it earns.

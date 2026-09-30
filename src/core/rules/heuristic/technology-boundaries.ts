@@ -62,6 +62,7 @@ interface TechHome {
 
 export const technologyRule: SddRule = {
   name: 'technology-boundaries',
+  judges: 'design',
   description:
     'Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component\'s ownership tree the technology\'s home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component\'s own interface.',
   codes: [

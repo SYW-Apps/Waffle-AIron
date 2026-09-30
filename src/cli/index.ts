@@ -13,7 +13,8 @@ import { runInit } from '../commands/init.js';
 import { runGenerate } from '../commands/generate.js';
 import { runLock as lockTree, checkApproval } from '../commands/lock.js';
 import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
-import { runValidate, validateAsComplete } from '../commands/validate.js';
+import { runValidate, validateAsComplete, computeGateStateId } from '../commands/validate.js';
+import { designOnly } from '../models/lock.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
 import { pathExists, writeFile, getProjectRoot } from '../utils/fs.js';
 import { runList } from '../commands/list.js';
@@ -115,7 +116,8 @@ program
   .option('--domain <id>', 'limit to agents in a single domain')
   .option('--domains <ids>', 'limit to a comma-separated list of domain ids')
   .option('--root', 'only generate root-level agents')
-  .option('--no-recurse', 'only generate this project\'s layer; do not cascade into chained subprojects')
+  .option('--family', 'also generate each member\'s own layer in its own root (generate never cascades otherwise)')
+  .option('--no-recurse', 'accepted for one release: generating only this project\'s layer is now the default')
   .option('--no-prune', 'do not remove wairon-managed agent files that are no longer in the topology')
   .option('--dry-run', 'preview what would be generated without writing files')
   .action(async (opts) => {
@@ -124,8 +126,9 @@ program
       domain: opts.domain,
       domains: opts.domains,
       root: opts.root,
-      // commander maps --no-recurse / --no-prune to opts.recurse/opts.prune === false
-      recurse: opts.recurse,
+      // --family walks the members explicitly; --no-recurse is the default now
+      // and is accepted for one release. commander maps --no-prune to opts.prune === false.
+      family: opts.family === true,
       prune: opts.prune,
       dryRun: opts.dryRun,
     });
@@ -135,11 +138,15 @@ program
 // lock
 // ---------------------------------------------------------------------------
 
-// cli_runner.runLock — the local `wairon lock` workflow: gate on the
-// as-complete dry-run validation (an invalid tree is never frozen), freeze the
-// tree through the lock adapter, and refresh the generated outputs. A parent
-// lock writes nothing into its members: each member pins what it consumes
-// (`wairon externals pin`) on its own schedule.
+// cli_runner.runLock — the local `wairon lock` workflow: CAPTURE the gate
+// identity before anything is judged, gate on the DESIGN half of the
+// as-complete dry-run validation (an invalid design is never frozen), lock
+// through the lock adapter (which refuses when requireApprovedMembers finds a
+// direct member unapproved, and when the identity moved while the lock ran),
+// and refresh THIS project's generated outputs. Code-conformance findings never
+// refuse the lock: they are recorded beside the claim and printed plainly — CI
+// (`wairon validate --ci`) enforces them. A parent lock writes nothing into its
+// members, generated outputs included: each member locks at its own root.
 //
 // Why validate-as-complete: the conformance gate downgrades completeness
 // errors to warnings while a spec is `draft`, so a draft tree can "pass" yet
@@ -158,17 +165,22 @@ async function runLock(options: LockOptions): Promise<void> {
   const projectConfig = loadProjectConfig();
   if (!projectConfig) throw new ProjectNotInitializedError();
 
+  // Step 6: capture the identity the record will certify, before anything is judged.
+  const captured = computeGateStateId();
+
   logger.info('Analyzing and validating specifications in-memory...');
   const dry = validateAsComplete({
     rules: projectConfig.rules,
     projectType: projectConfig.projectType,
     scopeSubsystem: options.subsystem,
-    recursive: options.recursive ?? true,
   });
 
-  const errors = dry.issues.filter((i) => i.severity === 'error');
+  // Step 8: the design half is what the approval certifies and the only
+  // findings that may refuse it — a design can be approved before its code exists.
+  const design = designOnly(dry);
+  const errors = design.issues.filter((i) => i.severity === 'error');
   if (errors.length > 0) {
-    logger.header('Cannot lock — the spec tree does not validate as complete');
+    logger.header('Cannot lock — the design does not validate as complete');
     let errorCount = 0;
     const MAX_PRINT = 100;
     let skippedErrors = 0;
@@ -188,20 +200,34 @@ async function runLock(options: LockOptions): Promise<void> {
     process.exit(1);
   }
 
-  // --- Freeze through the lock adapter (summary + confirmation live there) ---
+  // --- Lock through the adapter (summary, member states, confirmation, re-confirm) ---
   logger.header('Lock SDD specs');
-  const record = await lockTree(options, dry);
+  // A refusal (requireApprovedMembers, inputs that moved while it ran) is a
+  // WaironError: printed and exited on by the CLI's own handler, nothing written.
+  const record = await lockTree(options, dry, captured);
   if (!record) {
     logger.info('Cancelled. Nothing was changed.');
     return;
   }
 
+  // THIS project's generated outputs only — never --family: a parent lock
+  // writes nothing below itself, generated outputs included.
   logger.blank();
   await runGenerate({ domain: options.subsystem });
 
   logger.blank();
   logger.success('Specs locked and generated outputs reconciled.');
   logger.info(`Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
+  for (const [alias, pin] of Object.entries(record.members ?? {})) {
+    logger.info(`  member ${alias}: ${pin.state}${pin.subject ? ` (${pin.subject.slice(0, 26)}…)` : ''}`);
+  }
+  // Printed plainly, on its own line, so an approval taken over failing code is
+  // never mistaken for clean code.
+  const code = record.code;
+  logger.info(code
+    ? `code: ${code.errors} error(s), ${code.warnings} warning(s) recorded beside the claim `
+      + `(analyzer ${code.analyzer.validatorVersion}, grade ${code.analyzer.grade}) — CI enforces them, not the lock`
+    : 'code: no code analysis recorded');
   logger.info(
     'Live agent briefs (sdd_get_agent_brief / wairon-agent://) ' +
       'are composed per call and already current — no session restart needed.',

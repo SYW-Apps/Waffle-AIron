@@ -1,38 +1,73 @@
 id: igate_identity
 name: Gate Identity Interface
-description: 'The gate identity: the value a lock records and every staleness check compares.'
+description: >-
+  The gate identity: the value a lock records and every staleness check compares — and, beside it,
+  the digest of the code analyzer's doctrine, which a lock records next to its claim and never
+  inside it.
 component: gate_identity
 methods:
   - name: compute
     description: >-
-      The gate identity of a spec tree: its content identity digested together with the doctrine
-      that governs it (the built-in rules by name, codes and default severities; the packs,
-      profiles, languages, patterns, guarantees, assertions and pack rules; the project's type and
-      rule tuning) and the consumed contract inputs. Agent-facing prose (skills, instructions) is
-      left out, so a documentation edit never invalidates a lock. Pure: the same inputs always give
-      the same identity.
+      The gate identity of one project: its OWN spec content identity digested together with the
+      DESIGN doctrine that governs it (the built-in rules that judge design, by name, codes and
+      default severities; the packs, profiles, languages, patterns, guarantees, assertions and pack
+      rules; the project's type and its rule tuning without the code-conformance tuning —
+      rules.conformance and the sddRuleSeverity overrides of code-judging codes), its own consumed
+      contract inputs, its `composition` block, and each direct member's composition subject keyed
+      by alias. Rules that judge code, and their tuning, are left out, so neither an analyzer
+      upgrade nor a code-severity change ever stales a lock; agent-facing prose (skills,
+      instructions) is left out, so a documentation edit never does either. A member's specs are
+      never hashed here: the member's RECORDED subject stands for them, which already covers the
+      member's own members. So a change two levels down reaches this identity once the member
+      between re-locks; until then this project shows that member as drifted. Pure: the same inputs
+      always give the same identity.
     signature: >-
       compute(content: StateId, doctrine: LoadedExtensions, builtinRules: SddRule[], inputs:
-      string[], gate: GateConfig): StateId
+      string[], gate: GateConfig, members: Record<string, string>): StateId
     returns: StateId
     params:
       - name: content
         type: StateId
-        description: The spec tree's content identity
+        description: The project's own spec content identity (state_hash.ownTree)
       - name: doctrine
         type: LoadedExtensions
         description: The governing extensions
       - name: builtinRules
         type: SddRule[]
-        description: The built-in rule sequence
+        description: The built-in rule sequence; the rules that judge code are filtered out here
       - name: inputs
         type: string[]
-        description: The consumed contract inputs, as canonical content keys
+        description: The project's own consumed contract inputs, as canonical content keys
       - name: gate
         type: GateConfig
-        description: The project's type and rule tuning
+        description: The project's type, rule tuning and composition block
+      - name: members
+        type: Record<string, string>
+        description: >-
+          Each direct member's alias → its composition subject (the stateId its own lock record
+          carries, rendered `<algorithm>:<digest>`), or `never` when the member carries no lock or
+          has no project on disk
+    guarantees:
+      - idempotent
+  - name: analyzer
+    description: >-
+      The digest of the code analyzer's doctrine: the built-in rules that judge code, by name with
+      their codes and default severities, together with the project's code-conformance tuning —
+      rules.conformance and the rules.sddRuleSeverity overrides of the codes those rules declare.
+      Exactly the half compute leaves out, projected with the same discipline (codepoint sort,
+      canonical JSON, sha256 in hex), so AnalyzerIdentity.doctrineDigest moves when the analyzer's
+      rule set or tuning does, and the gate identity does not.
+    signature: 'analyzer(builtinRules: SddRule[], gate: GateConfig): string'
+    returns: string
+    params:
+      - name: builtinRules
+        type: SddRule[]
+        description: The built-in rule sequence; only the rules that judge code are projected
+      - name: gate
+        type: GateConfig
+        description: The project's configuration half; only rules.conformance is read
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-15T10:53:01.174Z'
-updatedAt: '2026-09-18T20:21:16.547Z'
+updatedAt: '2026-09-30T06:03:05.714Z'

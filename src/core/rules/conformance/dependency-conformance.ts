@@ -39,6 +39,7 @@ import { RuleContext, SddRule } from '../types.js';
 
 export const dependencyConformanceRule: SddRule = {
   name: 'dependency-conformance',
+  judges: 'code',
   description:
     'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning). Only exact-grade analyzed files participate; type-only imports are exempt; chained subprojects validate standalone.',
   codes: [

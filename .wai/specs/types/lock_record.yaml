@@ -2,17 +2,26 @@ kind: entity
 id: lock_record
 name: LockRecord
 description: >-
-  The commit-scoped lock record (.wai/lock.json): proof that the spec tree validated as-complete at
-  one exact gate StateId, AND the approval itself. `specs` carries a digest per spec file, so "which
-  specs did the human sign off, and which have moved since?" is answered from a COMMITTED file —
-  which is what lets a teammate, a fresh clone and CI see the same approval the approver saw.
-  Written with sorted keys, so a re-lock diffs one line per spec actually re-approved rather than a
-  rewritten blob.
+  The commit-scoped lock record (.wai/lock.json): the approval of ONE project's design under its
+  declared inputs. `stateId` is the gate identity the approval certifies (own tree, doctrine,
+  externals, adopted packs, `composition`, and each direct member's composition subject); `specs`
+  carries a digest per own spec file, so "which specs did the human sign off, and which have moved
+  since?" is answered from a COMMITTED file; `members` records each direct member's subject and
+  approval state as it stood when this project locked; `code` records the code-conformance results
+  beside the claim, with the analyzer that produced them. A lock writes nothing below its own
+  project: a member's approval is that member's own lock. Written with sorted keys, so a re-lock
+  diffs one line per spec actually re-approved rather than a rewritten blob. Versioned by `format`:
+  a record with no format is format 1 and still reads (its `children` pins included, for one
+  release); every record written from stage 5 on is format 2 and never carries `children`.
 subsystem: sdd_core
 fields:
   - name: stateId
     type: StateId
-    description: The exact spec-tree state this lock validated
+    description: >-
+      The gate identity this lock certifies, CAPTURED BEFORE the as-complete validation ran and
+      confirmed unchanged immediately before this record was written — so a lock never certifies
+      inputs that moved while it ran. It is also this project's composition subject as its parent
+      sees it.
     optional: false
   - name: lockedAt
     type: string
@@ -26,14 +35,17 @@ fields:
     optional: false
   - name: validatorVersion
     type: string
-    description: wairon version that produced the validation
+    description: >-
+      wairon version that took the lock. Informational: it is not an input of the gate identity, and
+      the code analyzer's own version is recorded again under `code.analyzer`.
     optional: false
   - name: validationResult
     type: ValidationResult
     description: >-
-      The as-complete validation outcome captured at lock time: whether it was valid, and how many
-      errors, warnings and notices it reported (a record written before notices existed carries no
-      notice count)
+      The DESIGN half of the as-complete validation captured at lock time
+      (ValidationResult.designOnly): whether it was valid, and how many errors, warnings and notices
+      it reported. The code-conformance findings are counted under `code` instead. A format-1 record
+      counted both together, and a record written before notices existed carries no notice count.
     optional: false
   - name: status
     type: string
@@ -66,9 +78,10 @@ fields:
   - name: children
     type: Record<string, string>
     description: >-
-      Chained child mount id → that child's approved StateId, pinned the way a git submodule pins a
-      commit. A child edit does not dirty the parent's own diff; it moves this pin, which is the
-      parent's review signal.
+      LEGACY (format 1): chained child mount id → that child's approved StateId, copied from the
+      child's record without checking that record still matched the child's tree. Read for one
+      release as the member pins (a child's StateId and a member's subject share one rendering),
+      never written from stage 5 on; `members` replaces it.
     optional: true
   - name: projectId
     type: string
@@ -78,6 +91,32 @@ fields:
       project.yaml later resolves to a different id; the sanctioned change is the rename migration
       followed by a re-lock. Absent on a record written before project ids existed, and when the
       project had no effective id to record.
+    optional: true
+  - name: format
+    type: number
+    description: >-
+      The record format. 2 from stage 5 on (members, code, no children). Absent means format 1: read
+      as written, its `children` taken as the member pins for one release, never written again.
+    optional: true
+  - name: members
+    type: Record<string, MemberPin>
+    description: >-
+      Each DIRECT member this project declares, keyed by its alias → its composition subject and
+      approval state (approved | drifted | never) as they stood when this project locked. The
+      subjects are the same values the gate identity hashed, so a member re-approving moves this
+      project's gate identity and stales this lock; the states are recorded, never hashed. Present
+      (possibly empty) on every format-2 record.
+    optional: true
+  - name: code
+    type: CodeAnalysis
+    description: >-
+      The code-conformance results of the lock-time run, with the analyzer identity (validator
+      version, code-conformance doctrine digest, weakest analysis grade) and the counts per severity
+      — recorded BESIDE the approval, never part of what it certifies, and never a reason the lock
+      refused: code errors are recorded here and the lock proceeds (the lock prints "code: N errors
+      recorded beside the claim"). CI enforces code conformance (`wairon validate --ci` still fails
+      on code errors), not the lock. An analyzer upgrade adds evidence and never stales a lock. Its
+      `codes` list is left out. Absent on a format-1 record.
     optional: true
 methods: []
 componentClass: lock_store
@@ -89,4 +128,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-09-26T15:26:10.706Z'
+updatedAt: '2026-09-30T06:03:11.900Z'

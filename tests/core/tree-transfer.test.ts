@@ -7,7 +7,7 @@ import {
   saveSystemSpec,
   saveSpec,
   invalidateSpecCache,
-  listChainedRoots,
+  inspectChainedRoots,
 } from '../../src/core/specs.js';
 import { exportSpecTree, importSpecTree } from '../../src/core/treetransfer.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
@@ -72,11 +72,13 @@ afterEach(() => {
   }
 });
 
-describe('listChainedRoots', () => {
+// The roots half of inspectChainedRoots (listChainedRoots is gone since stage 5:
+// a gate identity no longer walks members, and nothing else read the list alone).
+describe('inspectChainedRoots().roots', () => {
   it('returns [] for a project that chains nothing', () => {
     const root = mkTmp('wai-chain-none-');
     initProject(root, 'solo');
-    expect(listChainedRoots()).toEqual([]);
+    expect(inspectChainedRoots().roots).toEqual([]);
   });
 
   it('walks nested chains, and skips a mount whose directory is missing', () => {
@@ -96,7 +98,7 @@ describe('listChainedRoots', () => {
     saveSpec('subsystem', subsystem('billing', 'parent', 'packages/billing'));
     saveSpec('subsystem', subsystem('ghost', 'parent', 'packages/missing'));
 
-    expect(listChainedRoots()).toEqual(['packages/billing', 'packages/billing/vendor/ledger']);
+    expect(inspectChainedRoots().roots).toEqual(['packages/billing', 'packages/billing/vendor/ledger']);
   });
 
   it('skips a mount that escapes the project root', () => {
@@ -115,7 +117,7 @@ describe('listChainedRoots', () => {
         `publicInterfaces: []\ntrustedLinks: []\nstatus: draft\nprojectPath: ../victim\n` +
         `createdAt: '${now}'\nupdatedAt: '${now}'\n`,
     );
-    expect(listChainedRoots()).toEqual([]);
+    expect(inspectChainedRoots().roots).toEqual([]);
   });
 });
 

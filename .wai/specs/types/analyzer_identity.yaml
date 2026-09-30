@@ -1,0 +1,35 @@
+kind: value-object
+id: analyzer_identity
+name: AnalyzerIdentity
+description: >-
+  Which code analyzer produced a set of code-conformance results, so a result recorded beside an
+  approval can be read for what it is: evidence taken by one analyzer at one strictness, not part of
+  what the human approved. Deliberately NOT an input of the gate identity — an analyzer upgrade (a
+  new code-conformance code, a stricter body check, a better parser) changes this and never stales a
+  lock.
+fields:
+  - name: validatorVersion
+    type: string
+    description: The wairon version that ran the analysis.
+    optional: false
+  - name: doctrineDigest
+    type: string
+    description: >-
+      sha256 (hex) of the code-conformance doctrine: every built-in rule that judges code, by name
+      with its codes and default severities, plus the project's code-conformance tuning —
+      rules.conformance (source roots, exclusions, the unclaimed dial, the carried debt register,
+      test roots) and the rules.sddRuleSeverity overrides of the codes those rules declare. Computed
+      by gate_identity.analyzer, the same projection discipline as the gate identity's, over the
+      half the gate identity leaves out.
+    optional: false
+  - name: grade
+    type: string
+    description: >-
+      The weakest analysis grade the run applied to any source file it analyzed — exact (AST) |
+      pattern (language table) | generic (scan) — or none when no source file was analyzed. The
+      weakest, because a clean result is only as strong as the least exact file it read.
+    optional: false
+methods: []
+sourcePath: src/models/lock.ts
+createdAt: '2026-09-30T05:47:11.385Z'
+updatedAt: '2026-09-30T06:12:19.304Z'

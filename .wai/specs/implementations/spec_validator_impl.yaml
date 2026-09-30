@@ -103,6 +103,22 @@ methods:
           this one's
         type: local
       - stepNumber: 15
+        description: >-
+          Digest the code analyzer's doctrine: the rules of the sequence that judge code and the
+          project's rules.conformance tuning
+        type: call
+        targetComponent: gate_identity
+        targetMethod: analyzer
+      - stepNumber: 16
+        description: >-
+          Summarize the code half into the result's `analysis`: the codes declared by the rules that
+          judge code, the counts per severity among the issues carrying them, and the analyzer
+          identity — the wairon version, the doctrine digest just computed, and the weakest analysis
+          grade the code model applied to any file it analyzed (none when it analyzed none). Nothing
+          is removed from the issues: callers other than the lock see the run unchanged, and the
+          lock partitions it with ValidationResult.designOnly
+        type: local
+      - stepNumber: 17
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
@@ -197,10 +213,12 @@ methods:
   - name: computeGateStateId
     narrative:
       - stepNumber: 1
-        description: Compute the spec tree's content identity through the core adapter
+        description: >-
+          Compute the content identity of the bound project's OWN specs through the core adapter —
+          never a member's, whose subject stands for it below
         type: call
         targetComponent: validator_core_adapter
-        targetMethod: computeStateId
+        targetMethod: computeOwnStateId
       - stepNumber: 2
         description: >-
           Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
@@ -210,45 +228,75 @@ methods:
         targetMethod: loadProjectExtensions
       - stepNumber: 3
         description: >-
-          Read the bound project's configuration through the core adapter for its projectType and
-          rule tuning, both of which decide verdicts
+          Read the bound project's configuration through the core adapter for its projectType, rule
+          tuning and composition block
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 4
         description: >-
-          Take the gate config from the configuration's projectType and rules, empty when the
-          project has no configuration or its configuration fails its schema: the tree identity
-          still stands on its own
+          Take the gate config from the configuration's projectType, rules and composition, empty
+          when the project has no configuration or its configuration fails its schema: the tree
+          identity still stands on its own
         type: local
       - stepNumber: 5
         description: >-
-          Read the consumed contract inputs through the core adapter: this root's stored surface
-          snapshots, pinned external snapshots and externals lock, and those of the members it
-          contains, as canonical content keys — never an ancestor's
+          Read the bound root's own consumed contract inputs through the core adapter: its stored
+          surface snapshots, pinned external snapshots and externals lock, as canonical content keys
+          — never a member's, never an ancestor's
         type: call
         targetComponent: validator_core_adapter
         targetMethod: consumedContractInputs
       - stepNumber: 6
-        description: Seed the built-in SDD conformance rule set into the in-memory rule set
+        description: >-
+          Read the project graph for the members the bound root declares DIRECTLY — `members`
+          entries and, for one release, legacy mounts — each with its alias and directory. Deeper
+          members are not read: they reach this identity through their parent's subject
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 7
+        description: For each direct member
+        type: loop
+        loopKind: forEach
+        over: the bound root's direct members
+        endStep: 9
+      - stepNumber: 8
+        description: >-
+          Read the member's own lock record from its directory — one small file, no scan, no
+          validation
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 9
+        description: >-
+          Its composition subject is that record's stateId, rendered `<algorithm>:<digest>` — the
+          member's gate identity at ITS lock time, the decision its owner made; `never` when the
+          member carries no record or has no project on disk. Recorded, not recomputed: the member's
+          live edits are the member's to re-approve, and recomputing here would load the member's
+          tree into every parent identity
+        type: local
+      - stepNumber: 10
+        description: Seed the built-in SDD rule set into the in-memory rule set
         type: call
         targetComponent: rule_repository
         targetMethod: registerBuiltinRules
-      - stepNumber: 7
+      - stepNumber: 11
         description: >-
-          Read the rule sequence: the built-in rules. No pack rule is registered yet; pack rules
-          enter the identity through the extensions
+          Read the rule sequence: the built-in rules (gate_identity.compute keeps only those that
+          judge design). No pack rule is registered yet; pack rules enter the identity through the
+          extensions
         type: call
         targetComponent: rule_repository
         targetMethod: ruleSequence
-      - stepNumber: 8
+      - stepNumber: 12
         description: >-
-          Compute the gate identity from the content identity, the extensions, the built-in rules,
-          the consumed contract inputs and the gate config
+          Compute the gate identity from the own content identity, the extensions, the built-in
+          rules, the own consumed contract inputs, the gate config and the members' subjects
         type: call
         targetComponent: gate_identity
         targetMethod: compute
-      - stepNumber: 9
+      - stepNumber: 13
         description: Return the gate identity
         type: return
         outcome: StateId (the gate identity)
@@ -565,4 +613,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-29T16:07:45.836Z'
+updatedAt: '2026-09-30T05:51:37.031Z'

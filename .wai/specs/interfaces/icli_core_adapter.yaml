@@ -435,11 +435,16 @@ methods:
       - idempotent
   - name: approvalVerdict
     description: >-
-      What the lock says about the tree, for the line `wairon status` and `wairon doctor` print
-      under the dashboard. Forwarded to the core portal.
-    signature: 'approvalVerdict(): ApprovalVerdict'
+      Forward to approval_portal.approvalVerdict: what the lock says about the tree, given the pin
+      tree the validator computed (members whose pin moved, members drifted or never approved, and
+      the stage-5 upgrade note).
+    signature: 'approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict'
     returns: ApprovalVerdict
-    params: []
+    params:
+      - name: approvals
+        type: ProjectApproval[]
+        description: The pin tree from the validator adapter's familyApprovals
+        optional: true
     guarantees:
       - idempotent
   - name: findLegacySpecFiles
@@ -654,4 +659,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T15:57:16.517Z'
+updatedAt: '2026-09-30T05:54:14.162Z'

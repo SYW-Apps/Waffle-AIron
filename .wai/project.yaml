@@ -246,7 +246,7 @@ rules:
             at: 'runDoctor'
             covers:
               - '25:cli_mcp_adapter.installMcpServer'
-      # 77 finding(s), 103 unit(s).
+      # 75 finding(s), 101 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -575,11 +575,6 @@ rules:
               - 'skill_resources.listSkillResources'
               - 'skill_resources.readSkillResource'
           - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_index_impl
-            at: 'listChainedRoots'
-            covers:
-              - 'spec_loader.inspectChainedRoots'
-          - code: UNDECLARED_COLOCATED_CALL
             spec: spec_loader_impl
             at: 'saveComponentSpec'
             covers:
@@ -599,11 +594,6 @@ rules:
             at: 'saveSystemSpec'
             covers:
               - 'spec_registry.invalidateCache'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: spec_validator_impl
-            at: 'validateAsComplete'
-            covers:
-              - 'validator_portal.validateProject'
           - code: UNDECLARED_COLOCATED_CALL
             spec: surface_orchestrator_impl
             at: 'getSnapshot'
@@ -1224,7 +1214,7 @@ rules:
             at: 'WebSession'
             covers:
               - 'projects'
-      # 189 finding(s), 216 unit(s).
+      # 184 finding(s), 209 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of param-conformance on the signatures the contracts describe in
@@ -1248,16 +1238,6 @@ rules:
             at: 'executeApprovedCreate'
             covers:
               - 'placedBy'
-          - code: PARAM_OPTIONALITY
-            spec: admin_orchestrator_impl
-            at: 'executeApprovedLock'
-            covers:
-              - 'subproject'
-          - code: UNDECLARED_PARAM
-            spec: admin_orchestrator_impl
-            at: 'executeApprovedLock'
-            covers:
-              - 'subproject'
           - code: PARAM_NAME_MISMATCH
             spec: agent_file_generator_impl
             at: 'generateAll'
@@ -1298,28 +1278,11 @@ rules:
             at: 'captureApprovedSpecs'
             covers:
               - 'scope'
-          - code: PARAM_OPTIONALITY
-            spec: approval_comparison_impl
-            at: 'currentChildPins'
-            covers:
-              - 'root'
-              - 'mounts'
-          - code: PARAM_OPTIONALITY
-            spec: approval_comparison_impl
-            at: 'movedChildren'
-            covers:
-              - 'root'
-              - 'mounts'
           - code: UNREALIZED_PARAM
             spec: approval_index_impl
             at: 'list'
             covers:
               - 'requestedBy'
-          - code: UNDECLARED_PARAM
-            spec: cli_lock_adapter_impl
-            at: 'lockTree'
-            covers:
-              - 'gate'
           - code: PARAM_OPTIONALITY
             spec: cli_mcp_adapter_impl
             at: 'detectHostedMcpSource'

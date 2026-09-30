@@ -745,28 +745,16 @@ methods:
   - name: consumedContractInputs
     narrative:
       - stepNumber: 1
-        description: List every chained mount root beneath the bound project, project-relative in walk order
-        type: call
-        targetComponent: spec_loader
-        targetMethod: listChainedRoots
-      - stepNumber: 2
-        description: 'The roots to read: the bound root, then each chained root joined onto it'
-        type: local
-      - stepNumber: 3
-        description: Read each root's consumed contract inputs
-        type: loop
-        loopKind: forEach
-        over: the roots
-        endStep: 5
-      - stepNumber: 4
         description: >-
-          Read the root's consumed contracts: its stored surface snapshots under .wai/surfaces, its
-          pinned external snapshots under .wai/externals and its .wai/externals.lock.yaml. A missing
-          directory or lock holds none, and a malformed file is skipped rather than aborting the
-          read. Read locally: the snapshot and lock files are modelled in sdd_surfaces, which
-          sdd_core must not depend on
+          Read the BOUND root's consumed contracts only: its stored surface snapshots under
+          .wai/surfaces, its pinned external snapshots under .wai/externals and its
+          .wai/externals.lock.yaml. No member root is read: a member's inputs are its own gate's,
+          and reach this project only through the member's composition subject. A missing directory
+          or lock holds none, and a malformed file is skipped rather than aborting the read. Read
+          locally: the snapshot and lock files are modelled in sdd_surfaces, which sdd_core must not
+          depend on
         type: local
-      - stepNumber: 5
+      - stepNumber: 2
         description: >-
           Reduce each to its canonical content key: a snapshot with its provenance (stateId,
           generatedAt, origin) stripped and the rest canonicalized, so re-pinning an unchanged
@@ -774,8 +762,8 @@ methods:
           map are what a verdict consults. Each key names its kind (surface, external, lock) so
           equal content in two kinds never collides
         type: local
-      - stepNumber: 6
-        description: Return every root's content keys
+      - stepNumber: 3
+        description: Return the root's content keys
         type: return
         outcome: string[]
   - name: retireSpecialists
@@ -1821,4 +1809,4 @@ methods:
         targetMethod: importNames
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T15:56:53.297Z'
+updatedAt: '2026-09-30T05:50:13.851Z'

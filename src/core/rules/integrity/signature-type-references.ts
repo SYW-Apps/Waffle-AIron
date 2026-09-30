@@ -13,6 +13,7 @@ import {
  */
 export const signatureTypeReferencesRule: SddRule = {
   name: 'signature-type-references',
+  judges: 'design',
   description:
     'Every type identifier an interface method signature names must resolve to a builtin, a generic parameter in scope on the interface or the method, or a defined entity/value-object type.',
   codes: [

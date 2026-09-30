@@ -65,6 +65,7 @@ function collectEnds(ctx: RuleContext): { emitters: TopicEnd[]; subscribers: Top
 
 export const eventTopologyRule: SddRule = {
   name: 'event-topology',
+  judges: 'design',
   description:
     'Bipartite completeness of the declared pub/sub graph: every topic a component emits (emits declarations, MessageBus publish endpoints) must have at least one subscriber (subscribesTo declarations, MessageBus subscribe endpoints), and every subscription must have at least one source. Pairing is by exact topic name, and a topic is reported once per component however many declarations bind it there. Trees that declare no event edges see nothing — the rule costs request/response systems zero noise. Warnings + lint.allow: a topic produced for (or consumed from) an EXTERNAL system is a legitimate, declarable exception.',
   codes: [

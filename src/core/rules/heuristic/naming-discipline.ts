@@ -68,6 +68,7 @@ function withoutWord(methodWords: string[], dropIndex: number): string {
 
 export const namingDisciplineRule: SddRule = {
   name: 'naming-discipline',
+  judges: 'design',
   description:
     'A name says what a thing is and never repeats itself: a component\'s head noun names its own block, generic role words say nothing, a method does not repeat its component\'s head noun, and a component with one method is not merely that method\'s name. Adapters and Portals are exempt from the repetition check, because a forwarder\'s method mirrors the command or route it exposes.',
   codes: [

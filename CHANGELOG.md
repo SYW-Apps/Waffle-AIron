@@ -37,7 +37,10 @@ family run (whose member checks can newly fail `--ci`), five codes escalate to e
 `validateSddTree` is renamed `validateProject` with no alias. The governance stage makes
 every pack command that writes a project's packs show that pack's impact and ask first in a
 terminal (`--yes` for scripts), and adds three codes a parent's requirements can newly fail
-on. Nothing here is purely additive, so `[minor]` would understate it.
+on. Stage 5 makes approval per project: every lock reads stale once, code findings stop
+blocking `wairon lock` (CI still enforces them), the lock record moves to format 2, and
+`generate` stops cascading into members. Nothing here is purely additive, so `[minor]`
+would understate it.
 
 ### A third severity: `notice`
 
@@ -659,6 +662,86 @@ before the write, and a pack applies per project.
 - **Hosted API clients.** `POST /web/projects`, the policy portal's init and
   `executeApprovedInit` answer a `GovernedProjectCreation` (`record`, `packImpacts`,
   `profileImpact`) instead of the bare record: read the record from `record`.
+
+### Approval across a family: each project locks itself, transitively by hashing
+
+Stage 5 of the chained-subsystems work. A lock used to copy each child's `StateId`
+into `children` without re-checking it, hash its members' spec files into its own
+identity, leave `composition` outside it, and `generate` at a parent wrote into
+every member. Now each project approves itself, and a parent's approval covers
+its members through their own approvals.
+
+- **What a lock certifies is the design.** The gate identity is the project's own
+  specs, the design doctrine, its own consumed inputs, `composition`, and each
+  direct member's **composition subject** — the `stateId` in that member's own lock
+  record, read and never recomputed. A change two levels down reaches the top once
+  the member between them re-locks; until then the top shows that member as
+  drifted.
+- **Code findings no longer block `wairon lock`.** The lock refuses on design errors
+  only. Code-conformance results are recorded beside the claim (`code`), with the
+  analyzer that produced them (validator version, doctrine digest, grade), and the
+  lock prints `code: N error(s), … recorded beside the claim`. An analyzer upgrade,
+  `rules.conformance` and `sddRuleSeverity` overrides of code codes form the
+  analyzer digest outside the gate identity, so none of them stales an approval.
+  `validate --ci` still fails on code errors: CI enforces conformance, the lock
+  does not. A design can now be approved before it is implemented.
+- **Inputs are captured before validation and confirmed before writing.** A lock
+  that sees its gate identity move while it runs — a spec, the doctrine, an input,
+  the composition block or a member's approval — refuses ("inputs changed while it
+  ran") and writes nothing.
+- **Lock record format 2.** `format: 2`, `members` (alias → `{project, subject,
+  state}`, state `approved | drifted | never`) and `code`; `validationResult` is the
+  design half. `children` is read for one release and never written.
+- **`composition.requireApprovedMembers`** (opt-in, off by default) makes a parent's
+  lock refuse while a direct member is drifted or never approved, naming each. Off,
+  the lock proceeds and records each member's state, and the family run keeps
+  `MEMBER_UNAPPROVED` / `MEMBER_DRIFTED` as warnings.
+- **A parent lock writes nothing below itself.** Each member locks at its own root.
+- **`generate --family` replaces the cascade.** `generate` at a project writes only
+  that project's outputs; `--family` walks the members explicitly. `--no-recurse` is
+  accepted for one release and does nothing new.
+- **Member briefs and `delegatesTo`.** A parent's agent topology lists a member's
+  agents by reference (`delegatesTo: <alias>::<agentId>`, ids only), never copying
+  them, and a brief for `<alias>::<agent>` composes at the member's own root,
+  through the mount.
+- **`wairon status` and `sdd_get_status` print the pin tree** — each member's state
+  from its own root and how the parent pinned it (`matches | moved | unpinned`) —
+  so status asked at the parent and at the member agree.
+- **Hosted.** The hosted lock (`wairon host lock`, `POST /admin/projects/{id}/lock`,
+  the web lock, and an approved `project:lock` request) runs the same flow and
+  writes the same format-2 record; its outcome states the code findings beside the
+  claim. A **lock request pins the gate identity** of the tree it is about
+  (`ApprovalRequest.gateStateId`). When the tree moved after the request, the
+  approved execution refuses and writes nothing, and the request ends `cancelled`
+  with the reason on it (`executionSummary`: *the design changed since it was
+  requested (requested …, now …); request the lock again*) — the requester asks
+  again. A request made before stage 5 carries no identity and executes against the
+  tree as it stands. The HTTP admin and web planes answer a refused lock with 409.
+
+**Upgrading.**
+
+- **Every lock reads stale once.** The gate identity gained inputs (members'
+  composition subjects, `composition`) and lost the code rules. `wairon lock-check`
+  says so rather than just "stale": *the approval on record … was taken under an
+  earlier gate identity — the gate identity gained inputs in stage 5: members'
+  composition subjects, `composition`; code conformance moved beside the claim*,
+  with whether any own spec file changed since. Re-lock once (`wairon lock`) and
+  commit `.wai/lock.json`; in a family, bottom-up — members first.
+- **Code findings no longer block `wairon lock`.** If you relied on the lock to stop
+  unimplemented or drifted code, run `wairon validate --ci` in CI: it still fails on
+  code errors.
+- **Lock format 2.** Tools that read `.wai/lock.json` should read `members` and
+  `code`; `children` is read by wairon for one release and never written again.
+- **`requireApprovedMembers`** is off by default; set
+  `composition.requireApprovedMembers: true` in a parent's `project.yaml` to make
+  its lock wait for its members' approvals. Changing it stales that project's lock.
+- **`generate` no longer cascades.** A script that relied on `generate` at a parent
+  writing every member's files runs `wairon generate --family`.
+- **Hosted lock requests refuse if the tree moved after the request.** An approver
+  who approves a stale request sees the refusal, and the request is cancelled with
+  the reason (never left approved and un-executable until it expires); the
+  requester files a new one. Hosted API clients that call the
+  lock may now receive 409 for a refusal that is not a validation failure.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 

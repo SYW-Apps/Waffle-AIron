@@ -1,16 +1,35 @@
 id: istate_hash
 name: State Hash Interface
-description: Contract for computing the deterministic content identity of the spec tree.
+description: >-
+  Contract for computing the deterministic content identity of the spec tree: the whole scan
+  (compute) or the bound project's own specs alone (ownTree), which is the content half of the gate
+  identity.
 component: state_hash
 methods:
   - name: compute
     description: >-
-      Load every spec via the loader, canonicalize (stable key order, normalized serialization), and
-      digest into a StateId. Pure and reproducible.
+      Load every spec via the loader — the bound root's and every member the scan follows —
+      canonicalize (stable key order, normalized serialization), and digest into a StateId. Pure and
+      reproducible. Used for the snapshot and archive stamps, never for the gate identity since
+      stage 5.
     signature: 'compute(): StateId'
     returns: StateId
+    params: []
+    guarantees:
+      - idempotent
+  - name: ownTree
+    description: >-
+      The content identity of the bound project's OWN specs only: the specs the scan keys under the
+      bound root, never a member's (those are covered by the member's composition subject in the
+      gate identity, so hashing them here as well would re-couple a parent's approval to every
+      member edit). Same ordering, canonical form and algorithm marker (sha256) as compute, so for a
+      project with no members the two answer the same identity. The content half of the gate
+      identity.
+    signature: 'ownTree(): StateId'
+    returns: StateId
+    params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:48:43.305Z'
-updatedAt: '2026-09-17T20:30:32.114Z'
+updatedAt: '2026-09-30T05:48:44.004Z'

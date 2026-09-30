@@ -24,6 +24,7 @@ import { SddRule } from '../types.js';
  */
 export const packResolutionRule: SddRule = {
   name: 'pack-resolution',
+  judges: 'design',
   description:
     'Every pack a project declares must resolve — from a committed bundle under .wai/packs/, or from this wairon install\'s pack store — and must be the content it claims. An unresolvable selection is an error reported under the code that names the remedy: PACK_NOT_INSTALLED (absent entirely), PACK_VERSION_UNSATISFIED (installed, but no version satisfies the pin), or PACK_INTEGRITY_MISMATCH (resolved content does not match the pinned integrity digest, recomputed from the files rather than read from metadata, on whichever path won). Those never downgrade to warnings: a project whose declared doctrine is missing or altered is misconfigured, and a gate running without it must not look clean. PACK_STORE_DRIFT is the one warning — a committed bundle and the store hold different content for the same name@version; the bundle applies, so the store copy is silently ignored and that deserves saying.',
   codes: [

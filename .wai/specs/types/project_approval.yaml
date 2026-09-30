@@ -1,0 +1,60 @@
+kind: value-object
+id: project_approval
+name: ProjectApproval
+description: >-
+  One project's approval state, computed at that project's OWN root — its lock record against its
+  own gate identity recomputed there — so the answer is the same whichever root asked
+  (status-agrees). The family's pin tree is a list of these: the root's own entry first, then each
+  member within the requested depth, each with how its parent's lock pinned it. The lock workflow
+  reads the direct members' entries to record `members` and to enforce
+  composition.requireApprovedMembers; status and sdd_get_status print them.
+fields:
+  - name: key
+    type: string
+    description: >-
+      The project's key in the scan: empty for the root the question was asked at, else the member's
+      key.
+    optional: false
+  - name: alias
+    type: string
+    description: The alias the parent declares this member under. Absent on the root's own entry.
+    optional: true
+  - name: parent
+    type: string
+    description: The key of the project that declares this member. Absent on the root's own entry.
+    optional: true
+  - name: projectId
+    type: string
+    description: The project's effective id, when it has a usable one.
+    optional: true
+  - name: state
+    type: string
+    description: >-
+      approved (its lock matches its gate identity) | drifted (it has a lock and its gate identity
+      moved since) | never (no lock, or no project on disk at the declared path).
+    optional: false
+  - name: subject
+    type: string
+    description: >-
+      Its composition subject: the stateId its own lock record carries, rendered
+      `<algorithm>:<digest>`. Absent when state is never.
+    optional: true
+  - name: upgraded
+    type: boolean
+    description: >-
+      True when the project is drifted ONLY in the sense that its lock was taken under an earlier
+      gate identity algorithm (LockStatus.upgraded): the identity gained inputs in stage 5, which
+      says nothing about whether the design moved.
+    optional: true
+  - name: pinned
+    type: string
+    description: >-
+      How the parent's lock pinned this member: matches (the parent's record carries this subject —
+      its `members` entry, or for one release its legacy `children` entry), moved (the parent
+      recorded another subject, so the parent's own lock is stale until it re-locks), unpinned (the
+      parent has no lock, or its lock names no pin for this alias). Absent on the root's own entry.
+    optional: true
+methods: []
+sourcePath: src/models/lock.ts
+createdAt: '2026-09-30T05:47:31.984Z'
+updatedAt: '2026-09-30T06:12:20.974Z'

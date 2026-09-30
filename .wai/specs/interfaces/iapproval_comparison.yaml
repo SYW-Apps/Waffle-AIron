@@ -55,50 +55,30 @@ methods:
         optional: true
     guarantees:
       - idempotent
-  - name: currentChildPins
-    description: >-
-      The approved StateId of every chained child mounted under this root, keyed by mount id. A
-      child with no approval of its own contributes no entry.
-    signature: 'currentChildPins(mounts: SubsystemSpec[], root?: string): Record<string, string>'
-    returns: Record<string, string>
-    params:
-      - name: root
-        type: string
-        description: The parent project root; the bound project when omitted
-        optional: true
-      - name: mounts
-        type: SubsystemSpec[]
-        description: The subsystem specs whose projectPath mounts a chained child
-  - name: movedChildren
-    description: >-
-      Which chained children sit at a different pin than the approval recorded, each with the pin it
-      was approved at and the pin it is at now. A parent's approval covers the children it mounted,
-      so a child that moved is drift the parent has to know about even when no spec file of the
-      parent changed.
-    signature: 'movedChildren(mounts: SubsystemSpec[], root?: string): ChildPinDrift[]'
-    returns: ChildPinDrift[]
-    params:
-      - name: root
-        type: string
-        description: The parent project root; the bound project when omitted
-        optional: true
-      - name: mounts
-        type: SubsystemSpec[]
-        description: The subsystem specs whose projectPath mounts a chained child
-    guarantees:
-      - idempotent
   - name: verdict
     description: >-
       What the lock says about the tree as it stands, as a line to show plus whether it is drift.
-      Silent for a project that was never approved. Published rather than kept private because every
-      presenter needs the same answer — the terminal, the MCP status tool and anything else — and
-      two renderings of "has this drifted" that can disagree is precisely the thing a lock exists to
-      prevent.
-    signature: 'verdict(): ApprovalVerdict'
+      Silent for a project that was never approved. Takes the pin tree the caller obtained from the
+      validator (validator_portal.familyApprovals), because a member's state and its pin need gate
+      identities that only the validator computes: the verdict names each direct member whose pin
+      MOVED (its parent's lock records another subject than the member carries now — so this lock is
+      stale until it re-locks) and each that is drifted or never approved, and says plainly when
+      this project's own lock was taken under an earlier gate identity ("the gate identity gained
+      inputs in stage 5 — re-lock once"). Without approvals it reports the own-spec diff alone.
+      Published rather than kept private because every presenter needs the same answer — the
+      terminal, the MCP status tool and anything else — and two renderings of "has this drifted"
+      that can disagree is precisely the thing a lock exists to prevent.
+    signature: 'verdict(approvals?: ProjectApproval[]): ApprovalVerdict'
     returns: ApprovalVerdict
-    params: []
+    params:
+      - name: approvals
+        type: ProjectApproval[]
+        description: >-
+          The pin tree from validator_portal.familyApprovals: the root's own entry and its members'.
+          Omitted: no member or upgrade note.
+        optional: true
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-20T15:19:05.602Z'
-updatedAt: '2026-09-23T12:24:08.161Z'
+updatedAt: '2026-09-30T05:49:18.068Z'

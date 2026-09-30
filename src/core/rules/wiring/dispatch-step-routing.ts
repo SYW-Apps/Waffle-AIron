@@ -10,6 +10,7 @@ import { SddRule } from '../types.js';
 
 export const dispatchStepRoutingRule: SddRule = {
   name: 'dispatch-step-routing',
+  judges: 'design',
   description:
     'A dispatch narrative step must name the capability it routes and route it through a Portal whose dispatch table actually serves that capability; a guarantee the step asserts must be declared by the contract method the capability resolves to.',
   codes: [

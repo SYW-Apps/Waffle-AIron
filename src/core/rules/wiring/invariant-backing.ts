@@ -72,6 +72,7 @@ function resolveComponentClass(t: TypeSpec, ctx: RuleContext): ComponentSpec | u
 
 export const invariantBackingRule: SddRule = {
   name: 'invariant-backing',
+  judges: 'design',
   description:
     'The invariant registry: entities may declare domain invariants (type.invariants), anchored through their componentClass. Every write-effect contract method of the owning component must carry a narrative step asserting each invariant (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as semantic guarantees. This is an HONEST lint over declarations: a green run means every write path visibly claims the invariant, never that the narrative or code actually enforces it. An invariant with no resolvable owner or no declared write path is unanchored, and nothing further is claimed about it.',
   codes: [

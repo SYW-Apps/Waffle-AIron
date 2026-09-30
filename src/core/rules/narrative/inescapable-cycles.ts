@@ -12,6 +12,7 @@ import { completedStepGraph, stronglyConnected } from './completed-step-graph.js
 
 export const inescapableCyclesRule: SddRule = {
   name: 'inescapable-cycles',
+  judges: 'design',
   description:
     'A cycle in a narrative\'s step graph with no exit edge and no return or throw member never terminates, by construction: every path that enters it stays inside it forever. Read over the step graph closed by a completion step, so falling off the end of the narrative counts as leaving. Structure-only — prose conditions are never judged — and reported as a warning, lint.allow-suppressible.',
   codes: [

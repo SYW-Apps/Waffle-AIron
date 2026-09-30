@@ -12,6 +12,7 @@ const REPOSITORY_MEMBERS: ReadonlySet<string> = new Set(['Store', 'Registry', 'I
  */
 export const patternContainmentRule: SddRule = {
   name: 'pattern-containment',
+  judges: 'design',
   description:
     'Holds each pattern to the containment its definition prescribes. A Repository may own only Store, Registry, Index, Query and (optionally) Adapter, judged member by member. A FeatureComponent owns exactly one Orchestrator (the logic side) and one or more Views (its faces — list, detail, form — sharing the one logic component), and nothing else. A RouterComponent owns exactly one Portal as its facade and at least one other child to route to. A counting pattern that still owns a retired member is not judged until that member is migrated: its counts change with the migration, and STEREOTYPE_RETIRED is the one finding.',
   codes: [

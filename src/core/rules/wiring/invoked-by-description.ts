@@ -12,6 +12,7 @@ import { passesIntentFloor } from '../../../models/index.js';
  */
 export const invokedByDescriptionRule: SddRule = {
   name: 'invoked-by-description',
+  judges: 'design',
   description:
     'An invokedBy declaration names a caller outside the modeled graph and silences unused-detection for its method, so the claim must stay reviewable: its "caller" prose is held to the intent floor (missing or placeholder-thin prose is reported), stating WHO invokes the method and when.',
   codes: [

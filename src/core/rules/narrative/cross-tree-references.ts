@@ -15,6 +15,7 @@ import { ambiguityMessage } from '../../../models/index.js';
 
 export const crossTreeReferencesRule: SddRule = {
   name: 'cross-tree-references',
+  judges: 'design',
   description:
     "A narrative call, dispatch or register target that is not a component of this tree either leaves the project — and then its resolution (resolveCrossProject) decides: resolved is surface-reference-backing's, foreign snapshots that disagree are SURFACE_REF_AMBIGUOUS here, and every other outcome is project-boundaries' single finding — or it is a local id that names nothing, the INVALID_TARGET_COMPONENT_REFERENCE typo it always was. The CROSS_TREE_REF_UNRESOLVED warning (\"only the parent project can verify it\") is retired: no reference is left for a parent to judge.",
   codes: [

@@ -81,39 +81,6 @@ methods:
           record
         type: return
         outcome: settled
-  - name: currentChildPins
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Take the mounts the caller passed and keep those whose projectPath mounts a chained child.
-          The caller supplies them rather than this method discovering them, which is what the
-          signature says and why nothing here walks for roots
-        type: local
-      - stepNumber: 2
-        description: >-
-          Read each child's own approval record under its mounted root, keyed by the subsystem id it
-          mounts as; a child with no approval contributes no entry
-        type: call
-        targetComponent: lock_store
-        targetMethod: readAt
-      - stepNumber: 3
-        description: Answer with the pin map
-        type: return
-        outcome: pinned
-  - name: movedChildren
-    narrative:
-      - stepNumber: 1
-        description: Read the parent's approval record for the child pins it covers
-        type: call
-        targetComponent: lock_store
-        targetMethod: readAt
-      - stepNumber: 2
-        description: >-
-          Compare each child's current pin against the recorded one, and answer the subsystem ids
-          that differ — a parent's approval covers the children it mounted, so a moved child is
-          drift even when no spec file of the parent changed
-        type: return
-        outcome: moved
   - name: verdict
     narrative:
       - stepNumber: 1
@@ -141,13 +108,15 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
-          Read the subsystems that mount a chained child, then check whether any child's pin moved.
-          A moved child is a change this project should review even when none of its OWN specs
-          shifted — the trees are approved separately and the pin is the only thing that crosses
-          between them
-        type: call
-        targetComponent: approval_comparison
-        targetMethod: movedChildren
+          From the approvals the caller passed, when it passed any: take the root's own entry, and
+          note when it is upgraded — the lock was taken under an earlier gate identity, so say "the
+          gate identity gained inputs in stage 5 (members' composition subjects, `composition`; code
+          conformance moved beside the claim) — re-lock once" rather than implying the design moved;
+          then take the direct members (parent = the root) whose pin moved, and those drifted or
+          never approved. A moved pin is a change this project must re-approve even when none of its
+          OWN specs shifted; a drifted or never-approved member is the member's to lock, named so
+          the parent knows before it locks
+        type: local
       - stepNumber: 6
         description: Compare the tree against what was approved
         type: call
@@ -162,18 +131,20 @@ methods:
       - stepNumber: 8
         description: >-
           Say exactly that: the lock proves the tree validated, not which specs still match it, and
-          re-locking is what records the difference. Implying either answer would be worse than
-          naming the limit
+          re-locking is what records the difference — with the member and upgrade notes appended.
+          Drift when a member's pin moved or the identity was upgraded
         type: return
         outcome: coarse lock
       - stepNumber: 9
         description: >-
           Answer the verdict, naming the specs that actually moved rather than a count — a number
-          tells somebody that something changed, a list tells them what to look at — and report
-          drift when either the specs or a child's pin moved
+          tells somebody that something changed, a list tells them what to look at — with the member
+          and upgrade notes appended, and report drift when the specs moved, a member's pin moved,
+          or the identity was upgraded. A member that is merely drifted or never approved is named
+          but is not this project's drift
         type: return
         outcome: verdict
     symbol: approvalVerdict
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-09-23T12:57:18.799Z'
+updatedAt: '2026-09-30T05:49:32.618Z'

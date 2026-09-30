@@ -17,6 +17,7 @@ import { SddRule } from '../types.js';
  */
 export const portalCallAuthRule: SddRule = {
   name: 'portal-call-auth',
+  judges: 'design',
   description:
     "Hardens authenticated cross-service calls. An OUTBOUND narrative `call` into ANOTHER component's Portal whose auth is not `none` must (a) be made by an Adapter — the only block that does external I/O — and (b) declare the credential source it presents via the step's `auth.from`. Absence of a source warns PORTAL_AUTH_UNMET; a non-Adapter presenter warns AUTH_PRESENTER_NOT_ADAPTER. The actual secret is never stored in the spec. Dispatch steps (a portal's OWN inbound routing) and self-calls are not cross-service calls and are excluded.",
   codes: [

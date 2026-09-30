@@ -7,6 +7,7 @@ import { isDraftSubsystem } from '../../../models/index.js';
  */
 export const hierarchyRule: SddRule = {
   name: 'hierarchy-integrity',
+  judges: 'design',
   description:
     'Every subsystem references the system, every component an existing subsystem, every interface an existing component, and every implementation an existing interface contract. Draft/design specs are reported informationally.',
   codes: [

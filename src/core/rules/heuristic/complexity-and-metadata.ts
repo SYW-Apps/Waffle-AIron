@@ -34,6 +34,7 @@ function checkDescription(
 
 export const complexityRule: SddRule = {
   name: 'complexity-and-metadata',
+  judges: 'design',
   description:
     'Enforces metadata documentation completeness (checking if descriptions are missing or too short) and structural complexity caps (limits on methods per interface, parameters per method, dependencies per component, and components per subsystem) configured globally or in architectural profiles. A narrative\'s own length and shape are judged by narrative-complexity.',
   codes: [

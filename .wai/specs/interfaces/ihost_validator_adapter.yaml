@@ -60,6 +60,21 @@ methods:
       - name: manifest
         type: ExtensionPack
         description: The parsed pack manifest
+  - name: familyApprovals
+    description: >-
+      Forward to validator_portal.familyApprovals: the bound tree's pin tree (its own approval state
+      and each member's within `depth` levels, each at the member's own root). The hosted lock asks
+      with depth 1 for the direct members it records; the caller has already bound a root it is
+      entitled to reach.
+    signature: 'familyApprovals(depth?: number): ProjectApproval[]'
+    returns: ProjectApproval[]
+    params:
+      - name: depth
+        type: number
+        description: 'Member levels to include: 1 = direct members'
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-09-29T16:14:51.080Z'
+updatedAt: '2026-09-30T05:53:11.027Z'

@@ -3954,6 +3954,8 @@ export async function handleWebRequest(
       const errors = (err as { errors?: { code: string; message: string; specId?: string }[] }).errors;
       return sendJson(res, 409, { error: err.message, errors });
     }
+    // A lock that refused before writing anything is a conflict with the tree's state.
+    if (err instanceof Error && err.name === 'LockRefusedError') return sendJson(res, 409, { error: err.message });
     const msg = err instanceof Error ? err.message : String(err);
     if (/unsupported graph tier/i.test(msg)) return sendJson(res, 400, { error: msg });
     if (/not found|unknown/i.test(msg)) return sendJson(res, 404, { error: msg });

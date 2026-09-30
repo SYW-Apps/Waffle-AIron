@@ -10,6 +10,8 @@
 // there was no legal route to it at all.
 // ---------------------------------------------------------------------------
 
+import type { ValidationResult } from '../core/validation.js';
+
 /**
  * Who approved, and HOW that identity was established — because the two are
  * different claims. A `hosted` identity was authenticated by the instance that
@@ -39,4 +41,86 @@ export interface ApproverIdentity {
 export function describeApprover(who: ApproverIdentity): string {
   const label = who.name ? `${who.name} (${who.id})` : who.id;
   return who.source === 'hosted' ? `${label} [authenticated]` : label;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 5 — approval across a family. What a lock records BESIDE its claim
+// (the code analysis) and what a family's pin tree says about each project.
+// Shared vocabulary for the same reason the approver is: the validator
+// produces them, core persists and renders them, and neither may reach into
+// the other's modules for a type.
+// ---------------------------------------------------------------------------
+
+/** Weakest-first order of the analysis grades; `none` when no file was analyzed. */
+export type AnalysisGradeLabel = 'exact' | 'pattern' | 'generic' | 'none';
+
+/**
+ * analyzer_identity — which code analyzer produced a set of code-conformance
+ * results. Deliberately NOT an input of the gate identity: an analyzer upgrade
+ * changes this and never stales a lock.
+ */
+export interface AnalyzerIdentity {
+  /** The wairon version that ran the analysis. */
+  validatorVersion: string;
+  /** sha256 (hex) of the code-conformance doctrine (gate_identity.analyzer). */
+  doctrineDigest: string;
+  /** The weakest analysis grade applied to any analyzed file, or `none`. */
+  grade: AnalysisGradeLabel;
+}
+
+/**
+ * code_analysis — the code-conformance half of a validation run, summarized
+ * apart from the design half. A lock records it as `code`, beside the claim
+ * and never inside it; its `codes` list is left out there.
+ */
+export interface CodeAnalysis {
+  analyzer: AnalyzerIdentity;
+  /** Every code a code-judging rule declares, sorted. Absent on a lock record. */
+  codes?: string[];
+  errors: number;
+  warnings: number;
+  notices: number;
+}
+
+/** A project's approval state as seen from its own root. */
+export type ProjectApprovalState = 'approved' | 'drifted' | 'never';
+
+/** How a parent's lock pinned a member. */
+export type PinState = 'matches' | 'moved' | 'unpinned';
+
+/**
+ * project_approval — one project's approval state, computed at that project's
+ * OWN root, so the answer is the same whichever root asked (status-agrees).
+ * The family's pin tree is a list of these, the root's own entry first.
+ */
+export interface ProjectApproval {
+  /** '' for the root the question was asked at, else the member's key. */
+  key: string;
+  /** The alias the parent declares this member under; absent on the root. */
+  alias?: string;
+  /** The key of the declaring project; absent on the root. */
+  parent?: string;
+  /** The project's effective id, when it has a usable one. */
+  projectId?: string;
+  state: ProjectApprovalState;
+  /** Its composition subject: its own record's stateId, `<algorithm>:<digest>`. Absent when never. */
+  subject?: string;
+  /** Drifted only because the lock predates the stage-5 gate identity. */
+  upgraded?: boolean;
+  /** How the parent's lock pinned it; absent on the root. */
+  pinned?: PinState;
+}
+
+/**
+ * validation_result.designOnly — this result with every issue whose code is
+ * one of analysis.codes removed, `valid` recomputed over what remains, and
+ * `analysis` kept: the DESIGN half, which is what a lock gates on and
+ * certifies. Pure; a result with no analysis answers itself unchanged. It
+ * lives beside CodeAnalysis because the partition is that value's to draw.
+ */
+export function designOnly(result: ValidationResult): ValidationResult {
+  if (!result.analysis) return result;
+  const codeCodes = new Set(result.analysis.codes ?? []);
+  const issues = result.issues.filter((i) => !codeCodes.has(i.code));
+  return { ...result, issues, valid: issues.every((i) => i.severity !== 'error') };
 }

@@ -14,6 +14,7 @@ const FRONTEND_LIKE = new Set(['frontend-reactive', 'frontend-controller']);
 
 export const profileStereotypeFencingRule: SddRule = {
   name: 'profile-stereotype-fencing',
+  judges: 'design',
   description:
     'The built-in profile families fence which stereotypes may run under them: View/FeatureComponent/RouterComponent only in a frontend-like profile; Actor/Supervisor forbidden in plc-cyclic, whose logic runs single-threaded inside one execution scan cycle; Actor/Supervisor in a frontend-like profile warned. A pack profile opts in by declaring its family; an unregistered profile is neutral, with no doctrine to guess.',
   codes: [

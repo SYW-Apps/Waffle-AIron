@@ -16,6 +16,7 @@ import { isDraftSubsystem, isOwnComponentEntry } from '../../../models/index.js'
  */
 export const publicSurfaceBoundContractRule: SddRule = {
   name: 'public-surface-bound-contract',
+  judges: 'design',
   description:
     'A publicInterface entry that binds an L3 interface must bind one that exists and that belongs to the component the entry publishes.',
   codes: [

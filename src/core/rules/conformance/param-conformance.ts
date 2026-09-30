@@ -191,6 +191,7 @@ function agreed(judgements: Judgement[], reading: keyof Judgement): ParamFinding
 
 export const paramConformanceRule: SddRule = {
   name: 'param-conformance',
+  judges: 'code',
   description: 'Code-to-contract for the SIGNATURE, the last of the three readings a spec-driven gate never made: a contract declares `params`, and nothing ever compared them to the parameters of the function that realizes the method. A contract could promise an argument the code does not take, take one the contract never mentions — including a secret — or name the same argument two different things, and the brief handed to an implementer would carry the contract\'s version. Parameters are matched by POSITION against the tail of the realization\'s list, and the declared type is what tells a rename from a dropped argument: `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one parameter under two names, which anything matching on names alone reads as a parameter the code lost. What a realization takes BEFORE the contract\'s own parameters is wiring, and it is declared on the implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be told from a renamed first argument. A method the named file only CALLS is left to `methodRealization`, which already reports that the body is not here.',
   codes: [
     {

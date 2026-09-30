@@ -17,6 +17,11 @@ import { loadProjectConfig } from './core.js';
 // rule severities and projectType, read through the host core adapter.
 // ---------------------------------------------------------------------------
 export { computeGateStateId, builtinProfileIds, builtinProjectKinds } from '../../core/validation.js';
+// host_validator_adapter.familyApprovals — the bound tree's pin tree (its own
+// approval state and each member's, each at the member's own root). The hosted
+// lock asks with depth 1 for the direct members it records; the caller has
+// already bound a root it is entitled to reach.
+export { familyApprovals } from '../../core/validation.js';
 
 /**
  * host_validator_adapter.validateAsComplete — the as-complete gate for the

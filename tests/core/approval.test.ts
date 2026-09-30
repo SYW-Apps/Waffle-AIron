@@ -9,7 +9,7 @@ import {
 } from '../../src/core/specs.js';
 import {
   captureApprovedSpecs, approvalRecord, diffAgainstApproval, diffSize,
-  currentChildPins, movedChildren, pinOf, approvalVerdict, type ChildPinDrift,
+  pinOf, approvalVerdict,
 } from '../../src/core/approval.js';
 // The same surface as the CLI sees it: through core_portal, never the module.
 import * as portal from '../../src/core/index.js';
@@ -17,7 +17,7 @@ import {
   readLockRecord, writeLockRecord, normalizeApprover,
   type LockRecord,
 } from '../../src/core/lockfile.js';
-import { describeApprover, type ApproverIdentity } from '../../src/models/lock.js';
+import { describeApprover, type ApproverIdentity, type ProjectApproval } from '../../src/models/lock.js';
 import { computeGateStateId } from '../../src/core/validation.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
 
@@ -266,12 +266,21 @@ describe('the approval', () => {
     }
   });
 
-  it('carries child pins as metadata, not as local changes', () => {
+  it('never WRITES the legacy `children` map — format 2 records `members` instead', () => {
     root = project();
     approve(TESTER, { billing: 'sha256:abc123' });
 
-    expect(approvalRecord()!.children).toEqual({ billing: 'sha256:abc123' });
+    expect(approvalRecord()!.children).toBeUndefined();
+    expect(fs.readFileSync(path.join(root, '.wai', 'lock.json'), 'utf8')).not.toContain('"children"');
     expect(diffSize(diffAgainstApproval()!)).toBe(0);
+  });
+
+  it('still READS a format-1 record\'s `children` (one release)', () => {
+    root = project();
+    const legacy = approveAt(root);
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ ...legacy, children: { billing: 'sha256:abc123' } }, null, 2));
+    expect(approvalRecord()!.children).toEqual({ billing: 'sha256:abc123' });
+    expect(approvalRecord()!.format).toBeUndefined();
   });
 
   it('excludes a REAL chained child’s specs — a child edit must not dirty the parent', () => {
@@ -389,62 +398,51 @@ describe('the approval', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Child pins — the one thing that crosses between separately-approved trees.
+  // Member pins (stage 5) — the verdict takes the pin tree the validator
+  // computed at each project's own root; core never computes a member's state.
   // -------------------------------------------------------------------------
 
-  it('pins only children that have an approval of their own', () => {
-    root = project();
-    const childRoot = path.join(root, 'packages', 'billing');
-    fs.mkdirSync(path.join(childRoot, '.wai'), { recursive: true });
-
-    const mounts = [{ id: 'billing', projectPath: 'packages/billing' }];
-    // The child has never been approved — a parent cannot record a decision
-    // its owner never made.
-    expect(currentChildPins(mounts, root)).toEqual({});
-
-    const childLock = approveAt(childRoot);
-    expect(currentChildPins(mounts, root).billing).toBe(pinOf(childLock.stateId));
+  const own = (over: Partial<ProjectApproval> = {}): ProjectApproval => ({ key: '', state: 'approved', ...over });
+  const member = (over: Partial<ProjectApproval> = {}): ProjectApproval => ({
+    key: 'billing', alias: 'billing', parent: '', state: 'approved', pinned: 'matches',
+    subject: pinOf({ algorithm: 'sha256+content+doctrine+inputs+members', digest: 'a'.repeat(64) }), ...over,
   });
 
-  it('a child moving is visible to the parent WITHOUT dirtying the parent diff', () => {
+  it('a member whose pin MOVED is this project\'s drift, WITHOUT dirtying its own spec diff', () => {
     root = project();
-    const childRoot = path.join(root, 'packages', 'billing');
-    const mounts = [{ id: 'billing', projectPath: 'packages/billing' }];
+    approve();
+    expect(approvalVerdict([own(), member()]).drifted).toBe(false);
 
-    approveAt(childRoot);
-    approve(TESTER, currentChildPins(mounts, root));
-    expect(movedChildren(mounts, root)).toEqual([]);
-
-    // The child re-approves at a different state.
-    const second = approveAt(childRoot, 'f'.repeat(64));
-
-    const moved = movedChildren(mounts, root);
-    expect(moved).toHaveLength(1);
-    expect(moved[0].id).toBe('billing');
-    expect(moved[0].now).toBe(pinOf(second.stateId));
-
-    // …and the parent's OWN spec diff is untouched by it.
+    const verdict = approvalVerdict([own({ state: 'drifted' }), member({ pinned: 'moved' })]);
+    expect(verdict.drifted).toBe(true);
+    expect(verdict.text).toContain('member pin(s) moved since approval: billing');
     expect(diffSize(diffAgainstApproval()!)).toBe(0);
   });
 
-  it('says a child LOST its approval rather than calling it a move', () => {
-    // `now: null` is the reason this answer is a pair of pins and not a
-    // boolean. A child that re-approved at a different state and a child whose
-    // owner deleted its lock are both "not the pin I recorded", but they are
-    // different problems: one is work to review, the other is an approval that
-    // no longer exists. A boolean would report them identically, and the parent
-    // would go looking for a diff there is nothing to diff against.
+  it('names a member that is drifted or never approved, without calling it this project\'s drift', () => {
     root = project();
-    const childRoot = path.join(root, 'packages', 'billing');
-    const mounts = [{ id: 'billing', projectPath: 'packages/billing' }];
+    approve();
+    const verdict = approvalVerdict([own(), member({ state: 'never', subject: undefined }), member({ key: 'claims', alias: 'claims', state: 'drifted', upgraded: true })]);
+    expect(verdict.drifted).toBe(false);
+    expect(verdict.text).toContain('billing (never)');
+    expect(verdict.text).toContain('claims (drifted, re-lock once)');
+  });
 
-    const childLock = approveAt(childRoot);
-    approve(TESTER, currentChildPins(mounts, root));
+  it('says plainly when this approval predates the stage-5 gate identity', () => {
+    root = project();
+    approve();
+    const verdict = approvalVerdict([own({ state: 'drifted', upgraded: true })]);
+    expect(verdict.drifted).toBe(true);
+    expect(verdict.text).toContain('the gate identity gained inputs in stage 5');
+    expect(verdict.text).toContain('Re-lock once');
+  });
 
-    fs.rmSync(path.join(childRoot, '.wai', 'lock.json'));
-
-    const moved: ChildPinDrift[] = movedChildren(mounts, root);
-    expect(moved).toEqual([{ id: 'billing', pinned: pinOf(childLock.stateId), now: null }]);
+  it('only DIRECT members are this project\'s pins — a grandchild is its parent\'s', () => {
+    root = project();
+    approve();
+    const verdict = approvalVerdict([own(), member(), member({ key: 'billing::ledger', alias: 'ledger', parent: 'billing', pinned: 'moved', state: 'never' })]);
+    expect(verdict.drifted).toBe(false);
+    expect(verdict.text).not.toContain('ledger');
   });
 });
 
@@ -546,32 +544,29 @@ describe('the approval, published on core_portal', () => {
   it('publishes the same functions, not wrappers around them', () => {
     // Re-export, so the Portal method and the component's function resolve by
     // identity. A wrapper would be a second place for the behaviour to drift.
-    expect(portal.movedChildren).toBe(movedChildren);
     expect(portal.diffSize).toBe(diffSize);
     expect(portal.diffAgainstApproval).toBe(diffAgainstApproval);
     expect(portal.approvalRecord).toBe(approvalRecord);
-    expect(portal.currentChildPins).toBe(currentChildPins);
     expect(portal.captureApprovedSpecs).toBe(captureApprovedSpecs);
+    // The stage-1 child-pin reads are gone from the Portal (stage 5).
+    expect((portal as Record<string, unknown>).movedChildren).toBeUndefined();
+    expect((portal as Record<string, unknown>).currentChildPins).toBeUndefined();
     expect(portal.approvalVerdict).toBe(approvalVerdict);
   });
 
-  it('answers a child drift through the Portal exactly as the module does', () => {
+  it('answers a member\'s moved pin through the Portal exactly as the module does', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approval-portal-'));
     try {
-      const childRoot = path.join(root, 'packages', 'billing');
-      const mounts = [{ id: 'billing', projectPath: 'packages/billing' }];
-      approveAt(childRoot);
-      fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
-      fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({
-        stateId: { algorithm: 'sha256+content+doctrine+inputs', digest: 'b'.repeat(64) },
-        lockedAt: now, lockedBy: TESTER, validatorVersion: 'test',
-        validationResult: { valid: true, errors: 0, warnings: 0 },
-        status: 'ready', specs: {}, children: { billing: 'sha256:stale' },
-      }, null, 2));
-
-      expect(portal.movedChildren(mounts, root)).toEqual(movedChildren(mounts, root));
-      expect(portal.movedChildren(mounts, root)).toHaveLength(1);
+      approveAt(root);
+      setProjectRoot(root);
+      const approvals: ProjectApproval[] = [
+        { key: '', state: 'drifted' },
+        { key: 'billing', alias: 'billing', parent: '', state: 'approved', pinned: 'moved', subject: 'x:y' },
+      ];
+      expect(portal.approvalVerdict(approvals)).toEqual(approvalVerdict(approvals));
+      expect(portal.approvalVerdict(approvals).drifted).toBe(true);
     } finally {
+      setProjectRoot(null);
       try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
     }
   });

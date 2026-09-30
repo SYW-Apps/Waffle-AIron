@@ -19,6 +19,7 @@ import type { RuleContext, SddRule } from '../types.js';
 
 export const integrationSimDeclarationRule: SddRule = {
   name: 'integration-sim-declaration',
+  judges: 'code',
   description:
     'Once a subsystem has adopted integration sims (its first declared L4 simPath), every OTHER complete, non-leaf implementation of that subsystem must declare one too: its unit suite proves contract shape against mocks, not that the wired components run together. A leaf component\'s unit suite IS its sim, and a subsystem that has adopted nothing is never flooded.',
   codes: [

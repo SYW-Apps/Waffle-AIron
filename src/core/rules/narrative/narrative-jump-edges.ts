@@ -24,6 +24,7 @@ interface JumpEdge {
 
 export const narrativeJumpEdgesRule: SddRule = {
   name: 'narrative-jump-edges',
+  judges: 'design',
   description:
     'Where an L5 narrative\'s jump edges land: a loop/try/parallel region is entered through its header, never into the middle of its body; a backward jump is only idiomatic as a continue to an enclosing loop header, and otherwise models repetition that belongs in a loop step; and a try body must not fall through into its own catch/finally region on the success path. Judged only for a narrative whose step configuration is sound (narrative-step-config reports the rest).',
   codes: [

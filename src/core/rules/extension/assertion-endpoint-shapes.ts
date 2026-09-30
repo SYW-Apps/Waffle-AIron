@@ -49,6 +49,7 @@ function boundEndpoints(ctx: RuleContext, on: AssertionSelector): BoundEndpoint[
 
 export const assertionEndpointShapesRule: SddRule = {
   name: 'assertion-endpoint-shapes',
+  judges: 'design',
   description:
     'Evaluates the `endpoint-shape` assertions loaded packs declare: every endpoint bound on a contract whose component matches the on-selector must use an allowed transport and bind an address (path / topic / command / pipe / channel) matching the assertion\'s anchored pattern. Findings carry the pack\'s namespaced code (<PACK>_<CODE>) and its stated reason; severity is the pack\'s declaration (project sddRuleSeverity still wins, and error downgrades to warning in draft context). The codes are the packs\' own, so no fixed code list applies.',
   // Static codes are unknown here — packs bring their own. The validator

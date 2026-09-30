@@ -97,6 +97,13 @@ methods:
         type: call
         targetComponent: pack_impact
         targetMethod: doctrine
+  - name: familyApprovals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator's pin tree
+        type: call
+        targetComponent: family_validator
+        targetMethod: approvals
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T16:14:49.338Z'
+updatedAt: '2026-09-30T05:52:28.677Z'

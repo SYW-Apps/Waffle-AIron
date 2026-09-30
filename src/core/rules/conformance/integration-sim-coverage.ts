@@ -19,6 +19,7 @@ import type { RuleContext, SddRule } from '../types.js';
 
 export const integrationSimCoverageRule: SddRule = {
   name: 'integration-sim-coverage',
+  judges: 'code',
   description:
     'Once a committed integration harness carries sim:<component-id>. anchors, that component claims path coverage: every narrated method\'s happy path and every labeled throw step needs its exact sim:<component>.<method>[:<label>] string-literal anchor. Anchors prove the path is NAMED — assertion quality and execution stay CI\'s job.',
   codes: [

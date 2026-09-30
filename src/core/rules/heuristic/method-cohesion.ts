@@ -158,6 +158,7 @@ export function routingTableComponents(ctx: RuleContext): Set<string> {
 
 export const methodCohesionRule: SddRule = {
   name: 'method-cohesion',
+  judges: 'design',
   description:
     'An Orchestrator\'s methods share collaborators; when they split into groups that call no component in common, the component holds more than one responsibility. Reported only where two or more groups each hold two or more methods, so a single specialized method is not a finding — and never on a pure forwarder, whose every narrated method is a single hand-off and whose responsibility therefore lives in what it forwards to.',
   codes: [

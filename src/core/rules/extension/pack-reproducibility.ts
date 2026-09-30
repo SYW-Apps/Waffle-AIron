@@ -20,6 +20,7 @@ import { SddRule } from '../types.js';
  */
 export const reproducibilityRule: SddRule = {
   name: 'pack-reproducibility',
+  judges: 'design',
   description:
     'Under rules.enforceReproducibility (default true), every by-name pack selection must be reproducible elsewhere: pinned to an exact version (ideally with an integrity digest) or bundled into the repository. A floating selection resolves against whatever the local machine happens to have installed, so a clone or CI can validate the same tree against a different rule set (UNPINNED_PACK_SELECTION). A selection that records no fetchable source cannot be obtained by CI at all (PACK_SOURCE_UNFETCHABLE).',
   codes: [

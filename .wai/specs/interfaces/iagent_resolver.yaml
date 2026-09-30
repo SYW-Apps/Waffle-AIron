@@ -6,26 +6,33 @@ methods:
   - name: resolveAgentTopology
     description: >-
       Resolve the LAYERED agent topology for THIS project's own layer only: the system architect,
-      one owner per LOCAL subsystem, and exactly ONE delegating owner per chained subproject (a
-      projectPath subsystem) — never enumerating a subproject's internals, which belong to its own
-      layer. Federated subprojects carry a :: namespace prefix and are excluded here.
-      Component-implementer agents are emitted only when generateComponentImplementers is enabled —
-      a legacy escape hatch: component-level delegation is served as live briefs
-      (composeAgentBrief), not files. Keeps each generated agent set (and the context every session
-      loads) proportional to a single layer instead of the whole deep tree.
+      one owner per LOCAL subsystem, and exactly ONE delegating owner per member project — never
+      enumerating a member's internals, which belong to its own layer. The delegating owner lists
+      the member's own agents BY REFERENCE (delegatesTo: `<alias>::<agentId>`, resolved from the
+      member's topology at the member's own root, ids only), never copying them. A member's specs
+      carry a :: namespace prefix and are excluded here. Component-implementer agents are emitted
+      only when generateComponentImplementers is enabled — a legacy escape hatch: component-level
+      delegation is served as live briefs (composeAgentBrief), not files. Keeps each generated agent
+      set (and the context every session loads) proportional to a single layer instead of the whole
+      deep tree.
     signature: 'resolveAgentTopology(): AgentRecord[]'
     returns: AgentRecord[]
   - name: composeAgentBrief
     description: >-
-      Compose the LIVE delegation brief for one resolved agent: resolve the current topology, locate
-      the record by id, load its instruction template through the template source adapter, render
-      the record's variables into it (scope fence, domain context, variant guidance), fold in the
-      optional user-owned project guidance file (.wai/agents/<agentId>.md, read live), and return
-      the structured AgentBrief — rendered instructions plus ownedPaths/readPaths. Always reflects
-      the CURRENT spec tree and guidance, so a re-lock or a guidance edit changes the next call's
-      result with no session restart; an unknown agentId throws. An owner's scope runs UP TO its
-      chained subprojects, never into them — a subproject appears only as a delegating owner whose
-      brief routes work to that child's own layer.
+      Compose the LIVE delegation brief for one resolved agent. An id qualified `<alias>::<agentId>`
+      whose alias names a direct member composes AT THE MEMBER'S ROOT (brief-through-mount): the
+      member's own topology, templates, guidance and configuration, exactly the brief that member's
+      own session would get, with ownedPaths and readPaths re-expressed under the member's directory
+      and `root` naming it — so a member's brief never grows with the family (context-proportional).
+      The rest may itself be qualified, one member hop at a time. Otherwise: resolve the current
+      topology, locate the record by id, load its instruction template through the template source
+      adapter, render the record's variables into it (scope fence, domain context, variant
+      guidance), fold in the optional user-owned project guidance file (.wai/agents/<agentId>.md,
+      read live), and return the structured AgentBrief — rendered instructions plus
+      ownedPaths/readPaths. Always reflects the CURRENT spec tree and guidance, so a re-lock or a
+      guidance edit changes the next call's result with no session restart; an unknown agentId (or
+      an alias that names no direct member) throws. A hosted caller must gate on reach itself before
+      asking for a member's brief.
     signature: 'composeAgentBrief(agentId: string): AgentBrief'
     returns: AgentBrief
     params:
@@ -45,4 +52,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-20T21:20:50.445Z'
+updatedAt: '2026-09-30T05:56:27.317Z'

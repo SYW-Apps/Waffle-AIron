@@ -20,6 +20,7 @@ import type { ProjectIdentity } from '../../../models/index.js';
 
 export const projectIdentityRule: SddRule = {
   name: 'project-identity',
+  judges: 'design',
   description:
     "The bound project is keyed on its id, so the id must be declared, well-formed, stable and its own: a project that declares none answers to its display name slugified until it writes one (PROJECT_ID_DEFAULTED), a project whose name yields no id or whose declared id breaks the grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), and an id that differs from the one the lock approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). It judges the bound project's own identity only. The family half — a member with a defaulted id (named with its alias as the id to declare), a member with no id, and two members resolving to one id — is a family check since stage 4 (family_validator.checkMembers), which reads the family root's graph.",
   codes: [

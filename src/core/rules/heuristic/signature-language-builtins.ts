@@ -41,6 +41,7 @@ interface ReferenceScan {
  */
 export const signatureLanguageBuiltinsRule: SddRule = {
   name: 'signature-language-builtins',
+  judges: 'design',
   description:
     'Contracts must speak the declared target language: builtin types that unambiguously belong to another language family are flagged in method signatures (e.g. `usize` in a TypeScript system, `Promise` in a Rust one). Set targetLanguage on the system (L0) or override per subsystem (L1).',
   codes: [

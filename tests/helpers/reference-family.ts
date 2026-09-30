@@ -334,3 +334,65 @@ export function buildContractFamily(): ContractFamily {
     cleanup: () => fs.rmSync(top, { recursive: true, force: true }),
   };
 }
+
+// ---------------------------------------------------------------------------
+// The approval family (stage 5): a clean chain every project of which locks.
+//
+//   top (the bound root)                   id top
+//   ├── mid      `members:` entry          id mid  — itself a parent
+//   │   └── leaf `members:` entry          id leaf — two levels below top
+//   └── sib      `members:` entry          id sib  — a sibling of mid
+//
+// Every project validates as complete with no design error, so the real lock
+// workflow runs at each root. `touch` edits one of a project's own specs (a
+// design change at that root only); `setComposition` rewrites the top's
+// `composition` block.
+// ---------------------------------------------------------------------------
+
+export interface ApprovalFamily {
+  top: string;
+  mid: string;
+  leaf: string;
+  sib: string;
+  /** Change one of the project's own specs, as a design edit at that root. */
+  touch(dir: string, note: string): void;
+  /** Rewrite the top's composition block (YAML lines under `composition:`). */
+  setComposition(lines: string[]): void;
+  cleanup(): void;
+}
+
+/** Build the approval family in a fresh temp directory. */
+export function buildApprovalFamily(): ApprovalFamily {
+  const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-apfam-'));
+  const mid = path.join(top, 'mid');
+  const leaf = path.join(mid, 'leaf');
+  const sib = path.join(top, 'sib');
+  const topConfig = (extra: string[] = []): void =>
+    projectYaml(top, ['id: top', 'name: Top', 'members:', '  mid: mid', '  sib: sib', ...extra]);
+
+  topConfig();
+  system(top, 'Top');
+  subsystem(top, 'Top', 'front');
+  projectYaml(mid, ['id: mid', 'name: Mid', 'members:', '  leaf: leaf']);
+  system(mid, 'Mid');
+  subsystem(mid, 'Mid', 'middle');
+  projectYaml(leaf, ['id: leaf', 'name: Leaf']);
+  system(leaf, 'Leaf');
+  subsystem(leaf, 'Leaf', 'bottom');
+  projectYaml(sib, ['id: sib', 'name: Sib']);
+  system(sib, 'Sib');
+  subsystem(sib, 'Sib', 'aside');
+
+  const ownSubsystem: Record<string, [string, string]> = {
+    [top]: ['Top', 'front'], [mid]: ['Mid', 'middle'], [leaf]: ['Leaf', 'bottom'], [sib]: ['Sib', 'aside'],
+  };
+  return {
+    top, mid, leaf, sib,
+    touch: (dir, note) => {
+      const [parentSystem, id] = ownSubsystem[dir];
+      subsystem(dir, parentSystem, id, { description: `The ${id} subsystem — ${note}` });
+    },
+    setComposition: (lines) => topConfig(['composition:', ...lines.map((l) => `  ${l}`)]),
+    cleanup: () => fs.rmSync(top, { recursive: true, force: true }),
+  };
+}

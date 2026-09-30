@@ -11,7 +11,7 @@ import * as topology from './topology.js';
 import { AI_PATHS, assertProjectInitialized } from '../config/paths.js';
 import { Registry, createEmptyRegistry } from '../models/registry.js';
 import { projectConfigRepository } from '../config/project-config.js';
-import { getProjectRoot, pathExists } from '../utils/fs.js';
+import { getProjectRoot, pathExists, runWithProjectRoot } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { loadTemplate, loadAgentOverride, renderTemplateInstructions } from './templates.js';
 import { deriveExecutionProfile } from './execution_profile.js';
@@ -241,6 +241,26 @@ function buildVariantGuidance(
 // Topology Resolver: Translates SDD Spec Tree into Agent Topology
 // ---------------------------------------------------------------------------
 export function resolveAgentTopology(): AgentRecord[] {
+  return resolveLayer(true);
+}
+
+/**
+ * Step 10 of resolveAgentTopology: the ids of the agents a member's OWN layer
+ * resolves, bound to the member's root and qualified `<alias>::<agentId>`. Ids
+ * only, and one level: the member's own members appear as its delegating
+ * owners and are never expanded further. A member that cannot resolve a
+ * topology of its own (no configuration yet) delegates to nothing listed.
+ */
+function memberAgentIds(alias: string, memberDir: string): string[] {
+  try {
+    return runWithProjectRoot(memberDir, () => resolveLayer(false).map((r) => `${alias}::${r.id}`));
+  } catch {
+    return [];
+  }
+}
+
+/** One layer's topology; `delegate` lists each member's own agents by reference. */
+function resolveLayer(delegate: boolean): AgentRecord[] {
   projectFilesCache.clear();
 
   const system = loadSystemSpec();
@@ -328,6 +348,8 @@ export function resolveAgentTopology(): AgentRecord[] {
         writePaths: [mountSpecPath],
         tags: ['owner', 'subproject', 'delegate', 'sdd'],
         dependencies: [],
+        // The member's own agents BY REFERENCE, never copied into this layer.
+        ...(delegate ? { delegatesTo: memberAgentIds(sub.id, path.resolve(getProjectRoot(), sub.projectPath)) } : {}),
         status: 'active',
         targets: activeTargets,
         createdAt: sub.createdAt,
@@ -512,6 +534,16 @@ export class UnknownAgentError extends WaironError {
 // dynamic replacement for generate-time agent files.
 // ---------------------------------------------------------------------------
 export function composeAgentBrief(agentId: string): AgentBrief {
+  // Steps 1-4: an id qualified by a direct member's alias composes AT THE
+  // MEMBER'S ROOT (brief-through-mount) — exactly the brief the member's own
+  // session gets, so it never grows with the family — and comes back with its
+  // fence re-expressed under the member's directory. One hop per member.
+  const hop = memberHop(agentId);
+  if (hop) {
+    const brief = runWithProjectRoot(hop.directory, () => composeAgentBrief(hop.rest));
+    return throughMount(brief, hop.alias, hop.relative);
+  }
+
   // Always resolve against the live topology — a re-lock changes the next call.
   const records = resolveAgentTopology();
   const record = records.find((r) => r.id === agentId);
@@ -565,6 +597,29 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     variantGuidance: record.variantGuidance || undefined,
     profile: budget ? profile : undefined,
     budget,
+  };
+}
+
+/** A qualified id's first hop: the direct member its alias names, and the rest of the id. */
+function memberHop(agentId: string): { alias: string; rest: string; directory: string; relative: string } | null {
+  const at = agentId.indexOf('::');
+  if (at < 0) return null;
+  const alias = agentId.slice(0, at);
+  const member = graph().nodes.find((n) => n.parent === '' && n.mountAlias === alias);
+  if (!member) return null; // not a direct member: an unknown agent id, reported as such
+  const relative = path.relative(getProjectRoot(), member.directory).split(path.sep).join('/');
+  return { alias, rest: agentId.slice(at + 2), directory: member.directory, relative };
+}
+
+/** A member's brief as seen from the asking root: paths under the member's directory, id qualified. */
+function throughMount(brief: AgentBrief, alias: string, relative: string): AgentBrief {
+  const under = (p: string): string => path.posix.join(relative, p);
+  return {
+    ...brief,
+    agentId: `${alias}::${brief.agentId}`,
+    ownedPaths: brief.ownedPaths.map(under),
+    ...(brief.readPaths ? { readPaths: brief.readPaths.map(under) } : {}),
+    root: brief.root ? under(brief.root) : relative,
   };
 }
 

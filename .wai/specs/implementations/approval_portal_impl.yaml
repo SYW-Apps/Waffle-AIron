@@ -42,15 +42,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: readLockState
-  - name: currentChildPins
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Re-export the child-pin read — this Portal method and the comparison component's function
-          are the same function, so the call resolves by identity
-        type: call
-        targetComponent: approval_comparison
-        targetMethod: currentChildPins
   - name: captureApprovedSpecs
     narrative:
       - stepNumber: 1
@@ -88,15 +79,6 @@ methods:
         type: call
         targetComponent: approval_comparison
         targetMethod: approvalRecord
-  - name: movedChildren
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Re-export the child-pin drift read, so sdd_cli reaches it through this Portal rather than
-          importing the approval module across a subsystem boundary
-        type: call
-        targetComponent: approval_comparison
-        targetMethod: movedChildren
   - name: settledSpecPaths
     narrative:
       - stepNumber: 1
@@ -113,6 +95,13 @@ methods:
         type: call
         targetComponent: approval_comparison
         targetMethod: verdict
+  - name: computeOwnStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the state hash's own-tree identity
+        type: call
+        targetComponent: state_hash
+        targetMethod: ownTree
 status: complete
 createdAt: '2026-09-25T17:32:26.946Z'
-updatedAt: '2026-09-25T17:32:37.837Z'
+updatedAt: '2026-09-30T05:49:46.181Z'

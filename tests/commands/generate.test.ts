@@ -205,16 +205,17 @@ describe('resolveExpectedOutputPaths (full-topology expected set)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The cascade (runGenerate steps 9–15): after its own layer, `wairon generate`
-// generates each DIRECT chained subproject's layer in that subproject's own
-// root, completing the child's bootstrap first. It invalidates no spec cache of
+// The member walk (runGenerate steps 12-18): `wairon generate` writes only
+// this project's outputs (no cascade since stage 5); with --family it then
+// generates each DIRECT member's layer in that member's own root, completing
+// the member's bootstrap first. It invalidates no spec cache of
 // its own: every project root reads through its own spec workspace, and the
 // bootstrap invalidates whenever it writes. Covered for both kinds of child — a
 // fresh folder the bootstrap writes into, and an initialized child it leaves
 // alone (so nothing is invalidated before that child's layer is resolved).
 // ---------------------------------------------------------------------------
 
-describe('cli_runner.runGenerate: the chained cascade generates each child layer in its own root (real CLI)', () => {
+describe('cli_runner.runGenerate: --family generates each member layer in its own root; plain generate writes nothing below (real CLI)', () => {
   let rootDir: string;
 
   afterEach(() => {
@@ -249,7 +250,8 @@ describe('cli_runner.runGenerate: the chained cascade generates each child layer
     updatedAt: now,
   });
 
-  it('bootstraps and generates a fresh child, and generates an initialized child from its own tree', async () => {
+  /** A parent with two members: 'fresh' (an empty folder) and 'ready' (initialized). */
+  const buildFamily = (): { freshDir: string; readyDir: string } => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gen-cascade-'));
     const freshDir = path.join(rootDir, 'fresh');
     const readyDir = path.join(rootDir, 'ready');
@@ -270,8 +272,24 @@ describe('cli_runner.runGenerate: the chained cascade generates each child layer
     saveSpec('subsystem', { ...subsystem('inner'), parentSystem: 'ready' });
     invalidateSpecCache();
     setProjectRoot(null);
+    return { freshDir, readyDir };
+  };
 
+  it('without --family writes nothing below the project — not even a bootstrap (no cascade)', async () => {
+    const { freshDir, readyDir } = buildFamily();
     const { stdout } = await runCli(rootDir);
+    expect(stdout).not.toContain('Member "');
+    expect(fs.existsSync(path.join(rootDir, '.claude', 'agents', 'system-architect.md'))).toBe(true);
+    expect(fs.readdirSync(freshDir)).toEqual([]);
+    expect(fs.existsSync(path.join(readyDir, '.claude'))).toBe(false);
+    // --no-recurse is accepted for one release, as the default it now is.
+    await runCli(rootDir, '--no-recurse');
+    expect(fs.readdirSync(freshDir)).toEqual([]);
+  }, 180_000);
+
+  it('--family bootstraps and generates a fresh member, and generates an initialized member from its own tree', async () => {
+    const { freshDir, readyDir } = buildFamily();
+    const { stdout } = await runCli(rootDir, '--family');
 
     const agentsDir = (dir: string) => path.join(dir, '.claude', 'agents');
     expect(stdout).toContain('Member "fresh"');

@@ -10,6 +10,7 @@ import { walk, type WalkSeed } from '../narrative-graph-projector.js';
 
 export const durabilityRule: SddRule = {
   name: 'durability-round-trip',
+  judges: 'design',
   description:
     'A durable Store (persisted RAM projection) must carry effect-tagged contract methods, and its writes require a hydration read-back reachable from a lifecycle init entrypoint. read-through is exempt (every read IS the read-back), as are ram-projection (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic check is opt-out by declaration, never silently absent — the declaration itself is enforced by durability-declaration.',
   codes: [

@@ -107,6 +107,7 @@ function answers(route: ServedRoute, endpoint: ContractEndpoint): boolean {
 
 export const routeCoverageRule: SddRule = {
   name: 'route-coverage',
+  judges: 'code',
   description: 'Code-to-contract for the ROUTES: does every route a router actually answers have a contract endpoint, and does every contract endpoint have a route that answers it? A portal\'s endpoints are what its contract promises; the router is what the code serves; nothing compared the two, so a route with no contract — including a write — could run for months without a single rule noticing. The listener\'s mount names the router function (its `via`), and the routes are read out of that function\'s guards; the path segment the router never checks is the one the mount\'s prefix guarantees. One idiom is read — a method comparison with comparisons on the path\'s split segments — and a mounted router that yields no route in it is reported as unread, never passed: a check that cannot see a router must say so rather than stay quiet.',
   codes: [
     {

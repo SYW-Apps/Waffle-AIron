@@ -84,9 +84,10 @@ methods:
         optional: true
   - name: computeGateStateId
     description: >-
-      The gate identity of the bound project as it stands now: the value a lock records and every
-      staleness check compares. Served by the validator because the doctrine it covers includes the
-      validator's own built-in rules.
+      Forward to spec_validator.computeGateStateId: the gate identity a lock records and every
+      staleness check compares — the project's own spec content, the design doctrine, its own
+      consumed contract inputs, its `composition`, and each direct member's composition subject
+      (read from the member's own lock record). Rules that judge code are not part of it.
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
@@ -166,6 +167,23 @@ methods:
         description: The parsed pack manifest
     guarantees:
       - idempotent
+  - name: familyApprovals
+    description: >-
+      Forward to family_validator.approvals: the bound project's pin tree — its own approval state
+      and each member's within `depth` levels, each computed at the member's own root, with each
+      member's subject and how its parent pinned it. The one source the lock workflow (depth 1:
+      record `members`, enforce requireApprovedMembers), `wairon status` and sdd_get_status read, so
+      they cannot disagree. Writes nothing. Hosted callers must gate on reach themselves before
+      asking about a family.
+    signature: 'familyApprovals(depth?: number): ProjectApproval[]'
+    returns: ProjectApproval[]
+    params:
+      - name: depth
+        type: number
+        description: 'Member levels to include: 1 = direct members, omitted = every level'
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T16:14:48.062Z'
+updatedAt: '2026-09-30T05:52:33.272Z'

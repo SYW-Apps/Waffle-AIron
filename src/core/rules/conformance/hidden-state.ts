@@ -34,6 +34,7 @@ const isStatelessLogic = (component: ComponentSpec): boolean => isLogic(componen
 
 export const hiddenStateRule: SddRule = {
   name: 'hidden-state',
+  judges: 'code',
   description:
     'The fields-vs-Store criterion, statically approximated: module-scope mutable bindings (let/var) in a source file mapped EXCLUSIVELY to logic that holds no state (a component whose type isLogic() and not holdsState(): an Orchestrator, or a Specialist until it is retired) are flagged as hidden held state. A component maps every file its implementations and their methods name. State a logic component keeps for itself is invisible to the spec, the canvas, and every persistence rule: promote it to a Store (durability: cache for loss-safe memo state), or lint.allow with the reason it is genuinely wiring or ephemeral. Supervisor and Actor files may hold runtime state. Exact analysis grade only; files also mapped to data or boundary components are exempt (N:1 collapse); const-bound container mutation is beyond this check and the finding says so.',
   codes: [

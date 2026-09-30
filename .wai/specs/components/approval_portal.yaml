@@ -13,7 +13,8 @@ dependsOn:
   - approval_comparison
   - core_orchestrator
   - local_approver
+  - state_hash
 portalType: Custom
 status: complete
 createdAt: '2026-09-25T17:32:17.292Z'
-updatedAt: '2026-09-25T17:32:37.993Z'
+updatedAt: '2026-09-30T05:49:47.082Z'

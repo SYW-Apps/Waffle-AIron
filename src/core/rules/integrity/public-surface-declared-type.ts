@@ -45,6 +45,7 @@ const expectedFor = (t: string): string => {
  */
 export const publicSurfaceDeclaredTypeRule: SddRule = {
   name: 'public-surface-declared-type',
+  judges: 'design',
   description:
     'A publicInterface entry\'s declared type must be realizable by the stereotype of its backing component; Custom entries whose prose implies eventing must be backed by an event-capable component.',
   codes: [

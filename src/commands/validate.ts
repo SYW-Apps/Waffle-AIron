@@ -10,7 +10,7 @@ import { declaredMembers, type CarriedDebt, type ProjectConfig, type RulesConfig
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
 import {
-  validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId,
+  validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId, familyApprovals,
   type ValidationIssue, type ValidationResult, type ValidationOptions,
 } from '../core/validation.js';
 
@@ -40,7 +40,12 @@ import {
 // project's own gate verbatim, the composition of each project's externals and
 // the family checks), republished as the adapter's forward to the validator
 // portal.
-export { validateAsComplete, computeGateStateId };
+//
+// cli_validator_adapter.familyApprovals — the bound project's pin tree (its own
+// approval state and each member's, each computed at that project's own root),
+// republished as the adapter's forward to the validator portal: the local lock
+// asks with depth 1, `wairon status` for every level.
+export { validateAsComplete, computeGateStateId, familyApprovals };
 
 /** cli_validator_adapter.validateProject — the owner's gate, forwarded to the validator portal. */
 export function validateProject(options?: ValidationOptions, projectType?: string): ValidationResult {

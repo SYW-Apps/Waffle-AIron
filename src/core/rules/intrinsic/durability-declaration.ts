@@ -9,6 +9,7 @@ import { SddRule } from '../types.js';
  */
 export const durabilityDeclarationRule: SddRule = {
   name: 'durability-declaration',
+  judges: 'design',
   scope: 'spec',
   description:
     'Every Store declares its durability (MISSING_DURABILITY) and nothing but a Store may declare one (DURABILITY_ON_NON_STORE). Intrinsic to one component: no tree required. The round-trip consequences of the declaration are enforced by durability-round-trip.',

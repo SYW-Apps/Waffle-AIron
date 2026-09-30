@@ -10,6 +10,7 @@ import { SddRule } from '../types.js';
 
 export const contractSymmetryRule: SddRule = {
   name: 'contract-symmetry',
+  judges: 'design',
   description:
     'Implementations mirror their contract method-for-method: every method an implementation declares is defined on the contract it realizes, and every contract method has an implementation.',
   codes: [

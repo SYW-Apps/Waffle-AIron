@@ -39,6 +39,7 @@ interface NarrativeEntry {
 
 export const narrativeComplexityRule: SddRule = {
   name: 'narrative-complexity',
+  judges: 'design',
   description:
     'Judges a narrative on two independent axes: the cognitive band its shape earns, from branching and nesting, and the number of steps it lists. A flat list of registrations is long but linear; a deeply nested guard is short but severe. Each axis warns above its configured level, and reports an error only where a maximum is configured.',
   codes: [

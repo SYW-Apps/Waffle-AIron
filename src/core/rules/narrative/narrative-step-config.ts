@@ -18,6 +18,7 @@ import { SddRule } from '../types.js';
 
 export const narrativeStepConfigRule: SddRule = {
   name: 'narrative-step-config',
+  judges: 'design',
   description:
     'The step configuration of L5 narratives: every flow step (branch, switch, loop, try, parallel, jump) carries the config its type requires and no simple step carries flow config, "detach" (fire-and-forget) is legal on call/dispatch steps only, no step carries a field foreign to its type, a parallel body is covered by contiguous, ordered arms (>= 2), no two steps share a step number or a label, and every jump field targets an existing step number in the same narrative.',
   codes: [

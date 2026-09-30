@@ -3,7 +3,7 @@ import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
 import { snapshotSpecFiles, graph } from './specs.js';
 import { readLockRecord, readLockRecordAt } from './lockfile.js';
-import { describeApprover } from '../models/lock.js';
+import { describeApprover, type ProjectApproval } from '../models/lock.js';
 import type { LockRecord } from './lockfile.js';
 import type { StateId } from './statehash.js';
 
@@ -34,9 +34,11 @@ import type { StateId } from './statehash.js';
 //     which rewrote hundreds of SPEC files for a decision that changed no
 //     design.
 //  3. It is per PROJECT ROOT, because each `.wai` has its own lock — including
-//     every chained subproject. A parent approval never freezes a child's
-//     in-flight work; the parent PINS each child's approved StateId instead
-//     (see `children`), the way a git submodule pins a commit.
+//     every member. A parent approval never freezes a member's in-flight work;
+//     the parent records each direct member's composition subject instead
+//     (`members`, stage 5), the way a git submodule pins a commit — and a
+//     member's state and pin are the validator's to compute, since they need
+//     gate identities (validator_portal.familyApprovals).
 // ---------------------------------------------------------------------------
 
 export interface ApprovalDiff {
@@ -208,68 +210,9 @@ export function settledSpecPaths(root: string = getProjectRoot()): Set<string> |
   return diff ? new Set(diff.unchangedPaths) : null;
 }
 
-/** Render a StateId the way a child pin stores it. */
+/** Render a StateId the way a member pin (a composition subject) stores it. */
 export function pinOf(stateId: StateId): string {
   return `${stateId.algorithm}:${stateId.digest}`;
-}
-
-/**
- * One chained child sitting at a different pin than the approval recorded.
- *
- * Both pins are carried rather than a boolean, because a parent deciding
- * whether to re-lock needs to see what it approved and what it is looking at
- * now. And `now` is nullable on purpose: a child that no longer carries an
- * approval of its own is a DIFFERENT problem from a child that moved, and a
- * caller that cannot tell them apart reports the wrong one.
- */
-export interface ChildPinDrift {
-  /** The mount id — the parent subsystem the child is mounted as. */
-  id: string;
-  /** The pin the parent's approval recorded for this child. */
-  pinned: string;
-  /** The pin the child is at now, or null when it carries no approval. */
-  now: string | null;
-}
-
-/**
- * The approved StateId of every chained child mounted under this root, keyed by
- * mount id — what a parent approval PINS.
- *
- * A child with no lock of its own contributes no pin: the parent can only
- * record a decision the child's owner actually made.
- */
-export function currentChildPins(
-  mounts: { id: string; projectPath?: string }[],
-  root: string = getProjectRoot(),
-): Record<string, string> {
-  const pins: Record<string, string> = {};
-  for (const mount of mounts) {
-    if (!mount.projectPath || mount.id.includes('::')) continue;
-    const child = readLockRecordAt(path.resolve(root, mount.projectPath));
-    if (child) pins[mount.id] = pinOf(child.stateId);
-  }
-  return pins;
-}
-
-/**
- * Chained children whose own approval has moved away from what the parent
- * pinned. This is the parent-side review signal that a child edit is supposed
- * to produce — and the reason a child edit does NOT dirty the parent's own spec
- * diff: the two are separate decisions, and only this one crosses.
- */
-export function movedChildren(
-  mounts: { id: string; projectPath?: string }[],
-  root: string = getProjectRoot(),
-): ChildPinDrift[] {
-  const pinned = approvalRecord(root)?.children;
-  if (!pinned) return [];
-  const now = currentChildPins(mounts, root);
-  const moved: ChildPinDrift[] = [];
-  for (const [id, was] of Object.entries(pinned)) {
-    const current = now[id] ?? null;
-    if (current !== was) moved.push({ id, pinned: was, now: current });
-  }
-  return moved;
 }
 
 /**
@@ -289,18 +232,6 @@ export interface ApprovalVerdict {
 }
 
 /**
- * The members the bound root declares, in the shape a pin keys them by: the
- * alias and the path. A member is read from the project graph (stage 3: in
- * project.yaml `members`, or a legacy L1 mount for one release), never from
- * the subsystem specs, which no longer hold it.
- */
-function memberMounts(root: string = getProjectRoot()): { id: string; projectPath: string }[] {
-  return graph().nodes
-    .filter((n) => n.parent === '' && n.mountAlias !== undefined)
-    .map((n) => ({ id: n.mountAlias!, projectPath: path.relative(root, n.directory).split(path.sep).join('/') }));
-}
-
-/**
  * What has changed since the human last approved this tree.
  *
  * This used to report the lock's StateId verdict, which could only ever say
@@ -316,20 +247,21 @@ function memberMounts(root: string = getProjectRoot()): { id: string; projectPat
  * Answers whether it IS drift alongside the text — so the caller picks its
  * severity from the fact rather than by matching this function's own wording.
  */
-export function approvalVerdict(): ApprovalVerdict {
+export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict {
   const quiet = { text: '', drifted: false };
   try {
     const approval = approvalRecord();
     if (!approval) return quiet;
     const by = describeApprover(approval.lockedBy);
 
-    // A moved chained child is a change the parent should review even when none
-    // of the parent's OWN specs shifted — the trees are approved separately, and
-    // this pin is the only thing that crosses between them.
-    const moved = movedChildren(memberMounts());
-    const childNote = moved.length
-      ? `\n${moved.length} chained child project(s) moved since approval: ${moved.map((m) => m.id).join(', ')}.`
-      : '';
+    // What the pin tree says, when the caller passed one: an upgrade-only
+    // staleness of this project's own lock, direct members whose pin MOVED
+    // (this lock is stale until it re-locks) and direct members that are
+    // drifted or never approved (the member's to lock, named so this project
+    // knows before it locks).
+    const notes = memberNotes(approvals ?? []);
+    const pinDrift = notes.drift;
+    const childNote = notes.text;
 
     const diff = diffAgainstApproval();
     if (!diff) {
@@ -339,13 +271,13 @@ export function approvalVerdict(): ApprovalVerdict {
       return {
         text: `\nApproved: ${approval.lockedAt} by ${by} — this lock predates per-spec approval, so `
           + `drift is only visible at whole-tree level. Re-lock to record it.${childNote}\n`,
-        drifted: moved.length > 0,
+        drifted: pinDrift,
       };
     }
     if (diffSize(diff) === 0) {
       return {
         text: `\nApproved: ${approval.lockedAt} by ${by} — no spec has changed since.${childNote}\n`,
-        drifted: moved.length > 0,
+        drifted: pinDrift,
       };
     }
 
@@ -379,4 +311,37 @@ export function approvalVerdict(): ApprovalVerdict {
   } catch {
     return quiet; // never let a report line break the report
   }
+}
+
+/** The stage-5 upgrade note: the identity gained inputs, which says nothing about the design. */
+export const GATE_UPGRADE_NOTE =
+  'the gate identity gained inputs in stage 5 (members\' composition subjects, `composition`; '
+  + 'code conformance moved beside the claim)';
+
+/**
+ * The member and upgrade lines of the verdict, from the pin tree: whether this
+ * project's own lock was taken under an earlier gate identity, which direct
+ * members' pins moved, and which are drifted or never approved. `drift` is
+ * this project's drift only: an upgrade or a moved pin — a member that is
+ * merely unapproved is the member's to lock.
+ */
+function memberNotes(approvals: ProjectApproval[]): { text: string; drift: boolean } {
+  const own = approvals.find((a) => a.key === '');
+  const direct = approvals.filter((a) => a.parent === '');
+  const moved = direct.filter((a) => a.pinned === 'moved');
+  const unapproved = direct.filter((a) => a.state !== 'approved');
+  const lines: string[] = [];
+  if (own?.upgraded) {
+    lines.push(`This approval was taken under an earlier gate identity — ${GATE_UPGRADE_NOTE}. Re-lock once.`);
+  }
+  if (moved.length) {
+    lines.push(`${moved.length} member pin(s) moved since approval: ${moved.map((a) => a.alias ?? a.key).join(', ')} — re-lock to approve them.`);
+  }
+  if (unapproved.length) {
+    lines.push(`Member(s) not approved at their own root: ${unapproved.map((a) => `${a.alias ?? a.key} (${a.state}${a.upgraded ? ', re-lock once' : ''})`).join(', ')}.`);
+  }
+  return {
+    text: lines.map((l) => `\n${l}`).join(''),
+    drift: !!own?.upgraded || moved.length > 0,
+  };
 }

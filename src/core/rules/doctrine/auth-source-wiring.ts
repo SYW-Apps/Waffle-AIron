@@ -15,6 +15,7 @@ const COMPONENT_REF_PREFIX = 'component:';
 
 export const authSourceWiringRule: SddRule = {
   name: 'auth-source-wiring',
+  judges: 'design',
   description:
     "Resolves the credential source a narrative call presents to an authenticated Portal. When the step's `auth.from` is a modeled reference (`component:<id>`) it must name a component that exists (UNKNOWN_AUTH_SOURCE), that can hold or load a secret — an Adapter or a Store (AUTH_SOURCE_NOT_PROVIDER) — and that the presenting component depends on or owns (AUTH_SOURCE_UNWIRED). Opaque sources (env:/config:/vault:/free note) are design notes and are never resolved; a missing source is portal-call-auth's finding.",
   codes: [

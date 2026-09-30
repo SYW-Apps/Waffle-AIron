@@ -2,31 +2,31 @@ kind: value-object
 id: state_id
 name: StateId
 description: >-
-  The deterministic content identity of a spec-tree state. Two states with identical content produce
-  the same StateId; any change alters it. Two flavours exist, distinguished by `algorithm` so they
-  can never compare equal: the CONTENT identity over the spec tree alone (surface/landscape snapshot
-  stamps, where doctrine is irrelevant), and the GATE identity over the spec tree PLUS the governing
-  doctrine (pack identities, profiles, languages, patterns, guarantees, assertions, rule codes) PLUS
-  the consumed contract inputs (the content of the stored surface snapshots a verdict can consult) —
-  what the commit-scoped lock record is scoped to and what every staleness re-check recomputes,
-  because a lock asserts that these specs pass THIS gate against THESE contracts.
+  The deterministic identity of a spec-tree state. Two states with identical content produce the
+  same StateId; any change alters it. Two flavours exist, distinguished by `algorithm` so they can
+  never compare equal: the CONTENT identity over the spec tree alone (surface/landscape snapshot
+  stamps, where doctrine is irrelevant), and the GATE identity a lock records and every staleness
+  re-check recomputes — the project's OWN spec content, the governing design doctrine, the consumed
+  contract inputs of its own root, its `composition`, and each direct member's composition subject —
+  because a lock asserts that these specs pass THIS gate against THESE inputs.
 fields:
   - name: algorithm
     type: string
     description: >-
-      Hash algorithm identifier, also distinguishing the flavour: "sha256" = spec-tree content only;
-      "sha256+doctrine+inputs" = tree plus governing doctrine plus consumed contract inputs (the
-      earlier "sha256+doctrine" is no longer produced). stateIdEquals compares this, so neither a
-      content-only identity nor a gate identity taken before inputs were covered satisfies a gate
-      comparison — which makes such lock records read as stale instead of as valid.
+      Algorithm identifier, also distinguishing the flavour: "sha256" = spec-tree content only;
+      "sha256+content+doctrine+inputs+members" = the stage-5 gate identity. Earlier gate markers
+      ("sha256+doctrine+inputs", "sha256+content+doctrine+inputs") are no longer produced;
+      stateIdEquals compares this field, so a lock taken under an earlier marker reads stale once
+      (LockStatus.upgraded) instead of passing.
     optional: false
   - name: digest
     type: string
     description: >-
-      Hex digest over the canonicalized content (spec tree, plus the doctrine projection and the
-      consumed contract inputs for the gate flavour)
+      Hex digest over the canonicalized content (the spec tree, plus for the gate flavour the
+      doctrine projection, the consumed contract inputs, the composition block and the members'
+      subjects)
     optional: false
 methods: []
 sourcePath: src/core/statehash.ts
 createdAt: '2026-07-04T12:44:18.502Z'
-updatedAt: '2026-09-19T11:07:18.253Z'
+updatedAt: '2026-09-30T05:48:09.072Z'

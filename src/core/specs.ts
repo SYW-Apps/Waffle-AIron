@@ -641,14 +641,6 @@ export function inspectChainedRoots(rootDir: string = getProjectRoot()): Chained
   return inspection;
 }
 
-/**
- * Every member root beneath a project root, in walk order — the roots half of
- * inspectChainedRoots. Returns [] for a project that declares none.
- */
-export function listChainedRoots(rootDir: string = getProjectRoot()): string[] {
-  return inspectChainedRoots(rootDir).roots;
-}
-
 // ---------------------------------------------------------------------------
 // References: the positions a spec names other specs in.
 //
@@ -6056,22 +6048,27 @@ function consumedSurfaceInputsAt(rootDir: string): string[] {
 }
 
 /**
- * The consumed contract inputs a verdict can consult
- * (icore_orchestrator/icore_portal.consumedContractInputs): this root's own
- * stored surface snapshots, pinned external snapshots and externals lock, plus
- * every chained mount's, as canonical content keys. A whole-tree validation can consult any of them when resolving a
- * cross-tree reference, so the gate identity covers them all — swapping a
- * pinned contract invalidates a lock.
+ * The consumed contract inputs a verdict at the bound project can consult
+ * (icore_orchestrator/icore_portal.consumedContractInputs): THIS root's stored
+ * surface snapshots, pinned external snapshots and externals lock, as
+ * canonical content keys. A member's inputs are left out since stage 5: they
+ * are that member's own gate's, and reach this project's gate identity through
+ * the member's composition subject. The gate identity covers them, so swapping
+ * a pinned contract invalidates a lock.
  */
 export function consumedContractInputs(): string[] {
-  const root = getProjectRoot();
-  const roots = [root, ...listChainedRoots(root).map((rel) => path.join(root, rel))];
-  return roots.flatMap(consumedSurfaceInputsAt);
+  return consumedSurfaceInputsAt(getProjectRoot());
 }
 
 /** Whether a lock is in force, void, or absent. */
 export type LockState = 'unlocked' | 'locked' | 'stale';
 
+/**
+ * The resolved verdict on a project's lock, plus the evidence it was decided
+ * from. `stale` covers a record the design or anything it was approved under
+ * moved past — and a record taken under an earlier gate identity algorithm
+ * (lockUpgraded).
+ */
 export interface LockStatus {
   state: LockState;
   /** The persisted record, or null when the project was never locked. */
@@ -6098,6 +6095,18 @@ export function readLockState(current: StateId): LockStatus {
   const record = readLockRecord();
   if (!record) return { state: 'unlocked', record: null, current };
   return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
+}
+
+/**
+ * lock_status.upgraded — whether a stale verdict comes from the identity itself
+ * changing shape rather than from anything it covers: the state is stale and
+ * the record's algorithm differs from the current one. A lock taken before
+ * stage 5 answers true — every lock reads stale once, and a surface that says
+ * so can tell the human that nothing in the design is KNOWN to have moved.
+ * Pure over the status's own fields.
+ */
+export function lockUpgraded(status: LockStatus): boolean {
+  return status.state === 'stale' && !!status.record && status.record.stateId.algorithm !== status.current.algorithm;
 }
 
 // ---------------------------------------------------------------------------

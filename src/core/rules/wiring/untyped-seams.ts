@@ -17,6 +17,7 @@ function namesBareType(refs: string[]): boolean {
 
 export const untypedSeamRule: SddRule = {
   name: 'untyped-seams',
+  judges: 'design',
   description:
     'Methods on a subsystem\'s published components (its public surface) should not take or return bare Json/any/unknown/object, judged through each method\'s type references so a prose signature is judged like structured params: cross-subsystem contracts are the swap seam and must be typed. Generic-dispatch portals carry per-capability types via their dispatch table instead.',
   codes: [

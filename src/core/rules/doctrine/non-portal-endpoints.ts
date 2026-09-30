@@ -11,6 +11,7 @@ import { SddRule } from '../types.js';
  */
 export const nonPortalEndpointsRule: SddRule = {
   name: 'non-portal-endpoints',
+  judges: 'design',
   description:
     'Only a Portal may carry endpoints: a method on a non-Portal component\'s interface that declares one is publishing a block that is not the system\'s boundary as if it were.',
   codes: [

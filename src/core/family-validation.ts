@@ -16,6 +16,7 @@ import {
   projectFamily,
   loadProjectConfig,
   readLockRecord,
+  approvalRecord,
   loadProjectExtensions,
   packManifest,
   loadSubsystemSpecs,
@@ -30,6 +31,10 @@ import { admits, rangeProblem, requiredPolicies, type PackRequirement, type Pack
 import { packSettings, type PackSettings } from '../models/pack-impact.js';
 import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
+import type { PinState, ProjectApproval } from '../models/lock.js';
+
+/** A project's lock record, as the core adapter reads one. */
+type LockRecord = NonNullable<ReturnType<typeof approvalRecord>>;
 
 // ---------------------------------------------------------------------------
 // family_validator — the family run (stage 4).
@@ -383,26 +388,24 @@ function cycleFindings(family: ProjectFamily, config: ProjectConfig | null): (Va
   return out;
 }
 
-/** Steps 4-7: a present member's lock against its own gate identity. */
-function approvalFinding(node: ProjectNode, config: ProjectConfig | null): ValidationIssue | null {
-  return runWithProjectRoot(node.directory, () => {
-    // Step 5: its own gate identity — never an ancestor's.
-    const current = computeGateStateId();
-    // Step 6: its lock record.
-    const record = readLockRecord();
-    // Step 7: none is unapproved; one whose identity differs has drifted.
-    if (!record) {
-      return finding(config, 'MEMBER_UNAPPROVED',
-        `The member ${named(node.namespace)} has never been locked: nobody has approved its design. Lock it at its own root (\`wairon lock\`).`,
-        node.namespace);
-    }
-    if (record.stateId.algorithm !== current.algorithm || record.stateId.digest !== current.digest) {
-      return finding(config, 'MEMBER_DRIFTED',
-        `The member ${named(node.namespace)} changed since it was approved on ${record.lockedAt}: its lock no longer matches its own gate identity. Re-lock it at its own root (\`wairon lock\`).`,
-        node.namespace);
-    }
-    return null;
-  });
+/** Step 4: a present member's approval state as a family finding; null when it is approved. */
+function approvalFinding(entry: ProjectApproval, config: ProjectConfig | null): ValidationIssue | null {
+  if (entry.state === 'never') {
+    return finding(config, 'MEMBER_UNAPPROVED',
+      `The member ${named(entry.key)} has never been locked: nobody has approved its design. Lock it at its own root (\`wairon lock\`).`,
+      entry.key);
+  }
+  if (entry.state === 'drifted' && entry.upgraded) {
+    return finding(config, 'MEMBER_DRIFTED',
+      `The member ${named(entry.key)} was approved under an earlier gate identity — the gate identity gained inputs in stage 5 (members' composition subjects, \`composition\`; code conformance moved beside the claim), which says nothing about its design. Re-lock it once at its own root (\`wairon lock\`).`,
+      entry.key);
+  }
+  if (entry.state === 'drifted') {
+    return finding(config, 'MEMBER_DRIFTED',
+      `The member ${named(entry.key)} changed since it was approved: its lock no longer matches its own gate identity. Re-lock it at its own root (\`wairon lock\`).`,
+      entry.key);
+  }
+  return null;
 }
 
 /**
@@ -415,13 +418,110 @@ export function checkMembers(family: ProjectFamily): ValidationIssue[] {
   const config = configOrNull();
   // Steps 1-2: the graph's problems and its loops.
   const out = [...problemFindings(family, config), ...cycleFindings(family, config)];
-  // Step 3: each present member. The root's own lock is not a family finding.
-  for (const node of family.nodes) {
-    if (node.namespace === '') continue;
-    out.push(approvalFinding(node, config));
+  // Step 3: every member's approval state, each at its own root — the same
+  // answer the lock records and status prints.
+  const present = new Set(family.nodes.filter((n) => n.namespace !== '').map((n) => n.namespace));
+  // Step 4: each present member. The root's own lock is not a family finding.
+  for (const entry of projectApprovals()) {
+    if (present.has(entry.key)) out.push(approvalFinding(entry, config));
   }
   // Step 8: resolved and returned.
   return out.filter((f): f is ValidationIssue => f !== null);
+}
+
+// ---- the pin tree ----------------------------------------------------------
+//
+// Each project's approval state, computed at that project's OWN root — its
+// lock record against its own gate identity recomputed there — so the answer
+// about a project is the same whichever root asked (status-agrees). Reads each
+// project's own tree once and writes nothing.
+
+/** A StateId rendered as a composition subject. */
+function subjectOf(record: LockRecord): string {
+  return `${record.stateId.algorithm}:${record.stateId.digest}`;
+}
+
+/** Steps 4-7: one loaded project's own state, bound to its own root. */
+function ownApproval(node: ProjectNode, root: string): ProjectApproval {
+  return within(node.directory, { topRoot: root, narrowed: true }, () => {
+    // Step 5: its own gate identity — its tree, its members' recorded subjects.
+    const current = computeGateStateId();
+    // Step 6: its own lock record.
+    const record = readLockRecord();
+    const base: ProjectApproval = {
+      key: node.namespace,
+      ...(node.mountAlias !== undefined ? { alias: node.mountAlias } : {}),
+      ...(node.parent !== undefined ? { parent: node.parent } : {}),
+      ...(node.id !== undefined ? { projectId: node.id } : {}),
+      state: 'never',
+    };
+    // Step 7: none is never; a matching identity is approved; else drifted,
+    // upgraded when only the algorithm marker moved.
+    if (!record) return base;
+    const matches = record.stateId.algorithm === current.algorithm && record.stateId.digest === current.digest;
+    return {
+      ...base,
+      state: matches ? 'approved' : 'drifted',
+      subject: subjectOf(record),
+      ...(!matches && record.stateId.algorithm !== current.algorithm ? { upgraded: true } : {}),
+    };
+  });
+}
+
+/**
+ * Steps 8-9: how the parent's lock pinned a member — its `members` entry, else
+ * (format 1, for one release) its `children` entry.
+ */
+function pinOf(parent: LockRecord | null, alias: string, subject: string | undefined): PinState {
+  if (!parent) return 'unpinned';
+  const recorded = parent.members
+    ? (alias in parent.members ? parent.members[alias].subject ?? 'never' : undefined)
+    : parent.children?.[alias];
+  if (recorded === undefined) return 'unpinned';
+  return recorded === (subject ?? 'never') ? 'matches' : 'moved';
+}
+
+/**
+ * ifamily_validator.approvals — the bound project's pin tree: the root's own
+ * entry first, then each member within `depth` levels (all when omitted), in
+ * walk order. A declared member with no project on disk is `never`, with no
+ * subject, and nothing is bound for it. The caller must gate on reach itself
+ * before it asks about a family.
+ */
+export function projectApprovals(depth?: number): ProjectApproval[] {
+  // Step 1: the bound root's project graph.
+  const family = projectFamily();
+  const root = path.resolve(getProjectRoot());
+  // Step 2: the projects to answer for.
+  const limit = depth ?? Infinity;
+  const selected = family.nodes.filter((n) => depthOf(family, n) <= limit);
+  const directoryOf = new Map(family.nodes.map((n) => [n.namespace, n.directory]));
+  const parentRecord = (key: string): LockRecord | null => {
+    const dir = directoryOf.get(key);
+    return dir === undefined ? null : approvalRecord(dir);
+  };
+  // Steps 3-9: each loaded project at its own root, and its parent's pin.
+  const entries: ProjectApproval[] = selected.map((node) => {
+    const own = ownApproval(node, root);
+    if (node.parent === undefined || node.mountAlias === undefined) return own;
+    return { ...own, pinned: pinOf(parentRecord(node.parent), node.mountAlias, own.subject) };
+  });
+  // A declared member with no project on disk: never, bound to nothing.
+  for (const problem of family.problems) {
+    if (problem.kind !== 'member-absent' || !problem.id) continue;
+    const parentKey = problem.projects[0] ?? '';
+    const parentNode = family.nodes.find((n) => n.namespace === parentKey);
+    if (!parentNode || depthOf(family, parentNode) + 1 > limit) continue;
+    entries.push({
+      key: parentKey === '' ? problem.id : `${parentKey}::${problem.id}`,
+      alias: problem.id,
+      parent: parentKey,
+      state: 'never',
+      pinned: pinOf(parentRecord(parentKey), problem.id, undefined),
+    });
+  }
+  // Step 10: root first.
+  return entries;
 }
 
 // ---- the governance checks -------------------------------------------------

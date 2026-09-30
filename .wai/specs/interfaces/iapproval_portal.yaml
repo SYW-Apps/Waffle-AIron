@@ -34,21 +34,6 @@ methods:
       - name: current
         type: StateId
         description: The gate identity as it stands now
-  - name: currentChildPins
-    description: >-
-      The approved StateId of every chained child mounted under this root, keyed by mount id — what
-      an approval records so a later check can tell whether a child moved. A child with no approval
-      of its own contributes no entry.
-    signature: 'currentChildPins(mounts: SubsystemSpec[], root?: string): Record<string, string>'
-    returns: Record<string, string>
-    params:
-      - name: mounts
-        type: SubsystemSpec[]
-        description: The subsystem specs whose projectPath mounts a chained child
-      - name: root
-        type: string
-        description: The parent project root; the bound project when omitted
-        optional: true
   - name: captureApprovedSpecs
     description: >-
       Capture the CURRENT spec tree as approved: one content digest per spec file, keyed by path
@@ -97,23 +82,6 @@ methods:
         type: string
         description: The project root; the bound project when omitted
         optional: true
-  - name: movedChildren
-    description: >-
-      Which chained children sit at a different pin than the approval recorded, each with the pin it
-      was approved at and the pin it is at now — null when the child no longer has an approval of
-      its own. Published here for the same reason the rest of the approval surface is: the local
-      lock and the hosted admin plane both approve through this Portal, and a caller reaching past
-      it into the approval module crosses a subsystem boundary the architecture does not allow.
-    signature: 'movedChildren(mounts: SubsystemSpec[], root?: string): ChildPinDrift[]'
-    returns: ChildPinDrift[]
-    params:
-      - name: root
-        type: string
-        description: The parent project root; the bound project when omitted
-        optional: true
-      - name: mounts
-        type: SubsystemSpec[]
-        description: The subsystem specs whose projectPath mounts a chained child
   - name: settledSpecPaths
     description: >-
       The spec paths the approval on record covers, as a set for membership tests; null when there
@@ -129,13 +97,26 @@ methods:
         optional: true
   - name: approvalVerdict
     description: >-
-      Published read: what the lock says about the tree as it stands, as a line to show plus whether
-      it is drift. Forwarded to the approval comparison.
-    signature: 'approvalVerdict(): ApprovalVerdict'
+      What the lock says about the tree as it stands (approval_comparison.verdict), given the pin
+      tree the caller obtained from the validator; silent for a project never approved.
+    signature: 'approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict'
     returns: ApprovalVerdict
+    params:
+      - name: approvals
+        type: ProjectApproval[]
+        description: The pin tree from validator_portal.familyApprovals
+        optional: true
+    guarantees:
+      - idempotent
+  - name: computeOwnStateId
+    description: >-
+      The content identity of the bound project's OWN specs, never a member's: the content half of
+      the gate identity (state_hash.ownTree).
+    signature: 'computeOwnStateId(): StateId'
+    returns: StateId
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-25T17:32:24.931Z'
-updatedAt: '2026-09-25T17:32:37.688Z'
+updatedAt: '2026-09-30T05:49:42.158Z'

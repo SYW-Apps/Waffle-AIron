@@ -12,6 +12,7 @@ import type { SddRule } from '../types.js';
 
 export const guaranteeTokensRule: SddRule = {
   name: 'guarantee-tokens',
+  judges: 'design',
   description:
     'Every semantic-guarantee token an L3 method declares or a narrative step asserts must be a builtin guarantee or one a loaded extension pack declares in its `guarantees` list. The vocabulary is open for packs, not for typos — an undeclared token is matched by nothing and silently escapes the narrative↔contract consistency checks.',
   codes: [

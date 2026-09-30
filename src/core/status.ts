@@ -28,6 +28,7 @@ import {
 } from './specs.js';
 import { implementationSourceFiles, type SubsystemSpec } from '../models/specs.js';
 import { pathExists, fromProjectRoot } from '../utils/fs.js';
+import type { ProjectApproval } from '../models/lock.js';
 
 /**
  * The completeness report, and whether it could be produced at all. Two parts
@@ -64,6 +65,21 @@ export interface StatusOptions {
   subsystem?: string;
   /** How far into members to follow. Absent means all the way down. */
   recursive?: boolean | number;
+  /**
+   * The pin tree to print, computed by the validator at each project's own
+   * root (validator_portal.familyApprovals) and handed in — core cannot compute
+   * a gate identity itself. When given, each [Project] line carries its
+   * member's approval state and how its parent pinned it, and the report ends
+   * with the root's own state. Absent: no approval states.
+   */
+  approvals?: ProjectApproval[];
+}
+
+/** One approval as a status tag: its state, an upgrade note, and its pin. */
+function approvalTag(entry: ProjectApproval | undefined): string {
+  if (!entry) return '';
+  const state = entry.upgraded ? `${entry.state}, re-lock once` : entry.state;
+  return entry.pinned ? ` [${state} · pin ${entry.pinned}]` : ` [${state}]`;
 }
 
 /**
@@ -335,13 +351,25 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
       const isLast = ownSubs.length + j === total - 1;
       const form = member.mountForm === 'mount' ? mark.draft(' [mount form]') : '';
       const label = `[Project] ${member.mountAlias ?? member.namespace} (${member.id ?? 'no id'})`;
-      output += `${mark.structure(indent + (isLast ? '└── ' : '├── '))}${mark.layer('project', label)}${form}\n`;
+      // Step 9: the member's approval state and pin — read, never recomputed.
+      const approval = approvalTag(options.approvals?.find((a) => a.key === member.namespace));
+      output += `${mark.structure(indent + (isLast ? '└── ' : '├── '))}${mark.layer('project', label)}${form}${approval}\n`;
       renderProject(member.namespace, indent + (isLast ? '    ' : '│   '));
     });
   };
   renderProject('', '');
+  // Step 9: members the graph declares but no project stands behind, and the
+  // root's own state to close the report.
+  for (const absent of (options.approvals ?? []).filter((a) => a.key !== '' && !family.nodes.some((n) => n.namespace === a.key))) {
+    output += `${mark.structure('    ')}${mark.missing(`[Project] ${absent.alias ?? absent.key} (no project on disk)`)}${approvalTag(absent)}\n`;
+  }
+  // Silent for a lone project never approved: absence of an approval is the
+  // normal state of a tree still being designed, not news (the verdict agrees).
+  const own = options.approvals?.find((a) => a.key === '');
+  const hasMembers = (options.approvals ?? []).some((a) => a.key !== '');
+  if (own && (own.state !== 'never' || hasMembers)) output += `${mark.layer('system', 'Approval:')} this project is ${own.state}${own.upgraded ? ' (locked under the pre-stage-5 gate identity — re-lock once)' : ''}\n`;
 
-  // Step 9: answer the report as text, not failed, so a terminal, an MCP
+  // Step 10: answer the report as text, not failed, so a terminal, an MCP
   // client and a test all read the same account rather than three renderings
   // that can drift apart.
   return { text: output, failed: false };

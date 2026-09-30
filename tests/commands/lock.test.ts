@@ -130,14 +130,14 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
       valid: true,
       issues: [{ severity: 'warning', code: 'SOME_WARNING', message: 'w' }],
     };
-    const record = await runLock({ yes: true }, gate);
+    const record = await runLock({ yes: true }, gate, computeGateStateId());
 
     expect(record).not.toBeNull();
     expect(record!.status).toBe('ready');
     // The GATE flavour, not the content one: a lock certifies that these specs
     // passed THIS gate, so the governing doctrine is part of the frozen identity
     // and a later pack change invalidates the lock by state mismatch.
-    expect(record!.stateId.algorithm).toBe('sha256+content+doctrine+inputs');
+    expect(record!.stateId.algorithm).toBe('sha256+content+doctrine+inputs+members');
     expect(record!.stateId.digest).toMatch(/^[0-9a-f]{64}$/);
     // …and it is exactly the validator's gate identity, the one readLockState
     // is later handed to compare against.
@@ -165,7 +165,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
     buildLockableProject(rootDir);
 
-    const record = await runLock({ yes: true }, { valid: true, issues: [] });
+    const record = await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
 
     // 'lockable-system' declares no id, so it answers to its name slugified —
     // exactly what a later validate compares project.yaml against.
@@ -182,7 +182,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     invalidateSpecCache();
     setProjectRoot(rootDir);
 
-    const record = await runLock({ yes: true, subsystem: 'core-sub' });
+    const record = await runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, computeGateStateId());
     expect(record).not.toBeNull();
 
     // The approval covers core-sub's specs and nothing outside it: a scoped
@@ -207,7 +207,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     promptMock.mockResolvedValueOnce({ confirmed: false });
     try {
       (process.stdin as unknown as { isTTY: boolean }).isTTY = true;
-      const record = await runLock({});
+      const record = await runLock({}, { valid: true, issues: [] }, computeGateStateId());
       expect(record).toBeNull();
     } finally {
       (process.stdin as unknown as { isTTY: boolean | undefined }).isTTY = isTTY;
@@ -328,18 +328,18 @@ describe('readLockState (the shared lock verdict)', () => {
 
   it('locked immediately after a lock, against the CURRENT gate identity', async () => {
     project();
-    await runLock({ yes: true }, { valid: true, issues: [] });
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
 
     const { state, record, current } = readLockState(computeGateStateId());
     expect(state).toBe('locked');
     // The verdict is decided against the gate flavour, and they agree.
-    expect(current.algorithm).toBe('sha256+content+doctrine+inputs');
+    expect(current.algorithm).toBe('sha256+content+doctrine+inputs+members');
     expect(record!.stateId.digest).toBe(current.digest);
   });
 
   it('judges the record against the identity it is handed, hashing nothing itself', async () => {
     project();
-    const record = await runLock({ yes: true }, { valid: true, issues: [] });
+    const record = await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
     expect(readLockState(record!.stateId).state).toBe('locked');
 
     // Any other identity, however it was computed, is not the one the record froze.
@@ -351,7 +351,7 @@ describe('readLockState (the shared lock verdict)', () => {
 
   it('STALE once the spec tree changes after locking — the case that used to report "locked"', async () => {
     project();
-    await runLock({ yes: true }, { valid: true, issues: [] });
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
     expect(readLockState(computeGateStateId()).state).toBe('locked');
 
     // Any edit moves the tree past what was frozen.
@@ -372,7 +372,7 @@ describe('readLockState (the shared lock verdict)', () => {
 
   it('re-locking after the edit restores the freeze', async () => {
     project();
-    await runLock({ yes: true }, { valid: true, issues: [] });
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
     saveComponentSpec(component('gateway-portal', 'core-sub', {
       componentType: 'Portal', portalType: 'HTTP_API', description: 'edited after the freeze',
       status: 'complete',
@@ -381,7 +381,7 @@ describe('readLockState (the shared lock verdict)', () => {
     setProjectRoot(rootDir);
     expect(readLockState(computeGateStateId()).state).toBe('stale');
 
-    await runLock({ yes: true }, { valid: true, issues: [] });
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
     expect(readLockState(computeGateStateId()).state).toBe('locked');
   });
 });
@@ -465,7 +465,7 @@ describe('cli_runner.runLockCheck (real CLI): the approval merge gate', () => {
   it('an approved tree passes, naming the approval it passed on', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-locked-'));
     buildLockableProject(rootDir);
-    const record = await runLock({ yes: true }, { valid: true, issues: [] });
+    const record = await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
     setProjectRoot(null);
 
     for (const args of [[], ['--strict']]) {
@@ -480,7 +480,7 @@ describe('cli_runner.runLockCheck (real CLI): the approval merge gate', () => {
   it('a design that moved past its approval REFUSES, and names the remedy', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-stale-'));
     buildLockableProject(rootDir);
-    await runLock({ yes: true }, { valid: true, issues: [] });
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
 
     // The exact incident this exists for: the design changes on the branch and
     // nobody re-approves it before the merge.
@@ -490,7 +490,7 @@ describe('cli_runner.runLockCheck (real CLI): the approval merge gate', () => {
 
     const res = await check(rootDir);
     expect(res.code, res.out).toBe(1);
-    expect(res.out).toContain('The design changed after it was approved');
+    expect(res.out).toContain('changed after it was approved');
     // A gate that fails without naming its fix gets bypassed rather than satisfied.
     expect(res.out).toContain('wairon lock');
     expect(res.out).toContain('.wai/lock.json');
@@ -502,7 +502,7 @@ describe('cli_runner.runLockCheck (real CLI): the approval merge gate', () => {
   it('a whitespace-only edit does NOT refuse — the gate is on the design, not the bytes', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-whitespace-'));
     buildLockableProject(rootDir);
-    await runLock({ yes: true }, { valid: true, issues: [] });
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
 
     // Reformat a spec file without changing one thing it says.
     const specFile = specPathsInScope('core-sub').find((p) => p.includes('gateway-portal'))!;

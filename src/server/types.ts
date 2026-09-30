@@ -384,6 +384,13 @@ export interface ApprovalRequest {
    *  GovernedProjectCreation). The full impacts are in the project.init.policy
    *  audit event. Absent for every other kind and before execution. */
   executionSummary?: string;
+  /** A project:lock request only: the gate identity of the tree the request was
+   *  made about, captured when it was created, `<algorithm>:<digest>`. The
+   *  approved execution refuses when the tree's identity no longer matches it —
+   *  an approval never certifies a design nobody asked to have approved.
+   *  Absent on a request created before stage 5, which executes against the
+   *  tree as it then stands. */
+  gateStateId?: string;
 }
 
 /** A decision supplied by an authorized user/admin for a pending approval request. */

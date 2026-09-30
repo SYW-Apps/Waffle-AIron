@@ -1,19 +1,25 @@
 import * as crypto from 'crypto';
 import { canonicalize, compareOrdinal } from '../../utils/canonical-json.js';
-import type { RulesConfig } from '../../models/project.js';
+import type { CompositionConfig, RulesConfig } from '../../models/project.js';
 import type { LoadedExtensions } from '../extensions.js';
 import type { StateId } from '../statehash.js';
-import type { SddRule } from './types.js';
+import { judgesCode, type SddRule } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Gate identity (sdd_validator)
 //
-// The identity a lock records and every staleness check compares: the spec
-// tree's content identity digested together with the doctrine that governs it
-// and the consumed contract inputs a verdict can consult. A lock asserts "these
-// specs pass THIS gate", so changing a pack, the project's rule tuning or a
-// pinned contract invalidates it by identity mismatch exactly as a spec edit
-// does — nobody has to remember to invalidate it.
+// The identity a lock records and every staleness check compares: ONE
+// project's own content identity digested together with the DESIGN doctrine
+// that governs it, its own consumed contract inputs, its `composition` block
+// and each direct member's composition subject. A lock asserts "this design
+// passes THIS gate under THESE inputs", so changing a pack, the project's rule
+// tuning, a pinned contract, a requirement or a member's approval invalidates
+// it by identity mismatch exactly as a spec edit does.
+//
+// Beside it, the code analyzer's doctrine gets a digest of its own
+// (analyzerDigest): the rules that judge code and the project's code tuning.
+// A lock records that digest next to its claim, never inside it, so an
+// analyzer upgrade or a code-severity change never stales an approval.
 //
 // Pure: the spec validator gathers every input (computeGateStateId) and passes
 // it in, so a lock and the re-check that later judges it stale can never
@@ -28,15 +34,55 @@ import type { SddRule } from './types.js';
 export interface GateConfig {
   projectType?: string;
   rules?: RulesConfig;
+  /** The project's `composition` block; null/absent when it declares none. */
+  composition?: CompositionConfig | null;
 }
 
 /**
- * Algorithm marker for the gate identity. It names the composition — the content
- * digest, the doctrine and the inputs — so a record written under an earlier one
- * (sha256+doctrine+inputs digested the tree itself) never matches and reads stale
- * once, and a content identity (sha256) never compares equal to a gate identity.
+ * Algorithm marker for the gate identity. It names the composition — the own
+ * content digest, the design doctrine, the own inputs and the members' subjects
+ * — so a record written under an earlier one (sha256+doctrine+inputs,
+ * sha256+content+doctrine+inputs) never matches and reads stale once
+ * (LockStatus.upgraded names why), and a content identity (sha256) never
+ * compares equal to a gate identity.
  */
-const GATE_ALGORITHM = 'sha256+content+doctrine+inputs';
+export const GATE_ALGORITHM = 'sha256+content+doctrine+inputs+members';
+
+// Ordinal, never localeCompare: collation is locale- and ICU-dependent, and it
+// re-weights exactly the characters rule names are full of (hyphens,
+// underscores), so the same rule set could digest differently on two machines.
+const byKey = <T>(items: T[], key: (item: T) => string): T[] =>
+  [...items].sort((a, b) => compareOrdinal(key(a), key(b)));
+
+/** A rule by name with its codes and default severities — a function cannot be digested. */
+function ruleIdentities(rules: SddRule[]): Record<string, unknown>[] {
+  return byKey(
+    rules.map((r) => ({
+      name: r.name,
+      codes: byKey(r.codes.map((c) => ({ code: c.code, severity: c.defaultSeverity })), (c) => c.code),
+    })),
+    (r) => r.name,
+  );
+}
+
+/** Every code a code-judging rule declares. */
+function codeJudgedCodes(builtinRules: SddRule[]): Set<string> {
+  return new Set(builtinRules.filter(judgesCode).flatMap((r) => r.codes.map((c) => c.code)));
+}
+
+/**
+ * The rule config WITHOUT its code-conformance tuning: rules.conformance and
+ * every sddRuleSeverity override of a code a code-judging rule declares. Both
+ * tune only findings the approval does not certify, and enter the analyzer's
+ * digest instead.
+ */
+function designRulesConfig(rules: RulesConfig | undefined, codeCodes: Set<string>): Record<string, unknown> | null {
+  if (!rules) return null;
+  const { conformance: _codeTuning, sddRuleSeverity, ...rest } = rules;
+  const severities = Object.fromEntries(Object.entries(sddRuleSeverity ?? {}).filter(([code]) => !codeCodes.has(code)));
+  // An empty override map and an absent one tune nothing alike.
+  return { ...rest, ...(Object.keys(severities).length > 0 ? { sddRuleSeverity: severities } : {}) };
+}
 
 /**
  * The identity-bearing surface of the governing doctrine — everything that can
@@ -52,12 +98,6 @@ const GATE_ALGORITHM = 'sha256+content+doctrine+inputs';
  * its declared codes stands as its identity.
  */
 function doctrineIdentity(doctrine: LoadedExtensions, builtinRules: SddRule[], gate: GateConfig): Record<string, unknown> {
-  // Ordinal, never localeCompare: collation is locale- and ICU-dependent, and it
-  // re-weights exactly the characters rule names are full of (hyphens,
-  // underscores), so the same rule set could digest differently on two machines.
-  const byKey = <T>(items: T[], key: (item: T) => string): T[] =>
-    [...items].sort((a, b) => compareOrdinal(key(a), key(b)));
-
   return {
     /**
      * The BUILTIN rule set, by identity rather than by wairon version.
@@ -74,20 +114,23 @@ function doctrineIdentity(doctrine: LoadedExtensions, builtinRules: SddRule[], g
      * in the wairon version would catch it at the cost of churning every lock on
      * every release — the trade this projection deliberately declines.
      */
-    builtinRules: byKey(
-      builtinRules.map((r) => ({
-        name: r.name,
-        codes: byKey(r.codes.map((c) => ({ code: c.code, severity: c.defaultSeverity })), (c) => c.code),
-      })),
-      (r) => r.name,
-    ),
+    //
+    // Only the rules that judge DESIGN: a code analyzer that gains a code or a
+    // stricter check must never stale an approval (analyzer-upgrade-keeps-approval).
+    builtinRules: ruleIdentities(builtinRules.filter((r) => !judgesCode(r))),
     /**
-     * Which profile GOVERNS, and the project's own rule tuning. Both decide
-     * verdicts — a projectType switch changes the doctrine family outright, and
-     * `rules` carries severity overrides, complexity caps, and designDepth.
+     * Which profile GOVERNS, and the project's own design rule tuning. Both
+     * decide verdicts — a projectType switch changes the doctrine family
+     * outright, and `rules` carries design severity overrides, complexity caps
+     * and designDepth. Its code-conformance tuning is the analyzer's.
      */
     projectType: gate.projectType ?? null,
-    rulesConfig: gate.rules ?? null,
+    rulesConfig: designRulesConfig(gate.rules, codeJudgedCodes(builtinRules)),
+    /**
+     * What the project requires of the projects it contains (stage 5): a
+     * changed requirement stales the requiring project's lock.
+     */
+    composition: gate.composition ?? null,
     packs: byKey(
       doctrine.packs.map((p) => ({ name: p.name, version: p.version ?? null, scope: p.scope })),
       (p) => `${p.name}@${p.version ?? ''}#${p.scope}`,
@@ -110,12 +153,16 @@ function doctrineIdentity(doctrine: LoadedExtensions, builtinRules: SddRule[], g
 }
 
 /**
- * gate_identity.compute — the gate identity of a spec tree: its content identity
- * digested together with the governing doctrine and the consumed contract
- * inputs. The same inputs always give the same identity.
+ * gate_identity.compute — the gate identity of one project: its OWN content
+ * identity digested together with the design doctrine, its own consumed
+ * contract inputs, its composition block and each direct member's composition
+ * subject. The same inputs always give the same identity.
  *
- * `inputs` are sorted here: callers gather them from the bound root and every
- * chained mount in no particular order, so this is the one place that fixes one.
+ * `members` maps each direct member's alias to the stateId its own lock record
+ * carries (`<algorithm>:<digest>`), or `never`. That subject already covers the
+ * member's own members, so a change two levels down reaches this identity only
+ * once the member between re-locks (pin-chain); a member's live, unapproved
+ * edits never move it.
  */
 export function computeGateIdentity(
   content: StateId,
@@ -123,12 +170,33 @@ export function computeGateIdentity(
   builtinRules: SddRule[],
   inputs: string[],
   gate: GateConfig,
+  members: Record<string, string>,
 ): StateId {
   const payload = {
     content: content.digest,
     doctrine: doctrineIdentity(doctrine, builtinRules, gate),
-    inputs: [...inputs].sort(),
+    inputs: [...inputs].sort(compareOrdinal),
+    members: byKey(Object.entries(members), ([alias]) => alias).map(([alias, subject]) => ({ alias, subject })),
   };
   const digest = crypto.createHash('sha256').update(canonicalize(payload)).digest('hex');
   return { algorithm: GATE_ALGORITHM, digest };
+}
+
+/**
+ * gate_identity.analyzer — the digest of the code analyzer's doctrine: the
+ * built-in rules that judge code (name, codes, default severities) with the
+ * project's code-conformance tuning — rules.conformance and the sddRuleSeverity
+ * overrides of those rules' codes. Exactly the half compute leaves out, so this
+ * digest moves when the analyzer's rule set or tuning does, and the gate
+ * identity does not.
+ */
+export function analyzerDigest(builtinRules: SddRule[], gate: GateConfig): string {
+  const codeCodes = codeJudgedCodes(builtinRules);
+  const overrides = Object.entries(gate.rules?.sddRuleSeverity ?? {}).filter(([code]) => codeCodes.has(code));
+  const payload = {
+    rules: ruleIdentities(builtinRules.filter(judgesCode)),
+    conformance: gate.rules?.conformance ?? null,
+    severities: byKey(overrides, ([code]) => code).map(([code, severity]) => ({ code, severity })),
+  };
+  return crypto.createHash('sha256').update(canonicalize(payload)).digest('hex');
 }

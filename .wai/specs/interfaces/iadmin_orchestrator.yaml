@@ -60,9 +60,10 @@ methods:
   - name: lockProject
     description: >-
       Authenticate the caller (bootstrap master or a user token), resolve the caller's project:write
-      permission over the target project via the authorization seam (must be yes), bind the project
-      scope, validate-as-complete, and on success record the approval baseline and write the
-      StateId-scoped lock record. The spec tree itself is never rewritten.
+      permission over the target project via the authorization seam (must be yes), then lock through
+      the same pre-authorized entry the approval workflow uses (executeApprovedLock), so a direct
+      lock and an approved one are one workflow. The spec tree itself is never rewritten, and
+      nothing is written below the project.
     signature: 'lockProject(credential: string, project: string): LockRecord'
     returns: LockRecord
   - name: generateDiagram
@@ -211,18 +212,40 @@ methods:
       therefore performs no sync and no publish: the member is not the git unit. The frozen member
       tree persists in the project's working tree, but note it is NOT staged by the project's own
       .wai/-scoped commit either — a member lives outside that pathspec — so reaching a remote
-      requires a commit whose scope covers the member's path. The record pins each member the bound
-      tree declares, keyed by its alias.
-    signature: 'executeApprovedLock(projectId: string, subproject?: string): LockRecord'
+      requires a commit whose scope covers the member's path. Stage 5: the gate identity is CAPTURED
+      before validation and confirmed unchanged before the record is written (refused otherwise,
+      nothing written); when `expected` is given (an approval request's recorded gateStateId) the
+      captured identity must equal it, so an approval never certifies a design other than the one
+      requested; the lock gates on the design half of the as-complete run only; the record carries
+      format 2, each direct member's subject and state (`members`, never `children`), and the code
+      results beside the claim (`code`); and with composition.requireApprovedMembers it refuses
+      while a direct member is drifted or never approved, naming each. Nothing is ever written below
+      the bound root.
+    signature: >-
+      executeApprovedLock(projectId: string, approver: ApproverIdentity, subproject?: string,
+      expected?: string): LockRecord
     returns: LockRecord
     params:
       - name: projectId
         type: string
+      - name: approver
+        type: ApproverIdentity
+        description: >-
+          Who approves, as the caller AUTHENTICATED it: the credential's subject on a direct lock,
+          the decider on an approved request (hostedApprover; the bootstrap master credential when
+          there is no subject). Recorded as the record's lockedBy. Pre-authorized callers resolve
+          it; nothing here re-authenticates.
       - name: subproject
         type: string
         description: >-
           Member chain to bind instead of the project root — one member alias per hop ('a' or
           'a::b'), the same strings the legacy mount ids were; absent binds the project's own tree.
+        optional: true
+      - name: expected
+        type: string
+        description: >-
+          The gate identity (`<algorithm>:<digest>`) an approval request recorded when it was made;
+          absent for a direct lock and for a request created before stage 5.
         optional: true
   - name: commitProject
     description: >-
@@ -362,6 +385,24 @@ methods:
         type: string
       - name: rootPath
         type: string
+  - name: gateIdentity
+    description: >-
+      Pre-authorized, like executeApprovedLock and for the same caller: the gate identity of the
+      tree a lock of this project (or of the member the qualifier binds) would certify NOW, rendered
+      `<algorithm>:<digest>`. Read-only — no sync, no validation, no write.
+      project_lifecycle_orchestrator records it on a project:lock request when it is created, so the
+      approved execution can refuse a tree that moved after the request.
+    signature: 'gateIdentity(projectId: string, subproject?: string): string'
+    returns: string
+    params:
+      - name: projectId
+        type: string
+      - name: subproject
+        type: string
+        description: Member chain to bind instead of the project root, exactly as executeApprovedLock takes it.
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-27T15:26:57.712Z'
+updatedAt: '2026-09-30T16:23:03.628Z'

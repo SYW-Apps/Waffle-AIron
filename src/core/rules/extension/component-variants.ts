@@ -11,6 +11,7 @@ import { SddRule } from '../types.js';
  */
 export const variantReferencesRule: SddRule = {
   name: 'component-variants',
+  judges: 'design',
   description:
     "A component's variant resolves to a declared registry variant (UNKNOWN_VARIANT), and the component's stereotype equals the variant's declared base (VARIANT_BASE_MISMATCH). A variant is a base-anchored specialization (a kind of the base stereotype), not a cross-cutting attribute — those stay method guarantees.",
   codes: [

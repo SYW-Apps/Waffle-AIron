@@ -352,10 +352,12 @@ methods:
       - idempotent
   - name: consumedContractInputs
     description: >-
-      The consumed contract inputs a verdict can consult, as canonical content keys: this root's and
-      every chained mount's stored surface snapshots (.wai/surfaces), pinned external snapshots
-      (.wai/externals) and externals lock (.wai/externals.lock.yaml). The gate identity covers them,
-      so swapping a pinned contract or re-pinning a changed `used` map invalidates a lock.
+      The consumed contract inputs a verdict at the bound project can consult, as canonical content
+      keys: THIS root's stored surface snapshots (.wai/surfaces), pinned external snapshots
+      (.wai/externals) and externals lock (.wai/externals.lock.yaml). A member's inputs are left out
+      since stage 5: they are that member's own gate's, and reach this project's gate identity
+      through the member's composition subject. The gate identity covers them, so swapping a pinned
+      contract or re-pinning a changed `used` map invalidates a lock.
     signature: 'consumedContractInputs(): string[]'
     returns: string[]
     params: []
@@ -819,4 +821,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T15:57:07.840Z'
+updatedAt: '2026-09-30T05:50:06.891Z'

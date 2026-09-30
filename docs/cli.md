@@ -20,7 +20,11 @@ a subdirectory of an existing project, it offers to make that directory a
 ### `wairon status`
 Print a hierarchical completeness dashboard of the SDD spec tree (which
 subsystems/components/interfaces/implementations are drafted vs complete).
-Each member project prints as `[Project] alias (id)` holding its own subsystems.
+Each member project prints as `[Project] alias (id)` holding its own subsystems,
+with its **approval state** computed at the member's own root (`approved`,
+`drifted`, `never`) and how this project's lock pinned it (`matches`, `moved`,
+`unpinned`). The report closes with this project's own state. Asked at the parent
+or at the member, the answer is the same.
 
 ### `wairon validate [--ci]`
 Run the architecture-conformance gate over the spec tree: reference integrity,
@@ -28,15 +32,43 @@ contract↔implementation method symmetry, narrative-call resolution, component
 stereotype dependency rules, and dependency-cycle detection. `--ci` treats
 warnings as errors.
 
-### `wairon generate [--target <type>] [--domain <id>] [--domains <ids>] [--root] [--dry-run]`
+### `wairon generate [--target <type>] [--domain <id>] [--domains <ids>] [--root] [--family] [--dry-run]`
 Regenerate agent output files from the spec-derived topology and (re)install the
 SDD skills. Filters limit generation to a target type or to specific domains.
 `--dry-run` previews without writing.
 
-### `wairon lock [-y, --yes] [--subsystem <id>] [--no-recursive]`
+`generate` writes **only this project's** outputs. A parent's topology lists a
+member's agents by reference (`delegatesTo: <alias>::<agentId>`) instead of
+copying them, and a brief for `<alias>::<agent>` composes at the member's own
+root. `--family` also generates each member's own layer, in its own root.
+(`--no-recurse` is accepted for one release; not cascading is now the default.)
+
+### `wairon lock [-y, --yes] [--subsystem <id>]`
 Review and approve the design. Validates the spec tree **as if complete** (full
-strictness, no draft-status relaxation) and — only if it passes — records the
-current tree as approved and regenerates the agent topology.
+strictness, no draft-status relaxation) and — only if the **design** passes —
+records the current tree as approved and regenerates this project's agent
+topology.
+
+**What it certifies is the design.** Only design findings can refuse a lock.
+Code-conformance findings (the code↔spec checks) are recorded **beside** the
+claim in the record's `code` block, with the analyzer that produced them, and
+printed as `code: N error(s), … recorded beside the claim`. CI enforces them:
+`wairon validate --ci` still fails on a code error. A design can be approved
+before its code exists.
+
+**It approves this project only.** The gate identity it records covers this
+project's own specs, the design doctrine, its declared inputs, its `composition`
+block, and each direct member's **composition subject** — the `stateId` in the
+member's own lock record. The record (format 2) lists each direct member under
+`members` with its subject and state (`approved`, `drifted`, `never`). Nothing is
+written below the project: each member locks at its own root. With
+`composition.requireApprovedMembers: true` in `project.yaml`, the lock refuses
+while a direct member is drifted or never approved, naming each.
+
+The identity is captured **before** validating and confirmed **before** writing:
+if a spec, the doctrine, an input or a member's approval moves while the lock
+runs, it refuses and writes nothing. (`--no-recursive` is accepted for one
+release and changes nothing: a lock never reaches below its project.)
 
 It writes **nothing into your spec tree**. The approval is one sha256 per spec
 file on `.wai/lock.json`, the record that was always committed — so your
@@ -75,6 +107,12 @@ the one recorded in the committed `.wai/lock.json`.
 | **`stale`** — the design moved past its approval | **fail (1)** | **fail (1)** |
 | **`unlocked`** — nothing was ever approved | pass, with a notice (0) | **fail (1)** |
 | no `.wai/specs` in this directory at all | pass, saying so (0) | **fail (1)** |
+
+A lock taken before stage 5 reads `stale` once, because the gate identity
+gained inputs. The message says so — the approval *was taken under an earlier
+gate identity* — and whether any own spec file changed since; re-lock once and
+commit `.wai/lock.json`. It stays about this project's own approval: a member's
+state is `wairon status`'s to report.
 
 **It is optional by construction.** Only `stale` refuses by default, and `stale`
 cannot happen in a project that never locked — so adding this to an existing
@@ -402,7 +440,7 @@ Runs **in-process** (no running server needed), so it works over SSH /
 | `wairon host key mint --project <id\|*> [--role editor\|admin]` | Mint an API key (plaintext shown once) |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
-| `wairon host lock --project <id>` | Validate-as-complete + write the state-scoped lock record |
+| `wairon host lock --project <id>` | The same lock flow as `wairon lock` (design gate, `members`, `code` beside the claim, format 2) against the hosted project |
 | `wairon host packs list [--project <id>]` | List the server-global packs, or one hosted project's |
 | `wairon host packs install --file <pack.yaml> [--name <n>] [--project <id>] [-y]` | Install a declarative pack server-wide, or into a hosted project. Into a project it first shows the pack's impact on that project (measured by the host, writing nothing) and asks; `--yes`, or no terminal, installs without the report and says so |
 | `wairon host packs remove --name <n> [--project <id>] [-y]` | Remove a pack; from a project it first shows what the pack accounts for there and asks, as install does |
