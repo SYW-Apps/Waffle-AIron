@@ -568,8 +568,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd and confirm through the core
-          adapter that it holds an initialized wairon project; error if it does not
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
@@ -583,33 +583,32 @@ methods:
         type: throw
         error: '--path (the member''s destination) is required'
       - stepNumber: 4
-        description: Turn the subsystem into a member project declared in `members`
-        type: call
-        targetComponent: cli_core_adapter
-        targetMethod: externalizeSubsystem
-      - stepNumber: 5
-        description: >-
-          Print confirmation, the member's new path, and a reminder to move the source code, run
-          `wairon doctor --fix` for the exports either side now needs, and re-validate
+        label: request
+        description: Build the externalize request
         type: local
+      - stepNumber: 5
+        description: Run it through the shared migration flow; remind that source code is moved by the user
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
   - name: runMemberInternalize
     sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd and confirm through the core
-          adapter that it holds an initialized wairon project; error if it does not
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
       - stepNumber: 2
-        description: Take the member back into the current project
-        type: call
-        targetComponent: cli_core_adapter
-        targetMethod: internalizeMember
-      - stepNumber: 3
-        description: Print confirmation and a reminder to re-validate
+        description: Build the internalize request, its destination from --into, --packs and --export
         type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
   - name: runSurface
     sourcePath: src/commands/surface.ts
     narrative:
@@ -1500,58 +1499,67 @@ methods:
         description: With --fix, apply the repairs before the report, so the report shows the repaired state
         type: branch
         condition: '--fix was given'
-        onFalseStep: 27
+        onFalseStep: 28
       - stepNumber: 10
+        description: >-
+          First, resolve any family migration a crash left unfinished under this root — roll back
+          each transaction whose coordinator never committed, clean up each that did — before any
+          other repair reads a file that transaction may have half-swapped; a transaction whose
+          coordinator or an owner is out of reach is reported, not guessed
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: recover
+      - stepNumber: 11
         description: 'Read the configuration: the fixes need an initialized project whose configuration is valid'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 11
+      - stepNumber: 12
         description: Skip the fixes otherwise, warning when the configuration is invalid; the report flags both
         type: branch
         condition: the project is initialized and its configuration is valid
-        onFalseStep: 27
-      - stepNumber: 12
+        onFalseStep: 28
+      - stepNumber: 13
         description: >-
           Rebuild the derived context documents through the core adapter, each written only if it
           changed
         type: call
         targetComponent: cli_core_adapter
         targetMethod: syncContextFiles
-      - stepNumber: 13
+      - stepNumber: 14
         description: Re-export the SDD skills for the active targets
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Re-inject the local AI guides for the active targets through the core adapter, recording
           which files were written so the report can name them
         type: call
         targetComponent: cli_core_adapter
         targetMethod: reinjectLocalGuides
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Pin the installed-but-unapplied packs as explicit selections for a project that never
           declared a position on machine-wide packs, and print the names recorded
         type: call
         targetComponent: cli_core_adapter
         targetMethod: pinInstalledPacksAsSelections
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           List the spec files stored under a legacy name and rename each to the name the current
           layout expects
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findLegacySpecFiles
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           Write a project configuration for each chained subproject with specs but none, and print
           the directories repaired
         type: call
         targetComponent: cli_core_adapter
         targetMethod: backfillChainedSubprojectConfigs
-      - stepNumber: 18
+      - stepNumber: 19
         description: >-
           Retire the Specialists with apply true: each becomes an Orchestrator with the
           dependencyClass its dependencies decide, and each Specialist-based variant rebases onto
@@ -1560,7 +1568,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           Repair the narrative steps carrying a field their own type cannot have, with apply true:
           each foreign field is dropped and nothing else about the step changes; print what was
@@ -1568,7 +1576,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 20
+      - stepNumber: 21
         label: chaining
         description: >-
           Plan the chaining migration — the last spec-touching fix: after the configuration
@@ -1578,23 +1586,23 @@ methods:
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: plan
-      - stepNumber: 21
+      - stepNumber: 22
         description: 'Nothing to migrate: go on without asking'
         type: branch
         condition: the plan has something to write
-        onFalseStep: 25
-      - stepNumber: 22
+        onFalseStep: 26
+      - stepNumber: 23
         description: >-
           Print the plan per project as --report chaining does, then ask to apply it. --yes answers
           yes; a run with no terminal to ask and no --yes, or a no, skips the migration and writes
           none of it — every other fix above has already run, as it always has
         type: local
-      - stepNumber: 23
+      - stepNumber: 24
         description: Only a confirmed plan is applied
         type: branch
         condition: the person confirmed, or --yes was given
-        onFalseStep: 25
-      - stepNumber: 24
+        onFalseStep: 26
+      - stepNumber: 25
         description: >-
           Apply the confirmed plan and print each file written; then name every project whose lock
           the writes staled, pointing at `wairon lock` — re-locking is the human's, and nothing
@@ -1603,61 +1611,69 @@ methods:
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: apply
-      - stepNumber: 25
+      - stepNumber: 26
         label: mcp
         description: Register or repair the MCP server for each active backend
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
-      - stepNumber: 26
+      - stepNumber: 27
         description: >-
           For a Gemini or Antigravity target, remove the legacy global Antigravity plugin whose name
           collides with the MCP server
         type: local
-      - stepNumber: 27
+      - stepNumber: 28
         label: report
         description: 'Project: is this an initialized wairon project?'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
-      - stepNumber: 28
+      - stepNumber: 29
         description: Stop at a folder that is not a wairon project
         type: branch
         condition: the project is not initialized
-        onFalseStep: 30
-      - stepNumber: 29
+        onFalseStep: 31
+      - stepNumber: 30
         description: Report it, naming `wairon init`, print the summary and exit non-zero
         type: return
         outcome: not a wairon project
-      - stepNumber: 30
+      - stepNumber: 31
         label: config
         description: Report whether the configuration is valid, and read its active targets
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 31
+      - stepNumber: 32
+        description: >-
+          Transactions: report each unfinished family migration under this root — its verb, its
+          owners and its coordinator's phase — as an error pointing at `wairon doctor --fix`; silent
+          when there is none
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: recover
+      - stepNumber: 33
         description: 'Spec filenames: list the spec files still stored under a legacy name'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findLegacySpecFiles
-      - stepNumber: 32
+      - stepNumber: 34
         description: 'Chained subprojects: list the ones with specs but no project.yaml'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findChainingSubprojectsMissingConfig
-      - stepNumber: 33
+      - stepNumber: 35
         description: >-
           Report whether the system spec is present, whether the spec filenames are current, and any
           chained subproject with specs but no project.yaml
         type: local
-      - stepNumber: 34
+      - stepNumber: 36
         description: >-
           Spec tree: with a system spec and a valid configuration, run the conformance gate and
           report its error, warning and notice counts; notices alone leave the check passing
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateProject
-      - stepNumber: 35
+      - stepNumber: 37
         description: >-
           Stereotypes: plan the Specialist retirement with apply false and report each Specialist
           with the dependencyClass it would take as an Orchestrator, and each variant to rebase,
@@ -1665,7 +1681,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 36
+      - stepNumber: 38
         description: >-
           Narrative steps: plan the foreign-field repair with apply false and report each step
           carrying a field its own type cannot have — the implementation, the method, the step and
@@ -1673,7 +1689,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 37
+      - stepNumber: 39
         description: >-
           Chaining: plan the migration and report how much is pending — ids, L0s, entries,
           externals, pins, mounts to move, references to rewrite, family pins to delete and findings
@@ -1683,14 +1699,14 @@ methods:
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: plan
-      - stepNumber: 38
+      - stepNumber: 40
         description: >-
           Ask where the derived context documents live, so the staleness check reports on the
           generated pair and never on the two a person wrote
         type: call
         targetComponent: cli_core_adapter
         targetMethod: derivedDocPaths
-      - stepNumber: 39
+      - stepNumber: 41
         description: >-
           Generated files and skills: read the version each one was stamped with and compare it
           against the running build, so a file written by an older wairon is reported as stale
@@ -1698,19 +1714,19 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readStampVersion
-      - stepNumber: 40
+      - stepNumber: 42
         description: >-
           Skills: for each active target, compare the installed SDD skills with what an export would
           write now, reporting the missing and stale ones
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: checkSkillFreshness
-      - stepNumber: 41
+      - stepNumber: 43
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 42
+      - stepNumber: 44
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
           frozen, warning when it predates per-spec approval; a stale one warns to re-lock; a
@@ -1718,25 +1734,25 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
-      - stepNumber: 43
+      - stepNumber: 45
         description: >-
           Extension packs: diagnose the project's pack situation — unresolved selections, installed
           packs not applied, packs applied from the machine-wide store
         type: call
         targetComponent: cli_core_adapter
         targetMethod: diagnoseProjectPacks
-      - stepNumber: 44
+      - stepNumber: 46
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed but not applied, and those applied from
           the machine-wide store
         type: local
-      - stepNumber: 45
+      - stepNumber: 47
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and flag a legacy global Antigravity plugin
         type: local
-      - stepNumber: 46
+      - stepNumber: 48
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -2825,6 +2841,159 @@ methods:
         type: throw
         error: UnknownExternalsActionError
     detail: full
+  - name: runMigration
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: Plan the request from the current project
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: plan
+      - stepNumber: 2
+        description: >-
+          Print the plan: the verb, the family root (and that it is not the whole family, when so),
+          each owner's edits, every refusal, every notes line, the file changes per owner (one line
+          each, a count past a screenful), and the projects to re-lock
+        type: local
+      - stepNumber: 3
+        description: Report only, refused or empty?
+        type: branch
+        condition: '--report was given, or the plan is blocked, or it has no file change'
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Drop the plan's rehearsal; nothing was written
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: discard
+      - stepNumber: 5
+        description: >-
+          Stop: exit non-zero for a refused plan, zero for a report or an empty plan ("nothing to
+          migrate")
+        type: return
+        outcome: reported
+      - stepNumber: 6
+        label: confirm
+        description: >-
+          Ask to apply it: --yes answers; a non-interactive shell without --yes is answered no with
+          a message naming --yes
+        type: local
+      - stepNumber: 7
+        description: Confirmed?
+        type: branch
+        condition: the person declined
+        onFalseStep: 10
+      - stepNumber: 8
+        description: Drop the plan's rehearsal
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: discard
+      - stepNumber: 9
+        description: Stop, having written nothing
+        type: return
+        outcome: declined
+      - stepNumber: 10
+        label: apply
+        description: Apply the confirmed plan, all or nothing
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: apply
+      - stepNumber: 11
+        description: >-
+          Print the outcome: committed with each project to re-lock ("run `wairon lock` there");
+          failed with what failed and that the family is unchanged; or failed with the files `wairon
+          doctor --fix` must restore, exiting non-zero on either failure
+        type: return
+        outcome: applied or failed
+  - name: runMemberAttach
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the attach request from the alias, path and description
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runProjectRename
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the rename request from the new id and --project
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberRenameAlias
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the rename-alias request
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberDetach
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the detach request
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberAdopt
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the adopt request
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -2840,4 +3009,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T06:03:17.873Z'
+updatedAt: '2026-09-30T20:40:35.069Z'

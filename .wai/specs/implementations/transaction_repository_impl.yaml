@@ -1,0 +1,72 @@
+id: transaction_repository_impl
+name: Transaction Repository Implementation
+description: 'src/migrations/transaction-store.ts: the facade, each method one forward to the store.'
+contract: itransaction_repository
+sourcePath: src/migrations/transaction-store.ts
+methods:
+  - name: openRehearsal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: transaction_store
+        targetMethod: openRehearsal
+  - name: dropRehearsal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: transaction_store
+        targetMethod: dropRehearsal
+  - name: saveJournal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: transaction_store
+        targetMethod: saveJournal
+  - name: readJournal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: transaction_store
+        targetMethod: readJournal
+  - name: listJournals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: transaction_store
+        targetMethod: listJournals
+  - name: putFile
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: transaction_store
+        targetMethod: putFile
+  - name: readFile
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: transaction_store
+        targetMethod: readFile
+  - name: locate
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: transaction_store
+        targetMethod: locate
+  - name: close
+    narrative:
+      - stepNumber: 1
+        description: Forward to the store
+        type: call
+        targetComponent: transaction_store
+        targetMethod: close
+status: design
+createdAt: '2026-09-30T20:26:41.107Z'
+updatedAt: '2026-09-30T20:26:41.118Z'

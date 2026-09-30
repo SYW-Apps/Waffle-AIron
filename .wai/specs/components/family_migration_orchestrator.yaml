@@ -1,0 +1,26 @@
+id: family_migration_orchestrator
+name: Family Migration Orchestrator
+description: >-
+  The one migration shape every verb shares. plan: climb to the highest root in reach, read the
+  family graph there, refuse while an earlier transaction is unfinished, route the request to the
+  verb's planner, and — when nothing refuses — rehearse it: copy the family, run the verb's own
+  writes on the copy, and answer the copy's difference as the plan's file changes together with the
+  projects to re-lock (each owner that carries a lock and whose files change). apply: commit a
+  confirmed plan's rehearsal through the family transaction. discard: drop it. recover: doctor's
+  entry to the transaction's crash recovery. It knows the verbs only by which planner and writer to
+  call; the transaction knows nothing about verbs. Its own component (not a verb's) because the
+  rehearse-diff-commit shape is the discipline stage 6 exists to make uniform. It holds no state:
+  the plan is a value its caller holds between plan and apply. It never locks. The caller must gate
+  on reach itself.
+subsystem: sdd_migrations
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - membership_migration
+  - identity_migration
+  - boundary_migration
+  - family_transaction
+  - migration_core_adapter
+status: design
+createdAt: '2026-09-30T20:35:31.532Z'
+updatedAt: '2026-09-30T20:35:31.541Z'

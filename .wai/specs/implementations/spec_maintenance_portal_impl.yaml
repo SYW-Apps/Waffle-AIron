@@ -119,6 +119,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: createMember
+  - name: rewriteReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: rewriteReferences
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-09-27T10:57:05.434Z'
+updatedAt: '2026-09-30T20:22:57.305Z'

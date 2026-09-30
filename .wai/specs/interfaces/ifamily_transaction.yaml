@@ -1,0 +1,132 @@
+id: ifamily_transaction
+name: Family Transaction Interface
+description: >-
+  Rehearse, diff, commit or discard; restore and recover. After commit the family is either exactly
+  the rehearsal's result or byte-identical to before, and a crash at any point leaves journals that
+  recover resolves the same way.
+component: family_transaction
+methods:
+  - name: rehearse
+    description: >-
+      Open a rehearsal for a scope: a private copy of every scoped project's .wai tree, laid out as
+      the family is, with the digest of every live file copied. Writes nothing into the family.
+    signature: 'rehearse(scope: TransactionScope): Rehearsal'
+    returns: Rehearsal
+    params:
+      - name: scope
+        type: TransactionScope
+        description: The family root and the projects the migration reads or writes
+  - name: diff
+    description: >-
+      The rehearsal's difference from the live family after a verb wrote into it: the plan's file
+      changes. Writes nothing.
+    signature: 'diff(rehearsal: Rehearsal): FileChange[]'
+    returns: FileChange[]
+    params:
+      - name: rehearsal
+        type: Rehearsal
+        description: The rehearsal
+    guarantees:
+      - idempotent
+  - name: commit
+    description: >-
+      Make the changes live, all or nothing: stage every new file and back up every replaced one
+      inside its owner's .wai/transactions/<id>/, refuse when a live file no longer matches its base
+      digest, then swap under the journals and mark the coordinator committed. On any failure before
+      the commit point, restore every backup and answer what failed and whether everything was
+      restored. The rehearsal is dropped either way.
+    signature: 'commit(rehearsal: Rehearsal, changes: FileChange[], verb: string): TransactionOutcome'
+    returns: TransactionOutcome
+    params:
+      - name: rehearsal
+        type: Rehearsal
+        description: The rehearsal the changes were computed on
+      - name: changes
+        type: FileChange[]
+        description: The confirmed plan's file changes
+      - name: verb
+        type: string
+        description: The migration verb, recorded in each journal
+    guarantees:
+      - atomic
+  - name: discard
+    description: >-
+      Drop a rehearsal without touching the family: the end of a dry run, a refusal or a declined
+      confirmation.
+    signature: 'discard(rehearsal: Rehearsal): void'
+    returns: void
+    params:
+      - name: rehearsal
+        type: Rehearsal
+        description: The rehearsal
+    guarantees:
+      - idempotent
+  - name: restore
+    description: >-
+      Put every owner of a transaction back as its backups say: recreate removed directories, place
+      each backed-up file, remove each created one, prune created directories, verify each restored
+      file's digest against its base, and record each owner's journal rolled-back — or leave it
+      naming the files that could not be restored. Answers those files; empty means the family is
+      byte-identical to before. Safe to repeat: every step is keyed on the journal, not on how far a
+      swap got.
+    signature: 'restore(journals: TransactionJournal[]): string[]'
+    returns: string[]
+    params:
+      - name: journals
+        type: TransactionJournal[]
+        description: Every owner's journal of one transaction
+    guarantees:
+      - idempotent
+  - name: recover
+    description: >-
+      Find the unfinished transactions under a project root and, with fix, resolve each from its
+      coordinator's phase: committed → remove the transaction directories; anything else → restore
+      every owner, then remove them. A coordinator or owner out of reach, or a missing backup,
+      refuses that transaction and names it. Without fix, only reports.
+    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
+    returns: RecoveredTransaction[]
+    params:
+      - name: root
+        type: string
+        description: The project root doctor runs at
+      - name: fix
+        type: boolean
+        description: Resolve (true) or only report (false)
+    guarantees:
+      - idempotent
+  - name: stage
+    description: >-
+      Stage a transaction without touching a live file: per owner, a journal in phase staging, then
+      every new file in its staged area and every replaced file in its backup area (synced), after
+      re-checking each live file against its base digest and each staged file's volume against its
+      target's; each journal then reads staged. Throws StagingError naming the file when a live file
+      moved since the rehearsal or a swap would cross volumes. Answers the journals, the
+      coordinator's (the family root's) first.
+    signature: 'stage(rehearsal: Rehearsal, changes: FileChange[], verb: string): TransactionJournal[]'
+    returns: TransactionJournal[]
+    params:
+      - name: rehearsal
+        type: Rehearsal
+        description: The rehearsal the changes were computed on
+      - name: changes
+        type: FileChange[]
+        description: The file changes
+      - name: verb
+        type: string
+        description: The migration verb, recorded in each journal
+  - name: swap
+    description: >-
+      Swap staged journals in: the coordinator's journal first reads swapping, then each owner's
+      entries are applied in order — parents made for creates, staged files renamed over live paths,
+      deleted files removed and emptied directories pruned — and each owner's journal records the
+      directories it created and removed. Throws SwapError naming the file and operation on the
+      first failure; the caller restores.
+    signature: 'swap(journals: TransactionJournal[]): void'
+    returns: void
+    params:
+      - name: journals
+        type: TransactionJournal[]
+        description: The staged journals, the coordinator's first
+status: design
+createdAt: '2026-09-30T20:28:28.502Z'
+updatedAt: '2026-09-30T20:29:55.601Z'

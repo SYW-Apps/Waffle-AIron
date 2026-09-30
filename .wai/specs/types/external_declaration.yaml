@@ -27,7 +27,15 @@ fields:
       reference into the producer is written `alias::name`. A listed name must be one of the
       producer's public names (IMPORT_UNRESOLVED otherwise).
     optional: true
+  - name: description
+    type: string
+    description: >-
+      What the producer is to this project, in this project's words — the external's twin of
+      MemberDeclaration.description. The home of a member's description when `member detach` turns
+      the member into an external, and the source of the member description `member adopt` writes
+      back, so detach followed by adopt loses nothing.
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-26T17:39:15.516Z'
-updatedAt: '2026-09-28T16:05:23.009Z'
+updatedAt: '2026-09-30T20:19:23.909Z'

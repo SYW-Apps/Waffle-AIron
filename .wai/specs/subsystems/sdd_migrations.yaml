@@ -1,0 +1,36 @@
+id: sdd_migrations
+name: SDD Family Migrations
+description: >-
+  Changes to a family's shape, planned first and applied all-or-nothing: attaching an existing
+  project as a member, renaming a project's id or a member's alias, detaching a member into an
+  external and adopting one back, folding a member into its parent (internalize) and splitting a
+  subsystem out into a member (externalize). Every verb answers with a plan — per owner project, the
+  semantic edits, the references respelled at their parsed positions, the pins carried, every
+  refusal, the exact file changes and the projects whose locks go stale — and applies it through one
+  staged transaction: the verb's ordinary writes are rehearsed on a private copy of the family's
+  .wai trees, the copy's difference is staged beside each owner's files with a backup of every file
+  it replaces, and only then swapped in; any failure restores every backup, and a crash mid-swap
+  leaves journals that `wairon doctor --fix` rolls back. The family is either fully migrated or
+  byte-identical to before. It never locks: every plan lists the projects whose humans must re-lock.
+  It is its own subsystem because it composes two peers — sdd_core (the spec, reference and
+  configuration writers) and sdd_surfaces (pins) — and serves two doors, the CLI and the MCP server,
+  so it must sit above both peers and below both doors; the chaining migration's precedent of living
+  in sdd_cli works only for a verb one door reaches. The spec content a verb moves is restated,
+  never authored, so it stays on sdd_core's maintenance path exactly as the member writers it wraps
+  already do; nothing here goes through sdd_authoring. It holds one piece of state, the transaction
+  (rehearsal, per-owner journals, staged files and backups), in a Repository of its own. Hosted
+  members (records, not directories) are stage 7 and not modelled here. The caller must gate on
+  reach itself.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - type: Custom
+    details: >-
+      In-process family migrations: plan a verb (attach, rename, rename-alias, detach, adopt,
+      internalize, externalize), apply a confirmed plan all or nothing, discard one, and report or
+      roll back unfinished transactions.
+    component: migration_portal
+    interface: imigration_portal
+trustedLinks: []
+status: design
+createdAt: '2026-09-30T20:23:45.351Z'
+updatedAt: '2026-09-30T20:36:48.854Z'

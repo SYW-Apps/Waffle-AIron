@@ -1,0 +1,86 @@
+id: iidentity_migration
+name: Identity Migration Interface
+description: >-
+  Plan a project rename or an alias rename from a family graph (writing nothing), and write a
+  confirmed plan into the roots a rehearsal maps: reference respellings first, from the family's top
+  root while every key is still the planned one, then the alias tables and ids, then the pins.
+component: identity_migration
+methods:
+  - name: planRename
+    description: >-
+      Plan moving the id of the project request.project names (a member alias path from the bound
+      project; the bound project itself when empty) to request.newId. Refusals: no such project
+      (not-a-member) or its directory absent (member-absent); the family's top is out of reach
+      (family-partial: a rename must reach every consumer, and one could live above); a malformed
+      new id, or one a family project already answers to (id-collision); a reference to the project
+      whose position cannot be respelled (reference-unwritable). Edits: the project's id moved, the
+      old one appended to previousIds; for every family project whose alias table names it — its
+      parent's member entry, and every external that binds to it — an alias equal to the old id
+      renamed to the new id with each of that project's `old::name` references, its `use`-carrying
+      entry and its L0 `from: old` re-exports respelled, and an alias that differs kept, with an
+      external's `project` repointed to the new id; each pin under such an alias carried to its new
+      key and producer id, digest unchanged. Notes: consumers outside the family naming the old id
+      by path, which only they can rewrite (their externals report the id change at their next
+      gate); the id-locked case resolved when the new id is the member's alias. Re-lock: every
+      project written, the renamed one first — always, because the id is part of what was approved.
+    signature: 'planRename(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The graph of the highest root in reach
+      - name: bound
+        type: string
+        description: The bound project's key in that graph
+      - name: request
+        type: MigrationRequest
+        description: verb rename, project, newId
+    guarantees:
+      - idempotent
+  - name: planAliasRename
+    description: >-
+      Plan renaming the bound project's alias request.alias (a member or an external) to
+      request.newAlias. Refusals: the alias is declared under neither map (not-a-member); the new
+      alias is malformed or already declared (alias-taken). Edits, in the bound project only: the
+      alias rekeyed (value, description and `use` kept); every reference the bound project wrote as
+      `alias::name` respelled `newAlias::name` at its position; its L0 `from: alias` re-exports
+      respelled; an external's pin carried to the new alias, digest unchanged. Nothing in the
+      member, the producer or any sibling changes (alias-rename-touches-no-sibling). Notes: a local
+      spec id equal to the new alias (LOCAL_ID_SHADOWS_PROJECT would report it).
+    signature: >-
+      planAliasRename(family: ProjectFamily, bound: string, request: MigrationRequest):
+      MigrationPlan
+    returns: MigrationPlan
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The graph of the highest root in reach
+      - name: bound
+        type: string
+        description: The bound project's key in that graph
+      - name: request
+        type: MigrationRequest
+        description: verb rename-alias, alias, newAlias
+    guarantees:
+      - idempotent
+  - name: write
+    description: >-
+      Write a confirmed rename or alias-rename plan into the roots the rehearsal maps: with the
+      rehearsal's top root bound, each spec's reference edits in one call (spec keys are the scan's
+      before any alias moved, so this goes first); then, owner by owner under its binding, the id
+      moved and aliases rekeyed or externals repointed; last, the pins carried. Restores the
+      caller's binding on every path. Idempotent.
+    signature: 'write(plan: MigrationPlan, rehearsal: Rehearsal): void'
+    returns: void
+    params:
+      - name: plan
+        type: MigrationPlan
+        description: The plan
+      - name: rehearsal
+        type: Rehearsal
+        description: Where to write it
+    guarantees:
+      - idempotent
+status: design
+createdAt: '2026-09-30T20:34:26.022Z'
+updatedAt: '2026-09-30T20:34:26.033Z'

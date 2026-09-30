@@ -1,0 +1,34 @@
+kind: value-object
+id: transaction_outcome
+name: TransactionOutcome
+description: >-
+  What committing a staged transaction came to: committed, or refused/failed with every backup
+  restored — or, the one case a person must act on, failed with a file that could not be restored,
+  whose journal stays for `doctor --fix`.
+subsystem: sdd_migrations
+fields:
+  - name: committed
+    type: boolean
+    description: True when every file was swapped and the coordinator's journal reads committed.
+    optional: false
+  - name: written
+    type: FileChange[]
+    description: The changes now live (empty unless committed).
+    optional: false
+  - name: failure
+    type: string
+    description: >-
+      What stopped it: the operation (stage, backup, swap, verify), the file and the error — or
+      `moved since planned` naming the file whose live bytes no longer match its baseDigest.
+    optional: true
+  - name: restored
+    type: boolean
+    description: 'On failure: every live file is byte-identical to before (true), or some are not (false).'
+    optional: false
+  - name: unrestored
+    type: string[]
+    description: Files a rollback could not put back; the journal is left in place and names them.
+    optional: false
+methods: []
+createdAt: '2026-09-30T20:24:35.945Z'
+updatedAt: '2026-09-30T20:29:37.092Z'

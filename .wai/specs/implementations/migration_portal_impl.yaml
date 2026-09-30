@@ -1,0 +1,37 @@
+id: migration_portal_impl
+name: Migration Portal Implementation
+description: 'src/migrations/index.ts: the subsystem''s barrel, each export one forward to the workflow.'
+contract: imigration_portal
+sourcePath: src/migrations/index.ts
+methods:
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Route to the family migration workflow
+        type: call
+        targetComponent: family_migration_orchestrator
+        targetMethod: plan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Route to the family migration workflow
+        type: call
+        targetComponent: family_migration_orchestrator
+        targetMethod: apply
+  - name: discard
+    narrative:
+      - stepNumber: 1
+        description: Route to the family migration workflow
+        type: call
+        targetComponent: family_migration_orchestrator
+        targetMethod: discard
+  - name: recover
+    narrative:
+      - stepNumber: 1
+        description: Route to the family migration workflow
+        type: call
+        targetComponent: family_migration_orchestrator
+        targetMethod: recover
+status: design
+createdAt: '2026-09-30T20:36:38.923Z'
+updatedAt: '2026-09-30T20:36:38.932Z'

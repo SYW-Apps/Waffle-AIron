@@ -1,0 +1,20 @@
+id: identity_migration
+name: Identity Migration
+description: >-
+  The verbs that change what a project is CALLED: `project rename` (its id — a breaking identity
+  migration that reaches every reference to the old id across the family and asks every project it
+  writes to re-lock) and `member rename-alias` (one alias in the parent only — the parent's own
+  spellings change, and nothing in any member or sibling does). Both respell references at their
+  parsed positions from the scan taken before anything changed, and carry pins to their new key
+  without re-pinning. It resolves stage 3's id-locked case: a member whose lock approved an id other
+  than its mount alias is renamed deliberately, and the old id kept in previousIds lets the re-lock
+  through. It holds no state. The caller must gate on reach itself.
+subsystem: sdd_migrations
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - migration_core_adapter
+  - migration_surfaces_adapter
+status: design
+createdAt: '2026-09-30T20:34:12.691Z'
+updatedAt: '2026-09-30T20:34:12.704Z'

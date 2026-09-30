@@ -1,0 +1,20 @@
+id: family_file_adapter
+name: Family File Adapter
+description: >-
+  File I/O on the LIVE family's .wai trees for a staged transaction: mirror them into a rehearsal,
+  compare a rehearsal with them, read and digest a live file, replace a live file with a staged one,
+  remove one, and prune or recreate directories. The swap is a same-directory-volume rename
+  (MoveFileEx with replace-existing on Windows, rename(2) elsewhere), so a reader sees the old file
+  or the new one and never a torn one. On Windows a replace or remove that fails with EPERM, EBUSY
+  or EACCES — a scanner, indexer or editor holding the file without delete-sharing — is retried with
+  a short bounded backoff (about two seconds in all) before it fails; a read-only attribute fails at
+  once. A rename that would cross volumes (EXDEV) is never attempted: sameVolume is asked first.
+  Long paths go through Node's namespaced-path handling. Standalone: it holds no state, and it is
+  not part of the transaction aggregate — these are the family's own files.
+subsystem: sdd_migrations
+componentType: Adapter
+owns: []
+dependsOn: []
+status: design
+createdAt: '2026-09-30T20:25:25.235Z'
+updatedAt: '2026-09-30T20:25:25.248Z'

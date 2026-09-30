@@ -1,0 +1,21 @@
+id: boundary_migration
+name: Boundary Migration
+description: >-
+  The verbs that MOVE specs across a project boundary, family-wide: `member internalize` (every
+  subsystem of a member folds into its parent, the member's own metadata goes to the destination it
+  names, and every other family project that consumed the member now consumes the parent) and
+  `subsystem externalize` (a subsystem becomes a member; its sibling subsystems' references are
+  respelled `alias::name` by the core, every family consumer of the parent keeps resolving through
+  the parent's re-exports, and the new member's external for the parent is pinned so its own gate
+  can judge it). The move itself is sdd_core's (internalizeMember, externalizeSubsystem); this
+  workflow adds what those parent-scoped writes cannot see — the rest of the family — and turns a
+  core refusal into a plan refusal. It holds no state. The caller must gate on reach itself.
+subsystem: sdd_migrations
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - migration_core_adapter
+  - migration_surfaces_adapter
+status: design
+createdAt: '2026-09-30T20:34:50.185Z'
+updatedAt: '2026-09-30T20:34:50.197Z'

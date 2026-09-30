@@ -1,0 +1,74 @@
+id: family_file_adapter_impl
+name: Family File Adapter Implementation
+description: >-
+  src/migrations/family-files.ts: node:fs over the live family's .wai trees. The Windows retry is
+  one helper shared by replace, place and remove: up to 8 attempts, 25 ms doubling to 400 ms, only
+  for EPERM, EBUSY and EACCES, and never for a read-only file (checked first, reported at once).
+contract: ifamily_file_adapter
+sourcePath: src/migrations/family-files.ts
+methods:
+  - name: mirror
+    narrative: []
+    detail: intent
+    intent: >-
+      For each project root, refuses one that does not lie within the family root, then walks its
+      .wai tree (skipping .wai/transactions/ and following no link), copying each file to the same
+      relative path under the target and hashing the live bytes it read. Answers the digests by live
+      absolute path. A read failure throws naming the file; the caller drops the half-made
+      rehearsal.
+  - name: compare
+    narrative: []
+    detail: intent
+    intent: >-
+      Walks every .wai directory in the rehearsal tree and every live .wai the mirror copied, pairs
+      files by path relative to the family root, and emits a FileChange for each pair whose bytes
+      differ (write), each rehearsal-only file (create) and each live-only file under a copied tree
+      (delete). The owner is the directory holding the .wai, mapped back to its live path;
+      baseDigest comes from the rehearsal's recorded digests, stagedDigest is hashed from the
+      rehearsal bytes. A file present in both with equal bytes is not a change, so a writer that
+      re-saved identically adds nothing.
+  - name: read
+    narrative: []
+    detail: intent
+    intent: Reads the file; null on ENOENT; any other error throws naming the file.
+  - name: digest
+    narrative: []
+    detail: intent
+    intent: Hashes the file's bytes with sha256 and answers `sha256:<hex>`; null on ENOENT.
+  - name: replace
+    narrative: []
+    detail: intent
+    intent: >-
+      fs.renameSync(source, target) — on Windows a MoveFileEx with replace-existing, so readers see
+      the old or the new file whole. On EPERM, EBUSY or EACCES retries with the bounded backoff; a
+      target carrying the read-only attribute fails at once. Throws the last error with the file
+      named.
+  - name: place
+    narrative: []
+    detail: intent
+    intent: >-
+      Writes the bytes to `<path>.wairon-restore` in the same directory, fsyncs it, and renames it
+      over the path with replace's retries; removes the temporary sibling when the rename fails.
+  - name: remove
+    narrative: []
+    detail: intent
+    intent: fs.unlinkSync with the bounded retries; ENOENT is success.
+  - name: makeDirs
+    narrative: []
+    detail: intent
+    intent: >-
+      Walks up from the directory to the first existing ancestor, then creates the missing ones
+      downward, answering them shallowest first.
+  - name: prune
+    narrative: []
+    detail: intent
+    intent: >-
+      From the directory upward, removes each directory that is empty, stopping at the first
+      non-empty one or at stopAt, answering the removed ones deepest first.
+  - name: sameVolume
+    narrative: []
+    detail: intent
+    intent: Compares fs.statSync(a).dev with fs.statSync(b).dev; a missing path answers false.
+status: design
+createdAt: '2026-09-30T20:27:27.264Z'
+updatedAt: '2026-09-30T20:27:27.275Z'

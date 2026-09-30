@@ -1,0 +1,303 @@
+id: family_migration_orchestrator_impl
+name: Family Migration Orchestrator Implementation
+description: >-
+  src/migrations/orchestrator.ts. The climb is the chaining migration's: one hop at a time through
+  resolveChainingParent, which answers null where the request may not read above its root.
+contract: ifamily_migration_orchestrator
+sourcePath: src/migrations/orchestrator.ts
+methods:
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        label: climb
+        description: >-
+          Remember the bound root and the caller's binding — every path below restores it — and
+          climb the membership chain one hop at a time
+        type: loop
+        condition: the last hop found a parent in reach
+        loopKind: doWhile
+        endStep: 3
+      - stepNumber: 2
+        description: >-
+          Detect the current root's chaining parent: null for a top root, and null when the request
+          may not read above its root — the caller must gate on reach itself, and this is where it
+          does
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 3
+        label: climbed
+        description: >-
+          When a parent was found, bind its root and continue from there; when none was found for a
+          root that is itself a member, record the family as not whole
+        type: local
+      - stepNumber: 4
+        description: Read the project graph of the highest root reached, and find the bound project's key in it
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 5
+        description: Look for unfinished transactions under the family root and the bound root, writing nothing
+        type: call
+        targetComponent: family_transaction
+        targetMethod: recover
+      - stepNumber: 6
+        description: Is an earlier migration unfinished?
+        type: branch
+        condition: a transaction is pending
+        onFalseStep: 8
+      - stepNumber: 7
+        description: 'Refuse: transaction-pending, naming `wairon doctor --fix`; restore the caller''s binding'
+        type: return
+        outcome: refused plan
+      - stepNumber: 8
+        label: route
+        description: Route the request to its verb's planner
+        type: switch
+        'on': request.verb
+        cases:
+          - value: attach
+            step: 9
+          - value: detach
+            step: 11
+          - value: adopt
+            step: 13
+          - value: rename
+            step: 15
+          - value: rename-alias
+            step: 17
+          - value: internalize
+            step: 19
+          - value: externalize
+            step: 21
+      - stepNumber: 9
+        label: attach
+        description: Plan the attach
+        type: call
+        targetComponent: membership_migration
+        targetMethod: planAttach
+      - stepNumber: 10
+        description: Planned
+        type: jump
+        toStep: 22
+      - stepNumber: 11
+        label: detach
+        description: Plan the detach
+        type: call
+        targetComponent: membership_migration
+        targetMethod: planDetach
+      - stepNumber: 12
+        description: Planned
+        type: jump
+        toStep: 22
+      - stepNumber: 13
+        label: adopt
+        description: Plan the adopt
+        type: call
+        targetComponent: membership_migration
+        targetMethod: planAdopt
+      - stepNumber: 14
+        description: Planned
+        type: jump
+        toStep: 22
+      - stepNumber: 15
+        label: rename
+        description: Plan the project rename
+        type: call
+        targetComponent: identity_migration
+        targetMethod: planRename
+      - stepNumber: 16
+        description: Planned
+        type: jump
+        toStep: 22
+      - stepNumber: 17
+        label: rename-alias
+        description: Plan the alias rename
+        type: call
+        targetComponent: identity_migration
+        targetMethod: planAliasRename
+      - stepNumber: 18
+        description: Planned
+        type: jump
+        toStep: 22
+      - stepNumber: 19
+        label: internalize
+        description: Plan the internalize
+        type: call
+        targetComponent: boundary_migration
+        targetMethod: planInternalize
+      - stepNumber: 20
+        description: Planned
+        type: jump
+        toStep: 22
+      - stepNumber: 21
+        label: externalize
+        description: Plan the externalize
+        type: call
+        targetComponent: boundary_migration
+        targetMethod: planExternalize
+      - stepNumber: 22
+        label: planned
+        description: >-
+          Restore the caller's binding, then rehearse the plan (an already-refused plan comes back
+          unchanged)
+        type: call
+        targetComponent: family_migration_orchestrator
+        targetMethod: rehearse
+      - stepNumber: 23
+        description: Answer the plan
+        type: return
+        outcome: MigrationPlan
+  - name: rehearse
+    narrative:
+      - stepNumber: 1
+        description: Is the plan refused?
+        type: branch
+        condition: the plan is blocked
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Answer it unchanged: nothing is rehearsed for a refused plan'
+        type: return
+        outcome: refused plan
+      - stepNumber: 3
+        label: copy
+        description: >-
+          Copy every family project's .wai tree, and the project the verb brings in (attach, adopt),
+          into a private rehearsal
+        type: call
+        targetComponent: family_transaction
+        targetMethod: rehearse
+      - stepNumber: 4
+        description: Run the verb's own writes on the copy; a core writer's refusal ends the region
+        type: try
+        endStep: 11
+        catches:
+          - error: a core writer's refusal
+            step: 15
+      - stepNumber: 5
+        description: Which writer?
+        type: switch
+        'on': plan.request.verb
+        cases:
+          - value: attach
+            step: 6
+          - value: detach
+            step: 6
+          - value: adopt
+            step: 6
+          - value: rename
+            step: 8
+          - value: rename-alias
+            step: 8
+          - value: internalize
+            step: 10
+          - value: externalize
+            step: 10
+      - stepNumber: 6
+        label: membership
+        description: Write the attach, detach or adopt into the rehearsal roots
+        type: call
+        targetComponent: membership_migration
+        targetMethod: write
+      - stepNumber: 7
+        description: Written
+        type: jump
+        toStep: 11
+      - stepNumber: 8
+        label: identity
+        description: Write the rename or alias rename into the rehearsal roots
+        type: call
+        targetComponent: identity_migration
+        targetMethod: write
+      - stepNumber: 9
+        description: Written
+        type: jump
+        toStep: 11
+      - stepNumber: 10
+        label: boundary
+        description: Write the internalize or externalize into the rehearsal roots
+        type: call
+        targetComponent: boundary_migration
+        targetMethod: write
+      - stepNumber: 11
+        label: written
+        description: The verb's writes are on the copy
+        type: local
+      - stepNumber: 12
+        description: 'Diff the copy against the live family: the plan''s file changes'
+        type: call
+        targetComponent: family_transaction
+        targetMethod: diff
+      - stepNumber: 13
+        description: >-
+          Read each changed owner's lock record; an owner that carries one is a project to re-lock
+          (a rename's target first)
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 14
+        description: Answer the plan with its rehearsal, file changes and re-lock list
+        type: return
+        outcome: rehearsed plan
+      - stepNumber: 15
+        label: refused-on-copy
+        description: Drop the rehearsal
+        type: call
+        targetComponent: family_transaction
+        targetMethod: discard
+      - stepNumber: 16
+        description: >-
+          Answer the plan with the writer's refusal (internalize-refused, externalize-refused) and
+          its message
+        type: return
+        outcome: refused plan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Is there anything to apply?
+        type: branch
+        condition: the plan is blocked or has no file change
+        onFalseStep: 4
+      - stepNumber: 2
+        description: Drop any rehearsal it holds
+        type: call
+        targetComponent: family_transaction
+        targetMethod: discard
+      - stepNumber: 3
+        description: 'Answer not applied: refused, or nothing to do (a completed migration re-plans empty)'
+        type: return
+        outcome: not applied
+      - stepNumber: 4
+        label: commit
+        description: Commit the rehearsal's file changes all or nothing
+        type: call
+        targetComponent: family_transaction
+        targetMethod: commit
+      - stepNumber: 5
+        description: >-
+          Drop this process's cached scans of every root the changes touched, so the next read sees
+          the new files
+        type: local
+      - stepNumber: 6
+        description: >-
+          Answer the report: applied with the re-lock list when committed; otherwise the failure and
+          whether the family was restored
+        type: return
+        outcome: FamilyMigrationReport
+  - name: discard
+    narrative:
+      - stepNumber: 1
+        description: Drop the plan's rehearsal, if it holds one
+        type: call
+        targetComponent: family_transaction
+        targetMethod: discard
+  - name: recover
+    narrative:
+      - stepNumber: 1
+        description: Report or resolve the unfinished transactions under the root
+        type: call
+        targetComponent: family_transaction
+        targetMethod: recover
+status: design
+createdAt: '2026-09-30T20:36:19.753Z'
+updatedAt: '2026-09-30T20:36:19.767Z'

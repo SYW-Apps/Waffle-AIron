@@ -1,0 +1,43 @@
+id: icli_migration_adapter
+name: CLI Migration Client Adapter Interface
+description: One forward per migration_portal method.
+component: cli_migration_adapter
+methods:
+  - name: plan
+    description: Forward to migration_portal.plan.
+    signature: 'plan(request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: request
+        type: MigrationRequest
+        description: The verb and its arguments
+  - name: apply
+    description: Forward to migration_portal.apply.
+    signature: 'apply(plan: MigrationPlan): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: plan
+        type: MigrationPlan
+        description: The confirmed plan
+  - name: discard
+    description: Forward to migration_portal.discard.
+    signature: 'discard(plan: MigrationPlan): void'
+    returns: void
+    params:
+      - name: plan
+        type: MigrationPlan
+        description: The plan
+  - name: recover
+    description: Forward to migration_portal.recover.
+    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
+    returns: RecoveredTransaction[]
+    params:
+      - name: root
+        type: string
+        description: The project root
+      - name: fix
+        type: boolean
+        description: Resolve, or only report
+status: design
+createdAt: '2026-09-30T20:37:31.884Z'
+updatedAt: '2026-09-30T20:37:31.901Z'

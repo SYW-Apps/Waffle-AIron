@@ -414,7 +414,7 @@ methods:
       - stepNumber: 1
         description: >-
           Read the project graph of the bound root: the member under the alias, its declaration
-          form, its subsystems, members and externals
+          form, its subsystems, project-level types, members and externals
         type: call
         targetComponent: spec_loader
         targetMethod: graph
@@ -428,82 +428,144 @@ methods:
         type: throw
         error: 'cannot internalize: no member is declared under that alias'
       - stepNumber: 4
-        description: Guard the member can be taken in whole
-        type: branch
-        condition: >-
-          the member holds more than one subsystem, or declares members or externals of its own
-          other than the parent
-        onFalseStep: 6
+        label: home
+        description: >-
+          Resolve the destination's home subsystem: the one it names, else the member's only
+          subsystem
+        type: local
       - stepNumber: 5
-        description: >-
-          Reject: a multi-subsystem member (stage 6) or one whose own members and externals would
-          have no home here
-        type: throw
-        error: >-
-          cannot internalize: the member is not a single subsystem, or declares members or externals
-          of its own
-      - stepNumber: 6
-        label: referenced
-        description: Does another project of the family reference the member?
+        description: Guard the home
         type: branch
         condition: >-
-          a project of the family other than the bound root and the member itself references the
-          member (the graph's cross-project references)
-        onFalseStep: 8
-      - stepNumber: 7
-        description: >-
-          Refuse before anything is written, listing each such reference (the project, the spec and
-          the text as written): internalizing would leave them naming a project that no longer
-          exists, and rewriting other projects is the family migration's job, named and dry-run
-          first
+          the home names no subsystem of the member or of the bound project, or none is named while
+          the member holds several subsystems and its L0 says more than its name
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject, naming the member's subsystems as the candidates
         type: throw
-        error: 'cannot internalize: other projects of the family reference the member'
+        error: 'cannot internalize: the member''s metadata needs a home subsystem (--into)'
+      - stepNumber: 7
+        label: read-member
+        description: >-
+          With the project root scoped to the member, read its configuration — members, externals,
+          packs, projectType, rules — through the project config Repository, then restore the bound
+          scope
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
       - stepNumber: 8
+        description: >-
+          Collect every refusal before anything moves: a moved subsystem, project-level type or spec
+          file that would land on an existing one; a member or external alias the bound project
+          already declares differently; a pack the member selects that the bound project does not
+          select at the same version while the destination says neither adopt nor drop; conformance
+          debt (rules.conformance.carried) or severity overrides the bound project does not share; a
+          destination export whose public name the bound project already exports for another target;
+          a file of the member's .wai this write does not recognise
+        type: local
+      - stepNumber: 9
+        description: Is anything refused?
+        type: branch
+        condition: the collected refusals are not empty
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Refuse before anything is written, listing every refusal
+        type: throw
+        error: 'cannot internalize: the member cannot be taken in whole'
+      - stepNumber: 11
         label: take-in
         description: >-
           Delete its legacy L1 mount document first (false, writing nothing, for a member declared
-          in `members`), so the moved subsystem can take the folder the mount document held
+          in `members`), so a moved subsystem can take the folder the mount document held
         type: call
         targetComponent: spec_loader
         targetMethod: deleteMount
-      - stepNumber: 9
+      - stepNumber: 12
         description: >-
-          Move the member's spec subtree under the bound project's specs — its subsystem folder and
-          any project-level spec files beside it, refused before anything moves when one would land
-          on an existing file — its keys becoming local, and re-express each moved implementation's
-          file paths — sourcePath, each method's sourcePath, simPath — relative to the bound root.
+          Move every subsystem subtree of the member and its project-level types under the bound
+          project's specs, their keys becoming local, and re-express each moved implementation's
+          file paths (sourcePath, each method's sourcePath, simPath) relative to the bound root.
           Each reference that crossed the old boundary is re-expressed with the target the scan
           bound it to before the move, so the re-save below keeps every target
         type: local
-      - stepNumber: 10
+      - stepNumber: 13
+        description: >-
+          Place what the member held for its subsystems: append its L0 vision to the home
+          subsystem's description as a paragraph naming the member, and stamp its targetLanguage,
+          projectType (as profile) and designDepth on each moved subsystem that states none of its
+          own, where they differ from the bound project's
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 14
+        description: >-
+          Place what the member held as a project in the bound project's L0: its boundaries,
+          globalRequirements and databases merged by identity (an equal entry once), its re-exports
+          from the member re-pointed at the moved subsystems, and a re-export for each destination
+          export, at the audience the member gave it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 15
+        description: >-
+          Declare each of the member's own members as the bound project's member under the same
+          alias, its path re-expressed from the bound root, its description and `use` kept (an equal
+          declaration writes nothing)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 16
+        description: >-
+          Declare each of the member's externals other than the parent as the bound project's
+          external under the same alias, a relative source re-expressed from the bound root
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareExternal
+      - stepNumber: 17
+        description: >-
+          Import the names each carried external's `use` held, so the moved specs' bare names still
+          resolve
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: importNames
+      - stepNumber: 18
+        description: Does the destination adopt the member's packs?
+        type: branch
+        condition: the destination says adopt and the member selects a pack the bound project does not
+        onFalseStep: 20
+      - stepNumber: 19
+        description: Select each such pack in the bound project, pinned at the member's version and digest
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: upsertPackSelection
+      - stepNumber: 20
+        label: remove
         description: >-
           Remove the member from `members` (false, writing nothing, for a member declared in the
           legacy form)
         type: call
         targetComponent: project_config_repository
         targetMethod: removeMember
-      - stepNumber: 11
-        description: Delete the member's .wai project (project.yaml + specs)
+      - stepNumber: 21
+        description: >-
+          Delete what remains of the member's .wai project — its project.yaml, lock, pins and
+          snapshots, derived outputs and legacy surfaces — recording each file in the result's
+          deleted list
         type: local
-      - stepNumber: 12
+      - stepNumber: 22
         description: >-
           Re-save every spec that referenced across the old boundary, targets unchanged: the
           parent's `alias::name` references and the moved specs' `<parent id>::name` references
-          become local ids
+          become local ids; then drop the spec cache
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
-      - stepNumber: 13
+      - stepNumber: 23
         description: >-
-          Re-point the parent L0 entries that re-exported from the member (`from: <alias>`) at the
-          moved subsystem, and drop the spec cache
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSystemSpec
-      - stepNumber: 14
-        description: Member internalized into the bound project
+          Member internalized: answer what moved, where each piece went, the carried externals and
+          what was deleted
         type: return
-        outcome: internalized
+        outcome: 'internalized: the InternalizeResult'
     conformance: 'off'
   - name: loadTypeSpecs
     narrative:
@@ -1807,6 +1869,69 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: importNames
+  - name: renameProjectId
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: renameId
+  - name: renameAlias
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: renameAlias
+  - name: repointExternal
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: repointExternal
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: removeExternal
+  - name: declareMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Containment guard: resolve the member directory from the bound project root and reject a
+          path that does not resolve strictly within it, lexically and through links
+        type: branch
+        condition: the declaration's path escapes the bound project root
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject a path that resolves outside the project root
+        type: throw
+        error: a member path must resolve within the project root
+      - stepNumber: 3
+        label: declare
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+  - name: removeMember
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: removeMember
+  - name: rewriteReferences
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Respell the edits through the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: rewriteReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:50:13.851Z'
+updatedAt: '2026-09-30T20:22:29.337Z'

@@ -18,20 +18,6 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: moveMember
-  - name: externalizeSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Forward subsystem externalization to the core portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: externalizeSubsystem
-  - name: internalizeMember
-    narrative:
-      - stepNumber: 1
-        description: Forward subsystem internalization to the core portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: internalizeMember
   - name: composeAgentBrief
     narrative:
       - stepNumber: 1
@@ -408,4 +394,4 @@ methods:
         targetMethod: importNames
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T17:17:09.799Z'
+updatedAt: '2026-09-30T20:39:01.086Z'

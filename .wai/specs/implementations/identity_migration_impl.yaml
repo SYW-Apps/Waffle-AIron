@@ -1,0 +1,133 @@
+id: identity_migration_impl
+name: Identity Migration Implementation
+description: >-
+  src/migrations/identity.ts. Reference edits come from the graph's authoredReferences (position,
+  authored text, the alias it went through), never from a text search.
+contract: iidentity_migration
+sourcePath: src/migrations/identity.ts
+methods:
+  - name: planRename
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the target project from the bound node by its member alias path (the bound project
+          when empty): none is not-a-member, its directory absent is member-absent; a family that is
+          not whole is family-partial; a malformed new id or one any family node answers to is
+          id-collision
+        type: local
+      - stepNumber: 2
+        description: Is the rename possible?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 4
+        label: approved
+        description: >-
+          Read the target's lock record, for the id its approval recorded (the note that the rename
+          resolves an id-locked member, and the PROJECT_ID_RENAMED the re-lock clears)
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 5
+        description: >-
+          Collect the holders of the old id: every family node whose alias table binds to the target
+          — the parent's member entry and each external — each with the alias it uses and whether
+          that alias equals the old id
+        type: local
+      - stepNumber: 6
+        description: >-
+          For each holder, plan its edits: an alias equal to the old id is renamed to the new id and
+          each authored reference that went through it (the graph's authoredReferences with that
+          referrer and alias, at their positions, L0 `from` entries included) is respelled with the
+          new first segment; an alias that differs is kept, and an external's `project` is repointed
+          to the new id; a pin under the alias is carried to its new key and producer id. A
+          reference at a position the writer does not parse is reference-unwritable
+        type: local
+      - stepNumber: 7
+        description: >-
+          Plan the target's own edit: its id moved, the old one appended to previousIds; add the
+          notes — consumers outside the family are not discovered and must rewrite their own
+          externals
+        type: local
+      - stepNumber: 8
+        description: Answer the plan, every written project to re-lock, the target first
+        type: return
+        outcome: the rename plan
+  - name: planAliasRename
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Find the alias in the bound node's alias table: in neither map is not-a-member; a
+          malformed new alias or one either map declares is alias-taken
+        type: local
+      - stepNumber: 2
+        description: Is the rename possible?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 4
+        label: edits
+        description: >-
+          Plan the bound project's edits only: the alias rekeyed; every authored reference of the
+          bound project that went through the alias respelled with the new first segment at its
+          position, L0 `from` entries included; an external's pin carried to the new alias with the
+          same producer; a local spec id equal to the new alias is a note
+        type: local
+      - stepNumber: 5
+        description: Answer the plan
+        type: return
+        outcome: the alias-rename plan
+  - name: write
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Remember the caller's binding and bind the rehearsal's top root, where every spec key is
+          the one the plan was computed with
+        type: local
+      - stepNumber: 2
+        description: Respell each spec's planned references in one call per spec, before any alias moves
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: rewriteReferences
+      - stepNumber: 3
+        description: For each holder, bind its rehearsal root and rekey each planned alias
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: renameAlias
+      - stepNumber: 4
+        description: Repoint each planned external's producer id
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: repointExternal
+      - stepNumber: 5
+        description: Is this a project rename?
+        type: branch
+        condition: plan.request.verb is rename
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Bind the target's rehearsal root and move its id, the old one into previousIds
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: renameId
+      - stepNumber: 7
+        label: pins
+        description: >-
+          Last, for each holder with a pin under a planned alias, bind its rehearsal root and carry
+          the pin to its new key and producer id, digest unchanged
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: renamePin
+      - stepNumber: 8
+        description: Restore the caller's binding
+        type: local
+status: design
+createdAt: '2026-09-30T20:34:43.534Z'
+updatedAt: '2026-09-30T20:34:43.546Z'

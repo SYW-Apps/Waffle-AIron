@@ -1,0 +1,141 @@
+id: itransaction_store
+name: Transaction Store Interface
+description: >-
+  The transaction aggregate's state boundary: the rehearsal, each owner's journal, and its staged
+  and backup files. Read-through: every read is a file read, so what a crashed process left is
+  exactly what the next one reads.
+component: transaction_store
+methods:
+  - name: openRehearsal
+    description: >-
+      Create the rehearsal directory for a transaction id in the OS temporary directory and answer
+      its absolute path.
+    signature: 'openRehearsal(id: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+        description: The transaction id
+    effect: write
+  - name: dropRehearsal
+    description: Remove a rehearsal directory and everything under it; a missing one is not an error.
+    signature: 'dropRehearsal(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+        description: The transaction id
+    effect: write
+  - name: saveJournal
+    description: >-
+      Write one owner's journal durably (temporary sibling, fsync, rename), creating
+      .wai/transactions/<id>/ and the self-ignoring .gitignore when absent. Every phase change is
+      one call.
+    signature: 'saveJournal(journal: TransactionJournal): void'
+    returns: void
+    params:
+      - name: journal
+        type: TransactionJournal
+        description: The journal, whose owner and id say where it goes
+    effect: write
+  - name: readJournal
+    description: One owner's journal of a transaction, or null when it has none.
+    signature: 'readJournal(owner: string, id: string): TransactionJournal | null'
+    returns: TransactionJournal | null
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+    effect: read
+  - name: listJournals
+    description: >-
+      Every journal under one owner's .wai/transactions/, whatever its phase; empty when there is
+      none.
+    signature: 'listJournals(owner: string): TransactionJournal[]'
+    returns: TransactionJournal[]
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+    effect: read
+  - name: putFile
+    description: >-
+      Store bytes durably in an owner's transaction area — staged (the new content) or backup (the
+      live content it replaces) — under the file's owner-relative path.
+    signature: 'putFile(owner: string, id: string, area: string, path: string, bytes: bytes): void'
+    returns: void
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+      - name: area
+        type: string
+        description: staged | backup
+      - name: path
+        type: string
+        description: The file, relative to the owner's root
+      - name: bytes
+        type: bytes
+        description: The content
+    effect: write
+  - name: readFile
+    description: The bytes held in an owner's transaction area for a file, or null when there are none.
+    signature: 'readFile(owner: string, id: string, area: string, path: string): bytes | null'
+    returns: bytes | null
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+      - name: area
+        type: string
+        description: staged | backup
+      - name: path
+        type: string
+        description: The file, relative to the owner's root
+    effect: read
+  - name: locate
+    description: >-
+      The absolute path of a file in an owner's transaction area — on the owner's own volume by
+      construction, which is what makes the swap a rename.
+    signature: 'locate(owner: string, id: string, area: string, path: string): string'
+    returns: string
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+      - name: area
+        type: string
+        description: staged | backup
+      - name: path
+        type: string
+        description: The file, relative to the owner's root
+    effect: read
+  - name: close
+    description: >-
+      Remove an owner's transaction directory, and .wai/transactions/ itself when nothing else is
+      left in it.
+    signature: 'close(owner: string, id: string): void'
+    returns: void
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+    effect: write
+status: design
+createdAt: '2026-09-30T20:25:56.186Z'
+updatedAt: '2026-09-30T20:29:41.615Z'

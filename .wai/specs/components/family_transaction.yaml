@@ -1,0 +1,23 @@
+id: family_transaction
+name: Family Transaction
+description: >-
+  Applies a family's file changes all-or-nothing. It rehearses: copies the family's .wai trees into
+  a private rehearsal where a verb performs its ordinary writes, and answers the rehearsal's
+  difference from the live trees as the plan's file changes. It commits: stages every changed file
+  and a backup of every file it replaces inside each owner's own .wai/transactions/<id>/ (so each
+  swap is a rename on one volume), re-checks that no live file moved since the rehearsal copied it,
+  then swaps them in under a journal whose coordinator phase — at the family root — is the single
+  commit point; any failure restores every backup and proves each restored file by digest. It
+  recovers: `doctor` finds journals left by a crash and rolls back every transaction whose
+  coordinator never reached committed, or only cleans up one that did. It knows nothing about any
+  verb: it moves bytes it was shown. It holds no state of its own — the transaction lives in the
+  Transaction Repository, so a crash loses nothing this workflow held.
+subsystem: sdd_migrations
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - transaction_repository
+  - family_file_adapter
+status: design
+createdAt: '2026-09-30T20:28:13.363Z'
+updatedAt: '2026-09-30T20:28:13.376Z'

@@ -1,0 +1,31 @@
+kind: value-object
+id: family_migration_report
+name: FamilyMigrationReport
+description: >-
+  The answer of applying a family migration: the plan, whether it is now live, what was written, and
+  whom to ask for a re-lock — or why nothing changed.
+subsystem: sdd_migrations
+fields:
+  - name: plan
+    type: MigrationPlan
+    description: The plan applied.
+    optional: false
+  - name: applied
+    type: boolean
+    description: >-
+      True when the transaction committed; false for a dry run, a refused or empty plan, or a failed
+      commit.
+    optional: false
+  - name: outcome
+    type: TransactionOutcome
+    description: >-
+      The transaction's outcome: what was written, or what failed and whether everything was
+      restored. Absent when nothing was committed because the plan was refused, empty, or a dry run.
+    optional: true
+  - name: relock
+    type: string[]
+    description: The plan's re-lock list, when applied; nothing is locked on anyone's behalf.
+    optional: false
+methods: []
+createdAt: '2026-09-30T20:24:53.126Z'
+updatedAt: '2026-09-30T20:39:09.939Z'

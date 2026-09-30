@@ -20,22 +20,6 @@ methods:
       - name: newPath
         type: string
         description: The new root, relative to the bound project root
-  - name: externalizeSubsystem
-    description: >-
-      Forward to spec_maintenance_portal.externalizeSubsystem: turn an internal subsystem into a
-      member project declared in `members`.
-    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
-    returns: void
-  - name: internalizeMember
-    description: >-
-      Forward to spec_maintenance_portal.internalizeMember: take a single-subsystem member back into
-      the bound project.
-    signature: 'internalizeMember(alias: string): void'
-    returns: void
-    params:
-      - name: alias
-        type: string
-        description: The member's alias
   - name: composeAgentBrief
     description: >-
       Calls composeAgentBrief on core portal — the live delegation brief backing `wairon agent
@@ -659,4 +643,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:54:14.162Z'
+updatedAt: '2026-09-30T20:39:00.190Z'

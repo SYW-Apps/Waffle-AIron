@@ -1,0 +1,30 @@
+id: mcp_migration_adapter_impl
+name: MCP Migration Client Adapter Implementation
+description: 'src/mcp/server.ts: in-process imports of the sdd_migrations barrel.'
+contract: imcp_migration_adapter
+sourcePath: src/mcp/server.ts
+methods:
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: plan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: apply
+  - name: discard
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: discard
+status: design
+createdAt: '2026-09-30T20:39:17.987Z'
+updatedAt: '2026-09-30T20:39:17.996Z'

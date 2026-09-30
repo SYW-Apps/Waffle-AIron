@@ -1,0 +1,65 @@
+id: transaction_file_adapter_impl
+name: Transaction File Adapter Implementation
+description: >-
+  src/migrations/transaction-files.ts: node:fs under each owner's .wai/transactions/ and the OS
+  temporary directory.
+contract: itransaction_file_adapter
+sourcePath: src/migrations/transaction-files.ts
+methods:
+  - name: openRehearsal
+    narrative: []
+    detail: intent
+    intent: >-
+      Makes `wairon-migration-<id>` under os.tmpdir() (refusing when it already exists, so two plans
+      never share a rehearsal) and answers its absolute path.
+  - name: dropRehearsal
+    narrative: []
+    detail: intent
+    intent: >-
+      Removes the rehearsal directory recursively; ENOENT is success. Retries a Windows EBUSY/EPERM
+      on removal a few times before it reports the directory left behind, which is harmless: it lies
+      outside every family.
+  - name: saveJournal
+    narrative: []
+    detail: intent
+    intent: >-
+      Serializes the journal as YAML, writes it to journal.yaml.tmp beside journal.yaml under
+      <owner>/.wai/transactions/<id>/, fsyncs it, and renames it over journal.yaml; creates the
+      directories first, and writes `.wai/transactions/.gitignore` holding `*` when absent. A
+      failure at any point leaves the previous journal intact.
+  - name: readJournal
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads and parses <owner>/.wai/transactions/<id>/journal.yaml; null when the file is absent; a
+      parse failure throws naming the file.
+  - name: listJournals
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads every <owner>/.wai/transactions/*/journal.yaml; a transaction directory with no journal
+      (a crash before the first save) is answered as a journal in phase staging with no entries, so
+      recovery still cleans it up.
+  - name: putFile
+    narrative: []
+    detail: intent
+    intent: >-
+      Writes the bytes to <owner>/.wai/transactions/<id>/<area>/<path> through a temporary sibling,
+      fsync and rename, creating parent directories.
+  - name: readFile
+    narrative: []
+    detail: intent
+    intent: Reads <owner>/.wai/transactions/<id>/<area>/<path>; null when absent.
+  - name: locate
+    narrative: []
+    detail: intent
+    intent: Joins <owner>/.wai/transactions/<id>/<area>/<path>; touches nothing.
+  - name: close
+    narrative: []
+    detail: intent
+    intent: >-
+      Removes <owner>/.wai/transactions/<id>/ recursively (ENOENT is success, a Windows EBUSY/EPERM
+      retried briefly), then .wai/transactions/ when only its .gitignore remains.
+status: design
+createdAt: '2026-09-30T20:26:54.730Z'
+updatedAt: '2026-09-30T20:26:54.739Z'

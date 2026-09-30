@@ -1,0 +1,17 @@
+id: transaction_file_adapter
+name: Transaction File Adapter
+description: >-
+  File I/O for the transaction aggregate and nothing else: each owner's .wai/transactions/<id>/
+  (journal.yaml, staged/, backup/, and a self-ignoring .gitignore holding `*` at .wai/transactions/
+  so a transaction left by a crash is never committed) and the rehearsal directory in the OS
+  temporary directory. Every write is durable before it returns: file bytes are written to a
+  temporary sibling, fsynced, then renamed over the target (directory fsync where the platform
+  supports it; Windows does not, and the rename is the barrier there). Owned by the transaction
+  Repository; the only block that touches those paths.
+subsystem: sdd_migrations
+componentType: Adapter
+owns: []
+dependsOn: []
+status: design
+createdAt: '2026-09-30T20:25:14.097Z'
+updatedAt: '2026-09-30T20:25:14.109Z'

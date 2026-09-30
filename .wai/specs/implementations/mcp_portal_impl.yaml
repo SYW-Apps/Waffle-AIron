@@ -66,10 +66,10 @@ methods:
   - name: sdd_externalize_subsystem
     narrative:
       - stepNumber: 1
-        description: Dispatch to the externalizeSubsystem workflow
+        description: Build the externalize request and dispatch it to the migration workflow with dryRun
         type: call
-        targetComponent: mcp_orchestrator
-        targetMethod: externalizeSubsystem
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
   - name: listResources
     narrative:
       - stepNumber: 1
@@ -217,10 +217,12 @@ methods:
   - name: sdd_internalize_member
     narrative:
       - stepNumber: 1
-        description: Dispatch to the internalizeMember workflow
+        description: >-
+          Build the internalize request, its destination from into, packs and exports, and dispatch
+          it to the migration workflow with dryRun
         type: call
-        targetComponent: mcp_orchestrator
-        targetMethod: internalizeMember
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
   - name: sdd_pack_impact
     narrative:
       - stepNumber: 1
@@ -228,6 +230,41 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: packImpact
+  - name: sdd_attach_member
+    narrative:
+      - stepNumber: 1
+        description: Build the attach request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+  - name: sdd_rename_project
+    narrative:
+      - stepNumber: 1
+        description: Build the rename request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+  - name: sdd_rename_member_alias
+    narrative:
+      - stepNumber: 1
+        description: Build the rename-alias request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+  - name: sdd_detach_member
+    narrative:
+      - stepNumber: 1
+        description: Build the detach request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+  - name: sdd_adopt_member
+    narrative:
+      - stepNumber: 1
+        description: Build the adopt request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T16:00:51.335Z'
+updatedAt: '2026-09-30T20:40:07.522Z'

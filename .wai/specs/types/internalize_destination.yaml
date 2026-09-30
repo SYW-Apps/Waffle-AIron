@@ -1,0 +1,39 @@
+kind: value-object
+id: internalize_destination
+name: InternalizeDestination
+description: >-
+  Where a member's own metadata goes when `member internalize` folds it into its parent, so that
+  nothing the member held is deleted without a home or a listing. The member's subsystems and
+  project-level types always move under their own ids; this names the destination for what belongs
+  to the member as a PROJECT rather than to any one subsystem.
+subsystem: sdd_core
+fields:
+  - name: home
+    type: string
+    description: >-
+      The subsystem that receives the member's L0 vision, appended to its description as a paragraph
+      naming the member: one of the member's own subsystems (moving with it) or a subsystem the
+      parent already holds. Required when the member holds more than one subsystem and its L0 says
+      more than its name; defaults to the member's only subsystem.
+    optional: false
+  - name: packs
+    type: string
+    description: >-
+      adopt | drop: what happens to a pack the member selects that the parent does not select at the
+      same version. adopt: the parent selects it (its doctrine then governs the parent's whole tree,
+      which the plan says); drop: the moved specs are judged by the parent's packs alone. Absent,
+      such a pack refuses the internalize, naming it.
+    optional: true
+  - name: exports
+    type: string[]
+    description: >-
+      The member's public names the parent exports afterwards, each as a re-export from the moved
+      subsystem that realizes it at the audience the member gave it: the names other projects of the
+      family consume through the member (the family migration fills them in) plus any a person adds.
+      A name the parent already exports for another target refuses the internalize. Absent or empty,
+      the parent's export table only gains what its own re-exports of the member already named.
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-30T20:21:21.371Z'
+updatedAt: '2026-09-30T20:21:21.374Z'

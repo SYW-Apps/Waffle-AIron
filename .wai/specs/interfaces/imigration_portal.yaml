@@ -1,0 +1,61 @@
+id: imigration_portal
+name: Migration Portal Interface
+description: >-
+  Plan, apply, discard, recover — every door's entry to a family migration. A plan writes nothing
+  into the family; an apply makes the whole plan live or none of it; nothing is ever locked.
+component: migration_portal
+methods:
+  - name: plan
+    description: >-
+      Plan a family migration from the bound project (routed to the family migration workflow).
+      Writes nothing into the family.
+    signature: 'plan(request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: request
+        type: MigrationRequest
+        description: The verb and its arguments
+    endpoint:
+      transport: Custom
+      address: in-process migration.plan
+  - name: apply
+    description: Apply a confirmed plan all or nothing (routed to the family migration workflow).
+    signature: 'apply(plan: MigrationPlan): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: plan
+        type: MigrationPlan
+        description: The plan as plan() answered it
+    endpoint:
+      transport: Custom
+      address: in-process migration.apply
+  - name: discard
+    description: Drop a plan without applying it (routed to the family migration workflow).
+    signature: 'discard(plan: MigrationPlan): void'
+    returns: void
+    params:
+      - name: plan
+        type: MigrationPlan
+        description: The plan
+    endpoint:
+      transport: Custom
+      address: in-process migration.discard
+  - name: recover
+    description: >-
+      Report or resolve the unfinished transactions under a project root — doctor's entry (routed to
+      the family migration workflow).
+    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
+    returns: RecoveredTransaction[]
+    params:
+      - name: root
+        type: string
+        description: The project root
+      - name: fix
+        type: boolean
+        description: Resolve, or only report
+    endpoint:
+      transport: Custom
+      address: in-process migration.recover
+status: design
+createdAt: '2026-09-30T20:36:31.021Z'
+updatedAt: '2026-09-30T20:36:35.130Z'

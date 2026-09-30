@@ -687,7 +687,7 @@ methods:
           No identity of the root's own to judge: judged (a member's id is the family run's check,
           family_validator.checkMembers)
         type: jump
-        toStep: 10
+        toStep: 12
       - stepNumber: 4
         label: defaulted
         description: Does the identity carry a defaulted problem?
@@ -712,18 +712,30 @@ methods:
           yields no slug, or the declared id and the grammar it breaks
         type: local
       - stepNumber: 8
+        label: renamed
+        description: Does the identity carry a renamed problem?
+        type: branch
+        condition: the identity's problems include one of kind renamed
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Report PROJECT_ID_RENAMED (notice), naming the id the lock approved, the id project.yaml
+          declares now and that the rename moved the approved one into previousIds, and that only
+          the re-lock is owed; a lock taken now clears it
+        type: local
+      - stepNumber: 10
         label: changed
         description: Does the identity carry a changed problem?
         type: branch
         condition: the identity's problems include one of kind changed
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 12
+      - stepNumber: 11
         description: >-
           Report PROJECT_ID_CHANGED (error), naming the id the lock approved and the id project.yaml
           resolves to now, and the two ways out: restore the approved id, or rename deliberately and
           re-lock
         type: local
-      - stepNumber: 10
+      - stepNumber: 12
         label: judged
         description: The identity is judged
         type: return
@@ -1080,4 +1092,4 @@ methods:
     exportedVia: memberDeclarationsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-09-28T18:13:27.380Z'
+updatedAt: '2026-09-30T20:19:55.358Z'

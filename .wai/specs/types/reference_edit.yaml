@@ -1,0 +1,47 @@
+kind: value-object
+id: reference_edit
+name: ReferenceEdit
+description: >-
+  One reference a family migration respells at a parsed position of one spec: the text as the scan
+  recorded it there (an AuthoredReference's `authored`, or a bare name the plan read at that
+  position) and the text to write instead. Never a whole-string or substring match over the file:
+  the edit names the position the loader parses, and at a type position the one qualified token
+  inside the type string. A migration computes every edit from the scan taken BEFORE its
+  configuration writes — so a text that the renamed alias table no longer binds is still addressed
+  by where it stands — and the writer refuses an edit whose `from` is no longer at its position, so
+  a plan applied to a tree that moved under it writes nothing.
+subsystem: sdd_core
+fields:
+  - name: kind
+    type: string
+    description: >-
+      The kind of the spec holding the reference: system, subsystem, component, interface,
+      implementation or type.
+    optional: false
+  - name: specId
+    type: string
+    description: The spec's in-memory key from the family's top root, as the scan read it before the migration.
+    optional: false
+    key: primary
+  - name: position
+    type: string
+    description: >-
+      Where in the spec, in AuthoredReference.position's vocabulary (dependsOn, owns, dispatch,
+      mounts, lifecycle, publicInterfaces — an L0 entry's `from` included —, trustedLinks, contract,
+      subsystem, narrative with the method and step number, calls, auth, or type with the field,
+      param or return).
+    optional: false
+  - name: from
+    type: string
+    description: The text standing at the position now.
+    optional: false
+  - name: to
+    type: string
+    description: >-
+      The text written instead: `alias::publicName` with the new alias or public name, or a bare
+      local id.
+    optional: false
+methods: []
+sourcePath: src/models/project-family.ts
+createdAt: '2026-09-30T20:19:13.395Z'
+updatedAt: '2026-09-30T20:19:13.399Z'

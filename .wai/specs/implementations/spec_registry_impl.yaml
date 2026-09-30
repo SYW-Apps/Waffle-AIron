@@ -164,6 +164,22 @@ methods:
       - spec_file_store.read
       - spec_file_store.write
     symbol: writeCanonicalReferences
+  - name: rewriteReferences
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the stored document of the spec through the file store, as authored text (never the
+      bound in-memory value, whose keys are the scan's). Walks the positions the loader parses — the
+      same position vocabulary AuthoredReference records, an L0 export entry's `from` included — and
+      for each edit finds its position: a whole-value position must hold exactly `from`; a type
+      position must hold `from` as one qualified token of the type string, and the display signature
+      beside a param or return is rewritten token for token with it. When any edit's `from` is
+      absent from its position, refuses before writing, naming the spec, the position and both
+      texts. Otherwise replaces each, serializes, and writes through the file store only when the
+      text changed, answering whether it wrote.
+    calls:
+      - spec_file_store.read
+      - spec_file_store.write
 lint:
   allow:
     - code: UNNARRATED_COMPLEXITY
@@ -174,4 +190,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-09-27T17:46:40.996Z'
+updatedAt: '2026-09-30T20:22:40.161Z'

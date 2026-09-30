@@ -151,6 +151,34 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: importNames
+  - name: renameId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: renameId
+  - name: renameAlias
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: renameAlias
+  - name: repointExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: repointExternal
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: removeExternal
 status: complete
 createdAt: '2026-09-13T11:19:36.287Z'
-updatedAt: '2026-09-28T17:17:06.835Z'
+updatedAt: '2026-09-30T20:20:37.848Z'

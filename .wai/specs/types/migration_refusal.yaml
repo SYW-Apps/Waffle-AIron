@@ -1,0 +1,28 @@
+kind: value-object
+id: migration_refusal
+name: MigrationRefusal
+description: >-
+  One reason a family migration will not apply, named before anything is written. Any refusal blocks
+  the whole plan: no partial success is ever claimed.
+subsystem: sdd_migrations
+fields:
+  - name: code
+    type: string
+    description: >-
+      not-a-member | not-an-external | not-a-project | not-contained | member-absent |
+      family-partial | id-collision | alias-taken | id-moved | already-member | name-collision |
+      reference-unwritable | transaction-pending | internalize-refused | externalize-refused.
+      family-partial: a project the plan must write lies above the highest root in reach, or a
+      member it must write is absent or out of reach — each named.
+    optional: false
+  - name: project
+    type: string
+    description: The project key (or directory, for one outside the family) the refusal is about.
+    optional: false
+  - name: detail
+    type: string
+    description: What was found and what would unblock it.
+    optional: false
+methods: []
+createdAt: '2026-09-30T20:24:12.010Z'
+updatedAt: '2026-09-30T20:29:32.233Z'

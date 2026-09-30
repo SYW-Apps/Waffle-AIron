@@ -1,0 +1,122 @@
+id: itransaction_file_adapter
+name: Transaction File Adapter Interface
+description: >-
+  The file operations behind the Transaction Store, one per store method. Every write is durable
+  before it returns.
+component: transaction_file_adapter
+methods:
+  - name: openRehearsal
+    description: >-
+      Create the rehearsal directory for a transaction id in the OS temporary directory and answer
+      its absolute path.
+    signature: 'openRehearsal(id: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+        description: The transaction id
+  - name: dropRehearsal
+    description: Remove a rehearsal directory and everything under it; a missing one is not an error.
+    signature: 'dropRehearsal(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+        description: The transaction id
+  - name: saveJournal
+    description: >-
+      Write one owner's journal durably (temporary sibling, fsync, rename), creating
+      .wai/transactions/<id>/ and the self-ignoring .gitignore when absent.
+    signature: 'saveJournal(journal: TransactionJournal): void'
+    returns: void
+    params:
+      - name: journal
+        type: TransactionJournal
+        description: The journal, whose owner and id say where it goes
+  - name: readJournal
+    description: One owner's journal of a transaction, or null when it has none.
+    signature: 'readJournal(owner: string, id: string): TransactionJournal | null'
+    returns: TransactionJournal | null
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+  - name: listJournals
+    description: Every journal under one owner's .wai/transactions/; empty when there is none.
+    signature: 'listJournals(owner: string): TransactionJournal[]'
+    returns: TransactionJournal[]
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+  - name: putFile
+    description: Store bytes durably in an owner's transaction area (staged or backup).
+    signature: 'putFile(owner: string, id: string, area: string, path: string, bytes: bytes): void'
+    returns: void
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+      - name: area
+        type: string
+        description: staged | backup
+      - name: path
+        type: string
+        description: The file, relative to the owner's root
+      - name: bytes
+        type: bytes
+        description: The content
+  - name: readFile
+    description: The bytes held in an owner's transaction area for a file, or null.
+    signature: 'readFile(owner: string, id: string, area: string, path: string): bytes | null'
+    returns: bytes | null
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+      - name: area
+        type: string
+        description: staged | backup
+      - name: path
+        type: string
+        description: The file, relative to the owner's root
+  - name: locate
+    description: The absolute path of a file in an owner's transaction area.
+    signature: 'locate(owner: string, id: string, area: string, path: string): string'
+    returns: string
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+      - name: area
+        type: string
+        description: staged | backup
+      - name: path
+        type: string
+        description: The file, relative to the owner's root
+  - name: close
+    description: Remove an owner's transaction directory, and .wai/transactions/ itself when empty.
+    signature: 'close(owner: string, id: string): void'
+    returns: void
+    params:
+      - name: owner
+        type: string
+        description: The owner project's root
+      - name: id
+        type: string
+        description: The transaction id
+status: design
+createdAt: '2026-09-30T20:26:08.028Z'
+updatedAt: '2026-09-30T20:29:44.560Z'

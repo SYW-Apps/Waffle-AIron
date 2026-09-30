@@ -1,0 +1,68 @@
+kind: value-object
+id: migration_plan
+name: MigrationPlan
+description: >-
+  A family migration planned and not yet applied: the semantic edits per owner a person reads, the
+  refusals that block it, the byte-level file changes the rehearsal produced, and the projects whose
+  approval it stales. `--report` and `dryRun` answer with it and write nothing to the family; apply
+  swaps exactly its file changes in, or nothing.
+subsystem: sdd_migrations
+fields:
+  - name: request
+    type: MigrationRequest
+    description: What was asked.
+    optional: false
+  - name: familyRoot
+    type: string
+    description: 'The directory of the highest root in reach: the family the plan was computed over.'
+    optional: false
+  - name: whole
+    type: boolean
+    description: >-
+      Whether that root is the family's true top. A verb that writes above it (a rename whose
+      consumers could live there) is refused family-partial rather than planned on a part.
+    optional: false
+  - name: edits
+    type: PlannedEdit[]
+    description: Every semantic edit, owners in the graph's walk order, each owner's edits in write order.
+    optional: false
+  - name: refusals
+    type: MigrationRefusal[]
+    description: Every reason it will not apply, all of them, found before anything is written.
+    optional: false
+  - name: changes
+    type: FileChange[]
+    description: The rehearsal's difference from the live trees, per owner then path; empty when refused.
+    optional: false
+  - name: relock
+    type: string[]
+    description: >-
+      The owner projects that hold a lock and whose approved inputs the changes move — each needs
+      its human to re-lock. A rename lists every project it writes, the renamed one first.
+    optional: false
+  - name: notes
+    type: string[]
+    description: >-
+      What the plan cannot see and does not block on, printed prominently: consumers outside the
+      family that name a renamed or detached project by path, pins that will read drifted, packs a
+      destination adopts.
+    optional: false
+  - name: rehearsal
+    type: Rehearsal
+    description: >-
+      The rehearsal the file changes were computed on, which apply commits and discard drops; absent
+      when refused or empty.
+    optional: true
+methods:
+  - name: blocked
+    signature: 'blocked(): boolean'
+    returns: boolean
+    description: True when any refusal is present.
+  - name: isEmpty
+    signature: 'isEmpty(): boolean'
+    returns: boolean
+    description: >-
+      True when there is no file change: re-planning a completed migration plans nothing
+      (idempotence).
+createdAt: '2026-09-30T20:24:49.925Z'
+updatedAt: '2026-09-30T20:29:31.846Z'

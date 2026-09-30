@@ -1,0 +1,16 @@
+id: cli_migration_adapter
+name: CLI Migration Client Adapter
+description: >-
+  Local client adapter in sdd_cli for the hop into sdd_migrations: the family-migration verbs
+  (`wairon member attach|detach|adopt|rename-alias|internalize`, `wairon project rename`, `wairon
+  subsystem externalize`) plan, apply and discard through it, and `wairon doctor` reports and rolls
+  back unfinished transactions through it. In-process import seam today, swappable for a remote
+  transport without changing the commands.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - migration_portal
+status: design
+createdAt: '2026-09-30T20:37:27.711Z'
+updatedAt: '2026-09-30T20:37:27.721Z'

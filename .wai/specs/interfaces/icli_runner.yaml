@@ -92,20 +92,39 @@ methods:
     returns: Promise<void>
   - name: runSubsystemExternalize
     description: >-
-      `wairon subsystem externalize <id> --path <dir>`: turn an internal subsystem into a member
-      project at the path — its specs move there, it is declared in project.yaml `members` under the
-      subsystem id, and every reference across the new boundary is re-saved as `alias::name`. It
-      keeps its name because it acts on a subsystem. Source code is moved by the user; the exports
-      either side now needs are left to `wairon doctor --fix`.
-    signature: 'runSubsystemExternalize(id: string, options: { path?: string }): Promise<void>'
+      `wairon subsystem externalize <id> --path <dir> [--report] [--yes]`: turn an internal
+      subsystem into a member project at the path, family-wide and all-or-nothing — its specs move
+      there, it is declared in `members`, sibling subsystems' references are respelled
+      `alias::name`, what crosses the new boundary is exported and imported, and the new member's
+      external for this project is pinned; a reference that would need a component made public
+      refuses the plan instead. It keeps its name because it acts on a subsystem. Source code is
+      moved by the user. Through runMigration.
+    signature: 'runSubsystemExternalize(id: string, options: MigrationCommandOptions): Promise<void>'
     returns: Promise<void>
+    params:
+      - name: id
+        type: string
+        description: The subsystem
+      - name: options
+        type: MigrationCommandOptions
+        description: '--path (required by the command), --report, --yes'
+        optional: true
   - name: runMemberInternalize
     description: >-
-      `wairon member internalize <alias>`: take a single-subsystem member back into the current
-      project, remove it from `members` and delete its .wai project. Replaces `wairon subsystem
-      internalize`.
-    signature: 'runMemberInternalize(alias: string): Promise<void>'
+      `wairon member internalize <alias> [--into <subsystem>] [--packs adopt|drop] [--export
+      <name>…] [--report] [--yes]`: fold a member — every subsystem of it — back into the current
+      project, sending its own metadata to the named homes and re-pointing every family consumer of
+      it at the current project. Through runMigration. Replaces the single-subsystem form, which
+      deleted the member's whole .wai.
+    signature: 'runMemberInternalize(alias: string, options: MigrationCommandOptions): Promise<void>'
     returns: Promise<void>
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: options
+        type: MigrationCommandOptions
+        description: '--into, --packs, --export, --report, --yes'
   - name: runSurface
     description: >-
       Surface exchange commands for foreign surfaces: export (own surface, optionally as OpenAPI),
@@ -289,13 +308,15 @@ methods:
         type: string
   - name: runDoctor
     description: >-
-      `wairon doctor`: a health check of the project (initialization and configuration, spec
-      conformance by its owner's gate, the chaining migration still pending, generated guides and
-      skills, the lock, MCP registration). With --fix it applies the repairs it can — regenerating
-      stale guides, context and skills, registering the MCP server, retiring Specialists into
-      Orchestrators — and then the chaining migration, which it prints and applies only after
-      confirmation (--yes answers it for a non-interactive run; without either nothing of it is
-      written). With --report chaining it prints the chaining plan per project; with --report
+      `wairon doctor`: a health check of the project (initialization and configuration, unfinished
+      family-migration transactions, spec conformance by its owner's gate, the chaining migration
+      still pending, generated guides and skills, the lock, MCP registration). With --fix it first
+      resolves every unfinished family-migration transaction under the root — rolling back each one
+      whose coordinator never committed, cleaning up each one that did — then applies the repairs it
+      can — regenerating stale guides, context and skills, registering the MCP server, retiring
+      Specialists into Orchestrators — and then the chaining migration, which it prints and applies
+      only after confirmation (--yes answers it for a non-interactive run; without either nothing of
+      it is written). With --report chaining it prints the chaining plan per project; with --report
       composed-validation it prints what stage 4 changed in each project's verdict (today's gate
       against the totals its lock recorded, and every new finding with its reason) — either report
       changes nothing and never combines with --fix.
@@ -520,6 +541,101 @@ methods:
     signature: 'runExternals(action: string, aliases: string[], options: { json?: boolean }): Promise<void>'
     returns: Promise<void>
     params: []
+  - name: runMigration
+    description: >-
+      The one flow every family-migration command runs, so the verbs cannot drift apart: plan the
+      request; print the plan — its edits per owner, its refusals, its file changes, its notes and
+      the projects to re-lock; with --report drop it and stop; when it is refused, drop it and exit
+      non-zero; when it is empty, say so; otherwise ask (--yes answers; a non-interactive shell
+      without --yes stops, writing nothing), apply the confirmed plan, and print the outcome — the
+      projects to re-lock when it committed, the failure and that nothing changed when it did not,
+      or the files `wairon doctor --fix` must restore when a rollback could not. Never locks.
+    signature: 'runMigration(request: MigrationRequest, options: MigrationCommandOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: request
+        type: MigrationRequest
+        description: The verb and its arguments
+      - name: options
+        type: MigrationCommandOptions
+        description: '--report and --yes'
+  - name: runMemberAttach
+    description: >-
+      `wairon member attach <alias> <path> [--description] [--report] [--yes]`: make the existing
+      project at the path a member of the current project, keeping its L0 and subsystems (unlike
+      `member add`, which scaffolds). Through runMigration.
+    signature: 'runMemberAttach(alias: string, path: string, options: MigrationCommandOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: alias
+        type: string
+        description: The alias to declare
+      - name: path
+        type: string
+        description: The project's root, relative to the current project
+      - name: options
+        type: MigrationCommandOptions
+        description: '--description, --report, --yes'
+  - name: runProjectRename
+    description: >-
+      `wairon project rename <new-id> [--project <alias path>] [--report] [--yes]`: move a project's
+      id — the current project's, or a member's named by its alias path — and every reference to the
+      old id across the family, listing every project to re-lock. Through runMigration.
+    signature: 'runProjectRename(newId: string, options: MigrationCommandOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: newId
+        type: string
+        description: The new project id
+      - name: options
+        type: MigrationCommandOptions
+        description: '--project, --report, --yes'
+  - name: runMemberRenameAlias
+    description: >-
+      `wairon member rename-alias <old> <new> [--report] [--yes]`: rename one alias of the current
+      project (a member or an external) and respell the current project's references through it;
+      nothing in any member or sibling changes. Through runMigration.
+    signature: >-
+      runMemberRenameAlias(alias: string, newAlias: string, options: MigrationCommandOptions):
+      Promise<void>
+    returns: Promise<void>
+    params:
+      - name: alias
+        type: string
+        description: The alias as declared now
+      - name: newAlias
+        type: string
+        description: The new alias
+      - name: options
+        type: MigrationCommandOptions
+        description: '--report, --yes'
+  - name: runMemberDetach
+    description: >-
+      `wairon member detach <alias> [--report] [--yes]`: take a member out of the family; the
+      current project and every family consumer then reach it as an external by path, pinned.
+      Through runMigration.
+    signature: 'runMemberDetach(alias: string, options: MigrationCommandOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: options
+        type: MigrationCommandOptions
+        description: '--report, --yes'
+  - name: runMemberAdopt
+    description: >-
+      `wairon member adopt <alias> [--report] [--yes]`: make the current project's external found by
+      a path inside it a member — detach's inverse. Through runMigration.
+    signature: 'runMemberAdopt(alias: string, options: MigrationCommandOptions): Promise<void>'
+    returns: Promise<void>
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: options
+        type: MigrationCommandOptions
+        description: '--report, --yes'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T06:03:15.157Z'
+updatedAt: '2026-09-30T20:40:36.140Z'

@@ -11,7 +11,8 @@ dependsOn:
   - mcp_server
   - mcp_orchestrator
   - mcp_externals_orchestrator
+  - mcp_migration_orchestrator
 portalType: Custom
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T17:50:46.479Z'
+updatedAt: '2026-09-30T20:39:39.005Z'

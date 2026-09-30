@@ -1,0 +1,24 @@
+id: imcp_migration_orchestrator
+name: MCP Migration Orchestrator Interface
+description: Plan, then apply or drop.
+component: mcp_migration_orchestrator
+methods:
+  - name: run
+    description: >-
+      Plan a family migration; with dryRun, answer the plan (applied false) and drop its rehearsal;
+      when the plan is refused or empty, answer it likewise; otherwise apply it and answer the
+      report — committed with the projects to re-lock, or failed with the family restored (or the
+      files `wairon doctor --fix` must restore). Never locks.
+    signature: 'run(request: MigrationRequest, dryRun?: boolean): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: request
+        type: MigrationRequest
+        description: The tool's verb and arguments
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
+status: design
+createdAt: '2026-09-30T20:39:28.924Z'
+updatedAt: '2026-09-30T20:39:28.937Z'

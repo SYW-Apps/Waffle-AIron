@@ -211,8 +211,15 @@ methods:
         type: call
         targetComponent: spec_registry
         targetMethod: normalizeReferences
+  - name: rewriteReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: rewriteReferences
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T05:57:01.455Z'
+updatedAt: '2026-09-30T20:22:43.805Z'

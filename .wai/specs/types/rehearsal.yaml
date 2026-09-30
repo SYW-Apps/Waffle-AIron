@@ -1,0 +1,39 @@
+kind: value-object
+id: rehearsal
+name: Rehearsal
+description: >-
+  A private copy of a family's .wai trees on which a migration's writes are performed before
+  anything live moves: the family's layout mirrored from its top root under one temporary directory,
+  so every member path, containment check and relative source path resolves there exactly as it does
+  live. It holds no source code — the verbs write only under .wai/ — and it is the plan's evidence:
+  its difference from the live trees IS the plan's file changes. Discarded after a dry run, a
+  refusal or a commit.
+subsystem: sdd_migrations
+fields:
+  - name: id
+    type: string
+    description: Short random id (8 hex), shared by the transaction the rehearsal becomes.
+    optional: false
+  - name: directory
+    type: string
+    description: >-
+      The rehearsal's root in the OS temporary directory (`wairon-migration-<id>`); outside the
+      family, so a dry run writes nothing into it.
+    optional: false
+  - name: familyRoot
+    type: string
+    description: The live top root the layout is mirrored from.
+    optional: false
+  - name: roots
+    type: Map<string, string>
+    description: Each copied project's live root → its rehearsal root.
+    optional: false
+  - name: baseDigests
+    type: Map<string, string>
+    description: >-
+      Each copied live file (absolute) → sha256 of its bytes when copied: the base every FileChange
+      is planned against.
+    optional: false
+methods: []
+createdAt: '2026-09-30T20:24:23.894Z'
+updatedAt: '2026-09-30T20:29:35.574Z'

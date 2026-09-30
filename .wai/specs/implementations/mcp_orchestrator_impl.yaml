@@ -119,26 +119,6 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: moveMember
     symbol: sdd_move_member
-  - name: externalizeSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Verify the subsystem exists
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpec
-      - stepNumber: 2
-        description: Turn it into a member project declared in `members` via core
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: externalizeSubsystem
-  - name: internalizeMember
-    narrative:
-      - stepNumber: 1
-        description: Take the member back into the bound project via core
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: internalizeMember
-    symbol: sdd_internalize_member
   - name: listResources
     narrative:
       - stepNumber: 1
@@ -629,4 +609,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-30T05:54:23.759Z'
+updatedAt: '2026-09-30T20:40:10.227Z'

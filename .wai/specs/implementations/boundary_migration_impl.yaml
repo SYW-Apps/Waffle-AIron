@@ -1,0 +1,192 @@
+id: boundary_migration_impl
+name: Boundary Migration Implementation
+description: >-
+  src/migrations/boundary.ts. The parent-scoped move is sdd_core's; this adds the family's other
+  projects around it.
+contract: iboundary_migration
+sourcePath: src/migrations/boundary.ts
+methods:
+  - name: planInternalize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Find the member under the alias in the bound node: none is not-a-member, its directory
+          absent is member-absent
+        type: local
+      - stepNumber: 2
+        description: Is there a member to fold in?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 4
+        label: consumers
+        description: >-
+          From the graph's cross-project references, collect every family project other than the
+          bound one that consumes the member (the member's own members included), each with the
+          public names it uses; one out of reach is family-partial
+        type: local
+      - stepNumber: 5
+        description: Read the member's resolved export table
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 6
+        description: Read the bound project's resolved export table
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 7
+        description: >-
+          Complete the destination's exports with every public name a consumer uses; a name the
+          bound project already exports for another target is name-collision
+        type: local
+      - stepNumber: 8
+        description: >-
+          With the member bound, read its configuration for the externals the bound project will
+          carry (to pin there); restore the binding
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 9
+        description: >-
+          Plan each consumer's edits: one that already declares an alias for the bound project gets
+          its `member::name` references respelled to that alias at their positions (from the graph's
+          authoredReferences), the member alias's `use` merged into it, and the member external and
+          pin removed; any other gets its external repointed at the bound project's id (a source
+          path re-expressed) and re-pinned, with a note that the pin will read drifted. Plan the
+          core's internalize with the completed destination, and the carried externals pinned in the
+          bound project
+        type: local
+      - stepNumber: 10
+        description: Answer the plan
+        type: return
+        outcome: the internalize plan
+  - name: planExternalize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Judge the request against the bound node: no such subsystem, or one already a member, is
+          externalize-refused; a path not strictly within the bound project or already holding a
+          project is not-contained; the subsystem id already an alias is alias-taken, or a family
+          project's id id-collision
+        type: local
+      - stepNumber: 2
+        description: Is the externalize possible so far?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 4
+        label: crossing
+        description: Read the bound project's resolved export table
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 5
+        description: >-
+          From the graph, find each reference of the moved subtree back into the bound project at a
+          component whose subsystem does not publish it: externalize-refused, naming it — publishing
+          is a design decision to make first
+        type: local
+      - stepNumber: 6
+        description: >-
+          Check every other family project consuming the bound project: each public name it uses
+          that the moved subsystem realizes must stay exported through the bound project's
+          re-pointed re-exports; one that would not is externalize-refused. Nothing is planned for
+          them: the names they use do not move (externalize-updates-siblings)
+        type: local
+      - stepNumber: 7
+        description: >-
+          Plan the core's externalize, and the new member's external for the bound project pinned in
+          the member
+        type: local
+      - stepNumber: 8
+        description: Answer the plan
+        type: return
+        outcome: the externalize plan
+  - name: write
+    narrative:
+      - stepNumber: 1
+        description: Remember the caller's binding; every path below restores it
+        type: local
+      - stepNumber: 2
+        description: Which verb?
+        type: branch
+        condition: plan.request.verb is internalize
+        onFalseStep: 11
+      - stepNumber: 3
+        description: >-
+          Bind the rehearsal's top root and respell each consumer's planned references, while the
+          member's keys still exist
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: rewriteReferences
+      - stepNumber: 4
+        description: >-
+          Bind the bound project's rehearsal root and fold the member in with the completed
+          destination; a core refusal propagates
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: internalizeMember
+      - stepNumber: 5
+        description: >-
+          For each consumer that already had an alias for the bound project, bind its rehearsal root
+          and merge the member alias's `use` into it
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: importNames
+      - stepNumber: 6
+        description: Remove that consumer's pin of the member alias
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: unpin
+      - stepNumber: 7
+        description: Remove that consumer's member external
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: removeExternal
+      - stepNumber: 8
+        description: >-
+          For each other consumer, bind its rehearsal root and repoint its external at the bound
+          project's id
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: repointExternal
+      - stepNumber: 9
+        description: >-
+          Last, pin what changed producer: each repointed consumer's external under its binding, and
+          the carried externals under the bound project's
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: pinExternals
+      - stepNumber: 10
+        description: Internalize written
+        type: jump
+        toStep: 13
+      - stepNumber: 11
+        label: externalize
+        description: >-
+          Bind the bound project's rehearsal root and externalize the subsystem; a core refusal
+          propagates
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: externalizeSubsystem
+      - stepNumber: 12
+        description: Bind the new member's rehearsal root and pin its external for the bound project
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: pinExternals
+      - stepNumber: 13
+        label: restore
+        description: Restore the caller's binding
+        type: local
+status: design
+createdAt: '2026-09-30T20:35:23.802Z'
+updatedAt: '2026-09-30T20:35:23.821Z'

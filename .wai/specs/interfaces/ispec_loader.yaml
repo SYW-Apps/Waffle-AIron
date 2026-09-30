@@ -257,6 +257,26 @@ methods:
     guarantees:
       - idempotent
     effect: write
+  - name: rewriteReferences
+    description: >-
+      Respell references at parsed positions of one spec, each edit replacing exactly its text at
+      exactly its position; refuses the whole spec when an edit's text is not there. Answers whether
+      the stored text changed. Pure 1:1 forward to the registry write face.
+    signature: 'rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+      - name: edits
+        type: ReferenceEdit[]
+        description: The edits for this spec
+    guarantees:
+      - idempotent
+    effect: write
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T05:57:00.580Z'
+updatedAt: '2026-09-30T20:22:42.701Z'

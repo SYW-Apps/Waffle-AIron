@@ -235,6 +235,67 @@ methods:
         description: The public names to import, or `*`
     guarantees:
       - idempotent
+  - name: renameId
+    description: >-
+      Move the project's id from the one it answers to now to a new one, keeping the old in
+      previousIds; refused for a malformed new id or when the project no longer answers to the old
+      one, a no-op once done (forwarded to the registry). Returns whether it wrote.
+    signature: 'renameId(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The id the project answers to now
+      - name: to
+        type: string
+        description: The new id
+    guarantees:
+      - idempotent
+  - name: renameAlias
+    description: >-
+      Rekey one member or external alias, keeping its value and place; refused for a malformed or
+      taken new alias or an undeclared old one, a no-op once done (forwarded to the registry).
+      Returns whether it wrote.
+    signature: 'renameAlias(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The alias as declared now
+      - name: to
+        type: string
+        description: The alias to declare it under
+    guarantees:
+      - idempotent
+  - name: repointExternal
+    description: >-
+      Revise one external's producer id and explicit source, keeping its `use` and description;
+      refused for an undeclared alias or a malformed producer id, a no-op when equal (forwarded to
+      the registry). Returns whether it wrote.
+    signature: 'repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: project
+        type: string | null
+        description: The producer id, or null when the alias is the id
+      - name: source
+        type: ExternalSource | null
+        description: The explicit place, or null to find it through the family
+    guarantees:
+      - idempotent
+  - name: removeExternal
+    description: Remove one external declaration (forwarded to the registry). Returns whether it wrote.
+    signature: 'removeExternal(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-09-28T17:17:05.648Z'
+updatedAt: '2026-09-30T20:20:35.312Z'

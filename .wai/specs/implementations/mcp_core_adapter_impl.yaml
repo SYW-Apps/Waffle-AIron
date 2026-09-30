@@ -50,20 +50,6 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: moveMember
-  - name: externalizeSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Call externalizeSubsystem on core portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: externalizeSubsystem
-  - name: internalizeMember
-    narrative:
-      - stepNumber: 1
-        description: Call internalizeMember on the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: internalizeMember
   - name: resolveChainingParent
     narrative:
       - stepNumber: 1
@@ -179,4 +165,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-27T15:27:09.759Z'
+updatedAt: '2026-09-30T20:40:11.943Z'

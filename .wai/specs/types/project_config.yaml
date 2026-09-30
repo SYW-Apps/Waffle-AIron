@@ -63,8 +63,10 @@ fields:
       because the default can be wrong: an existing chained child answers to its mount's subsystem
       id, which a plain save cannot know. Only deliberate writers set it: init and provisioning
       write it from the name, hosted creation writes the hosted project id, and a chained child is
-      created (or repaired by doctor) with its mount's subsystem id. Changing it is a rename
-      migration: a lock records the id it approved, and a later mismatch is PROJECT_ID_CHANGED.
+      created (or repaired by doctor) with its mount's subsystem id. Changing it is the rename
+      migration (`wairon project rename`), which moves the old id into `previousIds`: a lock records
+      the id it approved, and a later mismatch is PROJECT_ID_CHANGED unless the approved id is one
+      of `previousIds` (PROJECT_ID_RENAMED, a notice until the re-lock).
     optional: true
     key: primary
   - name: externals
@@ -106,6 +108,17 @@ fields:
       with, and is never merged into, the hosted instance floor and profileSelection (see
       CompositionConfig).
     optional: true
+  - name: previousIds
+    type: string[]
+    description: >-
+      The ids this project answered to before, oldest first, each appended by the rename migration
+      and never removed or reordered by a writer. It is the project's own record that an id moved
+      deliberately: a lock that approved one of them reads as renamed (PROJECT_ID_RENAMED, notice)
+      rather than changed, so the re-lock the rename asks for is not refused by the error it would
+      otherwise raise — the deadlock stage 3 reported as id-locked. Nothing resolves through it: a
+      reference or an external that still names an old id is rewritten by the rename, or reported,
+      never redirected.
+    optional: true
 methods:
   - name: declaredPackNames
     signature: 'declaredPackNames(): string[]'
@@ -145,9 +158,10 @@ methods:
     description: >-
       Resolve the effective id against the id a lock approved, naming every problem with it:
       defaulted when no id is declared and the name yields one; ambiguous when no id is declared and
-      the name yields no slug, or when a declared id breaks the grammar; changed when a
-      lockedProjectId is given and the effective id differs from it (an effective id of none
-      included).
+      the name yields no slug, or when a declared id breaks the grammar; renamed when a
+      lockedProjectId is given, the effective id differs from it and it is one of `previousIds` (the
+      rename migration moved it, and only the re-lock is owed); changed when a lockedProjectId is
+      given and the effective id differs from it otherwise (an effective id of none included).
     symbol: projectIdentity
   - name: declaredExternals
     signature: 'declaredExternals(): DeclaredExternal[]'
@@ -188,4 +202,4 @@ methods:
       about the duplicate). Empty when nothing is required.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-29T16:09:24.420Z'
+updatedAt: '2026-09-30T20:19:27.952Z'
