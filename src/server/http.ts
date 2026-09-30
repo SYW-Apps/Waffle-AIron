@@ -658,6 +658,10 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     if (err instanceof identity.ForbiddenError) return sendJson(res, 403, { error: err.message });
     if (err instanceof AdminAuthError) return sendJson(res, 403, { error: 'forbidden' });
     if (err instanceof LockValidationError) return sendJson(res, 409, { error: err.message, errors: err.errors });
+    // A lock that refused before writing (the design moved since it was
+    // requested, an input moved while it ran, or a required member is not
+    // approved) is a conflict with the tree's state, not a malformed request.
+    if (err instanceof Error && err.name === 'LockRefusedError') return sendJson(res, 409, { error: err.message });
     sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
   }
 }
