@@ -221,11 +221,20 @@ methods:
       results beside the claim (`code`); and with composition.requireApprovedMembers it refuses
       while a direct member is drifted or never approved, naming each. Nothing is ever written below
       the bound root.
-    signature: 'executeApprovedLock(projectId: string, subproject?: string, expected?: string): LockRecord'
+    signature: >-
+      executeApprovedLock(projectId: string, approver: ApproverIdentity, subproject?: string,
+      expected?: string): LockRecord
     returns: LockRecord
     params:
       - name: projectId
         type: string
+      - name: approver
+        type: ApproverIdentity
+        description: >-
+          Who approves, as the caller AUTHENTICATED it: the credential's subject on a direct lock,
+          the decider on an approved request (hostedApprover; the bootstrap master credential when
+          there is no subject). Recorded as the record's lockedBy. Pre-authorized callers resolve
+          it; nothing here re-authenticates.
       - name: subproject
         type: string
         description: >-
@@ -396,4 +405,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-30T05:53:05.263Z'
+updatedAt: '2026-09-30T16:23:03.628Z'
