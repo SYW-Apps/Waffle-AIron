@@ -53,15 +53,6 @@ methods:
     description: Loads all type specifications across flat, per-subsystem, and grouped layouts.
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
-  - name: listChainedRoots
-    description: >-
-      Every member root beneath the bound project, as project-relative directories in walk order,
-      recursing through the members members declare (either form). Empty for a project that declares
-      none. The roots half of inspectChainedRoots.
-    signature: 'listChainedRoots(): string[]'
-    returns: string[]
-    guarantees:
-      - idempotent
   - name: resolveSubprojectForNamespace
     description: >-
       Resolve a member's key (its project id, or its alias path when its id is taken or missing) to
@@ -131,4 +122,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-09-27T10:34:57.259Z'
+updatedAt: '2026-09-30T05:57:02.561Z'

@@ -26,7 +26,17 @@ fields:
       spec's own fields, so the write gate also runs it on a candidate before saving; in the spec
       tree the spec-scoped built-ins are exactly intrinsic_rules' methods.
     optional: true
+  - name: judges
+    type: string
+    description: >-
+      design (the default) | code: what the rule's verdict is about. A rule that reads the source
+      code model — the structural, dependency, call-graph, type-shape, export and integration-sim
+      conformance rules, and detail sufficiency — judges code. Its codes are left out of the gate
+      identity and summarized apart in the as-complete run's analysis (CodeAnalysis), so an approval
+      certifies the design and an analyzer upgrade never stales it. A pack rule declares none and
+      counts as design.
+    optional: true
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:52.909Z'
-updatedAt: '2026-09-19T11:07:17.038Z'
+updatedAt: '2026-09-30T05:48:11.568Z'

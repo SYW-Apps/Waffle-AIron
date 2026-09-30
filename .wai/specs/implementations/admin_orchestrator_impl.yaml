@@ -297,112 +297,163 @@ methods:
           Bind the root this lock concerns: the project's isolated root, or — when a member
           qualifier was supplied (one member alias per hop) — the member's tree, resolved through
           the project repository's containment-checked qualified resolution so a qualifier can never
-          resolve outside the project root. Every step below therefore operates on the bound tree.
+          resolve outside the project root. Every step below operates on the bound tree, and nothing
+          below it is ever written.
         type: local
       - stepNumber: 2
         description: >-
           Sync the default branch into the working branch so the lock is based on the latest (no-op
-          for a native project, and equally a no-op for a subproject-scoped lock: the git binding is
-          read from the BOUND root and a child tree carries none — the child is not the git unit).
+          for a native project, and for a member-scoped lock: the git binding is read from the BOUND
+          root and a member carries none).
         type: call
         targetComponent: host_git_adapter
         targetMethod: sync
       - stepNumber: 3
-        description: Validate the tree as-complete
-        type: call
-        targetComponent: host_validator_adapter
-        targetMethod: validateAsComplete
-      - stepNumber: 4
-        description: If validation reports errors, refuse to lock
-        type: branch
-        condition: result reports errors
-        onFalseStep: 6
-      - stepNumber: 5
-        description: Return cannot-lock with the validation errors
-        type: return
-        outcome: cannot lock — validation failed
-      - stepNumber: 6
+        label: capture
         description: >-
-          Compute the validated GATE StateId (spec content + governing doctrine + consumed contract
-          inputs) through the validator adapter
+          CAPTURE the gate identity before anything is judged: own content, design doctrine, own
+          inputs, composition, and each direct member's recorded subject. This is the identity the
+          record will certify (inputs-captured-before-validation).
         type: call
         targetComponent: host_validator_adapter
         targetMethod: computeGateStateId
+      - stepNumber: 4
+        description: Was this lock requested about a particular design?
+        type: branch
+        condition: >-
+          an expected identity was passed (the request's gateStateId) and the captured identity
+          differs from it
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Refuse, writing nothing: the design changed after the lock was requested, so approving now
+          would certify a design nobody asked to have approved. The requester asks again.
+        type: throw
+        error: the design changed since the lock was requested
+      - stepNumber: 6
+        description: >-
+          Validate the tree as-complete; the result carries the code half summarized with its
+          analyzer
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: validateAsComplete
       - stepNumber: 7
         description: >-
-          Capture the approved tree as one content digest per spec file. Nothing is written into the
-          spec files: a hosted lock also commits and pushes .wai/, so the old status ratchet
-          published the whole rewrite into the repository.
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: captureApprovedSpecs
+          Take the design half of the result (ValidationResult.designOnly): what the approval
+          certifies and what may refuse it. Code-conformance findings are recorded beside the claim
+          and never refuse the lock
+        type: local
       - stepNumber: 8
-        description: >-
-          Read the bound tree's project graph for the members it declares directly — `members`
-          entries and, for one release, legacy L1 mounts, each as its alias and its path relative to
-          the bound root. A member is never a subsystem, so the subsystem specs do not name them
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: projectFamily
+        description: If the design half reports errors, refuse to lock
+        type: branch
+        condition: the design half reports errors
+        onTrueStep: 9
+        onFalseStep: 10
       - stepNumber: 9
-        description: >-
-          Pin each member's approved StateId, keyed by its alias — the parent records the decision
-          the member's owner made, not the member's specs.
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: currentChildPins
+        description: Return cannot-lock with the design errors, having written nothing
+        type: return
+        outcome: cannot lock — validation failed
       - stepNumber: 10
         description: >-
-          Read the bound tree's project configuration: the record carries its effective id
-          (project_config.effectiveId(), a defaulted one included) as projectId, which validate
-          later compares with project.yaml (PROJECT_ID_CHANGED); no configuration, or no effective
-          id, records none
+          Read the direct members' approval states, each computed at the member's own root, with
+          their subjects (depth 1)
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 11
+        description: >-
+          Read the bound tree's project configuration: its composition block
+          (requireApprovedMembers) and its effective id (project_config.effectiveId(), a defaulted
+          one included), recorded as projectId so validate can later report PROJECT_ID_CHANGED
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 11
-        description: >-
-          Assemble a LockRecord: stateId, lockedAt, the AUTHENTICATED approver the caller resolved
-          from the credential, validatorVersion, validationResult, status ready, the project's
-          effective id as projectId, plus the captured specs and child pins.
-        type: local
       - stepNumber: 12
+        description: Does the project require approved members, and is one not approved?
+        type: branch
+        condition: >-
+          composition.requireApprovedMembers is true and a direct member is drifted or never
+          approved
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Refuse, writing nothing, naming each drifted or never-approved direct member with its
+          state (and, for an upgrade-only drift, that it needs a re-lock once): each member locks at
+          its own root first — a parent never approves below itself (require-refuses)
+        type: throw
+        error: 'composition.requireApprovedMembers: direct members not approved'
+      - stepNumber: 14
+        description: >-
+          Capture the approved tree as one content digest per OWN spec file (a member's files are
+          its own lock's). Nothing is written into the spec files
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 15
+        label: confirm
+        description: Recompute the gate identity immediately before writing
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 16
+        description: Did any input move while the lock ran?
+        type: branch
+        condition: the recomputed identity differs from the captured one
+        onTrueStep: 17
+        onFalseStep: 18
+      - stepNumber: 17
+        description: >-
+          Refuse, writing nothing: a spec, the doctrine, an input, the composition block or a
+          member's approval changed while this lock ran, so the validation just performed does not
+          describe what would be recorded. Run the lock again
+        type: throw
+        error: the lock's inputs changed while it ran
+      - stepNumber: 18
+        description: >-
+          Assemble a format-2 LockRecord: stateId = the captured identity, lockedAt, the
+          AUTHENTICATED approver the caller resolved from the credential, validatorVersion,
+          validationResult = the design half's counts, status ready, the effective id as projectId,
+          the captured specs, `members` = each direct member's alias → {project, subject, state},
+          and `code` = the result's analysis without its codes list. No `children` is written
+        type: local
+      - stepNumber: 19
         description: >-
           Persist the record BEFORE publishing, so the commit that ships the specs also contains the
-          approval that certifies them.
+          approval that certifies them
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 13
+      - stepNumber: 20
         description: >-
           Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
-          the PR from — the lock is the semantic checkpoint that triggers the auto-publish. A no-op
-          for a native project, and for a subproject-scoped lock (no binding at the bound child
-          root), so a subproject freeze never commits or pushes against the parent's repository.
+          the PR from. A no-op for a native project and for a member-scoped lock (no binding at the
+          bound member root)
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-      - stepNumber: 14
+      - stepNumber: 21
         description: Only a real publish has a commit to record.
         type: branch
-        condition: nothing was published (native project, or a subproject-scoped lock)
-        onTrueStep: 15
-        onFalseStep: 16
-      - stepNumber: 15
+        condition: nothing was published (native project, or a member-scoped lock)
+        onTrueStep: 22
+        onFalseStep: 23
+      - stepNumber: 22
         description: Return the persisted record unchanged.
         type: return
         outcome: lock record
-      - stepNumber: 16
+      - stepNumber: 23
         description: >-
           Extend the record with commitSha and compareUrl — known only AFTER the commit, so these
           two fields are re-written into a record the commit already carries.
         type: local
-      - stepNumber: 17
+      - stepNumber: 24
         description: Persist the two published fields.
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 18
+      - stepNumber: 25
         description: Return the published record.
         type: return
         outcome: lock record with the compare URL to open the PR
@@ -517,96 +568,17 @@ methods:
         type: throw
         error: Forbidden — locking a project requires project:write over it
       - stepNumber: 5
-        description: Bind the project's isolated root
-        type: local
+        description: >-
+          Lock through the pre-authorized entry with the authenticated caller as approver: the same
+          workflow an approved request runs, so capture-before-validation, the design-only gate, the
+          member states and requireApprovedMembers hold identically on both paths
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: executeApprovedLock
       - stepNumber: 6
-        description: Sync the default branch into the working branch (no-op for native projects)
-        type: call
-        targetComponent: host_git_adapter
-        targetMethod: sync
-      - stepNumber: 7
-        description: Validate the tree as-complete
-        type: call
-        targetComponent: host_validator_adapter
-        targetMethod: validateAsComplete
-      - stepNumber: 8
-        description: If validation reports errors, refuse to lock
-        type: branch
-        condition: result reports errors
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
-        description: Return cannot-lock with the validation errors
-        type: return
-        outcome: cannot lock — validation failed
-      - stepNumber: 10
-        description: >-
-          Compute the validated GATE StateId (spec content + governing doctrine + consumed contract
-          inputs) through the validator adapter
-        type: call
-        targetComponent: host_validator_adapter
-        targetMethod: computeGateStateId
-      - stepNumber: 11
-        description: >-
-          Capture the approved tree as one content digest per spec file — the spec files themselves
-          are never written to.
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: captureApprovedSpecs
-      - stepNumber: 12
-        description: >-
-          Read the bound tree's project graph for the members it declares directly, each as its
-          alias and path
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: projectFamily
-      - stepNumber: 13
-        description: Pin each member's approved StateId, keyed by its alias.
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: currentChildPins
-      - stepNumber: 14
-        description: >-
-          Assemble a LockRecord: stateId, lockedAt, the AUTHENTICATED approver resolved from the
-          caller's credential, validatorVersion, validationResult, status ready, plus the captured
-          specs and child pins.
-        type: local
-      - stepNumber: 15
-        description: >-
-          Persist the record BEFORE publishing, so the commit that ships the specs also contains the
-          approval.
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: writeLockRecord
-      - stepNumber: 16
-        description: >-
-          Commit the .wai/-scoped tree and push the working branch, returning the commit sha and
-          compare URL.
-        type: call
-        targetComponent: host_git_adapter
-        targetMethod: publish
-      - stepNumber: 17
-        description: Only a real publish has a commit to record.
-        type: branch
-        condition: nothing was published (native project)
-        onTrueStep: 18
-        onFalseStep: 19
-      - stepNumber: 18
-        description: Return the persisted record unchanged.
+        description: Return the lock record
         type: return
         outcome: lock record
-      - stepNumber: 19
-        description: Extend the record with commitSha and compareUrl, known only after the commit.
-        type: local
-      - stepNumber: 20
-        description: Persist the two published fields.
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: writeLockRecord
-      - stepNumber: 21
-        description: Return the published record.
-        type: return
-        outcome: lock record with the compare URL
     detail: full
   - name: enableGit
     narrative:
@@ -1162,6 +1134,22 @@ methods:
         description: Return the registered record
         type: return
         outcome: project record
+  - name: gateIdentity
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Bind the root exactly as executeApprovedLock does: the project's isolated root, or the
+          member the qualifier names through the containment-checked qualified resolution
+        type: local
+      - stepNumber: 2
+        description: Compute the bound tree's gate identity
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 3
+        description: Return it rendered `<algorithm>:<digest>`
+        type: return
+        outcome: gate identity
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-27T15:27:02.240Z'
+updatedAt: '2026-09-30T05:53:43.682Z'

@@ -16,10 +16,13 @@ fields:
   - name: drifted
     type: boolean
     description: >-
-      Whether the tree has actually moved since it was approved, including a chained child whose pin
-      moved even when none of this project's own specs did.
+      Whether this project's approval no longer covers the tree: its own specs moved since it was
+      approved, a direct member's pin moved (the member re-approved, so this project's gate identity
+      moved even when none of its own specs did), or the lock was taken under an earlier gate
+      identity (stage-5 upgrade). A member that is merely drifted or never approved is named in the
+      text but is not this project's drift.
     optional: false
 methods: []
 sourcePath: src/core/approval.ts
 createdAt: '2026-09-23T12:24:05.267Z'
-updatedAt: '2026-09-23T12:24:05.496Z'
+updatedAt: '2026-09-30T05:57:28.103Z'

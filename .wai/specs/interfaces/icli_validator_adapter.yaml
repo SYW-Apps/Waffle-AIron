@@ -76,6 +76,20 @@ methods:
         description: >-
           What this run may vary, as the command's flags resolved it; `family` when --family was
           given
+  - name: familyApprovals
+    description: >-
+      Forward to validator_portal.familyApprovals: the bound project's pin tree — its own approval
+      state and each member's within `depth` levels, each computed at that project's own root. The
+      local lock asks with depth 1; `wairon status` asks for every level.
+    signature: 'familyApprovals(depth?: number): ProjectApproval[]'
+    returns: ProjectApproval[]
+    params:
+      - name: depth
+        type: number
+        description: 'Member levels to include: 1 = direct members, omitted = every level'
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T18:11:57.911Z'
+updatedAt: '2026-09-30T05:54:06.814Z'

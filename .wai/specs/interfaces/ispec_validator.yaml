@@ -58,7 +58,11 @@ methods:
       relaxation) and mutating nothing — the gate behind `wairon lock`. It judges the bound project
       alone, exactly as validateProject does, so a member locked at its own root and one locked
       inside its family are held to one verdict; a member's own findings never block its parent's
-      lock (a parent that refuses on an unapproved member is stage 5). The strictness flip happens
+      lock (a parent that requires approved members refuses in the lock workflow, on the members'
+      approval states, not here). Its result carries `analysis`: the code-conformance half
+      summarized with the analyzer identity (validator version, code doctrine digest, weakest
+      analysis grade), so the lock can gate and record on the design half alone
+      (ValidationResult.designOnly) and record the code half beside it. The strictness flip happens
       inside the run, because invalidating the spec cache would discard any status set beforehand.
     signature: 'validateAsComplete(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
@@ -102,17 +106,15 @@ methods:
         optional: true
   - name: computeGateStateId
     description: >-
-      Gather the content identity, the governing extensions, the project's gate config, the consumed
-      contract inputs and the built-in rule sequence, and compute the gate identity from them. Every
-      input is the bound project's own (its tree, its doctrine, its externals lock and pinned
-      snapshots, its foreign surface snapshots) — never an ancestor's state — so a lock taken at a
-      member's own root and one taken inside its family record the same identity. With
-      resolve-through-parent gone, the verdict a lock certifies no longer depends on an ancestor
-      either. Known inconsistency, kept on purpose until stage 5: at a parent the content identity
-      (and the consumed inputs) still hash the contained members' specs and pins, although the
-      parent's lock gate (validateAsComplete) ignores the members' findings — so a member edit
-      stales the parent's lock without the parent's verdict having judged it. Stage 5 replaces the
-      member content with each direct member's composition subject.
+      Gather the project's OWN content identity, the governing extensions, the project's gate config
+      (type, rule tuning, composition), its own consumed contract inputs, the built-in rule
+      sequence, and each direct member's composition subject — read from the member's own lock
+      record, never recomputed and never its specs — and compute the gate identity from them. Every
+      input is the bound project's own or a direct member's recorded decision, never an ancestor's
+      state and never a member's tree, so a lock taken at a member's own root and one taken inside
+      its family record the same identity, and a parent's identity costs its own tree plus one lock
+      file per direct member. This closes the stage-4 inconsistency where a parent's identity hashed
+      its members' specs and pins although its lock gate never judged them.
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
@@ -153,4 +155,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-28T17:17:10.516Z'
+updatedAt: '2026-09-30T05:51:10.004Z'

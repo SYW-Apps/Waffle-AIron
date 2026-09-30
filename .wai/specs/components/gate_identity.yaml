@@ -1,15 +1,16 @@
 id: gate_identity
 name: Gate Identity
 description: >-
-  Computes the gate identity a lock records and every staleness check compares: the spec tree's
-  content identity together with the doctrine that governs it (the built-in rules by name, codes and
-  default severities; the packs, profiles, languages, patterns, guarantees, assertions and pack
-  rules; the project's type and rule tuning) and the consumed contract inputs a verdict can consult.
-  Pure: the caller gathers every input. The project's `composition` block (requirePolicies) is
-  deliberately NOT part of it until stage 5: its only effect on the project's own gate is the syntax
-  check of its own requirements, and what it requires of members is judged in the family run, which
-  a lock does not record yet — stage 5's composition subjects add the adopted policies. Until then,
-  changing a requirement does not make the requiring project's lock stale.
+  Computes the gate identity a lock records and every staleness check compares: ONE project's own
+  spec content identity together with the design doctrine that governs it (the built-in rules that
+  judge design, by name, codes and default severities; the packs, profiles, languages, patterns,
+  guarantees, assertions and pack rules; the project's type and rule tuning, less its
+  code-conformance tuning), its own consumed contract inputs, its `composition` block, and each
+  direct member's composition subject. That is the whole of what a lock certifies (decision #10):
+  the design under its declared inputs. A member's specs and inputs are not hashed — its subject
+  stands for them, transitively — and the rules that judge code are not either: their doctrine has a
+  digest of its own (analyzer), recorded beside the claim with the code results, so an analyzer
+  upgrade never stales an approval. Pure: the caller gathers every input.
 subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
@@ -17,4 +18,4 @@ dependsOn: []
 dependencyClass: pure
 status: complete
 createdAt: '2026-09-15T10:51:24.462Z'
-updatedAt: '2026-09-29T16:09:19.397Z'
+updatedAt: '2026-09-30T05:50:58.800Z'

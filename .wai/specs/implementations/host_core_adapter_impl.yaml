@@ -127,15 +127,6 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: importSpecTree
-  - name: currentChildPins
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Forward the member pin resolution (the bound root's members, as alias and path) to the
-          approval portal
-        type: call
-        targetComponent: approval_portal
-        targetMethod: currentChildPins
   - name: captureApprovedSpecs
     narrative:
       - stepNumber: 1
@@ -220,13 +211,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpecs
-  - name: projectFamily
-    narrative:
-      - stepNumber: 1
-        description: Forward the project graph read to the spec tree portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: projectFamily
   - name: parseDeclarativePack
     narrative:
       - stepNumber: 1
@@ -237,4 +221,4 @@ methods:
     detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-29T21:27:59.174Z'
+updatedAt: '2026-09-30T05:57:18.124Z'

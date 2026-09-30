@@ -67,32 +67,67 @@ methods:
         targetMethod: loadConfig
       - stepNumber: 10
         description: >-
+          For each member the bound root declares directly, bind the member's own root and collect
+          the ids of the agents ITS layer resolves (its architect, its owners and implementers, and
+          its own members' delegating owners — never expanding those further), each qualified
+          `<alias>::<agentId>`. Ids only: nothing of the member's agents is rendered here, and the
+          walk stops at one level, so this layer's topology stays proportional to itself
+        type: local
+      - stepNumber: 11
+        description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per member project this project declares (in `members`, or for
           one release a legacy L1 mount) that routes work into the member without enumerating its
-          internals; component implementers only when generateComponentImplementers is enabled. Each
-          owner's and implementer's ownedPaths fence holds the source files its implementations and
-          their methods name, and each carries the rendered variantGuidance for its variant-tagged
-          components.
+          internals and lists the member's agents by reference (delegatesTo); component implementers
+          only when generateComponentImplementers is enabled. Each owner's and implementer's
+          ownedPaths fence holds the source files its implementations and their methods name, and
+          each carries the rendered variantGuidance for its variant-tagged components.
         type: local
   - name: composeAgentBrief
     narrative:
       - stepNumber: 1
         description: >-
+          Is the id qualified by a direct member's alias (`<alias>::<rest>`, the alias declared in
+          this project's `members` or, for one release, a legacy mount)?
+        type: branch
+        condition: the id's first segment is the alias of a direct member
+        onTrueStep: 2
+        onFalseStep: 5
+      - stepNumber: 2
+        description: >-
+          Bind the member's own root and compose the brief for `<rest>` there — the member's own
+          topology, template, guidance and configuration, so the brief is exactly the one the
+          member's own session gets and never grows with the family; `<rest>` may itself be
+          qualified, one hop per member. The binding is restored afterwards
+        type: call
+        targetComponent: agent_resolver
+        targetMethod: composeAgentBrief
+      - stepNumber: 3
+        description: >-
+          Re-express the brief's ownedPaths and readPaths under the member's directory relative to
+          this root, set `root` to that directory, and qualify its agentId with the alias, so the
+          fence is correct from the asking root
+        type: local
+      - stepNumber: 4
+        description: Return the member's brief
+        type: return
+        outcome: brief composed through the mount
+      - stepNumber: 5
+        description: >-
           Resolve the current agent topology (resolveAgentTopology over the live spec tree) and
           locate the record whose id matches agentId
         type: local
-      - stepNumber: 2
+      - stepNumber: 6
         description: Refuse unknown agents
         type: branch
         condition: no record matches agentId
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
         description: Unknown agent id — name the known ids in the error so a caller can self-correct
         type: throw
         error: UnknownAgentError
-      - stepNumber: 4
+      - stepNumber: 8
         description: >-
           Read the project configuration through the project config repository: the global templates
           directory the template lookup consults, and the execution settings the brief's budget is
@@ -100,31 +135,31 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: load
-      - stepNumber: 5
+      - stepNumber: 9
         description: Load the record's instruction template through the template source adapter
         type: call
         targetComponent: template_source_adapter
         targetMethod: loadTemplate
-      - stepNumber: 6
+      - stepNumber: 10
         description: >-
           Build the variable map from the record (agentName, ownedPaths fence, domain context,
           rendered variantGuidance) and substitute the {{variable}} placeholders into the template
           body
         type: local
-      - stepNumber: 7
+      - stepNumber: 11
         description: >-
           Read the optional per-agent project guidance file (.wai/agents/<agentId>.md) — live, so a
           user edit applies on the next fetch
         type: call
         targetComponent: template_source_adapter
         targetMethod: loadAgentOverride
-      - stepNumber: 8
+      - stepNumber: 12
         description: >-
           When guidance exists, append it to the rendered instructions under an attributed '##
           Project guidance' section — the user's delta stays legible AS a delta over the inferred
           brief
         type: local
-      - stepNumber: 9
+      - stepNumber: 13
         description: >-
           Return the AgentBrief: rendered instructions plus the structured scope fields (ownedPaths,
           readPaths, domainRoot, template)
@@ -147,4 +182,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-27T17:28:23.665Z'
+updatedAt: '2026-09-30T05:56:43.841Z'

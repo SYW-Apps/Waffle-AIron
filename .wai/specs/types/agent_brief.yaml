@@ -52,7 +52,15 @@ fields:
       The rendered variant-implementation guidance for the agent's variant-tagged components, also
       folded into instructions; carried structurally for programmatic consumers.
     optional: true
+  - name: root
+    type: string
+    description: >-
+      Set only on a brief for a member's agent (an id qualified `<alias>::`): the member's directory
+      relative to the root the brief was asked from. The brief was composed at that root, and its
+      ownedPaths and readPaths are re-expressed under this prefix so the fence is correct from the
+      asking root. Absent for an agent of the asking project itself.
+    optional: true
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-08-08T11:11:36.097Z'
-updatedAt: '2026-09-19T11:07:04.753Z'
+updatedAt: '2026-09-30T05:48:18.309Z'

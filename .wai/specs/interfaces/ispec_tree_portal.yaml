@@ -100,8 +100,8 @@ methods:
       - idempotent
   - name: consumedContractInputs
     description: >-
-      Forward to core_orchestrator.consumedContractInputs: the consumed contract inputs a verdict
-      can consult
+      Forward to core_orchestrator.consumedContractInputs: the consumed contract inputs a verdict at
+      the bound project can consult — its own root's, never a member's
     signature: 'consumedContractInputs(): string[]'
     returns: string[]
     params: []
@@ -279,4 +279,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T17:16:51.287Z'
+updatedAt: '2026-09-30T05:50:07.978Z'

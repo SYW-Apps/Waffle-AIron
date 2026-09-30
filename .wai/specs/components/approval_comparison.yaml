@@ -4,7 +4,7 @@ description: >-
   Whether this tree is still the tree that was approved, and where it is not. Holds nothing and
   writes nothing: it derives per-spec content digests from the spec files on disk, compares them
   against the digests the lock record carries, and answers the difference. It completes a triple
-  that was two thirds designed — `state_hash` answers what the gate identity IS, `lock_store`
+  that was two thirds designed — `state_hash` answers what the content identity IS, `lock_store`
   answers where the record lives, and until now nothing named the arithmetic between them, which is
   the part `wairon lock` and `lock-check` actually decide on. Two stereotype choices are worth
   recording because both were refused first. It is NOT a Query, though it only reads: a Query is a
@@ -12,9 +12,11 @@ description: >-
   and the lock record, which belong to different owners. And it carries no `dependencyClass`, though
   it writes nothing: `read` logic may reach Repositories, Indexes, Adapters and other pure or read
   Orchestrators but never a Store directly, and `lock_store` is a Store with no facade over it.
-  Claiming `read` would have been a promise the dependency graph does not keep. Child pins belong
-  here for the same reason the digests do — a chained subproject's approved commit is part of what
-  the record covers, so "did this change" has to account for it.
+  Claiming `read` would have been a promise the dependency graph does not keep. Member pins are NOT
+  computed here since stage 5: a member's subject, state and pin need gate identities, which only
+  the validator computes (validator_portal.familyApprovals); the verdict takes that pin tree as
+  data. The stage-1 child-pin reads (currentChildPins, movedChildren) are gone — the lock no longer
+  writes `children`.
 subsystem: sdd_core
 componentType: Orchestrator
 owns: []
@@ -23,4 +25,4 @@ dependsOn:
   - lock_store
 status: complete
 createdAt: '2026-09-20T15:18:48.313Z'
-updatedAt: '2026-09-20T15:22:26.252Z'
+updatedAt: '2026-09-30T05:49:39.362Z'

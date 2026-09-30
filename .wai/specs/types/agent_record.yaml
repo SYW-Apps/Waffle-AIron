@@ -55,7 +55,16 @@ fields:
     type: string
     description: When this agent was last written. Store-managed.
     optional: false
+  - name: delegatesTo
+    type: string[]
+    description: >-
+      A member project's delegating owner only: the ids of the member's own agents, each qualified
+      by the alias this project declares the member under (`<alias>::<agentId>`), resolved from the
+      member's topology at the member's own root. REFERENCES, never copies: nothing of the member's
+      agents is rendered into this layer, and a brief for one of them composes at the member's root
+      (composeAgentBrief).
+    optional: true
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-23T18:36:07.651Z'
+updatedAt: '2026-09-30T05:48:16.157Z'

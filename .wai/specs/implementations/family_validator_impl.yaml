@@ -157,32 +157,19 @@ methods:
           cheapest first
         type: local
       - stepNumber: 3
-        description: For each present member
-        type: loop
-        loopKind: forEach
-        over: the graph's members that loaded
-        endStep: 7
+        description: >-
+          Compute the approval state of every member of the selection, each at its own root — the
+          same answer the lock records and status prints
+        type: call
+        targetComponent: family_validator
+        targetMethod: approvals
       - stepNumber: 4
-        description: Bind the member's root for the next calls, restoring the caller's binding afterwards
+        description: >-
+          Report each present member whose state is never as MEMBER_UNAPPROVED and each drifted one
+          as MEMBER_DRIFTED, saying so when the drift is only the stage-5 identity upgrade (re-lock
+          once). The root's own lock is not a family finding
         type: local
       - stepNumber: 5
-        description: >-
-          Compute the member's own gate identity — its tree, doctrine, externals lock and pins,
-          never an ancestor's
-        type: call
-        targetComponent: spec_validator
-        targetMethod: computeGateStateId
-      - stepNumber: 6
-        description: Read the member's lock record through the core adapter
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: readLockRecord
-      - stepNumber: 7
-        description: >-
-          No record is MEMBER_UNAPPROVED; a record whose identity differs from the one just computed
-          is MEMBER_DRIFTED. The root's own lock is not a family finding
-        type: local
-      - stepNumber: 8
         description: >-
           Resolve each finding's severity with the root's sddRuleSeverity override, else the code
           default, and return them
@@ -455,6 +442,70 @@ methods:
         type: return
         outcome: ValidationIssue[]
     symbol: policyDeviations
+  - name: approvals
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph: its members at every level, with their directories
+          and parents
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: >-
+          Select the projects to answer for: the graph's root, then each member within `depth`
+          levels in walk order. A declared member with no project on disk is answered `never`, with
+          no subject, without binding anything
+        type: local
+      - stepNumber: 3
+        description: For each selected project that loaded
+        type: loop
+        loopKind: forEach
+        over: the selected projects that loaded
+        endStep: 9
+      - stepNumber: 4
+        description: >-
+          Bind the project's own root for the next calls, restoring the caller's binding afterwards
+          — the state is always computed where the project's own lock would be
+        type: local
+      - stepNumber: 5
+        description: >-
+          Compute the project's own gate identity — its own tree, doctrine, own inputs, composition
+          and ITS direct members' recorded subjects, never an ancestor's
+        type: call
+        targetComponent: spec_validator
+        targetMethod: computeGateStateId
+      - stepNumber: 6
+        description: Read the project's own lock record
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 7
+        description: >-
+          Decide its state: no record is never; a record whose stateId equals the identity just
+          computed is approved; otherwise drifted, marked upgraded when the record's algorithm
+          differs from the current one (the lock predates the stage-5 identity, which says nothing
+          about the design). Its subject is the record's stateId rendered `<algorithm>:<digest>`,
+          absent when never
+        type: local
+      - stepNumber: 8
+        description: For a member, read its parent's lock record from the parent's directory
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 9
+        description: >-
+          Decide how the parent pinned it: the parent's `members` entry for this alias, else (format
+          1, for one release) its `children` entry; matches when that equals the member's subject,
+          moved when it differs (including a member pinned before and never approved now), unpinned
+          when the parent has no record or names no pin for the alias. The root's own entry carries
+          no pin
+        type: local
+      - stepNumber: 10
+        description: Return the entries, root first
+        type: return
+        outcome: ProjectApproval[]
+    symbol: projectApprovals
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-09-29T16:08:57.373Z'
+updatedAt: '2026-09-30T05:52:21.829Z'

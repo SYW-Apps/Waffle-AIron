@@ -32,6 +32,14 @@ fields:
       A family run only: one line per selected project (the root first, then its members in scan
       order) with its own gate's totals. Absent on the owner's gate.
     optional: true
+  - name: analysis
+    type: CodeAnalysis
+    description: >-
+      The as-complete run only (validateAsComplete): the code-conformance half of this result
+      summarized with the analyzer that produced it — its identity, the codes code-judging rules
+      declare, and the counts per severity among `issues`. Absent on the owner's gate and on a
+      family run.
+    optional: true
 methods:
   - name: changesTo
     signature: 'changesTo(after: ValidationResult): FindingChanges'
@@ -44,6 +52,15 @@ methods:
       realized as the free function findingChanges in src/models/pack-impact.ts.
     sourcePath: src/models/pack-impact.ts
     symbol: findingChanges
+  - name: designOnly
+    signature: 'designOnly(): ValidationResult'
+    returns: ValidationResult
+    description: >-
+      This result with every issue whose code is one of analysis.codes removed, `valid` recomputed
+      over what remains, and `analysis` kept: the DESIGN half, which is what a lock gates on and
+      certifies. Pure over the result's own fields; a result with no analysis answers itself
+      unchanged. The lock refuses only on the errors this answers, and records its counts as the
+      lock's validationResult.
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-29T16:41:25.655Z'
+updatedAt: '2026-09-30T05:47:53.773Z'

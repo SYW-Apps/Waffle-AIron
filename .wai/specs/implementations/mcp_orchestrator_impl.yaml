@@ -502,7 +502,17 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Ask core for the completeness report through the adapter. Statically bound, never a lazy
+          Ask the validator for the pin tree: this project's own approval state and each member's,
+          every one computed at that project's OWN root, so the states printed here are the ones
+          status prints from the member's root (status-agrees). The hosted data plane has already
+          bound a root within the credential's reach
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 2
+        description: >-
+          Ask core for the completeness report through the adapter, handing it the pin tree so each
+          [Project] line carries its member's approval state and pin. Statically bound, never a lazy
           require: this server is bundled, and a runtime require of a command file resolves against
           the bundle's own directory — which worked from the CLI, whose bundle happened to contain
           that file, and answered "Cannot find module" on the hosted data plane instead of the
@@ -510,7 +520,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: getStatusReport
-      - stepNumber: 2
+      - stepNumber: 3
         description: >-
           Read the members the bound root declares — its project.yaml `members` entries and, for one
           release, its legacy L1 mounts, each with its alias, path and form — so the context line
@@ -519,16 +529,17 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: listDirectChainedSubprojects
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
-          Ask what the lock says about the tree as it stands. An agent reading this tool is deciding
-          whether it may write code against these specs, so a tree that has drifted from its
-          approval is the single most important thing this answer can carry — and silence would read
-          exactly like being current
+          Ask what the lock says about the tree as it stands, passing the pin tree so the verdict
+          names members whose pin moved and the stage-5 upgrade. An agent reading this tool is
+          deciding whether it may write code against these specs, so a tree that has drifted from
+          its approval is the single most important thing this answer can carry — and silence would
+          read exactly like being current
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: approvalVerdict
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Answer it behind the tool-family context line, so a client reading one tool's output knows
           which family of tools it belongs to
@@ -618,4 +629,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-29T16:00:47.343Z'
+updatedAt: '2026-09-30T05:54:23.759Z'

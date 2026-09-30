@@ -150,49 +150,58 @@ methods:
       - stepNumber: 6
         description: Executed — continue to auditing
         type: jump
-        toStep: 11
+        toStep: 12
       - stepNumber: 7
         description: Reject the lock
         type: throw
         error: Forbidden — caller may not lock this project
       - stepNumber: 8
         description: >-
-          Build the pending project:lock ApprovalRequest: kind, the TOP project id, the requester's
-          subject and token id, expiry, and a redacted human summary. When the caller is bound to a
-          subproject, record that qualifier in the request's payload (payloadType naming the scope
-          shape) — the SAME mechanism a project:init request already uses to carry what its
-          execution needs — so the approved action stays confined to that child tree instead of
-          silently widening to the whole project when someone approves it. The summary names the
-          subproject too, so an approver sees the real scope before deciding.
-        type: local
+          Approval required: capture the gate identity of the tree the request is about (the
+          project's, or the member's the requester is confined to) through the admin plane, so the
+          approved execution can refuse a tree that moved after the request
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: gateIdentity
       - stepNumber: 9
+        description: >-
+          Build the pending project:lock ApprovalRequest: kind, the TOP project id, the requester's
+          subject and token id, expiry, a redacted human summary, and gateStateId = the identity
+          just captured. When the caller is bound to a subproject, record that qualifier in the
+          request's payload (payloadType naming the scope shape) — the SAME mechanism a project:init
+          request already uses to carry what its execution needs — so the approved action stays
+          confined to that child tree instead of silently widening to the whole project when someone
+          approves it. The summary names the subproject too, so an approver sees the real scope
+          before deciding.
+        type: local
+      - stepNumber: 10
         description: Create the pending approval request
         type: call
         targetComponent: approval_repository
         targetMethod: create
-      - stepNumber: 10
+      - stepNumber: 11
         description: Build a pending-approval ProjectActionOutcome carrying the created request
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Append a redacted audit event without letting a failure fail the action
         type: try
-        endStep: 13
+        endStep: 14
         catches:
           - error: audit append failure
-            step: 14
-      - stepNumber: 12
+            step: 15
+      - stepNumber: 13
         description: Append the redacted project-lifecycle audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 13
+      - stepNumber: 14
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 15
-      - stepNumber: 14
+        toStep: 16
+      - stepNumber: 15
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: Return the project action outcome
         type: return
         outcome: the project action outcome
@@ -370,9 +379,11 @@ methods:
       - stepNumber: 15
         description: >-
           project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
-          subproject qualifier recorded on the request's payload when it carries one, so an approved
+          subproject qualifier recorded on the request's payload when it carries one (so an approved
           subproject lock freezes exactly that child tree and an approval can never widen the scope
-          the requester was confined to.
+          the requester was confined to) and the request's gateStateId as the expected identity (so
+          an approval never certifies a design other than the one requested; a request without one
+          executes against the tree as it stands).
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -489,8 +500,9 @@ methods:
       - stepNumber: 14
         description: >-
           project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
-          subproject qualifier recorded on the request's payload when it carries one (the retry path
-          must confine exactly as the auto-execute path does).
+          subproject qualifier recorded on the request's payload when it carries one and the
+          request's gateStateId as the expected identity (the retry path must confine and pin
+          exactly as the auto-execute path does).
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -589,4 +601,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-09-29T16:16:32.024Z'
+updatedAt: '2026-09-30T05:53:54.139Z'

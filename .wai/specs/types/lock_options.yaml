@@ -10,13 +10,19 @@ fields:
     optional: true
   - name: subsystem
     type: string
-    description: Narrow the lock scope to one subsystem (and its nested children).
+    description: >-
+      Narrow the approval to one subsystem of this project: only its specs' digests are re-captured,
+      the rest of the previous approval carries forward. The gate identity recorded is always the
+      whole project's.
     optional: true
   - name: recursive
     type: boolean
-    description: Whether to recursively lock chained subprojects.
+    description: >-
+      Accepted for one release and ignored for what is written: a lock approves this project only
+      and never writes below it (parent-lock-writes-nothing-below). Each member is locked at its own
+      root.
     optional: true
 methods: []
 sourcePath: src/commands/lock.ts
 createdAt: '2026-07-24T18:06:34.277Z'
-updatedAt: '2026-09-19T11:07:10.330Z'
+updatedAt: '2026-09-30T05:55:19.194Z'

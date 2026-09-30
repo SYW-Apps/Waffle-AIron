@@ -116,6 +116,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: validateFamily
+  - name: familyApprovals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal's pin tree
+        type: call
+        targetComponent: validator_portal
+        targetMethod: familyApprovals
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-28T18:11:56.916Z'
+updatedAt: '2026-09-30T05:54:08.115Z'

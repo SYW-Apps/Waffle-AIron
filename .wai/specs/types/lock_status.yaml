@@ -12,7 +12,9 @@ fields:
     type: string
     description: >-
       unlocked (no record) | locked (a record whose gate identity still matches) | stale (a record
-      the specs or governing doctrine have moved past, so promotion refuses it).
+      the design, its governing doctrine, its declared inputs, its `composition` or a direct
+      member's composition subject have moved past, or one taken under an earlier gate identity
+      algorithm — see upgraded()).
     optional: false
   - name: record
     type: LockRecord
@@ -27,7 +29,17 @@ fields:
       The gate identity as it stands now — what the verdict was decided against, and what a re-lock
       would record.
     optional: false
-methods: []
+methods:
+  - name: upgraded
+    signature: 'upgraded(): boolean'
+    returns: boolean
+    description: >-
+      Whether a stale verdict comes from the identity itself changing shape rather than from
+      anything it covers: true when the state is stale and the record's stateId.algorithm differs
+      from current.algorithm. A lock taken before stage 5 (algorithm sha256+content+doctrine+inputs)
+      against the stage-5 identity (sha256+content+doctrine+inputs+members) answers true — every
+      lock reads stale once, and a surface that says so can tell the human that nothing in the
+      design is known to have moved. Pure over the status's own fields.
 sourcePath: src/core/specs.ts
 createdAt: '2026-07-30T15:58:52.007Z'
-updatedAt: '2026-09-19T11:07:10.528Z'
+updatedAt: '2026-09-30T05:47:57.499Z'

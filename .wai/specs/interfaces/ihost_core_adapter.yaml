@@ -132,18 +132,6 @@ methods:
         type: bytes
       - name: options
         type: tree_import_options
-  - name: currentChildPins
-    description: >-
-      The approved StateId of every member the bound root declares, keyed by its alias — what a
-      parent approval pins. The members are read from the project graph (projectFamily: the bound
-      root's direct members, either declaration form) and handed in as alias and path; a member is
-      never a subsystem, so the subsystem specs no longer name them. A member with no approval of
-      its own contributes no pin.
-    signature: 'currentChildPins(mounts: SubsystemSpec[]): Record<string, string>'
-    returns: Record<string, string>
-    params:
-      - name: mounts
-        type: SubsystemSpec[]
   - name: captureApprovedSpecs
     description: >-
       Capture the CURRENT spec tree as approved: one content digest per spec file, keyed by path
@@ -267,16 +255,6 @@ methods:
     params: []
     guarantees:
       - idempotent
-  - name: projectFamily
-    description: >-
-      The project graph of the bound root's current scan — one node per project root with its
-      parent, alias and declaration form. Forwarded to the spec tree portal; read by the hosted lock
-      to pin the bound root's direct members.
-    signature: 'projectFamily(): ProjectFamily'
-    returns: ProjectFamily
-    params: []
-    guarantees:
-      - idempotent
   - name: parseDeclarativePack
     description: >-
       Read a parsed manifest as a declarative pack, forwarded to the extension portal: the
@@ -303,4 +281,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-29T21:27:52.106Z'
+updatedAt: '2026-09-30T05:57:17.374Z'

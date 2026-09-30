@@ -45,6 +45,21 @@ methods:
       - name: candidate
         type: PackCandidate
         description: The pack write to measure
+  - name: familyApprovals
+    description: >-
+      Forward to validator_portal.familyApprovals: the bound project's pin tree, each project's
+      approval state computed at its own root — what sdd_get_status prints beside the completeness
+      report. On the hosted data plane the caller has bound a root within the credential's reach
+      before asking.
+    signature: 'familyApprovals(depth?: number): ProjectApproval[]'
+    returns: ProjectApproval[]
+    params:
+      - name: depth
+        type: number
+        description: 'Member levels to include: omitted = every level the status report covers'
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T16:00:33.835Z'
+updatedAt: '2026-09-30T05:54:10.505Z'

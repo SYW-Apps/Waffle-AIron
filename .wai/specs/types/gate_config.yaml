@@ -2,9 +2,9 @@ kind: value-object
 id: gate_config
 name: GateConfig
 description: >-
-  The project-level half of the gate identity: which profile governs, and how the project tuned the
-  rules. A lock taken under one and honoured under another was never judged by the gate it claims to
-  have passed.
+  The project-level half of the gate identity: which profile governs, how the project tuned the
+  design rules, and what it requires of the projects it contains. A lock taken under one and
+  honoured under another was never judged by the gate it claims to have passed.
 fields:
   - name: projectType
     type: string
@@ -12,9 +12,18 @@ fields:
     optional: true
   - name: rules
     type: RulesConfig
-    description: 'The project''s rule tuning: severity overrides, complexity caps and design depth'
+    description: >-
+      The project's rule tuning: severity overrides, complexity caps and design depth. Its
+      code-conformance tuning (rules.conformance) is left out of the gate identity — it tunes only
+      findings the approval does not certify — and enters the analyzer's doctrine digest instead.
+    optional: true
+  - name: composition
+    type: CompositionConfig
+    description: >-
+      The project's `composition` block (requirePolicies, requireApprovedMembers), null when absent.
+      Stage 5: a changed requirement stales the requiring project's lock.
     optional: true
 methods: []
 sourcePath: src/core/rules/gate-identity.ts
 createdAt: '2026-09-15T10:51:01.644Z'
-updatedAt: '2026-09-19T11:07:07.986Z'
+updatedAt: '2026-09-30T05:48:00.207Z'

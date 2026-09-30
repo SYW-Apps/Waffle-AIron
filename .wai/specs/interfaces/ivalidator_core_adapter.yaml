@@ -53,15 +53,10 @@ methods:
     params: []
     guarantees:
       - idempotent
-  - name: computeStateId
-    description: 'Forward to core_portal.computeStateId: the spec tree''s content identity'
-    signature: 'computeStateId(): StateId'
-    returns: StateId
-    params: []
   - name: consumedContractInputs
     description: >-
-      Forward to core_portal.consumedContractInputs: the consumed contract inputs a verdict can
-      consult
+      Forward to core_portal.consumedContractInputs: the consumed contract inputs of the bound root
+      alone (never a member's)
     signature: 'consumedContractInputs(): string[]'
     returns: string[]
     params: []
@@ -183,6 +178,30 @@ methods:
       - name: entry
         type: PackSelection | string
         description: A by-name selection or a legacy path reference
+  - name: computeOwnStateId
+    description: >-
+      Forward to approval_portal.computeOwnStateId: the content identity of the bound project's own
+      specs, never a member's — the content half of the gate identity.
+    signature: 'computeOwnStateId(): StateId'
+    returns: StateId
+    params: []
+    guarantees:
+      - idempotent
+  - name: approvalRecord
+    description: >-
+      Forward to approval_portal.approvalRecord: the lock record another project root carries (a
+      direct member's, for its composition subject; a member's parent's, for its pin), or null when
+      it has none. Read from that root alone — no scan, no validation — which is what keeps a
+      parent's gate identity proportional to its own tree plus one small file per direct member.
+    signature: 'approvalRecord(root?: string): LockRecord | null'
+    returns: LockRecord | null
+    params:
+      - name: root
+        type: string
+        description: The project root whose record to read; the bound root when omitted
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T15:52:27.309Z'
+updatedAt: '2026-09-30T05:56:50.441Z'

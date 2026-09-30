@@ -1,9 +1,12 @@
 id: cli_lock_adapter_impl
 name: CLI Lock Adapter Implementation
 description: >-
-  Forwards the lock mechanics to the published portals: the tree's gate identity from the validator
-  portal, the commit-scoped lock record write to the core portal, and the read-only approval verdict
-  that compares the two. Realized by the existing lock command module.
+  Forwards the lock mechanics to the published portals: the tree's gate identity and the members'
+  approval states from the validator portal, the approval arithmetic and the commit-scoped lock
+  record write to the approval portal, the configuration from the project config portal, and the
+  read-only approval verdict that compares the record with the identity. Realized by the existing
+  lock command module. Writes one file — this project's .wai/lock.json — and nothing below the
+  project.
 contract: icli_lock_adapter
 sourcePath: src/commands/lock.ts
 methods:
@@ -11,30 +14,108 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Assemble the lock scope (optional subsystem narrowing), then obtain the record identity
-          from the tree's current gate identity through the validator portal: spec content,
-          governing doctrine and consumed contract inputs, so the lock records which gate validated
-          it
+          Compare this project's own specs against the approval on record, to summarize what changed
+          since the last approval (a first approval, or a format-1 record without per-spec digests,
+          says so instead of inventing a diff)
         type: call
-        targetComponent: validator_portal
-        targetMethod: computeGateStateId
+        targetComponent: approval_portal
+        targetMethod: diffAgainstApproval
       - stepNumber: 2
         description: >-
-          Read the project configuration through the core portal: the record carries the project's
-          effective id (project_config.effectiveId(), a defaulted one included), which validate
-          later compares with project.yaml (PROJECT_ID_CHANGED); no configuration, or no effective
-          id, records none
+          Read each DIRECT member's approval state, subject and pin, each computed at the member's
+          own root (depth 1)
+        type: call
+        targetComponent: validator_portal
+        targetMethod: familyApprovals
+      - stepNumber: 3
+        description: >-
+          Print the summary: the own specs changed, added and removed, then each direct member with
+          its state (approved | drifted | never) and, where its pin moved, the subject this approval
+          recorded and the one it carries now — a member's own edits never appear in this project's
+          spec diff; what the parent reviews is the member's approval moving
+        type: local
+      - stepNumber: 4
+        description: >-
+          Read the project configuration: its composition block (requireApprovedMembers) and its
+          effective id (project_config.effectiveId(), a defaulted one included), recorded as
+          projectId so validate can later report PROJECT_ID_CHANGED
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
-      - stepNumber: 3
+      - stepNumber: 5
+        description: Does the project require approved members, and is one not approved?
+        type: branch
+        condition: >-
+          composition.requireApprovedMembers is true and a direct member is drifted or never
+          approved
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
-          Persist the commit-scoped lock record, carrying the gate identity, the approval and the
-          project's effective id as projectId
+          Refuse, writing nothing, naming each drifted or never-approved direct member with its
+          state (an upgrade-only drift says the member needs one re-lock) and the remedy: lock each
+          at its own root first. A parent never approves below itself
+        type: throw
+        error: 'composition.requireApprovedMembers: direct members not approved'
+      - stepNumber: 7
+        description: >-
+          Confirm with the human (skipped under --yes; a non-interactive shell without --yes
+          refuses)
+        type: branch
+        condition: the human declined the confirmation
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: 'Declined: nothing was written'
+        type: return
+        outcome: null (declined)
+      - stepNumber: 9
+        description: >-
+          Capture the approval: one digest per OWN spec file; a --subsystem scope re-captures only
+          what it covers and carries the rest of the previous approval forward
+        type: call
+        targetComponent: approval_portal
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 10
+        description: 'Resolve who is approving: the git author identity, else user@hostname'
+        type: call
+        targetComponent: approval_portal
+        targetMethod: localApprover
+      - stepNumber: 11
+        label: confirm
+        description: Recompute the gate identity immediately before writing
+        type: call
+        targetComponent: validator_portal
+        targetMethod: computeGateStateId
+      - stepNumber: 12
+        description: >-
+          Did any input move while the lock ran — between the capture before validation and now, the
+          confirmation prompt included?
+        type: branch
+        condition: the recomputed identity differs from the captured one
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Refuse, writing nothing: a spec, the doctrine, an input, the composition block or a
+          member's approval changed while the lock ran, so the validation the human saw does not
+          describe what would be recorded. Run the lock again
+        type: throw
+        error: the lock's inputs changed while it ran
+      - stepNumber: 14
+        description: >-
+          Assemble a format-2 LockRecord: stateId = the captured identity, lockedAt, lockedBy,
+          validatorVersion, validationResult = the design half's counts (gate.designOnly()), status
+          ready, projectId when there is one, specs, `members` = each direct member's alias →
+          {project, subject, state}, and `code` = gate.analysis without its codes list. No
+          `children`
+        type: local
+      - stepNumber: 15
+        description: Persist the commit-scoped lock record — the only file this lock writes
         type: call
         targetComponent: approval_portal
         targetMethod: writeLockRecord
-      - stepNumber: 4
+      - stepNumber: 16
         description: Return the written lock record
         type: return
         outcome: LockRecord
@@ -67,10 +148,10 @@ methods:
       - stepNumber: 4
         label: gate-identity
         description: >-
-          Obtain the tree's gate identity as it stands NOW from the validator portal — the hashed
-          parsed tree plus the governing doctrine, which is what "has the design changed" means. The
-          per-spec content digests the same record carries are deliberately not consulted: they
-          would move on a whitespace-only edit.
+          Obtain the tree's gate identity as it stands NOW from the validator portal — own content,
+          design doctrine, declared inputs, composition and direct members' subjects, which is what
+          "has the approved design or anything it was approved under changed" means. The per-spec
+          content digests are not the gate: they would move on a whitespace-only edit.
         type: call
         targetComponent: validator_portal
         targetMethod: computeGateStateId
@@ -92,7 +173,7 @@ methods:
             step: 7
           - value: stale
             step: 8
-        defaultStep: 9
+        defaultStep: 12
       - stepNumber: 7
         label: verdict-locked
         description: >-
@@ -101,13 +182,40 @@ methods:
         type: return
         outcome: locked
       - stepNumber: 8
+        label: upgrade-only
+        description: >-
+          Is the staleness only the stage-5 identity upgrade (LockStatus.upgraded: the record's
+          algorithm is an earlier gate marker)?
+        type: branch
+        condition: the lock status is upgraded
+        onTrueStep: 9
+        onFalseStep: 11
+      - stepNumber: 9
+        label: own-diff
+        description: >-
+          Compare the own spec files with the approval's per-spec digests, so the message can say
+          whether any spec file changed since the approval
+        type: call
+        targetComponent: approval_portal
+        targetMethod: diffAgainstApproval
+      - stepNumber: 10
+        label: verdict-upgraded
+        description: >-
+          Refuse (the old identity cannot be recomputed, so nothing proves the design unchanged),
+          saying it plainly: "the approval on record was taken under an earlier gate identity — the
+          gate identity gained inputs in stage 5 (each direct member's composition subject,
+          `composition`) and code conformance moved beside the claim", whether any own spec file
+          changed since, and the remedy: re-lock once and commit .wai/lock.json.
+        type: return
+        outcome: stale (identity upgraded)
+      - stepNumber: 11
         label: verdict-stale
         description: >-
-          The design moved past the approval: refuse at every strictness, naming the remedy — re-run
-          the lock and commit the updated record.
+          The design, or something it was approved under, moved past the approval: refuse at every
+          strictness, naming the remedy — re-run the lock and commit the updated record.
         type: return
         outcome: stale
-      - stepNumber: 9
+      - stepNumber: 12
         label: verdict-unlocked
         description: >-
           Never approved: the opt-in seam. Pass with a notice by default so an upgrading project
@@ -116,4 +224,4 @@ methods:
         outcome: unlocked
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-09-26T15:27:42.619Z'
+updatedAt: '2026-09-30T05:55:11.488Z'
