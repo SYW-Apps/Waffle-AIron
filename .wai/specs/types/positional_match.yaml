@@ -6,7 +6,7 @@ description: >-
   — the reading stage 4 retired — and the explicit form that replaces it. The one answer both the
   upgrade report (verdict_changes) and the positional migration step read, so what the report
   explains is exactly what the migration writes.
-subsystem: sdd_cli
+subsystem: sdd_migrations
 fields:
   - name: consumer
     type: string
@@ -62,4 +62,4 @@ fields:
 methods: []
 sourcePath: src/commands/position-reader.ts
 createdAt: '2026-09-28T16:09:03.266Z'
-updatedAt: '2026-09-28T18:12:36.459Z'
+updatedAt: '2026-09-30T20:47:42.410Z'

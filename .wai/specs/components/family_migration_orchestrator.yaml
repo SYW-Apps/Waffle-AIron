@@ -19,8 +19,9 @@ dependsOn:
   - membership_migration
   - identity_migration
   - boundary_migration
+  - chaining_migration_orchestrator
   - family_transaction
   - migration_core_adapter
 status: design
 createdAt: '2026-09-30T20:35:31.532Z'
-updatedAt: '2026-09-30T20:35:31.541Z'
+updatedAt: '2026-09-30T20:48:02.409Z'

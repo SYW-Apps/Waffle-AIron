@@ -39,6 +39,21 @@ methods:
           failure (a tool error) and whether the family was restored
         type: return
         outcome: FamilyMigrationReport
+  - name: pending
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask the migration portal for the unfinished transactions under the bound root, fix false —
+          a report, nothing written
+        type: call
+        targetComponent: mcp_migration_adapter
+        targetMethod: recover
+      - stepNumber: 2
+        description: >-
+          Answer one notice line per transaction: its id, verb and coordinator phase, and `run
+          wairon doctor --fix`
+        type: return
+        outcome: notice lines
 status: design
 createdAt: '2026-09-30T20:39:33.686Z'
-updatedAt: '2026-09-30T20:39:33.697Z'
+updatedAt: '2026-09-30T20:52:24.412Z'

@@ -69,9 +69,14 @@ methods:
       declared under the same alias with the external's path, `use` and description; in every other
       family project, an external `source.path` that resolves to the adopted project removed, since
       the family now supplies it; in the adopted project, each external `source.path` that resolves
-      to a family project removed likewise. The exact inverse of planDetach for a family that had no
-      such redundant paths before — the detach-then-adopt-is-identity property's precondition, which
-      the plan states when it does not hold.
+      to a family project removed likewise. It is planDetach's inverse, and the property
+      detach-then-adopt-is-identity says exactly this (accepted): the member project is
+      BYTE-identical to before the detach, and the parent and every other family project are
+      SEMANTICALLY identical — the same member, external and pin declarations with the same values —
+      but not necessarily byte-identical, since a re-declared member is appended to `members` rather
+      than restored to its old position. Precondition: no family project held a redundant
+      source.path to the member before the detach; the plan names one when it does, because adopt
+      removes it too.
     signature: 'planAdopt(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -105,4 +110,4 @@ methods:
       - idempotent
 status: design
 createdAt: '2026-09-30T20:33:39.248Z'
-updatedAt: '2026-09-30T20:33:39.257Z'
+updatedAt: '2026-09-30T20:53:08.356Z'

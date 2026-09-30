@@ -19,6 +19,17 @@ methods:
         type: boolean
         description: Answer the plan and write nothing
         optional: true
+  - name: pending
+    description: >-
+      The pending-transaction banner for sdd_get_status and sdd_validate_tree: one notice line per
+      unfinished family-migration transaction under the bound root — its id, verb and coordinator
+      phase, pointing at `wairon doctor --fix` (a human's repair; no tool recovers). Empty when
+      there is none. Writes nothing.
+    signature: 'pending(): string[]'
+    returns: string[]
+    params: []
+    guarantees:
+      - idempotent
 status: design
 createdAt: '2026-09-30T20:39:28.924Z'
-updatedAt: '2026-09-30T20:39:28.937Z'
+updatedAt: '2026-09-30T20:52:23.869Z'

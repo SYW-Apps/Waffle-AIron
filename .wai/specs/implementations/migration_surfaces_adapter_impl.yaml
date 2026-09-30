@@ -25,6 +25,27 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: unpin
+  - name: listExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listExternals
+  - name: listFamilyPins
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listFamilyPins
+  - name: removeSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: removeSnapshot
 status: design
 createdAt: '2026-09-30T20:31:58.977Z'
-updatedAt: '2026-09-30T20:36:56.923Z'
+updatedAt: '2026-09-30T20:45:24.980Z'

@@ -6,7 +6,7 @@ description: >-
   the id to declare, the minimal L0 to create, the L0 entries to add, the externals to declare, the
   aliases to pin, the legacy mounts to move into its `members`, and the stage-1 family pins to
   delete.
-subsystem: sdd_cli
+subsystem: sdd_migrations
 fields:
   - name: project
     type: string
@@ -87,4 +87,4 @@ fields:
 methods: []
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:11:55.782Z'
-updatedAt: '2026-09-29T13:55:59.198Z'
+updatedAt: '2026-09-30T20:47:43.355Z'

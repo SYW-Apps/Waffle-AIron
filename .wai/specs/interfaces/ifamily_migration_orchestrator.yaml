@@ -10,11 +10,13 @@ methods:
   - name: plan
     description: >-
       Plan a family migration from the bound project: the highest root in reach and whether it is
-      the family's top; the verb's edits and refusals; and, when nothing refuses, the rehearsal and
-      its file changes, and the owners to re-lock. A pending transaction anywhere the plan reads
-      refuses it (transaction-pending, naming `wairon doctor --fix`). A core writer's refusal met
-      during the rehearsal becomes the plan's refusal (internalize-refused, externalize-refused),
-      the rehearsal dropped. Writes nothing into the family.
+      the family's top; the verb's edits and refusals — for verb chaining, the chaining migration's
+      own plan carried whole, its blocking findings as refusals; and, when nothing refuses and the
+      request does not ask otherwise, the rehearsal and its file changes, and the owners to re-lock.
+      A pending transaction anywhere the plan reads refuses it (transaction-pending, naming `wairon
+      doctor --fix`). A core writer's refusal met during the rehearsal becomes the plan's refusal
+      (internalize-refused, externalize-refused), the rehearsal dropped. Writes nothing into the
+      family.
     signature: 'plan(request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -25,10 +27,11 @@ methods:
       - idempotent
   - name: apply
     description: >-
-      Apply a confirmed plan: refused (nothing written) when it is blocked; nothing to do when it is
-      empty; otherwise its rehearsal committed through the family transaction — every file change
-      live, or the family byte-identical to before with the failure named. Answers the report with
-      the re-lock list when committed.
+      Apply a confirmed plan: refused (nothing written) when it is blocked; a plan made without a
+      rehearsal (doctor's chaining plan, confirmed as printed) is rehearsed first, and a refusal met
+      there refuses it; nothing to do when it has no file change; otherwise its rehearsal committed
+      through the family transaction — every file change live, or the family byte-identical to
+      before with the failure named. Answers the report with the re-lock list when committed.
     signature: 'apply(plan: MigrationPlan): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
@@ -79,4 +82,4 @@ methods:
       - idempotent
 status: design
 createdAt: '2026-09-30T20:35:39.470Z'
-updatedAt: '2026-09-30T20:35:55.133Z'
+updatedAt: '2026-09-30T20:50:10.120Z'

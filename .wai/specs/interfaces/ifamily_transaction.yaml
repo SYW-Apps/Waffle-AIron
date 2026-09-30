@@ -10,6 +10,11 @@ methods:
     description: >-
       Open a rehearsal for a scope: a private copy of every scoped project's .wai tree, laid out as
       the family is, with the digest of every live file copied. Writes nothing into the family.
+      PRECONDITION (accepted with the rehearsal design, to be confirmed by the implementation and
+      pinned by a test): no writer a verb runs on the copy reads source code — the copy holds only
+      .wai trees, so a writer that read a source file would see none there and could write something
+      the live tree would not have produced. A writer found to read code is either given what it
+      reads explicitly or taken off the rehearsal path, never run on the copy silently.
     signature: 'rehearse(scope: TransactionScope): Rehearsal'
     returns: Rehearsal
     params:
@@ -129,4 +134,4 @@ methods:
         description: The staged journals, the coordinator's first
 status: design
 createdAt: '2026-09-30T20:28:28.502Z'
-updatedAt: '2026-09-30T20:29:55.601Z'
+updatedAt: '2026-09-30T20:53:04.402Z'

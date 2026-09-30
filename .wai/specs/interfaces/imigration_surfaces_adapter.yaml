@@ -36,6 +36,26 @@ methods:
       - name: alias
         type: string
         description: The alias
+  - name: listExternals
+    description: Forward to surface_portal.listExternals.
+    signature: 'listExternals(): ExternalListing[]'
+    returns: ExternalListing[]
+    params: []
+  - name: listFamilyPins
+    description: 'Forward to surface_portal.listFamilyPins: the stage-1 family pins the bound root still holds.'
+    signature: 'listFamilyPins(): FamilyPin[]'
+    returns: FamilyPin[]
+    params: []
+  - name: removeSnapshot
+    description: >-
+      Forward to surface_portal.removeSnapshot: remove one stored snapshot of the bound root by its
+      key; false when there was none.
+    signature: 'removeSnapshot(projectName: string): boolean'
+    returns: boolean
+    params:
+      - name: projectName
+        type: string
+        description: The snapshot's storage key
 status: design
 createdAt: '2026-09-30T20:31:55.432Z'
-updatedAt: '2026-09-30T20:36:56.194Z'
+updatedAt: '2026-09-30T20:45:22.838Z'

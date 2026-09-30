@@ -108,11 +108,11 @@ methods:
         targetMethod: loadTypeSpecs
       - stepNumber: 16
         description: >-
-          Match the candidates by position — the same match the positional migration step writes
-          from
+          Match the candidates by position through the migration portal — the same match the
+          positional migration step writes from
         type: call
-        targetComponent: position_reader
-        targetMethod: match
+        targetComponent: cli_migration_adapter
+        targetMethod: matchPositions
       - stepNumber: 17
         description: >-
           An import match is positional, with resolvedAs and the fix: the `use` line, and the export
@@ -129,4 +129,4 @@ methods:
         outcome: UpgradeReport
 status: complete
 createdAt: '2026-09-28T06:16:03.117Z'
-updatedAt: '2026-09-29T13:54:48.739Z'
+updatedAt: '2026-09-30T20:48:48.206Z'

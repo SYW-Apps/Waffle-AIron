@@ -37,12 +37,22 @@ methods:
         outcome: validated remotely
       - stepNumber: 5
         description: >-
+          Pending transaction banner, before the tree is read (a crash mid-swap may leave it
+          unreadable): ask the migration portal (recover with fix false) for unfinished
+          family-migration transactions under this root; each becomes a notice-level line in the
+          output naming its id, verb and coordinator phase and pointing at `wairon doctor --fix` —
+          never an error, so --ci is unaffected
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: recover
+      - stepNumber: 6
+        description: >-
           Not attached: run the whole local validation workflow — registry, project config and spec
           tree — through the validator adapter.
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: runValidation
-      - stepNumber: 6
+      - stepNumber: 7
         description: Print validation errors, warnings and notices, and exit process if invalid
         type: local
     symbol: validateCommand
@@ -1471,9 +1481,12 @@ methods:
         outcome: composed-validation report printed
       - stepNumber: 7
         label: report-chaining
-        description: Plan the chaining migration of the family
+        description: >-
+          Plan the chaining migration of the family through the migration portal (verb chaining,
+          without a rehearsal: the report prints the plan and writes nothing, so there is nothing to
+          discard)
         type: call
-        targetComponent: chaining_migration_orchestrator
+        targetComponent: cli_migration_adapter
         targetMethod: plan
       - stepNumber: 8
         description: >-
@@ -1579,12 +1592,17 @@ methods:
       - stepNumber: 21
         label: chaining
         description: >-
-          Plan the chaining migration — the last spec-touching fix: after the configuration
-          backfill, so every chained child has a project.yaml to declare its id in, and after the
-          filename migration and the spec repairs, so its gated L0 writes save specs under current
-          names into a repaired tree
+          Plan the chaining migration through the migration portal (verb chaining, without a
+          rehearsal: what is printed and confirmed is the chaining plan, as before; apply rehearses
+          it) — the last spec-touching fix: after the configuration backfill, so every chained child
+          has a project.yaml to declare its id in, and after the filename migration and the spec
+          repairs, so its gated L0 writes save specs under current names into a repaired tree. It is
+          the one fix that writes several projects at once, so it alone runs through the family
+          transaction; every fix above writes one project, regenerates derived output or restates
+          what is there, is idempotent, and stays outside it — a failure there leaves a state its
+          own re-run completes. The transaction recovery at the top of --fix runs before all of them
         type: call
-        targetComponent: chaining_migration_orchestrator
+        targetComponent: cli_migration_adapter
         targetMethod: plan
       - stepNumber: 22
         description: 'Nothing to migrate: go on without asking'
@@ -1604,12 +1622,14 @@ methods:
         onFalseStep: 26
       - stepNumber: 25
         description: >-
-          Apply the confirmed plan and print each file written; then name every project whose lock
-          the writes staled, pointing at `wairon lock` — re-locking is the human's, and nothing
-          locks here. A refusal is printed with its findings and counts as an error in the summary;
-          nothing was written
+          Apply the confirmed plan through the migration portal — rehearsed, staged and swapped
+          all-or-nothing — and print each file written; then name every project whose lock the
+          writes staled, pointing at `wairon lock` — re-locking is the human's, and nothing locks
+          here. A refused or failed plan is printed with its findings (and, for a failed swap,
+          whether the family was restored) and counts as an error in the summary; nothing was
+          written
         type: call
-        targetComponent: chaining_migration_orchestrator
+        targetComponent: cli_migration_adapter
         targetMethod: apply
       - stepNumber: 26
         label: mcp
@@ -1691,13 +1711,13 @@ methods:
         targetMethod: repairForeignStepFields
       - stepNumber: 39
         description: >-
-          Chaining: plan the migration and report how much is pending — ids, L0s, entries,
-          externals, pins, mounts to move, references to rewrite, family pins to delete and findings
-          — pointing at `wairon doctor --report chaining` and `--fix`; silent when nothing is
-          planned or reported. After an applied --fix this plan is empty, which is the run's own
-          idempotence check
+          Chaining: plan the migration through the migration portal without a rehearsal and report
+          how much is pending — ids, L0s, entries, externals, pins, mounts to move, references to
+          rewrite, family pins to delete and findings — pointing at `wairon doctor --report
+          chaining` and `--fix`; silent when nothing is planned or reported. After an applied --fix
+          this plan is empty, which is the run's own idempotence check
         type: call
-        targetComponent: chaining_migration_orchestrator
+        targetComponent: cli_migration_adapter
         targetMethod: plan
       - stepNumber: 40
         description: >-
@@ -2007,13 +2027,23 @@ methods:
         type: local
       - stepNumber: 2
         description: >-
+          Pending transaction banner, FIRST — a crash mid-swap is exactly when the tree below may
+          not read: ask the migration portal (recover with fix false — a report, nothing written)
+          for unfinished family-migration transactions under this root, and print one notice line
+          per transaction naming its id, its verb and its coordinator's phase and pointing at
+          `wairon doctor --fix`; silent when there is none. A notice never changes the exit code
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: recover
+      - stepNumber: 3
+        description: >-
           Ask the validator for the pin tree: this project's approval state and each member's, every
           one computed at that project's own root — so the state printed for a member here is the
           state that member's own status prints (status-agrees)
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: familyApprovals
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Ask the core adapter for the completeness report with the pin tree, handing it the
           terminal's colours as roles: structure for the tree's scaffolding, layer for each label,
@@ -2022,35 +2052,35 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: getStatusReport
-      - stepNumber: 4
+      - stepNumber: 5
         description: Decide whether the tree could be reported on at all
         type: branch
         condition: the report came back failed
-        onTrueStep: 5
-        onFalseStep: 6
-      - stepNumber: 5
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
           Print the explanation as an error and exit non-zero, naming `wairon init` when there is no
           system specification. A script running this over a tree that will not parse must not read
           it as healthy, and the exit code is the only part of that a script sees
         type: return
         outcome: unreadable
-      - stepNumber: 6
+      - stepNumber: 7
         description: Print a heading and the report beneath it
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Ask what the lock says about this tree, passing the pin tree so the verdict names members
           whose pin moved, members not approved, and a stage-5 identity upgrade
         type: call
         targetComponent: cli_core_adapter
         targetMethod: approvalVerdict
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Print the verdict, choosing severity from whether it reports drift rather than by matching
           its wording — which is why the verdict answers a fact beside the sentence
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Done
         type: return
         outcome: printed
@@ -3009,4 +3039,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T20:40:35.069Z'
+updatedAt: '2026-09-30T20:52:03.885Z'

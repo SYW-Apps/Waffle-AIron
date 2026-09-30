@@ -5,7 +5,7 @@ description: >-
   One reference the chaining migration rewrites from a deprecated form to its canonical stage-3 text
   — the scan's own rewrite, so the target never changes, only its spelling. Listed one by one in the
   plan, grouped per spec by apply.
-subsystem: sdd_cli
+subsystem: sdd_migrations
 fields:
   - name: project
     type: string
@@ -42,4 +42,4 @@ fields:
 methods: []
 sourcePath: src/commands/position-migration.ts
 createdAt: '2026-09-27T10:44:27.609Z'
-updatedAt: '2026-09-28T16:10:59.631Z'
+updatedAt: '2026-09-30T20:47:40.009Z'

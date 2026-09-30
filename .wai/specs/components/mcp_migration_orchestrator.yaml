@@ -6,7 +6,8 @@ description: >-
   sdd_internalize_member, sdd_externalize_subsystem): plan the request, and with dryRun answer the
   plan and drop it; otherwise apply it when nothing refuses. An agent has no confirmation prompt, so
   dryRun is the confirmation: the tool descriptions tell an agent to dry-run first and show the
-  plan. Its own component beside mcp_orchestrator for the reason mcp_externals_orchestrator is: one
+  plan. It also answers the pending-transaction banner sdd_get_status and sdd_validate_tree lead
+  with. Its own component beside mcp_orchestrator for the reason mcp_externals_orchestrator is: one
   responsibility, one collaborator.
 subsystem: sdd_mcp
 componentType: Orchestrator
@@ -15,4 +16,4 @@ dependsOn:
   - mcp_migration_adapter
 status: design
 createdAt: '2026-09-30T20:39:25.526Z'
-updatedAt: '2026-09-30T20:39:25.542Z'
+updatedAt: '2026-09-30T20:52:45.207Z'

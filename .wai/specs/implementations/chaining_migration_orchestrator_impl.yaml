@@ -2,10 +2,11 @@ id: chaining_migration_orchestrator_impl
 name: Chaining Migration Orchestrator Implementation
 description: >-
   Plans a family's chaining migration from the graph, the scan's bindings and export usage — merging
-  the position migration's plan and stage 4's positional step (position_reader) — and applies a
+  the position migration's plan and stage 4's positional step (position_reader) — and writes a
   confirmed plan ids first, then exports, externals, imports and the position migration's moves and
-  rewrites, and pins last, binding each project's root for its writes and restoring the caller's
-  binding on every path.
+  rewrites, and pins last, into a rehearsal's roots (each project's `directory` mapped through the
+  rehearsal), binding each project's rehearsal root for its writes and restoring the caller's
+  binding on every path; the family transaction makes the result live all-or-nothing.
 contract: ichaining_migration_orchestrator
 sourcePath: src/commands/chaining-migration.ts
 methods:
@@ -26,7 +27,7 @@ methods:
           may not read above its root — the caller must gate on reach itself, and this is where it
           does
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: resolveChainingParent
       - stepNumber: 3
         label: climbed
@@ -42,7 +43,7 @@ methods:
           parent, mount alias, directory, members, declared externals bound to their producers), its
           owners, its cross-project references and its identity problems
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: projectFamily
       - stepNumber: 5
         label: ids
@@ -56,7 +57,7 @@ methods:
           Read the lock record the node's own root carries, for the project id it approved (none for
           a root never locked, or locked before project ids existed)
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: approvalRecord
       - stepNumber: 7
         label: decide-id
@@ -93,14 +94,14 @@ methods:
           Map the consumer's references into the producer onto the producer's public names; what
           lands on none is unexported
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: exportUsage
       - stepNumber: 11
         description: >-
           Read the producer's current project table, so a planned public name can be checked against
           every name it already binds
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: resolveProjectExports
       - stepNumber: 12
         label: unexported
@@ -116,14 +117,14 @@ methods:
           subsystem — for the subsystem that owns it: the entry's source; a project-level type has
           none
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: loadSpec
       - stepNumber: 14
         description: >-
           Read the source subsystem's L1 table: an L0 re-export can only follow what the subsystem
           already publishes to its own project
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: resolveSubsystemExports
       - stepNumber: 15
         label: plan-entry
@@ -176,7 +177,7 @@ methods:
           Under a chained member's binding, list its stage-1 family pins: the generated family and
           sibling snapshots in its .wai/surfaces (a node with no parent has none)
         type: call
-        targetComponent: cli_surfaces_client_adapter
+        targetComponent: migration_surfaces_adapter
         targetMethod: listFamilyPins
       - stepNumber: 20
         label: convert
@@ -195,7 +196,7 @@ methods:
           against until it is pinned. A pinned one is left alone: re-pinning a producer that changed
           would hide the change the family run reports (EXTERNAL_INCOMPATIBLE)
         type: call
-        targetComponent: cli_surfaces_client_adapter
+        targetComponent: migration_surfaces_adapter
         targetMethod: listExternals
       - stepNumber: 22
         label: position
@@ -232,7 +233,7 @@ methods:
           that the schema does not know, e.g. `status: draft`) as the project's droppedKeys, to
           print and confirm with the rest of the plan
         type: call
-        targetComponent: cli_authoring_adapter
+        targetComponent: migration_authoring_adapter
         targetMethod: updateSpecGated
       - stepNumber: 25
         description: >-
@@ -241,7 +242,7 @@ methods:
           and the new dependencies
         type: return
         outcome: ChainingMigrationPlan
-  - name: apply
+  - name: write
     narrative:
       - stepNumber: 1
         description: Is there anything to write?
@@ -273,12 +274,12 @@ methods:
         over: the plan's projects
         endStep: 10
       - stepNumber: 6
-        description: Bind the project's root
+        description: 'Bind the project''s rehearsal root: the rehearsal''s image of its directory'
         type: local
       - stepNumber: 7
         description: Is the project still there, with a configuration?
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: projectConfigExists
       - stepNumber: 8
         description: A project that disappeared since the plan was made
@@ -300,7 +301,7 @@ methods:
           createsSystem has no L0 to merge into yet; its minimal L0 is judged by the gate when it is
           written
         type: call
-        targetComponent: cli_authoring_adapter
+        targetComponent: migration_authoring_adapter
         targetMethod: updateSpecGated
       - stepNumber: 11
         label: ids
@@ -310,7 +311,7 @@ methods:
         over: the projects with an id to write
         endStep: 13
       - stepNumber: 12
-        description: Bind the project's root
+        description: Bind the project's rehearsal root
         type: local
       - stepNumber: 13
         label: set-id
@@ -318,8 +319,8 @@ methods:
           Declare the planned id in its project.yaml — an edit that keeps every comment; the same id
           declared already writes nothing, a different one is refused and never overwritten
         type: call
-        targetComponent: cli_core_adapter
-        targetMethod: setProjectId
+        targetComponent: migration_core_adapter
+        targetMethod: setId
       - stepNumber: 14
         label: exports
         description: Then the producers' exports, so every pin below projects them
@@ -336,7 +337,7 @@ methods:
           (else one line naming it an exporting project), nothing else; an L0 that appeared since
           the plan is kept and nothing is written
         type: call
-        targetComponent: cli_authoring_adapter
+        targetComponent: migration_authoring_adapter
         targetMethod: writeSpec
       - stepNumber: 16
         label: add-entries
@@ -348,7 +349,7 @@ methods:
           L1 own item by component + interface), so an entry already present changes nothing and a
           second apply writes nothing
         type: call
-        targetComponent: cli_authoring_adapter
+        targetComponent: migration_authoring_adapter
         targetMethod: updateSpecGated
       - stepNumber: 17
         label: externals
@@ -358,7 +359,7 @@ methods:
         over: each planned external of each project
         endStep: 19
       - stepNumber: 18
-        description: Bind the consumer's root
+        description: Bind the consumer's rehearsal root
         type: local
       - stepNumber: 19
         label: declare
@@ -366,7 +367,7 @@ methods:
           Declare the external in its project.yaml — the same declaration under the alias writes
           nothing, a different one is refused and never overwritten
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: declareExternal
       - stepNumber: 20
         label: position
@@ -380,7 +381,7 @@ methods:
           their digests before digests were canonical)
         type: call
         targetComponent: position_migration_orchestrator
-        targetMethod: apply
+        targetMethod: write
       - stepNumber: 21
         label: pins
         description: Pin LAST, once every id, export, declaration, import and rewrite is written
@@ -389,7 +390,7 @@ methods:
         over: the projects with aliases to pin
         endStep: 23
       - stepNumber: 22
-        description: Bind the consumer's root
+        description: Bind the consumer's rehearsal root
         type: local
       - stepNumber: 23
         label: pin
@@ -399,7 +400,7 @@ methods:
           caller must gate on reach itself — a producer out of reach is reported unreachable and
           keeps its previous pin
         type: call
-        targetComponent: cli_surfaces_client_adapter
+        targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
       - stepNumber: 24
         description: >-
@@ -413,7 +414,8 @@ methods:
         description: 'Answer the report: the plan, applied true, the files written and the projects to re-lock'
         type: return
         outcome: ChainingMigrationReport
+    symbol: apply
 detail: full
 status: complete
 createdAt: '2026-09-26T21:13:14.060Z'
-updatedAt: '2026-09-29T14:20:51.030Z'
+updatedAt: '2026-09-30T20:47:04.523Z'

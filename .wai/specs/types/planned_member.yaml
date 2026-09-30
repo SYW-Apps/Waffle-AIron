@@ -6,7 +6,7 @@ description: >-
   what it carries: the member entry the parent gains, the L0 entries the member gains from the
   mount's published surface, and the mount fields that have no home and retire with it, each listed
   so nothing is dropped silently.
-subsystem: sdd_cli
+subsystem: sdd_migrations
 fields:
   - name: parent
     type: string
@@ -46,4 +46,4 @@ fields:
 methods: []
 sourcePath: src/commands/position-migration.ts
 createdAt: '2026-09-27T10:44:23.135Z'
-updatedAt: '2026-09-27T17:05:34.511Z'
+updatedAt: '2026-09-30T20:47:39.541Z'

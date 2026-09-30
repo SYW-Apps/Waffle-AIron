@@ -1,31 +1,35 @@
 id: chaining_migration_orchestrator
 name: Chaining Migration Orchestrator
 description: >-
-  The chaining migration of one project family, plan first. It plans from what the project graph,
-  the scan's reference bindings and export usage already report — the ids to declare, the L0 entries
-  producers lack (re-exports, own `{ typeDef }` entries for project-level types, and a minimal L0
-  where a producer has none), the externals consumers must declare, the stage-1 family pins to
-  convert and delete — and hands the retirement of position (mounts into `members`, reference
-  rewrites, and stage 4's positional imports and self-prefix rewrites) to the position migration,
-  merging its plan: a positional import's export joins the producer's exports and its undeclared
-  producer becomes a planned external. It applies a confirmed plan in a fixed order: ids, then
-  exports, then externals, then the position migration (imports, moves, rewrites, pin deletions),
-  and pins LAST, so every snapshot and every lock's `used` map is taken from the final spelling.
-  Config writes go through the core's registry intents, spec writes through the gated authoring seam
-  (new content) or the core's maintenance intents (restating what is there), pins through the
-  surfaces plane; it binds each project's root to write it and restores the caller's binding on
-  every path. It is idempotent (an applied plan re-plans empty) and never locks. It holds no state:
-  the plan is a value its caller holds between plan and apply. It lives in sdd_cli, not sdd_core,
-  because it composes three planes and only a layer above all three can. The caller must gate on
-  reach itself.
-subsystem: sdd_cli
+  The chaining migration of one project family, plan first — the fourth verb family of
+  sdd_migrations (verb `chaining`), run by `doctor --fix` and `doctor --report chaining` through
+  migration_portal. It plans from what the project graph, the scan's reference bindings and export
+  usage already report — the ids to declare, the L0 entries producers lack (re-exports, own `{
+  typeDef }` entries for project-level types, and a minimal L0 where a producer has none), the
+  externals consumers must declare, the stage-1 family pins to convert and delete — and hands the
+  retirement of position (mounts into `members`, reference rewrites, and stage 4's positional
+  imports and self-prefix rewrites) to the position migration, merging its plan: a positional
+  import's export joins the producer's exports and its undeclared producer becomes a planned
+  external. It writes a confirmed plan in a fixed order: ids, then exports, then externals, then the
+  position migration (imports, moves, rewrites, pin deletions), and pins LAST, so every snapshot and
+  every lock's `used` map is taken from the final spelling — into the roots it is handed, which
+  since stage 6 are a rehearsal's: the family transaction then swaps the whole result in or nothing,
+  where before a failure mid-apply left a half-migrated family that only idempotence could finish.
+  Config writes go through the core's registry intents, new spec content through the gated authoring
+  seam, restatements through the core's maintenance intents, pins through the surfaces plane; it
+  binds each project's root to write it and restores the caller's binding on every path. It is
+  idempotent (an applied plan re-plans empty) and never locks. It holds no state: the plan is a
+  value its caller holds between plan and write. It moved from sdd_cli in stage 6 because it is a
+  family migration and only sdd_migrations composes the same three planes behind the transaction.
+  The caller must gate on reach itself.
+subsystem: sdd_migrations
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - cli_core_adapter
-  - cli_authoring_adapter
-  - cli_surfaces_client_adapter
+  - migration_core_adapter
+  - migration_authoring_adapter
+  - migration_surfaces_adapter
   - position_migration_orchestrator
 status: complete
 createdAt: '2026-09-26T21:12:18.987Z'
-updatedAt: '2026-09-29T13:57:55.106Z'
+updatedAt: '2026-09-30T20:46:13.206Z'

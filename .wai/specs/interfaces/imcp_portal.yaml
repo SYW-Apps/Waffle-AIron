@@ -109,7 +109,8 @@ methods:
       true. The hosted data plane serves this same tool, so a hosted verdict is the same function's:
       a member-qualified credential binds the member root and gets the member's own gate (its family
       run composes only within the credential's reach). Optionally narrowed to one subsystem, or to
-      one member by its key.
+      one member by its key. An unfinished family-migration transaction under the bound root adds a
+      notice naming it and pointing at `wairon doctor --fix` (the pending-transaction banner).
     signature: 'sdd_validate_tree(subsystem?: string, recursive?: boolean, family?: boolean): ValidationResult'
     returns: ValidationResult
     params:
@@ -138,7 +139,9 @@ methods:
       project holding its own subsystems. Optionally narrowed to one subsystem, and optionally
       descending into members. On a stale server the answer LEADS with the staleness — whether the
       build on disk changed and whether spec writes are refused because its schemas changed — so the
-      first call of a session surfaces it before anything is written.
+      first call of a session surfaces it before anything is written; an unfinished family-migration
+      transaction under the bound root leads likewise, one notice line each, pointing at `wairon
+      doctor --fix`.
     signature: 'sdd_get_status(subsystem?: string, recursive?: boolean): string'
     returns: string
     params:
@@ -699,4 +702,4 @@ methods:
       address: mcp tools/call sdd_adopt_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:40:02.118Z'
+updatedAt: '2026-09-30T20:52:43.021Z'

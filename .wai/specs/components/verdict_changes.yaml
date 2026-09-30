@@ -5,21 +5,22 @@ description: >-
   kept). It says what stage 4 changed in each project's verdict using only what exists now: each
   project's as-complete owner's gate today, the totals and validator version its last lock recorded,
   and — for a reference that no longer resolves — how the family's top matches it by position
-  (position_reader, the same match the positional migration step writes from), which is exactly how
-  it passed before. The lock records totals and nothing per code, so the report never claims a
-  per-code diff: it compares totals, and classifies today's findings by a reason it can compute
-  (escalated, pinned, positional), counting what it cannot attribute. It writes nothing. Read-class:
-  it only reads, through the CLI's validator and core adapters and the pure position reader; the
-  walk to the family's top goes through the reach-gated chaining detection and is explicit, because
-  the report is asked for.
+  (position_reader, the same match the positional migration step writes from; since stage 6 it lives
+  in sdd_migrations and is reached through migration_portal.matchPositions), which is exactly how it
+  passed before. The lock records totals and nothing per code, so the report never claims a per-code
+  diff: it compares totals, and classifies today's findings by a reason it can compute (escalated,
+  pinned, positional), counting what it cannot attribute. It writes nothing. Read-class: it only
+  reads, through the CLI's validator, core and migration adapters (the last one's matchPositions is
+  a pure read); the walk to the family's top goes through the reach-gated chaining detection and is
+  explicit, because the report is asked for.
 subsystem: sdd_cli
 componentType: Orchestrator
 owns: []
 dependsOn:
   - cli_validator_adapter
   - cli_core_adapter
-  - position_reader
+  - cli_migration_adapter
 dependencyClass: read
 status: complete
 createdAt: '2026-09-28T06:15:36.033Z'
-updatedAt: '2026-09-28T18:12:28.215Z'
+updatedAt: '2026-09-30T20:49:00.969Z'

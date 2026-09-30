@@ -69,6 +69,8 @@ methods:
           - value: internalize
             step: 19
           - value: externalize
+            step: 23
+          - value: chaining
             step: 21
       - stepNumber: 9
         label: attach
@@ -79,7 +81,7 @@ methods:
       - stepNumber: 10
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 24
       - stepNumber: 11
         label: detach
         description: Plan the detach
@@ -89,7 +91,7 @@ methods:
       - stepNumber: 12
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 24
       - stepNumber: 13
         label: adopt
         description: Plan the adopt
@@ -99,7 +101,7 @@ methods:
       - stepNumber: 14
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 24
       - stepNumber: 15
         label: rename
         description: Plan the project rename
@@ -109,7 +111,7 @@ methods:
       - stepNumber: 16
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 24
       - stepNumber: 17
         label: rename-alias
         description: Plan the alias rename
@@ -119,7 +121,7 @@ methods:
       - stepNumber: 18
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 24
       - stepNumber: 19
         label: internalize
         description: Plan the internalize
@@ -129,14 +131,26 @@ methods:
       - stepNumber: 20
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 24
       - stepNumber: 21
+        label: chaining
+        description: >-
+          Plan the chaining migration with its own climb, and carry it as the plan's `chaining`
+          part: its blocking findings become refusals, its projects and rewrites become edits
+        type: call
+        targetComponent: chaining_migration_orchestrator
+        targetMethod: plan
+      - stepNumber: 22
+        description: Planned
+        type: jump
+        toStep: 24
+      - stepNumber: 23
         label: externalize
         description: Plan the externalize
         type: call
         targetComponent: boundary_migration
         targetMethod: planExternalize
-      - stepNumber: 22
+      - stepNumber: 24
         label: planned
         description: >-
           Restore the caller's binding, then rehearse the plan (an already-refused plan comes back
@@ -144,7 +158,7 @@ methods:
         type: call
         targetComponent: family_migration_orchestrator
         targetMethod: rehearse
-      - stepNumber: 23
+      - stepNumber: 25
         description: Answer the plan
         type: return
         outcome: MigrationPlan
@@ -153,10 +167,10 @@ methods:
       - stepNumber: 1
         description: Is the plan refused?
         type: branch
-        condition: the plan is blocked
+        condition: the plan is blocked, or its request asks for no rehearsal (doctor's summary)
         onFalseStep: 3
       - stepNumber: 2
-        description: 'Answer it unchanged: nothing is rehearsed for a refused plan'
+        description: 'Answer it unchanged: nothing is rehearsed for a refused plan or a counts-only one'
         type: return
         outcome: refused plan
       - stepNumber: 3
@@ -170,10 +184,10 @@ methods:
       - stepNumber: 4
         description: Run the verb's own writes on the copy; a core writer's refusal ends the region
         type: try
-        endStep: 11
+        endStep: 13
         catches:
           - error: a core writer's refusal
-            step: 15
+            step: 17
       - stepNumber: 5
         description: Which writer?
         type: switch
@@ -193,6 +207,8 @@ methods:
             step: 10
           - value: externalize
             step: 10
+          - value: chaining
+            step: 12
       - stepNumber: 6
         label: membership
         description: Write the attach, detach or adopt into the rehearsal roots
@@ -202,7 +218,7 @@ methods:
       - stepNumber: 7
         description: Written
         type: jump
-        toStep: 11
+        toStep: 13
       - stepNumber: 8
         label: identity
         description: Write the rename or alias rename into the rehearsal roots
@@ -212,7 +228,7 @@ methods:
       - stepNumber: 9
         description: Written
         type: jump
-        toStep: 11
+        toStep: 13
       - stepNumber: 10
         label: boundary
         description: Write the internalize or externalize into the rehearsal roots
@@ -220,32 +236,45 @@ methods:
         targetComponent: boundary_migration
         targetMethod: write
       - stepNumber: 11
+        description: Written
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        label: chaining
+        description: >-
+          Write the chaining migration into the rehearsal roots: ids, exports, externals, the
+          position migration's imports, moves, rewrites and pin deletions, and pins LAST — its order
+          unchanged
+        type: call
+        targetComponent: chaining_migration_orchestrator
+        targetMethod: write
+      - stepNumber: 13
         label: written
         description: The verb's writes are on the copy
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: 'Diff the copy against the live family: the plan''s file changes'
         type: call
         targetComponent: family_transaction
         targetMethod: diff
-      - stepNumber: 13
+      - stepNumber: 15
         description: >-
           Read each changed owner's lock record; an owner that carries one is a project to re-lock
           (a rename's target first)
         type: call
         targetComponent: migration_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 14
+      - stepNumber: 16
         description: Answer the plan with its rehearsal, file changes and re-lock list
         type: return
         outcome: rehearsed plan
-      - stepNumber: 15
+      - stepNumber: 17
         label: refused-on-copy
         description: Drop the rehearsal
         type: call
         targetComponent: family_transaction
         targetMethod: discard
-      - stepNumber: 16
+      - stepNumber: 18
         description: >-
           Answer the plan with the writer's refusal (internalize-refused, externalize-refused) and
           its message
@@ -254,9 +283,9 @@ methods:
   - name: apply
     narrative:
       - stepNumber: 1
-        description: Is there anything to apply?
+        description: Is the plan refused?
         type: branch
-        condition: the plan is blocked or has no file change
+        condition: the plan is blocked
         onFalseStep: 4
       - stepNumber: 2
         description: Drop any rehearsal it holds
@@ -264,21 +293,53 @@ methods:
         targetComponent: family_transaction
         targetMethod: discard
       - stepNumber: 3
-        description: 'Answer not applied: refused, or nothing to do (a completed migration re-plans empty)'
+        description: 'Answer not applied: refused, nothing written'
         type: return
         outcome: not applied
       - stepNumber: 4
+        label: rehearsed
+        description: >-
+          Was it planned without a rehearsal (doctor's chaining plan, confirmed as the chaining plan
+          it printed)?
+        type: branch
+        condition: the plan carries no rehearsal
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Rehearse it now, with its request's rehearse flag set true so rehearse does not skip it
+          again; a refusal met on the copy comes back as the plan's refusal
+        type: call
+        targetComponent: family_migration_orchestrator
+        targetMethod: rehearse
+      - stepNumber: 6
+        label: anything
+        description: Is there anything to apply?
+        type: branch
+        condition: the plan is blocked (refused on the copy) or has no file change
+        onFalseStep: 9
+      - stepNumber: 7
+        description: Drop any rehearsal it holds
+        type: call
+        targetComponent: family_transaction
+        targetMethod: discard
+      - stepNumber: 8
+        description: >-
+          Answer not applied: refused on the copy, or nothing to do (a completed migration re-plans
+          empty)
+        type: return
+        outcome: not applied
+      - stepNumber: 9
         label: commit
         description: Commit the rehearsal's file changes all or nothing
         type: call
         targetComponent: family_transaction
         targetMethod: commit
-      - stepNumber: 5
+      - stepNumber: 10
         description: >-
           Drop this process's cached scans of every root the changes touched, so the next read sees
           the new files
         type: local
-      - stepNumber: 6
+      - stepNumber: 11
         description: >-
           Answer the report: applied with the re-lock list when committed; otherwise the failure and
           whether the family was restored
@@ -300,4 +361,4 @@ methods:
         targetMethod: recover
 status: design
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-09-30T20:36:19.767Z'
+updatedAt: '2026-09-30T20:50:16.678Z'

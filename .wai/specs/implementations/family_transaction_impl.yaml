@@ -30,7 +30,8 @@ methods:
         label: copied
         description: >-
           Mirror every scoped project's .wai tree into it at its path from the family root,
-          recording each live file's digest
+          recording each live file's digest. Only .wai trees are copied: every writer run on the
+          copy must read nothing outside them (the rehearsal precondition)
         type: call
         targetComponent: family_file_adapter
         targetMethod: mirror
@@ -457,4 +458,4 @@ methods:
         targetMethod: saveJournal
 status: design
 createdAt: '2026-09-30T20:29:10.401Z'
-updatedAt: '2026-09-30T20:30:18.496Z'
+updatedAt: '2026-09-30T20:53:09.880Z'

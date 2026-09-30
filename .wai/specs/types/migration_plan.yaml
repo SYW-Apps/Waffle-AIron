@@ -53,6 +53,13 @@ fields:
       The rehearsal the file changes were computed on, which apply commits and discard drops; absent
       when refused or empty.
     optional: true
+  - name: chaining
+    type: ChainingMigrationPlan
+    description: >-
+      For verb chaining: the chaining migration's own plan — its per-project writes, rewrites,
+      findings and new dependencies, printed as doctor always printed them. Its blocking findings
+      are also this plan's refusals, and its writes are rehearsed like any verb's.
+    optional: true
 methods:
   - name: blocked
     signature: 'blocked(): boolean'
@@ -65,4 +72,4 @@ methods:
       True when there is no file change: re-planning a completed migration plans nothing
       (idempotence).
 createdAt: '2026-09-30T20:24:49.925Z'
-updatedAt: '2026-09-30T20:29:31.846Z'
+updatedAt: '2026-09-30T20:47:55.846Z'

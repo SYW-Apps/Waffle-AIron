@@ -197,6 +197,79 @@ methods:
       - name: destination
         type: InternalizeDestination
         description: Where its metadata goes
+  - name: projectConfigExists
+    description: >-
+      Forward to project_config_portal.projectConfigExists: whether the bound project has a
+      configuration.
+    signature: 'projectConfigExists(): boolean'
+    returns: boolean
+    params: []
+  - name: exportUsage
+    description: >-
+      Forward to spec_tree_portal.exportUsage: one project's references into another mapped onto the
+      producer's public names (used) or not (unexported).
+    signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: producer
+        type: string
+        description: The producer's namespace in the family graph
+  - name: loadSpec
+    description: 'Forward to spec_tree_portal.loadSpec: one spec of the named kind by id, or null.'
+    signature: >-
+      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
+      | ImplementationSpec | TypeSpec | null
+    returns: >-
+      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
+      null
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
+  - name: loadTypeSpecs
+    description: >-
+      Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
+      members' included.
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
+    params: []
+  - name: resolveSubsystemExports
+    description: 'Forward to spec_tree_portal.resolveSubsystemExports: one subsystem''s resolved L1 export table.'
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
+  - name: moveMountToMembers
+    description: >-
+      Forward to spec_maintenance_portal.moveMountToMembers: move one legacy L1 mount of the bound
+      project into its `members`.
+    signature: 'moveMountToMembers(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id
+  - name: normalizeReferences
+    description: >-
+      Forward to spec_maintenance_portal.normalizeReferences: re-save one spec with every reference
+      in its canonical stage-3 form.
+    signature: 'normalizeReferences(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
 status: design
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-09-30T20:31:26.594Z'
+updatedAt: '2026-09-30T20:45:15.552Z'

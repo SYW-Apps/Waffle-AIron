@@ -308,13 +308,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: projectFamily
-  - name: exportUsage
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: exportUsage
   - name: resolveProjectExports
     narrative:
       - stepNumber: 1
@@ -322,55 +315,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: resolveProjectExports
-  - name: resolveSubsystemExports
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: resolveSubsystemExports
-  - name: loadSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: loadSpec
-  - name: approvalRecord
-    narrative:
-      - stepNumber: 1
-        description: Forward to the approval portal
-        type: call
-        targetComponent: approval_portal
-        targetMethod: approvalRecord
-  - name: setProjectId
-    narrative:
-      - stepNumber: 1
-        description: Forward to the project config portal
-        type: call
-        targetComponent: project_config_portal
-        targetMethod: setId
-  - name: declareExternal
-    narrative:
-      - stepNumber: 1
-        description: Forward to the project config portal
-        type: call
-        targetComponent: project_config_portal
-        targetMethod: declareExternal
-  - name: moveMountToMembers
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: moveMountToMembers
-  - name: normalizeReferences
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: normalizeReferences
   - name: createMember
     narrative:
       - stepNumber: 1
@@ -385,13 +329,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadTypeSpecs
-  - name: importNames
-    narrative:
-      - stepNumber: 1
-        description: Call importNames on the core portal
-        type: call
-        targetComponent: project_config_portal
-        targetMethod: importNames
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:39:01.086Z'
+updatedAt: '2026-09-30T20:51:15.137Z'

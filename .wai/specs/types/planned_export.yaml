@@ -8,7 +8,7 @@ description: >-
   component | typeDef, audience: project }` for a subsystem-owned item, as the own `{ typeDef,
   audience: project }` for a project-level type, with no `as`, so its public name is the item's
   default. An entry carried from a mount also keeps the mount entry's transport kind and details.
-subsystem: sdd_cli
+subsystem: sdd_migrations
 fields:
   - name: from
     type: string
@@ -81,4 +81,4 @@ fields:
 methods: []
 sourcePath: src/commands/chaining-migration.ts
 createdAt: '2026-09-26T21:11:40.727Z'
-updatedAt: '2026-09-28T16:11:02.439Z'
+updatedAt: '2026-09-30T20:47:36.904Z'

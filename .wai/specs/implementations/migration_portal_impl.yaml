@@ -32,6 +32,13 @@ methods:
         type: call
         targetComponent: family_migration_orchestrator
         targetMethod: recover
+  - name: matchPositions
+    narrative:
+      - stepNumber: 1
+        description: Route to the positional match
+        type: call
+        targetComponent: position_reader
+        targetMethod: match
 status: design
 createdAt: '2026-09-30T20:36:38.923Z'
-updatedAt: '2026-09-30T20:36:38.932Z'
+updatedAt: '2026-09-30T20:48:34.664Z'

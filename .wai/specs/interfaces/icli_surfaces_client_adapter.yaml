@@ -54,28 +54,6 @@ methods:
     signature: 'listExternals(): ExternalListing[]'
     returns: ExternalListing[]
     params: []
-  - name: listFamilyPins
-    description: >-
-      Forward to the surface portal: the stage-1 family pins the bound root still holds, for `doctor
-      --fix`'s chaining migration.
-    signature: 'listFamilyPins(): FamilyPin[]'
-    returns: FamilyPin[]
-    params: []
-    guarantees:
-      - idempotent
-  - name: removeSnapshot
-    description: >-
-      Forward to the surface portal: remove one stored snapshot of the bound root by its key (file
-      and projection), for `doctor --fix`'s deletion of superseded family pins. False when there was
-      none.
-    signature: 'removeSnapshot(projectName: string): boolean'
-    returns: boolean
-    params:
-      - name: projectName
-        type: string
-        description: The snapshot's storage key
-    guarantees:
-      - idempotent
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-09-27T10:43:04.286Z'
+updatedAt: '2026-09-30T20:51:18.308Z'

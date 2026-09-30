@@ -4,12 +4,16 @@ name: MigrationRequest
 description: >-
   One family migration as a person or an agent asks for it, from the bound project: the verb and
   exactly the arguments that verb reads. The same value comes in through `wairon member …` / `wairon
-  project rename` and through the sdd_* member tools, so both doors plan identically.
+  project rename` / `wairon doctor`, and through the sdd_* member tools, so every door plans
+  identically.
 subsystem: sdd_migrations
 fields:
   - name: verb
     type: string
-    description: attach | rename | rename-alias | detach | adopt | internalize | externalize.
+    description: >-
+      attach | rename | rename-alias | detach | adopt | internalize | externalize | chaining.
+      chaining is the stage 2–4 chaining migration (`doctor --fix`, `doctor --report chaining`),
+      which takes no other argument.
     optional: false
   - name: alias
     type: string
@@ -45,6 +49,13 @@ fields:
     type: InternalizeDestination
     description: 'internalize: where the member''s own metadata goes.'
     optional: true
+  - name: rehearse
+    type: boolean
+    description: >-
+      false: plan without rehearsing — the edits and refusals only, no file changes and nothing to
+      apply. doctor's summary line uses it, since it prints counts and never applies. Absent or
+      true: a full plan.
+    optional: true
 methods: []
 createdAt: '2026-09-30T20:24:03.011Z'
-updatedAt: '2026-09-30T20:29:33.334Z'
+updatedAt: '2026-09-30T20:47:54.137Z'

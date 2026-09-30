@@ -32,6 +32,13 @@ methods:
         type: call
         targetComponent: migration_portal
         targetMethod: recover
+  - name: matchPositions
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: matchPositions
 status: design
 createdAt: '2026-09-30T20:37:35.464Z'
-updatedAt: '2026-09-30T20:37:35.475Z'
+updatedAt: '2026-09-30T20:48:38.297Z'

@@ -5,7 +5,7 @@ description: >-
   What applying the stage-3 share of a chaining migration wrote: every file changed, in write order,
   and the projects whose approval those writes staled. The chaining migration folds it into its
   report.
-subsystem: sdd_cli
+subsystem: sdd_migrations
 fields:
   - name: written
     type: string[]
@@ -23,4 +23,4 @@ fields:
 methods: []
 sourcePath: src/commands/position-migration.ts
 createdAt: '2026-09-27T10:44:33.869Z'
-updatedAt: '2026-09-27T17:05:36.805Z'
+updatedAt: '2026-09-30T20:47:41.876Z'
