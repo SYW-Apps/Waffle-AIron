@@ -16,10 +16,11 @@ fields:
     type: string
     description: >-
       sha256 (hex) of the code-conformance doctrine: every built-in rule that judges code, by name
-      with its codes and default severities, plus the project's code-conformance tuning
-      (rules.conformance: source roots, exclusions, the unclaimed dial, the carried debt register,
-      test roots). Computed by gate_identity.analyzer, the same projection discipline as the gate
-      identity's, over the half the gate identity leaves out.
+      with its codes and default severities, plus the project's code-conformance tuning —
+      rules.conformance (source roots, exclusions, the unclaimed dial, the carried debt register,
+      test roots) and the rules.sddRuleSeverity overrides of the codes those rules declare. Computed
+      by gate_identity.analyzer, the same projection discipline as the gate identity's, over the
+      half the gate identity leaves out.
     optional: false
   - name: grade
     type: string
@@ -30,4 +31,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-09-30T05:47:11.385Z'
-updatedAt: '2026-09-30T05:47:17.270Z'
+updatedAt: '2026-09-30T06:03:09.439Z'

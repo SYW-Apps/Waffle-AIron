@@ -28,13 +28,16 @@ methods:
         type: local
       - stepNumber: 2
         description: >-
-          Take the project type, the rule config WITHOUT its code-conformance tuning
-          (rules.conformance, which only tunes findings the approval does not certify), and the
-          composition block from the gate config, each null when absent. All three decide what this
-          project's approval means: a project type switch changes the doctrine family, the rule
-          config carries severity overrides, complexity caps and design depth, and composition
-          (requirePolicies, requireApprovedMembers) is what the project requires of the projects it
-          contains — a changed requirement stales the requiring project's lock.
+          Take the project type, the rule config WITHOUT its code-conformance tuning, and the
+          composition block from the gate config, each null when absent. The code-conformance tuning
+          is rules.conformance together with every rules.sddRuleSeverity override of a code that a
+          code-judging rule declares: both only tune findings the approval does not certify, so
+          changing them never stales an approval, and both enter the analyzer's digest instead. What
+          stays decides what this project's approval means: a project type switch changes the
+          doctrine family, the rule config carries the design severity overrides, complexity caps
+          and design depth, and composition (requirePolicies, requireApprovedMembers) is what the
+          project requires of the projects it contains — a changed requirement stales the requiring
+          project's lock.
         type: local
       - stepNumber: 3
         description: >-
@@ -66,10 +69,11 @@ methods:
       - stepNumber: 8
         description: >-
           Order the members by alias, codepoint-sorted, each alias with its subject (or `never`).
-          The subject is the member's recorded gate identity, which already covers ITS direct
-          members' subjects, so a re-approval two levels down reaches this identity through the
-          chain once the level between re-approves (pin-chain); a member's live, unapproved edits
-          never move it.
+          The subject is the member's RECORDED gate identity, which already covers ITS direct
+          members' subjects. So a change two levels down reaches this identity only once the member
+          between re-locks (pin-chain): the grandchild's re-approval moves the member's gate
+          identity, the member reads drifted from here until it re-locks, and its re-lock moves its
+          subject and so this identity. A member's live, unapproved edits never move it.
         type: local
       - stepNumber: 9
         description: >-
@@ -97,16 +101,20 @@ methods:
           default severities — with the same codepoint sorts compute uses
         type: local
       - stepNumber: 2
-        description: Take the project's code-conformance tuning (gate.rules.conformance), null when absent
+        description: >-
+          Take the project's code-conformance tuning: gate.rules.conformance, and the
+          rules.sddRuleSeverity overrides of the codes the code-judging rules declare (sorted by
+          code); each null or empty when absent
         type: local
       - stepNumber: 3
         description: >-
           Digest with sha256, in hex, the canonical form of {rules: the projected code rules,
-          conformance: the tuning}, and return it
+          conformance: the conformance tuning, severities: the code-judging severity overrides}, and
+          return it
         type: return
         outcome: doctrine digest (hex)
     symbol: analyzerDigest
 detail: full
 status: complete
 createdAt: '2026-09-15T17:55:53.605Z'
-updatedAt: '2026-09-30T05:50:53.355Z'
+updatedAt: '2026-09-30T06:03:01.212Z'

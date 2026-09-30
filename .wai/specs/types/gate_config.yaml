@@ -14,8 +14,9 @@ fields:
     type: RulesConfig
     description: >-
       The project's rule tuning: severity overrides, complexity caps and design depth. Its
-      code-conformance tuning (rules.conformance) is left out of the gate identity — it tunes only
-      findings the approval does not certify — and enters the analyzer's doctrine digest instead.
+      code-conformance tuning — rules.conformance, and every sddRuleSeverity override of a code a
+      code-judging rule declares — is left out of the gate identity, since it tunes only findings
+      the approval does not certify, and enters the analyzer's doctrine digest instead.
     optional: true
   - name: composition
     type: CompositionConfig
@@ -26,4 +27,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/gate-identity.ts
 createdAt: '2026-09-15T10:51:01.644Z'
-updatedAt: '2026-09-30T05:48:00.207Z'
+updatedAt: '2026-09-30T06:03:07.439Z'

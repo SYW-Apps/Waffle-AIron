@@ -29,10 +29,12 @@ methods:
         targetMethod: familyApprovals
       - stepNumber: 3
         description: >-
-          Print the summary: the own specs changed, added and removed, then each direct member with
-          its state (approved | drifted | never) and, where its pin moved, the subject this approval
-          recorded and the one it carries now — a member's own edits never appear in this project's
-          spec diff; what the parent reviews is the member's approval moving
+          Print the summary: the own specs changed, added and removed; the code results of the gate
+          on a line of their own ("code: N errors, M warnings recorded beside the claim — CI
+          enforces them, not the lock"); then each direct member with its state (approved | drifted
+          | never) and, where its pin moved, the subject this approval recorded and the one it
+          carries now — a member's own edits never appear in this project's spec diff; what the
+          parent reviews is the member's approval moving
         type: local
       - stepNumber: 4
         description: >-
@@ -224,4 +226,4 @@ methods:
         outcome: unlocked
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-09-30T05:55:11.488Z'
+updatedAt: '2026-09-30T06:03:19.809Z'

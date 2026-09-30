@@ -967,7 +967,8 @@ methods:
         description: >-
           Take the design half (ValidationResult.designOnly): what the approval certifies and the
           only findings that may refuse it. Code-conformance findings are recorded beside the
-          approval, never refusing it, so a design can be approved before its code exists
+          approval and never refuse it, so a design can be approved before its code exists — CI
+          enforces code conformance (`wairon validate --ci`), not the lock
         type: local
       - stepNumber: 9
         description: The design half found errors (an invalid design is never frozen)
@@ -1004,7 +1005,11 @@ methods:
         targetComponent: cli_runner
         targetMethod: runGenerate
       - stepNumber: 15
-        description: Print the lock record, its members' states and the code results beside it, and return
+        description: >-
+          Print the lock record, each direct member's state, and the code results plainly on their
+          own line — "code: N errors, M warnings recorded beside the claim (analyzer <version>,
+          grade <grade>)" — so an approval taken over failing code is never mistaken for clean code;
+          then return
         type: return
         outcome: locked
     symbol: lockCommand
@@ -2835,4 +2840,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T05:55:58.514Z'
+updatedAt: '2026-09-30T06:03:17.873Z'

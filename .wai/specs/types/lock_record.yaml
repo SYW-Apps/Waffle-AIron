@@ -112,8 +112,11 @@ fields:
     description: >-
       The code-conformance results of the lock-time run, with the analyzer identity (validator
       version, code-conformance doctrine digest, weakest analysis grade) and the counts per severity
-      — recorded BESIDE the approval, never part of what it certifies: an analyzer upgrade adds
-      evidence and never stales a lock. Its `codes` list is left out. Absent on a format-1 record.
+      — recorded BESIDE the approval, never part of what it certifies, and never a reason the lock
+      refused: code errors are recorded here and the lock proceeds (the lock prints "code: N errors
+      recorded beside the claim"). CI enforces code conformance (`wairon validate --ci` still fails
+      on code errors), not the lock. An analyzer upgrade adds evidence and never stales a lock. Its
+      `codes` list is left out. Absent on a format-1 record.
     optional: true
 methods: []
 componentClass: lock_store
@@ -125,4 +128,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-09-30T05:47:45.837Z'
+updatedAt: '2026-09-30T06:03:11.900Z'

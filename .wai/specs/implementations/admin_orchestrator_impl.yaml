@@ -342,7 +342,8 @@ methods:
         description: >-
           Take the design half of the result (ValidationResult.designOnly): what the approval
           certifies and what may refuse it. Code-conformance findings are recorded beside the claim
-          and never refuse the lock
+          (`code`, reported in the outcome as "code: N errors recorded beside the claim") and never
+          refuse the lock — CI enforces code conformance, not the lock
         type: local
       - stepNumber: 8
         description: If the design half reports errors, refuse to lock
@@ -1152,4 +1153,4 @@ methods:
         outcome: gate identity
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-30T05:53:43.682Z'
+updatedAt: '2026-09-30T06:03:25.252Z'

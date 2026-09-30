@@ -159,15 +159,17 @@ methods:
   - name: runLock
     description: >-
       The local `wairon lock` workflow: capture the gate identity BEFORE validating, gate on the
-      design half of the as-complete dry-run validation (refusing to freeze an invalid design;
-      code-conformance findings are recorded beside the approval, never refusing it), lock the tree
-      through the lock adapter (which refuses when composition.requireApprovedMembers finds a direct
-      member drifted or never approved, and when the identity moved while the lock ran), and refresh
-      THIS project's generated outputs. A parent lock writes nothing into its members — not their
-      lock records, not their generated outputs: each member locks and generates at its own root.
-      Post-lock guidance points sessions at the live MCP briefs (sdd_get_agent_brief) — it no longer
-      instructs a session restart, because brief content is composed per call and is already
-      current.
+      design half of the as-complete dry-run validation (refusing to freeze an invalid design), lock
+      the tree through the lock adapter (which refuses when composition.requireApprovedMembers finds
+      a direct member drifted or never approved, and when the identity moved while the lock ran),
+      and refresh THIS project's generated outputs. Code-conformance findings never refuse the lock:
+      they are recorded beside the approval (the record's `code`) and printed plainly — "code: N
+      errors, M warnings recorded beside the claim" — because CI enforces code conformance (`wairon
+      validate --ci` still fails on code errors), not the lock. A parent lock writes nothing into
+      its members — not their lock records, not their generated outputs: each member locks and
+      generates at its own root. Post-lock guidance points sessions at the live MCP briefs
+      (sdd_get_agent_brief) — it no longer instructs a session restart, because brief content is
+      composed per call and is already current.
     signature: 'runLock(options: LockOptions): void'
     returns: void
     params:
@@ -520,4 +522,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T05:55:34.239Z'
+updatedAt: '2026-09-30T06:03:15.157Z'
