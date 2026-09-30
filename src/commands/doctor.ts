@@ -340,10 +340,16 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
           line(tally, 'warn', 'this lock predates per-spec approval — re-lock so `wairon status` can name what drifts');
         }
         logger.blank();
+      } else if (lock.state === 'stale' && lock.record!.stateId.algorithm !== lock.current.algorithm) {
+        console.log(chalk.bold('Lock'));
+        line(tally, 'warn',
+          `stale — the lock of ${lock.record!.lockedAt} was taken under an earlier gate identity: the gate identity gained `
+          + 'inputs in stage 5 (members\' composition subjects, `composition`; code conformance moved beside the claim). '
+          + 'Re-lock once (`wairon lock`).');
       } else if (lock.state === 'stale') {
         console.log(chalk.bold('Lock'));
         line(tally, 'warn',
-          `stale — the specs or the governing doctrine changed since ${lock.record!.lockedAt}, so this lock no longer holds. `
+          `stale — the design or something it was approved under changed since ${lock.record!.lockedAt}, so this lock no longer holds. `
           + 'Re-run `wairon lock` to freeze the current state.');
         logger.blank();
       }

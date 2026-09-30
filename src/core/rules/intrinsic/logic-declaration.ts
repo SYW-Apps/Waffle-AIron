@@ -13,6 +13,7 @@ import { isRetired } from '../../../models/index.js';
  */
 export const logicDeclarationRule: SddRule = {
   name: 'logic-declaration',
+  judges: 'design',
   scope: 'spec',
   description:
     'Only an Orchestrator may declare a dependencyClass (DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR); what the class allows is judged by logic-dependency-class. Intrinsic to one component: no tree required.',

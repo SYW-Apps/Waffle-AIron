@@ -46,6 +46,7 @@ function derivedIndexBreach(ctx: RuleContext, from: ComponentSpec, to: Component
 }
 export const dataBlockDepsRule: SddRule = {
   name: 'data-block-dependencies',
+  judges: 'design',
   description:
     'Keeps the data layer facing down. A Store may depend only on another Store, a backend Adapter or pure logic — Registries and Indexes depend on the Store, never the reverse. A Registry is the write path to its Store and may depend on that Store, a backend Adapter, or the pure logic that validates the write. An Index is a read projection and a Query a computed read, each over its Store through a backend Adapter where one serves it; as an exceptional case an Index may project another Index of the same Repository, never in a cycle. An Adapter is a sink toward the system: it may use pure logic, but never a Store or any other Orchestrator.',
   codes: [

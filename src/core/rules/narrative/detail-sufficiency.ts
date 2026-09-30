@@ -47,6 +47,7 @@ interface DialedDownMethod {
  */
 export const detailSufficiencyRule: SddRule = {
   name: 'detail-sufficiency',
+  judges: 'code',
   description:
     'A method dialed below detail: full with no narrative may not be hiding behavior it owes a reader. A method whose realized function — in the method\'s own source file, else the implementation\'s — measures real branching (cyclomatic complexity above rules.complexity.maxUnnarratedComplexity, exact AST grade only) is reported (UNNARRATED_COMPLEXITY), and an explicit dial below a full-floor logic stereotype without a narrative is a visible, lint.allow-justifiable choice (DETAIL_BELOW_STEREOTYPE) — reported only where the measured finding did not already fire, since evidence outranks expectation. Both are honest lints over declarations: they never claim a narrative would be correct, only that the dial hides something.',
   codes: [

@@ -15,6 +15,7 @@ const PROJECT_KINDS = new Set<string>(PROJECT_KIND_IDS);
  */
 export const profileRegistrationRule: SddRule = {
   name: 'profile-registration',
+  judges: 'design',
   description:
     'Every profile name in play — the project\'s own projectType and each subsystem\'s declared profile — must be a built-in profile, a composite project kind, or one a loaded extension pack registers. An unregistered name is flagged rather than guessed at: no doctrine is governing it.',
   codes: [

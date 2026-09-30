@@ -10,6 +10,7 @@ import { SddRule } from '../types.js';
 
 export const dispatchTableBindingsRule: SddRule = {
   name: 'dispatch-table-bindings',
+  judges: 'design',
   description:
     'A dispatch table belongs to a Portal, binds each capability once, and binds it to an existing component.method inside the portal\'s own subsystem (the portal dispatches inward) that the portal declares under dependsOn or owns — the table is a real runtime invocation path.',
   codes: [

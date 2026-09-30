@@ -15,6 +15,7 @@ import { isRetired } from '../../../models/index.js';
  */
 export const memberVisibilityRule: SddRule = {
   name: 'member-visibility',
+  judges: 'design',
   description:
     'A component may depend on a block within its own group (it is the owning pattern, or a sibling member of the same pattern), on any pattern facade, or on a standalone block — never on a block privately owned by ANOTHER pattern, which must be reached through that pattern\'s facade. A retired depending component is skipped, as everywhere in this family.',
   codes: [

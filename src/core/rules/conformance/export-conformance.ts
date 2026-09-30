@@ -100,6 +100,7 @@ const NOTHING_PROMISED: ReadonlySet<string> = new Set<string>();
 
 export const exportConformanceRule: SddRule = {
   name: 'export-conformance',
+  judges: 'code',
   description:
     'Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code — it asks whether the code holds what a spec claims — so a file could export whatever it liked under a component\'s name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method\'s `exportedVia` names the export a consumer imports to REACH it — the value that composes it, which `symbol` cannot name because `symbol` names the function inside — and a listener\'s mount names the router entry it calls to hand a portal its requests; both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module.',
   codes: [

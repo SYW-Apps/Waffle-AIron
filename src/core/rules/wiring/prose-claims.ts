@@ -36,6 +36,7 @@ function withoutQuotedText(text: string): string {
 
 export const proseClaimRule: SddRule = {
   name: 'prose-claims',
+  judges: 'design',
   description:
     'Flags durability/side-effect claims that exist only in prose: a local step description or an intent paragraph claiming persistence ("persisted", "persistence", "survives restart", "registered into") on a logic component whose narrative has no call, register or dispatch edge to any data-layer component (Store/Registry/Index/Adapter/Repository). Text inside quotes or backticks names a value or quotes a message and claims nothing. Data-layer components are exempt — they ARE the persistence.',
   codes: [

@@ -39,6 +39,7 @@ function liesUnder(path: string, prefix: string): boolean {
 
 export const portalMountsRule: SddRule = {
   name: 'portal-mounts',
+  judges: 'design',
   description:
     'Which listener serves which portal: a portal\'s routes are its methods\' endpoint bindings, but nothing said which listener hands it its requests, so a portal no listener serves was unreachable without anyone noticing, and the call that mounts one crossed a boundary no contract described. A listener Portal declares its mounts — each a portal, the path prefixes routed to it, and optionally the router entry it calls — and this rule checks them against the tree: a mount must name a Portal, every HTTP endpoint of a mounted portal must lie under one of its prefixes, and every portal with HTTP endpoints must be mounted by some listener unless it is one. A path lies under a prefix when it equals it or continues it past a slash, so `/` covers only the root. Whether the named entry is really exported is the code\'s question, and export-conformance asks it.',
   codes: [

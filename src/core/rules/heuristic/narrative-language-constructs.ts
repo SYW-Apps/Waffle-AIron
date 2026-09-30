@@ -71,6 +71,7 @@ function constructLabel(construct: string): string {
  */
 export const narrativeLanguageConstructsRule: SddRule = {
   name: 'narrative-language-constructs',
+  judges: 'design',
   description:
     'Narratives must describe flows the declared target language can express: steps using constructs the language lacks (e.g. exceptions in Rust/Go, do-while in Python) are flagged with the idiomatic alternative. Set targetLanguage on the system (L0) or override per subsystem (L1).',
   codes: [

@@ -10,6 +10,7 @@ import { isPureLogic, isReadLogic, stereotypeOf, storeResolutionHint } from './s
  */
 export const logicDependencyClassRule: SddRule = {
   name: 'logic-dependency-class',
+  judges: 'design',
   description:
     'Bounds an Orchestrator\'s dependencies by the dependencyClass it declares: pure logic depends only on pure Orchestrators; read logic also on read Orchestrators, Repositories, Indexes and Adapters; an Orchestrator that declares no class is a workflow and may depend on anything the rest of the matrix allows. Whether read logic calls a WRITE method on one of those is judged only once facade methods carry effect tags.',
   codes: [

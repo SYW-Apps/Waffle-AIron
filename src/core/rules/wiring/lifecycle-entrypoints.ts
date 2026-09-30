@@ -8,6 +8,7 @@ import { SddRule } from '../types.js';
 
 export const lifecycleRule: SddRule = {
   name: 'lifecycle-entrypoints',
+  judges: 'design',
   description:
     'Declared subsystem lifecycle entrypoints (init/shutdown flows) must name an existing component and a method on one of its interfaces — they are reachability roots, so a dangling entrypoint would silently detach every flow rooted in it.',
   codes: [

@@ -15,6 +15,7 @@ import { SddRule } from '../types.js';
 
 export const surfaceReferenceBackingRule: SddRule = {
   name: 'surface-reference-backing',
+  judges: 'design',
   description:
     "The contract entry a narrative target in another project resolves to — a contained member's live export table, a declared external's pinned snapshot, or a foreign surface snapshot — must back what the step asks of it: the calling component declares the collaborator, the entry exposes the called method (or serves the dispatched capability), and it declares every semantic guarantee the step asserts. These are contract verdicts on a resolved reference, and each carries that resolution.",
   codes: [

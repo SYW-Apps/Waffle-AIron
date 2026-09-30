@@ -21,6 +21,7 @@ import { RuleContext, SddRule } from '../types.js';
 
 export const portalImportsRule: SddRule = {
   name: 'portal-imports',
+  judges: 'code',
   description:
     'A runtime import that crosses a subsystem boundary must land on a file that realizes one of the target subsystem\'s PUBLISHED components — its portal file. dependency-conformance asks whether the hop is declared; this asks where it lands. An import that reaches past the portal into a concrete module can use anything that module exports, published or not, so the portal stops being the boundary and names no contract ever promised leak across it — which is how a surface grows that nobody designed. In-process it is cosmetic at runtime; it is not cosmetic for the contract. Only exact-grade component-mapped files participate; type-only imports are exempt; chained subprojects validate standalone.',
   codes: [

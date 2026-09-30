@@ -13,6 +13,7 @@ import type { SddRule } from '../types.js';
 
 export const facadeForwardingRule: SddRule = {
   name: 'facade-forwarding',
+  judges: 'design',
   description:
     'A Repository facade method with an authored narrative must be pure 1:1 forwarding: exactly one call step, targeting one of the pattern\'s owned members. Anything else is logic living on the facade — move it into a member block, or acknowledge a deliberate exception via lint.allow.',
   codes: [

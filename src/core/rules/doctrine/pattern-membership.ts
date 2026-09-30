@@ -9,6 +9,7 @@ import { PATTERN_TYPES, isPattern, isRetired } from '../../../models/index.js';
  */
 export const patternMembershipRule: SddRule = {
   name: 'pattern-membership',
+  judges: 'design',
   description:
     'Only patterns (Repository/FeatureComponent/RouterComponent) own member blocks, and every pattern owns at least one. Each claim must name a component that exists and is itself a building block — patterns compose at the subsystem (L1) level, never by owning one another — and a block has exactly one owner, the first pattern to claim it.',
   codes: [

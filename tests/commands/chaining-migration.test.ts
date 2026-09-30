@@ -10,7 +10,7 @@ import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { saveSnapshot } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
-import { validateProject, validateFamily, validateAsComplete, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, validateFamily, validateAsComplete, computeGateStateId, type ValidationResult } from '../../src/core/validation.js';
 import { ChainingMigrationRefusedError, DoctorOptionsError } from '../../src/utils/errors.js';
 import { plan, apply, isEmpty, blocked } from '../../src/commands/chaining-migration.js';
 import { runDoctor } from '../../src/commands/doctor.js';
@@ -287,7 +287,7 @@ describe('stage 2c — the chaining migration', () => {
   it('a locked member keeps the id its lock approved (id-locked), and re-locking afterwards succeeds', async () => {
     const f = family();
     // Billing was locked while its id was defaulted to its name slug.
-    const locked = await at(f.billing, () => runLock({ yes: true }));
+    const locked = await at(f.billing, () => runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId()));
     expect(locked?.projectId).toBe('billing-service');
 
     const planned = at(f.root, () => plan());
@@ -302,7 +302,7 @@ describe('stage 2c — the chaining migration', () => {
     // No deadlock: the id the lock approved is the id declared, so the gate lets the human re-lock.
     const gate = at(f.billing, () => validateAsComplete());
     expect(codesOf(gate, 'PROJECT_ID_CHANGED')).toEqual([]);
-    const relocked = await at(f.billing, () => runLock({ yes: true }, gate));
+    const relocked = await at(f.billing, () => runLock({ yes: true }, gate, computeGateStateId()));
     expect(relocked?.projectId).toBe('billing-service');
     expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_CHANGED', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
   });

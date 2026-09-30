@@ -510,6 +510,12 @@ export type PackRequirement = z.infer<typeof PackRequirementSchema>;
  */
 export const CompositionConfigSchema = z.object({
   requirePolicies: z.array(PackRequirementSchema).optional(),
+  /**
+   * Opt-in, off by default (stage 5). When true, this project's lock refuses
+   * while any DIRECT member is drifted or never approved, naming each, and
+   * writes nothing. Off: the lock proceeds and records each member's state.
+   */
+  requireApprovedMembers: z.boolean().optional(),
 });
 export type CompositionConfig = z.infer<typeof CompositionConfigSchema>;
 

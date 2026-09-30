@@ -8,6 +8,7 @@ import { SddRule } from '../types.js';
  */
 export const typeDeclarationsRule: SddRule = {
   name: 'type-declarations',
+  judges: 'design',
   description:
     'A type owned by a subsystem must reference an existing one, and a type declaring neither fields nor methods is a placeholder that can inform neither implementers nor the ERD.',
   codes: [

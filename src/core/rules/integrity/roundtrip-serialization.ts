@@ -10,6 +10,7 @@ import { SddRule } from '../types.js';
  */
 export const roundtripRule: SddRule = {
   name: 'roundtrip-serialization',
+  judges: 'design',
   description:
     'Every loaded spec must re-serialize through the exact writer pipeline (same relativization, same schema, no I/O) — validate must predict every refusal that lock\'s status promotion or any later save would otherwise raise mid-write.',
   codes: [

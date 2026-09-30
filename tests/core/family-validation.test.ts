@@ -6,6 +6,7 @@ import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import {
   validateProject, validateFamily, validateAsComplete, type ValidationIssue, type ValidationResult,
+  computeGateStateId,
 } from '../../src/core/validation.js';
 import { pinExternals } from '../../src/core/surfaces.js';
 import { readLockRecord } from '../../src/core/lockfile.js';
@@ -98,7 +99,7 @@ async function lock(dir: string): Promise<void> {
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   const config = projectConfigRepositoryAt(dir).load();
   const gate = validateAsComplete({ rules: config?.rules, projectType: config?.projectType });
-  await runLock({ yes: true }, gate);
+  await runLock({ yes: true }, gate, computeGateStateId());
 }
 
 describe('the family run — what it carries', () => {
@@ -307,7 +308,7 @@ describe('approval context', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     await runWithProjectBinding(f.ledger, { topRoot: f.top, parentReach: true }, async () => {
       const config = projectConfigRepositoryAt(f.ledger).load();
-      await runLock({ yes: true }, validateAsComplete({ rules: config?.rules, projectType: config?.projectType }));
+      await runLock({ yes: true }, validateAsComplete({ rules: config?.rules, projectType: config?.projectType }), computeGateStateId());
     });
     bind(f.ledger);
     expect(fields()).toEqual(atOwnRoot);

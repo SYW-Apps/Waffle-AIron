@@ -17,6 +17,7 @@ const DEFAULT_GOD_COMPONENT_THRESHOLD = 8;
  */
 export const couplingRule: SddRule = {
   name: 'coupling-health',
+  judges: 'design',
   description:
     'Two subsystems depending on each other is a real architectural commitment (deployment affinity, backpressure, scaling coupling). It is allowed but must be acknowledged with a trustedLinks declaration on either side, stating the reason (e.g. a latency fast lane that bypasses the bus). A trustedLink on the SOURCE subsystem additionally licenses its direct edges into the peer without the client-Adapter shim; the published-Portal target requirement stays either way. Also flags components whose dependsOn fan-out suggests a god component.',
   codes: [

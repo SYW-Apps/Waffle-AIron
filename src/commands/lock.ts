@@ -8,16 +8,15 @@ import {
   captureApprovedSpecs,
   diffAgainstApproval,
   diffSize,
-  currentChildPins,
-  movedChildren,
   localApprover,
   writeLockRecord,
   specPathsInScope,
-  projectFamily,
   loadSystemSpec,
   readLockState,
   loadProjectConfig,
   type LockRecord,
+  type MemberPin,
+  type StateId,
 } from '../core/index.js';
 import { effectiveProjectId } from '../models/project.js';
 // The approver's own projection, taken from the models rather than from the
@@ -25,20 +24,23 @@ import { effectiveProjectId } from '../models/project.js';
 // method, and it travels with the type.
 import { describeApprover } from '../models/lock.js';
 import { getProjectRoot } from '../utils/fs.js';
-import { computeGateStateId, type ValidationResult } from '../core/validation.js';
+import { WaironError } from '../utils/errors.js';
+import { computeGateStateId, familyApprovals, type ValidationResult } from '../core/validation.js';
+import { designOnly, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
 
 // ---------------------------------------------------------------------------
 // cli_lock_adapter — the core-side half of `wairon lock` (lockTree, realized
-// by runLock): summarize what CHANGED since the last approval, confirm with
-// the human (skipped under --yes), and record the current tree as approved.
-// It writes nothing into the spec tree: the approval is one digest per spec
-// inside the committed lock record, so the whole decision is a single file.
+// by runLock): summarize what CHANGED since the last approval and each direct
+// member's approval state, honour composition.requireApprovedMembers, confirm
+// with the human (skipped under --yes), re-confirm the gate identity the
+// caller captured before validating, and record the approval. It writes ONE
+// file — this project's .wai/lock.json — and nothing into the spec tree or
+// below this project: a member's approval is that member's own lock.
 //
-// Callers gate on an as-complete validation FIRST — the runner routes the
-// dry-run through the validator adapter's validateAsComplete before this
-// adapter is ever reached. This adapter never locks an invalid tree on its
-// own authority, and child-surface regeneration happens AFTER it (through the
-// surfaces client adapter): the runner owns that workflow.
+// Callers capture the gate identity and gate on the DESIGN half of an
+// as-complete validation FIRST — the runner does both through the validator
+// adapter before this adapter is ever reached. Code-conformance findings are
+// recorded beside the claim (`code`) and never refuse the lock.
 // ---------------------------------------------------------------------------
 
 export interface LockOptions {
@@ -46,7 +48,11 @@ export interface LockOptions {
   yes?: boolean;
   /** Limit lock scope to a specific subsystem. */
   subsystem?: string;
-  /** Whether to recursively lock subprojects. */
+  /**
+   * Accepted for one release and ignored for what is written: a lock approves
+   * this project only and never writes below it. Each member locks at its own
+   * root.
+   */
   recursive?: boolean | number;
 }
 
@@ -115,6 +121,12 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   const lock = readLockState(computeGateStateId());
   const record = lock.record;
 
+  // A stale verdict that is only the stage-5 identity upgrade still refuses —
+  // the old identity cannot be recomputed, so nothing proves the design
+  // unchanged — but it says so plainly, with whether any own spec file moved.
+  // (LockStatus.upgraded: stale, and the record's algorithm is not the current one.)
+  if (lock.state === 'stale' && record!.stateId.algorithm !== lock.current.algorithm) return upgradedCheck(record!);
+
   switch (lock.state) {
     case 'locked':
       return {
@@ -127,7 +139,8 @@ export function checkApproval(strict: boolean): ApprovalCheck {
       return {
         state: 'stale',
         approved: false,
-        message: 'The design changed after it was approved '
+        message: 'The design, or something it was approved under (doctrine, declared inputs, `composition`, '
+          + 'a direct member\'s approval), changed after it was approved '
           + `(the approval on record is ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}). `
           + 'Nothing says a human has seen what is about to merge. '
           + 'Fix: run `wairon lock` on this branch and commit the updated .wai/lock.json.',
@@ -146,19 +159,49 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   }
 }
 
+/** The stage-5 upgrade verdict: stale, said plainly, with the one remedy. */
+function upgradedCheck(record: LockRecord): ApprovalCheck {
+  const diff = diffAgainstApproval();
+  const specs = !diff
+    ? 'This approval predates per-spec digests, so whether a spec file moved since cannot be said.'
+    : diffSize(diff) === 0
+      ? 'No own spec file has changed since the approval.'
+      : `${diffSize(diff)} own spec file(s) changed since the approval.`;
+  return {
+    state: 'stale',
+    approved: false,
+    message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}) was taken under an `
+      + 'earlier gate identity — the gate identity gained inputs in stage 5: members\' composition subjects, '
+      + '`composition`; code conformance moved beside the claim. '
+      + `${specs} Fix: re-lock once (\`wairon lock\`) and commit the updated .wai/lock.json.`,
+  };
+}
+
 /**
- * cli_lock_adapter.lockTree — freeze the (scope-filtered) tree: record the
- * approval baseline (what was approved, held OUTSIDE the working copy) and
- * persist the commit-scoped lock record. Writes NOTHING into the spec tree.
- * Returns the written record, or null when the human declined the
- * confirmation (nothing was changed).
- *
- * `gate` is the as-complete validation result the caller already gated on;
- * its warning and notice counts are captured on the record (the hosted lock records the
- * same shape).
+ * Thrown when a lock refuses before writing anything. A WaironError, so the
+ * CLI prints its message and exits non-zero like any other refusal.
  */
-export async function runLock(options: LockOptions = {}, gate?: ValidationResult): Promise<LockRecord | null> {
-  // --- Summarize what is actually being approved ---
+class LockRefusedError extends WaironError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LockRefusedError';
+  }
+}
+
+/** A direct member that is not approved at its own root, named with its state. */
+function describeMemberState(entry: ProjectApproval): string {
+  return `${entry.alias ?? entry.key} (${entry.state}${entry.upgraded ? ' — approved under the pre-stage-5 identity, re-lock it once' : ''})`;
+}
+
+/** The code line a lock prints beside its claim. */
+function codeLine(code: CodeAnalysis | undefined): string {
+  if (!code) return 'code: no code analysis recorded';
+  return `code: ${code.errors} error(s), ${code.warnings} warning(s) recorded beside the claim `
+    + `(analyzer ${code.analyzer.validatorVersion}, grade ${code.analyzer.grade}) — CI enforces them, not the lock`;
+}
+
+/** Print what is being approved: the own spec diff, the code half, and each direct member. */
+function summarize(gate: ValidationResult, members: ProjectApproval[]): void {
   // Against the previous approval, not against each spec's stored status: the
   // human is deciding about a CHANGE, and "3 specs moved since you last said
   // yes" is the question they can answer. A first approval has nothing to
@@ -175,17 +218,42 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
     for (const p of diff.added) logger.info(`  + ${p}`);
     for (const p of diff.removed) logger.info(`  - ${p}`);
   }
-  // A chained child's own edits never show up in the parent's spec diff — the
-  // trees are approved separately. What the parent reviews is the child MOVING:
-  // its approval shifting away from the one this parent pinned.
-  const moved = movedChildren(memberMounts());
-  if (moved.length > 0) {
-    logger.info(`${moved.length} chained child project(s) moved since the last approval:`);
-    for (const m of moved) {
-      logger.info(`  ${m.id}: ${m.pinned.slice(0, 19)}… → ${m.now ? `${m.now.slice(0, 19)}…` : '(no approval)'}`);
-    }
+  logger.info(codeLine(gate.analysis));
+  // A member's own edits never show up in this project's spec diff: what this
+  // project reviews is the member's APPROVAL — its state, and whether its pin moved.
+  for (const m of members) {
+    const pin = m.pinned === 'moved' ? ' — its pin moved since the last approval' : '';
+    logger.info(`  member ${m.alias ?? m.key}: ${m.state}${m.upgraded ? ' (pre-stage-5 lock, re-lock once)' : ''}${pin}`);
   }
+}
 
+/**
+ * cli_lock_adapter.lockTree — record this project's approval: summarize,
+ * honour composition.requireApprovedMembers, confirm with the human (skipped
+ * under --yes), re-confirm the identity the caller captured BEFORE validating,
+ * and write a format-2 record. Writes one file, this project's .wai/lock.json,
+ * and never `children`, never anything in the spec tree or below the project.
+ * Returns the written record, or null when the human declined.
+ *
+ * `gate` is the as-complete result the caller gated on (its design half is
+ * counted as validationResult, its analysis recorded as `code`); `captured` is
+ * the gate identity the caller took before validating — what the record
+ * certifies.
+ */
+export async function runLock(options: LockOptions, gate: ValidationResult, captured: StateId): Promise<LockRecord | null> {
+  // Steps 1-3: what is being approved, and each direct member at its own root.
+  const members = familyApprovals(1).filter((a) => a.parent === '');
+  summarize(gate, members);
+
+  // Steps 4-6: the configuration, and a parent that requires approved members.
+  const config = loadProjectConfig();
+  const unapproved = members.filter((m) => m.state !== 'approved');
+  if (config?.composition?.requireApprovedMembers && unapproved.length > 0) {
+    throw new LockRefusedError(
+      `composition.requireApprovedMembers: direct member(s) not approved — ${unapproved.map(describeMemberState).join(', ')}. `
+        + 'Lock each at its own root first (`wairon lock` there); a parent never approves below itself. Nothing was written.',
+    );
+  }
   logger.blank();
   logger.warn('This records the current design as approved and (re)generates the agent topology.');
 
@@ -224,11 +292,11 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
     }
     : undefined;
 
-  // --- Persist the commit-scoped lock record at the tree's CURRENT StateId ---
+  // --- Persist the commit-scoped lock record at the CAPTURED gate identity ---
   // The GATE identity from the validator portal, not the content one: the
-  // record certifies "these specs passed THIS gate", so the governing doctrine
-  // is part of what is frozen — change a pack afterwards and the lock goes
-  // stale on its own.
+  // record certifies "this design passed THIS gate under THESE inputs", so the
+  // governing doctrine, the inputs, `composition` and the members' subjects
+  // are part of what is frozen.
   //
   // `specs` is the approval itself: one digest per spec file, so `wairon status`
   // can name what moved instead of printing a banner, and validate can tell
@@ -237,37 +305,58 @@ export async function runLock(options: LockOptions = {}, gate?: ValidationResult
   // fresh clone and CI all see the same approval the approver saw.
   // The project's effective id, recorded so a later id change is caught
   // (PROJECT_ID_CHANGED) rather than silently re-keying everything that keys on it.
-  const config = loadProjectConfig();
   const projectId = config ? effectiveProjectId(config) : null;
+  const specs = captureApprovedSpecs(root, scope);
+  const lockedBy = localApprover();
+
+  // Steps 11-13: did any input move while the lock ran — between the capture
+  // before validation and now, the confirmation prompt included? Then the
+  // validation the human saw does not describe what would be recorded.
+  const now = computeGateStateId();
+  if (now.algorithm !== captured.algorithm || now.digest !== captured.digest) {
+    throw new LockRefusedError(
+      'The lock\'s inputs changed while it ran — a spec, the doctrine, an input, the composition block or a '
+        + 'member\'s approval moved between the validation and the write. Nothing was written; run `wairon lock` again.',
+    );
+  }
+
+  // Step 14: a format-2 record. No `children`.
+  const design = designOnly(gate);
+  const count = (severity: string): number => design.issues.filter((i) => i.severity === severity).length;
   const record: LockRecord = {
-    stateId: computeGateStateId(),
+    // The record format: 2 from stage 5 on (members, code, no children).
+    format: 2,
+    stateId: captured,
     lockedAt: new Date().toISOString(),
-    lockedBy: localApprover(),
+    lockedBy,
     validatorVersion: WAIRON_VERSION,
-    validationResult: {
-      valid: true,
-      errors: 0,
-      warnings: gate ? gate.issues.filter((i) => i.severity === 'warning').length : 0,
-      notices: gate ? gate.issues.filter((i) => i.severity === 'notice').length : 0,
-    },
+    validationResult: { valid: design.valid, errors: count('error'), warnings: count('warning'), notices: count('notice') },
     status: 'ready',
     ...(projectId !== null ? { projectId } : {}),
-    specs: captureApprovedSpecs(root, scope),
-    children: currentChildPins(memberMounts(), root),
+    specs,
+    members: memberPins(members),
+    ...(gate.analysis ? { code: withoutCodes(gate.analysis) } : {}),
   };
+  // Step 15: the only file this lock writes.
   writeLockRecord(record);
   return record;
 }
 
-/**
- * The members this root declares, in the shape the approval pins them by: the
- * alias and the path. Stage 3: a member is declared in project.yaml `members`
- * (or, for one release, by a legacy L1 mount) and is never a subsystem, so it
- * is read from the project graph rather than from the subsystem specs.
- */
-function memberMounts(): { id: string; projectPath: string }[] {
-  const root = getProjectRoot();
-  return projectFamily().nodes
-    .filter((n) => n.parent === '' && n.mountAlias !== undefined)
-    .map((n) => ({ id: n.mountAlias!, projectPath: path.relative(root, n.directory).split(path.sep).join('/') }));
+/** Each direct member's alias → {project, subject, state} as it stands now. */
+function memberPins(members: ProjectApproval[]): Record<string, MemberPin> {
+  const pins: Record<string, MemberPin> = {};
+  for (const m of members) {
+    pins[m.alias ?? m.key] = {
+      ...(m.projectId !== undefined ? { project: m.projectId } : {}),
+      ...(m.subject !== undefined ? { subject: m.subject } : {}),
+      state: m.state,
+    };
+  }
+  return pins;
+}
+
+/** The analysis as a lock records it: its codes list is noise the analyzer identity already pins. */
+function withoutCodes(analysis: CodeAnalysis): CodeAnalysis {
+  const { codes: _codes, ...rest } = analysis;
+  return rest;
 }

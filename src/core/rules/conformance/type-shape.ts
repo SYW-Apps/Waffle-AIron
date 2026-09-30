@@ -64,6 +64,7 @@ function absence(optional: boolean): string {
 
 export const typeShapeRule: SddRule = {
   name: 'type-shape',
+  judges: 'code',
   description: 'Code-to-contract for the DATA: a type spec\'s `fields` are compared, name by name, against the shape its `sourcePath` actually declares. `typeRealization` asks whether a type EXISTS in code; nothing asked whether it is the shape the spec claims, so a type spec could describe two fields of a six-field record — and call the two that are optional required — straight through a lock and a CI gate, while the ERD, the agent briefs and every implementer read it as truth. That is the worst of the code-to-spec gaps, because a wrong signature eventually breaks at a call site and a type spec that lies is only ever read by humans and agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists, and a DERIVED one, an alias followed one hop to the object literal its schema is built from, where the keys are the members. A shape that extends another is judged on what it shows and never on what it omits, since its inherited members are not in this file to count.',
   codes: [
     {

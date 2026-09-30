@@ -17,6 +17,7 @@ import type { RuleContext, SddRule } from '../types.js';
 
 export const integrationSimFileRule: SddRule = {
   name: 'integration-sim-file',
+  judges: 'code',
   description:
     'A declared L4 simPath must resolve to a readable, committed file inside the project root — the integration harness is a re-runnable file, not a claim. Execution stays CI\'s job.',
   codes: [

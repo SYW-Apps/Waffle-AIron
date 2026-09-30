@@ -4,7 +4,7 @@ import { aiDir, aiDirAt } from '../utils/fs.js';
 import type { StateId } from './statehash.js';
 // The approver is shared vocabulary, not this store's private shape: a command
 // that only wants to RENDER one must not have to reach a Store to do it.
-import type { ApproverIdentity } from '../models/lock.js';
+import type { ApproverIdentity, CodeAnalysis, ProjectApprovalState } from '../models/lock.js';
 
 // ---------------------------------------------------------------------------
 // Lock Registry (sdd_host / sdd_core)
@@ -19,8 +19,27 @@ import type { ApproverIdentity } from '../models/lock.js';
 // (request-scoped) context.
 // ---------------------------------------------------------------------------
 
+/**
+ * member_pin — one direct member as a parent's lock recorded it: the member's
+ * composition subject (the stateId its OWN lock record carries) and its
+ * approval state when the parent locked. A record of the member owner's
+ * decision, never of the member's specs; the parent never writes below itself.
+ */
+export interface MemberPin {
+  /** The member's effective project id when the parent locked. */
+  project?: string;
+  /** The member's recorded gate identity, `<algorithm>:<digest>`; absent when it had no lock. */
+  subject?: string;
+  /** approved | drifted | never, as it stood when the parent locked. Recorded, never hashed. */
+  state: ProjectApprovalState;
+}
+
 export interface LockRecord {
-  /** The exact spec-tree state this lock validated. */
+  /**
+   * The gate identity this lock certifies, captured BEFORE the as-complete
+   * validation ran and confirmed unchanged immediately before the record was
+   * written. Also this project's composition subject as its parent sees it.
+   */
   stateId: StateId;
   /** ISO-8601 lock timestamp. */
   lockedAt: string;
@@ -29,8 +48,10 @@ export interface LockRecord {
   /** wairon version that produced the validation. */
   validatorVersion: string;
   /**
-   * The as-complete validation outcome captured at lock time. `notices` is
-   * absent on a record written before the notice severity existed.
+   * The DESIGN half of the as-complete validation captured at lock time
+   * (ValidationResult.designOnly); the code half is counted under `code`. A
+   * format-1 record counted both together, and a record written before the
+   * notice severity existed carries no notice count.
    */
   validationResult: { valid: boolean; errors: number; warnings: number; notices?: number };
   /** Always 'ready'. The lock IS the human gate; there is no second state. */
@@ -47,11 +68,25 @@ export interface LockRecord {
    */
   specs?: Record<string, string>;
   /**
-   * Chained child mount id → that child's approved StateId, pinned the way a
-   * git submodule pins a commit. A child edit does not dirty the parent's own
-   * diff; it moves this pin, which is the parent's review signal.
+   * LEGACY (format 1): chained child mount id → that child's approved StateId,
+   * copied without checking the child's lock still matched its tree. Read for
+   * one release as the member pins; never written from stage 5 on.
    */
   children?: Record<string, string>;
+  /** The record format: 2 from stage 5 on; absent means format 1. */
+  format?: number;
+  /**
+   * Each DIRECT member, keyed by alias → its composition subject and approval
+   * state as they stood when this project locked. Present (possibly empty) on
+   * every format-2 record.
+   */
+  members?: Record<string, MemberPin>;
+  /**
+   * The code-conformance results of the lock-time run with the analyzer that
+   * produced them — BESIDE the approval, never part of what it certifies.
+   * Absent on a format-1 record.
+   */
+  code?: CodeAnalysis;
   /**
    * The project's effective id when this lock was taken (a defaulted one
    * included). Validate reports PROJECT_ID_CHANGED when project.yaml later
@@ -108,7 +143,10 @@ function normalizeRecord(raw: unknown): LockRecord {
   return { ...record, lockedBy: normalizeApprover((record as { lockedBy?: unknown }).lockedBy) };
 }
 
-/** Persist the lock record atomically to .wai/lock.json (overwrites any prior). */
+/**
+ * Persist the lock record atomically to .wai/lock.json (overwrites any prior).
+ * A legacy `children` map is never written: stage 5 records `members` instead.
+ */
 export function writeLockRecord(record: LockRecord): void {
   const p = lockPath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -118,22 +156,24 @@ export function writeLockRecord(record: LockRecord): void {
 }
 
 /**
- * Sort `specs` and `children` by key before serializing. JSON preserves object
- * insertion order, so this is what makes a re-lock's diff readable: the entries
- * stay in the same place and only the specs that actually changed move.
+ * Sort `specs` and `members` by key before serializing, and drop the legacy
+ * `children`. JSON preserves object insertion order, so this is what makes a
+ * re-lock's diff readable: the entries stay in the same place and only the
+ * specs that actually changed move.
  */
 function withSortedMaps(record: LockRecord): LockRecord {
-  const sorted = (m?: Record<string, string>): Record<string, string> | undefined => {
+  const sorted = <T>(m?: Record<string, T>): Record<string, T> | undefined => {
     if (!m) return undefined;
-    const out: Record<string, string> = {};
+    const out: Record<string, T> = {};
     for (const k of Object.keys(m).sort()) out[k] = m[k];
     return out;
   };
-  const specs = sorted(record.specs);
-  const children = sorted(record.children);
+  const { children: _legacy, ...rest } = record;
+  const specs = sorted(rest.specs);
+  const members = sorted(rest.members);
   return {
-    ...record,
+    ...rest,
     ...(specs ? { specs } : {}),
-    ...(children ? { children } : {}),
+    ...(members ? { members } : {}),
   };
 }

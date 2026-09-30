@@ -1,11 +1,9 @@
 import * as crypto from 'crypto';
-import * as path from 'path';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
 import type { LockRecord } from '../core/lockfile.js';
 import type { ApproverIdentity } from '../models/lock.js';
-import type { ProjectFamily } from '../models/project-family.js';
 import { effectiveProjectId } from '../models/project.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
@@ -263,17 +261,6 @@ export function hostedApprover(subject?: PrincipalSubject): ApproverIdentity {
 }
 
 /**
- * The members a bound root declares directly, in the shape an approval pins
- * them by: the alias and the path relative to that root (either declaration
- * form — `members` entries and, for one release, legacy L1 mounts).
- */
-function directMembers(family: ProjectFamily, root: string): { id: string; projectPath: string }[] {
-  return family.nodes
-    .filter((n) => n.parent === '' && n.mountAlias !== undefined)
-    .map((n) => ({ id: n.mountAlias!, projectPath: path.relative(root, n.directory).split(path.sep).join('/') }));
-}
-
-/**
  * Step 1 of executeApprovedLock: the root the action
  * concerns. Without a qualifier that is the project's own isolated root; WITH one
  * it is the CHAINED CHILD's tree, resolved through the project registry's
@@ -342,9 +329,10 @@ export function executeApprovedLock(
     //
     // Settledness is derived from these digests instead, exactly as locally.
     const specs = hostCore.captureApprovedSpecs();
-    // The members the bound tree declares directly, from the project graph —
-    // a member is never a subsystem, so the subsystem specs do not name them.
-    const children = hostCore.currentChildPins(directMembers(hostCore.projectFamily(), root));
+    // Stage 5 (wave A): the legacy `children` pins are never written again.
+    // The members' subjects already enter the gate identity above; recording
+    // `members`, the format-2 fields and the capture/confirm discipline on
+    // this path is wave B's (hosted lock).
     // The bound tree's effective id, so a later id change is caught (PROJECT_ID_CHANGED).
     const config = hostCore.loadProjectConfig();
     const projectId = config ? effectiveProjectId(config) : null;
@@ -368,7 +356,6 @@ export function executeApprovedLock(
       status: 'ready',
       ...(projectId !== null ? { projectId } : {}),
       specs,
-      children,
     };
     hostCore.writeLockRecord(record);
 

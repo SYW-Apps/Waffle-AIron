@@ -17,6 +17,7 @@ import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
 import { runLock } from '../../src/commands/lock.js';
 import * as subsystemAdapter from '../../src/commands/adapters/core.js';
 import * as validateAdapter from '../../src/commands/validate.js';
+import { computeGateStateId } from '../../src/core/validation.js';
 
 // ---------------------------------------------------------------------------
 // `wairon doctor` (cli_runner_impl.runDoctor) — the report phase's Project
@@ -194,7 +195,7 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     expect(printed(logSpy)).not.toContain('Lock');
     logSpy.mockRestore();
 
-    await runLock({ yes: true }, { valid: true, issues: [] });
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
     invalidateSpecCache();
     setProjectRoot(rootDir);
 

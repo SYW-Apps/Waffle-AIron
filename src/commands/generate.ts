@@ -82,9 +82,10 @@ export function pruneStaleAgents(expectedPaths: Set<string>, scanDirs?: Iterable
 // zero agent files (leftover managed files are removed once), on means
 // owner/architect files rendered through the same brief composition. Guides,
 // skills, and context sync run in both modes. Topology is LAYERED: this
-// reconciles only the current project's own layer, then — unless --no-recurse —
-// cascades into each chained subproject's OWN .wai/.claude, so the whole stack
-// is reconciled by one command while each layer stays proportional to itself.
+// reconciles only the current project's own layer — there is no cascade into
+// members (stage 5). `--family` walks the members explicitly, generating each
+// member's own layer in its own .wai/.claude, so the whole stack can still be
+// reconciled by one command while each layer stays proportional to itself.
 // ---------------------------------------------------------------------------
 
 interface GenerateOptions {
@@ -97,8 +98,11 @@ interface GenerateOptions {
   /** Only generate root-level agents (no domainRoot) */
   root?: boolean;
   dryRun?: boolean;
-  /** Cascade into chained subprojects, generating each layer in its own .wai
-   *  (default true). Set false for --no-recurse (current layer only). */
+  /** --family: also generate each member's own layer in its own root, and
+   *  (carried down) its members'. Off by default: generate never cascades. */
+  family?: boolean;
+  /** Accepted for one release (--no-recurse): this project's layer only is
+   *  now the default, so it changes nothing. */
   recurse?: boolean;
   /** Reconcile managed output dirs — prune wairon-owned agent files no longer in
    *  the topology (default true). Set false for --no-prune (write-only). */
@@ -108,14 +112,16 @@ interface GenerateOptions {
 export async function runGenerate(options: GenerateOptions = {}): Promise<void> {
   await generateLayer(options);
 
-  // Cascade one layer at a time into each DIRECT member, generating
-  // its agents in its own .wai/.claude. Skipped for --no-recurse, dry runs, and
-  // scoped (--domain/--root) runs. Each subproject is ensured-initialized first
-  // (non-destructive) so a not-yet-runnable child becomes generable in place.
-  // No spec-cache invalidation is needed here: every project root reads through
-  // its own spec workspace, and the bootstrap invalidates whenever it writes.
+  // Nothing below this project is written unless the member walk is asked for
+  // (--family), and never for a dry run or a scoped (--domain/--root) run. With
+  // it, one layer at a time: each DIRECT member is ensured-initialized first
+  // (non-destructive — an explicitly asked-for write) so a not-yet-runnable
+  // member becomes generable in place, then generates its own layer and, since
+  // --family carries down, its own members'. No spec-cache invalidation is
+  // needed: every project root reads through its own spec workspace, and the
+  // bootstrap invalidates whenever it writes.
   const scoped = options.root || options.domain || options.domains;
-  if (options.recurse === false || options.dryRun || scoped) return;
+  if (!options.family || options.dryRun || scoped) return;
 
   const children = listDirectChainedSubprojects(getProjectRoot());
   for (const child of children) {
@@ -123,7 +129,7 @@ export async function runGenerate(options: GenerateOptions = {}): Promise<void> 
     logger.info(`↳ Member "${child.alias}" — generating its layer in ${path.relative(getProjectRoot(), child.dir) || '.'}/`);
     await runWithProjectRoot(child.dir, async () => {
       ensureProjectInitialized(child.alias, child.alias); // non-destructive; a member is identified by the alias its parent declares it under
-      await runGenerate(options); // recurse: this child's layer + its own subprojects
+      await runGenerate(options); // --family carries down: this member's layer + its own members'
     });
   }
 }

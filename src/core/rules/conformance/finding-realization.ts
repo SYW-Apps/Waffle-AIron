@@ -28,6 +28,7 @@ import { RuleContext, SddRule } from '../types.js';
 
 export const findingRealizationRule: SddRule = {
   name: 'finding-realization',
+  judges: 'code',
   description:
     'Code↔spec Level 1: every finding code an L3 contract method declares must be anchored in the method\'s own source file (the method\'s sourcePath, else the implementation\'s) — as a string literal or, at exact grade, a property-access name, so a code reported through a constants object counts. Below exact grade any identifier or word counts, and the grade rides on the finding. Respects the conformance dial (off skips), leaves unresolvable files to source-file-linkage, and skips implementations under chained subsystems (projectPath), which validate standalone in their own project run.',
   codes: [

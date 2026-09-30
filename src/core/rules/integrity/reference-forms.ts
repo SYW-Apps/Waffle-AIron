@@ -48,6 +48,7 @@ function whyNoRewrite(ref: AuthoredReference): string {
 
 export const referenceFormsRule: SddRule = {
   name: 'reference-forms',
+  judges: 'design',
   description:
     "A cross-project reference is `alias::name` (or a bare name a `use` imports): the alias is one of the referring project's members or externals, the name a public name of that project's L0 table. The older forms still bind for one release and are reported (DEPRECATED_REFERENCE_FORM), each naming the spec, where in it, the form as written and the text to write instead (the scan's rewrite: a bare local id, or `alias::publicName`): a leading `::`, which escapes to the root of whatever checkout loads it; `super::`, which climbs the containing projects — a place in one family, not a name; a member path (`desktop::shell` written inside desktop, `waffler_core::transpiler::x` written inside transpiler), a first segment the referring project does not declare, read from the bound root; and a self-prefix — the referring project's own id as the first segment, with `::` or `.` (`registry.advisory-channel` inside registry), which stage 3's migration did not rewrite and stage 4's positional step does. Wairon's own writer emits none of them. A form with no rewrite (its target is out of reach) is reported with the reason. It reads the project graph's authored references, which the scan records before binding erases the form.",
   codes: [

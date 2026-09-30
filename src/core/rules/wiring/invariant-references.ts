@@ -13,6 +13,7 @@ import { familyAliases, resolveInvariantRef } from './invariant-ref.js';
  */
 export const invariantReferencesRule: SddRule = {
   name: 'invariant-references',
+  judges: 'design',
   description:
     'Every invariant a narrative step asserts (step.assertsInvariants) must resolve to a declared entity invariant: the reference splits at its last dot into a type reference and an invariant id, and some entity matching that type reference must declare that id. A reference nothing declares is an error — the step claims a property that exists nowhere.',
   codes: [

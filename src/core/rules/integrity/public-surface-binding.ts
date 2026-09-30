@@ -16,6 +16,7 @@ import { isDraftSubsystem, isOwnComponentEntry } from '../../../models/index.js'
  */
 export const publicSurfaceBindingRule: SddRule = {
   name: 'public-surface-binding',
+  judges: 'design',
   description:
     'Every declared publicInterface names a backing component, that component exists, and the subsystem owns it — a subsystem may only publish its own components.',
   codes: [

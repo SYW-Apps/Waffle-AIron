@@ -131,16 +131,18 @@ export {
 } from './provision.js';
 export type { MemberCreation } from './provision.js';
 
-// The tree's identity (approval_portal computeStateId) — what a lock is taken
-// against, and what a staleness check compares to.
-export { computeStateId } from './statehash.js';
+// The tree's content identity (approval_portal computeStateId — the snapshot
+// and archive stamps) and the bound project's OWN content identity
+// (approval_portal computeOwnStateId — the content half of the gate identity a
+// lock records; a member's specs are never part of it).
+export { computeStateId, computeOwnStateId } from './statehash.js';
 export type { StateId } from './statehash.js';
 
 // The lock record itself (approval_portal readLockRecord / writeLockRecord).
 // `wairon lock` writes one and `wairon status` reads one; neither is allowed to
 // know where the file lives.
 export { readLockRecord, writeLockRecord } from './lockfile.js';
-export type { LockRecord } from './lockfile.js';
+export type { LockRecord, MemberPin } from './lockfile.js';
 
 // The rendered architecture diagram (spec_tree_portal renderDiagram) — one string
 // for `wairon diagram`, which is the only thing that command needs from the
@@ -320,16 +322,13 @@ export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migrat
 export { repairForeignStepFields } from './narrative-repair.js';
 export type { ForeignFieldRepair } from './narrative-repair.js';
 
-// The approval (approval_portal captureApprovedSpecs … movedChildren) — the
+// The approval (approval_portal captureApprovedSpecs … approvalVerdict) — the
 // per-spec digests a lock RECORDS instead of writing statuses into the tree.
 // Published on the portal because both the local lock and the hosted admin
-// plane (through host_core_adapter) approve through it.
-//
-// `movedChildren` is here for exactly that reason: `wairon lock` and `wairon
-// status` were importing it — and `diffSize` — straight out of ./approval.js,
-// which is sdd_cli reaching past this Portal into another subsystem's module.
-// The comment above already said where they belonged; the imports had just
-// never been moved.
+// plane (through host_core_adapter) approve through it. The stage-1 child pins
+// (currentChildPins, movedChildren) are gone: a member's subject, state and
+// pin need gate identities, which only the validator computes
+// (validator_portal.familyApprovals).
 //
 // `diffSize` is not a Portal method and is not claimed as one: it is the
 // `ApprovalDiff` value object's own arithmetic, realized as a free function
@@ -338,14 +337,12 @@ export type { ForeignFieldRepair } from './narrative-repair.js';
 // count one from here, or it is back to importing the module.
 export {
   captureApprovedSpecs,
-  currentChildPins,
   approvalRecord,
   diffAgainstApproval,
-  movedChildren,
   diffSize,
   // The validator needs it to tell an approved spec from an unapproved one, and
   // was importing it straight from ./approval.js - the same reach past this
-  // Portal that movedChildren and diffSize were making.
+  // Portal that diffSize was making.
   settledSpecPaths,
   // What the lock says about the tree as it stands. Republished by IDENTITY,
   // like getStatusReport below: the Portal method and the Orchestrator function
@@ -355,7 +352,7 @@ export {
   // about a tree that had drifted from its approval.
   approvalVerdict,
 } from './approval.js';
-export type { ApprovalDiff, ChildPinDrift, ApprovalVerdict } from './approval.js';
+export type { ApprovalDiff, ApprovalVerdict } from './approval.js';
 // Who to record as the approver on a machine with no wairon account — resolved
 // through the portal like everything else sdd_cli reaches in sdd_core.
 export { localApprover } from './approver.js';

@@ -11,6 +11,7 @@ import { completedStepGraph } from './completed-step-graph.js';
 
 export const meaninglessBranchesRule: SddRule = {
   name: 'meaningless-branches',
+  judges: 'design',
   description:
     'A branch or switch whose arms all target the same step decides nothing: the condition is evaluated and flow continues at one place whatever it answers. A decision\'s targets are its explicit ones plus, where it leaves its fall-through field unset, the steps the step graph continues it at — so the classic authoring slip of pointing both arms at the next step is caught. Structure-only — a warning, lint.allow-suppressible.',
   codes: [

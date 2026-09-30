@@ -65,6 +65,7 @@ const targetsOf = (implMethod: MethodImplementation): TargetEntry[] => {
 
 export const narrativeTargetReferencesRule: SddRule = {
   name: 'narrative-target-references',
+  judges: 'design',
   description:
     'A narrative call, dispatch or register step must name a target component, and a target method unless it dispatches; a method\'s declared calls name the same pair as one "<component>.<method>" reference, the spelling the conformance debt register and a lint allow name a unit with. A target this tree contains must be a collaborator the calling component declares, must carry the named method on one of its interfaces, and that method must declare every semantic guarantee the entry asserts.',
   codes: [

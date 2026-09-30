@@ -20,6 +20,7 @@ import type { RuleContext, SddRule } from '../types.js';
 
 export const integrationSimWiringRule: SddRule = {
   name: 'integration-sim-wiring',
+  judges: 'code',
   description:
     'A committed integration harness\'s import graph — closed transitively over the analyzed module set, exact grade only — must reach at least one of the component\'s own source modules (its implementation\'s or a method\'s) and at least one source module of each direct dependsOn/owns component (technology-boundary dependencies exempt: their contract-faithful fakes are sanctioned). Execution is CI\'s job — this proves wiring, never that the sim passes.',
   codes: [

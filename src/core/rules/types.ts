@@ -672,6 +672,14 @@ export interface RuleContext {
  */
 export type RuleScope = 'spec' | 'tree';
 
+/** What a rule's verdict is about (SddRule.judges). */
+export type RuleJudgement = 'design' | 'code';
+
+/** Whether a rule judges code (SddRule.judges = code); anything else counts as design. */
+export function judgesCode(rule: Pick<SddRule, 'judges'>): boolean {
+  return rule.judges === 'code';
+}
+
 export interface SddRule {
   /** Stable rule id (kebab-case), e.g. "subsystem-boundary-dependencies". */
   name: string;
@@ -683,6 +691,14 @@ export interface SddRule {
    * must never be handed a one-spec context.
    */
   scope?: RuleScope;
+  /**
+   * design (the default) | code: what the rule's verdict is about. A rule that
+   * reads the source code model judges code: its codes are left out of the gate
+   * identity and summarized apart in the as-complete run's analysis, so an
+   * approval certifies the design and an analyzer upgrade never stales it. A
+   * pack rule declares none and counts as design. Every built-in rule sets it.
+   */
+  judges?: RuleJudgement;
   /** Every issue code this rule can emit, with default severity and summary. */
   codes: RuleCode[];
   check(ctx: RuleContext): void;

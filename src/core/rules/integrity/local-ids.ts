@@ -29,6 +29,7 @@ function localIdOf(key: string, project: string): string {
 
 export const localIdsRule: SddRule = {
   name: 'local-ids',
+  judges: 'design',
   description:
     "Inside one project an id names one spec, and an id without `::` is always local. Two spec files of one project declaring one key are DUPLICATE_SPEC_ID: whichever the loader kept, every reference to that key — local, or `alias::name` from another project — could mean either, so the tree has no single reading. A local id equal to one of the project's aliases (a `members` or `externals` key) is LOCAL_ID_SHADOWS_PROJECT: the grammar keeps them apart (a bare id is local, `alias::name` crosses), but a reader seeing `billing` beside `billing::invoice_portal` cannot tell a local subsystem from a member, so the shadow is made visible. It reads the project graph's owners, alias tables and duplicate-spec problems.",
   codes: [

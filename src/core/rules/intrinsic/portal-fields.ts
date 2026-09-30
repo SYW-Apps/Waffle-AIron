@@ -14,6 +14,7 @@ import { SddRule } from '../types.js';
  */
 export const portalFieldsRule: SddRule = {
   name: 'portal-fields',
+  judges: 'design',
   scope: 'spec',
   description:
     'A Portal declares its portalType. Non-Portal components carry no portalType, basePath, or auth (auth is inbound transport auth — it belongs on the Portal that exposes the surface). Intrinsic to one component: no tree required.',

@@ -14,6 +14,7 @@ import { SddRule } from '../types.js';
 
 export const reservedIdSegmentsRule: SddRule = {
   name: 'reserved-id-segments',
+  judges: 'design',
   description:
     'No segment of a spec id may be the reserved namespace keyword "super" — the :: grammar consumes it as a namespace hop, so a stored reference to such an id resolves to a different spec.',
   codes: [

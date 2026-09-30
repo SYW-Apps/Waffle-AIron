@@ -11,6 +11,7 @@ import { isDraftSubsystem } from '../../../models/index.js';
  */
 export const publicSurfaceConsumersRule: SddRule = {
   name: 'public-surface-consumers',
+  judges: 'design',
   description:
     'Every subsystem a published surface names as its consumer must exist in the tree. A consumers list restricts who may depend on the surface, so an id that names nothing locks the surface against a caller nobody can be — and a typo there silently locks out the caller that was meant, which the boundary rule would then report against the wrong party.',
   codes: [

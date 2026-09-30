@@ -3,6 +3,7 @@ import { SddRule } from '../types.js';
 /** Dependency-cycle detection over the component dependsOn graph. */
 export const cyclesRule: SddRule = {
   name: 'dependency-cycles',
+  judges: 'design',
   description: 'The component dependsOn graph must be a DAG; the first cycle through a component in the run\'s scope is reported with its full path.',
   codes: [
     { code: 'CIRCULAR_DEPENDENCY', defaultSeverity: 'error', summary: 'Circular dependency between components' },

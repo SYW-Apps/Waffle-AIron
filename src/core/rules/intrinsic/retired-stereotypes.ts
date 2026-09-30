@@ -11,6 +11,7 @@ import { isRetired } from '../../../models/index.js';
  */
 export const retiredStereotypesRule: SddRule = {
   name: 'retired-stereotypes',
+  judges: 'design',
   scope: 'spec',
   description:
     'A component typed with a retired stereotype is an error until it is migrated (STEREOTYPE_RETIRED). A Specialist becomes an Orchestrator with the dependencyClass its dependencies give it, which `wairon doctor --fix` applies. A Gateway becomes the Portal it owns, with the gateway variant: its other members are depended on rather than owned, its consumers depend on that Portal, and the Gateway spec is deleted, steps the finding lists for the author. Intrinsic to one component: no tree required.',

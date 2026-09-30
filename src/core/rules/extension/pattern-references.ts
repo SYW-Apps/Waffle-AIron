@@ -10,6 +10,7 @@ import { SddRule } from '../types.js';
  */
 export const patternReferencesRule: SddRule = {
   name: 'pattern-references',
+  judges: 'design',
   description:
     "Every component pattern reference resolves to a reusable pattern declared by a loaded extension pack (UNKNOWN_PATTERN_REF); a pinned version with no matching pack pattern is warned (PATTERN_VERSION_MISMATCH). Pattern constraint enforcement itself is delegated to the declaring pack's rules.",
   codes: [

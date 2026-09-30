@@ -9,6 +9,7 @@ import { fieldTypeRefs } from '../../../models/index.js';
  */
 export const fieldTypeReferencesRule: SddRule = {
   name: 'field-type-references',
+  judges: 'design',
   description:
     'Every type identifier a type field\'s declared type names must resolve to a builtin or a defined entity/value-object type — the type\'s own generic parameters are not field references.',
   codes: [

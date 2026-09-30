@@ -18,9 +18,6 @@ export {
   writeLockRecord,
   // The approval: the per-spec digests a lock RECORDS.
   captureApprovedSpecs,
-  currentChildPins,
-  // The project graph: the members a bound root declares, for the lock's pins.
-  projectFamily,
   renderDiagram,
   // The full CanvasModel as data — the web app's canvas and share snapshots.
   buildCanvasDataModel,

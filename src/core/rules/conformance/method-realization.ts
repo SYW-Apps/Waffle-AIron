@@ -80,6 +80,7 @@ function bodyReachable(code: CodeIndex, file: string, symbol: string): boolean {
 
 export const methodRealizationRule: SddRule = {
   name: 'method-realization',
+  judges: 'code',
   description:
     'Code↔spec Level 1: every L3 contract method must be realized in its own source file (the method\'s sourcePath, else the implementation\'s) at its conformance tier — declared | anchored | off; Portals default to anchored, everything else to declared, and a per-method `symbol` maps an intent-language name onto the code name. A method realized by a DECLARATION owes a function BODY as well: at exact grade one must be reachable under the symbol, here or through the imports and republications this file forwards it by, so a signature, an ambient or interface declaration or a plain value binding stops reading as an implementation (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. Methods whose file escapes the root, is missing or could not be analyzed are left to source-file-linkage, and implementations under chained subsystems (projectPath) validate standalone in their own project run.',
   codes: [

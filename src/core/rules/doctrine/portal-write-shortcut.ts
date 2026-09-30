@@ -10,6 +10,7 @@ import { SddRule } from '../types.js';
  */
 export const portalWriteShortcutRule: SddRule = {
   name: 'portal-write-shortcut',
+  judges: 'design',
   description:
     'A Portal narrative call step or dispatch-table binding that reaches a write-effect method on a Repository or Index directly is the write shortcut: the Portal→data-facade edge is licensed for reads only, and a write routes through an Orchestrator that owns the workflow. A dispatch step reaches its server only through a table binding, so judging every binding judges each dispatch step that takes it, once, where the route is declared. Methods that carry no effect tag are not judged.',
   codes: [

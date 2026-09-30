@@ -33,6 +33,7 @@ const quoteList = (names: string[]): string => names.map(n => `"${n}"`).join(', 
 
 export const sourceFileLinkageRule: SddRule = {
   name: 'source-file-linkage',
+  judges: 'code',
   description:
     'Code↔spec Level 1: every source file an implementation names — its own sourcePath and each method\'s — must resolve to a real, readable file inside the project root, and an implementation that names no file at all, or leaves a contract method without one, is linked to no code. A file that escapes the root, is missing or cannot be analyzed is reported once and blocks only the methods realized in it. A run in which TypeScript/JavaScript files were analyzed below exact grade reports that once (CONFORMANCE_DEGRADED), since dependency conformance then skips them. Implementations under chained subsystems (projectPath) validate standalone in their own project run and are skipped here.',
   codes: [

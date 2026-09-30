@@ -77,6 +77,7 @@ function ownerOf(type: TypeSpec, file: string): string {
 
 export const typeRealizationRule: SddRule = {
   name: 'type-realization',
+  judges: 'code',
   description:
     'Code↔spec Level 1 for the data model: a type that names a sourcePath is claiming code, so every file it names — its own and each method\'s — must resolve to a real, readable file inside the project root, its file must PUBLISH its declaration (an exported name at exact grade, the declaration tier below it, under its `symbol` when the code-level name differs from the type\'s name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never realized), and each of its pure methods must appear in its own file (the method\'s sourcePath, else the type\'s) at the declaration tier, under the method\'s `symbol`, else the method\'s name. A type that names no sourcePath claims nothing and is never reported. Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible, a file that escapes the root, is missing or could not be analyzed is reported once and blocks only what it would have realized, and types under chained subsystems (projectPath) validate standalone in their own project run.',
   codes: [

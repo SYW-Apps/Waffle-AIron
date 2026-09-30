@@ -61,6 +61,7 @@ const isAllUppercase = (s: string) => /^[A-Z0-9_]+$/.test(s);
 
 export const namingRule: SddRule = {
   name: 'naming-conventions',
+  judges: 'design',
   description:
     'Enforces naming conventions (casing styles or regular expressions) for subsystem, component, interface, type (differentiating entities and value-objects), method, variables/parameters, fields, and constants names/IDs, plus stereotype-specific naming patterns.',
   codes: [

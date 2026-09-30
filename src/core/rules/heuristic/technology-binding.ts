@@ -14,6 +14,7 @@ const DATA_LAYER = new Set(['Adapter', 'Store', 'Registry', 'Index']);
 
 export const technologyBindingRule: SddRule = {
   name: 'technology-binding',
+  judges: 'design',
   description:
     'Only data-layer stereotypes (Adapter/Store/Registry/Index) should bind a technology directly: an L4 that declares `technologies` on logic has no swap seam. No hardcoded vendor lists — only declared tokens are policed, so the rule never fires on a tree that doesn\'t opt in.',
   codes: [

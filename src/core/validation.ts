@@ -18,10 +18,11 @@ import {
   dryRunSerializeSpecs,
   loadProjectExtensions,
   loadProjectConfig,
-  computeStateId,
+  computeOwnStateId,
   consumedContractInputs,
   settledSpecPaths,
   readLockRecord,
+  approvalRecord,
   loadProjectVariants,
   resolveSubsystemExports,
   resolveProjectExports,
@@ -45,9 +46,12 @@ import { projectIdentity, requiredPolicies, type PackRequirement, type PackSelec
 import * as packImpact from './pack-impact.js';
 import type { PackCandidate, PackDoctrine, PackImpact } from '../models/pack-impact.js';
 import type { ExtensionPack } from './extensions.js';
-import { computeGateIdentity, type GateConfig } from './rules/gate-identity.js';
-import { BUILTIN_PROFILES, PROJECT_KINDS, type IssueSeverity } from './rules/types.js';
+import { analyzerDigest, computeGateIdentity, type GateConfig } from './rules/gate-identity.js';
+import { BUILTIN_PROFILES, PROJECT_KINDS, judgesCode, type IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
+import type { AnalysisGradeLabel, CodeAnalysis, ProjectApproval } from '../models/lock.js';
+import type { CodeModel } from '../models/code-model.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
 
 /**
  * The project's BY-NAME pack selections, for the reproducibility rule. Legacy
@@ -187,6 +191,12 @@ export interface ValidationResult {
    * gate.
    */
   projects?: ProjectVerdict[];
+  /**
+   * The as-complete run only (validateAsComplete): the code-conformance half
+   * summarized with the analyzer that produced it. Absent on the owner's gate
+   * and on a family run.
+   */
+  analysis?: CodeAnalysis;
 }
 
 /**
@@ -409,6 +419,24 @@ export function validateProject(
   rulesOrOptions?: RulesConfig | ValidationOptions,
   projectType: string = 'backend'
 ): ValidationResult {
+  return runOwnersGate(rulesOrOptions, projectType).result;
+}
+
+/** One run of the owner's gate: the verdict, and the code model it judged the code with. */
+interface OwnersGateRun {
+  result: ValidationResult;
+  codeModel: CodeModel;
+}
+
+/**
+ * The owner's gate itself, shared by validateProject and validateAsComplete:
+ * the as-complete run also needs the code model the rules read, to say how
+ * exactly the code half was analyzed.
+ */
+function runOwnersGate(
+  rulesOrOptions?: RulesConfig | ValidationOptions,
+  projectType: string = 'backend'
+): OwnersGateRun {
   let rules = rulesOrOptions as RulesConfig | undefined;
   let scopeSubsystem: string | undefined;
   let extensions: LoadedExtensions | undefined;
@@ -509,7 +537,7 @@ export function validateProject(
         ? ' Extension packs were not checked yet either, and at least one problem is already known there — re-run once the L0 exists.'
         : ' Extension-pack configuration is not checked until the L0 exists.';
       issues.push(issue('error', 'MISSING_SYSTEM_SPEC', `L0 System specification (.system.yaml) is missing.${pending}`));
-      return { valid: false, issues };
+      return { result: { valid: false, issues }, codeModel };
     }
 
     // A --subsystem scope that names no loaded subsystem is almost always a typo
@@ -536,7 +564,7 @@ export function validateProject(
             scopeSubsystem,
           ),
         );
-        return { valid: false, issues };
+        return { result: { valid: false, issues }, codeModel };
       }
     }
 
@@ -632,9 +660,12 @@ export function validateProject(
 
     // Step 39: the project's verdict — the same from every root.
     return {
-      valid: issues.every((i) => i.severity !== 'error'),
-      issues,
-      ...(hint ? { hint } : {}),
+      result: {
+        valid: issues.every((i) => i.severity !== 'error'),
+        issues,
+        ...(hint ? { hint } : {}),
+      },
+      codeModel,
     };
   } finally {
     statusBearing.forEach((s, i) => { s.status = statusSnapshot[i]; });
@@ -697,7 +728,52 @@ function settledStatusBearing(loaded: {
  * exactly the silent degradation this wrapper previously suffered from.
  */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
-  return validateProject({ ...(options ?? {}), treatAllAsComplete: true });
+  const { result, codeModel } = runOwnersGate({ ...(options ?? {}), treatAllAsComplete: true });
+  // Steps 15-16: the code half summarized apart, with the analyzer that took
+  // it — never removed from the issues; the lock partitions with designOnly.
+  const sequence = ruleSequence();
+  const doctrineDigest = analyzerDigest(sequence, { rules: options?.rules ?? projectRules() });
+  return { ...result, analysis: codeAnalysisOf(result, sequence, codeModel, doctrineDigest) };
+}
+
+/** The bound project's rule tuning, when its configuration reads. */
+function projectRules(): RulesConfig | undefined {
+  try {
+    return loadProjectConfig()?.rules;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The weakest grade first: a clean result is only as strong as the least exact file it read. */
+const GRADE_ORDER: AnalysisGradeLabel[] = ['generic', 'pattern', 'exact'];
+
+/** The weakest analysis grade the code model applied to any analyzed file; `none` when it analyzed none. */
+function weakestGrade(codeModel: CodeModel): AnalysisGradeLabel {
+  const grades = codeModel.files
+    .filter((f) => f.status === 'analyzed' && f.analysisGrade)
+    .map((f) => GRADE_ORDER.indexOf(f.analysisGrade as AnalysisGradeLabel));
+  return grades.length ? GRADE_ORDER[Math.min(...grades)] : 'none';
+}
+
+/** The code half of a run: the codes code-judging rules declare, and how many of each severity it reported. */
+function codeAnalysisOf(
+  result: ValidationResult,
+  sequence: SddRule[],
+  codeModel: CodeModel,
+  doctrineDigest: string,
+): CodeAnalysis {
+  const codes = [...new Set(sequence.filter(judgesCode).flatMap((r) => r.codes.map((c) => c.code)))].sort();
+  const codeSet = new Set(codes);
+  const count = (severity: IssueSeverity): number =>
+    result.issues.filter((i) => codeSet.has(i.code) && i.severity === severity).length;
+  return {
+    analyzer: { validatorVersion: WAIRON_VERSION, doctrineDigest, grade: weakestGrade(codeModel) },
+    codes,
+    errors: count('error'),
+    warnings: count('warning'),
+    notices: count('notice'),
+  };
 }
 
 /**
@@ -753,25 +829,71 @@ export function builtinProjectKinds(): string[] {
 
 /**
  * The gate identity a lock records and every staleness check compares
- * (ispec_validator/ivalidator_portal.computeGateStateId): the spec tree's content
- * identity digested together with the governing doctrine and the consumed
- * contract inputs. The validator computes it because the doctrine it covers is
- * the validator's own rule set; core only compares a lock against the identity
- * its caller passes (readLockState).
+ * (ispec_validator/ivalidator_portal.computeGateStateId): the project's OWN
+ * content identity, the design doctrine, its own consumed contract inputs, its
+ * `composition`, and each direct member's composition subject — read from the
+ * member's own lock record, never recomputed and never its specs. So a
+ * parent's identity costs its own tree plus one lock file per direct member,
+ * and a lock taken at a member's own root and one taken inside its family
+ * record the same identity. The validator computes it because the doctrine it
+ * covers is the validator's own rule set; core only compares a lock against
+ * the identity its caller passes (readLockState).
  */
 export function computeGateStateId(): StateId {
-  const content = computeStateId();
+  // The whole scan, so the graph names every direct member whatever an earlier
+  // caller narrowed it to.
+  scanAllSpecs({ recursive: true });
+  const content = computeOwnStateId();
   const extensions = loadProjectExtensions();
   // The project's governing configuration decides verdicts too: which profile
-  // applies, and how it tuned the rules. A configuration that fails its schema
-  // contributes nothing, and the tree identity still stands on its own.
+  // applies, how it tuned the rules, and what it requires of its members. A
+  // configuration that fails its schema contributes nothing, and the tree
+  // identity still stands on its own.
   let gate: GateConfig = {};
   try {
     const config = loadProjectConfig();
-    if (config) gate = { projectType: config.projectType, rules: config.rules };
+    if (config) gate = { projectType: config.projectType, rules: config.rules, composition: config.composition ?? null };
   } catch { /* a configuration that fails its schema: an empty gate config */ }
   const inputs = consumedContractInputs();
+  const members = directMemberSubjects();
   // The built-in rules only: pack rules enter the identity through the extensions.
   registerBuiltinRules();
-  return computeGateIdentity(content, extensions, ruleSequence(), inputs, gate);
+  return computeGateIdentity(content, extensions, ruleSequence(), inputs, gate, members);
+}
+
+/** The subject recorded for a member with no lock (or no project on disk). */
+const NEVER_SUBJECT = 'never';
+
+/**
+ * Steps 6-9 of computeGateStateId: each member the bound root declares
+ * DIRECTLY → the stateId its own lock record carries (`<algorithm>:<digest>`),
+ * or `never`. Recorded, not recomputed: the member's live edits are the
+ * member's to re-approve. Deeper members reach the identity through their
+ * parent's subject.
+ */
+function directMemberSubjects(): Record<string, string> {
+  const family = projectFamily();
+  const subjects: Record<string, string> = {};
+  for (const node of family.nodes) {
+    if (node.parent !== '' || node.mountAlias === undefined) continue;
+    const record = approvalRecord(node.directory);
+    subjects[node.mountAlias] = record ? `${record.stateId.algorithm}:${record.stateId.digest}` : NEVER_SUBJECT;
+  }
+  // A declared member with no project on disk carries no decision at all.
+  for (const problem of family.problems) {
+    if (problem.kind === 'member-absent' && problem.projects[0] === '' && problem.id) subjects[problem.id] = NEVER_SUBJECT;
+  }
+  return subjects;
+}
+
+/**
+ * ivalidator_portal.familyApprovals — the bound project's pin tree: its own
+ * approval state and each member's within `depth` levels, each computed at the
+ * member's own root, with each member's subject and how its parent pinned it.
+ * The one source the lock workflow, `wairon status` and sdd_get_status read,
+ * so they cannot disagree. Writes nothing; a hosted caller gates on reach
+ * itself before asking about a family.
+ */
+export function familyApprovals(depth?: number): ProjectApproval[] {
+  return familyValidator.projectApprovals(depth);
 }

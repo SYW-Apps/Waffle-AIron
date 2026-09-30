@@ -6,6 +6,7 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
+  graph,
 } from './specs.js';
 import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 
@@ -19,10 +20,11 @@ import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 // timestamp does not shift the identity, and the specs are put in id order
 // before they are digested so the filesystem's directory order stays out of it.
 //
-// The gate identity a lock records digests this content identity together with
-// the governing doctrine; it is the validator's to compute
-// (src/core/rules/gate-identity.ts), since the doctrine it covers is the
-// validator's rule set.
+// Two readings: the whole scan (computeStateId — the snapshot and archive
+// stamps) and the bound project's OWN specs alone (computeOwnStateId — the
+// content half of the gate identity a lock records). The gate identity itself
+// is the validator's to compute (src/core/rules/gate-identity.ts), since the
+// doctrine it covers is the validator's rule set.
 // ---------------------------------------------------------------------------
 
 export interface StateId {
@@ -60,18 +62,41 @@ function inIdentityOrder<T extends { id: string }>(specs: T[]): T[] {
     .map((entry) => entry.spec);
 }
 
-/** Deterministic CONTENT StateId over the current (request-scoped) project's spec tree. */
-export function computeStateId(): StateId {
+/** The canonical digest of one tree reading, in identity order. */
+function digestTree(keep: (id: string) => boolean): StateId {
+  const kind = <T extends { id: string }>(specs: T[]): T[] => inIdentityOrder(specs.filter((s) => keep(s.id)));
   const tree = {
     system: loadSystemSpec(),
-    subsystems: inIdentityOrder(loadSubsystemSpecs()),
-    components: inIdentityOrder(loadComponentSpecs()),
-    interfaces: inIdentityOrder(loadInterfaceSpecs()),
-    implementations: inIdentityOrder(loadImplementationSpecs()),
-    types: inIdentityOrder(loadTypeSpecs()),
+    subsystems: kind(loadSubsystemSpecs()),
+    components: kind(loadComponentSpecs()),
+    interfaces: kind(loadInterfaceSpecs()),
+    implementations: kind(loadImplementationSpecs()),
+    types: kind(loadTypeSpecs()),
   };
   const digest = crypto.createHash('sha256').update(canonicalize(tree)).digest('hex');
   return { algorithm: CONTENT_ALGORITHM, digest };
+}
+
+/**
+ * Deterministic CONTENT StateId over the current (request-scoped) project's
+ * spec tree, every member the scan follows included. The snapshot and archive
+ * stamps; never the gate identity since stage 5.
+ */
+export function computeStateId(): StateId {
+  return digestTree(() => true);
+}
+
+/**
+ * state_hash.ownTree — the content identity of the bound project's OWN specs:
+ * the specs the scan keys under the bound root (owner key empty), never a
+ * member's. A member's specs reach the gate identity only as the member's
+ * composition subject; hashing them here too would re-couple a parent's
+ * approval to every member edit. Same ordering, canonical form and algorithm
+ * marker as computeStateId, so for a project with no members the two agree.
+ */
+export function computeOwnStateId(): StateId {
+  const owners = graph().owners;
+  return digestTree((id) => (owners.get(id) ?? '') === '');
 }
 
 /** True when two StateIds are the same identity: same algorithm, same digest. */

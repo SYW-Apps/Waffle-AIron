@@ -20,6 +20,7 @@ export const PORTAL_TRANSPORT: Record<string, string | undefined> = {
  */
 export const portalsRule: SddRule = {
   name: 'portal-endpoints',
+  judges: 'design',
   description:
     'A Portal binds every interface method to a concrete endpoint of the transport its portalType expects.',
   codes: [
