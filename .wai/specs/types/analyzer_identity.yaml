@@ -30,5 +30,6 @@ fields:
       weakest, because a clean result is only as strong as the least exact file it read.
     optional: false
 methods: []
+sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:11.385Z'
-updatedAt: '2026-09-30T06:03:09.439Z'
+updatedAt: '2026-09-30T06:12:19.304Z'

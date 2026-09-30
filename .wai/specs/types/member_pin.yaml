@@ -33,5 +33,6 @@ fields:
       disk). Recorded beside the subject, never hashed into the parent's identity.
     optional: false
 methods: []
+sourcePath: src/core/lockfile.ts
 createdAt: '2026-09-30T05:47:05.631Z'
-updatedAt: '2026-09-30T05:47:05.635Z'
+updatedAt: '2026-09-30T06:12:15.984Z'

@@ -61,6 +61,7 @@ methods:
       certifies. Pure over the result's own fields; a result with no analysis answers itself
       unchanged. The lock refuses only on the errors this answers, and records its counts as the
       lock's validationResult.
+    sourcePath: src/models/lock.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-30T05:47:53.773Z'
+updatedAt: '2026-09-30T06:21:45.867Z'

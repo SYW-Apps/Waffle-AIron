@@ -55,5 +55,6 @@ fields:
       parent has no lock, or its lock names no pin for this alias). Absent on the root's own entry.
     optional: true
 methods: []
+sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-09-30T05:47:31.987Z'
+updatedAt: '2026-09-30T06:12:20.974Z'

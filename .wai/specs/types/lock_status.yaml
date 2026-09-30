@@ -40,6 +40,7 @@ methods:
       against the stage-5 identity (sha256+content+doctrine+inputs+members) answers true — every
       lock reads stale once, and a surface that says so can tell the human that nothing in the
       design is known to have moved. Pure over the status's own fields.
+    symbol: lockUpgraded
 sourcePath: src/core/specs.ts
 createdAt: '2026-07-30T15:58:52.007Z'
-updatedAt: '2026-09-30T05:47:57.499Z'
+updatedAt: '2026-09-30T06:12:26.018Z'
