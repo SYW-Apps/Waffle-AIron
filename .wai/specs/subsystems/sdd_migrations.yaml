@@ -33,6 +33,6 @@ publicInterfaces:
     component: migration_portal
     interface: imigration_portal
 trustedLinks: []
-status: design
+status: complete
 createdAt: '2026-09-30T20:23:45.351Z'
-updatedAt: '2026-09-30T20:53:24.083Z'
+updatedAt: '2026-09-30T22:58:24.282Z'

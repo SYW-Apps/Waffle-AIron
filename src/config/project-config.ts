@@ -16,8 +16,10 @@ import {
   type PackSelection,
   type ProjectProfileSelection,
   type ExternalDeclaration,
+  type ExternalSource,
   type MemberDeclaration,
   memberDeclarationOf,
+  effectiveProjectId,
   withPack,
 } from '../models/project.js';
 
@@ -66,6 +68,10 @@ export interface ProjectConfigRepository {
   setMemberPath(alias: string, path: string): boolean;
   removeMember(alias: string): boolean;
   importNames(alias: string, names: string[]): boolean;
+  renameId(from: string, to: string): boolean;
+  renameAlias(from: string, to: string): boolean;
+  repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean;
+  removeExternal(alias: string): boolean;
 }
 
 /** iproject_config_index — the read half of the facade. */
@@ -560,7 +566,9 @@ class DocumentReconciler {
   }
 
   private mapping(map: YAML.YAMLMap, target: Record<string, unknown>, at: (string | number)[], replace: (value: PlainValue) => void): void {
-    const keyOf = (pair: YAML.Pair): string => String(YAML.isScalar(pair.key) ? pair.key.value : pair.key);
+    const written = (pair: YAML.Pair): string => String(YAML.isScalar(pair.key) ? pair.key.value : pair.key);
+    const renamed = this.renamedKeys(map, target, written);
+    const keyOf = (pair: YAML.Pair): string => renamed.get(pair) ?? written(pair);
     const kept = map.items.filter((pair) => target[keyOf(pair)] !== undefined);
     if (kept.length === 0) {
       replace(target);
@@ -569,6 +577,8 @@ class DocumentReconciler {
     for (const pair of map.items) {
       const key = keyOf(pair);
       const span = this.pairSpan(pair);
+      const keyRange = (pair.key as YAML.Node).range;
+      if (renamed.has(pair) && keyRange) this.splices.push({ start: keyRange[0], end: keyRange[1], text: key, rank: 0 });
       if (target[key] === undefined) {
         this.splices.push({ start: span.start, end: span.end, text: '', rank: 0 });
         continue;
@@ -578,6 +588,26 @@ class DocumentReconciler {
       });
     }
     this.insertNewKeys(map, kept, target, at, keyOf);
+  }
+
+  /**
+   * The keys renamed in place: a key the document drops whose value is, alone
+   * among them, the value of exactly one key the mapping does not have — an
+   * alias rekeyed. Only a plain key is renamed this way, to a key that needs
+   * no quoting; anything else is a drop and an insert.
+   */
+  private renamedKeys(map: YAML.YAMLMap, target: Record<string, unknown>, written: (pair: YAML.Pair) => string): Map<YAML.Pair, string> {
+    const out = new Map<YAML.Pair, string>();
+    const present = new Set(map.items.map(written));
+    const added = Object.keys(target).filter((k) => target[k] !== undefined && !present.has(k) && /^[a-z0-9_-]+$/.test(k));
+    const dropped = map.items.filter((pair) => target[written(pair)] === undefined && YAML.isScalar(pair.key) && pair.key.type === 'PLAIN' && pair.key.range && YAML.isNode(pair.value));
+    const valueOf = (pair: YAML.Pair): PlainValue => (pair.value as YAML.Node).toJS(this.doc, { maxAliasCount: -1 });
+    for (const pair of dropped) {
+      const matches = added.filter((k) => sameValue(valueOf(pair), target[k] as PlainValue));
+      const rivals = dropped.filter((other) => other !== pair && matches.some((k) => sameValue(valueOf(other), target[k] as PlainValue)));
+      if (matches.length === 1 && rivals.length === 0) out.set(pair, matches[0]);
+    }
+    return out;
   }
 
   /**
@@ -978,6 +1008,73 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       save(next);
       return true;
     },
+    renameId(from, to) {
+      // Refused before anything is read: a new id outside the grammar.
+      if (!PROJECT_ID_RE.test(to)) {
+        throw new WaironError(`Refusing to rename the project at ${root} to "${to}": it breaks the project-id grammar ([a-z0-9-_.], starting and ending alphanumeric).`);
+      }
+      const config = current();
+      const previous = config.previousIds ?? [];
+      // Already done: the new id declared, the old one kept.
+      if (config.id === to && previous.includes(from)) return false;
+      // The plan was computed against another identity: nothing is written.
+      const now = effectiveProjectId(config);
+      if (now !== from) {
+        throw new WaironError(`Refusing to rename the project at ${root} from "${from}" to "${to}": it answers to ${now === null ? 'no id' : `"${now}"`}, not "${from}".`);
+      }
+      save({ ...config, id: to, previousIds: previous.includes(from) ? previous : [...previous, from] });
+      return true;
+    },
+    renameAlias(from, to) {
+      if (!EXTERNAL_ALIAS_RE.test(to)) {
+        throw new WaironError(`Refusing to rename the alias "${from}" at ${root} to "${to}": an alias must fit [a-z0-9-_]+.`);
+      }
+      const config = current();
+      const holds = (alias: string): boolean => config.members?.[alias] !== undefined || config.externals?.[alias] !== undefined;
+      // Already done: the old alias gone and the new one declared.
+      if (!holds(from) && holds(to)) return false;
+      if (!holds(from)) {
+        throw new WaironError(`Refusing to rename the alias "${from}" at ${root}: neither \`members\` nor \`externals\` declares it.`);
+      }
+      if (holds(to)) {
+        throw new WaironError(`Refusing to rename the alias "${from}" at ${root} to "${to}": "${to}" is already declared, and one alias names one project.`);
+      }
+      // The key renamed in place: the entry keeps its position and its value exactly as written.
+      const rekey = <V>(map: Record<string, V>): Record<string, V> =>
+        Object.fromEntries(Object.entries(map).map(([k, v]) => [k === from ? to : k, v]));
+      save(config.members?.[from] !== undefined
+        ? { ...config, members: rekey(config.members) }
+        : { ...config, externals: rekey(config.externals!) });
+      return true;
+    },
+    repointExternal(alias, project, source) {
+      if (project !== null && !PROJECT_ID_RE.test(project)) {
+        throw new WaironError(`Refusing to repoint the external "${alias}" at ${root}: the producer id "${project}" breaks the project-id grammar.`);
+      }
+      const config = current();
+      const existing = config.externals?.[alias];
+      if (existing === undefined) {
+        throw new WaironError(`Refusing to repoint the external "${alias}" at ${root}: \`externals\` declares no "${alias}".`);
+      }
+      const next: ExternalDeclaration = { ...existing };
+      if (project === null) delete next.project;
+      else next.project = project;
+      if (source === null) delete next.source;
+      else next.source = { ...source };
+      if (sameValue(existing as PlainValue, next as PlainValue)) return false;
+      save({ ...config, externals: { ...config.externals, [alias]: next } });
+      return true;
+    },
+    removeExternal(alias) {
+      const config = current();
+      const externals = config.externals;
+      if (externals?.[alias] === undefined) return false;
+      const rest = Object.fromEntries(Object.entries(externals).filter(([key]) => key !== alias));
+      const next: ProjectConfig = { ...config, externals: rest };
+      if (Object.keys(rest).length === 0) delete next.externals;
+      save(next);
+      return true;
+    },
   };
 }
 
@@ -1114,6 +1211,10 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     setMemberPath(alias, memberPath) { return registry.setMemberPath(alias, memberPath); },
     removeMember(alias) { return registry.removeMember(alias); },
     importNames(alias, names) { return registry.importNames(alias, names); },
+    renameId(from, to) { return registry.renameId(from, to); },
+    renameAlias(from, to) { return registry.renameAlias(from, to); },
+    repointExternal(alias, project, source) { return registry.repointExternal(alias, project, source); },
+    removeExternal(alias) { return registry.removeExternal(alias); },
   };
 }
 
@@ -1150,4 +1251,8 @@ export const projectConfigRepository: ProjectConfigRepository = {
   setMemberPath(alias, memberPath) { return bound().setMemberPath(alias, memberPath); },
   removeMember(alias) { return bound().removeMember(alias); },
   importNames(alias, names) { return bound().importNames(alias, names); },
+  renameId(from, to) { return bound().renameId(from, to); },
+  renameAlias(from, to) { return bound().renameAlias(from, to); },
+  repointExternal(alias, project, source) { return bound().repointExternal(alias, project, source); },
+  removeExternal(alias) { return bound().removeExternal(alias); },
 };

@@ -75,20 +75,29 @@ methods:
         type: return
         outcome: refused plan
       - stepNumber: 4
+        description: >-
+          Read the member's resolved export table: the audience of each public name a family project
+          reaches in it
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 5
         label: consumers
         description: >-
           From the graph, collect every other family project whose declared external binds to the
           member through the family (no source path), and every external of the member that binds a
-          family project through the family; one that is not in reach is family-partial
+          family project through the family; one that is not in reach is family-partial. Every
+          public name a family project (the bound one included) reaches in the member that the
+          member exports below the instance audience is audience-too-narrow
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           With the bound root bound, read its configuration for the member's declaration (path,
           description, `use`)
         type: call
         targetComponent: migration_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Plan the edits: in the bound project, the member removed and an external declared under
           the same alias (`project` its id when that differs from the alias, `source.path` its path,
@@ -96,7 +105,7 @@ methods:
           `source.path` to the member relative to that consumer; in the member, each collected
           external's `source.path` relative to it. No reference is respelled: the alias is unchanged
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Answer the plan
         type: return
         outcome: the detach plan
@@ -235,6 +244,6 @@ methods:
         label: restore
         description: Restore the caller's binding
         type: local
-status: design
+status: complete
 createdAt: '2026-09-30T20:34:06.370Z'
-updatedAt: '2026-09-30T20:34:06.381Z'
+updatedAt: '2026-09-30T22:58:40.219Z'

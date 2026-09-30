@@ -11,9 +11,15 @@ fields:
     description: >-
       not-a-member | not-an-external | not-a-project | not-contained | member-absent |
       family-partial | id-collision | alias-taken | id-moved | already-member | name-collision |
-      reference-unwritable | transaction-pending | internalize-refused | externalize-refused.
-      family-partial: a project the plan must write lies above the highest root in reach, or a
-      member it must write is absent or out of reach — each named.
+      reference-unwritable | audience-too-narrow | transaction-pending | <verb>-refused
+      (attach-refused, detach-refused, adopt-refused, rename-refused, rename-alias-refused,
+      internalize-refused, externalize-refused, chaining-refused: a writer's refusal met on the
+      rehearsal, carrying its message) | and, for the chaining migration, each of its blocking
+      finding kinds passed through as it is: project-absent, mount-field-conflict,
+      mount-field-unhomed (family-partial and member-absent as above). family-partial: a project the
+      plan must write lies above the highest root in reach, or a member it must write is absent or
+      out of reach — each named. audience-too-narrow: a detach would leave a family consumer using a
+      name the member exports only to the family.
     optional: false
   - name: project
     type: string
@@ -26,4 +32,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:12.010Z'
-updatedAt: '2026-09-30T21:33:10.252Z'
+updatedAt: '2026-09-30T22:50:00.551Z'

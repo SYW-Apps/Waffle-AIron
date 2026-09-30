@@ -21,6 +21,8 @@ export interface MigrationRequest {
   newAlias?: string;
   subsystem?: string;
   destination?: InternalizeDestination;
+  /** attach: what the member is to the bound project, written into its `members` entry. */
+  description?: string;
   /** false: plan without rehearsing (doctor's summary). Absent or true: a full plan. */
   rehearse?: boolean;
 }
@@ -34,6 +36,22 @@ export interface PlannedEdit {
   /** One line naming the edit as the report prints it. */
   detail: string;
   reference?: ReferenceEdit;
+  /** The write that realizes it (a membership, identity or boundary verb); absent for a chaining edit. */
+  write?: PlannedWrite;
+}
+
+/**
+ * planned_write — the one write that realizes a planned edit: the owner root
+ * the writer binds (as its rehearsal image) and the client-adapter write it
+ * makes there, with its arguments exactly as planned.
+ */
+export interface PlannedWrite {
+  /** The owner's live root directory, absolute. */
+  root: string;
+  /** setId | declareMember | removeMember | declareExternal | repointExternal | removeExternal | renameAlias | renameId | importNames | rewriteReferences | internalizeMember | externalizeSubsystem | pinExternals | renamePin | unpin */
+  call: string;
+  /** Its arguments, in order. */
+  args: unknown[];
 }
 
 /** migration_refusal — one reason a family migration will not apply. */

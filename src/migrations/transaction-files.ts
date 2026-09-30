@@ -148,7 +148,13 @@ export function locate(owner: string, id: string, area: string, path: string): s
   return nodePath.join(transactionDir(owner, id), area, ...path.split('/'));
 }
 
-/** itransaction_file_adapter.close — remove the transaction directory, then .wai/transactions/ once only its .gitignore is left. */
+/**
+ * itransaction_file_adapter.close — remove the transaction directory, then
+ * .wai/transactions/ once only its .gitignore is left, then the owner's .wai/
+ * when that left it empty: a project the migration took apart (an
+ * internalized member) leaves no empty .wai behind for a later command to
+ * mistake for a project.
+ */
 export function close(owner: string, id: string): void {
   removeTree(transactionDir(owner, id));
   const dir = transactionsDir(owner);
@@ -158,5 +164,12 @@ export function close(owner: string, id: string): void {
   } catch {
     return;
   }
-  if (left.every((name) => name === '.gitignore')) removeTree(dir);
+  if (!left.every((name) => name === '.gitignore')) return;
+  removeTree(dir);
+  const wai = nodePath.dirname(dir);
+  try {
+    if (fs.readdirSync(wai).length === 0) fs.rmdirSync(wai);
+  } catch {
+    // already gone, or not empty after all: nothing to prune
+  }
 }

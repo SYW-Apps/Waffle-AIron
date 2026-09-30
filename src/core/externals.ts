@@ -161,3 +161,48 @@ export const externalsRepository: ExternalsRepository = {
     return pinnedExternalsStore.removeSnapshot(alias);
   },
 };
+
+// ── surface_orchestrator: carrying and removing a pin ───────────────────────
+//
+// The two pin writes the family migrations make (stage 6): a rename carries a
+// pin to its new alias or producer id WITHOUT re-pinning — a rename is not a
+// producer change, and re-pinning would hide one — and an adopt or an
+// internalize removes the pin of an alias that stops being an external. Both
+// act at the bound project's root. The caller must gate on reach itself.
+
+/** isurface_orchestrator.renamePin — carry the bound project's pin of one external to a new alias or producer id, digest unchanged. */
+export function renamePin(alias: string, newAlias: string, project: string): boolean {
+  // Step 1: the current lock (none yet reads as empty).
+  const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
+  const entry = lock.externals[alias];
+  // Steps 2-3: nothing to carry.
+  if (entry === undefined || (alias === newAlias && entry.project === project)) return false;
+  // Step 4: the pinned snapshot.
+  const snapshot = externalsRepository.readSnapshot(alias);
+  // Steps 5-6: its producer id set to the new one — its content, and so its digest, untouched.
+  if (snapshot) externalsRepository.saveSnapshot(newAlias, { ...snapshot, projectId: project });
+  // Step 7: the entry under the new alias with the new producer id, digest and `used` as pinned.
+  const externals = Object.fromEntries(Object.entries(lock.externals)
+    .filter(([key]) => key !== alias)
+    .concat([[newAlias, { ...entry, project, snapshot: `.wai/externals/${newAlias}.yaml` }]]));
+  externalsRepository.saveLock({ externals });
+  // Steps 8-9: the snapshot under the old alias goes.
+  if (newAlias !== alias) externalsRepository.removeSnapshot(alias);
+  // Step 10.
+  return true;
+}
+
+/** isurface_orchestrator.unpin — remove the bound project's pin of one alias: its lock entry and its snapshot. */
+export function unpin(alias: string): boolean {
+  // Step 1.
+  const lock = externalsRepository.readLock();
+  // Steps 2-3: nothing pinned.
+  if (!lock || lock.externals[alias] === undefined) return false;
+  // Step 4: the entry dropped and the lock saved.
+  const externals = Object.fromEntries(Object.entries(lock.externals).filter(([key]) => key !== alias));
+  externalsRepository.saveLock({ externals });
+  // Step 5.
+  externalsRepository.removeSnapshot(alias);
+  // Step 6.
+  return true;
+}

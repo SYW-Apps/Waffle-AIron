@@ -1,9 +1,13 @@
 import * as path from 'path';
 import * as core from './adapters/core.js';
 import * as chaining from './chaining-migration.js';
+import * as membership from './membership.js';
+import * as identity from './identity.js';
+import * as boundary from './boundary.js';
 import * as transaction from './transaction.js';
 import { getProjectRoot, getRequestParentReach, runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import type { ChainingMigrationPlan } from './chaining-migration.js';
+import type { ProjectFamily } from '../models/project-family.js';
 import {
   blocked,
   isEmpty,
@@ -32,9 +36,6 @@ import {
 // knows nothing about verbs. It holds no state (the plan is a value its caller
 // holds between plan and apply) and never locks. The caller must gate on reach
 // itself.
-//
-// Stage 6 wave A: the chaining migration is the verb on the transaction; the
-// membership, identity and boundary verbs join in wave B.
 // ---------------------------------------------------------------------------
 
 /** Steps 1-3: the highest root in reach, and whether it is the family's true top. */
@@ -58,15 +59,16 @@ export function plan(request: MigrationRequest): MigrationPlan {
   // Step 1: the bound root; every hop below is a scoped binding, so the caller's binding is restored on every path.
   const bound = getProjectRoot();
   const { top, whole } = climb(bound);
-  // Step 4: the project graph of the highest root reached.
-  runWithProjectRoot(top, () => core.projectFamily());
+  // Step 4: the project graph of the highest root reached, and the bound project's key in it.
+  const family = runWithProjectRoot(top, () => core.projectFamily());
+  const boundKey = family.nodes.find((n) => path.resolve(n.directory) === path.resolve(bound))?.namespace ?? '';
   // Steps 5-7: an unfinished transaction refuses the plan.
   const pending = unfinished(top, bound);
   if (pending.length > 0) return refusedForPending(request, top, whole, pending);
-  // Steps 8-23: the verb's planner.
-  const plan = route(request);
+  // Steps 8-23: the verb's planner — a verb reads the live family under the top root's binding; the chaining migration climbs from the caller's.
+  const planned = request.verb === 'chaining' ? route(request, family, boundKey) : runWithProjectRoot(top, () => route(request, family, boundKey));
   // Steps 24-25: rehearse (an already-refused plan comes back unchanged).
-  return rehearse(plan);
+  return rehearse(request.verb === 'chaining' ? planned : { ...planned, familyRoot: top, whole });
 }
 
 /** Step 5: the transactions a crash left under the family root and the bound root, writing nothing. */
@@ -89,13 +91,34 @@ function refusedForPending(request: MigrationRequest, top: string, whole: boolea
 }
 
 /** Step 8: route the request to its verb's planner. */
-function route(request: MigrationRequest): MigrationPlan {
+function route(request: MigrationRequest, family: ProjectFamily, bound: string): MigrationPlan {
   switch (request.verb) {
+    case 'attach':
+      // Step 9.
+      return membership.planAttach(family, bound, request);
+    case 'detach':
+      // Step 11.
+      return membership.planDetach(family, bound, request);
+    case 'adopt':
+      // Step 13.
+      return membership.planAdopt(family, bound, request);
+    case 'rename':
+      // Step 15.
+      return identity.planRename(family, bound, request);
+    case 'rename-alias':
+      // Step 17.
+      return identity.planAliasRename(family, bound, request);
+    case 'internalize':
+      // Step 19.
+      return boundary.planInternalize(family, bound, request);
     case 'chaining':
-      // Step 21.
+      // Step 21: its own climb, from the caller's binding.
       return fromChaining(request, chaining.plan());
+    case 'externalize':
+      // Step 23.
+      return boundary.planExternalize(family, bound, request);
     default:
-      throw new Error(`the "${request.verb}" family migration is not available yet (stage 6 wave B)`);
+      throw new Error(`there is no "${request.verb}" family migration: attach | detach | adopt | rename | rename-alias | internalize | externalize | chaining`);
   }
 }
 
@@ -140,8 +163,10 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
   if (blocked(plan) || plan.request.rehearse === false) return plan;
   // Step 3: the projects the rehearsal copies.
   const family = runWithProjectRoot(plan.familyRoot, () => core.projectFamily());
-  // Step 4.
-  const rehearsal = transaction.rehearse({ familyRoot: plan.familyRoot, projects: family.nodes.map((n) => n.directory) });
+  // Step 4: every family project, a project the verb brings in (attach, adopt), and every
+  // producer a family project names by a path inside the family root (a pin reads it).
+  const projects = [...family.nodes.map((n) => n.directory), ...broughtIn(plan, family), ...pathProducers(plan, family)];
+  const rehearsal = transaction.rehearse({ familyRoot: plan.familyRoot, projects });
   // Steps 5-14: the verb's own writes on the copy; a writer's refusal ends the region.
   try {
     onCopy(rehearsal, () => writeVerb(plan, rehearsal));
@@ -154,18 +179,49 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
   // Step 15: the copy's difference from the live family.
   const changes = transaction.diff(rehearsal);
   // Steps 16-17.
-  return { ...plan, rehearsal, changes, relock: relockOf(changes) };
+  return { ...plan, rehearsal, changes, relock: relockOf(plan, changes) };
+}
+
+/** Step 4: the producers family projects name by a path inside the family root — a pin taken on the copy reads them there. */
+function pathProducers(plan: MigrationPlan, family: ProjectFamily): string[] {
+  const inside = (dir: string): boolean => {
+    const rel = path.relative(plan.familyRoot, dir);
+    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  };
+  return family.nodes.flatMap((n) => n.externals.filter((e) => e.sourceKind === 'path' && e.directory && inside(e.directory)).map((e) => e.directory!));
+}
+
+/** Step 4: the roots a verb writes that the family graph does not hold yet — a project attached or adopted. */
+function broughtIn(plan: MigrationPlan, family: ProjectFamily): string[] {
+  const known = new Set(family.nodes.map((n) => path.resolve(n.directory)));
+  return [...new Set(plan.edits.flatMap((e) => (e.write ? [path.resolve(e.write.root)] : [])))].filter((r) => !known.has(r));
 }
 
 /** Steps 6-14: which writer. */
 function writeVerb(plan: MigrationPlan, rehearsal: Rehearsal): void {
   switch (plan.request.verb) {
+    case 'attach':
+    case 'detach':
+    case 'adopt':
+      // Step 7.
+      membership.write(plan, rehearsal);
+      return;
+    case 'rename':
+    case 'rename-alias':
+      // Step 9.
+      identity.write(plan, rehearsal);
+      return;
+    case 'internalize':
+    case 'externalize':
+      // Step 11.
+      boundary.write(plan, rehearsal);
+      return;
     case 'chaining':
       // Step 13: ids, exports, externals, the position migration, and pins LAST — its order unchanged.
       chaining.write(plan.chaining!, rehearsal);
       return;
     default:
-      throw new Error(`the "${plan.request.verb}" family migration is not available yet (stage 6 wave B)`);
+      throw new Error(`there is no "${plan.request.verb}" family migration`);
   }
 }
 
@@ -181,10 +237,20 @@ function onCopy<T>(rehearsal: Rehearsal, run: () => T): T {
   return runWithProjectBinding(rehearsalRoot(rehearsal, getProjectRoot()), { topRoot: top, parentReach: reach.parentReach, ...(reach.narrowed ? { narrowed: true } : {}) }, run);
 }
 
-/** Step 16: each changed owner that carries a lock is a project to re-lock. */
-function relockOf(changes: FileChange[]): string[] {
-  const owners = [...new Set(changes.map((c) => c.project))];
-  return owners.filter((owner) => core.approvalRecord(owner) !== null);
+/**
+ * Step 16: each changed owner that carries a lock is a project to re-lock. A
+ * rename lists every owner it writes, lock or none, the renamed project first:
+ * the id is part of what any approval of them names. An owner the plan takes
+ * apart (its project.yaml deleted, an internalized member) has nothing left to
+ * re-lock.
+ */
+function relockOf(plan: MigrationPlan, changes: FileChange[]): string[] {
+  const ended = new Set(changes.filter((c) => c.action === 'delete' && c.path === '.wai/project.yaml').map((c) => path.resolve(c.project)));
+  const owners = [...new Set(changes.map((c) => path.resolve(c.project)))].filter((o) => !ended.has(o));
+  if (plan.request.verb !== 'rename') return owners.filter((owner) => core.approvalRecord(owner) !== null);
+  const renamed = plan.edits.find((e) => e.write?.call === 'renameId')?.write?.root;
+  const first = renamed !== undefined ? path.resolve(renamed) : undefined;
+  return [...owners.filter((o) => o === first), ...owners.filter((o) => o !== first)];
 }
 
 /** ifamily_migration_orchestrator.apply — commit a confirmed plan all or nothing. */

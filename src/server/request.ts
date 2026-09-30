@@ -336,6 +336,13 @@ const WRITE_TOOL_PREFIXES = [
   'sdd_rename_',
   // sdd_pin_externals writes the externals lock and snapshots of the bound tree.
   'sdd_pin_',
+  // The stage-6 family migrations (sdd_attach_member, sdd_detach_member,
+  // sdd_adopt_member; the sdd_rename_ and sdd_internalize_/sdd_externalize_
+  // prefixes cover the rest). A dryRun call is still a write: a tool's class
+  // is its name's, never its arguments'.
+  'sdd_attach_',
+  'sdd_detach_',
+  'sdd_adopt_',
 ];
 
 /** Read tools only inspect the tree; their names carry one of these prefixes

@@ -187,6 +187,6 @@ methods:
         label: restore
         description: Restore the caller's binding
         type: local
-status: design
+status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-09-30T20:35:23.821Z'
+updatedAt: '2026-09-30T22:58:38.165Z'

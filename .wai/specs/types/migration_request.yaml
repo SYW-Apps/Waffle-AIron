@@ -56,7 +56,11 @@ fields:
       apply. doctor's summary line uses it, since it prints counts and never applies. Absent or
       true: a full plan.
     optional: true
+  - name: description
+    type: string
+    description: 'attach: what the member is to the bound project, written into its `members` entry.'
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:03.011Z'
-updatedAt: '2026-09-30T21:33:04.463Z'
+updatedAt: '2026-09-30T21:58:42.217Z'

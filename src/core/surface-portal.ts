@@ -8,6 +8,9 @@
 // portal. Client adapters import from here, never from ./surfaces.ts.
 // ---------------------------------------------------------------------------
 import * as surfaceOrchestrator from './surfaces.js';
+// The two pin writes of the family migrations live beside the externals
+// repository they edit (surface_orchestrator's renamePin and unpin).
+import * as pinWrites from './externals.js';
 import type { FamilyPin, SurfaceExportResult } from './surfaces.js';
 import type {
   ExternalListing,
@@ -56,4 +59,14 @@ export function listExternals(): ExternalListing[] {
 
 export function listPinnedExternals(): PinnedExternal[] {
   return surfaceOrchestrator.listPinnedExternals();
+}
+
+/** isurface_portal.renamePin — carry the bound project's pin of one external to a new alias or producer id, digest unchanged. */
+export function renamePin(alias: string, newAlias: string, project: string): boolean {
+  return pinWrites.renamePin(alias, newAlias, project);
+}
+
+/** isurface_portal.unpin — remove the bound project's pin of one alias. */
+export function unpin(alias: string): boolean {
+  return pinWrites.unpin(alias);
 }

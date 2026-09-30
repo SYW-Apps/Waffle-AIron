@@ -8,10 +8,9 @@
 // is the rehearsal copy's. The migrations import THIS module, so every call
 // they make into core lands here and resolves to the portal's function.
 //
-// Stage 6 wave A ships the reads and the writes the chaining migration makes;
-// the verbs' own writes (renameId, renameAlias, declareMember, removeMember,
-// repointExternal, removeExternal, rewriteReferences, externalizeSubsystem,
-// internalizeMember) join with the verbs in wave B.
+// The reads, the chaining migration's writes, and the verbs' own writes
+// (renameId, renameAlias, declareMember, removeMember, repointExternal,
+// removeExternal, rewriteReferences, externalizeSubsystem, internalizeMember).
 // ---------------------------------------------------------------------------
 export {
   // spec_tree_portal: the family graph, the export tables and the specs.
@@ -28,10 +27,22 @@ export {
   setId,
   declareExternal,
   importNames,
+  // project_config_portal: the verbs' configuration writes.
+  renameId,
+  renameAlias,
+  declareMember,
+  removeMember,
+  repointExternal,
+  removeExternal,
   // approval_portal: a project's lock record.
   approvalRecord,
   // spec_maintenance_portal: a legacy mount moved into `members`, and a spec's
   // references written in their canonical form.
   moveMountToMembers,
   normalizeReferences,
+  // spec_maintenance_portal: a reference respelled at its parsed position, and
+  // a subsystem turned into a member or a member folded back in.
+  rewriteReferences,
+  externalizeSubsystem,
+  internalizeMember,
 } from '../../core/index.js';

@@ -248,6 +248,9 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
     // --fix without --yes: the rollback runs first; the chaining migration itself is not confirmed, so not applied.
     const fixed = await cli(f.top, home, 'doctor', '--fix');
     expect(fixed.stdout).toMatch(/Rolled back the chaining migration [0-9a-f]{8} \(coordinator phase swapping\)/);
+    // The recovery reads as the first fix applied: under the heading, never above it.
+    expect(fixed.stdout.indexOf('Applying fixes…')).toBeGreaterThanOrEqual(0);
+    expect(fixed.stdout.indexOf('Applying fixes…')).toBeLessThan(fixed.stdout.indexOf('Rolled back the chaining migration'));
     for (const t of touched) {
       const now = fs.existsSync(t.file) ? `sha256:${crypto.createHash('sha256').update(fs.readFileSync(t.file)).digest('hex')}` : undefined;
       expect(now).toBe(t.base);

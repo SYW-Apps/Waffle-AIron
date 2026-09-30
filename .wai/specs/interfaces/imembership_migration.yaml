@@ -37,14 +37,18 @@ methods:
     description: >-
       Plan taking the member under request.alias out of the family. Refusals: no such member
       (not-a-member); its directory is absent (member-absent); a family project that must be written
-      is out of reach (family-partial). Edits: in the bound project, the member removed and an
-      external declared under the SAME alias — `project` its id when that differs from the alias,
-      `source.path` the member's path, its `use` and description carried — and pinned; in every
-      other family project whose external finds the member through the family, a `source.path` to it
-      (relative to that project); in the member, a `source.path` on each of its externals that found
-      a family project through the family, since it leaves the family. No reference text changes.
-      Notes: consumers outside the family are not affected (they already name it by path or not at
-      all).
+      is out of reach (family-partial); a family project (the bound one included) uses a public name
+      the member exports only to the family (audience project or department) — once the member is
+      outside the family, a pin taken by path sees its instance audience and above, so that use
+      would stop resolving (audience-too-narrow, naming the name and the user: widening it is a
+      design decision to make first, never a move's side effect). Edits: in the bound project, the
+      member removed and an external declared under the SAME alias — `project` its id when that
+      differs from the alias, `source.path` the member's path, its `use` and description carried —
+      and pinned; in every other family project whose external finds the member through the family,
+      a `source.path` to it (relative to that project); in the member, a `source.path` on each of
+      its externals that found a family project through the family, since it leaves the family. No
+      reference text changes. Notes: consumers outside the family are not affected (they already
+      name it by path or not at all).
     signature: 'planDetach(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -71,12 +75,14 @@ methods:
       the family now supplies it; in the adopted project, each external `source.path` that resolves
       to a family project removed likewise. It is planDetach's inverse, and the property
       detach-then-adopt-is-identity says exactly this (accepted): the member project is
-      BYTE-identical to before the detach, and the parent and every other family project are
-      SEMANTICALLY identical — the same member, external and pin declarations with the same values —
-      but not necessarily byte-identical, since a re-declared member is appended to `members` rather
-      than restored to its old position. Precondition: no family project held a redundant
-      source.path to the member before the detach; the plan names one when it does, because adopt
-      removes it too.
+      BYTE-identical to before the detach when the detach did not write it (it named no family
+      project through the family), and otherwise SEMANTICALLY identical — its first configuration
+      write materializes the schema's defaults the file left out, as every registry save does; the
+      parent and every other family project are SEMANTICALLY identical — the same member, external
+      and pin declarations with the same values — but not necessarily byte-identical, since a
+      re-declared member is appended to `members` rather than restored to its old position.
+      Precondition: no family project held a redundant source.path to the member before the detach;
+      the plan names one when it does, because adopt removes it too.
     signature: 'planAdopt(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -108,6 +114,6 @@ methods:
         description: 'Where to write it: each project''s rehearsal root'
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-09-30T20:33:39.248Z'
-updatedAt: '2026-09-30T20:53:08.356Z'
+updatedAt: '2026-09-30T22:58:33.331Z'

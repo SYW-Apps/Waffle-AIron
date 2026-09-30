@@ -88,6 +88,6 @@ methods:
         description: Where to write it
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-09-30T20:35:03.086Z'
-updatedAt: '2026-09-30T20:35:03.097Z'
+updatedAt: '2026-09-30T22:58:31.051Z'

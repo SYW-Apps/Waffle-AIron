@@ -58,6 +58,24 @@ describe('data-plane tool classification', () => {
     }
   });
 
+  it('gates the stage-6 family-migration tools as tree-scoped writes — a dryRun call included, since a tool\'s class is its name\'s', () => {
+    const migrationTools = [
+      'sdd_attach_member', 'sdd_detach_member', 'sdd_adopt_member', 'sdd_rename_project',
+      'sdd_rename_member_alias', 'sdd_internalize_member', 'sdd_externalize_subsystem',
+    ];
+    for (const name of migrationTools) {
+      expect(requiredDataPlaneCapability(name), name).toBe('project:write');
+      expect(toolScope(name), name).toBe('tree');
+      expect(isExplicitlyClassifiedTool(name), name).toBe(true);
+      // Tree-scoped: a credential narrowed to a member may call it on the member's tree (the plan climbs only as far as the reach, and refuses family-partial beyond it).
+      const dryRun = { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name, arguments: { dryRun: true } } };
+      expect(subprojectConfinementError('proj', 'kid', dryRun), name).toBeUndefined();
+      // A successful call wakes the bound project's channel, as every write does.
+      const success = { jsonrpc: '2.0', id: 7, result: { content: [{ type: 'text', text: '{}' }] } };
+      expect(mcpChangeChannels(dryRun, 'proj', success), name).toEqual(['project:proj']);
+    }
+  });
+
   it('gates sdd_rename_component as a tree-scoped write, on purpose', () => {
     expect(requiredDataPlaneCapability('sdd_rename_component')).toBe('project:write');
     expect(toolScope('sdd_rename_component')).toBe('tree');

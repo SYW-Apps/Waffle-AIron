@@ -15,7 +15,8 @@ import {
   saveSystemSpec,
 } from '../../src/core/specs.js';
 import { projectFamilyGraph } from '../../src/core/project-family.js';
-import { externalizeSubsystem, internalizeMember, moveMember } from '../../src/core/provision.js';
+import { externalizeSubsystem, moveMember } from '../../src/core/provision.js';
+import * as familyMigrations from '../../src/migrations/index.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { pinExternals } from '../../src/core/surfaces.js';
@@ -256,7 +257,7 @@ describe('stage 3 — the wave-B follow-ups', () => {
     expect(fs.existsSync(path.join(f.top, 'vocabulary', '.wai', 'project.yaml'))).toBe(true);
   });
 
-  it('follow-up (b): internalizeMember refuses while another project of the family references the member, listing each reference', () => {
+  it('follow-up (b), stage 6: internalizing a member another family project references re-points that project at the parent — nothing is left naming a gone project', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-internalize-'));
     made.push(root);
     const now = new Date().toISOString();
@@ -283,16 +284,24 @@ describe('stage 3 — the wave-B follow-ups', () => {
       saveComponentSpec({ id: 'dispatch_adapter', name: 'Dispatch Adapter', description: 'hop into core', subsystem: 'dispatch', componentType: 'Adapter', owns: [], dependsOn: ['core::core_portal'], createdAt: now, updatedAt: now } as never);
     });
     at(root, () => projectConfigRepository.declareMember('ops', { path: 'packages/ops' }));
-    const before = dirHash(root);
-    expect(() => at(root, () => internalizeMember('core'))).toThrow(/other projects of the family reference the member "core" — ops: ops::dispatch_adapter \(dependsOn\) "core::core_portal"/);
-    expect(dirHash(root)).toEqual(before);
-    // With the reference gone, the same member is taken in.
-    runWithProjectRoot(ops, () => {
+    // The member exports its portal, and ops pins what it uses: ops is clean from its own root.
+    runWithProjectRoot(path.join(root, 'packages', 'core'), () => {
       invalidateSpecCache();
-      saveComponentSpec({ id: 'dispatch_adapter', name: 'Dispatch Adapter', description: 'no longer crosses', subsystem: 'dispatch', componentType: 'Adapter', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as never);
+      saveSystemSpec({ schemaVersion: '1.0.0', name: 'core', vision: 'v', boundaries: [], globalRequirements: [], publicInterfaces: [{ from: 'core', component: 'core_portal', audience: 'project' }], createdAt: now, updatedAt: now } as never);
     });
-    at(root, () => internalizeMember('core'));
+    runWithProjectBinding(ops, { topRoot: root, parentReach: true }, () => { invalidateSpecCache(); pinExternals(); });
+    const crossing = (): string[] => codes(at(ops, () => validateProject()), 'EXTERNAL_UNRESOLVED', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_DRIFTED', 'EXTERNAL_INCOMPATIBLE');
+    const before = crossing();
+    expect(before).toEqual([]);
+    const planned = at(root, () => familyMigrations.plan({ verb: 'internalize', alias: 'core', destination: { home: '' } }));
+    expect(planned.refusals).toEqual([]);
+    // ops names core through its own external: it is re-pointed at the parent, whose exports gain core_portal.
+    expect(planned.edits.map((e) => `${e.project}|${e.kind}`)).toEqual(['ops|external', '|move', 'ops|pin', 'core|delete']);
+    expect(at(root, () => familyMigrations.apply(planned)).applied).toBe(true);
     expect(projectConfigRepositoryAt(root).load()?.members).toEqual({ ops: 'packages/ops' });
+    expect(projectConfigRepositoryAt(ops).load()?.externals).toEqual({ core: { project: 'fleet' } });
+    // ops' `core::core_portal` now binds the parent's export (its exports completed with the name ops used), re-pinned: still clean.
+    expect(crossing()).toEqual([]);
   });
 
   it('follow-up (c): a member declaring its parent or a sibling is clean from its own root; only what neither the scan nor the climb finds is EXTERNAL_UNRESOLVED', () => {

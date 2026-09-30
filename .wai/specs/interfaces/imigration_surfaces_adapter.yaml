@@ -56,6 +56,6 @@ methods:
       - name: projectName
         type: string
         description: The snapshot's storage key
-status: design
+status: complete
 createdAt: '2026-09-30T20:31:55.432Z'
-updatedAt: '2026-09-30T20:45:22.838Z'
+updatedAt: '2026-09-30T22:58:34.642Z'

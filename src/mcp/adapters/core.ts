@@ -18,8 +18,6 @@ export {
   resolveChainingParent,
   createMember,
   moveMember,
-  externalizeSubsystem,
-  internalizeMember,
   listDirectChainedSubprojects,
   renameComponent,
   renameMethod,

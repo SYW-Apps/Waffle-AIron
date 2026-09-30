@@ -80,6 +80,6 @@ methods:
         description: The verb's plan, not yet rehearsed
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-09-30T20:35:39.470Z'
-updatedAt: '2026-09-30T20:50:10.120Z'
+updatedAt: '2026-09-30T22:58:31.638Z'

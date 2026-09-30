@@ -10,8 +10,6 @@ export {
   loadSystemSpec,
   createMember,
   moveMember,
-  externalizeSubsystem,
-  internalizeMember,
   composeAgentBrief,
   exportSpecTree,
   importSpecTree,

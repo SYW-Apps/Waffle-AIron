@@ -468,6 +468,8 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
  * writes outside the project, so it is reported but not auto-fixed.
  */
 async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
+  // The heading first, so every line below — the recovery's included — reads as a fix applied.
+  console.log(chalk.bold('Applying fixes…'));
   // First: a family migration a crash left unfinished is resolved before any
   // other repair reads a file that transaction may have half-swapped.
   recoverTransactions(tally);
@@ -482,8 +484,6 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
     logger.blank();
     return;
   }
-
-  console.log(chalk.bold('Applying fixes…'));
 
   try {
     syncContextFiles();

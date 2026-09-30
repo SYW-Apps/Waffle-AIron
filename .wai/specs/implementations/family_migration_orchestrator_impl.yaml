@@ -184,8 +184,10 @@ methods:
       - stepNumber: 4
         label: copy
         description: >-
-          Copy every family project's .wai tree, and the project the verb brings in (attach, adopt),
-          into a private rehearsal
+          Copy every family project's .wai tree, the project the verb brings in (attach, adopt), and
+          every project a family project names as an external by a path inside the family root, into
+          a private rehearsal — so a pin taken on the copy reads the same producer the live pin
+          would
         type: call
         targetComponent: family_transaction
         targetMethod: rehearse
@@ -267,8 +269,9 @@ methods:
         targetMethod: diff
       - stepNumber: 16
         description: >-
-          Read each changed owner's lock record; an owner that carries one is a project to re-lock
-          (a rename's target first)
+          Read each changed owner's lock record; an owner that carries one is a project to re-lock.
+          A rename lists every owner it writes, lock or none, the renamed project first: the id is
+          part of what any approval of them names
         type: call
         targetComponent: migration_core_adapter
         targetMethod: approvalRecord
@@ -369,6 +372,6 @@ methods:
         type: call
         targetComponent: family_transaction
         targetMethod: recover
-status: design
+status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-09-30T21:34:18.290Z'
+updatedAt: '2026-09-30T22:58:38.719Z'

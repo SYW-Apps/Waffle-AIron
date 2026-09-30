@@ -30,7 +30,15 @@ fields:
     type: ReferenceEdit
     description: 'For kind reference: the position and both texts.'
     optional: true
+  - name: write
+    type: PlannedWrite
+    description: >-
+      The write that realizes it, for a membership, identity or boundary verb: the owner root to
+      bind and the adapter call to make there. The verb's writer makes these calls in its phases
+      (references, then configuration, then pins last), never recomputing them. Absent for a
+      chaining edit, whose writes the chaining plan carries.
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:08.010Z'
-updatedAt: '2026-09-30T21:33:10.753Z'
+updatedAt: '2026-09-30T22:12:08.414Z'

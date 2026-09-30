@@ -16,6 +16,6 @@ owns: []
 dependsOn:
   - migration_core_adapter
   - migration_surfaces_adapter
-status: design
+status: complete
 createdAt: '2026-09-30T20:34:50.185Z'
-updatedAt: '2026-09-30T20:34:50.197Z'
+updatedAt: '2026-09-30T22:58:24.732Z'
