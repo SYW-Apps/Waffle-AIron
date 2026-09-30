@@ -14,6 +14,10 @@ import { getStatusReport, approvalVerdict } from './adapters/core.js';
 // that project's own root, so a member's state here is the one its own status prints.
 import { familyApprovals } from './validate.js';
 import type { StatusDecor, StatusOptions } from '../core/status.js';
+// The pending-transaction banner: unfinished family migrations, asked of the
+// migration portal (recover with fix false — a report, nothing written).
+import { recover as recoverMigrations } from './adapters/migrations.js';
+import { getProjectRoot } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // status command
@@ -104,7 +108,11 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
   // like an empty tree rather than like the wrong directory.
   assertProjectInitialized();
 
-  // Step 2: ask the validator for the pin tree, each project at its own root.
+  // Step 2: the pending-transaction banner FIRST — a crash mid-swap is exactly
+  // when the tree below may not read.
+  printPendingTransactions();
+
+  // Step 3: ask the validator for the pin tree, each project at its own root.
   // A tree that will not load has no states to print: the report below says why.
   let approvals;
   try {
@@ -145,4 +153,23 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
 
   logger.blank();
   // Step 8: done.
+}
+
+/**
+ * The pending-transaction banner (`wairon status` and `wairon validate`): one
+ * notice line per unfinished family migration under this root, naming it and
+ * pointing at `wairon doctor --fix`; silent when there is none. A notice never
+ * changes the exit code, and a failure to read the transactions is not this
+ * command's to report — doctor reports it.
+ */
+function printPendingTransactions(): void {
+  let pending;
+  try {
+    pending = recoverMigrations(getProjectRoot(), false);
+  } catch {
+    return;
+  }
+  for (const t of pending) {
+    logger.notice(`[TRANSACTION_PENDING] an unfinished family migration (${t.verb}, transaction ${t.id}, coordinator phase ${t.phase}) — run \`wairon doctor --fix\` to roll it back`);
+  }
 }

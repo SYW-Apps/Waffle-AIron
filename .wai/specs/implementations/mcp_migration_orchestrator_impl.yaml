@@ -54,6 +54,6 @@ methods:
           wairon doctor --fix`
         type: return
         outcome: notice lines
-status: design
+status: complete
 createdAt: '2026-09-30T20:39:33.686Z'
-updatedAt: '2026-09-30T20:52:24.412Z'
+updatedAt: '2026-09-30T21:34:10.020Z'

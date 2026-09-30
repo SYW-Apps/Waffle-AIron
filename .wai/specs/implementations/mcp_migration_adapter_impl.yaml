@@ -1,8 +1,8 @@
 id: mcp_migration_adapter_impl
 name: MCP Migration Client Adapter Implementation
-description: 'src/mcp/server.ts: in-process imports of the sdd_migrations barrel.'
+description: 'src/mcp/adapters/migrations.ts: in-process imports of the sdd_migrations barrel.'
 contract: imcp_migration_adapter
-sourcePath: src/mcp/server.ts
+sourcePath: src/mcp/adapters/migrations.ts
 methods:
   - name: plan
     narrative:
@@ -32,6 +32,6 @@ methods:
         type: call
         targetComponent: migration_portal
         targetMethod: recover
-status: design
+status: complete
 createdAt: '2026-09-30T20:39:17.987Z'
-updatedAt: '2026-09-30T20:52:23.165Z'
+updatedAt: '2026-09-30T21:34:08.092Z'

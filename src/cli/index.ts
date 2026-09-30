@@ -22,6 +22,8 @@ import { runShow } from '../commands/show.js';
 import { runMcpServe, runMcpInstall, runMcpStatus } from '../commands/mcp.js';
 import { runUpdate, cleanStaleBinary } from '../commands/update.js';
 import { runStatus } from '../commands/status.js';
+// The pending-transaction banner: unfinished family migrations under this root.
+import { recover as recoverMigrations } from '../commands/adapters/migrations.js';
 import { runDomainsList, runDomainsScan, runDomainsAdd, runDomainsRemove } from '../commands/domains.js';
 import { runSkillsList, runSkillsInstall } from '../commands/skills.js';
 import { runDoctor } from '../commands/doctor.js';
@@ -276,6 +278,11 @@ async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursi
     // notices never fail it, --ci included.
     if (errors.length || (opts.ci && warnings.length)) process.exit(1);
     return;
+  }
+  // Not attached: the pending-transaction banner, before the tree is read (a
+  // crash mid-swap may leave it unreadable) — a notice, so --ci is unaffected.
+  for (const t of recoverMigrations(getProjectRoot(), false)) {
+    logger.notice(`[TRANSACTION_PENDING] an unfinished family migration (${t.verb}, transaction ${t.id}, coordinator phase ${t.phase}) — run \`wairon doctor --fix\` to roll it back`);
   }
   await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive, family: opts.family });
 }

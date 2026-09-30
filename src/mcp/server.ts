@@ -77,6 +77,9 @@ import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredMembers } from '../models/project.js';
 import { selectsFamily } from '../models/validation-options.js';
+// The pending-transaction banner sdd_get_status and sdd_validate_tree lead
+// with: unfinished family migrations under the bound root (mcp_migration_orchestrator).
+import { pending as pendingMigrations } from './migrations.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -625,6 +628,19 @@ function renderPackImpact(impact: PackImpact): string {
   return lines.join(String.fromCharCode(10));
 }
 
+
+/**
+ * The pending-transaction banner: one line per unfinished family migration
+ * under the bound root, or none. A banner that cannot be read is no banner —
+ * the tool's own answer is what the caller asked for.
+ */
+function pendingBanner(): string[] {
+  try {
+    return pendingMigrations();
+  } catch {
+    return [];
+  }
+}
 
 const validateTreeOutput = {
   valid: z.boolean().describe('False when the tree holds at least one error; warnings and notices never make it false.'),
@@ -2160,6 +2176,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       outputSchema: validateTreeOutput,
     },
     ({ subsystem, recursive, family }) => {
+      // Step 1: the pending-transaction banner first — a crash mid-swap may
+      // leave the tree below unreadable — each line a notice, never an error.
+      const banner = pendingBanner();
       try {
         const config = loadProjectConfig();
         // A missing config errored before (the loader's loadProjectConfig threw);
@@ -2184,12 +2203,16 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           valid: result.valid,
           errors: result.issues.filter((i) => i.severity === 'error'),
           warnings: result.issues.filter((i) => i.severity === 'warning'),
-          notices: result.issues.filter((i) => i.severity === 'notice'),
+          notices: [
+            ...banner.map((message) => ({ severity: 'notice' as const, code: 'TRANSACTION_PENDING', message })),
+            ...result.issues.filter((i) => i.severity === 'notice'),
+          ],
           ...(result.hint ? { hint: result.hint } : {}),
           ...(result.projects ? { projects: result.projects } : {}),
         });
       } catch (e) {
-        return errText(String(e));
+        return errText(`${banner.map((line) => `TRANSACTION_PENDING: ${line}
+`).join('')}${String(e)}`);
       }
     },
   );
@@ -2338,6 +2361,10 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       },
     },
     ({ subsystem, recursive }) => {
+      // Step 1: the pending-transaction banner, led in the answer so an agent
+      // sees it before a tree a crash may have half-swapped.
+      const banner = pendingBanner().map((line) => `⚠ TRANSACTION PENDING: ${line}
+`).join('');
       try {
         // STATIC import, not a lazy require: the server is bundled (tsup), and a
         // runtime require of a relative path resolves against the BUNDLE's
@@ -2376,9 +2403,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // important thing this answer can carry — and silence reads exactly like
         // being current, which is what this tool used to answer.
         const verdict = approvalVerdict(approvals);
-        return text(`${family}${report.text}${verdict.text}`);
+        return text(`${banner}${family}${report.text}${verdict.text}`);
       } catch (e) {
-        return errText(String(e));
+        return errText(`${banner}${String(e)}`);
       }
     },
   );
