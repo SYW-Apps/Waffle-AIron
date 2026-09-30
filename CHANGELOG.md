@@ -39,8 +39,11 @@ every pack command that writes a project's packs show that pack's impact and ask
 terminal (`--yes` for scripts), and adds three codes a parent's requirements can newly fail
 on. Stage 5 makes approval per project: every lock reads stale once, code findings stop
 blocking `wairon lock` (CI still enforces them), the lock record moves to format 2, and
-`generate` stops cascading into members. Nothing here is purely additive, so `[minor]`
-would understate it.
+`generate` stops cascading into members. Stage 6 changes a family's shape only through
+plan-first, all-or-nothing migrations: `member internalize` no longer deletes the member's
+metadata (and takes `--into`/`--packs`), `subsystem externalize` asks before it applies
+(`--yes` in a script), and a rename always asks for a re-lock. Nothing here is purely
+additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
 
@@ -742,6 +745,101 @@ its members through their own approvals.
   the reason (never left approved and un-executable until it expires); the
   requester files a new one. Hosted API clients that call the
   lock may now receive 409 for a refusal that is not a validation failure.
+
+### Family migrations: plan first, all or nothing, never a lock
+
+Stage 6 of the chained-subsystems work. Changing a family's shape — bringing a project
+in, renaming one, taking one out, folding one back into its parent — used to be a set of
+writers that each touched one project at a time, could stop half-way, and in
+`internalize`'s case deleted the member's whole `.wai`. Every such change is now a
+**family migration** (the new `sdd_migrations` subsystem): planned first, confirmed, then
+applied to every project it touches or to none of them.
+
+- **The verbs.**
+  - `wairon member attach <alias> <path>` — an existing project becomes a member, keeping
+    its L0, subsystems, packs and lock (`member add` scaffolds a new one). Its id is
+    declared when it only defaulted one: the id its lock approved, else its effective id.
+  - `wairon project rename <new-id> [--project <alias path>]` — a project's id, and every
+    reference to it family-wide: an alias that was the id follows it with each reference
+    written through it (respelled at its parsed position, never by a text search) and the
+    L0 re-exports naming it; an external naming the old id is repointed; a pin is carried
+    to its new key with its digest unchanged. The old id is kept in the new
+    `previousIds`.
+  - `wairon member rename-alias <old> <new>` — one alias of the current project (a member
+    or an external), and the current project's references through it; nothing in any
+    member or sibling changes. An external whose alias was its producer id keeps naming
+    that producer, now explicitly.
+  - `wairon member detach <alias>` — the member leaves the family: the parent and every
+    family consumer reach it as an external by `source.path`, the parent's pinned. A
+    consumer using a name the member exports only to the family (audience `project` or
+    `department`) refuses the detach (`audience-too-narrow`): outside the family a pin
+    sees `instance` and above, and widening an export is a design decision.
+  - `wairon member adopt <alias>` — detach's inverse: an external found by a path inside
+    the current project becomes a member again. Detach then adopt gives back the member's
+    specs byte for byte and every configuration semantically.
+  - `wairon member internalize <alias> [--into <subsystem>] [--packs adopt|drop]
+    [--export <name>…]` — a member, every subsystem of it, folded into the current
+    project. Its own metadata goes to a home instead of being deleted: its L0 vision onto
+    the `--into` subsystem's description, its boundaries, requirements and databases into
+    the parent's L0 (merged by identity), its target language, profile and design depth
+    onto the moved subsystems, its members and externals into the parent's configuration,
+    its packs adopted or dropped as `--packs` says, and the names other family projects
+    use from it re-exported by the parent. Every other family project that consumed it is
+    re-pointed at the parent. What has no home — its lock, pins and derived outputs — is
+    deleted and listed. A member carrying conformance debt, a severity override the parent
+    does not share, or a `.wai` file the write does not recognise is refused.
+  - `wairon subsystem externalize <id> --path <dir>` — now family-wide: every other family
+    project using a name the moved subsystem realizes is checked to keep resolving, and a
+    reference back into a component its subsystem does not publish refuses the plan.
+  - `member move` is unchanged: it changes no reference.
+- **Plan, confirm, apply.** Every verb prints its plan — each project's edits, every
+  refusal, the notes (consumers outside the family it cannot see, pins that will read
+  drifted), the file changes and the projects to re-lock. `--report` prints it and writes
+  nothing; otherwise it asks (`--yes` answers; a shell with no terminal and no `--yes`
+  writes nothing). A refused plan exits non-zero and writes nothing.
+- **All or nothing.** A plan is computed by running the verb's own writes on a private
+  copy of the family's `.wai` trees; applying it stages every file change and a backup of
+  every file it replaces under each project's `.wai/transactions/<id>/`, then swaps them
+  in. Any failure restores every backup: the family is fully migrated or exactly as it
+  was. A crash mid-swap leaves a journal.
+- **Never a lock.** Every verb names the projects to re-lock; a rename names every project
+  it wrote, the renamed one first.
+- **MCP.** `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`,
+  `sdd_rename_project` and `sdd_rename_member_alias` are new; `sdd_internalize_member`
+  gains `into`, `packs` and `exports`, and it and `sdd_externalize_subsystem` now run the
+  family migration. Each takes `dryRun`, which answers the plan and writes nothing; a
+  refused plan is a tool error carrying it. Hosted, all seven are tree-scoped writes —
+  a `dryRun` call included.
+- **`PROJECT_ID_RENAMED` (notice).** An id the rename moved from the one the lock
+  approved (the approved id is in `previousIds`) owes a re-lock and nothing more — it is
+  no longer `PROJECT_ID_CHANGED`, so the re-lock the rename asks for succeeds. This also
+  unblocks stage 3's *id-locked* member: rename it to its alias and re-lock.
+- **Hosted: an unfinished migration is rolled back when the project is next bound.** A
+  hosted project has no one to run `doctor --fix`, so the data plane recovers a crashed
+  transaction itself and audits each (`migration.recovered`).
+
+**Upgrading.**
+
+- **`member internalize` keeps the member's metadata.** It no longer deletes the member's
+  `.wai`: its pieces are placed as above and the rest is listed. A member with more than
+  one subsystem and an L0 vision needs `--into <subsystem>`; one selecting a pack the
+  parent does not needs `--packs adopt` or `--packs drop`. A member that carries
+  conformance debt is refused — pay or move the debt first.
+- **`subsystem externalize` and `member internalize` ask first** (`--yes` in a script,
+  `--report` to see the plan), and apply all or nothing.
+- **A rename always needs a re-lock.** The id is part of what was approved: re-lock every
+  project the rename lists (`PROJECT_ID_RENAMED` reminds you until you do).
+- **`.wai/transactions/`** holds a migration's staged files, backups and journal while it
+  applies, and is removed when it finishes. It carries its own `.gitignore` (`*`) — never
+  commit it.
+- **A pending-transaction banner.** A migration a crash left unfinished shows in `wairon
+  status`, `wairon validate`, `sdd_get_status` and `sdd_validate_tree` as a
+  `TRANSACTION_PENDING` notice until `wairon doctor --fix` rolls it back (the recovery is
+  the first fix doctor applies); a new plan is refused until then.
+- **Library callers:** `internalizeMember(alias, destination)` takes an
+  `InternalizeDestination` and answers an `InternalizeResult`; the CLI and MCP core
+  adapters no longer re-export `externalizeSubsystem` or `internalizeMember` — the verbs
+  go through the migration portal (`plan`, `apply`, `discard`).
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 
