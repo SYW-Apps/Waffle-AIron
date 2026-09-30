@@ -386,6 +386,37 @@ methods:
           narrowed credential.
         type: local
       - stepNumber: 10
+        label: recover-migrations
+        description: >-
+          Roll back any family migration a crash left unfinished under the bound project's roots
+          (the top root, and the bound member root when the binding narrows to one) BEFORE any tool
+          reads or writes that tree: a transaction whose coordinator never committed is restored
+          from its backups, one that did has only its directories cleaned, and one that cannot be
+          resolved (a coordinator or owner out of reach, a missing backup) is left for an operator.
+          A hosted project has no person to run `wairon doctor --fix` in its directory, so the
+          server does it on the next bind. It is housekeeping that only puts the family back into
+          the state an earlier request left it in, so it runs whatever the credential's permission;
+          a failure here is logged and never fails the request
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: recover
+      - stepNumber: 11
+        description: Did the recovery find an unfinished transaction?
+        type: branch
+        condition: the recovery answered at least one transaction
+        onFalseStep: 13
+      - stepNumber: 12
+        label: audit-recovery
+        description: >-
+          Audit each transaction the recovery found as a migration.recovered event (its id, verb,
+          coordinator phase and what was done: rolled-back, cleaned or refused) and write the same
+          line to the server log, so an operator sees a rollback nobody asked for; the request then
+          proceeds
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 13
+        label: confine
         description: >-
           Confine a member-qualified credential by the called tool's declared scope. A TREE-scoped
           tool — every scoped spec tool (the sdd_rename_ tools among them), lock, the two tree
@@ -404,8 +435,8 @@ methods:
           the resolved binding carries a member qualifier AND the called tool is not declared
           TREE-scoped (a record-scoped tool — initialize, approval status, await approval, the six
           project-ops tools, the four landscape discovery tools — or a tool with no declared scope)
-        onFalseStep: 12
-      - stepNumber: 11
+        onFalseStep: 15
+      - stepNumber: 14
         description: >-
           Refuse as an isError tool result (HTTP still 200, and the refusal still flows through the
           SAME best-effort audit path) naming the tool and the bound qualifier, and stating that the
@@ -413,23 +444,23 @@ methods:
           required. Never a silent success and never a partial action.
         type: return
         outcome: refused a tool outside the bound child on a subproject-qualified binding
-      - stepNumber: 12
+      - stepNumber: 15
         description: >-
           Offer the call to the project-lifecycle, landscape and project-ops dispatch, which serves
           it from the matching orchestrator instead of the scoped MCP server
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: dispatchProjectLifecycleTool
-      - stepNumber: 13
+      - stepNumber: 16
         description: >-
           A tool the dispatch serves answers with a response envelope: continue to the shared
           audit-event step, skipping the ordinary permission gate and scoped MCP server dispatch. A
           tool it does not serve answers with nothing and falls through to both.
         type: branch
         condition: the dispatch answered with a response envelope
-        onTrueStep: 20
-        onFalseStep: 14
-      - stepNumber: 14
+        onTrueStep: 23
+        onFalseStep: 17
+      - stepNumber: 17
         description: >-
           Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_
           (sdd_get_externals_status among them), or when it is one of the explicitly listed read
@@ -445,22 +476,22 @@ methods:
           sdd_pin_externals, sdd_get_externals_status and the family-migration tools act on the
           bound (possibly narrowed) tree
         type: local
-      - stepNumber: 15
+      - stepNumber: 18
         description: >-
           Resolve the caller's required capability (project:read or project:write) over the bound
           project through the authorization component
         type: call
         targetComponent: authorization
         targetMethod: authorize
-      - stepNumber: 16
+      - stepNumber: 19
         description: >-
           If the effective value is not yes, reject with a clear MCP error that the required
           data-plane permission is missing for the bound project
         type: branch
         condition: the effective value is not yes
-        onTrueStep: 17
-        onFalseStep: 18
-      - stepNumber: 17
+        onTrueStep: 20
+        onFalseStep: 21
+      - stepNumber: 20
         description: >-
           Reject with a clear MCP error that the required data-plane permission is missing for the
           bound project
@@ -468,20 +499,20 @@ methods:
         error: >-
           Forbidden — the caller lacks the required data-plane permission (project:read or
           project:write) for this project
-      - stepNumber: 18
+      - stepNumber: 21
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 19
+      - stepNumber: 22
         description: Connect the scoped server to the request transport and process the JSON-RPC message
         type: local
-      - stepNumber: 20
+      - stepNumber: 23
         description: Audit the handled data-plane tool call on the shared best-effort path
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: auditToolCall
-      - stepNumber: 21
+      - stepNumber: 24
         description: Return the MCP response
         type: return
         outcome: MCP response
@@ -502,4 +533,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-30T20:52:57.719Z'
+updatedAt: '2026-09-30T21:06:09.274Z'

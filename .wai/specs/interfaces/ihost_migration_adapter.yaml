@@ -1,0 +1,24 @@
+id: ihost_migration_adapter
+name: Host Migration Client Adapter Interface
+description: One forward to migration_portal.recover.
+component: host_migration_adapter
+methods:
+  - name: recover
+    description: >-
+      Forward to migration_portal.recover: with fix true, roll back every transaction under the root
+      whose coordinator never committed and clean up every one that did; answers what was found and
+      done (empty when there was nothing).
+    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
+    returns: RecoveredTransaction[]
+    params:
+      - name: root
+        type: string
+        description: A hosted project root
+      - name: fix
+        type: boolean
+        description: Resolve (true) or only report (false)
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-30T21:05:23.712Z'
+updatedAt: '2026-09-30T21:34:11.401Z'

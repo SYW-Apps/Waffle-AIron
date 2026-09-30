@@ -1,0 +1,16 @@
+id: host_migration_adapter
+name: Host Migration Client Adapter
+description: >-
+  Local client adapter in sdd_host for the hop into sdd_migrations: the data plane asks it to roll
+  back a family migration a crash left unfinished under a hosted project's roots, before any tool
+  touches that tree. The CLI's `doctor --fix` does this for a local project; a hosted project has no
+  person to run doctor in its directory, so the server does it when it next binds the project.
+  In-process import seam. The caller must gate on reach itself.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn:
+  - migration_portal
+status: complete
+createdAt: '2026-09-30T21:05:18.389Z'
+updatedAt: '2026-09-30T21:34:10.974Z'
