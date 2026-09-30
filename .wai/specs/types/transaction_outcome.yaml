@@ -30,5 +30,6 @@ fields:
     description: Files a rollback could not put back; the journal is left in place and names them.
     optional: false
 methods: []
+sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:35.945Z'
-updatedAt: '2026-09-30T20:29:37.092Z'
+updatedAt: '2026-09-30T21:33:06.962Z'

@@ -71,5 +71,6 @@ methods:
     description: >-
       True when there is no file change: re-planning a completed migration plans nothing
       (idempotence).
+sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:49.925Z'
-updatedAt: '2026-09-30T20:47:55.846Z'
+updatedAt: '2026-09-30T21:33:03.392Z'

@@ -9,7 +9,7 @@ description: >-
   declared), family-pin deletion under each member's; the caller's binding is restored on every
   path.
 contract: iposition_migration_orchestrator
-sourcePath: src/commands/position-migration.ts
+sourcePath: src/migrations/position-migration.ts
 methods:
   - name: plan
     narrative:
@@ -254,8 +254,7 @@ methods:
         description: Answer the writes and the projects to re-lock
         type: return
         outcome: PositionMigrationResult
-    symbol: apply
 detail: full
 status: complete
 createdAt: '2026-09-27T10:45:51.006Z'
-updatedAt: '2026-09-30T20:47:11.232Z'
+updatedAt: '2026-09-30T21:04:52.930Z'

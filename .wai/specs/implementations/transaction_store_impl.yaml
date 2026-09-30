@@ -74,6 +74,6 @@ methods:
       error.
     calls:
       - transaction_file_adapter.close
-status: design
+status: complete
 createdAt: '2026-09-30T20:26:47.758Z'
-updatedAt: '2026-09-30T20:26:47.769Z'
+updatedAt: '2026-09-30T21:33:48.316Z'

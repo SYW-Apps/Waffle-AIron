@@ -51,20 +51,10 @@ export {
   backfillChainedSubprojectConfigs,
   diagnoseProjectPacks,
   pinInstalledPacksAsSelections,
-  // The chaining migration's reads and its two configuration writes.
+  // The upgrade report's reads (the chaining migration and its writes moved to
+  // sdd_migrations in stage 6, behind migration_core_adapter).
   resolveChainingParent,
   projectFamily,
-  exportUsage,
   resolveProjectExports,
-  resolveSubsystemExports,
-  loadSpec,
-  approvalRecord,
-  setId as setProjectId,
-  declareExternal,
-  importNames,
   loadTypeSpecs,
-  // Stage 3: a legacy mount moved into `members`, and a spec's references
-  // written in their canonical form.
-  moveMountToMembers,
-  normalizeReferences,
 } from '../../core/index.js';

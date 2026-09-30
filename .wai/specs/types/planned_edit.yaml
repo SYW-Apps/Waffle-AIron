@@ -31,5 +31,6 @@ fields:
     description: 'For kind reference: the position and both texts.'
     optional: true
 methods: []
+sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:08.010Z'
-updatedAt: '2026-09-30T20:29:33.734Z'
+updatedAt: '2026-09-30T21:33:10.753Z'

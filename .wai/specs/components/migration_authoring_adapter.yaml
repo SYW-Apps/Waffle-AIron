@@ -11,6 +11,6 @@ componentType: Adapter
 owns: []
 dependsOn:
   - authoring_portal
-status: design
+status: complete
 createdAt: '2026-09-30T20:45:30.581Z'
-updatedAt: '2026-09-30T20:45:30.595Z'
+updatedAt: '2026-09-30T21:33:56.238Z'

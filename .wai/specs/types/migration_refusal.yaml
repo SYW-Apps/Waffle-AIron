@@ -24,5 +24,6 @@ fields:
     description: What was found and what would unblock it.
     optional: false
 methods: []
+sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:12.010Z'
-updatedAt: '2026-09-30T20:29:32.233Z'
+updatedAt: '2026-09-30T21:33:10.252Z'

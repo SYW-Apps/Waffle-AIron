@@ -33,6 +33,6 @@ methods:
       - name: restatement
         type: SpecRestatement
         description: The spec as the migration states it
-status: design
+status: complete
 createdAt: '2026-09-30T20:45:34.881Z'
-updatedAt: '2026-09-30T20:45:34.892Z'
+updatedAt: '2026-09-30T21:33:56.701Z'

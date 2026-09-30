@@ -78,9 +78,11 @@ methods:
         targetComponent: family_transaction
         targetMethod: stage
       - stepNumber: 3
-        description: Swap every owner; any failure restores everything
+        description: >-
+          Swap every owner and reach the commit point; any failure before the commit point is
+          recorded restores everything
         type: try
-        endStep: 4
+        endStep: 5
         catches:
           - error: SwapError
             step: 12
@@ -319,7 +321,9 @@ methods:
         description: >-
           Group the changes by owner in swap order (creates, then writes, then deletes); the
           coordinator is the family root, whose journal also lists every owner; every journal starts
-          in phase staging
+          in phase staging and already names, in dirsCreated, the parent directories its creates
+          will need that do not exist yet — so a crash between a create's makeDirs and the owner's
+          next journal save still leaves every directory to prune named
         type: local
       - stepNumber: 2
         description: For each owner, the coordinator first
@@ -456,6 +460,6 @@ methods:
         type: call
         targetComponent: transaction_repository
         targetMethod: saveJournal
-status: design
+status: complete
 createdAt: '2026-09-30T20:29:10.401Z'
-updatedAt: '2026-09-30T20:53:09.880Z'
+updatedAt: '2026-09-30T21:33:44.049Z'

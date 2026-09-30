@@ -18,5 +18,6 @@ fields:
       against the declaring root, so this holds for every member and every adoptable path).
     optional: false
 methods: []
+sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:56.008Z'
-updatedAt: '2026-09-30T20:29:37.469Z'
+updatedAt: '2026-09-30T21:33:07.505Z'

@@ -1117,3 +1117,13 @@ export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 
 function isAbsolutePath(p: string): boolean {
   return /^([/\\]|[A-Za-z]:)/.test(p);
 }
+
+/** internalize_destination — where a member's own metadata goes when `member internalize` folds it into its parent (stage 6). */
+export interface InternalizeDestination {
+  /** The parent subsystem that receives the member's metadata. */
+  home: string;
+  /** The member's packs: adopt | drop. */
+  packs?: string;
+  /** The member's L0 export names carried into the parent's L0. */
+  exports?: string[];
+}

@@ -20,7 +20,8 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../../src/co
 import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { pinExternals } from '../../src/core/surfaces.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
-import { plan, apply, isEmpty, blocked } from '../../src/commands/chaining-migration.js';
+import { plan, isEmpty, blocked } from '../../src/migrations/chaining-migration.js';
+import { apply } from '../helpers/chaining-transaction.js';
 import { runDoctor } from '../../src/commands/doctor.js';
 import { buildReferenceFamily, type ReferenceFamily } from '../helpers/reference-family.js';
 

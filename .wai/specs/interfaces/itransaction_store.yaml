@@ -136,6 +136,6 @@ methods:
         type: string
         description: The transaction id
     effect: write
-status: design
+status: complete
 createdAt: '2026-09-30T20:25:56.186Z'
-updatedAt: '2026-09-30T20:29:41.615Z'
+updatedAt: '2026-09-30T21:33:47.285Z'

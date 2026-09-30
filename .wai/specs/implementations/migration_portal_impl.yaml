@@ -39,6 +39,6 @@ methods:
         type: call
         targetComponent: position_reader
         targetMethod: match
-status: design
+status: complete
 createdAt: '2026-09-30T20:36:38.923Z'
-updatedAt: '2026-09-30T20:48:34.664Z'
+updatedAt: '2026-09-30T21:33:59.977Z'

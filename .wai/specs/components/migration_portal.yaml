@@ -16,6 +16,6 @@ dependsOn:
   - family_migration_orchestrator
   - position_reader
 portalType: Custom
-status: design
+status: complete
 createdAt: '2026-09-30T20:36:26.062Z'
-updatedAt: '2026-09-30T20:48:29.883Z'
+updatedAt: '2026-09-30T21:33:58.388Z'

@@ -113,6 +113,6 @@ methods:
       - name: id
         type: string
         description: The transaction id
-status: design
+status: complete
 createdAt: '2026-09-30T20:26:17.206Z'
-updatedAt: '2026-09-30T20:29:43.054Z'
+updatedAt: '2026-09-30T21:33:45.063Z'

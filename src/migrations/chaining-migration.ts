@@ -13,6 +13,7 @@ import { EXTERNAL_ALIAS_RE, PROJECT_ID_RE } from '../models/project.js';
 import { declares, familyNode, type CrossProjectReference, type ProjectFamily, type ProjectNode } from '../models/project-family.js';
 import { exportTargetKey, type ResolvedExport, type ResolvedExportTable } from '../models/exports.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec, SystemSpec, TypeSpec } from '../models/specs.js';
+import { liveName, rehearsalRoot, type Rehearsal } from './types.js';
 
 // ---------------------------------------------------------------------------
 // chaining_migration_orchestrator — the stage-2c chaining migration of one
@@ -28,17 +29,21 @@ import type { ComponentSpec, InterfaceSpec, SubsystemSpec, SystemSpec, TypeSpec 
 // the deprecated and self-prefixed references to rewrite and stage 4's
 // positional `use` imports, with the exports and externals those need. Every
 // consumer → producer edge it introduces is listed as a new dependency. It
-// writes nothing. apply(plan) writes exactly that, in a fixed order — ids,
-// exports, externals, then position (members, imports, rewrites, superseded
-// pins), and pins LAST, so every snapshot projects the final spelling — each
-// under its project's binding, and locks nothing: every project whose approval
-// the writes staled is named for its own human to re-lock.
+// writes nothing. write(plan, rehearsal) writes exactly that, in a fixed order —
+// ids, exports, externals, then position (members, imports, rewrites,
+// superseded pins), and pins LAST, so every snapshot projects the final
+// spelling — each under its project's REHEARSAL binding (the rehearsal's image
+// of its directory), and locks nothing: every project whose approval the writes
+// stale is named for its own human to re-lock. Since stage 6 the family
+// transaction swaps the rehearsal's result in all-or-nothing, where a failure
+// mid-apply once left a half-migrated family only idempotence could finish.
 //
 // It holds no state: the plan is a value its caller holds between the two. It
-// lives in sdd_cli because it composes three planes — the core's configuration
-// writes, the gated authoring seam for the L0 entries (new design content, so
-// it is judged like any authored write), and the surfaces plane for the pins —
-// and only a layer above all three can. Every hop into another project's root
+// lives in sdd_migrations (moved from sdd_cli in stage 6) because it composes
+// three planes — the core's configuration writes, the gated authoring seam for
+// the L0 entries (new design content, so it is judged like any authored
+// write), and the surfaces plane for the pins — and only a layer above all
+// three can, behind the family transaction. Every hop into another project's root
 // is a runWithProjectRoot, so the caller's binding is restored on every path,
 // a refusal included. The caller must gate on reach itself.
 // ---------------------------------------------------------------------------
@@ -725,15 +730,19 @@ function settle(ctx: Planning, top: string, whole: boolean): ChainingMigrationPl
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
-// ── apply ───────────────────────────────────────────────────────────────────
+// ── write ───────────────────────────────────────────────────────────────────
 
 /** The files written and the projects to re-lock, each once, in first-write order. */
 class WriteLog {
   readonly written: string[] = [];
   readonly relock: string[] = [];
 
+  constructor(private readonly rehearsal: Rehearsal) {}
+
+  /** A file written, named by its live project. */
   file(file: string): void {
-    if (!this.written.includes(file)) this.written.push(file);
+    const live = liveName(this.rehearsal, file);
+    if (!this.written.includes(live)) this.written.push(live);
   }
 
   stale(directory: string): void {
@@ -742,12 +751,12 @@ class WriteLog {
 }
 
 /**
- * ichaining_migration_orchestrator.apply — write what the plan names, ids
- * first and pins last, each under its project's binding. Idempotent: what is
- * already there changes nothing. Locks nothing.
+ * ichaining_migration_orchestrator.write — write what the plan names into the
+ * rehearsal, ids first and pins last, each under its project's rehearsal
+ * binding. Idempotent: what is already there changes nothing. Locks nothing.
  */
-// `plan` shadows the module's plan() here: apply never plans, it applies the value it is given.
-export function apply(plan: ChainingMigrationPlan): ChainingMigrationReport {
+// `plan` shadows the module's plan() here: write never plans, it writes the value it is given.
+export function write(plan: ChainingMigrationPlan, rehearsal: Rehearsal): ChainingMigrationReport {
   // Steps 1-2.
   if (isEmpty(plan)) return { plan, applied: false, written: [], relock: [] };
   // Steps 3-4.
@@ -756,20 +765,22 @@ export function apply(plan: ChainingMigrationPlan): ChainingMigrationReport {
   }
   // Steps 5-10: check every project before writing any.
   const projects = plan.projects.filter(hasWrites);
-  for (const p of projects) runWithProjectRoot(p.directory, () => preflight(p));
-  const log = new WriteLog();
+  // Steps 6 / 12 / 18 / 22: each project is bound at its rehearsal root.
+  const at = (p: ProjectMigration): string => rehearsalRoot(rehearsal, p.directory);
+  for (const p of projects) runWithProjectRoot(at(p), () => preflight(p));
+  const log = new WriteLog(rehearsal);
   // Steps 11-13.
-  for (const p of projects.filter((q) => q.idToWrite !== undefined)) runWithProjectRoot(p.directory, () => declareId(p, log));
+  for (const p of projects.filter((q) => q.idToWrite !== undefined)) runWithProjectRoot(at(p), () => declareId(p, log));
   // Steps 14-16.
-  for (const p of projects.filter((q) => q.exports.length > 0)) runWithProjectRoot(p.directory, () => addEntries(p, mountDescription(plan, p.project), log));
+  for (const p of projects.filter((q) => q.exports.length > 0)) runWithProjectRoot(at(p), () => addEntries(p, mountDescription(plan, p.project), log));
   // Steps 17-19.
-  for (const p of projects.filter((q) => q.externals.length > 0)) runWithProjectRoot(p.directory, () => declareExternals(p, log));
+  for (const p of projects.filter((q) => q.externals.length > 0)) runWithProjectRoot(at(p), () => declareExternals(p, log));
   // Step 20: then retire position — members, imports, rewrites, the superseded family pins.
-  const retired = position.apply(plan);
+  const retired = position.write(plan, rehearsal);
   retired.written.forEach((w) => log.file(w));
   retired.relock.forEach((d) => log.stale(d));
   // Steps 21-23: pins LAST, projected from the final spelling.
-  for (const p of projects.filter((q) => q.pins.length > 0)) runWithProjectRoot(p.directory, () => pin(p, log));
+  for (const p of projects.filter((q) => q.pins.length > 0)) runWithProjectRoot(at(p), () => pin(p, log));
   // Steps 24-25.
   return { plan, applied: true, written: log.written, relock: log.relock };
 }
@@ -801,13 +812,13 @@ function exportDelta(p: ProjectMigration): { publicInterfaces: Record<string, st
 
 /** Step 13. */
 function declareId(p: ProjectMigration, log: WriteLog): void {
-  if (core.setProjectId(p.idToWrite!)) log.file(AI_PATHS.projectConfig());
+  if (core.setId(p.idToWrite!)) log.file(AI_PATHS.projectConfig());
 }
 
 /** Steps 15-16: the minimal L0 first where there is none, then one gated delta; entries already present change nothing. */
 function addEntries(p: ProjectMigration, description: string | undefined, log: WriteLog): void {
   // Step 15.
-  if (p.createsSystem && core.loadSystemSpec() === null) createMinimalSystem(p, description, log);
+  if (p.createsSystem && core.loadSpec('system', 'system') === null) createMinimalSystem(p, description, log);
   // Step 16: a carried entry its subsystem does not publish yet is published at L1 first.
   for (const e of p.exports.filter((x) => x.publishAtL1 && x.from !== undefined && x.component !== undefined)) {
     const l1 = authoring.updateSpecGated('subsystem', e.from!, { publicInterfaces: [{ component: e.component, type: e.type, details: e.details }] });

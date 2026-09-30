@@ -57,5 +57,6 @@ fields:
       true: a full plan.
     optional: true
 methods: []
+sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:03.011Z'
-updatedAt: '2026-09-30T20:47:54.137Z'
+updatedAt: '2026-09-30T21:33:04.463Z'

@@ -11,6 +11,6 @@ componentType: Adapter
 owns: []
 dependsOn:
   - migration_portal
-status: design
+status: complete
 createdAt: '2026-09-30T20:37:27.711Z'
-updatedAt: '2026-09-30T20:37:27.721Z'
+updatedAt: '2026-09-30T21:34:00.739Z'

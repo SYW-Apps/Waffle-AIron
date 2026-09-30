@@ -39,6 +39,6 @@ methods:
         type: call
         targetComponent: migration_portal
         targetMethod: matchPositions
-status: design
+status: complete
 createdAt: '2026-09-30T20:37:35.464Z'
-updatedAt: '2026-09-30T20:48:38.297Z'
+updatedAt: '2026-09-30T21:34:01.997Z'

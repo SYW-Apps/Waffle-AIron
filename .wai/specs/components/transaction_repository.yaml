@@ -13,6 +13,6 @@ owns:
   - transaction_store
   - transaction_file_adapter
 dependsOn: []
-status: design
+status: complete
 createdAt: '2026-09-30T20:25:20.094Z'
-updatedAt: '2026-09-30T20:25:20.105Z'
+updatedAt: '2026-09-30T21:33:44.548Z'

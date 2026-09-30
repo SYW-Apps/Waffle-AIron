@@ -57,6 +57,6 @@ methods:
       - name: types
         type: TypeSpec[]
         description: Every type the family top's scan loaded
-status: design
+status: complete
 createdAt: '2026-09-30T20:37:31.884Z'
-updatedAt: '2026-09-30T20:48:37.264Z'
+updatedAt: '2026-09-30T21:34:01.178Z'

@@ -6,10 +6,6 @@ export {
   exportSurface,
   importSurface,
   listSnapshots,
-  // doctor --fix's chaining migration: the stage-1 family pins a root still
-  // holds, and the removal of each once it is converted.
-  listFamilyPins,
-  removeSnapshot,
   // `wairon externals`: pin, status and list of the declared externals.
   pinExternals,
   getExternalsStatus,

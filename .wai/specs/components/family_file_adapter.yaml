@@ -15,6 +15,6 @@ subsystem: sdd_migrations
 componentType: Adapter
 owns: []
 dependsOn: []
-status: design
+status: complete
 createdAt: '2026-09-30T20:25:25.235Z'
-updatedAt: '2026-09-30T20:25:25.248Z'
+updatedAt: '2026-09-30T21:33:53.595Z'

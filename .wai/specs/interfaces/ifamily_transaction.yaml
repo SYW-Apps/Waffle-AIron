@@ -132,6 +132,6 @@ methods:
       - name: journals
         type: TransactionJournal[]
         description: The staged journals, the coordinator's first
-status: design
+status: complete
 createdAt: '2026-09-30T20:28:28.502Z'
-updatedAt: '2026-09-30T20:53:04.402Z'
+updatedAt: '2026-09-30T21:33:42.847Z'

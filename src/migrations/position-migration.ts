@@ -11,6 +11,7 @@ import type { PositionalMatch } from './position-reader.js';
 import { exportTargetKey, type ResolvedExportTable } from '../models/exports.js';
 import type { ComponentSpec, PublicInterface, SubsystemSpec, TypeSpec } from '../models/specs.js';
 import type { ChainingMigrationFinding, ChainingMigrationPlan, PlannedExport, ProjectMigration } from './chaining-migration.js';
+import { rehearsalRoot, type Rehearsal } from './types.js';
 
 // ---------------------------------------------------------------------------
 // position_migration_orchestrator — the stage-3 share of a family's chaining
@@ -30,11 +31,14 @@ import type { ChainingMigrationFinding, ChainingMigrationPlan, PlannedExport, Pr
 // name, a named import a local spec would shadow, two imports supplying one
 // name) is reported for a person, never guessed. It writes nothing.
 //
-// apply(plan) runs after the chaining migration's ids, exports and externals
-// are written and before its pins: members first (under each parent's
-// binding), then the imports (under each consumer's), then the rewrites (from
-// the family's top root, where the deprecated forms still bind), then the
-// deletion of the stage-1 family pins nothing reads any more.
+// write(plan, rehearsal) runs after the chaining migration's ids, exports and
+// externals are written and before its pins, into the chaining migration's
+// rehearsal: members first (under each parent's rehearsal binding), then the
+// imports (under each consumer's), then the rewrites (from the rehearsal's top
+// root, where the deprecated forms still bind), then the deletion of the
+// stage-1 family pins nothing reads any more. The family transaction then
+// swaps the result in all-or-nothing (stage 6). It moved from sdd_cli to
+// sdd_migrations with the chaining migration.
 // Every hop into a root is a runWithProjectRoot, so the caller's binding is
 // restored on every path. It holds no state and never locks. The caller must
 // gate on reach itself.
@@ -110,7 +114,7 @@ export interface PositionMigrationPlan {
   imports: PlannedImport[];
 }
 
-/** position_migration_result — what applying the stage-3 share wrote. */
+/** position_migration_result — what writing the stage-3 share wrote. */
 export interface PositionMigrationResult {
   /** Every write, in write order. */
   written: string[];
@@ -483,7 +487,7 @@ function heldElsewhere(family: ProjectFamily, planned: PlannedImport): string | 
   return undefined;
 }
 
-// ── apply ───────────────────────────────────────────────────────────────────
+// ── write ───────────────────────────────────────────────────────────────────
 
 class WriteLog implements PositionMigrationResult {
   readonly written: string[] = [];
@@ -498,26 +502,28 @@ class WriteLog implements PositionMigrationResult {
 const specsAt = (directory: string): string => path.join(directory, '.wai', 'specs');
 
 /**
- * iposition_migration_orchestrator.apply — move the planned mounts, add the
+ * iposition_migration_orchestrator.write — move the planned mounts, add the
  * positional imports, rewrite the planned references and delete the
- * superseded family pins, after the chaining migration's ids, exports and
- * externals and before its pins. Idempotent; locks nothing.
+ * superseded family pins in the rehearsal, after the chaining migration's ids,
+ * exports and externals and before its pins. Idempotent; locks nothing. Every
+ * write is logged by its live project.
  */
-// `plan` shadows the module's plan() here: apply never plans, it applies the value it is given.
-export function apply(plan: ChainingMigrationPlan): PositionMigrationResult {
+// `plan` shadows the module's plan() here: write never plans, it writes the value it is given.
+export function write(plan: ChainingMigrationPlan, rehearsal: Rehearsal): PositionMigrationResult {
   const log = new WriteLog();
-  // Steps 1-2: members, under each parent's binding.
+  const at = (directory: string): string => rehearsalRoot(rehearsal, directory);
+  // Steps 1-2: members, under each parent's rehearsal binding.
   for (const p of plan.projects) {
-    for (const member of p.members) runWithProjectRoot(p.directory, () => moveMount(p, member, log));
+    for (const member of p.members) runWithProjectRoot(at(p.directory), () => moveMount(p, member, log));
   }
-  // Steps 3-5: the positional imports, under each consumer's binding — after
-  // the moves, so an import on a legacy mount's alias finds it under `members`.
-  for (const p of plan.projects.filter((q) => q.imports.length > 0)) runWithProjectRoot(p.directory, () => importAll(p, log));
-  // Steps 6-8: the rewrites, from the family's top root.
-  runWithProjectRoot(plan.familyRoot, () => rewriteAll(plan, log));
-  // Steps 9-10: the superseded family pins, under each member's binding.
+  // Steps 3-5: the positional imports, under each consumer's rehearsal binding —
+  // after the moves, so an import on a legacy mount's alias finds it under `members`.
+  for (const p of plan.projects.filter((q) => q.imports.length > 0)) runWithProjectRoot(at(p.directory), () => importAll(p, log));
+  // Steps 6-8: the rewrites, from the rehearsal's top root.
+  runWithProjectRoot(at(plan.familyRoot), () => rewriteAll(plan, log));
+  // Steps 9-10: the superseded family pins, under each member's rehearsal binding.
   for (const p of plan.projects) {
-    for (const key of p.supersededPins) runWithProjectRoot(p.directory, () => unpin(p, key, log));
+    for (const key of p.supersededPins) runWithProjectRoot(at(p.directory), () => unpin(p, key, log));
   }
   // Steps 11-12.
   return { written: log.written, relock: log.relock };

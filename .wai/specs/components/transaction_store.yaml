@@ -12,6 +12,6 @@ owns: []
 dependsOn:
   - transaction_file_adapter
 durability: read-through
-status: design
+status: complete
 createdAt: '2026-09-30T20:25:17.146Z'
-updatedAt: '2026-09-30T20:25:17.158Z'
+updatedAt: '2026-09-30T21:33:46.922Z'

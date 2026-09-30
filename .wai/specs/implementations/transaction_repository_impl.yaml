@@ -11,6 +11,7 @@ methods:
         type: call
         targetComponent: transaction_store
         targetMethod: openRehearsal
+    exportedVia: transactionRepository
   - name: dropRehearsal
     narrative:
       - stepNumber: 1
@@ -18,6 +19,7 @@ methods:
         type: call
         targetComponent: transaction_store
         targetMethod: dropRehearsal
+    exportedVia: transactionRepository
   - name: saveJournal
     narrative:
       - stepNumber: 1
@@ -25,6 +27,7 @@ methods:
         type: call
         targetComponent: transaction_store
         targetMethod: saveJournal
+    exportedVia: transactionRepository
   - name: readJournal
     narrative:
       - stepNumber: 1
@@ -32,6 +35,7 @@ methods:
         type: call
         targetComponent: transaction_store
         targetMethod: readJournal
+    exportedVia: transactionRepository
   - name: listJournals
     narrative:
       - stepNumber: 1
@@ -39,6 +43,7 @@ methods:
         type: call
         targetComponent: transaction_store
         targetMethod: listJournals
+    exportedVia: transactionRepository
   - name: putFile
     narrative:
       - stepNumber: 1
@@ -46,6 +51,7 @@ methods:
         type: call
         targetComponent: transaction_store
         targetMethod: putFile
+    exportedVia: transactionRepository
   - name: readFile
     narrative:
       - stepNumber: 1
@@ -53,6 +59,7 @@ methods:
         type: call
         targetComponent: transaction_store
         targetMethod: readFile
+    exportedVia: transactionRepository
   - name: locate
     narrative:
       - stepNumber: 1
@@ -60,6 +67,7 @@ methods:
         type: call
         targetComponent: transaction_store
         targetMethod: locate
+    exportedVia: transactionRepository
   - name: close
     narrative:
       - stepNumber: 1
@@ -67,6 +75,7 @@ methods:
         type: call
         targetComponent: transaction_store
         targetMethod: close
-status: design
+    exportedVia: transactionRepository
+status: complete
 createdAt: '2026-09-30T20:26:41.107Z'
-updatedAt: '2026-09-30T20:26:41.118Z'
+updatedAt: '2026-09-30T21:33:45.955Z'

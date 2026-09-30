@@ -7,7 +7,7 @@ description: >-
   earlier round's import makes a producer export counts as exported — what a re-run after apply
   decides, so the migration it plans is idempotent.
 contract: iposition_reader
-sourcePath: src/commands/position-reader.ts
+sourcePath: src/migrations/position-reader.ts
 methods:
   - name: match
     narrative:
@@ -86,4 +86,4 @@ methods:
         outcome: PositionalMatch[]
 status: complete
 createdAt: '2026-09-28T16:09:37.950Z'
-updatedAt: '2026-09-29T14:31:21.762Z'
+updatedAt: '2026-09-30T21:04:54.145Z'

@@ -174,6 +174,14 @@ methods:
         type: return
         outcome: refused plan
       - stepNumber: 3
+        label: scope
+        description: >-
+          Read the project graph at the family root, under that root's binding: its nodes are the
+          projects the rehearsal copies (the plan carries its family root, not the graph)
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 4
         label: copy
         description: >-
           Copy every family project's .wai tree, and the project the verb brings in (attach, adopt),
@@ -181,65 +189,65 @@ methods:
         type: call
         targetComponent: family_transaction
         targetMethod: rehearse
-      - stepNumber: 4
+      - stepNumber: 5
         description: Run the verb's own writes on the copy; a core writer's refusal ends the region
         type: try
-        endStep: 13
+        endStep: 14
         catches:
           - error: a core writer's refusal
-            step: 17
-      - stepNumber: 5
+            step: 18
+      - stepNumber: 6
         description: Which writer?
         type: switch
         'on': plan.request.verb
         cases:
           - value: attach
-            step: 6
+            step: 7
           - value: detach
-            step: 6
+            step: 7
           - value: adopt
-            step: 6
+            step: 7
           - value: rename
-            step: 8
+            step: 9
           - value: rename-alias
-            step: 8
+            step: 9
           - value: internalize
-            step: 10
+            step: 11
           - value: externalize
-            step: 10
+            step: 11
           - value: chaining
-            step: 12
-      - stepNumber: 6
+            step: 13
+      - stepNumber: 7
         label: membership
         description: Write the attach, detach or adopt into the rehearsal roots
         type: call
         targetComponent: membership_migration
         targetMethod: write
-      - stepNumber: 7
+      - stepNumber: 8
         description: Written
         type: jump
-        toStep: 13
-      - stepNumber: 8
+        toStep: 14
+      - stepNumber: 9
         label: identity
         description: Write the rename or alias rename into the rehearsal roots
         type: call
         targetComponent: identity_migration
         targetMethod: write
-      - stepNumber: 9
+      - stepNumber: 10
         description: Written
         type: jump
-        toStep: 13
-      - stepNumber: 10
+        toStep: 14
+      - stepNumber: 11
         label: boundary
         description: Write the internalize or externalize into the rehearsal roots
         type: call
         targetComponent: boundary_migration
         targetMethod: write
-      - stepNumber: 11
+      - stepNumber: 12
         description: Written
         type: jump
-        toStep: 13
-      - stepNumber: 12
+        toStep: 14
+      - stepNumber: 13
         label: chaining
         description: >-
           Write the chaining migration into the rehearsal roots: ids, exports, externals, the
@@ -248,33 +256,33 @@ methods:
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: write
-      - stepNumber: 13
+      - stepNumber: 14
         label: written
         description: The verb's writes are on the copy
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: 'Diff the copy against the live family: the plan''s file changes'
         type: call
         targetComponent: family_transaction
         targetMethod: diff
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Read each changed owner's lock record; an owner that carries one is a project to re-lock
           (a rename's target first)
         type: call
         targetComponent: migration_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 16
+      - stepNumber: 17
         description: Answer the plan with its rehearsal, file changes and re-lock list
         type: return
         outcome: rehearsed plan
-      - stepNumber: 17
+      - stepNumber: 18
         label: refused-on-copy
         description: Drop the rehearsal
         type: call
         targetComponent: family_transaction
         targetMethod: discard
-      - stepNumber: 18
+      - stepNumber: 19
         description: >-
           Answer the plan with the writer's refusal (internalize-refused, externalize-refused) and
           its message
@@ -336,8 +344,10 @@ methods:
         targetMethod: commit
       - stepNumber: 10
         description: >-
-          Drop this process's cached scans of every root the changes touched, so the next read sees
-          the new files
+          The next read sees the new files without a cache dropped by hand (no contract into
+          sdd_core offers one): the core's spec workspace re-verifies its file signature on the
+          first read of every new root binding, and at most 2 s later otherwise, and every swapped
+          file carries a new mtime
         type: local
       - stepNumber: 11
         description: >-
@@ -361,4 +371,4 @@ methods:
         targetMethod: recover
 status: design
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-09-30T20:50:16.678Z'
+updatedAt: '2026-09-30T21:34:18.290Z'

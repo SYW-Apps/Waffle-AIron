@@ -82,6 +82,6 @@ methods:
     endpoint:
       transport: Custom
       address: in-process migration.matchPositions
-status: design
+status: complete
 createdAt: '2026-09-30T20:36:31.021Z'
-updatedAt: '2026-09-30T20:48:33.475Z'
+updatedAt: '2026-09-30T21:33:58.906Z'

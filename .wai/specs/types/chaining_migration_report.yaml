@@ -34,6 +34,6 @@ fields:
       is locked on anyone's behalf.
     optional: false
 methods: []
-sourcePath: src/commands/chaining-migration.ts
+sourcePath: src/migrations/chaining-migration.ts
 createdAt: '2026-09-26T21:12:09.954Z'
-updatedAt: '2026-09-30T20:47:36.154Z'
+updatedAt: '2026-09-30T21:05:06.884Z'

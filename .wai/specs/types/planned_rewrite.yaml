@@ -40,6 +40,6 @@ fields:
       rewritten to the bare local id by stage 4's positional step.
     optional: false
 methods: []
-sourcePath: src/commands/position-migration.ts
+sourcePath: src/migrations/position-migration.ts
 createdAt: '2026-09-27T10:44:27.609Z'
-updatedAt: '2026-09-30T20:47:40.009Z'
+updatedAt: '2026-09-30T21:05:11.180Z'

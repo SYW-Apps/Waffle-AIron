@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { explain } from '../../src/commands/verdict-changes.js';
-import { match } from '../../src/commands/position-reader.js';
+import { match } from '../../src/migrations/position-reader.js';
 import { runDoctor } from '../../src/commands/doctor.js';
 import { DoctorOptionsError } from '../../src/utils/errors.js';
 import { projectFamily, resolveProjectExports, loadTypeSpecs } from '../../src/core/index.js';
