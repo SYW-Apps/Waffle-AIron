@@ -99,6 +99,40 @@ network — the operator owns that risk).
 Upgrade path to OIDC/OAuth later: the MCP SDK's `requireBearerAuth` + an OIDC
 verifier slots in at the same boundary. Not a v1 requirement.
 
+### Hosted families — members are projects
+
+A hosted project may declare members (`members` in its `project.yaml`), each a
+wairon project inside its isolated tree. Every member is a **hosted project
+record** of its own (`parentProjectId`, `memberPath`; its root derived from its
+parent's): it is bound by its own id, audited under its own id, and has its own
+record-level tools, approval page and lock requests.
+
+- **Access is inherited.** Projects nest like organization units: a member's
+  permission chain is its own scope, its parent's, up to its family root's
+  units and the instance; the most specific setting wins, so an explicit **no**
+  on a member beats an inherited yes. A token narrowed to a project covers its
+  members. No grant is copied when a member appears.
+- **Membership changes reach.** Attach and adopt widen who reaches the member,
+  detach narrows it; each lists the principals who gain or lose access (a dry
+  run included) and audits it. After any applied family-shape tool the records
+  are reconciled with the family on disk, and a renamed member's own settings
+  and key entries move to its new id.
+- **Detach and adopt relocate.** A detached member moves to an isolated root of
+  its own — in one all-or-nothing transaction with the family edits and the
+  record and placement writes — and keeps its former family root's units. Its
+  consumers name it by `source.hosted: <record id>`, resolved live only through
+  the server's record lookup within what the request may read (unavailable
+  otherwise, never a pass). Adopt moves it back.
+- **Git.** A family commits through its family root's repository: a member
+  under its own `<path>/.wai/`, a family change as one commit over every member
+  it touched.
+- **Refused.** Placing a member in a unit (it takes its units from its family
+  root), and renaming a family root's id.
+- **Upgrading a data dir.** `wairon host doctor` plans the member records and
+  `--fix` applies them, all or nothing; it writes no grant, so nobody's reach
+  changes. A crashed transaction under the data directory is rolled back at
+  boot and by `host doctor --fix`.
+
 ---
 
 ## 4. State-scoped lock

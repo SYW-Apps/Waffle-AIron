@@ -42,7 +42,10 @@ blocking `wairon lock` (CI still enforces them), the lock record moves to format
 `generate` stops cascading into members. Stage 6 changes a family's shape only through
 plan-first, all-or-nothing migrations: `member internalize` no longer deletes the member's
 metadata (and takes `--into`/`--packs`), `subsystem externalize` asks before it applies
-(`--yes` in a script), and a rename always asks for a re-lock. Nothing here is purely
+(`--yes` in a script), and a rename always asks for a re-lock. Stage 7 makes every hosted
+member a project record of its own, inheriting access through its parent: hosted operators run
+`wairon host doctor --fix` once, a qualified token is mapped to the member's record id, and a
+hosted detach or adopt moves the member's directory. Nothing here is purely
 additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
@@ -845,6 +848,90 @@ applied to every project it touches or to none of them.
   `InternalizeDestination` and answers an `InternalizeResult`; the CLI and MCP core
   adapters no longer re-export `externalizeSubsystem` or `internalizeMember` — the verbs
   go through the migration portal (`plan`, `apply`, `discard`).
+
+### Hosted members are projects of their own
+
+Stage 7 of the chained-subsystems work. Locally a member has been a project since stage 3 —
+its own id, gate, lock and migrations. On a hosted instance it was still a path inside its
+parent's record, reached by a narrowed token (`platform::billing`) and permissioned only
+through the parent. Every member of a hosted family is now a **hosted project record** of
+its own.
+
+- **Member records.** A member record carries `parentProjectId` and `memberPath`; its root
+  is derived from its parent's, never stored, so moving a family moves its members with it.
+  A member is a project for every hosted operation: it is bound by its own id, its own
+  record-level tools (status, approval, lock requests, packs, policy, producers, commit,
+  landscape) act on it, and audit names it (`projectId` the member, `composition` the
+  project the request ran at).
+- **Access is inherited through the project chain.** Projects nest like organization units:
+  a member's chain is its own scope, then its parent's, up to its family root's units and
+  the instance — the most specific setting wins. A grant on a project reaches every member
+  below it; an explicit **no** on a member's own record beats any inherited yes. No grant is
+  ever copied.
+- **Membership changes reach, and says so.** Because a member inherits its parent's access,
+  attaching or adopting a project widens who can reach it and detaching narrows it. Hosted,
+  `sdd_attach_member`'s dry run carries the principals who gain access beside the plan;
+  `sdd_detach_member` and `sdd_adopt_member` list everyone who loses or gains access; every
+  applied change is audited with the reach it changed (`member.registered`,
+  `member.relocated`, `member.renamed`, `member.departed`, `member.detached`,
+  `member.adopted`).
+- **Hosted detach and adopt relocate.** Every hosted record has an isolated root, so a
+  detached member cannot stay inside its family's tree. A hosted detach **moves** the member
+  — its files leave as deletes and arrive in a new isolated root as creates, its own members
+  with it — in the same all-or-nothing transaction as the family edits and the host store
+  writes; its record becomes top-level and keeps its former family root's units. A hosted
+  adopt (`sdd_adopt_member` with `path`) moves it back and converts the record into a member
+  again; detach-then-adopt is the identity on hosted as it is locally.
+- **`source.hosted`.** An external may name its producer by hosted record id —
+  `source: { hosted: billing }` — which a detach writes for every consumer, since a path
+  cannot cross isolated roots. Exactly one of `source.path` and `source.hosted` is set. It
+  is read live (status, re-pin) only through the hosting server's record lookup, within what
+  the request may read; the consumer's own gate still judges its pin. Outside a hosted
+  server it is reported as "hosted-only producer `<id>`: available only through the hosted
+  server" — unavailable, never a pass.
+- **Reconcile.** After an applied `sdd_add_member`, `sdd_move_member` or family migration on
+  hosted, the family's records follow the family on disk: new members are registered,
+  moved ones relocated, departed ones disabled (never deleted), and a renamed member is
+  re-keyed — its own-scope settings and the key entries naming it move to the new id, with
+  no widening.
+- **One family commit.** A git-backed family commits through its family root's repository:
+  a member under its own `<path>/.wai/`, and a family migration or reconciliation as ONE
+  commit covering every member it touched.
+- **Refusals.** Placing a member in a unit refuses (a member takes its units from its family
+  root). Renaming a hosted family root's id refuses: "renaming a hosted family root's id is
+  not supported; a member can be renamed, or the root recreated".
+- **Two fixed bugs.** Hosted member specs were never committed by the periodic sync, and the
+  backup mirror missed members; both now cover every member through its family root.
+- **Web app.** `GET /web/projects` lists member records with `parentProjectId`; the app shows
+  a crumb to a member's parent (named only when you can see the parent) and lists members
+  under their parent. The family canvas links each member to its own page when you may read
+  it. `GET /web/projects/externals` answers a project's relation health — its externals
+  status, per external — shown on the project's new *Relations* tab.
+
+**Upgrading.**
+
+- **Run `wairon host doctor`, then `wairon host doctor --fix`.** It registers every member
+  the hosted families declare (members of members included) as a record — plan first, all
+  or nothing, audited. It writes **no grant**: access is inherited, so everyone's reach is
+  exactly what it was (the plan proves it, row by row, before it writes). Until it runs, the
+  server logs at boot how many members await it. A member it cannot read refuses the whole
+  upgrade, named with why (a missing directory, no `.wai/project.yaml`, a file that fails
+  its schema, no valid id).
+- **A crash is recovered.** A transaction a crash left unfinished under the data directory
+  (a member upgrade, or a hosted detach or adopt) is rolled back before the server serves,
+  and by `host doctor --fix`; a dry run reports it.
+- **Explicit denies on members.** A "no" assigned on a member's own record now beats
+  whatever its parent grants — use it to keep a member private inside a readable family.
+- **Qualified tokens keep working for one release.** A token narrowed to `platform::billing`
+  is rewritten by the upgrade to the member's record id (`billing`); one that is not keeps
+  resolving to the member's record. `host key mint` given a qualified entry stores the record
+  id and says what it mapped (`platform::billing -> billing`); the admin API answers it as
+  `mapped`. Mint new tokens by record id.
+- **Hosted detach and adopt move directories** and name the projects they write to re-lock.
+  `sdd_adopt_member` takes `path` on hosted (where to adopt a `source.hosted` external).
+- **`source.path` is optional** in `externals` now that `source.hosted` exists; a source
+  naming both or neither is reported as the declaration's problem.
+- **Library callers:** `mintToken` answers `{ token, mapped }` instead of the bare token.
 
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 
