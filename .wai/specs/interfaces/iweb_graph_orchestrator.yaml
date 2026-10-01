@@ -57,9 +57,11 @@ methods:
       be in the caller's resolved read set (cross-project access is Forbidden, an unknown project
       indistinguishably so), and the model is built over the project's bound spec tree. Since stage
       7 this is the FAMILY canvas for a project that declares members: each member renders as a
-      project node (stage 3's project node), carrying the member's hosted record id ONLY when the
-      caller may read that record, so the app links the node to the member's own page; a member the
-      caller may not read stays an unlinked node drawn through its exports.
+      project node (stage 3's project node), carrying the member's hosted record id ONLY when that
+      record is in the caller's listed projects (the web project orchestrator's scoped list); any
+      other member carries none (no id leaks). The SPA turns the record ids into a strip of links
+      above the canvas, each opening the member's own project page; the nodes themselves are not
+      clickable yet (a future engine hook).
     signature: 'getProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
     returns: CanvasModel
     params:
@@ -94,10 +96,13 @@ methods:
       Relation health for ONE authorized project: its externals status — each declared external's
       pin compared with its live producer at signature level, per external (drifted, incompatible,
       unavailable, current), what cannot be compared reported unavailable and never a pass. Same
-      scoped authorization as the canvas: the session resolves to a Principal, the project must be
-      in the caller's resolved read set, and the status is read over the project's bound root. A
-      producer outside the caller's reach is reported unavailable; the caller must gate on reach
-      itself.
+      scoped authorization as the canvas: the session resolves to a Principal and the project must
+      be in the caller's listed projects. The read's reach is that list — the web project
+      orchestrator's scoped list, which holds every project the caller may read, write or
+      administer, not only read: the family above the project is composed when the family root is in
+      it, and a source.hosted producer is read when its record is; anything else is reported
+      unavailable. The SPA renders it on the project page's Relations tab; the canvas's edges are
+      not coloured by it (a future engine hook).
     signature: 'getProjectExternals(sessionId: string, projectId: string): ExternalStatus[]'
     returns: ExternalStatus[]
     params:
@@ -109,4 +114,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-10-01T16:35:10.571Z'
+updatedAt: '2026-10-01T19:50:18.449Z'

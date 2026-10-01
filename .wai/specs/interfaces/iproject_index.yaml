@@ -67,9 +67,10 @@ methods:
       is followed through the containment guard, and the member's own project id is read from its
       project.yaml. Each is answered as the record it should hold (id, parentProjectId = the
       declaring project's id, memberPath as declared), with the pre-stage-7 qualifier that bound it
-      and the action against the stored records (register, relocate, rename, unchanged). A member
-      whose declaration, directory or project.yaml cannot be followed or read is answered with
-      action unreadable and the reason, never skipped.
+      and the action against the stored records (register, relocate, rename, return — a record
+      disabled as departed whose member is declared again — or unchanged). A member whose
+      declaration, directory or project.yaml cannot be followed or read is answered with action
+      unreadable and the reason, never skipped.
     signature: 'declaredMembers(id: string): PlannedMemberRecord[]'
     returns: PlannedMemberRecord[]
     params:
@@ -88,4 +89,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-10-01T18:09:12.775Z'
+updatedAt: '2026-10-01T19:51:36.637Z'

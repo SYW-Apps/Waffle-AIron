@@ -308,36 +308,30 @@ methods:
         targetMethod: list
       - stepNumber: 5
         description: >-
-          For every declared member whose action is register, relocate or rename (family roots
-          first, so a parent record exists before its members)
+          For every declared member whose action is register, relocate, rename or return (family
+          roots first, so a parent record exists before its members)
         type: loop
         loopKind: forEach
-        over: declared members to register, relocate or rename
-        endStep: 15
+        over: declared members to register, relocate, rename or return
+        endStep: 14
       - stepNumber: 6
         description: Is it a project rename (another record id held this parent and path)?
         type: branch
         condition: the action is rename
-        onFalseStep: 15
+        onFalseStep: 13
       - stepNumber: 7
         description: >-
           Refuse the re-key when the new id already has a setting at its own scope (moving the old
           ones would merge two subjects' access), or when the old or new id is also an organization
-          unit id (the scope remaps are kind-blind and would rewrite the unit's settings too)
+          unit id (the scope remaps are kind-blind and would rewrite the unit's settings too). A
+          refused re-key is recorded for the audit below and goes straight on to registering the new
+          id: the old record stays (disabled with the departed), the new one is registered with only
+          its inheritance, and an operator moves the own-scope settings by hand
         type: branch
         condition: the new id holds settings, or the old or new id is also a unit id
-        onFalseStep: 10
+        onTrueStep: 13
+        onFalseStep: 8
       - stepNumber: 8
-        description: >-
-          Record the refused re-key for the audit below: the old record stays (disabled with the
-          departed), the new one is registered with only its inheritance, and an operator moves the
-          own-scope settings by hand
-        type: local
-      - stepNumber: 9
-        description: Continue with registering the new id
-        type: jump
-        toStep: 15
-      - stepNumber: 10
         label: rekey
         description: >-
           Move every assignment scoped at the old member's own project scope to the new id (explicit
@@ -346,29 +340,38 @@ methods:
         type: call
         targetComponent: permission_repository
         targetMethod: remapScope
-      - stepNumber: 11
+      - stepNumber: 9
         description: Move every role binding anchored at the old member's own scope to the new id
         type: call
         targetComponent: user_repository
         targetMethod: remapUnitReferences
-      - stepNumber: 12
+      - stepNumber: 10
         description: List the API keys whose narrowing names the old id
         type: call
         targetComponent: credential_repository
         targetMethod: list
-      - stepNumber: 13
+      - stepNumber: 11
         description: Rewrite each such key's entry from the old id to the new one
         type: call
         targetComponent: credential_repository
         targetMethod: renarrow
-      - stepNumber: 14
+      - stepNumber: 12
         description: >-
           Delete the old member record (a member record's deletion never touches its directory); its
           children are relocated under the new id as the loop reaches them
         type: call
         targetComponent: project_repository
         targetMethod: remove
-      - stepNumber: 15
+      - stepNumber: 13
+        label: return
+        description: >-
+          When the member returns — the family declares it again after its record was disabled as
+          departed — set the record active again (its own-scope settings were kept, so it regains
+          exactly its inherited reach and those)
+        type: call
+        targetComponent: project_repository
+        targetMethod: setStatus
+      - stepNumber: 14
         label: upsert
         description: >-
           Upsert the member record with its id, parent and path — no grant and no placement: it
@@ -376,56 +379,57 @@ methods:
         type: call
         targetComponent: project_repository
         targetMethod: registerMember
-      - stepNumber: 16
+      - stepNumber: 15
         description: For every stored member record of the family the family no longer declares
         type: loop
         loopKind: forEach
         over: departed member records
-        endStep: 17
-      - stepNumber: 17
+        endStep: 16
+      - stepNumber: 16
         description: 'Disable it — never delete: its own-scope settings and audit trail stay for an operator'
         type: call
         targetComponent: project_repository
         targetMethod: setStatus
-      - stepNumber: 18
+      - stepNumber: 17
         description: >-
-          Build the after-world: parent links added for registered, relocated and renamed members,
-          removed for departed ones
+          Build the after-world: parent links added for registered, relocated, returned and renamed
+          members, removed for departed ones
         type: call
         targetComponent: member_reach_rules
         targetMethod: relink
-      - stepNumber: 19
+      - stepNumber: 18
         description: For every member whose membership changed
         type: loop
         loopKind: forEach
-        over: registered, reparented, renamed and departed members
-        endStep: 20
-      - stepNumber: 20
+        over: registered, returned, reparented, renamed and departed members
+        endStep: 19
+      - stepNumber: 19
         description: >-
-          Compare its reach before and after (a registration widens it from none, a departure
-          narrows it to none, a reparenting moves it; a re-key is equal by construction) and keep
-          the rows that differ
+          Compare its reach before and after (a registration or a return widens it from none, a
+          departure narrows it to none, a reparenting moves it; a re-key is equal by construction)
+          and keep the rows that differ
         type: call
         targetComponent: member_reach_rules
         targetMethod: compare
-      - stepNumber: 21
+      - stepNumber: 20
         description: >-
           For every touched project (the tool's written owners plus every record registered,
-          relocated, renamed or disabled)
+          returned, relocated, renamed or disabled)
         type: loop
         loopKind: forEach
         over: touched record ids
-        endStep: 23
-      - stepNumber: 22
+        endStep: 22
+      - stepNumber: 21
         description: >-
-          Audit the change as its own event — member.registered, member.relocated, member.renamed
-          (with the settings and key entries moved, or the refused re-key) or member.departed — with
-          projectId = the touched project, composition = the project the tool ran at, actor = the
-          principal, and the principals whose reach it changed
+          Audit the change as its own event — member.registered, member.returned, member.relocated,
+          member.renamed (with the settings and key entries moved, or the refused re-key) or
+          member.departed; or family.changed for a project the tool wrote whose membership did not
+          change — with projectId = the touched project, composition = the project the tool ran at,
+          actor = the principal, and the principals whose reach it changed
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 23
+      - stepNumber: 22
         label: scope
         description: >-
           Collect its repository scope: the family's one repository root and the project's own .wai/
@@ -433,7 +437,7 @@ methods:
         type: call
         targetComponent: project_repository
         targetMethod: repositoryScope
-      - stepNumber: 24
+      - stepNumber: 23
         description: >-
           Publish ONE commit at the family's repository root whose pathspecs are exactly the touched
           projects' own .wai/ — never another member's tree and never source code; a family that is
@@ -441,10 +445,10 @@ methods:
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-      - stepNumber: 25
+      - stepNumber: 24
         description: >-
-          Return what was registered, relocated, renamed, disabled, the reach changes, and the
-          commit
+          Return what was registered, returned, relocated, renamed, disabled, the reach changes, and
+          the commit
         type: return
         outcome: MemberReconciliation
     detail: full
@@ -519,9 +523,9 @@ methods:
       - stepNumber: 3
         description: >-
           Fix the new root — the isolated root a new hosted project with the member's id would be
-          allocated — and refuse when a record or a directory already holds it, or when a family
-          project's record id differs from its project id (a hosted source names a producer by
-          record id)
+          allocated — and refuse when a record holds it, when a NON-EMPTY directory is there (an
+          empty one, left by a cut-short cleanup, is free), or when a family project's record id
+          differs from its project id (a hosted source names a producer by record id)
         type: local
       - stepNumber: 4
         description: Gather the permission world exactly as the resolver sees it
@@ -617,7 +621,9 @@ methods:
       - stepNumber: 18
         description: >-
           Audit member.detached naming the member as projectId and the bound project as composition,
-          with its new root and every principal who lost access
+          with its new root, every principal who lost access, and the note "no git binding: enable
+          one for this project" — the family's repository stays with the family and none is created
+          for it
         type: call
         targetComponent: audit_repository
         targetMethod: append
@@ -635,7 +641,9 @@ methods:
         targetComponent: host_git_adapter
         targetMethod: publish
       - stepNumber: 21
-        description: Answer the detachment as applied
+        description: >-
+          Answer the detachment as applied, its notes saying "no git binding: enable one for this
+          project"
         type: return
         outcome: MemberDetachment (applied)
       - stepNumber: 22
@@ -853,4 +861,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-01T18:09:58.290Z'
+updatedAt: '2026-10-01T19:55:29.901Z'

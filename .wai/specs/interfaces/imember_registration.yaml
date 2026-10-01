@@ -112,12 +112,16 @@ methods:
       After a hosted family-shape tool (sdd_add_member, sdd_move_member, and the stage-6 family
       migrations) succeeded at a project, make the family's records agree with the family on disk:
       register each newly declared member (no grant, no placement — it inherits through its parent),
+      re-enable a member the family declares again after its record was disabled as departed (it
+      goes back to active with the own-scope settings it kept, and regains exactly that reach),
       relocate a member whose parent or path changed, re-key a member a project rename gave a new id
       (the settings on its OWN scope — assignments, role bindings anchored there — and the key
       entries naming it move to the new id; nothing inherited moves, because nothing inherited is
       stored on it), disable a record whose member the family no longer declares (never delete it).
       List every principal whose reach changed through those membership changes, and audit every
-      touched project as its own event naming it, with the initiating project as composition and its
+      touched project as its own event naming it — member.registered, member.returned,
+      member.relocated, member.renamed, member.departed, or family.changed for a project the tool
+      wrote whose membership did not change — with the initiating project as composition and its
       reach changes. When the family is git-backed, publish ONE commit whose pathspecs are every
       touched project's own .wai/.
     signature: 'reconcile(principal: Principal, projectId: string, touched: string[]): MemberReconciliation'
@@ -141,13 +145,16 @@ methods:
       moved to the isolated root a new hosted project with its id would get (its files as creates
       there and deletes at the old place, members of the member moving with it), its record made a
       top-level record (parentProjectId and memberPath cleared, root persisted) and placed in its
-      former family root's units. The plan lists the move, the new root and every principal who
-      LOSES access (detach cuts the inherited project rungs; the unit rungs stay through the
-      placement). A dry run answers the plan and writes nothing; applied, it commits all or nothing
-      (a crash leaves a journal recover rolls back on the next bind), audits member.detached with
-      the losers and the new root, and publishes one family commit covering the touched family
-      projects' .wai/ (the member's own history leaves with it: it gets its own repository only when
-      one is bound).
+      former family root's units. The new root must be free: held by no record, and absent or an
+      empty directory (one a cut-short cleanup left behind). The plan lists the move, the new root
+      and every principal who LOSES access (detach cuts the inherited project rungs; the unit rungs
+      stay through the placement). A dry run answers the plan and writes nothing; applied, it
+      commits all or nothing (a crash leaves a journal recover rolls back on the next bind), audits
+      member.detached with the losers and the new root, and publishes one family commit covering the
+      touched family projects' .wai/. The detached project has NO git binding of its own afterwards
+      — the family's repository stays with the family and none is created for it: the result's notes
+      and the audit event say "no git binding: enable one for this project", and its git status
+      reads not git-backed until one is enabled.
     signature: >-
       detach(principal: Principal, binding: ProjectBinding, alias: string, apply: boolean):
       MemberDetachment
@@ -226,4 +233,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-01T18:09:57.469Z'
+updatedAt: '2026-10-01T19:51:20.678Z'

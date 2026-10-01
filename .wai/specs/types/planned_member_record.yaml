@@ -32,7 +32,8 @@ fields:
     description: >-
       register (no record yet), relocate (a record exists and the member's path or parent changed),
       rename (a record with another id held this parent and path: a project rename, re-keyed),
-      unchanged (the record agrees with the family on disk), unreadable
+      return (a record disabled as departed, its member declared again: re-enabled), unchanged (the
+      record agrees with the family on disk), unreadable
     optional: false
   - name: previousId
     type: string
@@ -47,4 +48,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-01T16:26:56.046Z'
-updatedAt: '2026-10-01T18:06:40.811Z'
+updatedAt: '2026-10-01T19:51:29.563Z'

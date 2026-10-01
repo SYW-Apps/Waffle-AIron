@@ -67,7 +67,7 @@ methods:
         description: >-
           Find the member under the alias in the bound node: none is not-a-member; its directory
           absent is member-absent; with a relocation (hosted), a relocation target that already
-          exists is relocation-target-exists
+          exists and is not an empty directory is relocation-target-exists
         type: local
       - stepNumber: 2
         description: Is there a member to detach?
@@ -142,8 +142,9 @@ methods:
           Judge the external: none is not-an-external; locally no source path, or one not strictly
           within the bound project, is not-contained; with a relocation, no source.hosted is
           not-contained, and a member path that is not strictly within the bound project, or does
-          not equal relocation.to, is not-contained, and a target that already exists is
-          relocation-target-exists; a family node already at the directory is already-member
+          not equal relocation.to, is not-contained, and a target that already exists and is not an
+          empty directory is relocation-target-exists; a family node already at the directory is
+          already-member
         type: local
       - stepNumber: 4
         description: Is there an external to adopt?
@@ -294,4 +295,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:06.370Z'
-updatedAt: '2026-10-01T18:08:16.319Z'
+updatedAt: '2026-10-01T19:52:09.236Z'

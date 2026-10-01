@@ -6,7 +6,8 @@ description: >-
   at its new root and deletes at its old directory), the new isolated root, the principals who LOSE
   access (detach narrows: inherited project rungs are cut; the unit rungs stay, because the detached
   project is placed in its former family root's units), and — when applied — the transaction outcome
-  and the family commit.
+  and the family commit. The plan's notes say the detached project has no git binding of its own
+  ("no git binding: enable one for this project").
 subsystem: sdd_host
 fields:
   - name: memberId
@@ -39,4 +40,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-01T17:03:59.641Z'
-updatedAt: '2026-10-01T17:03:59.643Z'
+updatedAt: '2026-10-01T19:51:31.023Z'

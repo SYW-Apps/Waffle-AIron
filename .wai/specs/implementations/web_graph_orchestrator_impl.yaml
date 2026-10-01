@@ -178,9 +178,10 @@ methods:
         targetMethod: family
       - stepNumber: 7
         description: >-
-          Link each member project node to its member's record id only when that record is in the
-          caller's read set from step 2; a member the caller may not read stays an unlinked node
-          drawn through its exports (no id leaks)
+          Give each member project node its member's record id only when that record is in the
+          caller's listed projects from step 2 (read, write or administer); any other member stays a
+          node without one (no id leaks). The SPA links the ids from a strip above the canvas; the
+          nodes are not clickable yet
         type: local
       - stepNumber: 8
         description: Return the model
@@ -265,7 +266,11 @@ methods:
         targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 4
-        description: Bind that root for the read that follows
+        description: >-
+          Bind that root with the caller's reach: the listed projects from step 2 — every project
+          the caller may read, write or administer, not only read. The family above the project is
+          in reach when the family root is listed, and a source.hosted producer when its record is;
+          anything else is reported unavailable
         type: local
       - stepNumber: 5
         description: Read the project's externals status over the bound root through the host surfaces adapter
@@ -280,4 +285,4 @@ methods:
     symbol: getWebProjectExternals
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-10-01T16:35:22.968Z'
+updatedAt: '2026-10-01T19:50:23.728Z'

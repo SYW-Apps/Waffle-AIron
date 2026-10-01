@@ -38,6 +38,12 @@ fields:
       Every subject x capability x project whose effective permission changed because a member
       gained, lost or changed its parent — audited with the change
     optional: false
+  - name: returned
+    type: string[]
+    description: >-
+      Member record ids re-enabled because the family declares their member again after they were
+      disabled as departed
+    optional: false
 methods: []
 createdAt: '2026-10-01T16:27:33.167Z'
-updatedAt: '2026-10-01T16:55:14.188Z'
+updatedAt: '2026-10-01T19:51:27.802Z'
