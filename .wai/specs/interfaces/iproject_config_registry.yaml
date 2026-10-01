@@ -243,6 +243,79 @@ methods:
         description: The public names to import, or `*`
     guarantees:
       - idempotent
+  - name: renameId
+    description: >-
+      Move the project's id — the rename migration's write, and the one write that may replace a
+      declared id: sets `id` to the new one and appends the old one to `previousIds` (creating it
+      when absent). Refuses a new id outside the project-id grammar, and refuses when the
+      configuration declares neither the old id nor, when it declares none, defaults to it — so a
+      plan applied to a project whose id moved under it writes nothing. Already declaring the new id
+      with the old one in `previousIds` writes nothing. Returns whether it wrote.
+    signature: 'renameId(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The id the project answers to now (declared, or defaulted from its name)
+      - name: to
+        type: string
+        description: 'The new id: a slug of [a-z0-9-_.] that starts and ends alphanumeric'
+    guarantees:
+      - idempotent
+  - name: renameAlias
+    description: >-
+      Rekey one alias of the alias table, keeping its value and its place: a `members` entry or an
+      `externals` entry under `from` moves to `to`, with its path or producer, its description and
+      its `use` exactly as written. Refuses a `to` outside [a-z0-9-_]+, a `from` neither map
+      declares, and a `to` either map already declares. A table that already holds `to` with `from`
+      gone writes nothing. Returns whether it wrote.
+    signature: 'renameAlias(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The alias as declared now
+      - name: to
+        type: string
+        description: The alias to declare it under
+    guarantees:
+      - idempotent
+  - name: repointExternal
+    description: >-
+      Revise where one declared external's producer is: its producer id (`project`, omitted when
+      null so the alias is the id) and its explicit source (`source`, removed when null), keeping
+      its `use` and description. The write behind a rename (an external naming the old id), a detach
+      (a family external that now needs a path), an adopt (a path the family now supplies) and an
+      internalize (a consumer of the folded member now consumes the parent). Refuses an alias
+      `externals` does not declare, and a producer id outside the project-id grammar. An equal
+      revision writes nothing. Returns whether it wrote.
+    signature: 'repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: project
+        type: string | null
+        description: The producer id to record, or null when the alias is the producer id
+      - name: source
+        type: ExternalSource | null
+        description: The producer's explicit place, or null to find it through the family
+    guarantees:
+      - idempotent
+  - name: removeExternal
+    description: >-
+      Remove one external declaration from `externals` — the write behind adopting it as a member,
+      or folding the producer into this project. Returns false when the alias is not declared,
+      writing nothing.
+    signature: 'removeExternal(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-09-29T13:56:00.930Z'
+updatedAt: '2026-09-30T20:20:15.906Z'

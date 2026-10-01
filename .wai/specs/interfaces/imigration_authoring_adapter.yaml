@@ -1,0 +1,38 @@
+id: imigration_authoring_adapter
+name: Migration Authoring Client Adapter Interface
+description: The two gated writes the chaining migration makes, at the project root the caller has bound.
+component: migration_authoring_adapter
+methods:
+  - name: updateSpecGated
+    description: >-
+      Forward a delta to authoring_portal.updateSpecGated: merged, judged and written, or with
+      dryRun judged and not written; answers the change report.
+    signature: >-
+      updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
+      SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The stored spec's id
+      - name: delta
+        type: SpecDelta
+        description: The partial change to merge
+      - name: dryRun
+        type: boolean
+        description: Answer what the delta would do and write nothing
+        optional: true
+  - name: writeSpec
+    description: Forward a whole-spec restatement to authoring_portal.writeSpec; answers the write receipt.
+    signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: restatement
+        type: SpecRestatement
+        description: The spec as the migration states it
+status: complete
+createdAt: '2026-09-30T20:45:34.881Z'
+updatedAt: '2026-09-30T21:33:56.701Z'

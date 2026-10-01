@@ -1,0 +1,61 @@
+id: imigration_surfaces_adapter
+name: Migration Surfaces Client Adapter Interface
+description: >-
+  One forward per sdd_surfaces published method the family migrations use, against the bound project
+  root.
+component: migration_surfaces_adapter
+methods:
+  - name: pinExternals
+    description: 'Forward to surface_portal.pinExternals: pin the named externals of the bound project.'
+    signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
+    returns: ExternalPin[]
+    params:
+      - name: aliases
+        type: string[]
+        description: The aliases to pin
+        optional: true
+  - name: renamePin
+    description: 'Forward to surface_portal.renamePin: carry a pin to a new alias or producer id, digest kept.'
+    signature: 'renamePin(alias: string, newAlias: string, project: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The pinned alias
+      - name: newAlias
+        type: string
+        description: The alias to keep it under
+      - name: project
+        type: string
+        description: The producer id from now on
+  - name: unpin
+    description: 'Forward to surface_portal.unpin: remove a pin.'
+    signature: 'unpin(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias
+  - name: listExternals
+    description: Forward to surface_portal.listExternals.
+    signature: 'listExternals(): ExternalListing[]'
+    returns: ExternalListing[]
+    params: []
+  - name: listFamilyPins
+    description: 'Forward to surface_portal.listFamilyPins: the stage-1 family pins the bound root still holds.'
+    signature: 'listFamilyPins(): FamilyPin[]'
+    returns: FamilyPin[]
+    params: []
+  - name: removeSnapshot
+    description: >-
+      Forward to surface_portal.removeSnapshot: remove one stored snapshot of the bound root by its
+      key; false when there was none.
+    signature: 'removeSnapshot(projectName: string): boolean'
+    returns: boolean
+    params:
+      - name: projectName
+        type: string
+        description: The snapshot's storage key
+status: complete
+createdAt: '2026-09-30T20:31:55.432Z'
+updatedAt: '2026-09-30T22:58:34.642Z'

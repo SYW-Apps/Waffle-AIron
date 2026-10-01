@@ -1,0 +1,73 @@
+kind: value-object
+id: migration_request
+name: MigrationRequest
+description: >-
+  One family migration as a person or an agent asks for it, from the bound project: the verb and
+  exactly the arguments that verb reads. The same value comes in through `wairon member …` / `wairon
+  project rename` / `wairon doctor`, and through the sdd_* member tools, so every door plans
+  identically.
+subsystem: sdd_migrations
+fields:
+  - name: verb
+    type: string
+    description: >-
+      attach | rename | rename-alias | detach | adopt | internalize | externalize | chaining.
+      chaining is the stage 2–4 chaining migration (`doctor --fix`, `doctor --report chaining`),
+      which takes no other argument.
+    optional: false
+  - name: alias
+    type: string
+    description: >-
+      attach: the alias to declare; rename-alias: the alias as declared now; detach, adopt,
+      internalize: the member or external it acts on.
+    optional: true
+  - name: path
+    type: string
+    description: >-
+      attach: the existing project's root; externalize: the new member's root — relative to the
+      bound project.
+    optional: true
+  - name: project
+    type: string
+    description: >-
+      rename: the project whose id moves, as a member alias path from the bound project
+      (`billing/payments`); empty or absent for the bound project itself.
+    optional: true
+  - name: newId
+    type: string
+    description: 'rename: the new project id.'
+    optional: true
+  - name: newAlias
+    type: string
+    description: 'rename-alias: the alias to declare it under.'
+    optional: true
+  - name: subsystem
+    type: string
+    description: 'externalize: the subsystem that becomes a member.'
+    optional: true
+  - name: destination
+    type: InternalizeDestination
+    description: 'internalize: where the member''s own metadata goes.'
+    optional: true
+  - name: rehearse
+    type: boolean
+    description: >-
+      false: plan without rehearsing — the edits and refusals only, no file changes and nothing to
+      apply. doctor's summary line uses it, since it prints counts and never applies. Absent or
+      true: a full plan.
+    optional: true
+  - name: description
+    type: string
+    description: 'attach: what the member is to the bound project, written into its `members` entry.'
+    optional: true
+  - name: widen
+    type: boolean
+    description: >-
+      detach: widen to the instance audience exactly the member's exports a family project uses and
+      the member exports only to the family, instead of refusing audience-too-narrow — each widening
+      shown in the plan and confirmed with it.
+    optional: true
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T20:24:03.011Z'
+updatedAt: '2026-10-01T05:54:08.815Z'

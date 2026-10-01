@@ -6,7 +6,7 @@ description: >-
   producer, and the bare references in the consumer it makes resolve. Planned from references that
   resolved before stage 4 only by position (the family-wide suffix match), so apply changes what
   they resolve through, never what they resolve to.
-subsystem: sdd_cli
+subsystem: sdd_migrations
 fields:
   - name: alias
     type: string
@@ -60,4 +60,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-09-28T16:08:56.957Z'
-updatedAt: '2026-09-28T16:22:17.363Z'
+updatedAt: '2026-09-30T20:47:38.434Z'

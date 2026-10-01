@@ -2,13 +2,14 @@ id: position_migration_orchestrator_impl
 name: Position Migration Orchestrator Implementation
 description: >-
   Plans the mount moves, reference rewrites and stage 4's positional imports and self-prefix
-  rewrites from the family's graph (the positional match is position_reader's), and applies them
-  after the chaining migration's ids, exports and externals and before its pins: members under each
-  parent's binding, imports under each consumer's, rewrites under the family's top binding (each
-  spec addressed by the key it answers to once the plan's ids are declared), family-pin deletion
-  under each member's binding; the caller's binding is restored on every path.
+  rewrites from the family's graph (the positional match is position_reader's), and writes them into
+  the chaining migration's rehearsal after its ids, exports and externals and before its pins:
+  members under each parent's rehearsal binding, imports under each consumer's, rewrites under the
+  rehearsal's top binding (each spec addressed by the key it answers to once the plan's ids are
+  declared), family-pin deletion under each member's; the caller's binding is restored on every
+  path.
 contract: iposition_migration_orchestrator
-sourcePath: src/commands/position-migration.ts
+sourcePath: src/migrations/position-migration.ts
 methods:
   - name: plan
     narrative:
@@ -24,7 +25,7 @@ methods:
           Under the parent's binding, read its configuration: the `members` entries it already
           declares
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 3
         description: >-
@@ -38,7 +39,7 @@ methods:
           Read the member's current L0 table, so a carried entry can be checked against every name
           it already binds
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: resolveProjectExports
       - stepNumber: 5
         label: entries
@@ -52,7 +53,7 @@ methods:
           Read the member component the entry names, for the member subsystem that owns it: the
           carried entry's source
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: loadSpec
       - stepNumber: 7
         description: >-
@@ -60,7 +61,7 @@ methods:
           publishes to its own project, so a component it does not publish yet is published there
           first
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: resolveSubsystemExports
       - stepNumber: 8
         label: carry
@@ -117,14 +118,14 @@ methods:
           project's own id as the first segment, `registry.x` or `registry::x`). With none, the step
           is skipped. Load every type of the family as the top's scan sees them
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: loadTypeSpecs
       - stepNumber: 14
         description: >-
           Read every project's resolved L0 export table: a name a project already exports is matched
           on its public name first
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: resolveProjectExports
       - stepNumber: 15
         description: >-
@@ -165,7 +166,7 @@ methods:
         description: 'Answer the plan: members, rewrites, imports and findings'
         type: return
         outcome: PositionMigrationPlan
-  - name: apply
+  - name: write
     narrative:
       - stepNumber: 1
         label: members
@@ -177,11 +178,11 @@ methods:
       - stepNumber: 2
         label: move
         description: >-
-          Under the parent's binding, declare the member in its `members` and delete the L1 mount
-          document — the carried entries were written with the member's exports already; an
+          Under the parent's rehearsal binding, declare the member in its `members` and delete the
+          L1 mount document — the carried entries were written with the member's exports already; an
           already-moved mount writes nothing
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: moveMountToMembers
       - stepNumber: 3
         label: imports
@@ -194,7 +195,7 @@ methods:
         over: each project's planned imports, grouped per alias
         endStep: 5
       - stepNumber: 4
-        description: Bind the consumer's root
+        description: Bind the consumer's rehearsal root
         type: local
       - stepNumber: 5
         label: import
@@ -202,13 +203,13 @@ methods:
           Add the alias's planned names to its `use` in the consumer's project.yaml — names already
           imported write nothing, and nothing a person wrote is removed or reordered
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: importNames
       - stepNumber: 6
         description: >-
-          Bind the family's top root: the deprecated forms bind from there, so every rewrite is read
-          and written where its target is still found. A spec is addressed by the key it answers to
-          now — its project's planned id where the plan declared one
+          Bind the rehearsal's top root: the deprecated forms bind from there, so every rewrite is
+          read and written where its target is still found. A spec is addressed by the key it
+          answers to now — its project's planned id where the plan declared one
         type: local
       - stepNumber: 7
         label: rewrites
@@ -223,7 +224,7 @@ methods:
           Re-save the spec with every reference in its canonical form, raw positions included; a
           reference that no longer has one is refused there, by name, before that spec is written
         type: call
-        targetComponent: cli_core_adapter
+        targetComponent: migration_core_adapter
         targetMethod: normalizeReferences
       - stepNumber: 9
         label: pins
@@ -237,9 +238,11 @@ methods:
         endStep: 10
       - stepNumber: 10
         label: unpin
-        description: Under the project's binding, remove the pin's snapshot; one already gone writes nothing
+        description: >-
+          Under the project's rehearsal binding, remove the pin's snapshot; one already gone writes
+          nothing
         type: call
-        targetComponent: cli_surfaces_client_adapter
+        targetComponent: migration_surfaces_adapter
         targetMethod: removeSnapshot
       - stepNumber: 11
         description: >-
@@ -254,4 +257,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-09-27T10:45:51.006Z'
-updatedAt: '2026-09-29T14:20:42.923Z'
+updatedAt: '2026-09-30T21:04:52.930Z'

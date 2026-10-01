@@ -1,0 +1,50 @@
+kind: value-object
+id: internalize_result
+name: InternalizeResult
+description: >-
+  What internalizing a member did with each thing the member held: the subsystems and types it
+  moved, where each piece of the member's own metadata went, and what was deleted — so no part of
+  the member's .wai disappears unlisted.
+subsystem: sdd_core
+fields:
+  - name: subsystems
+    type: string[]
+    description: The member's subsystems, now the parent's, under their own ids.
+    optional: false
+  - name: types
+    type: string[]
+    description: The member's project-level types, now the parent's project-level types.
+    optional: false
+  - name: placed
+    type: string[]
+    description: >-
+      One line per piece of metadata and where it went, e.g. "L0 vision → billing description",
+      "globalRequirements (2) → parent L0", "targetLanguage rust → billing, ledger", "member
+      payments → parent members as payments (services/billing/payments)", "pack acme/rules@1.2.0
+      adopted".
+    optional: false
+  - name: externals
+    type: string[]
+    description: >-
+      The aliases the parent now declares that the member declared, whose pins the family migration
+      takes again in the parent.
+    optional: false
+  - name: deleted
+    type: string[]
+    description: >-
+      Every file of the member's .wai deleted with no home, grouped: its project.yaml, its lock (its
+      approval ends with the project), its pins and snapshots, its derived outputs (agents, context,
+      guides), its legacy surfaces.
+    optional: false
+  - name: notCarried
+    type: string[]
+    description: >-
+      One line per piece of the member's metadata deliberately not carried, with the reason — e.g.
+      "projectType fullstack not stamped on billing, ledger: not a subsystem profile (a project
+      kind, or no built-in or loaded pack registers it)" — so a value the moved subsystems cannot
+      hold is listed rather than raising UNKNOWN_PROFILE.
+    optional: false
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-09-30T20:21:50.730Z'
+updatedAt: '2026-10-01T05:54:12.251Z'

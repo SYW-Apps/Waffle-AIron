@@ -109,7 +109,8 @@ methods:
       true. The hosted data plane serves this same tool, so a hosted verdict is the same function's:
       a member-qualified credential binds the member root and gets the member's own gate (its family
       run composes only within the credential's reach). Optionally narrowed to one subsystem, or to
-      one member by its key.
+      one member by its key. An unfinished family-migration transaction under the bound root adds a
+      notice naming it and pointing at `wairon doctor --fix` (the pending-transaction banner).
     signature: 'sdd_validate_tree(subsystem?: string, recursive?: boolean, family?: boolean): ValidationResult'
     returns: ValidationResult
     params:
@@ -138,7 +139,9 @@ methods:
       project holding its own subsystems. Optionally narrowed to one subsystem, and optionally
       descending into members. On a stale server the answer LEADS with the staleness — whether the
       build on disk changed and whether spec writes are refused because its schemas changed — so the
-      first call of a session surfaces it before anything is written.
+      first call of a session surfaces it before anything is written; an unfinished family-migration
+      transaction under the bound root leads likewise, one notice line each, pointing at `wairon
+      doctor --fix`.
     signature: 'sdd_get_status(subsystem?: string, recursive?: boolean): string'
     returns: string
     params:
@@ -155,12 +158,28 @@ methods:
       address: mcp tools/call sdd_get_status
   - name: sdd_externalize_subsystem
     description: >-
-      Tool: turn an internal subsystem into a member project at the path — provisions the member,
-      moves the subsystem's specs there, declares it in project.yaml `members` under the subsystem
-      id, and re-saves every reference across the new boundary as `alias::name`. The exports either
-      side now needs are left to `wairon doctor --fix`.
-    signature: 'sdd_externalize_subsystem(subsystem: string, path: string): void'
-    returns: void
+      Tool: turn an internal subsystem into a member project at the path, family-wide and
+      all-or-nothing — the member provisioned, the subsystem's specs moved there and declared in
+      `members`, sibling subsystems' references respelled `alias::name`, what crosses the new
+      boundary exported and imported, the new member's external for this project pinned, and every
+      other family project's references checked to still resolve. A reference that would need a
+      component made public refuses the plan instead. dryRun answers the plan and writes nothing;
+      run it first and show the plan. Never locks: the answer names the projects to re-lock.
+    signature: >-
+      sdd_externalize_subsystem(subsystem: string, path: string, dryRun?: boolean):
+      FamilyMigrationReport
+    returns: FamilyMigrationReport
+    params:
+      - name: subsystem
+        type: string
+        description: The subsystem to externalize
+      - name: path
+        type: string
+        description: The new member's root, relative to the bound project
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_externalize_subsystem
@@ -515,15 +534,38 @@ methods:
       address: mcp tools/call sdd_move_member
   - name: sdd_internalize_member
     description: >-
-      Tool: take a single-subsystem member back into the bound project — move its specs in, re-save
-      every reference across the old boundary as a local id, remove it from `members` and delete its
-      .wai project.
-    signature: 'sdd_internalize_member(alias: string): void'
-    returns: void
+      Tool: fold a member — every subsystem of it — back into the bound project, sending its own
+      metadata to the destination (its L0 vision to the `into` subsystem's description; its
+      requirements, boundaries and databases to the bound L0; its language, profile and depth onto
+      the moved subsystems; its members and externals to the bound project's; its packs adopted or
+      dropped as `packs` says) and re-pointing every other family project that consumed it at the
+      bound project. What has no home — its lock, pins, derived outputs — is listed as deleted.
+      All-or-nothing; dryRun answers the plan and writes nothing; run it first and show the plan.
+      Never locks.
+    signature: >-
+      sdd_internalize_member(alias: string, into?: string, packs?: string, exports?: string[],
+      dryRun?: boolean): FamilyMigrationReport
+    returns: FamilyMigrationReport
     params:
       - name: alias
         type: string
         description: The member's alias
+      - name: into
+        type: string
+        description: The home subsystem for the member's L0 vision; required when it holds several subsystems
+        optional: true
+      - name: packs
+        type: string
+        description: 'adopt | drop: packs only the member selects'
+        optional: true
+      - name: exports
+        type: string[]
+        description: Extra public names of the member the bound project exports afterwards
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_internalize_member
@@ -547,6 +589,124 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_pack_impact
+  - name: sdd_attach_member
+    description: >-
+      Tool: make an existing project at the path a member of the bound project, keeping its L0,
+      subsystems, packs and lock (sdd_add_member scaffolds a new one instead). Refused when its id
+      collides with a family project's. All-or-nothing; dryRun answers the plan and writes nothing.
+      Never locks.
+    signature: >-
+      sdd_attach_member(alias: string, path: string, description?: string, dryRun?: boolean):
+      FamilyMigrationReport
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The alias to declare
+      - name: path
+        type: string
+        description: The project's root, relative to the bound project
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_attach_member
+  - name: sdd_rename_project
+    description: >-
+      Tool: move a project's id — the bound project's, or a member's named by its alias path — and
+      every reference to the old id across the family (aliases that were the id, their references
+      and re-exports, externals naming it, pins). The whole family must be in reach. Every project
+      it writes must be re-locked; the answer names them. All-or-nothing; dryRun answers the plan
+      and writes nothing; run it first and show the plan.
+    signature: 'sdd_rename_project(newId: string, project?: string, dryRun?: boolean): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: newId
+        type: string
+        description: The new project id
+      - name: project
+        type: string
+        description: The member's alias path from the bound project; the bound project when omitted
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_rename_project
+  - name: sdd_rename_member_alias
+    description: >-
+      Tool: rename one alias of the bound project (a member or an external) and respell the bound
+      project's references through it; nothing in any member or sibling changes. All-or-nothing;
+      dryRun answers the plan and writes nothing. Never locks.
+    signature: >-
+      sdd_rename_member_alias(alias: string, newAlias: string, dryRun?: boolean):
+      FamilyMigrationReport
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The alias as declared now
+      - name: newAlias
+        type: string
+        description: The new alias
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_rename_member_alias
+  - name: sdd_detach_member
+    description: >-
+      Tool: take a member out of the family; the bound project and every family consumer then reach
+      it as an external by path, pinned. No reference text changes. Refused (audience-too-narrow,
+      each export named with its users) while a family project uses an export the member gives the
+      family alone, unless widen is set: then exactly those used exports are widened to the instance
+      audience in the member's L0, each shown in the plan. All-or-nothing; dryRun answers the plan
+      and writes nothing. Never locks.
+    signature: 'sdd_detach_member(alias: string, widen?: boolean, dryRun?: boolean): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
+      - name: widen
+        type: boolean
+        description: Widen the used family-only exports to instance instead of refusing
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_detach_member
+  - name: sdd_adopt_member
+    description: >-
+      Tool: make the bound project's external found by a path inside it a member —
+      sdd_detach_member's inverse. All-or-nothing; dryRun answers the plan and writes nothing. Never
+      locks.
+    signature: 'sdd_adopt_member(alias: string, dryRun?: boolean): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_adopt_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T21:29:49.594Z'
+updatedAt: '2026-10-01T05:54:24.936Z'

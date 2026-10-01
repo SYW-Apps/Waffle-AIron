@@ -1,0 +1,15 @@
+id: migration_surfaces_adapter
+name: Migration Surfaces Client Adapter
+description: >-
+  Local client adapter in sdd_migrations for the hop into sdd_surfaces: read a project's pinned
+  externals, pin new ones, carry a pin to a new alias or producer id without re-pinning, and remove
+  one — at the project root the caller has bound. In-process import seam today. The caller must gate
+  on reach itself.
+subsystem: sdd_migrations
+componentType: Adapter
+owns: []
+dependsOn:
+  - surface_portal
+status: complete
+createdAt: '2026-09-30T20:31:50.580Z'
+updatedAt: '2026-09-30T22:58:28.164Z'

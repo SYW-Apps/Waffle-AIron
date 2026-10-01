@@ -1,0 +1,272 @@
+id: membership_migration_impl
+name: Membership Migration Implementation
+description: >-
+  src/migrations/membership.ts. Plans read the live family (the caller has bound its top root);
+  write binds each owner's rehearsal root in turn and restores the caller's binding on every path.
+contract: imembership_migration
+sourcePath: src/migrations/membership.ts
+methods:
+  - name: planAttach
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the path from the bound project's directory under the containment guard, lexically
+          and through links, through the family file adapter (a planner touches no file itself); a
+          null answer — not strictly within it — is a not-contained refusal
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: resolve
+      - stepNumber: 2
+        description: >-
+          Check the alias against the bound node's alias table (members and externals): declared is
+          alias-taken; an external of the bound project whose source path resolves to this directory
+          is already-member, naming `member adopt`; a family node at this directory is
+          already-member
+        type: local
+      - stepNumber: 3
+        description: Is there anything left to read?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Answer the refusals; nothing further is read
+        type: return
+        outcome: refused plan
+      - stepNumber: 5
+        label: read-project
+        description: >-
+          With the directory bound, read its configuration: whether it is a project, its declared or
+          defaulted id; then restore the binding
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 6
+        description: Read the lock record it carries, for the id its approval recorded
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 7
+        description: >-
+          Judge it: no configuration and no L0 is not-a-project; its effective id equal to a family
+          project's id is id-collision (PROJECT_ID_COLLISION), naming both
+        type: local
+      - stepNumber: 8
+        description: >-
+          Plan the edits: the member declared in the bound project (alias → path, the description
+          given); the attached project's id declared only when it declares none — the id its lock
+          approved, else its effective id, never the alias; each of the bound project's
+          requirePolicies the attached project's packs do not meet is a note, not an edit
+        type: local
+      - stepNumber: 9
+        description: Answer the plan
+        type: return
+        outcome: the attach plan
+  - name: planDetach
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Find the member under the alias in the bound node: none is not-a-member; its directory
+          absent is member-absent
+        type: local
+      - stepNumber: 2
+        description: Is there a member to detach?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 4
+        description: >-
+          Read the member's resolved export table: the audience of each public name a family project
+          reaches in it
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 5
+        label: consumers
+        description: >-
+          From the graph, collect every other family project whose declared external binds to the
+          member through the family (no source path), and every external of the member that binds a
+          family project through the family; one that is not in reach is family-partial. Collect
+          every public name a family project (the bound one included) reaches in the member that the
+          member exports below the instance audience, with who uses it: without request.widen each
+          is audience-too-narrow, naming the export and its users; with it, each is planned to be
+          widened
+        type: local
+      - stepNumber: 6
+        description: >-
+          With the bound root bound, read its configuration for the member's declaration (path,
+          description, `use`)
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: >-
+          Plan the edits: with request.widen, first, in the member, each collected export's L0 entry
+          widened to the instance audience, shown as `widen <name> <audience>→instance (used by …)`
+          — only those used names, never another; then in the bound project, the member removed and
+          an external declared under the same alias (`project` its id when that differs from the
+          alias, `source.path` its path, its `use` and description), then pinned; in each collected
+          consumer, its external's `source.path` to the member relative to that consumer; in the
+          member, each collected external's `source.path` relative to it. No reference is respelled:
+          the alias is unchanged
+        type: local
+      - stepNumber: 8
+        description: Answer the plan
+        type: return
+        outcome: the detach plan
+  - name: planAdopt
+    narrative:
+      - stepNumber: 1
+        description: With the bound root bound, read its configuration for the external under the alias
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Resolve the external's source path from the bound project's directory under the
+          containment guard, lexically and through links, through the family file adapter
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: resolve
+      - stepNumber: 3
+        description: >-
+          Judge the external: none is not-an-external; no source path, or one not strictly within
+          the bound project, is not-contained; a family node already at the directory is
+          already-member
+        type: local
+      - stepNumber: 4
+        description: Is there an external to adopt?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 6
+        label: read-adoptee
+        description: >-
+          With the adoptee's directory bound, read its configuration: whether it is a project, its
+          id, and its externals with their source paths; then restore the binding
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: >-
+          Judge it: not a project is not-a-project; its id equal to another family project's id is
+          id-collision
+        type: local
+      - stepNumber: 8
+        description: >-
+          Plan the edits: in the bound project, the external's pin removed, the external removed and
+          a member declared under the same alias with its path, `use` and description; in every
+          other family project, an external source path that resolves to the adoptee removed; in the
+          adoptee, each external source path that resolves to a family project removed. A source
+          path that was already redundant before a detach is named as a note: adopt removes it too,
+          so detach-then-adopt is exact only without one
+        type: local
+      - stepNumber: 9
+        description: Answer the plan
+        type: return
+        outcome: the adopt plan
+  - name: write
+    narrative:
+      - stepNumber: 1
+        description: Remember the caller's binding; every path below restores it
+        type: local
+      - stepNumber: 2
+        description: Which verb?
+        type: switch
+        'on': plan.request.verb
+        cases:
+          - value: attach
+            step: 3
+          - value: detach
+            step: 6
+          - value: adopt
+            step: 12
+      - stepNumber: 3
+        label: attach
+        description: Bind the attached project's rehearsal root and declare its id when the plan says so
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: setId
+      - stepNumber: 4
+        description: Bind the bound project's rehearsal root and declare the member
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: declareMember
+      - stepNumber: 5
+        description: Attach written
+        type: jump
+        toStep: 16
+      - stepNumber: 6
+        description: >-
+          Bind the member's rehearsal root and widen each planned export of its L0 to the instance
+          audience through the gated authoring seam — new content, never core's raw write — before
+          anything reads or pins the member (only when the plan widens)
+        type: call
+        targetComponent: migration_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 7
+        label: detach
+        description: Bind the bound project's rehearsal root and remove the member
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: removeMember
+      - stepNumber: 8
+        description: Declare the external under the same alias with its source path, `use` and description
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: declareExternal
+      - stepNumber: 9
+        description: >-
+          For each planned consumer and for the member itself, bind its rehearsal root and give each
+          planned external its source path
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: repointExternal
+      - stepNumber: 10
+        description: >-
+          Last, bind the bound project's rehearsal root again and pin the new external, reading the
+          member's final state
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: pinExternals
+      - stepNumber: 11
+        description: Detach written
+        type: jump
+        toStep: 16
+      - stepNumber: 12
+        label: adopt
+        description: Bind the bound project's rehearsal root and remove the external's pin
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: unpin
+      - stepNumber: 13
+        description: Remove the external
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: removeExternal
+      - stepNumber: 14
+        description: Declare the member under the same alias with the external's path, `use` and description
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: declareMember
+      - stepNumber: 15
+        description: >-
+          For each planned consumer and for the adoptee, bind its rehearsal root and remove each
+          planned redundant source path
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: repointExternal
+      - stepNumber: 16
+        label: restore
+        description: Restore the caller's binding
+        type: local
+status: complete
+createdAt: '2026-09-30T20:34:06.370Z'
+updatedAt: '2026-10-01T05:53:50.526Z'

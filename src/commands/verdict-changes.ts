@@ -13,8 +13,10 @@ import {
   resolveProjectExports,
   loadTypeSpecs,
 } from './adapters/core.js';
-// position_reader: the positional match the migration writes from.
-import { match, type PositionalMatch } from './position-reader.js';
+// The positional match the migration writes from — position_reader, in
+// sdd_migrations since stage 6 — reached through the migration portal.
+import { matchPositions } from './adapters/migrations.js';
+import type { PositionalMatch } from '../migrations/position-reader.js';
 import { keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -199,7 +201,7 @@ function matchAtTop(root: string): { top: ProjectFamily; matches: PositionalMatc
     const unresolved = family.authoredReferences.filter((r) =>
       (r.form === 'import' && r.binding === 'unresolved') || isSelfPrefix(r, family.owners.get(r.specId)));
     // Step 16: the positional match.
-    return { top: family, matches: match(unresolved, family, tables, types) };
+    return { top: family, matches: matchPositions(unresolved, family, tables, types) };
   });
 }
 

@@ -38,22 +38,6 @@ methods:
       - name: newPath
         type: string
         description: The new root, relative to the bound project root
-  - name: externalizeSubsystem
-    description: >-
-      Calls externalizeSubsystem on the core portal to turn an internal subsystem into a member
-      project declared in `members`.
-    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
-    returns: void
-  - name: internalizeMember
-    description: >-
-      Calls internalizeMember on the core portal to take a single-subsystem member back into the
-      bound project.
-    signature: 'internalizeMember(alias: string): void'
-    returns: void
-    params:
-      - name: alias
-        type: string
-        description: The member's alias
   - name: resolveChainingParent
     description: >-
       Forward chaining-parent detection to the core portal: is the bound root a chained subproject,
@@ -236,4 +220,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:54:16.005Z'
+updatedAt: '2026-09-30T20:40:11.069Z'

@@ -166,6 +166,95 @@ methods:
         description: The public names to import, or `*`
     guarantees:
       - idempotent
+  - name: renameId
+    description: >-
+      Published write: move the bound project's id, keeping the old one in previousIds; refused for
+      a malformed new id or when the project no longer answers to the old one, a no-op once done.
+      Returns whether it wrote. Routed through the core orchestrator.
+    signature: 'renameId(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The id the project answers to now
+      - name: to
+        type: string
+        description: The new id
+    guarantees:
+      - idempotent
+  - name: renameAlias
+    description: >-
+      Published write: rekey one member or external alias of the bound project, keeping its value
+      and place. Returns whether it wrote. Routed through the core orchestrator.
+    signature: 'renameAlias(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The alias as declared now
+      - name: to
+        type: string
+        description: The new alias
+    guarantees:
+      - idempotent
+  - name: repointExternal
+    description: >-
+      Published write: revise one external's producer id and explicit source, keeping its `use` and
+      description. Returns whether it wrote. Routed through the core orchestrator.
+    signature: 'repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: project
+        type: string | null
+        description: The producer id, or null when the alias is the id
+      - name: source
+        type: ExternalSource | null
+        description: The explicit place, or null to find it through the family
+    guarantees:
+      - idempotent
+  - name: removeExternal
+    description: >-
+      Published write: remove one external declaration of the bound project. Returns whether it
+      wrote. Routed through the core orchestrator.
+    signature: 'removeExternal(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+    guarantees:
+      - idempotent
+  - name: declareMember
+    description: >-
+      Published write: declare an existing project as a member of the bound project, under the
+      containment guard; scaffolds nothing. Returns whether it wrote. Routed through the core
+      orchestrator.
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: declaration
+        type: MemberDeclaration
+        description: Its path, and its description and `use` when it has them
+    guarantees:
+      - idempotent
+  - name: removeMember
+    description: >-
+      Published write: remove one member declaration of the bound project, leaving the member's
+      directory as it is. Returns whether it wrote. Routed through the core orchestrator.
+    signature: 'removeMember(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:06.947Z'
-updatedAt: '2026-09-28T17:17:03.136Z'
+updatedAt: '2026-09-30T20:23:04.870Z'

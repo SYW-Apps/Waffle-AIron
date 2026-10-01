@@ -1,0 +1,51 @@
+kind: value-object
+id: migration_command_options
+name: MigrationCommandOptions
+description: The options every family-migration command shares, plus the few one verb reads.
+subsystem: sdd_cli
+fields:
+  - name: report
+    type: boolean
+    description: '--report: print the plan and write nothing.'
+    optional: true
+  - name: 'yes'
+    type: boolean
+    description: '--yes: apply without asking; required in a non-interactive shell.'
+    optional: true
+  - name: description
+    type: string
+    description: 'member attach: what the member is to this project.'
+    optional: true
+  - name: into
+    type: string
+    description: 'member internalize --into <subsystem>: the home subsystem for the member''s L0 vision.'
+    optional: true
+  - name: packs
+    type: string
+    description: 'member internalize --packs adopt|drop: what to do with packs only the member selects.'
+    optional: true
+  - name: exports
+    type: string[]
+    description: >-
+      member internalize --export <name>…: public names of the member the parent exports afterwards,
+      beyond those the family uses.
+    optional: true
+  - name: path
+    type: string
+    description: 'subsystem externalize --path <dir>: the new member''s root.'
+    optional: true
+  - name: project
+    type: string
+    description: >-
+      project rename --project <alias path>: the member whose id moves; the current project when
+      absent.
+    optional: true
+  - name: widen
+    type: boolean
+    description: >-
+      member detach --widen: widen exactly the exports the family uses that the member exports only
+      to the family to the instance audience, shown in the plan, instead of refusing.
+    optional: true
+methods: []
+createdAt: '2026-09-30T20:37:46.672Z'
+updatedAt: '2026-10-01T05:54:10.101Z'

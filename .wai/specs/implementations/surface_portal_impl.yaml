@@ -76,6 +76,20 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: listPinnedExternals
+  - name: renamePin
+    narrative:
+      - stepNumber: 1
+        description: Forward renamePin to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: renamePin
+  - name: unpin
+    narrative:
+      - stepNumber: 1
+        description: Forward unpin to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: unpin
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-09-28T17:17:00.734Z'
+updatedAt: '2026-09-30T20:23:35.993Z'

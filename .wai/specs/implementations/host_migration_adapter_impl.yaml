@@ -1,0 +1,16 @@
+id: host_migration_adapter_impl
+name: Host Migration Client Adapter Implementation
+description: 'src/server/adapters/migrations.ts: in-process import of the sdd_migrations barrel.'
+contract: ihost_migration_adapter
+sourcePath: src/server/adapters/migrations.ts
+methods:
+  - name: recover
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: recover
+status: complete
+createdAt: '2026-09-30T21:05:28.671Z'
+updatedAt: '2026-09-30T21:34:12.405Z'

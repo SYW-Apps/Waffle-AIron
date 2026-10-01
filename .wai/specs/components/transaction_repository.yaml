@@ -1,0 +1,18 @@
+id: transaction_repository
+name: Transaction Repository
+description: >-
+  Facade over the transaction aggregate — rehearsal, journals, staged files and backups — shaped
+  like the externals Repository: reads and writes forward 1:1 to the Transaction Store, the file I/O
+  lives in the Transaction File Adapter, and consumers use the facade only. No Registry or Index:
+  the aggregate is written by one workflow (family_transaction) in a fixed protocol and read by the
+  same workflow at recovery, one journal at a time; there is no second write path to separate and no
+  projection to keep.
+subsystem: sdd_migrations
+componentType: Repository
+owns:
+  - transaction_store
+  - transaction_file_adapter
+dependsOn: []
+status: complete
+createdAt: '2026-09-30T20:25:20.094Z'
+updatedAt: '2026-09-30T21:33:44.548Z'

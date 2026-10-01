@@ -1,0 +1,71 @@
+kind: value-object
+id: transaction_journal
+name: TransactionJournal
+description: >-
+  One owner project's record of a staged transaction, at .wai/transactions/<id>/journal.yaml beside
+  its staged files and backups: enough to finish or undo that owner's share after a crash with
+  nothing else in memory. The coordinator's journal (the family's top root) also names every owner,
+  and its phase is the transaction's commit point: `committed` there, and only there, means the swap
+  is final.
+subsystem: sdd_migrations
+fields:
+  - name: id
+    type: string
+    description: The transaction id (the rehearsal's).
+    optional: false
+  - name: verb
+    type: string
+    description: The migration verb, for the recovery report.
+    optional: false
+  - name: owner
+    type: string
+    description: >-
+      This owner project's root, absolute when written; recovery re-reads it relative to where the
+      journal was found.
+    optional: false
+  - name: coordinator
+    type: string
+    description: >-
+      The coordinator's root relative to this owner ('' when this owner is the coordinator) — a
+      recorded path, never discovered.
+    optional: false
+  - name: owners
+    type: string[]
+    description: 'Coordinator only: every owner''s root relative to the coordinator.'
+    optional: false
+  - name: phase
+    type: string
+    description: >-
+      staging | staged | swapping | committed | rolled-back. staging: backups and staged copies are
+      being written, nothing live has moved; staged: all of them are on disk and synced; swapping:
+      live files are being replaced; committed: final (coordinator: the commit point); rolled-back:
+      every live file is back.
+    optional: false
+  - name: entries
+    type: FileChange[]
+    description: This owner's file changes, in swap order.
+    optional: false
+  - name: dirsCreated
+    type: string[]
+    description: >-
+      Directories the swap created under the owner, deepest last, so a rollback removes them deepest
+      first.
+    optional: false
+  - name: dirsRemoved
+    type: string[]
+    description: Directories the swap left empty and removed, so a rollback recreates them.
+    optional: false
+  - name: startedAt
+    type: string
+    description: ISO time the transaction was staged.
+    optional: false
+  - name: unrestored
+    type: string[]
+    description: >-
+      Files a restore could not put back, named by the restore that left this journal for `wairon
+      doctor --fix`; absent until a restore has run.
+    optional: true
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T20:24:30.949Z'
+updatedAt: '2026-09-30T21:33:02.555Z'

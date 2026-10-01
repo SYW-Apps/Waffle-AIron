@@ -1,10 +1,11 @@
 id: ichaining_migration_orchestrator
 name: Chaining Migration Orchestrator Interface
 description: >-
-  Plan first, applied on confirmation. plan() writes nothing, ever; apply(plan) writes only what the
-  plan names, in a fixed order, and is idempotent — applying the same plan again, or planning again
-  after it, changes nothing. Neither locks: the writes stale the approval of every project they
-  touch, and the report names them for their humans to re-lock.
+  Plan first, written on confirmation into a rehearsal, made live by the family transaction. plan()
+  writes nothing, ever; write(plan, rehearsal) writes only what the plan names, in a fixed order,
+  into the rehearsal's roots, and is idempotent — writing the same plan again, or planning again
+  after it is committed, changes nothing. Neither locks: the writes stale the approval of every
+  project they touch, and the report names them for their humans to re-lock.
 component: chaining_migration_orchestrator
 methods:
   - name: plan
@@ -25,26 +26,33 @@ methods:
     params: []
     guarantees:
       - idempotent
-  - name: apply
+  - name: write
     description: >-
-      Apply a plan. Refuses before the first write when the plan is blocked (the family was partial,
-      a project it writes or a member it declares is absent, or a mount carries a field it cannot
-      move) or when a planned L0 edit fails the gate's dry run. Then writes in order — ids; minimal
-      L0s and L0 entries through the gated authoring seam; externals declarations; the pins; and
-      last, through the position migration, the mounts moved into `members`, the reference rewrites
-      and the deletion of superseded family pins — each under its project's binding. Every write is
-      idempotent: a declared id or external equal to the planned one, an L0 entry already present, a
-      mount already moved, a spec already canonical and a pin already gone change nothing; a
-      declared id or alias that DIFFERS is refused, never overwritten. Answers what was written and
+      Write a plan into the rehearsal: each project's writes land in its rehearsal root (the
+      rehearsal's image of the plan's `directory`), and the family transaction then swaps the whole
+      result in or nothing. Refuses before the first write when the plan is blocked (the family was
+      partial, a project it writes or a member it declares is absent, or a mount carries a field it
+      cannot move) or when a planned L0 edit fails the gate's dry run. Then writes in order — ids;
+      minimal L0s and L0 entries through the gated authoring seam; externals declarations; then,
+      through the position migration, the positional imports, the mounts moved into `members`, the
+      reference rewrites and the deletion of superseded family pins; and the pins LAST, so every
+      snapshot and every lock's `used` map is taken from the final spelling — each under its
+      project's binding. Every write is idempotent: a declared id or external equal to the planned
+      one, an L0 entry already present, a mount already moved, a spec already canonical and a pin
+      already gone change nothing; a declared id or alias that DIFFERS is refused, never
+      overwritten. Answers what was written (rehearsal paths reported by their live project) and
       which projects must be re-locked; it locks nothing.
-    signature: 'apply(plan: ChainingMigrationPlan): ChainingMigrationReport'
+    signature: 'write(plan: ChainingMigrationPlan, rehearsal: Rehearsal): ChainingMigrationReport'
     returns: ChainingMigrationReport
     params:
       - name: plan
         type: ChainingMigrationPlan
         description: The plan the person confirmed, as plan() answered it
+      - name: rehearsal
+        type: Rehearsal
+        description: 'Where to write it: each project''s rehearsal root'
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-26T21:12:29.184Z'
-updatedAt: '2026-09-27T10:46:51.935Z'
+updatedAt: '2026-09-30T20:46:45.507Z'

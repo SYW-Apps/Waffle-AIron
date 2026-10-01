@@ -1,0 +1,79 @@
+id: transaction_store_impl
+name: Transaction Store Implementation
+description: >-
+  src/migrations/transaction-store.ts. A read-through Store: each method is one file operation
+  through the transaction file adapter.
+contract: itransaction_store
+sourcePath: src/migrations/transaction-store.ts
+methods:
+  - name: openRehearsal
+    narrative: []
+    detail: intent
+    intent: >-
+      Creates the rehearsal directory through the file adapter and answers its path; a failure
+      propagates.
+    calls:
+      - transaction_file_adapter.openRehearsal
+  - name: dropRehearsal
+    narrative: []
+    detail: intent
+    intent: Removes the rehearsal directory through the file adapter; a missing one is not an error.
+    calls:
+      - transaction_file_adapter.dropRehearsal
+  - name: saveJournal
+    narrative: []
+    detail: intent
+    intent: >-
+      Writes the journal through the file adapter, which makes it durable before returning; a write
+      failure propagates, and the caller treats it as a failed phase change.
+    calls:
+      - transaction_file_adapter.saveJournal
+  - name: readJournal
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the owner's journal through the file adapter on every call, or null when none exists; a
+      malformed journal propagates the adapter's error rather than being read as absent.
+    calls:
+      - transaction_file_adapter.readJournal
+  - name: listJournals
+    narrative: []
+    detail: intent
+    intent: >-
+      Lists and reads every journal under the owner through the file adapter on every call; empty
+      when there is none.
+    calls:
+      - transaction_file_adapter.listJournals
+  - name: putFile
+    narrative: []
+    detail: intent
+    intent: >-
+      Writes the bytes into the staged or backup area through the file adapter, durable before
+      returning; a failure propagates.
+    calls:
+      - transaction_file_adapter.putFile
+  - name: readFile
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the bytes from the staged or backup area through the file adapter on every call, or null
+      when none are held.
+    calls:
+      - transaction_file_adapter.readFile
+  - name: locate
+    narrative: []
+    detail: intent
+    intent: Answers the area path through the file adapter, which computes it without touching the disk.
+    calls:
+      - transaction_file_adapter.locate
+  - name: close
+    narrative: []
+    detail: intent
+    intent: >-
+      Removes the owner's transaction directory through the file adapter; a missing one is not an
+      error.
+    calls:
+      - transaction_file_adapter.close
+status: complete
+createdAt: '2026-09-30T20:26:47.758Z'
+updatedAt: '2026-09-30T21:33:48.316Z'

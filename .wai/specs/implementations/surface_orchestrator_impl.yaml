@@ -390,6 +390,95 @@ methods:
         description: Answer the pins in declaration order
         type: return
         outcome: PinnedExternal[]
+  - name: renamePin
+    sourcePath: src/core/externals.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the current externals lock (none yet reads as empty)
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 2
+        description: Is there a pin to carry?
+        type: branch
+        condition: >-
+          the lock has no entry for the alias, or already holds the entry under newAlias with that
+          producer id
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to carry: nothing is written'
+        type: return
+        outcome: 'false'
+      - stepNumber: 4
+        label: read-snapshot
+        description: Read the alias's pinned snapshot
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readSnapshot
+      - stepNumber: 5
+        description: >-
+          Set the snapshot provenance's producer id to the new one, leaving its content — and so its
+          digest — untouched
+        type: local
+      - stepNumber: 6
+        description: Save the snapshot under the new alias
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveSnapshot
+      - stepNumber: 7
+        description: >-
+          Move the lock entry to the new alias with the new producer id and snapshot path, its
+          digest and used map as pinned, and save the lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveLock
+      - stepNumber: 8
+        description: Did the alias change?
+        type: branch
+        condition: newAlias differs from alias
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Remove the snapshot kept under the old alias
+        type: call
+        targetComponent: externals_repository
+        targetMethod: removeSnapshot
+      - stepNumber: 10
+        label: carried
+        description: The pin now answers to the new alias and producer id
+        type: return
+        outcome: 'true'
+  - name: unpin
+    sourcePath: src/core/externals.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the current externals lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 2
+        description: Is the alias pinned?
+        type: branch
+        condition: the lock has no entry for the alias
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing pinned: nothing is written'
+        type: return
+        outcome: 'false'
+      - stepNumber: 4
+        label: drop
+        description: Drop the entry and save the lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveLock
+      - stepNumber: 5
+        description: Remove the alias's snapshot
+        type: call
+        targetComponent: externals_repository
+        targetMethod: removeSnapshot
+      - stepNumber: 6
+        description: The pin is gone
+        type: return
+        outcome: 'true'
 lint:
   allow:
     - code: UNDECLARED_COLOCATED_CALL
@@ -404,4 +493,4 @@ lint:
         replaced listExternalInterfaces, whose entry for it was retired with it.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-09-28T18:12:05.205Z'
+updatedAt: '2026-09-30T20:23:31.366Z'

@@ -1,0 +1,177 @@
+id: migration_core_adapter_impl
+name: Migration Core Client Adapter Implementation
+description: 'src/migrations/adapters/core.ts: in-process imports of the sdd_core portal barrel.'
+contract: imigration_core_adapter
+sourcePath: src/migrations/adapters/core.ts
+methods:
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveChainingParent
+  - name: projectFamily
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: projectFamily
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveProjectExports
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+  - name: approvalRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: approvalRecord
+  - name: setId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: setId
+  - name: renameId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: renameId
+  - name: renameAlias
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: renameAlias
+  - name: declareMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: declareMember
+  - name: removeMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: removeMember
+  - name: declareExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: declareExternal
+  - name: repointExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: repointExternal
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: removeExternal
+  - name: importNames
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: importNames
+  - name: rewriteReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: rewriteReferences
+  - name: externalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: externalizeSubsystem
+  - name: internalizeMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: internalizeMember
+  - name: projectConfigExists
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+  - name: exportUsage
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: exportUsage
+  - name: loadSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadSpec
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadTypeSpecs
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveSubsystemExports
+  - name: moveMountToMembers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: moveMountToMembers
+  - name: normalizeReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: normalizeReferences
+status: complete
+createdAt: '2026-09-30T20:31:36.988Z'
+updatedAt: '2026-09-30T22:58:41.212Z'

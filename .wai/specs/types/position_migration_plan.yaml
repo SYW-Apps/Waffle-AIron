@@ -6,7 +6,7 @@ description: >-
   legacy mounts to move into `members` with what they carry, the references to rewrite out of a
   deprecated form (stage 4's self-prefixed ones among them), stage 4's positional imports, and every
   finding it will not decide for a person. The chaining migration merges it into its own plan.
-subsystem: sdd_cli
+subsystem: sdd_migrations
 fields:
   - name: members
     type: PlannedMember[]
@@ -30,6 +30,6 @@ fields:
       — which the chaining migration plans with its own entries and declarations
     optional: false
 methods: []
-sourcePath: src/commands/position-migration.ts
+sourcePath: src/migrations/position-migration.ts
 createdAt: '2026-09-27T10:44:31.358Z'
-updatedAt: '2026-09-28T16:13:15.685Z'
+updatedAt: '2026-09-30T21:05:11.591Z'

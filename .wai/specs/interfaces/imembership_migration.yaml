@@ -1,0 +1,124 @@
+id: imembership_migration
+name: Membership Migration Interface
+description: >-
+  Plan attach, detach or adopt from a family graph (writing nothing), and write a confirmed plan
+  into the roots a rehearsal maps. Each plan answers its edits and refusals; the caller rehearses it
+  and adds the file changes and the re-lock list.
+component: membership_migration
+methods:
+  - name: planAttach
+    description: >-
+      Plan making the existing project at request.path a member of the bound project under
+      request.alias. Refusals: the path is not strictly within the bound project (not-contained);
+      the alias is declared under members or externals (alias-taken); an external of the bound
+      project already names that directory (already-member, pointing at `member adopt`); the
+      directory holds no project — no .wai/project.yaml and no L0 (not-a-project); a family node is
+      already there (already-member); its id equals a family project's id (id-collision,
+      PROJECT_ID_COLLISION named). Edits: the member declared (path, description); in the attached
+      project, its id declared when it only defaults one — the id its lock approved, else its
+      effective id, never the alias, so its approval keeps its identity. Its L0, subsystems, packs,
+      externals and lock are untouched; the bound project's composition.requirePolicies it does not
+      meet are notes (the family run reports them), never scaffolded into it.
+    signature: 'planAttach(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The graph of the highest root in reach
+      - name: bound
+        type: string
+        description: The bound project's key in that graph
+      - name: request
+        type: MigrationRequest
+        description: verb attach, alias, path
+    guarantees:
+      - idempotent
+  - name: planDetach
+    description: >-
+      Plan taking the member under request.alias out of the family. Refusals: no such member
+      (not-a-member); its directory is absent (member-absent); a family project that must be written
+      is out of reach (family-partial); without request.widen, a family project (the bound one
+      included) using a public name the member exports only to the family (audience project or
+      department) — once the member is outside the family, a pin taken by path sees its instance
+      audience and above, so that use would stop resolving (audience-too-narrow, one refusal per
+      export naming every project that uses it: widening is a design decision, never a move's silent
+      side effect). Edits: with request.widen, first, in the member, exactly those used exports' L0
+      entries widened to the instance audience through the gated authoring seam, each shown as
+      `widen <name> <audience>→instance (used by …)` and confirmed with the rest — an export no
+      family project uses is never widened; an export no L0 entry of the member names directly
+      cannot be widened and stays audience-too-narrow. Then, in the bound project, the member
+      removed and an external declared under the SAME alias — `project` its id when that differs
+      from the alias, `source.path` the member's path, its `use` and description carried — and
+      pinned; in every other family project whose external finds the member through the family, a
+      `source.path` to it (relative to that project); in the member, a `source.path` on each of its
+      externals that found a family project through the family, since it leaves the family. No
+      reference text changes. Notes: consumers outside the family are not affected (they already
+      name it by path or not at all).
+    signature: 'planDetach(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The graph of the highest root in reach
+      - name: bound
+        type: string
+        description: The bound project's key in that graph
+      - name: request
+        type: MigrationRequest
+        description: verb detach, alias
+    guarantees:
+      - idempotent
+  - name: planAdopt
+    description: >-
+      Plan making the bound project's external under request.alias a member. Refusals: no such
+      external (not-an-external); it names no source.path, or its path is not strictly within the
+      bound project (not-contained); the directory holds no project (not-a-project); it is already
+      some family project's member (already-member); its id equals another family project's id
+      (id-collision). Edits: in the bound project, the external and its pin removed and a member
+      declared under the same alias with the external's path, `use` and description; in every other
+      family project, an external `source.path` that resolves to the adopted project removed, since
+      the family now supplies it; in the adopted project, each external `source.path` that resolves
+      to a family project removed likewise. It is planDetach's inverse, and the property
+      detach-then-adopt-is-identity says exactly this (accepted): the member project is
+      BYTE-identical to before the detach when the detach did not write it (it named no family
+      project through the family), and otherwise SEMANTICALLY identical — its first configuration
+      write materializes the schema's defaults the file left out, as every registry save does; the
+      parent and every other family project are SEMANTICALLY identical — the same member, external
+      and pin declarations with the same values — but not necessarily byte-identical, since a
+      re-declared member is appended to `members` rather than restored to its old position.
+      Precondition: no family project held a redundant source.path to the member before the detach;
+      the plan names one when it does, because adopt removes it too.
+    signature: 'planAdopt(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The graph of the highest root in reach
+      - name: bound
+        type: string
+        description: The bound project's key in that graph
+      - name: request
+        type: MigrationRequest
+        description: verb adopt, alias
+    guarantees:
+      - idempotent
+  - name: write
+    description: >-
+      Write a confirmed attach, detach or adopt plan into the roots the rehearsal maps, owner by
+      owner under that owner's binding, restoring the caller's binding on every path: configuration
+      edits first, pins last (a pin reads the producer's final state). Every write is idempotent, so
+      a re-run writes nothing.
+    signature: 'write(plan: MigrationPlan, rehearsal: Rehearsal): void'
+    returns: void
+    params:
+      - name: plan
+        type: MigrationPlan
+        description: The plan
+      - name: rehearsal
+        type: Rehearsal
+        description: 'Where to write it: each project''s rehearsal root'
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-30T20:33:39.248Z'
+updatedAt: '2026-10-01T05:53:56.910Z'

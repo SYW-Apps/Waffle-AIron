@@ -1,0 +1,45 @@
+id: imcp_migration_adapter
+name: MCP Migration Client Adapter Interface
+description: One forward per migration_portal method the tools use.
+component: mcp_migration_adapter
+methods:
+  - name: plan
+    description: Forward to migration_portal.plan.
+    signature: 'plan(request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: request
+        type: MigrationRequest
+        description: The verb and its arguments
+  - name: apply
+    description: Forward to migration_portal.apply.
+    signature: 'apply(plan: MigrationPlan): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: plan
+        type: MigrationPlan
+        description: The plan
+  - name: discard
+    description: Forward to migration_portal.discard.
+    signature: 'discard(plan: MigrationPlan): void'
+    returns: void
+    params:
+      - name: plan
+        type: MigrationPlan
+        description: The plan
+  - name: recover
+    description: >-
+      Forward to migration_portal.recover; the MCP server asks only with fix false, for the
+      pending-transaction banner — recovery itself is `wairon doctor --fix`'s.
+    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
+    returns: RecoveredTransaction[]
+    params:
+      - name: root
+        type: string
+        description: The bound project root
+      - name: fix
+        type: boolean
+        description: Always false here
+status: complete
+createdAt: '2026-09-30T20:39:15.096Z'
+updatedAt: '2026-09-30T21:34:06.866Z'

@@ -120,6 +120,32 @@ methods:
     guarantees:
       - idempotent
     effect: write
+  - name: rewriteReferences
+    description: >-
+      Respell references at parsed positions of one spec: for each edit, the reference standing at
+      its position — a whole reference value, or at a type position the one qualified token inside
+      the type string, the display signature beside it included — whose text equals `from` is
+      replaced by `to`, and nothing else in the document moves. An edit whose `to` already stands at
+      its position was applied before and writes nothing (idempotent). Refuses the whole spec before
+      writing, naming the position and both texts, when an edit's `from` is not at its position and
+      its `to` is not either. Never re-derives a spelling and never whole-string or
+      substring-matches the file. Compares the serialized document with the stored one and writes
+      through the file store only when they differ, answering whether it wrote; the lock is never
+      touched.
+    signature: 'rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+      - name: edits
+        type: ReferenceEdit[]
+        description: The edits for this spec
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-09-29T14:31:27.828Z'
+updatedAt: '2026-09-30T22:47:28.340Z'

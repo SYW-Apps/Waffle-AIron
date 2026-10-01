@@ -1,0 +1,17 @@
+id: transaction_store
+name: Transaction Store
+description: >-
+  Authoritative state of a family migration's transaction — one aggregate: its rehearsal copy, each
+  owner's journal, and the staged bytes and backups beside it. Read-through: every read is the file
+  read through the transaction file adapter and nothing is held in memory, which is the point —
+  after a crash the files ARE the state, and doctor reads them with nothing else to go on. There is
+  therefore nothing to hydrate.
+subsystem: sdd_migrations
+componentType: Store
+owns: []
+dependsOn:
+  - transaction_file_adapter
+durability: read-through
+status: complete
+createdAt: '2026-09-30T20:25:17.146Z'
+updatedAt: '2026-09-30T21:33:46.922Z'

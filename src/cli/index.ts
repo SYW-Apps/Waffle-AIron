@@ -22,6 +22,8 @@ import { runShow } from '../commands/show.js';
 import { runMcpServe, runMcpInstall, runMcpStatus } from '../commands/mcp.js';
 import { runUpdate, cleanStaleBinary } from '../commands/update.js';
 import { runStatus } from '../commands/status.js';
+// The pending-transaction banner: unfinished family migrations under this root.
+import { recover as recoverMigrations } from '../commands/adapters/migrations.js';
 import { runDomainsList, runDomainsScan, runDomainsAdd, runDomainsRemove } from '../commands/domains.js';
 import { runSkillsList, runSkillsInstall } from '../commands/skills.js';
 import { runDoctor } from '../commands/doctor.js';
@@ -61,6 +63,11 @@ import {
 import {
   runMemberAdd,
   runMemberMove,
+  runMemberAttach,
+  runMemberDetach,
+  runMemberAdopt,
+  runMemberRenameAlias,
+  runProjectRename,
   runSubsystemExternalize,
   runMemberInternalize,
 } from '../commands/subsystem.js';
@@ -276,6 +283,11 @@ async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursi
     // notices never fail it, --ci included.
     if (errors.length || (opts.ci && warnings.length)) process.exit(1);
     return;
+  }
+  // Not attached: the pending-transaction banner, before the tree is read (a
+  // crash mid-swap may leave it unreadable) — a notice, so --ci is unaffected.
+  for (const t of recoverMigrations(getProjectRoot(), false)) {
+    logger.notice(`[TRANSACTION_PENDING] an unfinished family migration (${t.verb}, transaction ${t.id}, coordinator phase ${t.phase}) — run \`wairon doctor --fix\` to roll it back`);
   }
   await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive, family: opts.family });
 }
@@ -1188,11 +1200,77 @@ memberCmd
     await runMemberMove(alias, memberPath);
   });
 
+// The family migrations: each plans first and prints the plan, applies only
+// once confirmed (--yes answers; --report prints and writes nothing), applies
+// all or nothing, and never locks — it names the projects to re-lock.
+const collect = (value: string, previous: string[] = []): string[] => [...previous, value];
+
+memberCmd
+  .command('attach <alias> <path>')
+  .description('Make the existing project at <path> a member, keeping its L0, subsystems, packs and lock (`member add` scaffolds a new one)')
+  .option('--description <text>', 'what the member is to this project')
+  .option('--report', 'print the plan and write nothing')
+  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, memberPath: string, opts) => {
+    await runMemberAttach(alias, memberPath, { description: opts.description, report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('detach <alias>')
+  .description('Take a member out of the family: this project and every family consumer then reach it as an external by path, pinned')
+  .option('--widen', 'widen exactly the exports the family uses that the member gives the family alone to the instance audience (shown in the plan), instead of refusing')
+  .option('--report', 'print the plan and write nothing')
+  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberDetach(alias, { widen: opts.widen, report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('adopt <alias>')
+  .description("Make this project's external found by a path inside it a member again (detach's inverse)")
+  .option('--report', 'print the plan and write nothing')
+  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberAdopt(alias, { report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('rename-alias <old> <new>')
+  .description("Rename one alias of this project (a member or an external) and respell this project's references through it; no member or sibling changes")
+  .option('--report', 'print the plan and write nothing')
+  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, newAlias: string, opts) => {
+    await runMemberRenameAlias(alias, newAlias, { report: opts.report, yes: opts.yes });
+  });
+
 memberCmd
   .command('internalize <alias>')
-  .description('Take a single-subsystem member back into this project (moves its specs in, removes it from `members`, deletes its .wai project)')
-  .action(async (alias: string) => {
-    await runMemberInternalize(alias);
+  .description("Fold a member — every subsystem of it — back into this project, its own metadata sent to explicit homes and every family consumer re-pointed at this project")
+  .option('--into <subsystem>', "the subsystem that receives the member's L0 vision (required when it holds several subsystems)")
+  .option('--packs <adopt|drop>', 'what to do with a pack only the member selects')
+  .option('--export <name>', "a public name of the member this project exports afterwards (repeatable), beyond those the family uses", collect, [])
+  .option('--report', 'print the plan and write nothing')
+  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberInternalize(alias, { into: opts.into, packs: opts.packs, exports: opts.export, report: opts.report, yes: opts.yes });
+  });
+
+// ---------------------------------------------------------------------------
+// project rename — a project's id, family-wide
+// ---------------------------------------------------------------------------
+
+const projectCmd = program
+  .command('project')
+  .description('Act on a project of the family');
+
+projectCmd
+  .command('rename <new-id>')
+  .description("Move a project's id — this project's, or a member's named by --project — and every reference to the old id across the family; lists every project to re-lock")
+  .option('--project <alias-path>', "the member whose id moves, as an alias path from this project (e.g. billing/payments)")
+  .option('--report', 'print the plan and write nothing')
+  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (newId: string, opts) => {
+    await runProjectRename(newId, { project: opts.project, report: opts.report, yes: opts.yes });
   });
 
 // ---------------------------------------------------------------------------
@@ -1205,10 +1283,12 @@ const subsystemCmd = program
 
 subsystemCmd
   .command('externalize <id>')
-  .description('Turn an internal subsystem into a member project at --path (moves its specs, declares it in `members`, re-saves references as alias::name; you move the source code)')
+  .description('Turn an internal subsystem into a member project at --path, family-wide and all or nothing (moves its specs, declares it in `members`, exports and imports what crosses the new boundary; you move the source code)')
   .requiredOption('--path <dir>', 'destination directory for the member project')
+  .option('--report', 'print the plan and write nothing')
+  .option('--yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (id: string, opts) => {
-    await runSubsystemExternalize(id, { path: opts.path });
+    await runSubsystemExternalize(id, { path: opts.path, report: opts.report, yes: opts.yes });
   });
 
 // ---------------------------------------------------------------------------

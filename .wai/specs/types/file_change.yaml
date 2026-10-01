@@ -1,0 +1,34 @@
+kind: value-object
+id: file_change
+name: FileChange
+description: >-
+  One file a family migration replaces, creates or deletes in one owner project, as the rehearsal's
+  difference found it: the byte-level truth of the plan, and one entry of a transaction journal.
+  Digests pin both ends, so a swap never lands on a file that moved after it was planned and a
+  restore can prove what it put back.
+subsystem: sdd_migrations
+fields:
+  - name: project
+    type: string
+    description: The owner project's root directory, absolute.
+    optional: false
+  - name: path
+    type: string
+    description: The file, relative to the owner's root, forward slashes (always under .wai/).
+    optional: false
+  - name: action
+    type: string
+    description: write (replace an existing file) | create | delete.
+    optional: false
+  - name: baseDigest
+    type: string
+    description: sha256 of the live file when the rehearsal copied it; absent for create.
+    optional: true
+  - name: stagedDigest
+    type: string
+    description: sha256 of the bytes the swap puts in place; absent for delete.
+    optional: true
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T20:24:16.215Z'
+updatedAt: '2026-09-30T21:33:05.330Z'

@@ -17,25 +17,26 @@ dependsOn:
   - cli_variants_adapter
   - cli_surfaces_client_adapter
   - remote_orchestrator
-  - chaining_migration_orchestrator
   - verdict_changes
   - cli_mcp_adapter
   - user_config_store
+  - cli_migration_adapter
 lint:
   allow:
     - code: GOD_COMPONENT
       reason: >-
         The runner IS the terminal dispatch hub by design: almost every dependency is a thin
         per-concern CLI adapter, one per subsystem or command family, with no domain logic of its
-        own. The four that are not — `remote_orchestrator`, `chaining_migration_orchestrator`,
-        `verdict_changes` and `user_config_store` — are sdd_cli's own workflows and its own held
-        state, which belong to this subsystem rather than behind an adapter onto another. Splitting
-        the dispatcher, or hiding adapters behind a synthetic facade, would add a hop without
-        separating any real responsibility.
+        own. The three that are not — `remote_orchestrator`, `verdict_changes` and
+        `user_config_store` — are sdd_cli's own workflows and its own held state, which belong to
+        this subsystem rather than behind an adapter onto another (the chaining migration moved to
+        sdd_migrations in stage 6 and is reached through `cli_migration_adapter`). Splitting the
+        dispatcher, or hiding adapters behind a synthetic facade, would add a hop without separating
+        any real responsibility.
     - code: EXCESSIVE_DEPENDENCIES
       reason: >-
-        Same deliberate hub shape as the GOD_COMPONENT allow: seventeen dependencies fanned out from
-        the one CLI entry orchestrator, of which thirteen are thin command adapters and four are
+        Same deliberate hub shape as the GOD_COMPONENT allow: sixteen dependencies fanned out from
+        the one CLI entry orchestrator, of which thirteen are thin command adapters and three are
         sdd_cli's own workflows and held state. The count tracks how many command families and
         subsystem hops the terminal exposes, not how much this component knows.
     - code: INCOHESIVE_METHODS
@@ -48,4 +49,4 @@ lint:
         mint one dispatcher per command family and separate no responsibility.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-28T06:16:32.307Z'
+updatedAt: '2026-09-30T20:50:29.251Z'

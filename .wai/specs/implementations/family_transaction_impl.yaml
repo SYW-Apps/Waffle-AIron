@@ -1,0 +1,465 @@
+id: family_transaction_impl
+name: Family Transaction Implementation
+description: >-
+  src/migrations/transaction.ts. Layout: the rehearsal at <os tmp>/wairon-migration-<id>/<path from
+  family root>/.wai/...; per owner <owner>/.wai/transactions/<id>/{journal.yaml, staged/<path>,
+  backup/<path>} with .wai/transactions/.gitignore = `*`. The coordinator is always the family root,
+  whose journal lists every owner; its phase is the commit point. Phases: staging → staged →
+  swapping → committed | rolled-back.
+contract: ifamily_transaction
+sourcePath: src/migrations/transaction.ts
+methods:
+  - name: rehearse
+    narrative:
+      - stepNumber: 1
+        description: Draw a short random transaction id
+        type: local
+      - stepNumber: 2
+        description: Open the rehearsal directory outside the family
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: openRehearsal
+      - stepNumber: 3
+        description: Copy the scope, dropping the half-made rehearsal if the copy fails
+        type: try
+        endStep: 4
+        catches:
+          - error: Error
+            step: 6
+      - stepNumber: 4
+        label: copied
+        description: >-
+          Mirror every scoped project's .wai tree into it at its path from the family root,
+          recording each live file's digest. Only .wai trees are copied: every writer run on the
+          copy must read nothing outside them (the rehearsal precondition)
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: mirror
+      - stepNumber: 5
+        description: >-
+          Answer the rehearsal: its id, directory, family root, each project's rehearsal root and
+          the base digests
+        type: return
+        outcome: the Rehearsal
+      - stepNumber: 6
+        label: copy-failed
+        description: Remove the half-made rehearsal
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: dropRehearsal
+      - stepNumber: 7
+        description: Rethrow the copy's error, naming the file
+        type: throw
+        error: the mirror's error
+  - name: diff
+    narrative:
+      - stepNumber: 1
+        description: Compare the rehearsal with the live family, file by file
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: compare
+      - stepNumber: 2
+        description: Answer the file changes
+        type: return
+        outcome: FileChange[]
+  - name: commit
+    narrative:
+      - stepNumber: 1
+        description: Stage every owner; nothing live moves inside this region
+        type: try
+        endStep: 2
+        catches:
+          - error: StagingError
+            step: 9
+      - stepNumber: 2
+        label: staged
+        description: 'Stage the transaction: journals, staged files, backups, base and volume checks'
+        type: call
+        targetComponent: family_transaction
+        targetMethod: stage
+      - stepNumber: 3
+        description: >-
+          Swap every owner and reach the commit point; any failure before the commit point is
+          recorded restores everything
+        type: try
+        endStep: 5
+        catches:
+          - error: SwapError
+            step: 12
+      - stepNumber: 4
+        label: swapped
+        description: Swap the staged files in
+        type: call
+        targetComponent: family_transaction
+        targetMethod: swap
+      - stepNumber: 5
+        label: commit-point
+        description: >-
+          Record the coordinator's journal in phase committed — the commit point: from here recovery
+          only cleans up
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: saveJournal
+      - stepNumber: 6
+        description: Remove every owner's transaction directory, the coordinator's last
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: close
+      - stepNumber: 7
+        description: Drop the rehearsal
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: dropRehearsal
+      - stepNumber: 8
+        description: 'Committed: answer the changes now live'
+        type: return
+        outcome: committed
+      - stepNumber: 9
+        label: staging-failed
+        description: 'Nothing live moved: remove every owner''s transaction directory'
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: close
+      - stepNumber: 10
+        description: Drop the rehearsal
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: dropRehearsal
+      - stepNumber: 11
+        description: 'Failed before the swap: the family is untouched'
+        type: return
+        outcome: failed, restored (nothing live changed), naming what failed
+      - stepNumber: 12
+        label: swap-failed
+        description: Put every owner back from its backups
+        type: call
+        targetComponent: family_transaction
+        targetMethod: restore
+      - stepNumber: 13
+        description: Was everything restored?
+        type: branch
+        condition: restore answered no unrestored file
+        onFalseStep: 17
+      - stepNumber: 14
+        description: Remove every owner's transaction directory
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: close
+      - stepNumber: 15
+        description: Drop the rehearsal
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: dropRehearsal
+      - stepNumber: 16
+        description: 'Failed and restored: the family is byte-identical to before'
+        type: return
+        outcome: failed, restored, naming the swap that failed
+      - stepNumber: 17
+        label: left-for-doctor
+        description: >-
+          Failed and not fully restored: the journals stay, naming the files, and `wairon doctor
+          --fix` retries the restore; the rehearsal is kept for inspection until then
+        type: return
+        outcome: failed, not restored, naming the unrestored files
+  - name: discard
+    narrative:
+      - stepNumber: 1
+        description: Drop the rehearsal; the family was never touched
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: dropRehearsal
+  - name: restore
+    narrative:
+      - stepNumber: 1
+        description: For each owner's journal
+        type: loop
+        loopKind: forEach
+        over: the journals
+        endStep: 8
+      - stepNumber: 2
+        description: Recreate the directories the swap removed (dirsRemoved), shallowest first
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: makeDirs
+      - stepNumber: 3
+        description: Read each write's and delete's backup; a missing backup is recorded as unrestored
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: readFile
+      - stepNumber: 4
+        description: Put each backup back at its live path, whether or not the swap had reached it
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: place
+      - stepNumber: 5
+        description: Remove each created file, when present
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: remove
+      - stepNumber: 6
+        description: Prune the directories the swap created (dirsCreated), deepest first, when empty
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: prune
+      - stepNumber: 7
+        description: >-
+          Prove each restored file: its digest must equal its baseDigest, and each created path must
+          be absent; a file that fails is recorded as unrestored
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: digest
+      - stepNumber: 8
+        label: owner-restored
+        description: >-
+          Record the owner's journal in phase rolled-back, or keep it swapping with its unrestored
+          files named
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: saveJournal
+      - stepNumber: 9
+        description: Answer the unrestored files; empty means byte-identical to before
+        type: return
+        outcome: the unrestored files
+  - name: recover
+    narrative:
+      - stepNumber: 1
+        description: Read every journal under the root
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: listJournals
+      - stepNumber: 2
+        description: >-
+          Group them by transaction and resolve each one's coordinator: the journal itself when its
+          coordinator path is empty, else the root its recorded coordinator path names — a recorded
+          path, never a discovery walk
+        type: local
+      - stepNumber: 3
+        description: Is a fix asked for?
+        type: branch
+        condition: fix is false
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report each transaction as pending, with its verb, owners and the coordinator's phase;
+          nothing is written
+        type: return
+        outcome: pending transactions
+      - stepNumber: 5
+        label: each
+        description: For each unfinished transaction
+        type: loop
+        loopKind: forEach
+        over: the transactions
+        endStep: 16
+      - stepNumber: 6
+        description: Read the coordinator's journal
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: readJournal
+      - stepNumber: 7
+        description: Is the coordinator readable?
+        type: branch
+        condition: the coordinator's root is absent or out of reach, or holds no journal of this transaction
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Refuse this transaction, naming the coordinator: without its phase nobody can know whether
+          the swap was final
+        type: jump
+        toStep: 16
+      - stepNumber: 9
+        label: phase
+        description: Did the coordinator reach its commit point?
+        type: branch
+        condition: the coordinator's phase is committed
+        onFalseStep: 12
+      - stepNumber: 10
+        description: 'Committed: only its directories remain; remove every owner''s transaction directory'
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: close
+      - stepNumber: 11
+        description: Record it cleaned
+        type: jump
+        toStep: 16
+      - stepNumber: 12
+        label: roll-back
+        description: >-
+          Read the journal of every owner the coordinator lists; an owner out of reach refuses the
+          transaction, naming it
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: readJournal
+      - stepNumber: 13
+        description: Put every owner back from its backups
+        type: call
+        targetComponent: family_transaction
+        targetMethod: restore
+      - stepNumber: 14
+        description: Was everything restored?
+        type: branch
+        condition: restore answered no unrestored file
+        onFalseStep: 16
+      - stepNumber: 15
+        description: Remove every owner's transaction directory
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: close
+      - stepNumber: 16
+        label: recorded
+        description: >-
+          Record the transaction's action: refused, cleaned, rolled-back, or refused with the files
+          a restore could not put back
+        type: local
+      - stepNumber: 17
+        description: Answer every transaction found and what was done
+        type: return
+        outcome: RecoveredTransaction[]
+  - name: stage
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Group the changes by owner in swap order (creates, then writes, then deletes); the
+          coordinator is the family root, whose journal also lists every owner; every journal starts
+          in phase staging and already names, in dirsCreated, the parent directories its creates
+          will need that do not exist yet — so a crash between a create's makeDirs and the owner's
+          next journal save still leaves every directory to prune named
+        type: local
+      - stepNumber: 2
+        description: For each owner, the coordinator first
+        type: loop
+        loopKind: forEach
+        over: the owners
+        endStep: 15
+      - stepNumber: 3
+        description: >-
+          Record the owner's journal in phase staging before any byte is staged, so a crash from
+          here on leaves a directory recovery can find
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: saveJournal
+      - stepNumber: 4
+        description: >-
+          Re-read each entry's live digest: a write or delete must still match its baseDigest, a
+          create's path must still be absent
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: digest
+      - stepNumber: 5
+        description: Did a live file move since the rehearsal copied it?
+        type: branch
+        condition: an entry's live digest differs from its base, or a create's path now exists
+        onFalseStep: 7
+      - stepNumber: 6
+        description: 'Stop: the plan no longer describes the family'
+        type: throw
+        error: 'StagingError: moved since planned, naming the file'
+      - stepNumber: 7
+        label: stage-bytes
+        description: Read each write's and create's new bytes from the rehearsal
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: read
+      - stepNumber: 8
+        description: Stage them in the owner's staged area, synced
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: putFile
+      - stepNumber: 9
+        description: Read each write's and delete's live bytes
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: read
+      - stepNumber: 10
+        description: Back them up in the owner's backup area, synced
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: putFile
+      - stepNumber: 11
+        description: Locate each staged file
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: locate
+      - stepNumber: 12
+        description: Check each staged file shares a volume with its live target's nearest existing directory
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: sameVolume
+      - stepNumber: 13
+        description: Would a swap cross volumes (a .wai subtree linked onto another drive)?
+        type: branch
+        condition: a staged file and its target lie on different volumes
+        onFalseStep: 15
+      - stepNumber: 14
+        description: 'Stop before anything live moves: a rename across volumes is not atomic'
+        type: throw
+        error: 'StagingError: cross-volume, naming the file'
+      - stepNumber: 15
+        label: owner-staged
+        description: >-
+          Record the owner's journal in phase staged: every backup and staged copy is on disk and
+          synced
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: saveJournal
+      - stepNumber: 16
+        description: Answer the staged journals, the coordinator's first
+        type: return
+        outcome: TransactionJournal[]
+  - name: swap
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Record the coordinator's journal in phase swapping: from here a crash is rolled back by
+          doctor --fix
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: saveJournal
+      - stepNumber: 2
+        description: For each owner, its entries in swap order
+        type: loop
+        loopKind: forEach
+        over: the journals
+        endStep: 8
+      - stepNumber: 3
+        description: Locate each staged file
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: locate
+      - stepNumber: 4
+        description: >-
+          For a create, make its missing parent directories, recording them in the owner's
+          dirsCreated
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: makeDirs
+      - stepNumber: 5
+        description: >-
+          For a create or a write, rename the staged file over the live path (retried on transient
+          Windows sharing errors)
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: replace
+      - stepNumber: 6
+        description: For a delete, remove the live file; its backup is held
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: remove
+      - stepNumber: 7
+        description: >-
+          For a delete, prune the directories it left empty up to the owner root, recording them in
+          dirsRemoved
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: prune
+      - stepNumber: 8
+        label: owner-swapped
+        description: >-
+          Record the owner's journal with the directories its swap created and removed; any failure
+          above surfaces as SwapError naming the file and the operation
+        type: call
+        targetComponent: transaction_repository
+        targetMethod: saveJournal
+status: complete
+createdAt: '2026-09-30T20:29:10.401Z'
+updatedAt: '2026-09-30T21:33:44.049Z'

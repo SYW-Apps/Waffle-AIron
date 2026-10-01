@@ -6,7 +6,7 @@ import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { AI_PATHS } from '../config/paths.js';
-import { ChainingMigrationRefusedError, DoctorOptionsError, ProjectNotInitializedError } from '../utils/errors.js';
+import { DoctorOptionsError, ProjectNotInitializedError } from '../utils/errors.js';
 import {
   loadProjectConfig,
   projectConfigExists,
@@ -44,11 +44,16 @@ import { computeGateStateId, validateProject } from './validate.js';
 // a command has no business reaching a Store to get it.
 import { describeApprover } from '../models/lock.js';
 import { claudeMcpConfigPath } from './mcp.js';
-// The chaining migration is sdd_cli's own workflow. Bound as a namespace so each
-// call site names the contract method it reaches (chainingMigration.plan / .apply).
-import * as chainingMigration from './chaining-migration.js';
-import type { ChainingMigrationPlan, PlannedExport, ProjectMigration } from './chaining-migration.js';
-import type { PlannedRewrite } from './position-migration.js';
+// The chaining migration is a family migration of sdd_migrations since stage 6,
+// reached through the migration portal: planned, applied through the family
+// transaction (rehearsed, staged, swapped all-or-nothing), and recovered after
+// a crash. Bound as a namespace so each call site names the contract method it
+// reaches (migrations.plan / .apply / .recover). Its values are read as types
+// only — the plan is data this command prints.
+import * as migrations from './adapters/migrations.js';
+import type { ChainingMigrationPlan, PlannedExport, ProjectMigration } from '../migrations/chaining-migration.js';
+import type { PlannedRewrite } from '../migrations/position-migration.js';
+import type { FamilyMigrationReport, MigrationPlan, RecoveredTransaction } from '../migrations/types.js';
 // The stage-4 upgrade report: what the owner's gate changed in each verdict.
 import * as verdictChanges from './verdict-changes.js';
 import type { UpgradeReport } from './verdict-changes.js';
@@ -174,6 +179,10 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     try { targets = enabledTargets(); } catch { /* leave empty */ }
   }
 
+  // Transactions: each unfinished family migration under this root, as an
+  // error pointing at --fix; silent when there is none.
+  reportPendingTransactions(tally);
+
   const hasSystemSpec = pathExists(AI_PATHS.specsSystem());
   if (hasSystemSpec) {
     line(tally, 'ok', 'System spec present (.wai/specs/.index.yaml)');
@@ -269,8 +278,10 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     // nothing is planned or reported; after an applied --fix this plan is
     // empty, which is the run's own idempotence check.
     try {
-      const pending = chainingMigration.plan();
-      if (!chainingMigration.isEmpty(pending) || pending.findings.length > 0) {
+      // Planned without a rehearsal: this line prints counts and never applies.
+      const planned = migrations.plan({ verb: 'chaining', rehearse: false });
+      const pending = planned.chaining;
+      if (pending && (pendingCount(pending) > 0 || pending.findings.length > 0)) {
         console.log(chalk.bold('Chaining'));
         line(tally, 'warn', `Chaining: ${pendingCount(pending)} pending (${chainingTotals(pending)}) — see \`wairon doctor --report chaining\`, apply with \`wairon doctor --fix\``);
         logger.blank();
@@ -457,6 +468,11 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
  * writes outside the project, so it is reported but not auto-fixed.
  */
 async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
+  // The heading first, so every line below — the recovery's included — reads as a fix applied.
+  console.log(chalk.bold('Applying fixes…'));
+  // First: a family migration a crash left unfinished is resolved before any
+  // other repair reads a file that transaction may have half-swapped.
+  recoverTransactions(tally);
   if (!projectConfigExists()) return; // the report below will flag this
 
   let targets: string[];
@@ -468,8 +484,6 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
     logger.blank();
     return;
   }
-
-  console.log(chalk.bold('Applying fixes…'));
 
   try {
     syncContextFiles();
@@ -609,12 +623,13 @@ function reportOnly(options: DoctorOptions): void {
     logger.blank();
     return;
   }
-  // Steps 7-8: the chaining plan.
-  const migration = chainingMigration.plan();
+  // Steps 7-8: the chaining plan, without a rehearsal — the report writes nothing, so there is nothing to discard.
+  const planned = migrations.plan({ verb: 'chaining', rehearse: false });
   logger.blank();
   console.log(`${chalk.bold('wairon doctor --report chaining')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
   logger.blank();
-  printChainingPlan(migration);
+  if (planned.chaining) printChainingPlan(planned.chaining);
+  else printRefusals(planned);
   console.log(chalk.gray('Nothing was written.'));
   logger.blank();
 }
@@ -672,24 +687,86 @@ function printUpgradeReport(report: UpgradeReport): void {
  * --yes, or a no, writes none of it.
  */
 async function migrateChaining(options: DoctorOptions, tally: Tally): Promise<void> {
-  let migration: ChainingMigrationPlan;
+  let planned: MigrationPlan;
   try {
-    migration = chainingMigration.plan();
+    // Without a rehearsal: what is printed and confirmed is the chaining plan; apply rehearses it.
+    planned = migrations.plan({ verb: 'chaining', rehearse: false });
   } catch (e) {
     console.log(`  ${icon('error')} Could not plan the chaining migration: ${e instanceof Error ? e.message : String(e)}`);
     tally.error++;
     return;
   }
-  if (chainingMigration.isEmpty(migration)) return;
-  printChainingPlan(migration);
-  if (!(await confirmChaining(options))) return;
-  try {
-    const applied = chainingMigration.apply(migration);
-    printApplied(applied.written, applied.relock);
-  } catch (e) {
-    if (!(e instanceof ChainingMigrationRefusedError)) throw e;
-    console.log(`  ${icon('error')} ${e.message}`);
+  if (!planned.chaining) {
+    printRefusals(planned);
     tally.error++;
+    return;
+  }
+  if (pendingCount(planned.chaining) === 0) return;
+  printChainingPlan(planned.chaining);
+  if (!(await confirmChaining(options))) return;
+  // Rehearsed, staged and swapped all-or-nothing.
+  const report = migrations.apply(planned);
+  if (report.applied) {
+    printApplied(report);
+    return;
+  }
+  printNotApplied(report);
+  tally.error++;
+}
+
+/** A refused, failed or restored apply: what stopped it and whether the family is as it was. */
+function printNotApplied(report: FamilyMigrationReport): void {
+  if (report.outcome === undefined) {
+    console.log(`  ${icon('error')} The chaining migration was not applied; nothing was written:`);
+    for (const r of report.plan.refusals) console.log(`      ${r.code}${r.project ? ` (${r.project})` : ''}: ${r.detail}`);
+    return;
+  }
+  const outcome = report.outcome;
+  if (outcome.restored) {
+    console.log(`  ${icon('error')} The chaining migration failed and was rolled back; the family is byte-identical to before: ${outcome.failure ?? 'unknown failure'}`);
+    return;
+  }
+  console.log(`  ${icon('error')} The chaining migration failed and ${outcome.unrestored.length} file(s) could not be restored — run \`wairon doctor --fix\` to finish the rollback: ${outcome.failure ?? 'unknown failure'}`);
+  for (const file of outcome.unrestored) console.log(`      ${file}`);
+}
+
+/** A plan refused before it was made (an unfinished transaction): each refusal, naming what unblocks it. */
+function printRefusals(planned: MigrationPlan): void {
+  for (const r of planned.refusals) console.log(`  ${icon('error')} ${r.code}: ${r.detail}`);
+}
+
+/** doctor --fix, first: roll back (or clean up) every family migration a crash left unfinished under this root. */
+function recoverTransactions(tally: Tally): void {
+  let recovered: RecoveredTransaction[];
+  try {
+    recovered = migrations.recover(getProjectRoot(), true);
+  } catch (e) {
+    console.log(`  ${icon('error')} Could not recover unfinished family migrations: ${e instanceof Error ? e.message : String(e)}`);
+    tally.error++;
+    return;
+  }
+  for (const t of recovered) {
+    const what = `the ${t.verb} migration ${t.id} (coordinator phase ${t.phase})`;
+    if (t.action === 'rolled-back') console.log(`  ${icon('ok')} Rolled back ${what}: ${t.detail}.`);
+    else if (t.action === 'cleaned') console.log(`  ${icon('ok')} Cleaned up ${what}: ${t.detail}.`);
+    else {
+      console.log(`  ${icon('error')} Could not resolve ${what}: ${t.detail}.`);
+      tally.error++;
+    }
+  }
+}
+
+/** Plain doctor: each unfinished family migration under this root, as an error pointing at --fix. */
+function reportPendingTransactions(tally: Tally): void {
+  let pending: RecoveredTransaction[];
+  try {
+    pending = migrations.recover(getProjectRoot(), false);
+  } catch (e) {
+    line(tally, 'error', `Could not read the family-migration transactions: ${e instanceof Error ? e.message : String(e)}`);
+    return;
+  }
+  for (const t of pending) {
+    line(tally, 'error', `Unfinished family migration ${t.id} (${t.verb}, coordinator phase ${t.phase}; owners: ${t.owners.map((o) => path.relative(getProjectRoot(), o) || '.').join(', ')}) — run \`wairon doctor --fix\` to roll it back`);
   }
 }
 
@@ -707,12 +784,13 @@ async function confirmChaining(options: DoctorOptions): Promise<boolean> {
   return confirmed;
 }
 
-function printApplied(written: string[], relock: string[]): void {
+function printApplied(report: FamilyMigrationReport): void {
+  const written = report.outcome?.written ?? [];
   console.log(`  ${icon('ok')} Applied the chaining migration: ${written.length} file(s) written.`);
-  for (const file of written) console.log(`      ${file}`);
-  if (relock.length === 0) return;
-  console.log(`  ${icon('warn')} The writes staled the approval of ${relock.length} project(s); nothing was locked here. Re-lock each with \`wairon lock\`:`);
-  for (const dir of relock) console.log(`      ${dir}`);
+  for (const change of written) console.log(`      ${change.action} ${path.join(change.project, ...change.path.split('/'))}`);
+  if (report.relock.length === 0) return;
+  console.log(`  ${icon('warn')} The writes staled the approval of ${report.relock.length} project(s); nothing was locked here. Re-lock each with \`wairon lock\`:`);
+  for (const dir of report.relock) console.log(`      ${dir}`);
 }
 
 /** How many writes the plan holds: ids, L0s, entries, externals, imports, pins, mounts, rewrites and family pins. */
@@ -749,7 +827,7 @@ function printChainingPlan(migration: ChainingMigrationPlan): void {
     console.log(`  ${icon('warn')} ${chalk.bold(`New dependencies (${migration.newDependencies.length})`)} — edges no external or pin had before, added exactly as the specs resolve today; whether each should exist is yours to decide:`);
     for (const d of migration.newDependencies) console.log(`      ${chalk.bold(d)}`);
   }
-  if (chainingMigration.isEmpty(migration)) console.log('  Nothing to migrate.');
+  if (pendingCount(migration) === 0) console.log('  Nothing to migrate.');
   for (const p of migration.projects) printProjectMigration(p);
   printRewrites(migration);
   for (const f of migration.findings) {

@@ -100,7 +100,7 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     expect(ids.has(adapter!.dependsOn[0])).toBe(true); // no dangling ref
 
     // --- internalize core back ---
-    internalizeMember('core');
+    internalizeMember('core', { home: '' });
     invalidateSpecCache();
 
     // core is internal again, its `members` entry and child project gone
@@ -122,7 +122,7 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     externalizeSubsystem('core', 'packages/core');
     invalidateSpecCache();
     expect(() => externalizeSubsystem('core', 'packages/core2')).toThrow(/already a member/);
-    expect(() => internalizeMember('cli')).toThrow(/no member is declared under that alias/);
+    expect(() => internalizeMember('cli', { home: '' })).toThrow(/no member is declared under that alias/);
   });
 
   it('externalizes a legacy mount: refused, it is already a member', () => {
@@ -156,7 +156,7 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     expect(own?.sourcePath).toBe('src/orch.ts');
     expect(own?.simPath).toBe('../../sim/orch.sim.ts');
 
-    internalizeMember('core');
+    internalizeMember('core', { home: '' });
     invalidateSpecCache();
     const back = loadImplementationSpec('core_orch_impl');
     expect(back?.sourcePath).toBe('packages/core/src/orch.ts');
@@ -201,7 +201,7 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     expect(childRaw.sourcePath).toBe('src/orch.ts');
     expect(childRaw.methods.map((m: any) => m.sourcePath)).toEqual(['src/commands/run.ts', '../../tools/stop.ts', absolute]);
 
-    internalizeMember('core');
+    internalizeMember('core', { home: '' });
     invalidateSpecCache();
     const parentRaw = rawImpl(root);
     expect(parentRaw.methods.map((m: any) => m.sourcePath)).toEqual(['packages/core/src/commands/run.ts', 'tools/stop.ts', absolute]);
@@ -419,7 +419,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
 
     externalizeSubsystem('billing', 'packages/billing');
     expect(storedReferences(fam.childDir, 'billing')).not.toEqual(authored);
-    internalizeMember('billing');
+    internalizeMember('billing', { home: '' });
 
     expect(storedReferences(fam.root, 'billing')).toEqual(authored);
     expect(referenceFindings(verdict(fam.root))).toEqual(before);
@@ -491,7 +491,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     expect(referenceFindings(verdict(top))).toEqual([]);
 
     setProjectRoot(top);
-    internalizeMember('billing');
+    internalizeMember('billing', { home: '' });
     expect(stored(top, 'billing/billing_adapter/.index.yaml').dependsOn).toEqual(['top_portal']);
     expect(referenceFindings(verdict(top))).toEqual([]);
   });

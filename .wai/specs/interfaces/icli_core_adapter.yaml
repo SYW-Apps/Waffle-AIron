@@ -20,22 +20,6 @@ methods:
       - name: newPath
         type: string
         description: The new root, relative to the bound project root
-  - name: externalizeSubsystem
-    description: >-
-      Forward to spec_maintenance_portal.externalizeSubsystem: turn an internal subsystem into a
-      member project declared in `members`.
-    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
-    returns: void
-  - name: internalizeMember
-    description: >-
-      Forward to spec_maintenance_portal.internalizeMember: take a single-subsystem member back into
-      the bound project.
-    signature: 'internalizeMember(alias: string): void'
-    returns: void
-    params:
-      - name: alias
-        type: string
-        description: The member's alias
   - name: composeAgentBrief
     description: >-
       Calls composeAgentBrief on core portal — the live delegation brief backing `wairon agent
@@ -499,21 +483,6 @@ methods:
     params: []
     guarantees:
       - idempotent
-  - name: exportUsage
-    description: >-
-      Forward to spec_tree_portal.exportUsage: one project's references into another mapped onto the
-      producer's public names (used) or not (unexported).
-    signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
-    returns: ExportUsage
-    params:
-      - name: consumer
-        type: string
-        description: The consumer's namespace in the family graph
-      - name: producer
-        type: string
-        description: The producer's namespace in the family graph
-    guarantees:
-      - idempotent
   - name: resolveProjectExports
     description: >-
       Forward to spec_tree_portal.resolveProjectExports: a project's resolved L0 export table, the
@@ -525,96 +494,6 @@ methods:
         type: string
         description: The namespace of a member project; omitted for the bound root
         optional: true
-    guarantees:
-      - idempotent
-  - name: resolveSubsystemExports
-    description: 'Forward to spec_tree_portal.resolveSubsystemExports: one subsystem''s resolved L1 export table.'
-    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
-    returns: ResolvedExportTable
-    params:
-      - name: subsystemId
-        type: string
-        description: The (qualified) id of the subsystem
-    guarantees:
-      - idempotent
-  - name: loadSpec
-    description: 'Forward to spec_tree_portal.loadSpec: one spec of the named kind by id, or null.'
-    signature: >-
-      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
-      | ImplementationSpec | TypeSpec | null
-    returns: >-
-      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
-      null
-    params:
-      - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
-      - name: id
-        type: string
-        description: The spec id (namespaced if needed)
-  - name: approvalRecord
-    description: >-
-      Forward to approval_portal.approvalRecord: the lock record a project root carries (with the
-      project id it approved), or null.
-    signature: 'approvalRecord(root?: string): LockRecord | null'
-    returns: LockRecord | null
-    params:
-      - name: root
-        type: string
-        description: The project root; the bound project when omitted
-        optional: true
-  - name: setProjectId
-    description: >-
-      Forward to project_config_portal.setId: declare the bound project's id. Returns whether it
-      wrote.
-    signature: 'setProjectId(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The project id to declare
-    guarantees:
-      - idempotent
-  - name: declareExternal
-    description: >-
-      Forward to project_config_portal.declareExternal: declare one external of the bound project.
-      Returns whether it wrote.
-    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The alias key
-      - name: declaration
-        type: ExternalDeclaration
-        description: The value under the alias
-    guarantees:
-      - idempotent
-  - name: moveMountToMembers
-    description: >-
-      Forward to spec_maintenance_portal.moveMountToMembers: move one legacy L1 mount of the bound
-      project into its `members`. Returns whether it wrote.
-    signature: 'moveMountToMembers(alias: string): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The mount subsystem's local id
-    guarantees:
-      - idempotent
-  - name: normalizeReferences
-    description: >-
-      Forward to spec_maintenance_portal.normalizeReferences: re-save one spec with every reference
-      in its canonical stage-3 form. Returns whether the stored text changed.
-    signature: 'normalizeReferences(kind: string, id: string): boolean'
-    returns: boolean
-    params:
-      - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
-      - name: id
-        type: string
-        description: The spec's in-memory key, from the family's top root
     guarantees:
       - idempotent
   - name: createMember
@@ -642,21 +521,6 @@ methods:
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
     params: []
-  - name: importNames
-    description: >-
-      Forward to project_config_portal.importNames: add public names to the `use` of an external or
-      member of the bound project
-    signature: 'importNames(alias: string, names: string[]): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The external or member alias
-      - name: names
-        type: string[]
-        description: The public names to import, or `*`
-    guarantees:
-      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:54:14.162Z'
+updatedAt: '2026-09-30T20:51:11.809Z'

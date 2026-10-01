@@ -454,3 +454,17 @@ function shortestPath(from: string, to: string, members: Set<string>, edges: Map
   }
   return [to];
 }
+
+/** reference_edit — one reference respelled at its parsed position (stage 6 family migrations). */
+export interface ReferenceEdit {
+  /** The kind of the spec holding the reference. */
+  kind: string;
+  /** The spec's id. */
+  specId: string;
+  /** Where in the spec (as AuthoredReference.position). */
+  position: string;
+  /** The reference as written. */
+  from: string;
+  /** What it is respelled to. */
+  to: string;
+}

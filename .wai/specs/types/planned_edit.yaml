@@ -1,0 +1,44 @@
+kind: value-object
+id: planned_edit
+name: PlannedEdit
+description: >-
+  One semantic change a family migration makes in one owner project, in plan order — what a person
+  reads to decide, beside the byte-level FileChange list that says where it lands. A reference edit
+  carries the ReferenceEdit the writer applies, so the plan printed and the plan applied are one
+  list.
+subsystem: sdd_migrations
+fields:
+  - name: project
+    type: string
+    description: The owner project's key in the family graph ('' is the family's top root).
+    optional: false
+  - name: kind
+    type: string
+    description: >-
+      id | member | external | reference | export | pin | move | delete: an id moved, a member
+      declared/rekeyed/removed, an external declared/rekeyed/repointed/removed, a reference
+      respelled, an L0 export added or re-pointed, a pin carried/taken/removed, specs moved between
+      projects, files deleted with no home.
+    optional: false
+  - name: detail
+    type: string
+    description: >-
+      One line naming the edit as the report prints it, e.g. `members: billing → invoicing` or `pin
+      ledger carried to acme-ledger (digest kept)`.
+    optional: false
+  - name: reference
+    type: ReferenceEdit
+    description: 'For kind reference: the position and both texts.'
+    optional: true
+  - name: write
+    type: PlannedWrite
+    description: >-
+      The write that realizes it, for a membership, identity or boundary verb: the owner root to
+      bind and the adapter call to make there. The verb's writer makes these calls in its phases
+      (references, then configuration, then pins last), never recomputing them. Absent for a
+      chaining edit, whose writes the chaining plan carries.
+    optional: true
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T20:24:08.010Z'
+updatedAt: '2026-09-30T22:12:08.414Z'

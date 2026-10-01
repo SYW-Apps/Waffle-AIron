@@ -1,0 +1,22 @@
+id: membership_migration
+name: Membership Migration
+description: >-
+  The verbs that change WHICH projects a family holds, without moving any spec: `member attach` (an
+  existing project becomes a member, keeping its L0 and subsystems), `member detach` (a member
+  leaves and every reference to it becomes a reference to an external found by path, pinned) and
+  `member adopt` (the inverse: an external found by a path inside the parent becomes a member). No
+  reference text changes in any of them — the alias stays the alias — so what they rewrite is the
+  alias table and the pins. It plans from the family graph and each affected project's
+  configuration, and writes a confirmed plan into whatever roots it is handed (a rehearsal's). It
+  holds no state. The caller must gate on reach itself.
+subsystem: sdd_migrations
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - migration_core_adapter
+  - migration_surfaces_adapter
+  - migration_authoring_adapter
+  - family_file_adapter
+status: complete
+createdAt: '2026-09-30T20:33:24.727Z'
+updatedAt: '2026-10-01T05:53:30.914Z'

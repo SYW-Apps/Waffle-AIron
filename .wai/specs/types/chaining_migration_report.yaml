@@ -2,10 +2,11 @@ kind: value-object
 id: chaining_migration_report
 name: ChainingMigrationReport
 description: >-
-  The answer of applying a chaining migration, shaped after `wairon host doctor`'s MigrationReport {
-  findings, applied }: the plan it applied, whether it wrote, every file written in write order, and
-  the projects whose approval the writes staled — each needs its human to re-lock.
-subsystem: sdd_cli
+  The answer of writing a chaining migration into its rehearsal, shaped after `wairon host doctor`'s
+  MigrationReport { findings, applied }: the plan it wrote, whether it wrote, every file written in
+  write order (named by its live project), and the projects whose approval the writes stale — each
+  needs its human to re-lock. The family transaction makes those writes live or none of them.
+subsystem: sdd_migrations
 fields:
   - name: plan
     type: ChainingMigrationPlan
@@ -33,6 +34,6 @@ fields:
       is locked on anyone's behalf.
     optional: false
 methods: []
-sourcePath: src/commands/chaining-migration.ts
+sourcePath: src/migrations/chaining-migration.ts
 createdAt: '2026-09-26T21:12:09.954Z'
-updatedAt: '2026-09-27T17:32:53.873Z'
+updatedAt: '2026-09-30T21:05:06.884Z'

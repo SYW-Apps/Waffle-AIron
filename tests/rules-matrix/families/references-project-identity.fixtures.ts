@@ -12,6 +12,9 @@
  *  - PROJECT_ID_CHANGED (error): the effective id differs from the projectId
  *    the lock recorded. A lock written before project ids existed records none
  *    and approves nothing to compare against.
+ *  - PROJECT_ID_RENAMED (notice): the effective id differs from the one the
+ *    lock recorded, and that one is in `previousIds` — the rename migration
+ *    moved it, so only the re-lock is owed and PROJECT_ID_CHANGED stays quiet.
  *
  * The identity lives in .wai/project.yaml, which is configuration, not a spec,
  * so every finding here names no spec (anchoredTo: null). Each fixture
@@ -22,10 +25,11 @@ import { defineRuleFixture, type FixtureTree } from '../harness.js';
 const TS = '2026-01-01T00:00:00.000Z';
 
 /** A project.yaml for the billing platform, with the identity fields a scenario sets. */
-function projectYaml(identity: { id?: string; name: string }): string {
+function projectYaml(identity: { id?: string; name: string; previousIds?: string[] }): string {
   return [
     'schemaVersion: 1.0.0',
     ...(identity.id !== undefined ? [`id: '${identity.id}'`] : []),
+    ...(identity.previousIds !== undefined ? ['previousIds:', ...identity.previousIds.map((p) => `  - '${p}'`)] : []),
     `name: '${identity.name}'`,
     'targets: []',
     'extensions:',
@@ -55,7 +59,7 @@ function lockJson(projectId?: string): string {
  * scenario sets it, and — when given — the lock it was approved under
  * (`{}` is a lock written before project ids existed).
  */
-function billingPlatform(identity: { id?: string; name: string }, lock?: { projectId?: string }): FixtureTree {
+function billingPlatform(identity: { id?: string; name: string; previousIds?: string[] }, lock?: { projectId?: string }): FixtureTree {
   return {
     subsystems: [{ id: 'invoicing', description: 'Issues invoices and tracks what customers owe.' }],
     files: {
@@ -144,5 +148,38 @@ export default [
     reason: 'A lock written before project ids existed records none, so it approved no id to compare against.',
     scenario: 'The billing platform declares `id: billing-core`, and its lock predates project ids.',
     tree: billingPlatform({ id: 'billing-core', name: 'Billing Platform' }, {}),
+  }),
+  defineRuleFixture({
+    code: 'PROJECT_ID_CHANGED',
+    expectFire: false,
+    reason: 'The rename migration moved the approved id into previousIds, so the move was deliberate: it is PROJECT_ID_RENAMED, never an error that would refuse the re-lock.',
+    scenario: 'The billing platform was locked as "billing-platform" and renamed with `wairon project rename billing-core`, which kept the old id in previousIds.',
+    tree: billingPlatform({ id: 'billing-core', name: 'Billing Platform', previousIds: ['billing-platform'] }, { projectId: 'billing-platform' }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // PROJECT_ID_RENAMED
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'PROJECT_ID_RENAMED',
+    severity: 'notice',
+    anchoredTo: null,
+    expectFire: true,
+    scenario: 'The billing platform was locked as "billing-platform" and renamed with `wairon project rename billing-core`: project.yaml declares `id: billing-core` with `previousIds: [billing-platform]`, and the re-lock is still owed.',
+    tree: billingPlatform({ id: 'billing-core', name: 'Billing Platform', previousIds: ['billing-platform'] }, { projectId: 'billing-platform' }),
+  }),
+  defineRuleFixture({
+    code: 'PROJECT_ID_RENAMED',
+    expectFire: false,
+    reason: 'The lock was taken after the rename and approved the new id, so nothing is owed; previousIds is history, not a finding.',
+    scenario: 'The billing platform was renamed from "billing-platform" to "billing-core" and re-locked since: its lock approved "billing-core".',
+    tree: billingPlatform({ id: 'billing-core', name: 'Billing Platform', previousIds: ['billing-platform'] }, { projectId: 'billing-core' }),
+  }),
+  defineRuleFixture({
+    code: 'PROJECT_ID_RENAMED',
+    expectFire: false,
+    reason: 'The approved id is not in previousIds, so the rename migration never moved it: that id change is PROJECT_ID_CHANGED.',
+    scenario: 'The billing platform was locked as "billing-platform", and project.yaml was hand-edited to `id: billing-core` with an unrelated `previousIds: [billing-legacy]`.',
+    tree: billingPlatform({ id: 'billing-core', name: 'Billing Platform', previousIds: ['billing-legacy'] }, { projectId: 'billing-platform' }),
   }),
 ];

@@ -126,7 +126,7 @@ describe('wairon member add|move|internalize', () => {
     await expect(runMemberMove('billing', '')).rejects.toThrow('a new path is required: wairon member move <alias> <path>');
   });
 
-  it('subsystem externalize --path turns a subsystem into a member, and member internalize takes it back', async () => {
+  it('subsystem externalize --path turns a subsystem into a member, and member internalize takes it back — each a family migration, applied with --yes', async () => {
     const root = parentProject();
     const output = captureOutput();
     saveSpec('subsystem', {
@@ -136,17 +136,18 @@ describe('wairon member add|move|internalize', () => {
     invalidateSpecCache();
 
     await expect(runSubsystemExternalize('pharmacy', {})).rejects.toThrow("--path (the member's destination) is required.");
-    await runSubsystemExternalize('pharmacy', { path: 'services/pharmacy' });
+    await runSubsystemExternalize('pharmacy', { path: 'services/pharmacy', yes: true });
     expect(membersOf(root)).toEqual({ pharmacy: 'services/pharmacy' });
-    expect(output()).toContain('Externalized subsystem "pharmacy" → member at services/pharmacy');
-    expect(output()).toContain('wairon doctor --fix');
+    expect(output()).toContain('wairon family migration: externalize');
+    expect(output()).toContain('Applied the externalize migration');
+    expect(output()).toContain('Source code is not moved');
 
-    await runMemberInternalize('pharmacy');
+    await runMemberInternalize('pharmacy', { yes: true });
     expect(membersOf(root)).toBeUndefined();
     invalidateSpecCache();
     expect(loadSubsystemSpec('pharmacy')?.name).toBe('Pharmacy');
     expect(fs.existsSync(path.join(root, 'services', 'pharmacy', '.wai'))).toBe(false);
-    expect(output()).toContain('Internalized member "pharmacy" into this project.');
+    expect(output()).toContain('Applied the internalize migration');
   });
 });
 
@@ -160,7 +161,8 @@ describe('the retired subsystem commands (real CLI)', () => {
     const member = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'member', '--help'], { timeout: 180_000 });
     expect(member.stdout).toMatch(/add \[options\] <alias> <path>/);
     expect(member.stdout).toMatch(/move <alias> <path>/);
-    expect(member.stdout).toMatch(/internalize <alias>/);
+    expect(member.stdout).toMatch(/internalize \[options\] <alias>/);
+    for (const verb of ['attach', 'detach', 'adopt', 'rename-alias']) expect(member.stdout).toContain(verb);
   }, 360_000);
 });
 

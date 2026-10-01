@@ -46,20 +46,6 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: listExternals
-  - name: listFamilyPins
-    narrative:
-      - stepNumber: 1
-        description: Forward to the surface portal
-        type: call
-        targetComponent: surface_portal
-        targetMethod: listFamilyPins
-  - name: removeSnapshot
-    narrative:
-      - stepNumber: 1
-        description: Forward to the surface portal
-        type: call
-        targetComponent: surface_portal
-        targetMethod: removeSnapshot
 status: complete
 createdAt: '2026-07-10T23:16:03.846Z'
-updatedAt: '2026-09-27T10:43:06.429Z'
+updatedAt: '2026-09-30T20:51:19.665Z'

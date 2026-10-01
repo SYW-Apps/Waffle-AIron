@@ -465,6 +465,13 @@ export const ExternalDeclarationSchema = z.object({
    * REPORTED (the declaration's problem), never unreadable.
    */
   use: z.array(z.string()).optional(),
+  /**
+   * What the producer is to this project, in this project's words — the
+   * external's twin of MemberDeclaration.description. `member detach` moves a
+   * member's description here and `member adopt` moves it back, so detach
+   * followed by adopt loses nothing.
+   */
+  description: z.string().optional(),
 });
 export type ExternalDeclaration = z.infer<typeof ExternalDeclarationSchema>;
 
@@ -535,6 +542,16 @@ export const ProjectConfigSchema = z.object({
    * (PROJECT_ID_AMBIGUOUS), not make the whole configuration unreadable.
    */
   id: z.string().optional(),
+
+  /**
+   * The ids this project answered to before, oldest first, each appended by
+   * the rename migration (`wairon project rename`) and never removed or
+   * reordered by a writer. A lock that approved one of them reads as renamed
+   * (PROJECT_ID_RENAMED, a notice) rather than changed, so the re-lock the
+   * rename asks for is not refused. Nothing resolves through it: a reference
+   * still naming an old id is rewritten by the rename, or reported.
+   */
+  previousIds: z.array(z.string()).optional(),
 
   /** Human-readable display name. Not an identity — `id` is. */
   name: z.string(),
@@ -942,7 +959,7 @@ export function effectiveProjectId(config: Pick<ProjectConfig, 'id' | 'name'>): 
 
 /** One thing wrong with a project's identity, as project_config.identity names it. */
 export interface ProjectIdentityProblem {
-  kind: 'defaulted' | 'ambiguous' | 'changed';
+  kind: 'defaulted' | 'ambiguous' | 'renamed' | 'changed';
   detail: string;
 }
 
@@ -964,10 +981,12 @@ export interface ProjectIdentity {
  * project_config.identity — resolve the effective id against the id a lock
  * approved and name every problem with it: defaulted (no id declared, one
  * derived from the name), ambiguous (the name yields none, or the declared id
- * breaks the grammar), changed (the effective id — none included — differs
- * from lockedProjectId).
+ * breaks the grammar), renamed (the effective id differs from lockedProjectId,
+ * which is one of `previousIds`: the rename migration moved it, and only the
+ * re-lock is owed), changed (the effective id — none included — differs from
+ * lockedProjectId otherwise).
  */
-export function projectIdentity(config: Pick<ProjectConfig, 'id' | 'name'>, lockedProjectId?: string): ProjectIdentity {
+export function projectIdentity(config: Pick<ProjectConfig, 'id' | 'name' | 'previousIds'>, lockedProjectId?: string): ProjectIdentity {
   const id = effectiveProjectId(config);
   const source: ProjectIdentity['source'] = config.id !== undefined ? 'declared' : id !== null ? 'defaulted' : 'none';
   const problems: ProjectIdentityProblem[] = [];
@@ -978,7 +997,9 @@ export function projectIdentity(config: Pick<ProjectConfig, 'id' | 'name'>, lock
   } else if (!PROJECT_ID_RE.test(config.id!)) {
     problems.push({ kind: 'ambiguous', detail: `the declared id "${config.id}" breaks the project-id grammar` });
   }
-  if (lockedProjectId !== undefined && id !== lockedProjectId) {
+  if (lockedProjectId !== undefined && id !== lockedProjectId && id !== null && (config.previousIds ?? []).includes(lockedProjectId)) {
+    problems.push({ kind: 'renamed', detail: `the lock approved "${lockedProjectId}", and the project was renamed to "${id}"` });
+  } else if (lockedProjectId !== undefined && id !== lockedProjectId) {
     problems.push({
       kind: 'changed',
       detail: id === null ? `the lock approved "${lockedProjectId}", and the project now has no id` : `the lock approved "${lockedProjectId}", and the project now resolves to "${id}"`,
@@ -1116,4 +1137,14 @@ export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 
 /** An absolute path on any platform this configuration may be read on. */
 function isAbsolutePath(p: string): boolean {
   return /^([/\\]|[A-Za-z]:)/.test(p);
+}
+
+/** internalize_destination — where a member's own metadata goes when `member internalize` folds it into its parent (stage 6). */
+export interface InternalizeDestination {
+  /** The parent subsystem that receives the member's metadata. */
+  home: string;
+  /** The member's packs: adopt | drop. */
+  packs?: string;
+  /** The member's L0 export names carried into the parent's L0. */
+  exports?: string[];
 }

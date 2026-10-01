@@ -11,6 +11,7 @@ import {
   type PackSelection,
   type ProjectProfileSelection,
   type ExternalDeclaration,
+  type ExternalSource,
 } from '../models/project.js';
 import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
@@ -83,6 +84,7 @@ import {
   type ProjectFamilyProblem,
   type ReadableProject,
   type ReferenceBinding,
+  type ReferenceEdit,
 } from '../models/project-family.js';
 import { projectConfigRepositoryAt } from '../config/project-config.js';
 // The project family index is an owned face of this Repository: the facade
@@ -829,6 +831,86 @@ function withUniqueTargets(spec: ComponentSpec): ComponentSpec {
   const owns = unique(spec.owns);
   if (dependsOn?.length === spec.dependsOn?.length && owns?.length === spec.owns?.length) return spec;
   return { ...spec, dependsOn, owns } as ComponentSpec;
+}
+
+/**
+ * Every reference position of one STORED spec document, rewritten in place
+ * through `map` by position — the positions the scan records an
+ * AuthoredReference at (the bound ones of mapSpecReferences and the raw ones
+ * of mapRawReferences), plus an L0 export entry's `from`, `component`,
+ * `interface` and `typeDef`. A type position is read token by token, the
+ * display signature beside it included. A field the document does not hold is
+ * skipped: this reads the file as written, before any schema default.
+ */
+function respellStoredReferences(kind: string, doc: Record<string, unknown>, map: ReferenceMapper): void {
+  const list = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter((v) => v && typeof v === 'object') : []);
+  const at = (holder: Record<string, unknown>, key: string, position: string): void => {
+    if (typeof holder[key] === 'string') holder[key] = map(position, holder[key] as string);
+  };
+  const each = (holder: Record<string, unknown>, key: string, position: string): void => {
+    const values = holder[key];
+    if (Array.isArray(values)) holder[key] = values.map((v) => (typeof v === 'string' ? map(position, v) : v));
+  };
+  const typed = (holder: Record<string, unknown>, key: string): void => {
+    if (typeof holder[key] === 'string') holder[key] = mapTypeNames(holder[key] as string, map);
+  };
+  const published = (entries: unknown): void => {
+    for (const e of list(entries)) {
+      for (const key of ['from', 'component', 'interface', 'typeDef']) at(e, key, 'publicInterfaces');
+      each(e, 'consumers', 'publicInterfaces');
+    }
+  };
+  switch (kind) {
+    case 'system':
+      published(doc.publicInterfaces);
+      break;
+    case 'subsystem':
+      published(doc.publicInterfaces);
+      for (const le of list(doc.lifecycle)) at(le, 'component', 'lifecycle');
+      for (const link of list(doc.trustedLinks)) at(link, 'subsystem', 'trustedLinks');
+      break;
+    case 'component':
+      at(doc, 'subsystem', 'subsystem');
+      each(doc, 'owns', 'owns');
+      each(doc, 'dependsOn', 'dependsOn');
+      for (const b of list(doc.dispatch)) at(b, 'component', 'dispatch');
+      for (const m of list(doc.mounts)) at(m, 'portal', 'mounts');
+      break;
+    case 'interface':
+      at(doc, 'component', 'contract');
+      for (const m of list(doc.methods)) {
+        typed(m, 'signature');
+        typed(m, 'returns');
+        for (const p of list(m.params)) typed(p, 'type');
+      }
+      break;
+    case 'implementation':
+      at(doc, 'contract', 'contract');
+      for (const m of list(doc.methods)) {
+        for (const step of list(m.narrative)) {
+          at(step, 'targetComponent', 'narrative');
+          const auth = step.auth as Record<string, unknown> | undefined;
+          if (auth && typeof auth.from === 'string' && auth.from.startsWith(COMPONENT_AUTH_SOURCE)) {
+            auth.from = `${COMPONENT_AUTH_SOURCE}${map('auth', auth.from.slice(COMPONENT_AUTH_SOURCE.length))}`;
+          }
+        }
+        if (Array.isArray(m.calls)) {
+          m.calls = m.calls.map((entry: unknown) => {
+            const call = typeof entry === 'string' ? parseDeclaredCall(entry) : null;
+            const next = call ? map('calls', call.compId) : undefined;
+            return call && next !== call.compId ? `${next}.${call.methodName}` : entry;
+          });
+        }
+      }
+      break;
+    case 'type':
+      at(doc, 'subsystem', 'subsystem');
+      at(doc, 'group', 'group');
+      for (const f of list(doc.fields)) typed(f, 'type');
+      break;
+    default:
+      break;
+  }
 }
 
 /**
@@ -3844,6 +3926,60 @@ export class SpecWorkspace {
     return true;
   }
 
+  /**
+   * spec_registry.rewriteReferences (respellReferences) — respell references at parsed positions
+   * of one spec: each edit replaces exactly its `from` at its position in the
+   * STORED document (the authored text, never the bound in-memory value, whose
+   * keys are the scan's), and nothing else in the document moves. Refuses the
+   * whole spec, writing nothing, when an edit's `from` is not at its position.
+   * Writes through the file store only when the text changed; the lock is
+   * never touched.
+   */
+  respellReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean {
+    if (!['system', 'subsystem', 'component', 'interface', 'implementation', 'type'].includes(kind)) {
+      throw new Error(`Cannot rewrite the references of a "${kind}": only a system, subsystem, component, interface, implementation or type holds references.`);
+    }
+    if (edits.length === 0) return false;
+    const file = this.storedFileOf(kind, id);
+    if (!file || !pathExists(file)) throw new Error(`Cannot rewrite the references of ${kind} "${id}": no such spec is stored.`);
+    const stored = readSpecFile(file);
+    const document = JSON.parse(JSON.stringify(stored)) as Record<string, unknown>;
+    const found = new Set<ReferenceEdit>();
+    const respell: ReferenceMapper = (position, value) => {
+      const edit = edits.find((e) => e.position === position && e.from === value);
+      if (!edit) return value;
+      found.add(edit);
+      return edit.to;
+    };
+    respellStoredReferences(kind, document, respell);
+    // An edit whose text already reads `to` at its position was applied before: idempotent, never refused.
+    const applied = new Set<ReferenceEdit>();
+    respellStoredReferences(kind, JSON.parse(JSON.stringify(stored)) as Record<string, unknown>, (position, value) => {
+      for (const e of edits) if (!found.has(e) && e.position === position && e.to === value) applied.add(e);
+      return value;
+    });
+    const missing = edits.filter((e) => !found.has(e) && !applied.has(e));
+    if (missing.length > 0) {
+      throw new Error(
+        `Refusing to rewrite the references of ${kind} "${id}": ${missing.map((e) => `"${e.from}" (${e.position})`).join(', ')} `
+        + `is not at its position any more, so the plan was made against a different tree — nothing was written. Plan again.`,
+      );
+    }
+    if (JSON.stringify(document) === JSON.stringify(stored)) return false;
+    writeSpecFile(file, document);
+    invalidateSpecCache();
+    return true;
+  }
+
+  /** The file holding one stored spec, by its in-memory key from the bound root; a system by its project's key. */
+  private storedFileOf(kind: string, id: string): string | undefined {
+    const index = this.scanAll();
+    if (kind !== 'system') return index.paths[kind as keyof SpecIndex['paths']]?.[id];
+    const key = id === 'system' ? '' : id;
+    const root = this.cachedRawRoots.find((r) => r.record.namespace === key);
+    return root ? aiPathsAt(root.dir).specsSystem() : undefined;
+  }
+
   /** The write preparation of one kind: what the typed writer serializes. */
   private prepareForKind(kind: WritableSpecKind, spec: StoredSpec): unknown {
     switch (kind) {
@@ -6191,6 +6327,37 @@ export function importNames(alias: string, names: string[]): boolean {
 }
 
 /**
+ * core_orchestrator.renameProjectId — move the bound project's id through the
+ * project config Repository, the old one kept in previousIds: refused for a
+ * malformed new id or when the project no longer answers to the old one, a
+ * no-op once done. The rename migration's write; it touches no reference and
+ * no lock. Returns whether it wrote.
+ */
+export function renameProjectId(from: string, to: string): boolean {
+  return projectConfigRepository.renameId(from, to);
+}
+
+/** core_orchestrator.renameAlias — rekey one member or external alias of the bound project, value and place kept. Returns whether it wrote. */
+export function renameAlias(from: string, to: string): boolean {
+  return projectConfigRepository.renameAlias(from, to);
+}
+
+/** core_orchestrator.repointExternal — revise one external's producer id and explicit source, `use` and description kept. Returns whether it wrote. */
+export function repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean {
+  return projectConfigRepository.repointExternal(alias, project, source);
+}
+
+/** core_orchestrator.removeExternal — remove one external declaration of the bound project. Returns whether it wrote. */
+export function removeExternal(alias: string): boolean {
+  return projectConfigRepository.removeExternal(alias);
+}
+
+/** core_orchestrator.removeMember — remove one member declaration of the bound project, its directory left as it is. Returns whether it wrote. */
+export function removeMember(alias: string): boolean {
+  return projectConfigRepository.removeMember(alias);
+}
+
+/**
  * Compute the CURRENT spec-tree state hash of the project at the given root
  * (icore_orchestrator/icore_portal.computeStateIdAt). The root is bound
  * strictly READ-ONLY for the duration of the computation via the async-scoped
@@ -6310,6 +6477,11 @@ export function deleteMount(alias: string): boolean {
 /** spec_loader.normalizeReferences — forwarded 1:1 to the registry write face. */
 export function normalizeReferences(kind: string, id: string): boolean {
   return current().writeCanonicalReferences(kind, id);
+}
+
+/** spec_loader.rewriteReferences — forwarded 1:1 to the registry write face. */
+export function rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean {
+  return current().respellReferences(kind, id, edits);
 }
 
 export function moveMethods(

@@ -245,7 +245,7 @@ rules:
             spec: cli_runner_impl
             at: 'runDoctor'
             covers:
-              - '25:cli_mcp_adapter.installMcpServer'
+              - '26:cli_mcp_adapter.installMcpServer'
       # 75 finding(s), 101 unit(s).
       - kind: drift
         why: >-

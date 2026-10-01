@@ -1,0 +1,275 @@
+id: imigration_core_adapter
+name: Migration Core Client Adapter Interface
+description: >-
+  One forward per sdd_core published method the family migrations read or write, each against the
+  project root the caller has bound.
+component: migration_core_adapter
+methods:
+  - name: resolveChainingParent
+    description: >-
+      Forward to spec_tree_portal.resolveChainingParent: The bound root's chaining parent, or null
+      for a top root and when the request may not read above its root.
+    signature: 'resolveChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef | null
+    params: []
+  - name: projectFamily
+    description: >-
+      Forward to spec_tree_portal.projectFamily: The project graph of the bound root's scan: nodes,
+      owners, authored and cross-project references, identity problems.
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
+    params: []
+  - name: resolveProjectExports
+    description: >-
+      Forward to spec_tree_portal.resolveProjectExports: A project's resolved L0 export table: the
+      bound root's, or a member's at a namespace.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: project
+        type: string
+        description: The member's namespace; omitted for the bound root
+        optional: true
+  - name: loadProjectConfig
+    description: >-
+      Forward to project_config_portal.loadProjectConfig: The bound project's configuration, or null
+      when it has none.
+    signature: 'loadProjectConfig(): ProjectConfig | null'
+    returns: ProjectConfig | null
+    params: []
+  - name: approvalRecord
+    description: 'Forward to approval_portal.approvalRecord: The lock record a project root carries, or null.'
+    signature: 'approvalRecord(root?: string): LockRecord | null'
+    returns: LockRecord | null
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+  - name: setId
+    description: >-
+      Forward to project_config_portal.setId: Declare the bound project's id (never replaces a
+      different one).
+    signature: 'setId(id: string): boolean'
+    returns: boolean
+    params:
+      - name: id
+        type: string
+        description: The id to declare
+  - name: renameId
+    description: >-
+      Forward to project_config_portal.renameId: Move the bound project's id, keeping the old one in
+      previousIds.
+    signature: 'renameId(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The id it answers to now
+      - name: to
+        type: string
+        description: The new id
+  - name: renameAlias
+    description: >-
+      Forward to project_config_portal.renameAlias: Rekey one member or external alias of the bound
+      project.
+    signature: 'renameAlias(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The alias as declared now
+      - name: to
+        type: string
+        description: The new alias
+  - name: declareMember
+    description: >-
+      Forward to project_config_portal.declareMember: Declare an existing project as a member of the
+      bound project.
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias
+      - name: declaration
+        type: MemberDeclaration
+        description: Its path, description and use
+  - name: removeMember
+    description: >-
+      Forward to project_config_portal.removeMember: Remove one member declaration of the bound
+      project.
+    signature: 'removeMember(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias
+  - name: declareExternal
+    description: 'Forward to project_config_portal.declareExternal: Declare one external of the bound project.'
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias
+      - name: declaration
+        type: ExternalDeclaration
+        description: The value under the alias
+  - name: repointExternal
+    description: >-
+      Forward to project_config_portal.repointExternal: Revise one external's producer id and
+      explicit source.
+    signature: 'repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias
+      - name: project
+        type: string | null
+        description: The producer id, or null when the alias is the id
+      - name: source
+        type: ExternalSource | null
+        description: The explicit place, or null
+  - name: removeExternal
+    description: >-
+      Forward to project_config_portal.removeExternal: Remove one external declaration of the bound
+      project.
+    signature: 'removeExternal(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias
+  - name: importNames
+    description: >-
+      Forward to project_config_portal.importNames: Add public names to the use of an external or
+      member of the bound project.
+    signature: 'importNames(alias: string, names: string[]): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias
+      - name: names
+        type: string[]
+        description: The names, or *
+  - name: rewriteReferences
+    description: >-
+      Forward to spec_maintenance_portal.rewriteReferences: Respell references at parsed positions
+      of one spec of the family.
+    signature: 'rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: The spec kind
+      - name: id
+        type: string
+        description: The spec's in-memory key
+      - name: edits
+        type: ReferenceEdit[]
+        description: The edits for this spec
+  - name: externalizeSubsystem
+    description: >-
+      Forward to spec_maintenance_portal.externalizeSubsystem: Turn an internal subsystem of the
+      bound project into a member project.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
+    returns: void
+    params:
+      - name: subsystemId
+        type: string
+        description: The subsystem
+      - name: path
+        type: string
+        description: The new member's root, relative to the bound root
+  - name: internalizeMember
+    description: >-
+      Forward to spec_maintenance_portal.internalizeMember: Take a member back into the bound
+      project whole, sending its metadata to the destination's homes.
+    signature: 'internalizeMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where its metadata goes
+  - name: projectConfigExists
+    description: >-
+      Forward to project_config_portal.projectConfigExists: whether the bound project has a
+      configuration.
+    signature: 'projectConfigExists(): boolean'
+    returns: boolean
+    params: []
+  - name: exportUsage
+    description: >-
+      Forward to spec_tree_portal.exportUsage: one project's references into another mapped onto the
+      producer's public names (used) or not (unexported).
+    signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: producer
+        type: string
+        description: The producer's namespace in the family graph
+  - name: loadSpec
+    description: 'Forward to spec_tree_portal.loadSpec: one spec of the named kind by id, or null.'
+    signature: >-
+      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
+      | ImplementationSpec | TypeSpec | null
+    returns: >-
+      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
+      null
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
+  - name: loadTypeSpecs
+    description: >-
+      Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
+      members' included.
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: TypeSpec[]
+    params: []
+  - name: resolveSubsystemExports
+    description: 'Forward to spec_tree_portal.resolveSubsystemExports: one subsystem''s resolved L1 export table.'
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
+  - name: moveMountToMembers
+    description: >-
+      Forward to spec_maintenance_portal.moveMountToMembers: move one legacy L1 mount of the bound
+      project into its `members`.
+    signature: 'moveMountToMembers(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id
+  - name: normalizeReferences
+    description: >-
+      Forward to spec_maintenance_portal.normalizeReferences: re-save one spec with every reference
+      in its canonical stage-3 form.
+    signature: 'normalizeReferences(kind: string, id: string): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+status: complete
+createdAt: '2026-09-30T20:31:26.576Z'
+updatedAt: '2026-09-30T22:58:33.846Z'

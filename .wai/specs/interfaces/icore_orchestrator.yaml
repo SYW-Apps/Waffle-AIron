@@ -142,23 +142,41 @@ methods:
     returns: void
   - name: internalizeMember
     description: >-
-      Internalize a member back into the bound project: move the member's spec subtree under the
-      bound project's specs, re-express each moved implementation's file paths relative to the bound
-      root, remove the member from `members` (or delete its legacy L1 mount), delete the member's
-      .wai project, and re-save every reference from where it now lives — the parent's `alias::name`
-      references into it and its `<parent id>::name` references back become local ids, and the
-      parent's L0 re-exports from the member become re-exports of the moved subsystem. Throws if the
-      alias declares no member, if the member is not a single subsystem (a multi-subsystem
-      internalize is stage 6's), if the member declares members or externals of its own other than
-      the parent, which would have no home, if another project of the family references the member
-      (each reference listed — rewriting other projects is the family migration's job), or if a
-      moved spec file would land on an existing one, before anything moves.
-    signature: 'internalizeMember(alias: string): void'
-    returns: void
+      Internalize a member back into the bound project, whole: move EVERY subsystem of the member
+      and its project-level types under the bound project's specs, re-express each moved
+      implementation's file paths relative to the bound root, and send each piece of the member's
+      own metadata to a home instead of deleting it — its L0 vision appended to the destination's
+      home subsystem description; its L0 boundaries, globalRequirements and databases merged into
+      the bound project's L0 by identity; its targetLanguage, projectType and designDepth stamped on
+      each moved subsystem that states none and where they differ from the bound project's — a
+      projectType only when it is a subsystem profile (built in, or registered by a pack the bound
+      project loads) and a designDepth only when it is a design depth, any other listed in the
+      result's notCarried with the reason; its own members declared as the bound project's members
+      (paths re-expressed from the bound root) and its externals other than the parent declared as
+      the bound project's (their `use` kept); its packs adopted or dropped as the destination says;
+      the destination's `exports` added to the bound project's L0 as re-exports from the moved
+      subsystems. Then remove it from `members` (or delete its legacy L1 mount), delete what remains
+      of its .wai project — its lock, its pins, its derived outputs, every one listed — and re-save
+      every reference from where it now lives: the parent's `alias::name` references and the
+      member's `<parent id>::name` references become local ids, and the parent's L0 re-exports from
+      the member become re-exports of the moved subsystems. Pins of the carried externals and
+      references from OTHER projects of the family are the family migration's (boundary_migration),
+      not this write's. Throws, before anything moves, if the alias declares no member, if the home
+      names no subsystem of either side, if a moved subsystem, type or spec file would land on an
+      existing one, if a carried alias is already declared differently, if a pack differs and the
+      destination says neither adopt nor drop, if the member carries conformance debt or severity
+      overrides the parent does not share, if a destination export collides with a public name the
+      parent already exports, or if the member's .wai holds a file this write does not recognise —
+      each named.
+    signature: 'internalizeMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
     params:
       - name: alias
         type: string
         description: The member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where the member's own metadata goes
   - name: loadTypeSpecs
     description: Delegate loading type specs to spec loader
     signature: 'loadTypeSpecs(): TypeSpec[]'
@@ -819,6 +837,122 @@ methods:
         description: The public names to import, or `*`
     guarantees:
       - idempotent
+  - name: renameProjectId
+    description: >-
+      Move the bound project's id through the project config Repository, keeping the old one in
+      previousIds: refused for a malformed new id or when the project no longer answers to the old
+      one, a no-op once done. The rename migration's write; it touches no reference and no lock.
+      Returns whether it wrote.
+    signature: 'renameProjectId(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The id the project answers to now
+      - name: to
+        type: string
+        description: The new id
+    guarantees:
+      - idempotent
+  - name: renameAlias
+    description: >-
+      Rekey one member or external alias of the bound project through the project config Repository,
+      keeping its value and place. It touches no reference: the family migration respells them.
+      Returns whether it wrote.
+    signature: 'renameAlias(from: string, to: string): boolean'
+    returns: boolean
+    params:
+      - name: from
+        type: string
+        description: The alias as declared now
+      - name: to
+        type: string
+        description: The new alias
+    guarantees:
+      - idempotent
+  - name: repointExternal
+    description: >-
+      Revise one external of the bound project — its producer id and explicit source — through the
+      project config Repository, keeping its `use` and description. Returns whether it wrote.
+    signature: 'repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: project
+        type: string | null
+        description: The producer id, or null when the alias is the id
+      - name: source
+        type: ExternalSource | null
+        description: The explicit place, or null to find it through the family
+    guarantees:
+      - idempotent
+  - name: removeExternal
+    description: >-
+      Remove one external declaration of the bound project through the project config Repository.
+      Returns whether it wrote.
+    signature: 'removeExternal(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+    guarantees:
+      - idempotent
+  - name: declareMember
+    description: >-
+      Declare an EXISTING project as a member of the bound project through the project config
+      Repository — the write behind `member attach` and `member adopt`, which scaffold nothing
+      (createMember scaffolds). Refused for a malformed alias, a path that does not resolve strictly
+      within the bound root (the containment guard createMember applies), an alias `externals`
+      holds, or an alias already holding a different member; a no-op when it holds the same one.
+      Returns whether it wrote.
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: declaration
+        type: MemberDeclaration
+        description: Its path relative to the bound root, and its description and `use` when it has them
+    guarantees:
+      - idempotent
+  - name: removeMember
+    description: >-
+      Remove one member declaration of the bound project through the project config Repository — the
+      write behind `member detach`; the member's directory and project are left exactly as they are.
+      Returns whether it wrote.
+    signature: 'removeMember(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+    guarantees:
+      - idempotent
+  - name: rewriteReferences
+    description: >-
+      Respell references at parsed positions of one spec of the family through the spec repository:
+      each edit replaces exactly the text it names at exactly its position. The family migrations'
+      reference write, for spellings the canonical writer cannot derive because the alias table they
+      bind through is changing in the same migration. Refuses the whole spec, writing nothing, when
+      an edit's text is not at its position. Returns whether the stored text changed.
+    signature: 'rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+      - name: edits
+        type: ReferenceEdit[]
+        description: The edits for this spec
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:50:06.891Z'
+updatedAt: '2026-10-01T05:54:36.226Z'

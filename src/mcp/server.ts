@@ -53,8 +53,6 @@ import {
   resolveChainingParent,
   createMember,
   moveMember,
-  externalizeSubsystem,
-  internalizeMember,
   listDirectChainedSubprojects,
   renameComponent,
   renameMethod,
@@ -77,6 +75,10 @@ import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredMembers } from '../models/project.js';
 import { selectsFamily } from '../models/validation-options.js';
+// The pending-transaction banner sdd_get_status and sdd_validate_tree lead
+// with: unfinished family migrations under the bound root (mcp_migration_orchestrator).
+import { pending as pendingMigrations, run as runMigration } from './migrations.js';
+import type { FamilyMigrationReport, MigrationRequest } from '../migrations/types.js';
 
 // ---------------------------------------------------------------------------
 // wairon MCP Server
@@ -292,6 +294,50 @@ const TYPE_REF_GRAMMAR = (what: string): string =>
 /** A result carrying both channels: the sentence, and the same outcome as data. */
 function structured(content: string, data: object): CallToolResult {
   return { content: [{ type: 'text', text: content }], structuredContent: data as Record<string, unknown> };
+}
+
+/**
+ * A family-migration tool's answer (mcp_portal's seven migration tools, each a
+ * dispatch to mcp_migration_orchestrator.run): the report as structured
+ * content, its JSON as text. A refused plan and a failed apply are tool errors
+ * carrying the report, so an agent cannot read either as success; a dry run
+ * or an empty plan answers applied false, having written nothing.
+ */
+function migrationTool(request: MigrationRequest, dryRun?: boolean): CallToolResult {
+  let report: FamilyMigrationReport;
+  try {
+    report = runMigration(request, dryRun);
+  } catch (e) {
+    return errMessage(e);
+  }
+  const view = migrationView(report, dryRun === true);
+  const body = JSON.stringify(view, null, 2);
+  if (report.plan.refusals.length > 0) return errText(`the ${request.verb} migration is refused; nothing was written.\n${body}`);
+  if (!report.applied && report.outcome) {
+    const how = report.outcome.restored ? 'the family was restored exactly as before' : 'some files could not be restored: a person must run `wairon doctor --fix` in the project';
+    return errText(`the ${request.verb} migration failed (${report.outcome.failure ?? 'unknown failure'}) and ${how}.\n${body}`);
+  }
+  return structured(body, view);
+}
+
+/** A family-migration report as a tool answers it: the plan without its private rehearsal, the edits without their write calls. */
+function migrationView(report: FamilyMigrationReport, dryRun: boolean): Record<string, unknown> {
+  const plan = report.plan;
+  return {
+    dryRun,
+    applied: report.applied,
+    relock: report.applied ? report.relock : plan.relock,
+    ...(report.outcome ? { outcome: { committed: report.outcome.committed, restored: report.outcome.restored, unrestored: report.outcome.unrestored, ...(report.outcome.failure ? { failure: report.outcome.failure } : {}) } } : {}),
+    plan: {
+      verb: plan.request.verb,
+      familyRoot: plan.familyRoot,
+      whole: plan.whole,
+      edits: plan.edits.map((e) => ({ project: e.project, kind: e.kind, detail: e.detail, ...(e.reference ? { reference: e.reference } : {}) })),
+      refusals: plan.refusals,
+      changes: plan.changes.map((c) => ({ project: c.project, path: c.path, action: c.action })),
+      notes: plan.notes,
+    },
+  };
 }
 
 /** The same for a tool whose text block already IS the JSON of its answer. */
@@ -626,6 +672,19 @@ function renderPackImpact(impact: PackImpact): string {
 }
 
 
+/**
+ * The pending-transaction banner: one line per unfinished family migration
+ * under the bound root, or none. A banner that cannot be read is no banner —
+ * the tool's own answer is what the caller asked for.
+ */
+function pendingBanner(): string[] {
+  try {
+    return pendingMigrations();
+  } catch {
+    return [];
+  }
+}
+
 const validateTreeOutput = {
   valid: z.boolean().describe('False when the tree holds at least one error; warnings and notices never make it false.'),
   errors: z.array(z.object(validationIssueOutput)).describe('Every finding of severity error.'),
@@ -913,6 +972,11 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_move_member',
   'sdd_externalize_subsystem',
   'sdd_internalize_member',
+  'sdd_attach_member',
+  'sdd_detach_member',
+  'sdd_adopt_member',
+  'sdd_rename_project',
+  'sdd_rename_member_alias',
   'sdd_rename_component',
   'sdd_rename_method',
   'sdd_add_component',
@@ -1590,44 +1654,107 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ subsystem: string; path: string }>(server,
+  // ── the family migrations (stage 6) ──────────────────────────────────────
+  // Each tool builds its request and dispatches it to mcp_migration_orchestrator.run:
+  // plan, then with dryRun answer the plan and write nothing; otherwise apply it
+  // all or nothing. A refused plan (or a failed apply) is a tool error carrying
+  // it, so an agent cannot read it as success. None ever locks.
+  const dryRunArg = z.boolean().optional().describe('Answer the plan and write nothing — run this first and show the plan');
+
+  reg<{ subsystem: string; path: string; dryRun?: boolean }>(server,
     'sdd_externalize_subsystem',
     {
-      description: "Turn an internal subsystem into a member project at the path: provision the member, move the subsystem's specs there, declare it in project.yaml `members` under the subsystem id, and re-save every reference across the new boundary as `alias::name`. Source code is not moved; the exports either side now needs are left to `wairon doctor --fix`. Errors if the subsystem is missing or is already a member.",
+      description: "Turn an internal subsystem into a member project at the path, family-wide and all-or-nothing — the member provisioned, the subsystem's specs moved there and declared in `members`, sibling subsystems' references respelled `alias::name`, what crosses the new boundary exported and imported, the new member's external for this project pinned, and every other family project's references checked to still resolve. A reference that would need a component made public refuses the plan instead. Source code is not moved. dryRun answers the plan and writes nothing; run it first and show the plan. Never locks: the answer names the projects to re-lock.",
       inputSchema: {
         subsystem: z.string().describe('The internal L1 subsystem id to externalize'),
-        path: z.string().describe('Relative destination directory for the new member project'),
+        path: z.string().describe("The new member's root, relative to the bound project"),
+        dryRun: dryRunArg,
       },
     },
-    ({ subsystem, path: memberPath }) => {
-      try {
-        // mcp_orchestrator.externalizeSubsystem steps 1-2: the core refuses a
-        // missing subsystem, and turns an existing one into a member.
-        externalizeSubsystem(subsystem, memberPath);
-        return text(`Externalized subsystem "${subsystem}" into the member project at ${memberPath}. Move its source code there, run \`wairon doctor --fix\` for the exports either side now needs, and re-validate.`);
-      } catch (e) {
-        return errText(String(e));
-      }
-    },
+    ({ subsystem, path: memberPath, dryRun }) => migrationTool({ verb: 'externalize', subsystem, path: memberPath }, dryRun),
   );
 
-  reg<{ alias: string }>(server,
+  reg<{ alias: string; into?: string; packs?: string; exports?: string[]; dryRun?: boolean }>(server,
     'sdd_internalize_member',
     {
-      description: 'Take a single-subsystem member back into the bound project: move its specs in, re-save every reference across the old boundary as a local id, remove it from `members` and delete its .wai project. Errors if the alias declares no member, or the member holds more than one subsystem or declares members or externals of its own.',
+      description: "Fold a member — every subsystem of it — back into the bound project, sending its own metadata to the destination (its L0 vision to the `into` subsystem's description; its requirements, boundaries and databases to the bound L0; its language, profile and depth onto the moved subsystems; its members and externals to the bound project's; its packs adopted or dropped as `packs` says) and re-pointing every other family project that consumed it at the bound project. What has no home — its lock, pins, derived outputs — is listed as deleted. Refused for a member carrying conformance debt, a pack only it selects with no `packs` answer, or a name collision. All-or-nothing; dryRun answers the plan and writes nothing; run it first and show the plan. Never locks.",
       inputSchema: {
         alias: z.string().describe("The member's alias"),
+        into: z.string().optional().describe("The home subsystem for the member's L0 vision; required when it holds several subsystems"),
+        packs: z.enum(['adopt', 'drop']).optional().describe('adopt | drop: packs only the member selects'),
+        exports: z.array(z.string()).optional().describe('Extra public names of the member the bound project exports afterwards'),
+        dryRun: dryRunArg,
       },
     },
-    ({ alias }) => {
-      try {
-        // mcp_orchestrator.internalizeMember step 1: via core.
-        internalizeMember(alias);
-        return text(`Internalized member "${alias}" into this project (its .wai project removed).`);
-      } catch (e) {
-        return errText(String(e));
-      }
+    ({ alias, into, packs, exports, dryRun }) => migrationTool({
+      verb: 'internalize', alias,
+      destination: { home: into ?? '', ...(packs !== undefined ? { packs } : {}), ...(exports && exports.length > 0 ? { exports } : {}) },
+    }, dryRun),
+  );
+
+  reg<{ alias: string; path: string; description?: string; dryRun?: boolean }>(server,
+    'sdd_attach_member',
+    {
+      description: "Make an existing project at the path a member of the bound project, keeping its L0, subsystems, packs and lock (sdd_add_member scaffolds a new one instead). Refused when its id collides with a family project's. All-or-nothing; dryRun answers the plan and writes nothing. Never locks.",
+      inputSchema: {
+        alias: z.string().describe('The alias to declare ([a-z0-9-_]+)'),
+        path: z.string().describe("The project's root, relative to the bound project"),
+        description: z.string().optional().describe('What the member is to this project'),
+        dryRun: dryRunArg,
+      },
     },
+    ({ alias, path: memberPath, description, dryRun }) => migrationTool({ verb: 'attach', alias, path: memberPath, ...(description !== undefined ? { description } : {}) }, dryRun),
+  );
+
+  reg<{ newId: string; project?: string; dryRun?: boolean }>(server,
+    'sdd_rename_project',
+    {
+      description: "Move a project's id — the bound project's, or a member's named by its alias path — and every reference to the old id across the family (aliases that were the id, their references and re-exports, externals naming it, pins). The whole family must be in reach. Every project it writes must be re-locked; the answer names them. All-or-nothing; dryRun answers the plan and writes nothing; run it first and show the plan.",
+      inputSchema: {
+        newId: z.string().describe('The new project id'),
+        project: z.string().optional().describe("The member's alias path from the bound project (e.g. billing/payments); the bound project when omitted"),
+        dryRun: dryRunArg,
+      },
+    },
+    ({ newId, project, dryRun }) => migrationTool({ verb: 'rename', newId, ...(project ? { project } : {}) }, dryRun),
+  );
+
+  reg<{ alias: string; newAlias: string; dryRun?: boolean }>(server,
+    'sdd_rename_member_alias',
+    {
+      description: "Rename one alias of the bound project (a member or an external) and respell the bound project's references through it; nothing in any member or sibling changes. All-or-nothing; dryRun answers the plan and writes nothing. Never locks.",
+      inputSchema: {
+        alias: z.string().describe('The alias as declared now'),
+        newAlias: z.string().describe('The new alias'),
+        dryRun: dryRunArg,
+      },
+    },
+    ({ alias, newAlias, dryRun }) => migrationTool({ verb: 'rename-alias', alias, newAlias }, dryRun),
+  );
+
+  reg<{ alias: string; widen?: boolean; dryRun?: boolean }>(server,
+    'sdd_detach_member',
+    {
+      description: 'Take a member out of the family; the bound project and every family consumer then reach it as an external by path, pinned. No reference text changes. Refused (audience-too-narrow, each export named with its users) while a family project uses an export the member gives the family alone, unless widen is set: then exactly those used exports are widened to the instance audience in the member\'s L0, each shown in the plan. All-or-nothing; dryRun answers the plan and writes nothing. Never locks.',
+      inputSchema: {
+        alias: z.string().describe("The member's alias"),
+        widen: z.boolean().optional().describe('Widen the used family-only exports to the instance audience instead of refusing'),
+        dryRun: dryRunArg,
+      },
+    },
+    ({ alias, widen, dryRun }) => migrationTool({ verb: 'detach', alias, ...(widen ? { widen: true } : {}) }, dryRun),
+  );
+
+  reg<{ alias: string; dryRun?: boolean }>(server,
+    'sdd_adopt_member',
+    {
+      description: "Make the bound project's external found by a path inside it a member — sdd_detach_member's inverse. All-or-nothing; dryRun answers the plan and writes nothing. Never locks.",
+      inputSchema: {
+        alias: z.string().describe("The external's alias"),
+        dryRun: dryRunArg,
+      },
+    },
+    ({ alias, dryRun }) => migrationTool({ verb: 'adopt', alias }, dryRun),
   );
 
   reg<{ id: string; newId: string }>(server,
@@ -2160,6 +2287,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       outputSchema: validateTreeOutput,
     },
     ({ subsystem, recursive, family }) => {
+      // Step 1: the pending-transaction banner first — a crash mid-swap may
+      // leave the tree below unreadable — each line a notice, never an error.
+      const banner = pendingBanner();
       try {
         const config = loadProjectConfig();
         // A missing config errored before (the loader's loadProjectConfig threw);
@@ -2184,12 +2314,16 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
           valid: result.valid,
           errors: result.issues.filter((i) => i.severity === 'error'),
           warnings: result.issues.filter((i) => i.severity === 'warning'),
-          notices: result.issues.filter((i) => i.severity === 'notice'),
+          notices: [
+            ...banner.map((message) => ({ severity: 'notice' as const, code: 'TRANSACTION_PENDING', message })),
+            ...result.issues.filter((i) => i.severity === 'notice'),
+          ],
           ...(result.hint ? { hint: result.hint } : {}),
           ...(result.projects ? { projects: result.projects } : {}),
         });
       } catch (e) {
-        return errText(String(e));
+        return errText(`${banner.map((line) => `TRANSACTION_PENDING: ${line}
+`).join('')}${String(e)}`);
       }
     },
   );
@@ -2338,6 +2472,10 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       },
     },
     ({ subsystem, recursive }) => {
+      // Step 1: the pending-transaction banner, led in the answer so an agent
+      // sees it before a tree a crash may have half-swapped.
+      const banner = pendingBanner().map((line) => `⚠ TRANSACTION PENDING: ${line}
+`).join('');
       try {
         // STATIC import, not a lazy require: the server is bundled (tsup), and a
         // runtime require of a relative path resolves against the BUNDLE's
@@ -2376,9 +2514,9 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
         // important thing this answer can carry — and silence reads exactly like
         // being current, which is what this tool used to answer.
         const verdict = approvalVerdict(approvals);
-        return text(`${family}${report.text}${verdict.text}`);
+        return text(`${banner}${family}${report.text}${verdict.text}`);
       } catch (e) {
-        return errText(String(e));
+        return errText(`${banner}${String(e)}`);
       }
     },
   );

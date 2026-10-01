@@ -1,0 +1,14 @@
+id: mcp_migration_adapter
+name: MCP Migration Client Adapter
+description: >-
+  Local client adapter in sdd_mcp for the hop into sdd_migrations: the member tools plan, apply and
+  discard family migrations through it, and the pending-transaction banner asks it for unfinished
+  transactions. In-process import seam (src/mcp/adapters/migrations.ts).
+subsystem: sdd_mcp
+componentType: Adapter
+owns: []
+dependsOn:
+  - migration_portal
+status: complete
+createdAt: '2026-09-30T20:39:11.881Z'
+updatedAt: '2026-09-30T21:34:06.114Z'

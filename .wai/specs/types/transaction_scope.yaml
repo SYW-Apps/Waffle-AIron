@@ -1,0 +1,23 @@
+kind: value-object
+id: transaction_scope
+name: TransactionScope
+description: >-
+  What a rehearsal copies: the family's top root and the project roots under it whose .wai trees the
+  migration reads or writes — every project the family graph holds, plus a project the verb brings
+  in (the one attached or adopted).
+subsystem: sdd_migrations
+fields:
+  - name: familyRoot
+    type: string
+    description: The live top root, absolute.
+    optional: false
+  - name: projects
+    type: string[]
+    description: >-
+      Each project root to copy, absolute; every one lies within familyRoot (containment is decided
+      against the declaring root, so this holds for every member and every adoptable path).
+    optional: false
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T20:24:56.008Z'
+updatedAt: '2026-09-30T21:33:07.505Z'

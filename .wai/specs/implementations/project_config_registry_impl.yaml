@@ -220,7 +220,62 @@ methods:
     calls:
       - project_config_store.read
       - project_config_store.write
+  - name: renameId
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses a new id outside the project-id grammar before reading anything. Reads the
+      configuration through the store, refusing when the project has none. When it already declares
+      the new id and holds the old one in previousIds, returns false and writes nothing. When its
+      effective id (declared, else defaulted from the name) is not the old id, refuses naming both
+      ids and the project root — the plan was computed against a different identity. Otherwise sets
+      `id` to the new id, appends the old id to `previousIds` (creating the list after `id` when
+      absent), and writes the configuration back through the store, whose edit keeps every comment,
+      returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: renameAlias
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses a new alias outside [a-z0-9-_]+ before reading anything. Reads the configuration
+      through the store, refusing when the project has none. When neither `members` nor `externals`
+      declares the old alias and one of them declares the new one, returns false and writes nothing.
+      Refuses an old alias neither map declares, and a new alias either map already declares, naming
+      it and the project root. Otherwise renames the key in the map that holds it, in place — the
+      entry keeps its position, and its shorthand or long form, path or producer, description and
+      `use` stay exactly as written — and writes the configuration back through the store, returning
+      true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: repointExternal
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses a producer id outside the project-id grammar before reading anything. Reads the
+      configuration through the store, refusing when the project has none, and refuses an alias
+      `externals` does not declare, naming it and the project root. Sets the entry's `project` to
+      the given id, or removes it when null; sets its `source` to the given one, or removes it when
+      null; leaves `use` and `description` as written. When the entry already reads that way,
+      returns false and writes nothing; otherwise writes the configuration back through the store,
+      returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: removeExternal
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the configuration through the store, refusing when the project has none. When
+      `externals` does not declare the alias, returns false and writes nothing; otherwise removes
+      the entry (and `externals` itself when it was the last one) and writes the configuration back
+      through the store, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-28T17:17:05.109Z'
+updatedAt: '2026-09-30T20:20:22.889Z'

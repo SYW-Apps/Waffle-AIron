@@ -1,0 +1,33 @@
+kind: value-object
+id: planned_write
+name: PlannedWrite
+description: >-
+  The one write that realizes a planned edit: which owner's root it runs under and which
+  client-adapter write it makes there, with its arguments exactly as planned. The verb's writer
+  binds the owner's rehearsal root and makes the call, so the plan printed and the plan applied are
+  one list and nothing is re-derived at write time.
+subsystem: sdd_migrations
+fields:
+  - name: root
+    type: string
+    description: >-
+      The owner's live root directory, absolute; the writer binds its rehearsal image. For a project
+      the verb brings in (attach) or creates (externalize) it is that project's directory.
+    optional: false
+  - name: call
+    type: string
+    description: >-
+      The migration_core_adapter, migration_surfaces_adapter or migration_authoring_adapter write:
+      setId | declareMember | removeMember | declareExternal | repointExternal | removeExternal |
+      renameAlias | renameId | importNames | rewriteReferences | internalizeMember |
+      externalizeSubsystem | pinExternals | renamePin | unpin | updateSpecGated (a detach --widen's
+      export widening, new content through the gated seam).
+    optional: false
+  - name: args
+    type: unknown[]
+    description: Its arguments in order, as planned (a source path already re-expressed relative to the owner).
+    optional: false
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T22:12:04.183Z'
+updatedAt: '2026-10-01T05:54:14.160Z'

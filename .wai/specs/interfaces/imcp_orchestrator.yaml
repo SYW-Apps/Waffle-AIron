@@ -67,20 +67,6 @@ methods:
       - name: newPath
         type: string
         description: The new root, relative to the bound project root
-  - name: externalizeSubsystem
-    description: Verify the subsystem exists, then turn it into a member project declared in `members`.
-    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
-    returns: void
-  - name: internalizeMember
-    description: >-
-      The sdd_internalize_member workflow: take a single-subsystem member back into the bound
-      project; the core refuses an alias that declares no member.
-    signature: 'internalizeMember(alias: string): void'
-    returns: void
-    params:
-      - name: alias
-        type: string
-        description: The member's alias
   - name: listResources
     description: >-
       List the MCP resources the server publishes: the built-in SDD skills plus one live
@@ -332,4 +318,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-29T16:00:43.784Z'
+updatedAt: '2026-09-30T20:40:09.268Z'

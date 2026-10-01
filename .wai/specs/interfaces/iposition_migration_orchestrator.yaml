@@ -1,9 +1,9 @@
 id: iposition_migration_orchestrator
 name: Position Migration Orchestrator Interface
 description: >-
-  Plan first, applied on confirmation, as the chaining migration it is part of. plan() writes
-  nothing; apply(plan) writes only what the plan names and is idempotent — applying again, or
-  planning again after it, changes nothing. Neither locks.
+  Plan first, written on confirmation into the chaining migration's rehearsal. plan() writes
+  nothing; write(plan, rehearsal) writes only what the plan names and is idempotent — writing again,
+  or planning again after the transaction commits, changes nothing. Neither locks.
 component: position_migration_orchestrator
 methods:
   - name: plan
@@ -34,24 +34,28 @@ methods:
         description: The project graph of the family's top root, as the chaining migration read it
     guarantees:
       - idempotent
-  - name: apply
+  - name: write
     description: >-
-      Apply the position share of a confirmed chaining migration plan, after its ids, exports (the
-      carried and positional entries included) and externals are written and BEFORE its pins: move
-      each planned mount into its parent's `members` under the parent's binding, add each positional
-      import to its consumer's `use`, rewrite each planned reference from the family's top root
-      (where the deprecated forms still bind; self-prefixed ones to their bare local id), and delete
-      each project's superseded stage-1 family pins under its binding. Every write is idempotent: a
-      mount already moved, a name already imported, a spec already canonical and a pin already gone
-      change nothing. Answers what it wrote and which projects must be re-locked; locks nothing.
-    signature: 'apply(plan: ChainingMigrationPlan): PositionMigrationResult'
+      Write the position share of a confirmed chaining migration plan into the rehearsal's roots,
+      after its ids, exports (the carried and positional entries included) and externals are written
+      and BEFORE its pins: move each planned mount into its parent's `members` under the parent's
+      binding, add each positional import to its consumer's `use`, rewrite each planned reference
+      from the rehearsal's top root (where the deprecated forms still bind; self-prefixed ones to
+      their bare local id), and delete each project's superseded stage-1 family pins under its
+      binding. Every write is idempotent: a mount already moved, a name already imported, a spec
+      already canonical and a pin already gone change nothing. Answers what it wrote and which
+      projects must be re-locked; locks nothing.
+    signature: 'write(plan: ChainingMigrationPlan, rehearsal: Rehearsal): PositionMigrationResult'
     returns: PositionMigrationResult
     params:
       - name: plan
         type: ChainingMigrationPlan
         description: The confirmed plan, whose stage-1 writes the chaining migration has already applied
+      - name: rehearsal
+        type: Rehearsal
+        description: 'Where to write it: each project''s rehearsal root'
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-27T10:45:32.019Z'
-updatedAt: '2026-09-29T13:57:52.569Z'
+updatedAt: '2026-09-30T20:46:49.048Z'

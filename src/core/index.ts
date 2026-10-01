@@ -128,7 +128,14 @@ export {
   // chaining migration's member move and reference normalization.
   moveMountToMembers,
   normalizeReferences,
+  // spec_maintenance_portal rewriteReferences: the family migrations'
+  // reference write, at parsed positions (stage 6).
+  rewriteReferences,
+  // project_config_portal declareMember: an existing project declared as a
+  // member under the containment guard (member attach / adopt).
+  declareMember,
 } from './provision.js';
+export type { InternalizeResult } from './provision.js';
 export type { MemberCreation } from './provision.js';
 
 // The tree's content identity (approval_portal computeStateId — the snapshot
@@ -395,6 +402,15 @@ export {
   // project_config_portal importNames: stage 4's `use` imports, which
   // `doctor --fix`'s positional step writes.
   importNames,
+  // project_config_portal renameId / renameAlias / repointExternal /
+  // removeExternal / removeMember: the family migrations' configuration
+  // writes (stage 6). The portal's renameId IS the orchestrator's
+  // renameProjectId, by identity.
+  renameProjectId as renameId,
+  renameAlias,
+  repointExternal,
+  removeExternal,
+  removeMember,
 } from './specs.js';
 
 // The project_config type's own behaviour, for callers deriving from a loaded configuration.

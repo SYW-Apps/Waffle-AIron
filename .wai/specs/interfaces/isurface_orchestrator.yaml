@@ -124,8 +124,43 @@ methods:
     signature: 'listPinnedExternals(): PinnedExternal[]'
     returns: PinnedExternal[]
     params: []
+  - name: renamePin
+    description: >-
+      Carry the bound project's pin of one external over to its new alias or its producer's new id,
+      WITHOUT re-pinning: the lock entry moves from `alias` to `newAlias` with its producer id set
+      to `project`, its snapshot moves to .wai/externals/<newAlias>.yaml with the provenance's
+      producer id set likewise, and the digest and `used` map stay exactly as pinned — a rename is
+      not a producer change, and re-pinning would hide one. Answers false, writing nothing, when the
+      alias has no pin or already reads that way. The caller must gate on reach itself.
+    signature: 'renamePin(alias: string, newAlias: string, project: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The pinned alias as declared now
+      - name: newAlias
+        type: string
+        description: The alias to keep the pin under (equal to alias when only the producer id changes)
+      - name: project
+        type: string
+        description: The producer id the pin records from now on
+    guarantees:
+      - idempotent
+  - name: unpin
+    description: >-
+      Remove the bound project's pin of one alias — its lock entry and its snapshot — when the alias
+      stops being an external (adopted as a member, or folded into this project). Answers false,
+      writing nothing, when there is none. The caller must gate on reach itself.
+    signature: 'unpin(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias whose pin goes
+    guarantees:
+      - idempotent
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-09-28T18:12:06.038Z'
+updatedAt: '2026-09-30T20:23:23.010Z'

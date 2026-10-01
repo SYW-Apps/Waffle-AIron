@@ -12,7 +12,8 @@ import { saveSnapshot } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import { validateProject, validateFamily, validateAsComplete, computeGateStateId, type ValidationResult } from '../../src/core/validation.js';
 import { ChainingMigrationRefusedError, DoctorOptionsError } from '../../src/utils/errors.js';
-import { plan, apply, isEmpty, blocked } from '../../src/commands/chaining-migration.js';
+import { plan, isEmpty, blocked } from '../../src/migrations/chaining-migration.js';
+import { apply } from '../helpers/chaining-transaction.js';
 import { runDoctor } from '../../src/commands/doctor.js';
 import { runLock } from '../../src/commands/lock.js';
 
@@ -368,7 +369,11 @@ describe('stage 2c — the chaining migration', () => {
     expect(plain.stdout).toMatch(/Chaining: 14 pending \(3 id\(s\), 0 L0\(s\) to create, 2 L0 entries, 2 external\(s\), 0 import\(s\), 2 pin\(s\), 2 mount\(s\) to move, 3 rewrite\(s\), 0 family pin\(s\) to delete, 0 dropped key\(s\), 2 new dependencies, 0 finding\(s\)\)/);
     const fixed = await doctorCli(f.dispatch, '--fix', '--yes');
     expect(fixed.stdout).toContain('Applied the chaining migration: 13 file(s) written.');
-    expect(fixed.stdout).toContain('Re-lock each with `wairon lock`');
+    // Stage 6: the re-lock list names each changed owner that CARRIES a lock —
+    // no project of this family was ever locked, so there is no approval to stale.
+    expect(fixed.stdout).not.toContain('Re-lock each with `wairon lock`');
+    // The transaction left nothing behind in any owner.
+    for (const dir of [f.root, f.billing, f.dispatch]) expect(fs.existsSync(path.join(dir, '.wai', 'transactions'))).toBe(false);
     // The report that follows the fixes plans again, and finds nothing left.
     expect(fixed.stdout).not.toMatch(/Chaining: \d+ pending/);
     expect(isEmpty(at(f.root, () => plan()))).toBe(true);

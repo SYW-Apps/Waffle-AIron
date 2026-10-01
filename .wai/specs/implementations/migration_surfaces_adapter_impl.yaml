@@ -1,0 +1,51 @@
+id: migration_surfaces_adapter_impl
+name: Migration Surfaces Client Adapter Implementation
+description: 'src/migrations/adapters/surfaces.ts: in-process imports of the sdd_surfaces portal.'
+contract: imigration_surfaces_adapter
+sourcePath: src/migrations/adapters/surfaces.ts
+methods:
+  - name: pinExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: pinExternals
+  - name: renamePin
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: renamePin
+  - name: unpin
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: unpin
+  - name: listExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listExternals
+  - name: listFamilyPins
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listFamilyPins
+  - name: removeSnapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: removeSnapshot
+status: complete
+createdAt: '2026-09-30T20:31:58.977Z'
+updatedAt: '2026-09-30T22:58:41.825Z'

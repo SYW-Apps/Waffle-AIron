@@ -1,0 +1,37 @@
+kind: value-object
+id: recovered_transaction
+name: RecoveredTransaction
+description: What `doctor` found and did about one unfinished transaction.
+subsystem: sdd_migrations
+fields:
+  - name: id
+    type: string
+    description: The transaction id.
+    optional: false
+  - name: verb
+    type: string
+    description: The migration it was applying.
+    optional: false
+  - name: owners
+    type: string[]
+    description: The owner roots it touches.
+    optional: false
+  - name: phase
+    type: string
+    description: The coordinator's phase as found.
+    optional: false
+  - name: action
+    type: string
+    description: >-
+      pending (reported, --fix not given) | rolled-back | cleaned (it had committed; only its
+      directories remained) | refused (an owner or the coordinator is out of reach, or a backup is
+      missing).
+    optional: false
+  - name: detail
+    type: string
+    description: What was restored, cleaned or blocking.
+    optional: false
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T20:24:39.241Z'
+updatedAt: '2026-09-30T21:33:08.482Z'

@@ -1,0 +1,152 @@
+id: ifamily_file_adapter
+name: Family File Adapter Interface
+description: >-
+  File operations on the live family's .wai trees, as a staged transaction needs them. Every
+  mutation of a live file is a rename onto it from its own volume, retried on the transient Windows
+  sharing errors and never attempted across volumes.
+component: family_file_adapter
+methods:
+  - name: mirror
+    description: >-
+      Copy each project's .wai tree (everything under it except .wai/transactions/) into the target
+      directory at the project's path relative to the family root, so the family's layout is
+      reproduced; answer each copied live file's sha256 by its absolute path. Refuses a project root
+      outside the family root.
+    signature: 'mirror(scope: TransactionScope, target: string): Map<string, string>'
+    returns: Map<string, string>
+    params:
+      - name: scope
+        type: TransactionScope
+        description: The family root and the projects to copy
+      - name: target
+        type: string
+        description: The rehearsal directory
+  - name: compare
+    description: >-
+      The difference between a rehearsal and the live family: every .wai tree found anywhere in the
+      rehearsal (a project the migration created included) and every copied one, file by file,
+      byte-exact — a file whose bytes differ is a write, one only in the rehearsal a create, one
+      only live a delete — each with its owner (the directory holding that .wai, mapped back to
+      live), its owner-relative path, the base digest the mirror recorded and the staged digest.
+      Ordered by owner then path.
+    signature: 'compare(rehearsal: Rehearsal): FileChange[]'
+    returns: FileChange[]
+    params:
+      - name: rehearsal
+        type: Rehearsal
+        description: The rehearsal after the verb's writes
+  - name: read
+    description: A file's bytes, or null when it is absent.
+    signature: 'read(path: string): bytes | null'
+    returns: bytes | null
+    params:
+      - name: path
+        type: string
+        description: Absolute path
+  - name: digest
+    description: sha256 of a file's bytes, or null when it is absent.
+    signature: 'digest(path: string): string | null'
+    returns: string | null
+    params:
+      - name: path
+        type: string
+        description: Absolute path
+  - name: replace
+    description: >-
+      Rename a file over a live path — the swap. The source must lie on the target's volume. Retries
+      EPERM, EBUSY and EACCES with a bounded backoff, then throws naming the file and the error.
+    signature: 'replace(source: string, target: string): void'
+    returns: void
+    params:
+      - name: source
+        type: string
+        description: The staged file
+      - name: target
+        type: string
+        description: The live path
+  - name: place
+    description: >-
+      Put bytes at a live path the same way a swap does: write them to a temporary sibling, fsync,
+      and rename it over the path with the same retries — the restore of a backup.
+    signature: 'place(path: string, bytes: bytes): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+        description: The live path
+      - name: bytes
+        type: bytes
+        description: The content to restore
+  - name: remove
+    description: Delete a live file, with the same retries; an absent file is success.
+    signature: 'remove(path: string): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+        description: The live path
+  - name: makeDirs
+    description: Create a directory and its missing parents, answering the ones it created, shallowest first.
+    signature: 'makeDirs(dir: string): string[]'
+    returns: string[]
+    params:
+      - name: dir
+        type: string
+        description: Absolute directory
+  - name: prune
+    description: >-
+      Remove a directory when it is empty, then each empty parent up to but not including stopAt,
+      answering the ones removed, deepest first.
+    signature: 'prune(dir: string, stopAt: string): string[]'
+    returns: string[]
+    params:
+      - name: dir
+        type: string
+        description: The directory a deletion may have emptied
+      - name: stopAt
+        type: string
+        description: The owner's root, never removed
+  - name: sameVolume
+    description: >-
+      Whether two existing paths lie on one volume (their device ids agree), so a rename between
+      them cannot fail with EXDEV.
+    signature: 'sameVolume(a: string, b: string): boolean'
+    returns: boolean
+    params:
+      - name: a
+        type: string
+        description: Absolute path
+      - name: b
+        type: string
+        description: Absolute path
+  - name: resolve
+    description: >-
+      Resolve a path relative to a project root under the containment guard: the absolute directory
+      when it lies strictly within the root lexically and, through links, its nearest existing
+      ancestor lands strictly within the root's real path too; null for an empty, absolute,
+      ../-escaping or link-escaping path, or the root itself. A planner's read of where a path
+      lands, so no planner touches the file system. Writes nothing.
+    signature: 'resolve(root: string, path: string): string | null'
+    returns: string | null
+    params:
+      - name: root
+        type: string
+        description: The project root the path is relative to, absolute
+      - name: path
+        type: string
+        description: The path as declared or requested
+    guarantees:
+      - idempotent
+  - name: holdsProject
+    description: 'Whether a directory already holds a wairon project: a .wai/project.yaml there. Writes nothing.'
+    signature: 'holdsProject(dir: string): boolean'
+    returns: boolean
+    params:
+      - name: dir
+        type: string
+        description: The directory, absolute
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-30T20:27:16.585Z'
+updatedAt: '2026-10-01T05:53:20.613Z'

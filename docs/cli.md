@@ -343,8 +343,26 @@ without `::` is local.
 |---------|-------------|
 | `wairon member add <alias> <path> [--description <text>]` | Scaffold a member project at `<path>` (its id = `<alias>`, its L0) — each part only when absent — and declare it in `members`. Nothing is written into this project's spec tree |
 | `wairon member move <alias> <path>` | Move a member's directory and point its `members` entry there (a legacy L1 mount is moved into `members` first) |
-| `wairon member internalize <alias>` | Take a single-subsystem member back into this project: its specs move in, references across the old boundary become local ids, its `members` entry and `.wai/` go |
-| `wairon subsystem externalize <id> --path <dir>` | Turn an internal subsystem into a member at `<dir>`: its specs move there, it is declared in `members` under the subsystem id, and references across the new boundary are re-saved as `alias::name`. You move the source code; `wairon doctor --fix` adds the exports either side now needs |
+| `wairon member attach <alias> <path> [--description <text>]` | Make the **existing** project at `<path>` a member, keeping its L0, subsystems, packs and lock; its id is declared when it only defaulted one (the id its lock approved, else its effective id). Refused when its id collides with a family project's |
+| `wairon member detach <alias> [--widen]` | Take a member out of the family: this project and every family consumer reach it as an external by `source.path`, this project's pinned. Refused (`audience-too-narrow`, each export named with its users) while a family project uses a name the member exports only to the family; `--widen` instead widens exactly those used exports to `instance` in the member's L0, each shown in the plan |
+| `wairon member adopt <alias>` | Make this project's external found by a path inside it a member again — detach's inverse |
+| `wairon member rename-alias <old> <new>` | Rename one alias of this project (a member or an external) and respell this project's references through it; no member or sibling changes |
+| `wairon member internalize <alias> [--into <subsystem>] [--packs adopt\|drop] [--export <name>…]` | Fold a member — every subsystem of it — into this project. Its own metadata goes to a home: its L0 vision onto the `--into` subsystem, its boundaries, requirements and databases into this L0, its language, profile and depth onto the moved subsystems, its members and externals into this configuration, its packs adopted or dropped; what has no home (its lock, pins, derived outputs) is deleted and listed. Every family project that consumed it is re-pointed here |
+| `wairon project rename <new-id> [--project <alias path>]` | Move a project's id — this project's, or a member's named by its alias path — and every reference to the old id family-wide; the old id is kept in `previousIds`. Lists every project it writes to re-lock |
+| `wairon subsystem externalize <id> --path <dir>` | Turn an internal subsystem into a member at `<dir>`: its specs move there, it is declared in `members` under the subsystem id, references across the new boundary become `alias::name`, and what crosses it is exported and imported. Every other family project's names are checked to keep resolving. You move the source code |
+
+**Family migrations.** `attach`, `detach`, `adopt`, `rename-alias`,
+`internalize`, `project rename` and `subsystem externalize` all run one flow:
+plan, print the plan (each project's edits, every refusal, the notes, the file
+changes, the projects to re-lock), then apply it all or nothing. `--report`
+prints the plan and writes nothing; otherwise the command asks — `--yes` answers,
+and a shell with no terminal and no `--yes` writes nothing. A refused plan exits
+non-zero and writes nothing. The plan is computed by running the verb's writes on
+a private copy of the family's `.wai` trees; applying it stages every change with a
+backup under each project's `.wai/transactions/<id>/` (never committed) and swaps
+them in, restoring every backup on any failure. A crash mid-swap leaves a journal:
+`wairon status` and `wairon validate` show it as a notice, and `wairon doctor --fix`
+rolls it back. No verb ever locks — each names the projects to re-lock.
 
 **Required packs.** A project may require packs of the members below it with
 `composition.requirePolicies` (see
@@ -405,7 +423,10 @@ and author specs directly.
 **Tools:** `listAgents`, `getAgent`, `listDomains`, `validateTopology`,
 `getProjectConfig`, `sdd_initialize_system`, `sdd_add_subsystem`,
 `sdd_set_public_interfaces`, `sdd_add_member`, `sdd_move_member`,
-`sdd_externalize_subsystem`, `sdd_internalize_member`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`,
+`sdd_externalize_subsystem`, `sdd_internalize_member`, `sdd_attach_member`,
+`sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`,
+`sdd_rename_member_alias` (each family migration takes `dryRun`),
+`sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`,
 `sdd_write_narrative`, `sdd_add_type`, `sdd_get_spec`, `sdd_update_spec`,
 `sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.
 

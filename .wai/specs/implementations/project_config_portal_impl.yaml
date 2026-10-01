@@ -112,6 +112,48 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: importNames
+  - name: renameId
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameProjectId
+  - name: renameAlias
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameAlias
+  - name: repointExternal
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: repointExternal
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: removeExternal
+  - name: declareMember
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: declareMember
+  - name: removeMember
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: removeMember
 status: complete
 createdAt: '2026-09-25T17:33:08.848Z'
-updatedAt: '2026-09-28T17:17:03.907Z'
+updatedAt: '2026-09-30T20:23:08.562Z'

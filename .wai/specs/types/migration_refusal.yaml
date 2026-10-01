@@ -1,0 +1,36 @@
+kind: value-object
+id: migration_refusal
+name: MigrationRefusal
+description: >-
+  One reason a family migration will not apply, named before anything is written. Any refusal blocks
+  the whole plan: no partial success is ever claimed.
+subsystem: sdd_migrations
+fields:
+  - name: code
+    type: string
+    description: >-
+      not-a-member | not-an-external | not-a-project | not-contained | member-absent |
+      family-partial | id-collision | alias-taken | id-moved | already-member | name-collision |
+      reference-unwritable | audience-too-narrow | transaction-pending | <verb>-refused
+      (attach-refused, detach-refused, adopt-refused, rename-refused, rename-alias-refused,
+      internalize-refused, externalize-refused, chaining-refused: a writer's refusal met on the
+      rehearsal, carrying its message) | and, for the chaining migration, each of its blocking
+      finding kinds passed through as it is: project-absent, mount-field-conflict,
+      mount-field-unhomed (family-partial and member-absent as above). family-partial: a project the
+      plan must write lies above the highest root in reach, or a member it must write is absent or
+      out of reach — each named. audience-too-narrow: a detach without --widen would leave a family
+      consumer using an export the member exports only to the family — one per export, naming its
+      users (or an export no L0 entry names directly, which --widen cannot widen).
+    optional: false
+  - name: project
+    type: string
+    description: The project key (or directory, for one outside the family) the refusal is about.
+    optional: false
+  - name: detail
+    type: string
+    description: What was found and what would unblock it.
+    optional: false
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T20:24:12.010Z'
+updatedAt: '2026-10-01T05:54:17.295Z'

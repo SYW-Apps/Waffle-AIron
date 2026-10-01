@@ -254,7 +254,7 @@ describe('a migration leaves a union type reference exactly as written', () => {
     externalizeSubsystem('billing', 'sub/billing');
     invalidateSpecCache();
     setProjectRoot(root);
-    internalizeMember('billing');
+    internalizeMember('billing', { home: '' });
     invalidateSpecCache();
     setProjectRoot(root);
 

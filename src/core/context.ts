@@ -209,7 +209,7 @@ export function renderWaironGuide(): string {
     lines.push('The **wairon MCP server** is active in this project. The tools are self-describing; call them directly:');
     lines.push('');
     lines.push('- Authoring: `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`, `sdd_write_narrative`, `sdd_add_type`.');
-    lines.push('- Members (projects this one contains, declared in project.yaml `members`, referenced as `alias::name`): `sdd_add_member`, `sdd_move_member`, `sdd_externalize_subsystem`, `sdd_internalize_member`.');
+    lines.push('- Members (projects this one contains, declared in project.yaml `members`, referenced as `alias::name`): `sdd_add_member`, `sdd_move_member`; and the family migrations, each with `dryRun` (run it first and show the plan; applied, it writes every project or none and never locks): `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`, `sdd_rename_member_alias`, `sdd_internalize_member`, `sdd_externalize_subsystem`.');
     lines.push('- Reading & maintenance: `sdd_get_spec`, `sdd_update_spec`, `sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.');
     lines.push('- Topology: `listAgents`, `getAgent`, `listDomains`, `validateTopology`, `getProjectConfig`.');
     lines.push('');

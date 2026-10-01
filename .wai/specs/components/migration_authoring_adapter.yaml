@@ -1,0 +1,16 @@
+id: migration_authoring_adapter
+name: Migration Authoring Client Adapter
+description: >-
+  Local client adapter in sdd_migrations for the hop into sdd_authoring: the chaining migration
+  writes NEW spec content — a minimal L0 where a producer has none, and the L0 export entries a
+  person would otherwise have written — through the gated seam, as it did from sdd_cli before it
+  moved here. The other verbs restate what the tree already holds and never use it. In-process
+  import seam today.
+subsystem: sdd_migrations
+componentType: Adapter
+owns: []
+dependsOn:
+  - authoring_portal
+status: complete
+createdAt: '2026-09-30T20:45:30.581Z'
+updatedAt: '2026-09-30T21:33:56.238Z'

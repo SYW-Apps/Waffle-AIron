@@ -7,7 +7,7 @@ description: >-
   project that has something to write, the reference rewrites (applied from the family's top), and
   every finding it will not decide for a person. `doctor --report chaining` prints it; `doctor
   --fix` prints it, asks, and applies it.
-subsystem: sdd_cli
+subsystem: sdd_migrations
 fields:
   - name: familyRoot
     type: string
@@ -63,6 +63,6 @@ methods:
       True when a finding refuses apply: the family is partial, a project the plan writes is absent,
       a member the family declares is absent, or a legacy mount carries a field its member already
       holds differently.
-sourcePath: src/commands/chaining-migration.ts
+sourcePath: src/migrations/chaining-migration.ts
 createdAt: '2026-09-26T21:12:04.535Z'
-updatedAt: '2026-09-28T16:22:32.752Z'
+updatedAt: '2026-09-30T21:05:05.843Z'

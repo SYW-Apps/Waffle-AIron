@@ -97,6 +97,36 @@ methods:
     signature: 'listPinnedExternals(): PinnedExternal[]'
     returns: PinnedExternal[]
     params: []
+  - name: renamePin
+    description: >-
+      Carry the bound project's pin of one external to its new alias or producer id without
+      re-pinning (digest and used map unchanged). The caller must gate on reach itself.
+    signature: 'renamePin(alias: string, newAlias: string, project: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The pinned alias as declared now
+      - name: newAlias
+        type: string
+        description: The alias to keep the pin under
+      - name: project
+        type: string
+        description: The producer id the pin records from now on
+    guarantees:
+      - idempotent
+  - name: unpin
+    description: >-
+      Remove the bound project's pin of one alias — lock entry and snapshot. The caller must gate on
+      reach itself.
+    signature: 'unpin(alias: string): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The alias whose pin goes
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-09-28T17:17:00.147Z'
+updatedAt: '2026-09-30T20:23:34.368Z'

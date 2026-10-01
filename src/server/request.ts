@@ -8,6 +8,7 @@ import { resolveProjectBinding, existingProjectRoot, SUBPROJECT_SEPARATOR } from
 import { createScopedServer } from './adapters/mcp.js';
 import * as hostCore from './adapters/core.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import * as hostMigrations from './adapters/migrations.js';
 import {
   initializeProject,
   lockProject,
@@ -140,6 +141,65 @@ export function auditToolCall(
       `[sdd_host] audit append failed for ${event.action} (target=${target}): ` +
         (e instanceof Error ? e.message : String(e)),
     );
+  }
+}
+
+/**
+ * Steps 10–12: roll back any family migration a crash left unfinished under the
+ * bound project's roots — the top root, and the bound member root when the
+ * binding narrows to one — before any tool reads or writes that tree, and audit
+ * each transaction found (migration.recovered) with a server log line. A hosted
+ * project has no person to run `wairon doctor --fix` in its directory, so the
+ * server does it on the next bind. It only puts the family back into the state
+ * an earlier request left it in, so it runs whatever the credential's
+ * permission; a failure is logged and never fails the request.
+ */
+function recoverUnfinishedMigrations(
+  dataDir: string,
+  principal: Principal,
+  projectId: string,
+  roots: string[],
+): void {
+  for (const root of [...new Set(roots)]) {
+    let found;
+    try {
+      // Step 10.
+      found = hostMigrations.recover(root, true);
+    } catch (e) {
+      console.error(`[sdd_host] family-migration recovery failed for project ${projectId}: ${e instanceof Error ? e.message : String(e)}`);
+      continue;
+    }
+    // Steps 11–12.
+    for (const t of found) auditRecovery(dataDir, principal, projectId, t);
+  }
+}
+
+/** Step 12: one migration.recovered audit event and server log line per transaction. */
+function auditRecovery(
+  dataDir: string,
+  principal: Principal,
+  projectId: string,
+  t: { id: string; verb: string; phase: string; action: string },
+): void {
+  console.error(`[sdd_host] project ${projectId}: unfinished family migration ${t.id} (${t.verb}, coordinator phase ${t.phase}) — ${t.action}`);
+  const actor: PrincipalSubject = principal.subject ?? { userId: `token:${principal.tokenId}`, kind: 'service', issuer: 'local' };
+  const event: AuditEvent = {
+    id: '',
+    timestamp: '',
+    level: t.action === 'refused' ? 'warning' : 'info',
+    category: 'project',
+    action: 'migration.recovered',
+    outcome: t.action === 'refused' ? 'failed' : 'success',
+    actor,
+    tokenId: principal.tokenId,
+    projectId,
+    target: t.id,
+    metadata: JSON.stringify({ verb: t.verb, phase: t.phase, action: t.action }),
+  };
+  try {
+    appendAuditEvent(dataDir, event, DEFAULT_AUDIT_POLICY);
+  } catch (e) {
+    console.error(`[sdd_host] audit append failed for migration.recovered (target=${t.id}): ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -276,6 +336,13 @@ const WRITE_TOOL_PREFIXES = [
   'sdd_rename_',
   // sdd_pin_externals writes the externals lock and snapshots of the bound tree.
   'sdd_pin_',
+  // The stage-6 family migrations (sdd_attach_member, sdd_detach_member,
+  // sdd_adopt_member; the sdd_rename_ and sdd_internalize_/sdd_externalize_
+  // prefixes cover the rest). A dryRun call is still a write: a tool's class
+  // is its name's, never its arguments'.
+  'sdd_attach_',
+  'sdd_detach_',
+  'sdd_adopt_',
 ];
 
 /** Read tools only inspect the tree; their names carry one of these prefixes
@@ -743,6 +810,10 @@ export async function handleMcpRequest(
     // subproject's child tree (binding.subproject carries the qualifier).
     const projectId = binding.projectId;
     const subproject = binding.subproject;
+
+    // Steps 10–12: a family migration a crash left unfinished is rolled back
+    // before any tool touches the tree, and audited.
+    recoverUnfinishedMigrations(cfg.dataDir, principal, projectId, [topRoot, binding.rootPath]);
 
     // Steps 10–11: confine a subproject-qualified credential by the called tool's
     // declared scope. A RECORD-scoped tool acts on the hosted project record with

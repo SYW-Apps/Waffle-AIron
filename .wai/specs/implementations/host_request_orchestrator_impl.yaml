@@ -386,22 +386,57 @@ methods:
           narrowed credential.
         type: local
       - stepNumber: 10
+        label: recover-migrations
+        description: >-
+          Roll back any family migration a crash left unfinished under the bound project's roots
+          (the top root, and the bound member root when the binding narrows to one) BEFORE any tool
+          reads or writes that tree: a transaction whose coordinator never committed is restored
+          from its backups, one that did has only its directories cleaned, and one that cannot be
+          resolved (a coordinator or owner out of reach, a missing backup) is left for an operator.
+          A hosted project has no person to run `wairon doctor --fix` in its directory, so the
+          server does it on the next bind. It is housekeeping that only puts the family back into
+          the state an earlier request left it in, so it runs whatever the credential's permission;
+          a failure here is logged and never fails the request
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: recover
+      - stepNumber: 11
+        description: Did the recovery find an unfinished transaction?
+        type: branch
+        condition: the recovery answered at least one transaction
+        onFalseStep: 13
+      - stepNumber: 12
+        label: audit-recovery
+        description: >-
+          Audit each transaction the recovery found as a migration.recovered event (its id, verb,
+          coordinator phase and what was done: rolled-back, cleaned or refused) and write the same
+          line to the server log, so an operator sees a rollback nobody asked for; the request then
+          proceeds
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 13
+        label: confine
         description: >-
           Confine a member-qualified credential by the called tool's declared scope. A TREE-scoped
-          tool — every scoped spec tool (the sdd_rename_ tools among them), lock, and the two tree
-          transfer tools — acts on the bound member tree (lock and transfer receive the qualifier).
-          A RECORD-scoped tool acts on the project record or its repository, or answers for the
-          hosted project's relations to other projects, so serving it would let a token scoped to
-          one member reach the whole parent — the qualifier would narrow nothing. A tool with no
-          declared scope is treated as record-scoped: confinement fails closed, so a tool added
-          later is refused under a narrowed credential until it declares its scope.
+          tool — every scoped spec tool (the sdd_rename_ tools among them), lock, the two tree
+          transfer tools, and the seven family-migration tools (sdd_attach_member,
+          sdd_detach_member, sdd_adopt_member, sdd_rename_project, sdd_rename_member_alias,
+          sdd_internalize_member, sdd_externalize_subsystem), whose plan climbs only as far as the
+          request's reach and refuses family-partial where it would have to write beyond it — acts
+          on the bound member tree (lock and transfer receive the qualifier). A RECORD-scoped tool
+          acts on the project record or its repository, or answers for the hosted project's
+          relations to other projects, so serving it would let a token scoped to one member reach
+          the whole parent — the qualifier would narrow nothing. A tool with no declared scope is
+          treated as record-scoped: confinement fails closed, so a tool added later is refused under
+          a narrowed credential until it declares its scope.
         type: branch
         condition: >-
           the resolved binding carries a member qualifier AND the called tool is not declared
           TREE-scoped (a record-scoped tool — initialize, approval status, await approval, the six
           project-ops tools, the four landscape discovery tools — or a tool with no declared scope)
-        onFalseStep: 12
-      - stepNumber: 11
+        onFalseStep: 15
+      - stepNumber: 14
         description: >-
           Refuse as an isError tool result (HTTP still 200, and the refusal still flows through the
           SAME best-effort audit path) naming the tool and the bound qualifier, and stating that the
@@ -409,52 +444,54 @@ methods:
           required. Never a silent success and never a partial action.
         type: return
         outcome: refused a tool outside the bound child on a subproject-qualified binding
-      - stepNumber: 12
+      - stepNumber: 15
         description: >-
           Offer the call to the project-lifecycle, landscape and project-ops dispatch, which serves
           it from the matching orchestrator instead of the scoped MCP server
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: dispatchProjectLifecycleTool
-      - stepNumber: 13
+      - stepNumber: 16
         description: >-
           A tool the dispatch serves answers with a response envelope: continue to the shared
           audit-event step, skipping the ordinary permission gate and scoped MCP server dispatch. A
           tool it does not serve answers with nothing and falls through to both.
         type: branch
         condition: the dispatch answered with a response envelope
-        onTrueStep: 20
-        onFalseStep: 14
-      - stepNumber: 14
+        onTrueStep: 23
+        onFalseStep: 17
+      - stepNumber: 17
         description: >-
           Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_
           (sdd_get_externals_status among them), or when it is one of the explicitly listed read
           tools — the topology reads listAgents, getAgent, listDomains, validateTopology and
           getProjectConfig — requiring project:read; ANY other tool — the explicit write prefixes
-          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_/sdd_rename_/sdd_pin_),
+          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_/sdd_rename_/sdd_pin_/sdd_attach_/sdd_detach_/sdd_adopt_),
           AND any unrecognized or newly added name — is treated as a write requiring project:write
           (fail closed: an unknown tool never falls through to read-level gating, and a tool added
           later is a write by its prefix rather than by a hand-kept list — sdd_add_member,
-          sdd_move_member and sdd_internalize_member among them). Every explicit read and every
-          explicit write prefix declares scope tree, so sdd_pin_externals and
-          sdd_get_externals_status act on the bound (possibly narrowed) tree
+          sdd_move_member, sdd_internalize_member and the stage-6 family-migration tools among them,
+          a dryRun call included, since the tool's class is its name's and never its arguments').
+          Every explicit read and every explicit write prefix declares scope tree, so
+          sdd_pin_externals, sdd_get_externals_status and the family-migration tools act on the
+          bound (possibly narrowed) tree
         type: local
-      - stepNumber: 15
+      - stepNumber: 18
         description: >-
           Resolve the caller's required capability (project:read or project:write) over the bound
           project through the authorization component
         type: call
         targetComponent: authorization
         targetMethod: authorize
-      - stepNumber: 16
+      - stepNumber: 19
         description: >-
           If the effective value is not yes, reject with a clear MCP error that the required
           data-plane permission is missing for the bound project
         type: branch
         condition: the effective value is not yes
-        onTrueStep: 17
-        onFalseStep: 18
-      - stepNumber: 17
+        onTrueStep: 20
+        onFalseStep: 21
+      - stepNumber: 20
         description: >-
           Reject with a clear MCP error that the required data-plane permission is missing for the
           bound project
@@ -462,20 +499,20 @@ methods:
         error: >-
           Forbidden — the caller lacks the required data-plane permission (project:read or
           project:write) for this project
-      - stepNumber: 18
+      - stepNumber: 21
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 19
+      - stepNumber: 22
         description: Connect the scoped server to the request transport and process the JSON-RPC message
         type: local
-      - stepNumber: 20
+      - stepNumber: 23
         description: Audit the handled data-plane tool call on the shared best-effort path
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: auditToolCall
-      - stepNumber: 21
+      - stepNumber: 24
         description: Return the MCP response
         type: return
         outcome: MCP response
@@ -496,4 +533,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-29T16:09:35.286Z'
+updatedAt: '2026-09-30T21:06:09.274Z'

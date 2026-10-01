@@ -27,6 +27,7 @@ import {
   graph,
   deleteMount,
   normalizeReferences as normalizeSpecReferences,
+  rewriteReferences as rewriteSpecReferences,
   // The ONE reference-field table (see core/specs.ts). A rename drives it
   // over raw files, a move over the typed store; the list of where a spec
   // names another spec is written once so neither can go stale alone.
@@ -40,9 +41,11 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import { admits, declaredMembers, effectiveProjectId, requiredPolicies, EXTERNAL_ALIAS_RE, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { admits, declaredMembers, DesignDepthSchema, effectiveProjectId, memberDeclarationOf, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 // extension_orchestrator: the installed packs a member's required packs are pinned from.
-import { listInstalledPacks } from './extensions.js';
+import { listInstalledPacks, loadProjectExtensions } from './extensions.js';
+// The built-in subsystem profiles, so internalize stamps only a profile a subsystem can hold.
+import { BUILTIN_PROFILES } from './rules/types.js';
 import type { InstalledPack } from './packstore.js';
 import { isNewerVersion } from '../utils/version.js';
 import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
@@ -54,7 +57,9 @@ import {
   type ImplementationSpec,
   type InterfaceSpec,
   type ProjectFamily,
+  type ReferenceEdit,
   type SubsystemSpec,
+  type SystemSpec,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -425,6 +430,39 @@ export function createMember(alias: string, path: string, description?: string):
 }
 
 /**
+ * core_orchestrator.declareMember — declare an EXISTING project as a member of
+ * the bound project: the write behind `member attach` and `member adopt`,
+ * which scaffold nothing (createMember scaffolds). The containment guard comes
+ * first — a path that does not resolve strictly within the bound root,
+ * lexically or through a link, is refused — and the Repository refuses a
+ * malformed alias, an alias `externals` holds, or one already holding a
+ * different member; the same one again writes nothing. Returns whether it wrote.
+ */
+export function declareMember(alias: string, declaration: MemberDeclaration): boolean {
+  // Steps 1-2: the containment guard.
+  const relPath = toPosixPath(declaration.path);
+  const root = getProjectRoot();
+  const memberDir = assertContainedProjectPath(root, relPath);
+  if (path.resolve(memberDir) === path.resolve(root)) {
+    throw new WaironError(`Refusing to declare the member "${alias}": its path "${relPath}" is the project root itself — a member path must resolve within the project root.`);
+  }
+  // Step 3.
+  return projectConfigRepository.declareMember(alias, { ...declaration, path: relPath });
+}
+
+/**
+ * core_orchestrator.rewriteReferences — respell references at parsed positions
+ * of one spec of the family through the spec repository: each edit replaces
+ * exactly its text at exactly its position, and the whole spec is refused,
+ * writing nothing, when an edit's text is not there. Returns whether the
+ * stored text changed.
+ */
+export function rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean {
+  // Step 1.
+  return rewriteSpecReferences(kind, id, edits);
+}
+
+/**
  * core_orchestrator.moveMember — relocate a member of the bound project: move
  * its directory on disk and point its `members` entry there. A member still
  * declared by a legacy L1 mount is first moved into `members`
@@ -705,74 +743,449 @@ function exportTypeFromSubsystem(subsystemId: string, typeId: string): void {
 }
 
 /**
- * core_orchestrator.internalizeMember — take a single-subsystem member back
- * into the bound project: move its specs in, remove its declaration, delete
- * its .wai project, and re-save every reference that crossed the old boundary
- * as a local id. Refuses a member holding more than one subsystem, or
- * declaring members or externals of its own other than the parent.
+ * internalize_result — what internalizing a member did with each thing the
+ * member held: the subsystems and types it moved, where each piece of the
+ * member's own metadata went, the externals the parent now declares, and every
+ * file deleted — so no part of the member's .wai disappears unlisted.
  */
-export function internalizeMember(alias: string): void {
+export interface InternalizeResult {
+  subsystems: string[];
+  types: string[];
+  placed: string[];
+  externals: string[];
+  deleted: string[];
+  /** Each piece of metadata deliberately not carried, with the reason. */
+  notCarried: string[];
+}
+
+/** The member's .wai entries this write knows, by the group its deleted list names them under. */
+const MEMBER_WAI_GROUPS: ReadonlyMap<string, string> = new Map([
+  ['project.yaml', 'project.yaml'],
+  ['lock.json', 'lock'],
+  ['externals.lock.yaml', 'pins and snapshots'],
+  ['externals', 'pins and snapshots'],
+  ['surfaces', 'legacy surfaces'],
+  ['agents', 'derived outputs'],
+  ['context', 'derived outputs'],
+  ['docs', 'derived outputs'],
+  ['generated', 'derived outputs'],
+  ['rules', 'derived outputs'],
+  ['templates', 'derived outputs'],
+  ['topology.yaml', 'derived outputs'],
+]);
+
+/** A member of the bound root as internalize reads it, before anything moves. */
+interface InternalizeScan {
+  alias: string;
+  member: ProjectFamily['nodes'][number];
+  memberDir: string;
+  config: ProjectConfig | null;
+  system: SystemSpec | null;
+  subsystems: string[];
+  types: string[];
+  home: string;
+  parentId: string | undefined;
+}
+
+/**
+ * core_orchestrator.internalizeMember — fold a member back into the bound
+ * project, whole: every subsystem and project-level type moves under the bound
+ * project's specs, and each piece of the member's own metadata goes to a home
+ * instead of being deleted — its L0 vision onto the home subsystem, its L0
+ * requirements into the bound L0, its language, profile and depth onto the
+ * moved subsystems, its members and externals into the bound configuration,
+ * its packs adopted or dropped as the destination says, and the destination's
+ * exports as re-exports from the moved subsystems. What has no home (its lock,
+ * pins, derived outputs) is deleted and listed. Every refusal is found before
+ * anything moves. Pins of the carried externals and references from OTHER
+ * family projects are the family migration's, never this write's.
+ */
+export function internalizeMember(alias: string, destination: InternalizeDestination): InternalizeResult {
   // Step 1: the graph of the bound root.
   const family = graph();
   const member = family.nodes.find((n) => n.parent === '' && n.mountAlias === alias);
-  // Steps 2-3: the alias declares a member.
+  // Steps 2-3.
   if (!member) {
     throw new WaironError(`cannot internalize: no member is declared under that alias ("${alias}").`);
   }
-  // Steps 4-5: the member can be taken in whole.
-  const root = family.nodes.find((n) => n.namespace === '');
-  const parentId = root?.id;
-  const subsystems = loadSubsystemSpecs().filter((s) => family.owners.get(s.id) === member.namespace);
-  const ownExternals = Object.keys(configAt(member.directory)?.externals ?? {}).filter((a) => a !== parentId);
-  if (subsystems.length !== 1 || member.members.length > 0 || ownExternals.length > 0) {
-    throw new WaironError(
-      `cannot internalize: the member is not a single subsystem, or declares members or externals of its own (member "${alias}": `
-      + `${subsystems.length} subsystem(s), ${member.members.length} member(s), externals ${ownExternals.length ? ownExternals.join(', ') : 'none'}).`,
-    );
+  // Steps 4-7: the home and the member's configuration.
+  const scan = scanMember(family, alias, member, destination);
+  // Steps 8-10: every refusal before anything moves.
+  const refusals = internalizeRefusals(scan, destination);
+  if (refusals.length > 0) {
+    throw new WaironError(`cannot internalize "${alias}": the member cannot be taken in whole — ${refusals.join('; ')}.`);
   }
-  // Steps 6-7: no other project of the family may reference the member.
-  const others = family.references.filter((r) => r.producer === member.namespace && r.consumer !== '' && r.consumer !== member.namespace);
-  if (others.length > 0) {
-    const listed = [...new Set(others.map((r) => `${r.consumer}: ${r.specId} (${r.position}) "${r.authored}"`))];
-    throw new WaironError(
-      `cannot internalize: other projects of the family reference the member "${alias}" — ${listed.join('; ')}. `
-      + 'Internalizing would leave them naming a project that no longer exists; rewriting other projects is the family migration\'s job.',
-    );
-  }
-  const parentRoot = getProjectRoot();
-  const parentSpecsDir = aiPathsAt(parentRoot).specsDir();
-  const memberDir = assertContainedProjectPath(parentRoot, path.relative(parentRoot, member.directory) || '.');
-  const memberSpecsDir = aiPathsAt(memberDir).specsDir();
-  const localSub = subsystems[0].id.slice(member.namespace.length + 2);
-  // What crosses the old boundary, read BEFORE anything moves: each reference
-  // the parent makes into the member, and the member makes back into the
-  // parent, by the target the scan bound it to.
+  const result: InternalizeResult = { subsystems: scan.subsystems, types: scan.types, placed: [], externals: [], deleted: [], notCarried: [] };
+  // What crosses the old boundary, read BEFORE anything moves.
   const intoMember = crossingReferences(family, '', member.namespace);
   const backOut = crossingReferences(family, member.namespace, '');
-  // Step 8: delete a legacy mount document first, so the moved subsystem can take its folder.
+  // Step 11: a legacy mount document goes first, so a moved subsystem can take its folder.
   deleteMount(alias);
-  // Step 9: move the member's specs in (refused before anything moves on a collision).
-  const movedFiles = moveTreeInto(memberSpecsDir, parentSpecsDir, new Set([path.resolve(aiPathsAt(memberDir).specsSystem())]));
-  rebaseImplementationPaths(parentSpecsDir, memberDir, parentRoot, movedFiles);
-  const parentSystemName = loadSystemSpec()?.name;
-  patchSubsystemIndex(path.join(parentSpecsDir, localSub, '.index.yaml'), (s) => {
-    if (parentSystemName) s.parentSystem = parentSystemName;
-    delete s.projectPath;
-  });
-  const rewritten = [
-    ...rewriteRefFields(parentSpecsDir, (ref) => intoMember.get(ref) ?? backOut.get(ref) ?? ref),
-  ];
-  // Step 10: remove the member from `members` (false for a legacy declaration).
+  // Step 12: every subsystem and project-level type moves in.
+  const rewritten = moveMemberSpecs(scan, (ref) => intoMember.get(ref) ?? backOut.get(ref) ?? ref);
+  // Step 13: what the member held for its subsystems.
+  placeOnSubsystems(scan, result);
+  // Step 14: what it held as a project, into the bound L0.
+  placeOnSystem(scan, destination, result);
+  // Steps 15-17: its members and externals.
+  carryDeclarations(scan, result);
+  // Steps 18-19: its packs.
+  carryPacks(scan, destination, result);
+  // Step 20: the member leaves `members` (false for a legacy declaration).
   projectConfigRepository.removeMember(alias);
-  // Step 11: delete the member's .wai project.
-  fs.rmSync(path.join(memberDir, '.wai'), { recursive: true, force: true });
+  // Step 21: what remains of its .wai, each file listed.
+  result.deleted = deleteMemberWai(scan.memberDir);
   invalidateSpecCache();
-  // Step 12: re-save each spec whose references crossed the old boundary.
+  // Step 22: every spec that referenced across the old boundary, re-saved.
   for (const spec of rewritten) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, spec.id);
-  // Step 13: the parent L0's re-exports from the member now re-export the moved subsystem.
-  restateReExports(alias, localSub);
   invalidateSpecCache();
-  // Step 14.
+  // Step 23.
+  return result;
+}
+
+/** Steps 4-7: the member's subsystems and types, its home, its L0 and its configuration. */
+function scanMember(family: ProjectFamily, alias: string, member: ProjectFamily['nodes'][number], destination: InternalizeDestination): InternalizeScan {
+  const root = getProjectRoot();
+  const memberDir = assertContainedProjectPath(root, path.relative(root, member.directory) || '.');
+  const local = (key: string): string => localIn(key, member.namespace);
+  const subsystems = loadSubsystemSpecs().filter((s) => family.owners.get(s.id) === member.namespace).map((s) => local(s.id));
+  const types = loadTypeSpecs().filter((t) => family.owners.get(t.id) === member.namespace && !t.subsystem).map((t) => local(t.id));
+  const system = runWithProjectRoot(memberDir, () => loadSystemSpec());
+  // Step 4: the home it names, else the member's only subsystem.
+  const named = destination.home ?? '';
+  const home = named !== '' ? named : subsystems.length === 1 ? subsystems[0] : '';
+  // Steps 5-6.
+  const own = new Set(loadSubsystemSpecs().filter((s) => (family.owners.get(s.id) ?? '') === '' && !s.projectPath).map((s) => s.id));
+  if ((home !== '' && !subsystems.includes(home) && !own.has(home)) || (home === '' && saysMoreThanItsName(system))) {
+    throw new WaironError(
+      `cannot internalize "${alias}": the member's metadata needs a home subsystem (--into) — `
+      + `${home === '' ? 'none was named' : `"${home}" is no subsystem of the member or of this project`}; the member's subsystems are ${subsystems.join(', ') || 'none'}.`,
+    );
+  }
+  // Step 7: its configuration, read under its own binding.
+  const config = runWithProjectRoot(memberDir, () => {
+    try {
+      return projectConfigRepository.load();
+    } catch {
+      return null;
+    }
+  });
+  const parentId = family.nodes.find((n) => n.namespace === '')?.id;
+  return { alias, member, memberDir, config, system, subsystems, types, home, parentId };
+}
+
+/**
+ * Whether a member's L0 says anything a home must keep: a vision beyond its
+ * own name. The vision a scaffold wrote from names alone — externalize's
+ * `Core vision for <name>`, createMember's `Member <alias> of …` — says
+ * nothing more than the names do.
+ */
+function saysMoreThanItsName(system: SystemSpec | null): boolean {
+  const vision = system?.vision?.trim() ?? '';
+  const name = system?.name.trim() ?? '';
+  const scaffolded = vision === bootstrapSystemSpec(name, '').vision || /^Member [a-z0-9_-]+ of (?:the .+ project|its parent project)$/.test(vision);
+  return vision !== '' && vision !== name && !scaffolded;
+}
+
+/** Step 8: every reason the member cannot be taken in whole, each named. */
+function internalizeRefusals(scan: InternalizeScan, destination: InternalizeDestination): string[] {
+  const out: string[] = [];
+  const bound = projectConfigRepository.load() ?? ({} as ProjectConfig);
+  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const memberSpecs = aiPathsAt(scan.memberDir).specsDir();
+  // A moved spec file landing on an existing one.
+  const skip = path.resolve(aiPathsAt(scan.memberDir).specsSystem());
+  const taken = (fs.existsSync(memberSpecs) ? listFilesRecursive(memberSpecs, '') : [])
+    .filter((f) => path.resolve(f) !== skip && fs.existsSync(path.join(specsDir, path.relative(memberSpecs, f))))
+    .map((f) => toPosixPath(path.relative(memberSpecs, f)));
+  if (taken.length > 0) out.push(`its specs would land on this project's ${taken.join(', ')}`);
+  // A carried alias declared differently here.
+  out.push(...aliasConflicts(scan, bound));
+  // A pack only the member selects, with no adopt or drop.
+  if (destination.packs === undefined) {
+    for (const pack of memberOnlyPacks(scan.config, bound)) out.push(`it selects the pack ${pack}, which this project does not — say --packs adopt or --packs drop`);
+  }
+  // Conformance debt, or severity overrides this project does not share.
+  const carried = scan.config?.rules?.conformance?.carried ?? [];
+  if (carried.length > 0) out.push(`it carries conformance debt (${carried.length} group(s) in rules.conformance.carried) — pay it or move it first`);
+  const mine = bound.rules?.sddRuleSeverity ?? {};
+  for (const [code, severity] of Object.entries(scan.config?.rules?.sddRuleSeverity ?? {})) {
+    if (mine[code] !== severity) out.push(`it overrides ${code} to ${severity}, which this project does not`);
+  }
+  // A destination export colliding with a public name this project exports for another target.
+  const exported = resolveSubsystemExportsOfProject();
+  for (const name of destination.exports ?? []) {
+    const held = exported.get(name);
+    if (held !== undefined && held !== scan.alias) out.push(`the export "${name}" is a public name this project already exports for ${held}`);
+  }
+  // A file of the member's .wai this write does not recognise.
+  const wai = path.join(scan.memberDir, '.wai');
+  for (const entry of fs.existsSync(wai) ? fs.readdirSync(wai) : []) {
+    if (entry === 'specs' || entry === 'transactions' || MEMBER_WAI_GROUPS.has(entry)) continue;
+    out.push(`its .wai holds "${entry}", which this write does not recognise — move or delete it by hand`);
+  }
+  return out;
+}
+
+/** The public names the bound L0 exports, each with the alias or subsystem it re-exports from. */
+function resolveSubsystemExportsOfProject(): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const e of (loadSystemSpec()?.publicInterfaces ?? []) as { from?: string; as?: string; component?: string; typeDef?: string }[]) {
+    const name = e.as ?? e.component ?? e.typeDef;
+    if (name) out.set(name, e.from ?? '');
+  }
+  return out;
+}
+
+/** Each member or external of the member whose alias this project declares for another project. */
+function aliasConflicts(scan: InternalizeScan, bound: ProjectConfig): string[] {
+  const out: string[] = [];
+  for (const m of declaredMembers(scan.config ?? ({} as ProjectConfig))) {
+    if (m.alias === scan.alias) continue;
+    const here = bound.members?.[m.alias] ?? bound.externals?.[m.alias];
+    const dir = path.resolve(scan.memberDir, m.path);
+    const same = bound.members?.[m.alias] !== undefined && path.resolve(getProjectRoot(), memberDeclarationOf(bound.members[m.alias]).path) === dir;
+    if (here !== undefined && !same) out.push(`its member "${m.alias}" is an alias this project already declares for another project`);
+  }
+  for (const [a, decl] of Object.entries(scan.config?.externals ?? {})) {
+    if (carriedExternal(scan, a, decl) === 'parent') continue;
+    const producer = decl.project ?? a;
+    const member = bound.members?.[a];
+    const external = bound.externals?.[a];
+    if (member !== undefined && a !== scan.alias && memberIdAt(memberDeclarationOf(member).path) !== producer) {
+      out.push(`its external "${a}" is a member alias this project declares for another project`);
+    }
+    if (external !== undefined && (external.project ?? a) !== producer) out.push(`its external "${a}" names "${producer}", which this project declares as "${external.project ?? a}"`);
+  }
+  return out;
+}
+
+/** The effective id of the project at a member path of the bound root, when it has one. */
+function memberIdAt(memberPath: string): string | undefined {
+  const config = configAt(path.resolve(getProjectRoot(), memberPath));
+  return config ? effectiveProjectId(config) ?? undefined : undefined;
+}
+
+/** How one of the member's externals is carried: the parent itself (dropped), or carried. */
+function carriedExternal(scan: InternalizeScan, alias: string, decl: { project?: string }): 'parent' | 'carried' {
+  return scan.parentId !== undefined && (decl.project ?? alias) === scan.parentId ? 'parent' : 'carried';
+}
+
+/** The member's pack selections this project does not select at the same version, as name@version. */
+function memberOnlyPacks(config: ProjectConfig | null, bound: ProjectConfig): string[] {
+  const mine = (bound.extensions?.packs ?? []).filter((p): p is PackSelection => typeof p !== 'string');
+  return (config?.extensions?.packs ?? []).filter((p): p is PackSelection => typeof p !== 'string')
+    .filter((p) => !mine.some((q) => q.name === p.name && (q.version ?? '') === (p.version ?? '')))
+    .map((p) => `${p.name}${p.version ? `@${p.version}` : ''}`);
+}
+
+/** Step 12: move the member's specs in, keys local, file paths re-expressed; the references that crossed re-expressed. */
+function moveMemberSpecs(scan: InternalizeScan, remap: (ref: string) => string): RewrittenSpec[] {
+  const parentRoot = getProjectRoot();
+  const parentSpecsDir = aiPathsAt(parentRoot).specsDir();
+  const memberSpecsDir = aiPathsAt(scan.memberDir).specsDir();
+  const movedFiles = moveTreeInto(memberSpecsDir, parentSpecsDir, new Set([path.resolve(aiPathsAt(scan.memberDir).specsSystem())]));
+  rebaseImplementationPaths(parentSpecsDir, scan.memberDir, parentRoot, movedFiles);
+  const parentSystemName = loadSystemSpec()?.name;
+  for (const sub of scan.subsystems) {
+    patchSubsystemIndex(path.join(parentSpecsDir, sub, '.index.yaml'), (s) => {
+      if (parentSystemName) s.parentSystem = parentSystemName;
+      delete s.projectPath;
+    });
+  }
+  const rewritten = rewriteRefFields(parentSpecsDir, remap);
+  invalidateSpecCache();
+  return rewritten;
+}
+
+/** Step 13: the L0 vision onto the home, and the language, profile and depth onto each moved subsystem that states none. */
+function placeOnSubsystems(scan: InternalizeScan, result: InternalizeResult): void {
+  const boundSystem = loadSystemSpec();
+  const bound = projectConfigRepository.load();
+  const stamps: [string, string | undefined, string | undefined][] = [
+    ['targetLanguage', scan.system?.targetLanguage, boundSystem?.targetLanguage],
+    ['profile', scan.config?.projectType, bound?.projectType],
+    ['designDepth', scan.config?.rules?.designDepth, bound?.rules?.designDepth],
+  ];
+  const stamped = new Map<string, string[]>();
+  const refused = new Map<string, string[]>();
+  for (const id of scan.subsystems) {
+    const sub = loadSubsystemSpec(id);
+    if (!sub) continue;
+    const next: Record<string, unknown> = { ...sub };
+    for (const [field, value, boundValue] of stamps) {
+      if (value === undefined || value === boundValue || next[field] !== undefined) continue;
+      // A value a subsystem cannot hold is listed, never stamped to raise UNKNOWN_PROFILE.
+      const why = unholdable(field, value);
+      if (why !== null) {
+        refused.set(why, [...(refused.get(why) ?? []), id]);
+        continue;
+      }
+      next[field] = value;
+      stamped.set(`${field} ${value}`, [...(stamped.get(`${field} ${value}`) ?? []), id]);
+    }
+    if (Object.keys(next).length !== Object.keys(sub).length) saveSpec('subsystem', next as SubsystemSpec);
+  }
+  for (const [what, ids] of stamped) result.placed.push(`${what} → ${ids.join(', ')}`);
+  for (const [why, ids] of refused) result.notCarried.push(why.replace('{ids}', ids.join(', ')));
+  if (!saysMoreThanItsName(scan.system)) return;
+  const home = loadSubsystemSpec(scan.home);
+  if (!home) return;
+  const paragraph = `From the member project "${scan.alias}" (${scan.system!.name}): ${scan.system!.vision.trim()}`;
+  if (!home.description.includes(paragraph)) {
+    saveSpec('subsystem', { ...home, description: home.description ? `${home.description}\n\n${paragraph}` : paragraph });
+  }
+  result.placed.push(`L0 vision → ${scan.home} description`);
+}
+
+/**
+ * Why a member's value cannot be stamped on a subsystem, with `{ids}` for the
+ * subsystems it was not stamped on; null when it can. A projectType becomes a
+ * subsystem profile only when it is one — built in, or registered by a pack
+ * the bound project loads — and a designDepth only when it is a design depth.
+ */
+function unholdable(field: string, value: string): string | null {
+  if (field === 'profile') {
+    const registered = (BUILTIN_PROFILES as readonly string[]).includes(value) || loadProjectExtensions().profiles[value] !== undefined;
+    return registered ? null : `projectType ${value} not stamped on {ids}: not a subsystem profile (a project kind, or no built-in profile or loaded pack registers it)`;
+  }
+  if (field === 'designDepth' && !DesignDepthSchema.safeParse(value).success) {
+    return `designDepth ${value} not stamped on {ids}: not a design depth (components | interfaces | implementations | narratives)`;
+  }
+  return null;
+}
+
+/** Step 14: requirements, boundaries and databases merged by identity; re-exports re-pointed; the destination's exports added. */
+function placeOnSystem(scan: InternalizeScan, destination: InternalizeDestination, result: InternalizeResult): void {
+  const system = loadSystemSpec();
+  if (!system) return;
+  const next = { ...system } as SystemSpec;
+  const merge = <T>(field: 'boundaries' | 'globalRequirements' | 'databases', key: (item: T) => string): void => {
+    const held = (next[field] ?? []) as unknown as T[];
+    const theirs = ((scan.system?.[field] ?? []) as unknown as T[]).filter((item) => !held.some((h) => key(h) === key(item)));
+    if (theirs.length === 0) return;
+    (next as unknown as Record<string, T[]>)[field] = [...held, ...theirs];
+    result.placed.push(`${field} (${theirs.length}) → parent L0`);
+  };
+  // A boundary or requirement may be written as a bare string or an object: its identity is its name or its text.
+  const identity = (field: string) => (item: unknown): string => (typeof item === 'string' ? item : String((item as Record<string, unknown>)[field] ?? ''));
+  merge<unknown>('boundaries', identity('name'));
+  merge<unknown>('globalRequirements', identity('description'));
+  merge<unknown>('databases', identity('id'));
+  // The re-exports of the member, re-pointed at the moved subsystems; the destination's exports added.
+  const entries = (next.publicInterfaces ?? []) as ExportEntry[];
+  const memberEntries = (scan.system?.publicInterfaces ?? []) as ExportEntry[];
+  const repointed = entries.flatMap((e) => (e.from === scan.alias ? reExportsOf(e, memberEntries) : [e]));
+  for (const name of destination.exports ?? []) {
+    const source = memberEntries.find((e) => publicNameOf(e) === name);
+    if (!source) throw new WaironError(`cannot internalize "${scan.alias}": the export "${name}" is no public name of the member.`);
+    const entry = movedEntry(source);
+    if (!repointed.some((e) => publicNameOf(e) === name)) {
+      repointed.push(entry);
+      result.placed.push(`export ${name} → parent L0 (from ${entry.from ?? 'the project'})`);
+    }
+  }
+  next.publicInterfaces = repointed as SystemSpec['publicInterfaces'];
+  if (JSON.stringify(next) !== JSON.stringify(system)) saveSystemSpec(next);
+}
+
+/** One L0 export entry as written. */
+type ExportEntry = { from?: string; as?: string; component?: string; interface?: string; typeDef?: string; audience?: string; [k: string]: unknown };
+
+const publicNameOf = (e: ExportEntry): string | undefined => e.as ?? e.component ?? e.typeDef;
+
+/** A member's L0 entry as the parent writes it once the member's subsystems are its own: from the subsystem realizing it. */
+function movedEntry(e: ExportEntry): ExportEntry {
+  if (e.from !== undefined) return { ...e };
+  const component = e.component !== undefined ? loadComponentSpec(e.component) : null;
+  if (component) return { ...e, from: component.subsystem };
+  const type = e.typeDef !== undefined ? loadTypeSpecs().find((t) => t.id === e.typeDef) : undefined;
+  return type?.subsystem ? { ...e, from: type.subsystem } : { ...e };
+}
+
+/** A parent entry re-exporting from the member, as re-exports from the moved subsystems. */
+function reExportsOf(e: ExportEntry, memberEntries: ExportEntry[]): ExportEntry[] {
+  const named = e.component ?? e.typeDef;
+  const matches = named === undefined ? memberEntries : memberEntries.filter((m) => publicNameOf(m) === named);
+  return matches.map((m) => {
+    const moved = movedEntry(m);
+    const component = moved.component;
+    const typeDef = moved.typeDef;
+    return {
+      ...e,
+      ...(moved.from !== undefined ? { from: moved.from } : { from: undefined }),
+      ...(component !== undefined ? { component } : {}),
+      ...(typeDef !== undefined ? { typeDef } : {}),
+      ...(e.as === undefined && publicNameOf(m) !== (component ?? typeDef) ? { as: publicNameOf(m) } : {}),
+    };
+  }).map((x) => Object.fromEntries(Object.entries(x).filter(([, v]) => v !== undefined)) as ExportEntry);
+}
+
+/** Steps 15-17: the member's members and externals, declared here; the `use` each external carried, imported. */
+function carryDeclarations(scan: InternalizeScan, result: InternalizeResult): void {
+  const root = getProjectRoot();
+  for (const m of declaredMembers(scan.config ?? ({} as ProjectConfig))) {
+    if (m.problem) continue;
+    const relPath = toPosixPath(path.relative(root, path.resolve(scan.memberDir, m.path)));
+    projectConfigRepository.declareMember(m.alias, {
+      path: relPath,
+      ...(m.description !== undefined ? { description: m.description } : {}),
+      ...(m.use.length > 0 ? { use: m.use } : {}),
+    });
+    result.placed.push(`member ${m.alias} → parent members as ${m.alias} (${relPath})`);
+  }
+  const bound = projectConfigRepository.load() ?? ({} as ProjectConfig);
+  for (const [alias, decl] of Object.entries(scan.config?.externals ?? {})) {
+    if (carriedExternal(scan, alias, decl) === 'parent') continue;
+    const source = decl.source && !path.isAbsolute(decl.source.path)
+      ? { path: toPosixPath(path.relative(root, path.resolve(scan.memberDir, decl.source.path))) }
+      : decl.source;
+    if (bound.members?.[alias] === undefined) {
+      projectConfigRepository.declareExternal(alias, {
+        ...(decl.project !== undefined ? { project: decl.project } : {}),
+        ...(source ? { source } : {}),
+        ...(decl.description !== undefined ? { description: decl.description } : {}),
+      });
+      result.externals.push(alias);
+    }
+    // Step 17: the names its `use` held, so the moved specs' bare names still resolve.
+    if ((decl.use ?? []).length > 0) projectConfigRepository.importNames(alias, decl.use!);
+    result.placed.push(`external ${alias} → parent externals as ${alias}`);
+  }
+}
+
+/** Steps 18-19: each pack only the member selects, adopted (pinned at its version and digest) or dropped. */
+function carryPacks(scan: InternalizeScan, destination: InternalizeDestination, result: InternalizeResult): void {
+  const bound = projectConfigRepository.load() ?? ({} as ProjectConfig);
+  const only = memberOnlyPacks(scan.config, bound);
+  const selections = (scan.config?.extensions?.packs ?? []).filter((p): p is PackSelection => typeof p !== 'string');
+  for (const label of only) {
+    const selection = selections.find((p) => `${p.name}${p.version ? `@${p.version}` : ''}` === label)!;
+    if (destination.packs === 'adopt') {
+      projectConfigRepository.upsertPackSelection(selection);
+      result.placed.push(`pack ${label} adopted`);
+    } else {
+      result.placed.push(`pack ${label} dropped`);
+    }
+  }
+}
+
+/** Step 21: delete what remains of the member's .wai, every file listed under its group. */
+function deleteMemberWai(memberDir: string): string[] {
+  const wai = path.join(memberDir, '.wai');
+  if (!fs.existsSync(wai)) return [];
+  const deleted = listFilesRecursive(wai, '')
+    .filter((f) => !path.relative(wai, f).split(path.sep).includes('transactions'))
+    .map((f) => {
+      const rel = toPosixPath(path.relative(wai, f));
+      // What is left under specs/ once its subsystems and types moved is its L0, whose pieces were placed above.
+      return `${MEMBER_WAI_GROUPS.get(rel.split('/')[0]) ?? 'L0 (its pieces placed)'}: .wai/${rel}`;
+    });
+  for (const entry of fs.readdirSync(wai)) {
+    if (entry !== 'transactions') fs.rmSync(path.join(wai, entry), { recursive: true, force: true });
+  }
+  if (fs.readdirSync(wai).length === 0) fs.rmdirSync(wai);
+  return deleted.sort();
 }
 
 /** A root's configuration read through that root's binding; null when it has none or it fails its schema. */

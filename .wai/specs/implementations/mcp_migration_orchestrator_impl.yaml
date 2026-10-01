@@ -1,0 +1,59 @@
+id: mcp_migration_orchestrator_impl
+name: MCP Migration Orchestrator Implementation
+description: src/mcp/migrations.ts.
+contract: imcp_migration_orchestrator
+sourcePath: src/mcp/migrations.ts
+methods:
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: Plan the request from the bound project
+        type: call
+        targetComponent: mcp_migration_adapter
+        targetMethod: plan
+      - stepNumber: 2
+        description: Dry run, refused or empty?
+        type: branch
+        condition: dryRun is true, or the plan is blocked, or it has no file change
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Drop the plan's rehearsal
+        type: call
+        targetComponent: mcp_migration_adapter
+        targetMethod: discard
+      - stepNumber: 4
+        description: >-
+          Answer the plan, applied false; a refused plan is answered as a tool error carrying it, so
+          an agent cannot read it as success
+        type: return
+        outcome: the plan, not applied
+      - stepNumber: 5
+        label: apply
+        description: Apply the plan, all or nothing
+        type: call
+        targetComponent: mcp_migration_adapter
+        targetMethod: apply
+      - stepNumber: 6
+        description: >-
+          Answer the report as structured content: applied with the projects to re-lock, or the
+          failure (a tool error) and whether the family was restored
+        type: return
+        outcome: FamilyMigrationReport
+  - name: pending
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask the migration portal for the unfinished transactions under the bound root, fix false —
+          a report, nothing written
+        type: call
+        targetComponent: mcp_migration_adapter
+        targetMethod: recover
+      - stepNumber: 2
+        description: >-
+          Answer one notice line per transaction: its id, verb and coordinator phase, and `run
+          wairon doctor --fix`
+        type: return
+        outcome: notice lines
+status: complete
+createdAt: '2026-09-30T20:39:33.686Z'
+updatedAt: '2026-09-30T21:34:10.020Z'

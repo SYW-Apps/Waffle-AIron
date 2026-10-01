@@ -32,14 +32,20 @@ methods:
     returns: void
   - name: internalizeMember
     description: >-
-      Published write: take a single-subsystem member back into the bound project and remove its
-      declaration. Routed through the core orchestrator.
-    signature: 'internalizeMember(alias: string): void'
-    returns: void
+      Published write: take a member back into the bound project whole — every subsystem and
+      project-level type — sending its own metadata to the destination's homes and listing what it
+      deletes, and remove its declaration. Routed through the core orchestrator. The family
+      migration (sdd_migrations) is its caller: it plans the consumers of the member elsewhere in
+      the family and runs this inside a staged transaction.
+    signature: 'internalizeMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
     params:
       - name: alias
         type: string
         description: The member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where the member's own metadata goes
   - name: importSpecTree
     description: >-
       Imports a .waitree archive into a project root under an explicit import policy, backing up any
@@ -201,6 +207,25 @@ methods:
         type: string
         description: What the member is to this project
         optional: true
+  - name: rewriteReferences
+    description: >-
+      Published write: respell references at parsed positions of one spec of the family, each edit
+      replacing exactly its text at exactly its position; refused whole when an edit's text is not
+      there. Answers whether the stored text changed. Routed through the core orchestrator.
+    signature: 'rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean'
+    returns: boolean
+    params:
+      - name: kind
+        type: string
+        description: system, subsystem, component, interface, implementation or type
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+      - name: edits
+        type: ReferenceEdit[]
+        description: The edits for this spec
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-09-29T15:57:15.129Z'
+updatedAt: '2026-09-30T20:22:55.921Z'

@@ -275,7 +275,7 @@ describe('the member tools — sdd_add_member, sdd_move_member, sdd_internalize_
     expect(textOf(ghost)).toMatch(/^Error: .*no member is declared under that alias/);
   });
 
-  it('internalizes a single-subsystem member, and refuses one with externals of its own', async () => {
+  it('internalizes a member (a dry run first writes nothing), and refuses one whose pack has no adopt-or-drop answer', async () => {
     const { root, call } = await bound();
     await seed(call);
     // The subsystem out and back in: externalize writes a `members` member.
@@ -283,20 +283,27 @@ describe('the member tools — sdd_add_member, sdd_move_member, sdd_internalize_
     expect(out.isError ?? false, textOf(out)).toBe(false);
     expect(members(root)).toEqual({ shop: 'packages/shop' });
 
+    const dry = await call('sdd_internalize_member', { alias: 'shop', dryRun: true });
+    expect(dry.isError ?? false, textOf(dry)).toBe(false);
+    expect(JSON.parse(textOf(dry))).toMatchObject({ dryRun: true, applied: false, plan: { verb: 'internalize', refusals: [] } });
+    expect(members(root)).toEqual({ shop: 'packages/shop' });
     const back = await call('sdd_internalize_member', { alias: 'shop' });
     expect(back.isError ?? false, textOf(back)).toBe(false);
+    expect(JSON.parse(textOf(back))).toMatchObject({ dryRun: false, applied: true });
     expect(members(root)).toBeUndefined();
     invalidateSpecCache();
     expect(loadSubsystemSpec('shop')?.id).toBe('shop');
     expect(fs.existsSync(path.join(root, 'packages', 'shop', '.wai'))).toBe(false);
 
-    // A member declaring an external of its own has nowhere to take it here.
+    // A member selecting a pack this project does not, with no adopt-or-drop answer, is refused as a tool error.
     expect((await call('sdd_add_member', { alias: 'ledger', path: 'packages/ledger' })).isError ?? false).toBe(false);
     const ledgerConfig = path.join(root, 'packages', 'ledger', '.wai', 'project.yaml');
-    writeYamlFile(ledgerConfig, { ...(readYamlFile(ledgerConfig) as object), externals: { crm: {} } });
+    writeYamlFile(ledgerConfig, { ...(readYamlFile(ledgerConfig) as object), extensions: { packs: [{ name: 'acme-rules', version: '1.0.0' }], useGlobalPacks: false } });
     const refused = await call('sdd_internalize_member', { alias: 'ledger' });
     expect(refused.isError).toBe(true);
-    expect(textOf(refused)).toMatch(/^Error: .*cannot internalize: the member is not a single subsystem, or declares members or externals of its own/);
+    expect(textOf(refused)).toMatch(/^Error: the internalize migration is refused; nothing was written\./);
+    expect(textOf(refused)).toMatch(/internalize-refused[\s\S]*selects the pack acme-rules@1\.0\.0/);
+    expect(members(root)).toEqual({ ledger: 'packages/ledger' });
   });
 });
 
