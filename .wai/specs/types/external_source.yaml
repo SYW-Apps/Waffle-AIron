@@ -3,17 +3,28 @@ id: external_source
 name: ExternalSource
 description: >-
   Where an external's producer is found when the family does not hold it: an explicit filesystem
-  path, relative to the declaring project's root. A hosted source is stage 7 and is not part of this
-  shape.
+  path, relative to the declaring project's root, or — on a hosted instance — the producer's hosted
+  record id. Exactly one of the two is set. A consumer's own gate never needs the producer's files:
+  it judges against its pinned snapshot (stage 4), so a hosted source is only read live (status,
+  re-pin) and only through the hosting server's record lookup within the request's readable reach;
+  outside a hosted server, or out of reach, it is unavailable, never a pass.
 subsystem: sdd_core
 fields:
   - name: path
     type: string
     description: >-
       The producer project's root directory, relative to the declaring project's root (an absolute
-      path is kept as written).
-    optional: false
+      path is kept as written). Absent when hosted is set.
+    optional: true
+  - name: hosted
+    type: string
+    description: >-
+      The producer's hosted project record id (stage 7) — how a project names a producer in another
+      isolated root on the same hosted instance, which a path can never reach (each record's root is
+      isolated). Written by the hosted detach for every consumer of the detached member, and for the
+      detached member's own externals into its former family.
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-26T17:39:12.278Z'
-updatedAt: '2026-09-26T17:39:12.283Z'
+updatedAt: '2026-10-01T17:02:59.718Z'

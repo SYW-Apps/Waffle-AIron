@@ -2,21 +2,25 @@ id: member_registration
 name: Member Registration
 description: >-
   The workflow that makes every member of a hosted family a hosted project record and keeps the
-  records agreeing with the families on disk. It never writes a grant or a placement: projects nest
-  like organization units, so a member's reach is inherited through its chain (its own scope, its
-  parents', its family root's units), and the most specific setting wins. (1) The stage-7 upgrade of
-  a data dir (`wairon host doctor`, applied with --fix): plan registers every declared member,
-  members of members included, with parentProjectId and memberPath, rewrites API key entries that
-  are member-qualified to record ids, and proves before writing that nobody's reach changes (today's
-  reach over the family root vs the member's chain — equal by construction); its writes go into a
-  rehearsal copy of the host stores and apply commits them through stage 6's family transaction, all
-  or nothing, then audits each member and key. (2) Family upkeep around a data-plane tool: recover
-  rolls back a crashed family migration before the tool runs; screen lists who gains or loses access
-  through an attach, adopt or detach, and refuses a hosted detach while the member's directory is
-  inside its parent's tree; reconcile, after a family-shape tool succeeded, registers, relocates,
-  re-keys (a project rename: own-scope settings and key entries move to the new id) or disables
-  member records, lists and audits the reach those membership changes altered, and publishes ONE
-  commit covering every touched project's .wai/. Properties the implementation proves:
+  records agreeing with the families on disk. It never writes a grant: projects nest like
+  organization units, so a member's reach is inherited through its chain (its own scope, its
+  parents', its family root's units), and the most specific setting wins; the only placement it
+  writes is a detached project's, which keeps its former family root's units. (1) The stage-7
+  upgrade of a data dir (`wairon host doctor`, applied with --fix): plan registers every declared
+  member, members of members included, with parentProjectId and memberPath, rewrites API key entries
+  that are member-qualified to record ids, and proves before writing that nobody's reach changes
+  (today's reach over the family root vs the member's chain — equal by construction); its writes go
+  into a rehearsal copy of the host stores and apply commits them through stage 6's family
+  transaction, all or nothing, then audits each member and key. (2) Family upkeep around a
+  data-plane tool: recover rolls back a crashed family migration before the tool runs; screen lists
+  who gains access through an attach or adopt, and refuses renaming a family root (an admin
+  operation outside the family migrations); detach serves a hosted detach whole — it RELOCATES the
+  member into an isolated root of its own (the directory move, the family edits with hosted external
+  sources and the host store writes in one transaction), makes its record top-level, keeps its
+  units, and lists and audits who loses access; reconcile, after a family-shape tool succeeded,
+  registers, relocates, re-keys (a member rename: own-scope settings and key entries move to the new
+  id) or disables member records, lists and audits the reach those membership changes altered, and
+  publishes ONE commit covering every touched project's .wai/. Properties the implementation proves:
   member-is-a-project, no-widening (the upgrade changes nobody's reach), member-inherits-parent (a
   parent grant reaches every member, transitively), member-no-wins (an explicit no on the member's
   own record beats an inherited yes), membership-change-lists-reach, audit-names-the-member,
@@ -26,6 +30,7 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - project_repository
+  - organization_repository
   - permission_repository
   - user_repository
   - credential_repository
@@ -36,4 +41,4 @@ dependsOn:
   - host_git_adapter
 status: design
 createdAt: '2026-10-01T16:31:44.124Z'
-updatedAt: '2026-10-01T16:58:12.610Z'
+updatedAt: '2026-10-01T17:05:02.692Z'

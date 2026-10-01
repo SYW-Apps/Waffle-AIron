@@ -9,10 +9,10 @@ methods:
   - name: mirror
     description: >-
       Copy each scoped owner's areas (its .wai tree by default, everything under it except
-      .wai/transactions/; the listed files when the scope names areas) into the target directory at
-      the owner's path relative to the coordinator root, so the layout is reproduced; answer each
-      copied live file's sha256 by its absolute path. Refuses an owner root outside the coordinator
-      root.
+      .wai/transactions/; the listed files when the scope names areas) and every owner the scope
+      names whole (all its files except .wai/transactions/) into the target directory at the owner's
+      path relative to the coordinator root, so the layout is reproduced; answer each copied live
+      file's sha256 by its absolute path. Refuses an owner root outside the coordinator root.
     signature: 'mirror(scope: TransactionScope, target: string): Map<string, string>'
     returns: Map<string, string>
     params:
@@ -25,11 +25,12 @@ methods:
   - name: compare
     description: >-
       The difference between a rehearsal and the live owners: every .wai tree found anywhere in the
-      rehearsal (a project the migration created included) and every copied area, file by file,
+      rehearsal (a project the migration created included), every copied area and every whole owner
+      (a relocated member's old directory and its new root, file by file whatever the file),
       byte-exact — a file whose bytes differ is a write, one only in the rehearsal a create, one
       only live a delete — each with its owner (mapped back to live), its owner-relative path, the
       base digest the mirror recorded and the staged digest. Ordered by owner then path. For a scope
-      that names areas only those areas are compared.
+      that names areas only those areas and whole owners are compared.
     signature: 'compare(rehearsal: Rehearsal): FileChange[]'
     returns: FileChange[]
     params:
@@ -150,4 +151,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:27:16.585Z'
-updatedAt: '2026-10-01T16:28:12.973Z'
+updatedAt: '2026-10-01T17:03:26.802Z'

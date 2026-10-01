@@ -25,7 +25,15 @@ fields:
       ['.wai'] (every family migration). A file named here that does not exist is a create when the
       rehearsal writes it. .wai/transactions/ is never an area.
     optional: true
+  - name: whole
+    type: string[]
+    description: >-
+      Owner roots copied, compared and swapped IN FULL (every file under them, .wai/transactions/
+      excluded): the relocated member's old directory, whose files leave as deletes, and its new
+      root, whose files arrive as creates. This is how a directory move joins the transaction — as
+      staged, backed-up, journaled file changes, never as a rename outside it.
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:56.008Z'
-updatedAt: '2026-10-01T16:28:00.385Z'
+updatedAt: '2026-10-01T17:03:07.229Z'

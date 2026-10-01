@@ -281,61 +281,6 @@ methods:
         outcome: RecoveredTransaction[]
     detail: full
     symbol: recoverUnfinishedMigrations
-  - name: screen
-    narrative:
-      - stepNumber: 1
-        description: Gather the permission world exactly as the resolver sees it
-        type: call
-        targetComponent: authorization
-        targetMethod: world
-      - stepNumber: 2
-        description: List every user and service record (the subjects of the listing)
-        type: call
-        targetComponent: user_repository
-        targetMethod: list
-      - stepNumber: 3
-        description: Is the call a detach?
-        type: branch
-        condition: tool is sdd_detach_member
-        onFalseStep: 7
-      - stepNumber: 4
-        description: Read the bound project's hosted family, to find the member record the alias names
-        type: call
-        targetComponent: project_repository
-        targetMethod: family
-      - stepNumber: 5
-        description: Read the family's declared members, to resolve the alias to its member's directory
-        type: call
-        targetComponent: project_repository
-        targetMethod: declaredMembers
-      - stepNumber: 6
-        description: >-
-          Refuse a hosted detach while the member's directory lies inside its parent's isolated
-          tree: the detached project would have no isolated root of its own; the refusal names the
-          member and says to run `member move` first. The losers are still listed below
-        type: local
-      - stepNumber: 7
-        label: relink
-        description: >-
-          Build the after-world: for attach or adopt, a parent link from the incoming member (its
-          alias/path standing in for the id it has no record under yet) to the bound project; for
-          detach, the member's parent link removed
-        type: call
-        targetComponent: member_reach_rules
-        targetMethod: relink
-      - stepNumber: 8
-        description: >-
-          Compare every subject x capability before (attach/adopt: no record; detach: the member in
-          the stored world) and after (attach/adopt: the incoming member in the after-world; detach:
-          the member unlinked), keeping the rows that differ — who gains or loses access
-        type: call
-        targetComponent: member_reach_rules
-        targetMethod: compare
-      - stepNumber: 9
-        description: Return the refusal, if any, and the reach changes
-        type: return
-        outcome: MembershipScreen
-    detail: full
   - name: reconcile
     narrative:
       - stepNumber: 1
@@ -500,6 +445,215 @@ methods:
         type: return
         outcome: MemberReconciliation
     detail: full
+  - name: screen
+    narrative:
+      - stepNumber: 1
+        description: Is the call a project rename?
+        type: branch
+        condition: tool is sdd_rename_project
+        onFalseStep: 5
+      - stepNumber: 2
+        description: Read the bound project's hosted family, to tell a family root from a member
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 3
+        description: >-
+          A bound FAMILY ROOT is refused: renaming a hosted project record is an admin operation
+          outside the family migrations. A bound member is let through — reconcile re-keys it
+          afterwards, and its reach does not change
+        type: local
+      - stepNumber: 4
+        description: Return the refusal, or nothing to list
+        type: return
+        outcome: MembershipScreen (rename)
+      - stepNumber: 5
+        label: listing
+        description: Gather the permission world exactly as the resolver sees it
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 6
+        description: List every user and service record (the subjects of the listing)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 7
+        description: >-
+          Build the after-world: a parent link from the incoming member (its alias/path standing in
+          for the id it has no record under yet) to the bound project
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: relink
+      - stepNumber: 8
+        description: >-
+          Compare every subject x capability before (no record) and after (the incoming member
+          through its new chain), keeping the rows that differ — who gains access
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: compare
+      - stepNumber: 9
+        description: Return the reach changes, with no refusal
+        type: return
+        outcome: MembershipScreen (attach/adopt)
+    detail: full
+  - name: detach
+    narrative:
+      - stepNumber: 1
+        description: 'Read the bound project''s hosted family: its family root first, then its member records'
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 2
+        description: >-
+          Read the family's declared members, to resolve the alias to the member's record and
+          directory
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredMembers
+      - stepNumber: 3
+        description: >-
+          Fix the new root — the isolated root a new hosted project with the member's id would be
+          allocated — and refuse when a record or a directory already holds it, or when a family
+          project's record id differs from its project id (a hosted source names a producer by
+          record id)
+        type: local
+      - stepNumber: 4
+        description: Gather the permission world exactly as the resolver sees it
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 5
+        description: List every user and service record (the subjects of the listing)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 6
+        description: Read the family root's placements, the units the detached project keeps
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 7
+        description: >-
+          Build the after-world: the member's parent link removed and the member placed in the
+          family root's units
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: relink
+      - stepNumber: 8
+        description: >-
+          Compare every subject x capability over the member (and each member below it, which moves
+          with it) before and after, keeping the rows that drop — who loses access because the
+          inherited project rungs are cut
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: compare
+      - stepNumber: 9
+        description: >-
+          Plan the detach with a relocation: the member's directory moved to the new root inside the
+          transaction, externals written with source.hosted, the host data directory as coordinator
+          contributing its project-record and organization store files
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: plan
+      - stepNumber: 10
+        description: Did the plan refuse?
+        type: branch
+        condition: the plan has refusals
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Answer the detachment with its refusals and the reach it would have cut; nothing was
+          rehearsed or written
+        type: return
+        outcome: MemberDetachment (refused)
+      - stepNumber: 12
+        label: host-writes
+        description: >-
+          With the repositories wired to the rehearsal's copy of the data root, make the member's
+          record a top-level record at its new root (parentProjectId and memberPath cleared, root
+          persisted)
+        type: call
+        targetComponent: project_repository
+        targetMethod: register
+      - stepNumber: 13
+        description: >-
+          Place it in each of its former family root's units, in their stored order, so its unit
+          rungs stay
+        type: call
+        targetComponent: organization_repository
+        targetMethod: placeProject
+      - stepNumber: 14
+        description: >-
+          Compute every file change: the family edits, the move (creates at the new root, deletes at
+          the old directory) and the host stores
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: diff
+      - stepNumber: 15
+        description: Apply only when asked
+        type: branch
+        condition: apply is requested
+        onFalseStep: 24
+      - stepNumber: 16
+        description: >-
+          Commit everything through the family transaction, all or nothing: each file is staged,
+          backed up and journaled before any live file moves, a live file that changed since the
+          rehearsal refuses at staging, any failure before the commit point restores every backup,
+          and a crash mid-swap leaves a journal the next bind's recover rolls back
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: commit
+      - stepNumber: 17
+        description: Did the transaction commit?
+        type: branch
+        condition: the outcome is committed
+        onFalseStep: 22
+      - stepNumber: 18
+        description: >-
+          Audit member.detached naming the member as projectId and the bound project as composition,
+          with its new root and every principal who lost access
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 19
+        description: Collect the family repository scope of every touched family project
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
+      - stepNumber: 20
+        description: >-
+          Publish ONE commit at the family's repository root covering the touched family projects'
+          .wai/ (the member's old path among them, now deleted); a family that is not git-backed
+          publishes nothing
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 21
+        description: Answer the detachment as applied
+        type: return
+        outcome: MemberDetachment (applied)
+      - stepNumber: 22
+        label: failed
+        description: Audit member.detach failed with what failed and whether every file was restored
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 23
+        description: Answer the detachment as not applied, with the outcome
+        type: return
+        outcome: MemberDetachment (not applied)
+      - stepNumber: 24
+        label: dry
+        description: 'A dry run: drop the rehearsal, writing nothing live'
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: drop
+      - stepNumber: 25
+        description: 'Answer the planned detachment: the move, the new root, the losers'
+        type: return
+        outcome: MemberDetachment (dry run)
+    detail: full
 status: design
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-01T16:58:05.216Z'
+updatedAt: '2026-10-01T17:04:49.127Z'

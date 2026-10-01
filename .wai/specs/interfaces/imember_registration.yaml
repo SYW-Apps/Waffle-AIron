@@ -82,14 +82,13 @@ methods:
       - idempotent
   - name: screen
     description: >-
-      Before the data plane dispatches a membership-changing tool (sdd_attach_member,
-      sdd_adopt_member, sdd_detach_member): list the principals whose reach the change alters —
-      attach and adopt add the member under the bound project, so everyone the bound project's chain
-      grants gains access to it; detach removes the member's parent link, so everyone who reached it
-      only through its parents loses access — and refuse what the hosted model cannot honour: a
-      hosted detach while the member's directory still lies inside its parent's isolated tree, with
-      a message pointing at `member move` first. A dry run's result carries the listing; an applied
-      run is audited with the reach actually changed by reconcile.
+      Before the data plane dispatches a membership-changing tool it does not serve itself
+      (sdd_attach_member, sdd_adopt_member, sdd_rename_project): for attach and adopt, list the
+      principals whose reach the change alters — the member is added under the bound project, so
+      everyone the bound project's chain grants gains access to it (a dry run's result carries the
+      listing; reconcile audits the applied change); for sdd_rename_project bound at a FAMILY ROOT,
+      refuse: renaming a hosted project record is an admin operation outside the family migrations
+      (a member rename is allowed and re-keyed by reconcile).
     signature: 'screen(binding: ProjectBinding, tool: string, alias: string, path: string): MembershipScreen'
     returns: MembershipScreen
     params:
@@ -130,6 +129,39 @@ methods:
       - name: touched
         type: string[]
         description: The record ids the tool's report names as written (the applied plan's owners)
+  - name: detach
+    description: >-
+      Serve a hosted sdd_detach_member: detach RELOCATES the member, because on hosted every
+      member's directory lies inside its family root's isolated tree and a detached project needs an
+      isolated root of its own. One plan, one transaction: the family detach edits (externals
+      written with source.hosted, since a path cannot cross isolated roots), the member's directory
+      moved to the isolated root a new hosted project with its id would get (its files as creates
+      there and deletes at the old place, members of the member moving with it), its record made a
+      top-level record (parentProjectId and memberPath cleared, root persisted) and placed in its
+      former family root's units. The plan lists the move, the new root and every principal who
+      LOSES access (detach cuts the inherited project rungs; the unit rungs stay through the
+      placement). A dry run answers the plan and writes nothing; applied, it commits all or nothing
+      (a crash leaves a journal recover rolls back on the next bind), audits member.detached with
+      the losers and the new root, and publishes one family commit covering the touched family
+      projects' .wai/ (the member's own history leaves with it: it gets its own repository only when
+      one is bound).
+    signature: >-
+      detach(principal: Principal, binding: ProjectBinding, alias: string, apply: boolean):
+      MemberDetachment
+    returns: MemberDetachment
+    params:
+      - name: principal
+        type: Principal
+        description: The caller — the actor of the audit event
+      - name: binding
+        type: ProjectBinding
+        description: The bound project the member is detached from
+      - name: alias
+        type: string
+        description: The member alias
+      - name: apply
+        type: boolean
+        description: False for a dry run
 status: design
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-01T16:57:18.629Z'
+updatedAt: '2026-10-01T17:04:25.830Z'

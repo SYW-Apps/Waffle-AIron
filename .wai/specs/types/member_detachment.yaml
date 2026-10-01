@@ -1,0 +1,42 @@
+kind: value-object
+id: member_detachment
+name: MemberDetachment
+description: >-
+  A hosted detach, planned or applied: the family migration plan (with the member's move as creates
+  at its new root and deletes at its old directory), the new isolated root, the principals who LOSE
+  access (detach narrows: inherited project rungs are cut; the unit rungs stay, because the detached
+  project is placed in its former family root's units), and — when applied — the transaction outcome
+  and the family commit.
+subsystem: sdd_host
+fields:
+  - name: memberId
+    type: string
+    description: The detached member's record id
+    optional: false
+  - name: plan
+    type: MigrationPlan
+    description: The detach plan, including the move and the host store writes, refusals listed
+    optional: false
+  - name: newRoot
+    type: string
+    description: The member's new isolated root
+    optional: false
+  - name: reachLost
+    type: ReachComparison[]
+    description: Every subject x capability whose effective permission over the member drops
+    optional: false
+  - name: applied
+    type: boolean
+    description: True only when the transaction committed
+    optional: false
+  - name: outcome
+    type: TransactionOutcome
+    description: The transaction outcome when applied
+    optional: true
+  - name: commit
+    type: GitPublish
+    description: The family repository commit covering every touched family project's .wai/, when git-backed
+    optional: true
+methods: []
+createdAt: '2026-10-01T17:03:59.641Z'
+updatedAt: '2026-10-01T17:03:59.643Z'

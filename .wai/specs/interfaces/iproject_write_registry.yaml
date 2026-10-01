@@ -21,7 +21,9 @@ methods:
     description: >-
       Upsert a project record pointing at an existing directory the caller names, instead of
       allocating one under the data root; the first registration's creation time is kept across
-      repeats. Refuses a malformed id.
+      repeats. The record written is a family root: any parentProjectId and memberPath the id held
+      are cleared and the root is persisted — which is how a hosted detach makes a relocated member
+      top-level. Refuses a malformed id.
     signature: 'register(id: string, rootPath: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
@@ -56,4 +58,4 @@ methods:
         description: active | disabled
 status: complete
 createdAt: '2026-07-19T09:00:02.108Z'
-updatedAt: '2026-10-01T16:29:07.337Z'
+updatedAt: '2026-10-01T17:06:03.551Z'

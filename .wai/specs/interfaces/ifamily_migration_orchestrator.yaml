@@ -17,9 +17,13 @@ methods:
       may not read above a root) and those it may WRITE — a plan that must write a project outside
       the writable set refuses (family-partial), naming it. Locally both sets are every root the
       request can open; on the hosted data plane they are the family records the credential may read
-      and write, each judged through its own permission chain. A pending transaction anywhere the
-      plan reads refuses it (transaction-pending, naming `wairon doctor --fix`). A core writer's
-      refusal met during the rehearsal becomes the plan's refusal (internalize-refused,
+      and write, each judged through its own permission chain. A request carrying a relocation
+      (hosted detach) is rehearsed with the relocation's coordinator (the host data directory) as
+      the coordinator and an owner contributing its store files, and with the member's old directory
+      and its new root named whole, so the member's move, the family edits and the host store writes
+      the caller makes in the same rehearsal commit as one transaction. A pending transaction
+      anywhere the plan reads refuses it (transaction-pending, naming `wairon doctor --fix`). A core
+      writer's refusal met during the rehearsal becomes the plan's refusal (internalize-refused,
       externalize-refused), the rehearsal dropped. Writes nothing into the family.
     signature: 'plan(request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
@@ -86,4 +90,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:35:39.470Z'
-updatedAt: '2026-10-01T16:59:40.879Z'
+updatedAt: '2026-10-01T17:03:45.725Z'

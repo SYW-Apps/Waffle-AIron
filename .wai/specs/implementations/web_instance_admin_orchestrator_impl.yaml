@@ -63,34 +63,50 @@ methods:
           referential validation happen in the repository)
         type: local
       - stepNumber: 5
+        description: Read the project's hosted family, to tell a member from a family root
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 6
+        description: Is the project a member (its family root is another record)?
+        type: branch
+        condition: the project's family root is another record
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Reject: a member takes its units from its family root — a placement of its own would not
+          be a rung of its permission chain, so it is refused rather than silently ignored
+        type: throw
+        error: A member takes its units from its family root; place the family root instead
+      - stepNumber: 8
         description: Place the project into the organization unit through the organization repository
         type: call
         targetComponent: organization_repository
         targetMethod: placeProject
         assertsGuarantees:
           - atomic
-      - stepNumber: 6
+      - stepNumber: 9
         description: Append a redacted audit event without letting a failure fail the placement
         type: try
-        endStep: 8
+        endStep: 11
         catches:
           - error: audit append failure
-            step: 9
-      - stepNumber: 7
+            step: 12
+      - stepNumber: 10
         description: >-
           Append the redacted org.placement.set audit event (security level) under the active
           retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 8
+      - stepNumber: 11
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 10
-      - stepNumber: 9
+        toStep: 13
+      - stepNumber: 12
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 10
+      - stepNumber: 13
         description: Return once the project has been placed
         type: return
         outcome: project placed
@@ -477,4 +493,4 @@ lint:
         the pretence this allow exists instead of.
 status: complete
 createdAt: '2026-09-18T16:57:28.238Z'
-updatedAt: '2026-09-24T13:34:15.359Z'
+updatedAt: '2026-10-01T17:06:16.326Z'

@@ -59,6 +59,18 @@ methods:
         type: Rehearsal
     guarantees:
       - idempotent
+  - name: plan
+    description: >-
+      Forward to migration_portal.plan: plan a family migration from the bound project — used by the
+      hosted detach with a relocation, whose rehearsal the host then writes its store changes into
+      before committing.
+    signature: 'plan(request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: request
+        type: MigrationRequest
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-30T21:05:23.712Z'
-updatedAt: '2026-10-01T16:28:38.080Z'
+updatedAt: '2026-10-01T17:03:54.106Z'

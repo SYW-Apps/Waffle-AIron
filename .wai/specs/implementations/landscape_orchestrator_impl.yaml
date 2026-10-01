@@ -129,30 +129,46 @@ methods:
         type: throw
         error: the target organization unit does not exist
       - stepNumber: 8
+        description: Read the project's hosted family, to tell a member from a family root
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 9
+        description: Is the project a member (its family root is another record)?
+        type: branch
+        condition: the project's family root is another record
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Reject: a member takes its units from its family root — a placement of its own would not
+          be a rung of its permission chain, so it is refused rather than silently ignored
+        type: throw
+        error: A member takes its units from its family root; place the family root instead
+      - stepNumber: 11
         description: Place the hosted project in the organization unit
         type: call
         targetComponent: organization_repository
         targetMethod: placeProject
-      - stepNumber: 9
+      - stepNumber: 12
         description: Append a redacted audit event without letting a failure fail the placement
         type: try
-        endStep: 11
+        endStep: 14
         catches:
           - error: audit append failure
-            step: 12
-      - stepNumber: 10
+            step: 15
+      - stepNumber: 13
         description: Append the redacted project.place audit event (info level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 11
+      - stepNumber: 14
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 13
-      - stepNumber: 12
+        toStep: 16
+      - stepNumber: 15
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 13
+      - stepNumber: 16
         description: Return the stored project placement
         type: return
         outcome: the stored project placement
@@ -559,4 +575,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T22:10:36.787Z'
-updatedAt: '2026-09-26T16:14:15.112Z'
+updatedAt: '2026-10-01T17:06:15.386Z'

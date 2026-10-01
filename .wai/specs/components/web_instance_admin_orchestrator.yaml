@@ -26,6 +26,7 @@ dependsOn:
   - user_repository
   - audit_repository
   - secret_repository
+  - project_repository
 status: complete
 createdAt: '2026-09-18T16:56:18.390Z'
-updatedAt: '2026-09-18T16:58:20.102Z'
+updatedAt: '2026-10-01T17:05:47.356Z'

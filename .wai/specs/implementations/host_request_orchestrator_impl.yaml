@@ -425,7 +425,7 @@ methods:
           tool it does not serve answers with nothing and falls through to both.
         type: branch
         condition: the dispatch answered with a response envelope
-        onTrueStep: 28
+        onTrueStep: 31
         onFalseStep: 15
       - stepNumber: 15
         description: >-
@@ -468,57 +468,79 @@ methods:
           project:write) for this project
       - stepNumber: 19
         description: >-
-          Is the call membership-changing — sdd_attach_member, sdd_adopt_member or
-          sdd_detach_member, dry run or applied? On hosted, membership decides reach (a member
-          inherits its parent's access), so the change is screened first
+          Is the call membership-changing — sdd_attach_member, sdd_adopt_member, sdd_detach_member
+          or sdd_rename_project, dry run or applied? On hosted, membership decides reach (a member
+          inherits its parent's access) and a detach must move storage, so these are handled first
         type: branch
-        condition: the called tool is sdd_attach_member, sdd_adopt_member or sdd_detach_member
-        onFalseStep: 24
+        condition: >-
+          the called tool is sdd_attach_member, sdd_adopt_member, sdd_detach_member or
+          sdd_rename_project
+        onFalseStep: 27
       - stepNumber: 20
+        description: Is it a detach?
+        type: branch
+        condition: the called tool is sdd_detach_member
+        onFalseStep: 23
+      - stepNumber: 21
         description: >-
-          Screen it: list every principal who gains (attach, adopt) or loses (detach) access through
-          the change of parent, and decide whether the hosted model refuses it (a hosted detach
-          while the member's directory is inside its parent's tree)
+          Serve the hosted detach whole through member registration — it relocates the member into
+          an isolated root of its own in one transaction with the family edits and host stores, and
+          answers the plan (dry run) or the applied detachment with the principals who lose access,
+          as the tool result; the scoped server never runs it on hosted
+        type: call
+        targetComponent: member_registration
+        targetMethod: detach
+      - stepNumber: 22
+        description: Continue to the shared audit step
+        type: jump
+        toStep: 31
+      - stepNumber: 23
+        label: screen
+        description: >-
+          Screen it: for attach and adopt, list every principal who gains access through the new
+          parent; for a project rename, decide whether the hosted model refuses it (a family root's
+          rename)
         type: call
         targetComponent: member_registration
         targetMethod: screen
-      - stepNumber: 21
+      - stepNumber: 24
         description: Does the hosted model refuse it?
         type: branch
         condition: the screen carries a refusal
-        onFalseStep: 24
-      - stepNumber: 22
+        onFalseStep: 27
+      - stepNumber: 25
         description: >-
-          Answer an isError tool result (HTTP still 200) with the refusal — naming the member and
-          `member move` first — and the principals who would have lost access; nothing is dispatched
+          Answer an isError tool result (HTTP still 200) with the refusal — renaming a hosted
+          project record is an admin operation outside the family migrations; nothing is dispatched
         type: local
-      - stepNumber: 23
+      - stepNumber: 26
         description: Continue to the shared audit step
         type: jump
-        toStep: 28
-      - stepNumber: 24
+        toStep: 31
+      - stepNumber: 27
         label: serve
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 25
+      - stepNumber: 28
         description: >-
           Connect the scoped server to the request transport and process the JSON-RPC message; a
           screened DRY-RUN result carries the screen's reach changes beside the plan (who gains or
           loses access), so a human approves the membership change with its access consequences in
           view
         type: local
-      - stepNumber: 26
+      - stepNumber: 29
         description: >-
           Did an APPLIED family-shape tool succeed — sdd_add_member, sdd_move_member, or a stage-6
-          family migration (attach, detach, adopt, rename project, rename alias, internalize,
-          externalize) called without dryRun? Those change which projects the family holds or where,
-          so the hosted records must follow
+          family migration the scoped server ran (attach, adopt, rename project, rename alias,
+          internalize, externalize; a hosted detach is served by member registration above) called
+          without dryRun? Those change which projects the family holds or where, so the hosted
+          records must follow
         type: branch
         condition: the call was an applied family-shape tool and its outcome is success
-        onFalseStep: 28
-      - stepNumber: 27
+        onFalseStep: 31
+      - stepNumber: 30
         description: >-
           Reconcile the family's member records with the family on disk — register new members
           (placed like their family root, no grants), relocate moved ones, disable departed ones —
@@ -529,13 +551,13 @@ methods:
         type: call
         targetComponent: member_registration
         targetMethod: reconcile
-      - stepNumber: 28
+      - stepNumber: 31
         label: audit
         description: Audit the handled data-plane tool call on the shared best-effort path
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: auditToolCall
-      - stepNumber: 29
+      - stepNumber: 32
         description: Return the MCP response
         type: return
         outcome: MCP response
@@ -556,4 +578,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-01T16:58:45.938Z'
+updatedAt: '2026-10-01T17:05:25.760Z'

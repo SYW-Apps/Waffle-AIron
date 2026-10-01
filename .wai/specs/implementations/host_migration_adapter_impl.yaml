@@ -39,6 +39,13 @@ methods:
         type: call
         targetComponent: migration_portal
         targetMethod: drop
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: plan
 status: complete
 createdAt: '2026-09-30T21:05:28.671Z'
-updatedAt: '2026-10-01T16:28:40.551Z'
+updatedAt: '2026-10-01T17:03:55.448Z'
