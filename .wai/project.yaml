@@ -1214,7 +1214,7 @@ rules:
             at: 'WebSession'
             covers:
               - 'projects'
-      # 184 finding(s), 209 unit(s).
+      # 182 finding(s), 207 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of param-conformance on the signatures the contracts describe in
@@ -1831,16 +1831,6 @@ rules:
             at: 'listPendingRequests'
             covers:
               - 'projectId'
-          - code: PARAM_NAME_MISMATCH
-            spec: project_lifecycle_orchestrator_impl
-            at: 'lockProject'
-            covers:
-              - 'subproject'
-          - code: PARAM_OPTIONALITY
-            spec: project_lifecycle_orchestrator_impl
-            at: 'lockProject'
-            covers:
-              - 'subproject'
           - code: UNDECLARED_PARAM
             spec: project_lifecycle_orchestrator_impl
             at: 'lockProject'
