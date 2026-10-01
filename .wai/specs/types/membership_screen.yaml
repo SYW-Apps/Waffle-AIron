@@ -3,18 +3,20 @@ id: membership_screen
 name: MembershipScreen
 description: >-
   What the hosted data plane learns before it dispatches a membership-changing tool it does not
-  serve itself: for attach and adopt, the principals whose reach the change alters — every subject x
+  serve itself: for attach, the principals whose reach the change alters — every subject x
   capability whose effective permission over the incoming member differs once its parent link is
   added (they gain the bound project's access by inheritance); for a project rename, whether the
   hosted model refuses it. A dry run's result carries the list; reconcile audits the applied change.
-  A hosted detach is not screened: member registration serves it whole (it relocates the member).
+  A hosted detach or adopt is not screened: member registration serves each whole (they relocate the
+  project).
 subsystem: sdd_host
 fields:
   - name: refusal
     type: string
     description: >-
       Why the hosted model refuses the call, when it does: sdd_rename_project bound at a family root
-      (renaming a hosted project record is an admin operation outside the family migrations)
+      — "renaming a hosted family root's id is not supported; a member can be renamed, or the root
+      recreated"
     optional: true
   - name: reachChanges
     type: ReachComparison[]
@@ -22,4 +24,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-10-01T16:55:21.624Z'
-updatedAt: '2026-10-01T17:04:55.368Z'
+updatedAt: '2026-10-01T17:08:08.715Z'

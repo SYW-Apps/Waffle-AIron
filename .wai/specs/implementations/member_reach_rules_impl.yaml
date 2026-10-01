@@ -8,7 +8,8 @@ methods:
       - stepNumber: 1
         description: >-
           Copy the world's parent links, drop every link whose projectId is in removed, add every
-          added link (replacing any link the member already had), and append the given placements
+          added link (replacing any link the member already had), drop every placement of an
+          unplaced project, and append the given placements
         type: local
       - stepNumber: 2
         description: Return the world with the new links and every other collection unchanged
@@ -80,4 +81,4 @@ methods:
     detail: full
 status: design
 createdAt: '2026-10-01T16:56:34.586Z'
-updatedAt: '2026-10-01T17:04:04.997Z'
+updatedAt: '2026-10-01T17:08:48.806Z'

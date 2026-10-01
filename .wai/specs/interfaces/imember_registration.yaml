@@ -83,12 +83,12 @@ methods:
   - name: screen
     description: >-
       Before the data plane dispatches a membership-changing tool it does not serve itself
-      (sdd_attach_member, sdd_adopt_member, sdd_rename_project): for attach and adopt, list the
-      principals whose reach the change alters — the member is added under the bound project, so
-      everyone the bound project's chain grants gains access to it (a dry run's result carries the
-      listing; reconcile audits the applied change); for sdd_rename_project bound at a FAMILY ROOT,
-      refuse: renaming a hosted project record is an admin operation outside the family migrations
-      (a member rename is allowed and re-keyed by reconcile).
+      (sdd_attach_member, sdd_rename_project): for attach, list the principals whose reach the
+      change alters — the member is added under the bound project, so everyone the bound project's
+      chain grants gains access to it (a dry run's result carries the listing; reconcile audits the
+      applied change); for sdd_rename_project bound at a FAMILY ROOT, refuse with "renaming a hosted
+      family root's id is not supported; a member can be renamed, or the root recreated" (a member
+      rename is allowed and re-keyed by reconcile).
     signature: 'screen(binding: ProjectBinding, tool: string, alias: string, path: string): MembershipScreen'
     returns: MembershipScreen
     params:
@@ -162,6 +162,47 @@ methods:
       - name: apply
         type: boolean
         description: False for a dry run
+  - name: adopt
+    description: >-
+      Serve a hosted sdd_adopt_member — the exact inverse of detach. The external under the alias
+      names a top-level hosted project by source.hosted; adopt RELOCATES it back: its directory
+      moves from its own isolated root into the bound project's tree at the member path, in one
+      transaction with the family adopt edits (the hosted sources that named it, and its own into
+      the family, removed) and the host store writes — its record converted into a member
+      (parentProjectId and memberPath set, the persisted root dropped) and its own placements
+      removed, since a member takes its units from its family root. Refuses cleanly, writing
+      nothing, when the caller lacks project:write on BOTH the bound project and the adopted record,
+      when the adopted record carries members of its own whose directories could not be held at the
+      target (a derived root that would collide with an existing directory or escape the family
+      root), or for any refusal the plan names. The plan lists every principal who GAINS access
+      through the new parent chain and anyone whose access through the former placements changes. A
+      dry run answers the plan and writes nothing; applied, it commits all or nothing (a crash
+      leaves a journal recover rolls back on the next bind), audits member.adopted with the reach
+      changes, and publishes one family commit covering the touched family projects' .wai/, the
+      adopted member's included. detach-then-adopt-is-identity holds hosted as locally: the moved
+      files are byte-identical (the move copies bytes; only configuration a verb edited is
+      semantically identical), the parent semantically identical, the record and its (absent)
+      placements as before the detach.
+    signature: >-
+      adopt(principal: Principal, binding: ProjectBinding, alias: string, path: string, apply:
+      boolean): MemberAdoption
+    returns: MemberAdoption
+    params:
+      - name: principal
+        type: Principal
+        description: The caller — its write on both records is required, and it is the actor of the audit event
+      - name: binding
+        type: ProjectBinding
+        description: The bound project that adopts
+      - name: alias
+        type: string
+        description: The external alias that names the project by source.hosted
+      - name: path
+        type: string
+        description: The member path to adopt it at, relative to the bound project's root
+      - name: apply
+        type: boolean
+        description: False for a dry run
 status: design
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-01T17:04:25.830Z'
+updatedAt: '2026-10-01T17:09:06.708Z'

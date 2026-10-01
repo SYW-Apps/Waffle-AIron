@@ -459,9 +459,9 @@ methods:
         targetMethod: family
       - stepNumber: 3
         description: >-
-          A bound FAMILY ROOT is refused: renaming a hosted project record is an admin operation
-          outside the family migrations. A bound member is let through — reconcile re-keys it
-          afterwards, and its reach does not change
+          A bound FAMILY ROOT is refused with "renaming a hosted family root's id is not supported;
+          a member can be renamed, or the root recreated". A bound member is let through — reconcile
+          re-keys it afterwards, and its reach does not change
         type: local
       - stepNumber: 4
         description: Return the refusal, or nothing to list
@@ -654,6 +654,170 @@ methods:
         type: return
         outcome: MemberDetachment (dry run)
     detail: full
+  - name: adopt
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Plan the adopt with a relocation: the external's source.hosted producer resolved through
+          the hosting binding's record lookup, its isolated root as relocation.from, the member path
+          under the bound project as relocation.to, the host data directory as coordinator
+          contributing its project-record and organization store files; the plan names the adopted
+          project (its id and current root)
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: plan
+      - stepNumber: 2
+        description: Did the plan refuse?
+        type: branch
+        condition: the plan has refusals
+        onTrueStep: 6
+        onFalseStep: 3
+      - stepNumber: 3
+        label: check
+        description: Read the adopted record's hosted family — itself and the members it carries
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 4
+        description: >-
+          Resolve the caller's write over BOTH the bound project and the adopted record, each
+          through its own chain
+        type: call
+        targetComponent: authorization
+        targetMethod: reach
+      - stepNumber: 5
+        description: >-
+          Refuse when the caller cannot write both records, or when a member the adopted record
+          carries would derive a root under the target that collides with an existing directory or
+          escapes the family root
+        type: branch
+        condition: either record is not writable, or a carried member cannot be held at the target
+        onFalseStep: 8
+      - stepNumber: 6
+        label: refuse
+        description: Drop the rehearsal, if one was opened, writing nothing
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: drop
+      - stepNumber: 7
+        description: >-
+          Answer the adoption refused — the plan's refusals, or the record the caller cannot write,
+          or the member that cannot be held
+        type: return
+        outcome: MemberAdoption (refused)
+      - stepNumber: 8
+        label: reach
+        description: Gather the permission world exactly as the resolver sees it
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 9
+        description: List every user and service record (the subjects of the listing)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 10
+        description: >-
+          Build the after-world: a parent link from the adopted project to the bound project, and
+          its own placements (from the world) removed
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: relink
+      - stepNumber: 11
+        description: >-
+          Compare every subject x capability over the adopted project (and each member below it,
+          which moves with it) before and after, keeping the rows that differ — who gains access
+          through the new parent chain, and whose access through the former placements changes
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: compare
+      - stepNumber: 12
+        description: >-
+          With the repositories wired to the rehearsal's copy of the data root, convert the adopted
+          record into a member — parentProjectId the bound project, memberPath the target, its
+          persisted root dropped
+        type: call
+        targetComponent: project_repository
+        targetMethod: registerMember
+      - stepNumber: 13
+        description: >-
+          Remove each of its own placements (as the world lists them): a member takes its units from
+          its family root
+        type: call
+        targetComponent: organization_repository
+        targetMethod: deletePlacement
+      - stepNumber: 14
+        description: >-
+          Compute every file change: the family edits, the move (creates at the member path, deletes
+          at the isolated root) and the host stores
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: diff
+      - stepNumber: 15
+        description: Apply only when asked
+        type: branch
+        condition: apply is requested
+        onFalseStep: 24
+      - stepNumber: 16
+        description: >-
+          Commit everything through the family transaction, all or nothing: staged, backed up and
+          journaled before any live file moves; a changed live file refuses at staging; any failure
+          before the commit point restores every backup; a crash leaves a journal the next bind's
+          recover rolls back
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: commit
+      - stepNumber: 17
+        description: Did the transaction commit?
+        type: branch
+        condition: the outcome is committed
+        onFalseStep: 22
+      - stepNumber: 18
+        description: >-
+          Audit member.adopted naming the adopted project as projectId and the bound project as
+          composition, with its member path, the removed placements and every reach change
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 19
+        description: >-
+          Collect the family repository scope of every touched family project, the adopted member's
+          included
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
+      - stepNumber: 20
+        description: >-
+          Publish ONE commit at the family's repository root covering those pathspecs; a family that
+          is not git-backed publishes nothing
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 21
+        description: Answer the adoption as applied
+        type: return
+        outcome: MemberAdoption (applied)
+      - stepNumber: 22
+        label: failed
+        description: Audit member.adopt failed with what failed and whether every file was restored
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 23
+        description: Answer the adoption as not applied, with the outcome
+        type: return
+        outcome: MemberAdoption (not applied)
+      - stepNumber: 24
+        label: dry
+        description: 'A dry run: drop the rehearsal, writing nothing live'
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: drop
+      - stepNumber: 25
+        description: 'Answer the planned adoption: the move, the member path, the reach changes'
+        type: return
+        outcome: MemberAdoption (dry run)
+    detail: full
 status: design
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-01T17:04:49.127Z'
+updatedAt: '2026-10-01T17:09:44.532Z'

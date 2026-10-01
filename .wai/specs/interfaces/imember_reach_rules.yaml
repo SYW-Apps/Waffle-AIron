@@ -8,12 +8,14 @@ methods:
   - name: relink
     description: >-
       The permission world with the given parent links added, the given member ids unlinked (their
-      parent link removed), and the given placements added (a detached member becomes a family root
-      placed in its former family root's units). Assignments, roles and units are untouched — a
-      membership change moves no setting, only the chain.
+      parent link removed), the given placements added (a detached member becomes a family root
+      placed in its former family root's units), and every placement of the given unplaced projects
+      removed (an adopted project becomes a member and takes its units from its new family root).
+      Assignments, roles and units are untouched — a membership change moves no setting, only the
+      chain.
     signature: >-
       relink(world: PermissionWorld, added: ProjectParentLink[], removed: string[], placements:
-      ProjectPlacement[]): PermissionWorld
+      ProjectPlacement[], unplaced: string[]): PermissionWorld
     returns: PermissionWorld
     params:
       - name: world
@@ -26,6 +28,9 @@ methods:
       - name: placements
         type: ProjectPlacement[]
         description: Placements to add (empty for every change but a detach)
+      - name: unplaced
+        type: string[]
+        description: Project ids whose placements are removed (empty for every change but an adopt)
     guarantees:
       - idempotent
   - name: compare
@@ -75,4 +80,4 @@ methods:
       - idempotent
 status: design
 createdAt: '2026-10-01T16:56:27.256Z'
-updatedAt: '2026-10-01T17:04:03.953Z'
+updatedAt: '2026-10-01T17:08:47.319Z'

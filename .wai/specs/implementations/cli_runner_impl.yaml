@@ -2805,8 +2805,9 @@ methods:
       - stepNumber: 3
         description: >-
           Print one line per alias — pinned, unchanged, unresolved or unreachable, with the
-          used-name count and each unexported reference (export it from the producer's L0 to pin it)
-          — or the JSON answer
+          used-name count and each unexported reference (export it from the producer's L0 to pin
+          it); a source.hosted external prints "hosted-only producer `<id>`: available only through
+          the hosted server" instead of a bare unresolved — or the JSON answer
         type: return
         outcome: pinned
       - stepNumber: 4
@@ -2819,7 +2820,9 @@ methods:
         description: >-
           Print the status table — per alias: source, pinned, reachable, stale, drifted, then each
           used member's state, with EXTERNAL_CHECK_UNAVAILABLE and its reason on what could not be
-          compared — or the JSON answer; staleness never fails the command
+          compared; a source.hosted external's reason reads "hosted-only producer `<id>`: available
+          only through the hosted server", never a bare unavailable — or the JSON answer; staleness
+          never fails the command
         type: return
         outcome: status reported
       - stepNumber: 6
@@ -3054,4 +3057,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-01T16:59:20.693Z'
+updatedAt: '2026-10-01T17:08:02.273Z'

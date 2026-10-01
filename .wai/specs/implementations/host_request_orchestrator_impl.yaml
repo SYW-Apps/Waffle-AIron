@@ -425,7 +425,7 @@ methods:
           tool it does not serve answers with nothing and falls through to both.
         type: branch
         condition: the dispatch answered with a response envelope
-        onTrueStep: 31
+        onTrueStep: 34
         onFalseStep: 15
       - stepNumber: 15
         description: >-
@@ -470,12 +470,13 @@ methods:
         description: >-
           Is the call membership-changing — sdd_attach_member, sdd_adopt_member, sdd_detach_member
           or sdd_rename_project, dry run or applied? On hosted, membership decides reach (a member
-          inherits its parent's access) and a detach must move storage, so these are handled first
+          inherits its parent's access), and a detach or an adopt must move storage between isolated
+          roots, so these are handled first
         type: branch
         condition: >-
           the called tool is sdd_attach_member, sdd_adopt_member, sdd_detach_member or
           sdd_rename_project
-        onFalseStep: 27
+        onFalseStep: 30
       - stepNumber: 20
         description: Is it a detach?
         type: branch
@@ -493,44 +494,62 @@ methods:
       - stepNumber: 22
         description: Continue to the shared audit step
         type: jump
-        toStep: 31
+        toStep: 34
       - stepNumber: 23
+        description: Is it an adopt?
+        type: branch
+        condition: the called tool is sdd_adopt_member
+        onFalseStep: 26
+      - stepNumber: 24
+        description: >-
+          Serve the hosted adopt whole through member registration — detach's inverse: it relocates
+          the source.hosted project back into the bound project's tree at the member path in one
+          transaction, converts its record into a member, removes its own placements, and answers
+          the plan (dry run) or the applied adoption with every reach change, as the tool result
+        type: call
+        targetComponent: member_registration
+        targetMethod: adopt
+      - stepNumber: 25
+        description: Continue to the shared audit step
+        type: jump
+        toStep: 34
+      - stepNumber: 26
         label: screen
         description: >-
-          Screen it: for attach and adopt, list every principal who gains access through the new
-          parent; for a project rename, decide whether the hosted model refuses it (a family root's
-          rename)
+          Screen it: for attach, list every principal who gains access through the new parent; for a
+          project rename, decide whether the hosted model refuses it (a family root's rename)
         type: call
         targetComponent: member_registration
         targetMethod: screen
-      - stepNumber: 24
+      - stepNumber: 27
         description: Does the hosted model refuse it?
         type: branch
         condition: the screen carries a refusal
-        onFalseStep: 27
-      - stepNumber: 25
+        onFalseStep: 30
+      - stepNumber: 28
         description: >-
-          Answer an isError tool result (HTTP still 200) with the refusal — renaming a hosted
-          project record is an admin operation outside the family migrations; nothing is dispatched
+          Answer an isError tool result (HTTP still 200) with the refusal — "renaming a hosted
+          family root's id is not supported; a member can be renamed, or the root recreated";
+          nothing is dispatched
         type: local
-      - stepNumber: 26
+      - stepNumber: 29
         description: Continue to the shared audit step
         type: jump
-        toStep: 31
-      - stepNumber: 27
+        toStep: 34
+      - stepNumber: 30
         label: serve
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 28
+      - stepNumber: 31
         description: >-
           Connect the scoped server to the request transport and process the JSON-RPC message; a
           screened DRY-RUN result carries the screen's reach changes beside the plan (who gains or
           loses access), so a human approves the membership change with its access consequences in
           view
         type: local
-      - stepNumber: 29
+      - stepNumber: 32
         description: >-
           Did an APPLIED family-shape tool succeed — sdd_add_member, sdd_move_member, or a stage-6
           family migration the scoped server ran (attach, adopt, rename project, rename alias,
@@ -539,8 +558,8 @@ methods:
           records must follow
         type: branch
         condition: the call was an applied family-shape tool and its outcome is success
-        onFalseStep: 31
-      - stepNumber: 30
+        onFalseStep: 34
+      - stepNumber: 33
         description: >-
           Reconcile the family's member records with the family on disk — register new members
           (placed like their family root, no grants), relocate moved ones, disable departed ones —
@@ -551,13 +570,13 @@ methods:
         type: call
         targetComponent: member_registration
         targetMethod: reconcile
-      - stepNumber: 31
+      - stepNumber: 34
         label: audit
         description: Audit the handled data-plane tool call on the shared best-effort path
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: auditToolCall
-      - stepNumber: 32
+      - stepNumber: 35
         description: Return the MCP response
         type: return
         outcome: MCP response
@@ -578,4 +597,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-01T17:05:25.760Z'
+updatedAt: '2026-10-01T17:10:01.097Z'

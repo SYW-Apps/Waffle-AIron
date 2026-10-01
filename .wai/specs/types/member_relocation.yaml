@@ -2,21 +2,24 @@ kind: value-object
 id: member_relocation
 name: MemberRelocation
 description: >-
-  How a detach also MOVES the member, as the hosted server asks for it: the member's directory
-  leaves its family root's isolated tree for an isolated root of its own, inside the same
-  transaction as the detach's file edits and the host store writes, all or nothing. The coordinator
-  is the host data directory, which contains every family root and every new root, so every owner
-  lies within it. With a relocation, every external the detach writes names its producer by hosted
-  record id instead of by path, since a path cannot cross isolated roots; a hosted project's record
-  id is its project id (member records are keyed by it, and the hosted caller refuses a family whose
-  root record id differs from its project id).
+  How a detach or an adopt also MOVES the project, as the hosted server asks for it, inside the same
+  transaction as the verb's file edits and the host store writes, all or nothing. Detach: the
+  member's directory leaves its family root's isolated tree for an isolated root of its own (to).
+  Adopt, its exact inverse: a top-level project named by an external's source.hosted leaves its own
+  isolated root (from) for the member path inside the adopting project's tree (to). The coordinator
+  is the host data directory, which contains every family root and every isolated root, so every
+  owner lies within it. With a relocation, detach writes hosted sources instead of path sources (a
+  path cannot cross isolated roots) and adopt removes them; a hosted project's record id is its
+  project id (member records are keyed by it, and the hosted caller refuses a family whose root
+  record id differs from its project id).
 subsystem: sdd_migrations
 fields:
   - name: to
     type: string
     description: >-
-      The member's new isolated root, absolute (where a new hosted project with its id would be
-      allocated); must not exist
+      Where the project's files go, absolute: detach — the member's new isolated root (where a new
+      hosted project with its id would be allocated); adopt — the member path inside the adopting
+      project's tree. Must not exist
     optional: false
   - name: coordinator
     type: string
@@ -26,6 +29,13 @@ fields:
     type: string[]
     description: The host store files the coordinator owner contributes (project records, organization)
     optional: false
+  - name: from
+    type: string
+    description: >-
+      adopt: the adopted project's current isolated root, absolute (the root the hosting binding's
+      record lookup answers for its source.hosted id). Absent for detach, whose source is the
+      member's own directory
+    optional: true
 methods: []
 createdAt: '2026-10-01T17:03:04.052Z'
-updatedAt: '2026-10-01T17:03:15.612Z'
+updatedAt: '2026-10-01T17:08:35.099Z'
