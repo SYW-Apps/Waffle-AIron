@@ -427,18 +427,61 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
  * resolves to zero permissions under the live-owner model.
  */
 export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {}): Promise<void> {
+  // Step 1.
   const cfg = resolveHostConfig(options);
-  const report = localAdmin.migratePermissionModel(cfg.dataDir, options.fix === true);
+  const fix = options.fix === true;
+  // Steps 2-3: the permission-model migration first.
+  const report = localAdmin.migratePermissionModel(cfg.dataDir, fix);
   if (report.findings.length === 0) {
     logger.success('Hosted data is on the permission model — nothing to migrate.');
+  } else {
+    logger.info(`${report.findings.length} finding(s)${report.applied ? ' — applied' : ' (dry run; re-run with --fix to apply)'}:`);
+    for (const f of report.findings) {
+      logger.info(`  [${f.area.padEnd(8)}] ${f.detail}`);
+    }
+    if (!report.applied) {
+      logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
+    }
+  }
+  // Step 4: then the stage-7 member upgrade — a dry-run plan, applied all or nothing only with --fix.
+  const upgrade = localAdmin.upgradeMemberRecords(cfg.dataDir, fix);
+  const plan = upgrade.plan;
+  const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
+  // Steps 5-6.
+  if (writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
+    logger.success('Hosted members are records — nothing to upgrade.');
     return;
   }
-  logger.info(`${report.findings.length} finding(s)${report.applied ? ' — applied' : ' (dry run; re-run with --fix to apply)'}:`);
-  for (const f of report.findings) {
-    logger.info(`  [${f.area.padEnd(8)}] ${f.detail}`);
+  // Step 7.
+  printMemberUpgrade(upgrade, fix);
+}
+
+/** Step 7: the member upgrade plan, once per family, with its proof, key rewrites and refusals. */
+function printMemberUpgrade(upgrade: ReturnType<typeof localAdmin.upgradeMemberRecords>, fix: boolean): void {
+  const plan = upgrade.plan;
+  const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
+  for (const familyRootId of [...new Set(writes.map((m) => m.familyRootId))]) {
+    logger.info(`Family ${familyRootId}:`);
+    for (const m of writes.filter((w) => w.familyRootId === familyRootId)) {
+      const rows = plan.reach.filter((r) => r.memberId === m.record.id);
+      const verdict = rows.every((r) => r.equal) ? 'all equal — nobody’s reach changes' : 'NOT all equal';
+      logger.info(`  ${m.action} ${m.record.id} (parent ${m.record.parentProjectId}, path ${m.record.memberPath}) — `
+        + `reach: ${rows.length} row(s) compared, ${verdict}`);
+    }
   }
-  if (!report.applied) {
-    logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
+  for (const n of plan.narrowings) {
+    logger.info(`  key ${n.keyId}: ${n.before.join(', ')} → ${n.after.join(', ')} (${n.widening})`);
+  }
+  for (const r of plan.refusals) logger.error(`  refused [${r.area}] ${r.detail}`);
+  if (plan.refusals.length > 0) {
+    logger.warn('The member upgrade is blocked — nothing was written.');
+  } else if (upgrade.applied) {
+    logger.success(`Member upgrade applied (${upgrade.outcome?.written.length ?? 0} store file(s) swapped in).`);
+  } else if (upgrade.outcome) {
+    logger.error(`Member upgrade failed: ${upgrade.outcome.failure ?? 'unknown'} — `
+      + (upgrade.outcome.restored ? 'every store was restored.' : `NOT restored: ${upgrade.outcome.unrestored.join(', ')}`));
+  } else if (!fix) {
+    logger.warn('Member upgrade NOT applied (dry run; re-run with --fix to apply).');
   }
 }
 

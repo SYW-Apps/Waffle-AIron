@@ -2,10 +2,14 @@ import { listOrganizationUnits, listProjectPlacements } from './organization.js'
 import { listAssignments } from './permissions.js';
 import { listRoles, BUILTIN_ROLES, isBuiltinRoleId } from './roles.js';
 import { resolvePermission, resolveVisibleScopes } from './permission-rules.js';
+import { listProjectRecords } from './projects.js';
 import type {
   EffectivePermission,
+  FamilyReach,
+  HostedProjectRecord,
   PermissionWorld,
   Principal,
+  ProjectParentLink,
   Role,
   VisibleScope,
 } from './types.js';
@@ -36,20 +40,57 @@ function mergeRoles(stored: Role[]): Role[] {
 
 /**
  * Gather the read-only world the pure permission rules walk: the organization tree,
- * project placements, the assignment grid, and the role definitions. This is the
- * only I/O in the authorization path.
+ * project placements, the member records' parent links, the assignment grid, and
+ * the role definitions. This is the only I/O in the authorization path.
  */
 function gatherWorld(dataDir: string): PermissionWorld {
   // Step 1: gather all organization units.
   const units = listOrganizationUnits(dataDir);
   // Step 2: gather all project placements.
   const placements = listProjectPlacements(dataDir);
-  // Step 3: gather the relevant permission assignments.
+  // Step 3: gather the hosted records and project the member records' parent links.
+  const parents = parentLinksOf(listProjectRecords(dataDir));
+  // Step 4: gather the relevant permission assignments.
   const assignments = listAssignments(dataDir);
-  // Step 4: gather the role definitions the subject's bindings reference.
+  // Step 5: gather the role definitions the subject's bindings reference.
   const roles = listRoles(dataDir);
-  // Step 5: assemble the world, merging the intrinsic built-in roles.
-  return { assignments, roles: mergeRoles(roles), units, placements };
+  // Step 6: assemble the world, merging the intrinsic built-in roles.
+  return { assignments, roles: mergeRoles(roles), units, placements, parents };
+}
+
+/** Each member record's link to its parent — the project rungs of a member's chain. */
+function parentLinksOf(records: HostedProjectRecord[]): ProjectParentLink[] {
+  return records
+    .filter((r) => r.parentProjectId !== undefined)
+    .map((r) => ({ projectId: r.id, parentProjectId: r.parentProjectId as string }));
+}
+
+/**
+ * Gather the permission world exactly as authorize resolves over it, for a
+ * caller that must reason about resolution itself (the member upgrade's reach
+ * proof, a membership change's reach listing). A read; no authentication.
+ */
+export function gatherPermissionWorld(dataDir: string): PermissionWorld {
+  return gatherWorld(dataDir);
+}
+
+/**
+ * Which of the given hosted records the principal may read and write, each
+ * resolved through its OWN chain (its own scope, its parents', its family root's
+ * units) over one gathered world. An unauthenticated principal reaches nothing.
+ */
+export function resolveFamilyReach(dataDir: string, principal: Principal, projectIds: string[]): FamilyReach {
+  const reach: FamilyReach = { readable: [], writable: [] };
+  if (!principal.authenticated || !principal.permissionSubject) return reach;
+  // Step 1: gather the permission world once.
+  const world = gatherPermissionWorld(dataDir);
+  // Steps 2-4: each record's read and write over its own project scope.
+  for (const id of projectIds) {
+    if (resolvePermission(principal.permissionSubject, 'project:read', 'project', id, world).value === 'yes') reach.readable.push(id);
+    if (resolvePermission(principal.permissionSubject, 'project:write', 'project', id, world).value === 'yes') reach.writable.push(id);
+  }
+  // Step 5.
+  return reach;
 }
 
 /**
@@ -67,9 +108,9 @@ export function authorize(
   if (!principal.authenticated || !principal.permissionSubject) {
     return { value: 'no', source: 'instance-default' };
   }
-  // Steps 1-5: gather the permission world once.
+  // Steps 1-6: gather the permission world once.
   const world = gatherWorld(dataDir);
-  // Step 6: resolve the effective permission through pure permission rules.
+  // Step 7: resolve the effective permission through pure permission rules.
   return resolvePermission(principal.permissionSubject, capability, scopeKind, scopeId, world);
 }
 
@@ -87,9 +128,9 @@ export function visibleScopes(
   if (!principal.authenticated || !principal.permissionSubject) {
     return [];
   }
-  // Steps 1-5: gather the permission world once.
+  // Steps 1-6: gather the permission world once.
   const world = gatherWorld(dataDir);
-  // Step 6: compute the actionable scopes plus their ancestor breadcrumb.
+  // Step 7: compute the actionable scopes plus their ancestor breadcrumb.
   return resolveVisibleScopes(principal.permissionSubject, capability, world);
 }
 

@@ -10,6 +10,9 @@
 // HTTP caller reads the status code it maps to.
 // ---------------------------------------------------------------------------
 
+import * as memberRegistration from './members.js';
+import type { MemberUpgradeReport } from './members.js';
+
 // Project, key, producer, secret, git-backing and lock workflows, and the dev
 // server's project registration (admin_orchestrator).
 export {
@@ -73,3 +76,25 @@ export { existingProjectRoot } from './projects.js';
 
 // The admin plane's authorization refusal.
 export { AdminAuthError } from './errors.js';
+
+// The stage-7 member upgrade behind `wairon host doctor` (member_registration).
+export type { MemberUpgradeReport, MemberUpgradePlan } from './members.js';
+
+/**
+ * Plan, and with apply commit, the stage-7 member upgrade of the data dir:
+ * every hosted family's members registered as records (no grants: they inherit
+ * through their parent chain), every member-qualified API key entry rewritten
+ * to a record id, nobody's reach changed — all or nothing. A dry run or a
+ * blocked plan writes nothing.
+ */
+export function upgradeMemberRecords(dataDir: string, apply: boolean): MemberUpgradeReport {
+  // Step 1.
+  const plan = memberRegistration.plan(dataDir);
+  // Steps 2-4.
+  if (apply && plan.refusals.length === 0 && plan.rehearsal) {
+    return memberRegistration.apply(dataDir, plan);
+  }
+  // Steps 5-6.
+  memberRegistration.discard(plan);
+  return { plan: { ...plan, rehearsal: undefined }, applied: false };
+}

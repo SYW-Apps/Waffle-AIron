@@ -7,6 +7,7 @@ description: >-
   rehearsal's copy of the data root, and committed by the family transaction with the data directory
   as its one owner and the project-record and credential store files as its areas.
 contract: imember_registration
+sourcePath: src/server/members.ts
 injectedParams:
   - dataDir
 methods:
@@ -820,4 +821,4 @@ methods:
     detail: full
 status: design
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-01T17:09:44.532Z'
+updatedAt: '2026-10-01T17:39:42.064Z'

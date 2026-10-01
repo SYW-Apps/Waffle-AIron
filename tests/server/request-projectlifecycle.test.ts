@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { upgradeMemberRecords } from '../../src/server/local-admin.js';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
@@ -378,7 +379,7 @@ function policyVendoring(name: string): InstancePackPolicy {
   };
 }
 
-describe('handleMcpRequest subproject confinement (end-to-end)', () => {
+describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () => {
   const MASTER = 'confine-master-credential-value';
   let base: string;
   let dataDir: string;
@@ -418,6 +419,8 @@ describe('handleMcpRequest subproject confinement (end-to-end)', () => {
     childRoot = seedChainedMount(demoRoot, 'billing', 'packages/billing');
     runWithProjectRoot(childRoot, () => hostCore.provisionProject('billing'));
     invalidateSpecCache();
+    // Stage 7: billing becomes a hosted record of its own.
+    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
 
     unitId = createUnit(dataDir, {
       id: '', name: 'Confine', slug: 'confine', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
@@ -497,171 +500,55 @@ describe('handleMcpRequest subproject confinement (end-to-end)', () => {
     return (await res.json()) as RpcResponse;
   };
 
-  /** True only for THE confinement refusal: isError, naming the tool, the bound
-   *  qualifier, and the "acts on the whole project" reason. Deliberately strict so
-   *  an unrelated failure (a permission denial, an Unknown-project error, a
-   *  producer misconfiguration) can never be mistaken for the guard firing. */
-  const refused = (r: RpcResponse, tool: string): boolean =>
-    r.result?.isError === true &&
-    text(r).includes(tool) &&
-    text(r).includes('demo::billing') &&
-    /acts on the whole project/.test(text(r)) &&
-    /unqualified credential/.test(text(r));
+  // Since stage 7 a member is a record of its own: a credential bound to the
+  // member — by its id, or for one release by the deprecated qualifier — reaches
+  // the member's OWN record-level tools (the documented widening within the
+  // member only), and never acts on its parent's record.
 
-  /** The nine RECORD-level tools with arguments that WOULD take effect. */
-  const recordLevelCalls = (): { tool: string; args: Record<string, unknown> }[] => [
-    { tool: 'sdd_host_initialize_project', args: { id: 'sneaky', displayName: 'Sneaky', ownerUnitId: unitId } },
-    { tool: 'sdd_host_get_approval_status', args: { requestId: seededRequestId } },
-    { tool: 'sdd_host_await_approval', args: { requestId: seededRequestId, timeoutSeconds: 0 } },
-    { tool: 'sdd_host_pack_list', args: {} },
-    { tool: 'sdd_host_pack_install', args: { name: 'sneaky', content: CONFINE_PACK } },
-    { tool: 'sdd_host_policy_evaluate', args: {} },
-    { tool: 'sdd_host_policy_reconcile', args: {} },
-    { tool: 'sdd_host_produce', args: { target: 'notion' } },
-    { tool: 'sdd_host_commit_project', args: { message: 'sneaky commit' } },
-  ];
-
-  // ── the refused set ────────────────────────────────────────────────────────
-
-  it('refuses EVERY record-level hosted tool on a subproject-qualified binding (isError, HTTP 200)', async () => {
-    for (const { tool, args } of recordLevelCalls()) {
-      const body = await send(qualTok, tool, args);
-      expect(refused(body, tool), `${tool} was not refused: ${text(body)}`).toBe(true);
-    }
-    // The await_approval refusal is immediate — it never enters the long poll.
-  }, 30_000);
-
-  it('the same nine tools on an UNQUALIFIED binding are never refused (no regression)', async () => {
-    for (const { tool, args } of recordLevelCalls()) {
-      const body = await send(plainTok, tool, args);
-      expect(refused(body, tool), `${tool} was wrongly refused on a plain binding`).toBe(false);
-    }
-  }, 30_000);
-
-  it('a refusal still flows through the SAME best-effort audit path (TOP project id + bound qualifier)', async () => {
-    await send(qualTok, 'sdd_host_commit_project', { message: 'sneaky commit' });
-
-    const events = queryAuditEvents(dataDir, { action: 'mcp.tool.call' });
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      target: 'sdd_host_commit_project',
-      projectId: 'demo', // TOP project id — provenance anchors at the top
-      outcome: 'failed', // an isError result derives a failed outcome
-      tokenId: 'tok-qual',
-    });
-    expect(JSON.parse(events[0].metadata ?? '{}')).toEqual({ subproject: 'billing' });
-  }, 20_000);
-
-  // ── what each refusal PREVENTED ────────────────────────────────────────────
-
-  it('refused initialize: NO new project was created and NO approval request was queued', async () => {
-    const before = listApprovalRequests(dataDir).length;
-    const body = await send(qualTok, 'sdd_host_initialize_project', {
-      id: 'sneaky', displayName: 'Sneaky', ownerUnitId: unitId,
-    });
-    expect(refused(body, 'sdd_host_initialize_project')).toBe(true);
-
-    // DID NOT HAPPEN: no project record/tree for "sneaky", and no new approval.
-    expect(existingProjectRoot(dataDir, 'sneaky')).toBeNull();
-    expect(fs.existsSync(path.join(dataDir, 'projects', 'sneaky'))).toBe(false);
-    expect(listApprovalRequests(dataDir)).toHaveLength(before);
-
-    // The control DOES create it, proving the fixture could have succeeded.
-    const ok = await send(plainTok, 'sdd_host_initialize_project', {
-      id: 'sneaky', displayName: 'Sneaky', ownerUnitId: unitId,
-    });
-    expect(ok.result?.isError).toBeFalsy();
-    expect(existingProjectRoot(dataDir, 'sneaky')).toBeTruthy();
-  }, 20_000);
-
-  it('refused pack install: the pack was NOT vendored into the parent project', async () => {
+  it('record-level tools act on the MEMBER record: a pack install lands in the member, never the parent', async () => {
     const body = await send(qualTok, 'sdd_host_pack_install', { name: 'sneaky', content: CONFINE_PACK });
-    expect(refused(body, 'sdd_host_pack_install')).toBe(true);
-
+    expect(body.result?.isError, text(body)).toBeFalsy();
+    expect(fs.existsSync(path.join(childRoot, '.wai', 'packs', 'sneaky.yaml'))).toBe(true);
     // DID NOT HAPPEN: nothing landed in the parent's pack set or on its disk.
     expect(packs.listProjectPacks(cfg, MASTER, 'demo').map((p) => p.name)).not.toContain('sneaky-doctrine');
     expect(fs.existsSync(path.join(demoRoot, '.wai', 'packs', 'sneaky.yaml'))).toBe(false);
-    // …nor in the CHILD tree (the guard refuses; it never redirects the write).
-    expect(fs.existsSync(path.join(childRoot, '.wai', 'packs', 'sneaky.yaml'))).toBe(false);
-
-    // The control installs it into the parent, proving the call was viable.
-    const ok = await send(plainTok, 'sdd_host_pack_install', { name: 'sneaky', content: CONFINE_PACK });
-    expect(ok.result?.isError).toBeFalsy();
-    expect(packs.listProjectPacks(cfg, MASTER, 'demo').map((p) => p.name)).toContain('sneaky-doctrine');
   }, 20_000);
 
-  it("refused policy reconcile: the instance policy's default pack was NOT vendored into the parent", async () => {
-    setPackPolicyRecord(dataDir, policyVendoring('policy-doctrine'));
-
-    const body = await send(qualTok, 'sdd_host_policy_reconcile', {});
-    expect(refused(body, 'sdd_host_policy_reconcile')).toBe(true);
-
-    // DID NOT HAPPEN: the reconciliation never ran, so the default pack is absent.
-    expect(packs.listProjectPacks(cfg, MASTER, 'demo').map((p) => p.name)).not.toContain('policy-doctrine');
-
-    // The control reconciles, vendoring it — the policy really was actionable.
-    const ok = await send(plainTok, 'sdd_host_policy_reconcile', {});
-    expect(ok.result?.isError, text(ok)).toBeFalsy();
-    expect(packs.listProjectPacks(cfg, MASTER, 'demo').map((p) => p.name)).toContain('policy-doctrine');
-  }, 20_000);
-
-  it('refused pack list / policy evaluate: the parent project’s state was NOT disclosed', async () => {
+  it("pack list and policy reconcile answer for the member's own record, never disclosing or touching the parent's", async () => {
     packs.installProjectPack(cfg, MASTER, 'demo', 'seeded', SEEDED_PACK);
-
     const list = await send(qualTok, 'sdd_host_pack_list', {});
-    expect(refused(list, 'sdd_host_pack_list')).toBe(true);
-    // DID NOT HAPPEN: the parent's installed pack is not named in the refusal.
+    expect(list.result?.isError, text(list)).toBeFalsy();
     expect(text(list)).not.toContain('seeded-doctrine');
 
-    const evaluated = await send(qualTok, 'sdd_host_policy_evaluate', {});
-    expect(refused(evaluated, 'sdd_host_policy_evaluate')).toBe(true);
-    // DID NOT HAPPEN: no evaluation payload came back.
-    expect(text(evaluated)).not.toContain('compliant');
-
-    // The control sees the parent's pack, proving the listing was available.
-    const ok = await send(plainTok, 'sdd_host_pack_list', {});
-    expect(text(ok)).toContain('seeded-doctrine');
+    setPackPolicyRecord(dataDir, policyVendoring('policy-doctrine'));
+    const reconciled = await send(qualTok, 'sdd_host_policy_reconcile', {});
+    expect(reconciled.result?.isError, text(reconciled)).toBeFalsy();
+    expect(packs.listProjectPacks(cfg, MASTER, 'billing').map((p) => p.name)).toContain('policy-doctrine');
+    expect(packs.listProjectPacks(cfg, MASTER, 'demo').map((p) => p.name)).not.toContain('policy-doctrine');
   }, 20_000);
 
-  it('refused approval status / await: the parent project’s pending request was NOT disclosed', async () => {
-    for (const tool of ['sdd_host_get_approval_status', 'sdd_host_await_approval']) {
-      const tok = tool === 'sdd_host_await_approval' ? requesterQualTok : qualTok;
-      const body = await send(tok, tool, { requestId: seededRequestId, timeoutSeconds: 0 });
-      expect(refused(body, tool), text(body)).toBe(true);
-      // DID NOT HAPPEN: the request id and its status never reach the caller.
-      expect(text(body)).not.toContain(seededRequestId);
-      expect(text(body)).not.toContain('pending');
-    }
-
-    // The controls DO see it (u-full via approval:decide, u-req as requester).
-    expect(text(await send(plainTok, 'sdd_host_get_approval_status', { requestId: seededRequestId })))
-      .toContain(seededRequestId);
-    expect(text(await send(requesterPlainTok, 'sdd_host_await_approval', { requestId: seededRequestId, timeoutSeconds: 0 })))
-      .toContain(seededRequestId);
+  it('a member-bound call is audited naming the member, with the family root a qualifier named as composition', async () => {
+    await send(qualTok, 'sdd_host_commit_project', { message: 'member commit' });
+    const events = queryAuditEvents(dataDir, { action: 'mcp.tool.call' });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ target: 'sdd_host_commit_project', projectId: 'billing', composition: 'demo', tokenId: 'tok-qual' });
   }, 20_000);
 
-  // ── the TREE-scoped pair: confined by forwarding, not refused ──────────────
-
-  it('lock on a qualified binding freezes the CHILD tree and leaves the PARENT unlocked', async () => {
+  it('lock on a member-bound credential freezes the MEMBER tree and leaves the PARENT unlocked', async () => {
     const body = await send(qualTok, 'sdd_host_lock_project', {});
     expect(body.result?.isError, text(body)).toBeFalsy();
     const outcome = JSON.parse(text(body)) as ProjectActionOutcome;
     expect(outcome.status).toBe('completed');
     expect(outcome.action).toBe('project:lock');
-    expect(outcome.summary).toContain('subproject "billing"');
+    expect(outcome.summary).toContain('Locked project "billing"');
 
-    // The lock record landed in the CHILD's .wai/ …
     const childLockPath = path.join(childRoot, '.wai', 'lock.json');
     expect(fs.existsSync(childLockPath)).toBe(true);
     const childLock = JSON.parse(fs.readFileSync(childLockPath, 'utf8')) as { stateId: { digest: string }; status: string };
     expect(childLock.status).toBe('ready');
     expect(outcome.lock?.stateId.digest).toBe(childLock.stateId.digest);
-
-    // DID NOT HAPPEN: the PARENT tree was never locked — no record at all.
+    // DID NOT HAPPEN: the PARENT tree was never locked.
     expect(fs.existsSync(path.join(demoRoot, '.wai', 'lock.json'))).toBe(false);
-    // …and the child's StateId is genuinely the child's, not the parent's.
-    const parentStateId = runWithProjectRoot(demoRoot, () => hostCore.computeStateId());
-    expect(childLock.stateId.digest).not.toBe(parentStateId.digest);
   }, 20_000);
 
   it('lock WITHOUT a qualifier still locks the project itself (no regression)', async () => {
@@ -669,7 +556,6 @@ describe('handleMcpRequest subproject confinement (end-to-end)', () => {
     const outcome = JSON.parse(text(body)) as ProjectActionOutcome;
     expect(outcome.status).toBe('completed');
     expect(outcome.summary).toContain('Locked project "demo"');
-    expect(outcome.summary).not.toContain('subproject');
 
     expect(fs.existsSync(path.join(demoRoot, '.wai', 'lock.json'))).toBe(true);
     // The child was NOT dragged along by a project-level lock.

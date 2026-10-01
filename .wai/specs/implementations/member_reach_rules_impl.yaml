@@ -1,7 +1,10 @@
 id: member_reach_rules_impl
 name: Member Reach Rules Implementation
-description: Pure rules of member reach; the implementation pass names their source file.
+description: >-
+  Pure rules of member reach over supplied values: the world after a membership change, the reach
+  comparison across it, and the token qualifier rewrite.
 contract: imember_reach_rules
+sourcePath: src/server/member-reach.ts
 methods:
   - name: relink
     narrative:
@@ -79,6 +82,6 @@ methods:
         type: return
         outcome: PlannedNarrowing
     detail: full
-status: design
+status: complete
 createdAt: '2026-10-01T16:56:34.586Z'
-updatedAt: '2026-10-01T17:08:48.806Z'
+updatedAt: '2026-10-01T17:39:39.645Z'

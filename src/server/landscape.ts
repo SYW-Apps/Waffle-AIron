@@ -3,7 +3,7 @@ import { runWithProjectRoot } from '../utils/fs.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import { resolveProjectRoot, listProjectRecords } from './projects.js';
+import { resolveProjectRoot, listProjectRecords, listFamilyRecords } from './projects.js';
 import * as hostCore from './adapters/core.js';
 import {
   createUnit,
@@ -516,6 +516,12 @@ export function placeProject(
   }
   if (!getOrganizationUnit(cfg.dataDir, placement.unitId)) {
     throw new Error('the target organization unit does not exist');
+  }
+  // Steps 8-10: a member takes its units from its family root — a placement of
+  // its own would not be a rung of its permission chain, so it is refused.
+  const family = listFamilyRecords(cfg.dataDir, placement.projectId);
+  if (family.length > 0 && family[0].id !== placement.projectId) {
+    throw new Error('A member takes its units from its family root; place the family root instead');
   }
   const stored = placeProjectInUnit(cfg.dataDir, placement);
   tryAppendAudit(

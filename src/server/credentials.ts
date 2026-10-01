@@ -106,3 +106,20 @@ export function listCredentials(dataDir: string, project: string): ApiKeyRecord[
 export function listByOwner(dataDir: string, ownerUserId: string): ApiKeyRecord[] {
   return load(dataDir).filter((r) => r.ownerSubject?.userId === ownerUserId);
 }
+
+/**
+ * Replace one credential's project narrowing with the given entries (record ids
+ * or '*'), leaving the hash, owner, label and expiry untouched — the member
+ * upgrade's token rewrite. Refuses an empty narrowing and an unknown or revoked
+ * id.
+ */
+export function renarrowCredential(dataDir: string, id: string, projects: string[]): ApiKeyRecord {
+  if (projects.length === 0) throw new Error(`Credential "${id}": a narrowing cannot be empty.`);
+  const records = load(dataDir);
+  const rec = records.find((r) => r.id === id);
+  if (!rec) throw new Error(`Unknown credential "${id}".`);
+  if (rec.revokedAt) throw new Error(`Credential "${id}" is revoked.`);
+  rec.projects = [...projects];
+  save(dataDir, records);
+  return rec;
+}

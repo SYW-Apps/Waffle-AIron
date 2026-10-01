@@ -123,6 +123,65 @@ export interface PermissionWorld {
   roles: Role[];
   units: OrganizationUnitRecord[];
   placements: ProjectPlacement[];
+  /** Every member record's link to its parent record — the project rungs of a
+   *  member's chain, between its own scope and its family root's units. */
+  parents: ProjectParentLink[];
+}
+
+/** One rung of the project-to-parent-project chain: a member record and the
+ *  record of the project that declares it. Projects nest like units. */
+export interface ProjectParentLink {
+  projectId: string;
+  parentProjectId: string;
+}
+
+/** A request's reach into its bound project's hosted family, per record through
+ *  each record's own chain. */
+export interface FamilyReach {
+  /** Family record ids with project:read yes. */
+  readable: string[];
+  /** Family record ids with project:write yes. */
+  writable: string[];
+}
+
+/** One row of a reach comparison: one project, subject and capability, before
+ *  and after a change. */
+export interface ReachComparison {
+  memberId: string;
+  subjectId: string;
+  capability: string;
+  before: EffectivePermission;
+  after: EffectivePermission;
+  equal: boolean;
+}
+
+/** One member a hosted family declares on disk, as the member registration
+ *  plans its hosted record. */
+export interface PlannedMemberRecord {
+  record: HostedProjectRecord;
+  familyRootId: string;
+  /** The pre-stage-7 member-qualified selector that reached it. */
+  qualifier: string;
+  /** register | relocate | rename | unchanged | unreadable */
+  action: 'register' | 'relocate' | 'rename' | 'unchanged' | 'unreadable';
+  /** For action rename: the record id the member held before. */
+  previousId?: string;
+}
+
+/** One API key's narrowing as the member upgrade rewrites it. */
+export interface PlannedNarrowing {
+  keyId: string;
+  before: string[];
+  after: string[];
+  widening: string;
+}
+
+/** Where a hosted project's specs are committed: its family root's repository
+ *  and the project's own .wai/ pathspec relative to it. */
+export interface RepositoryScope {
+  familyRootId: string;
+  repositoryRoot: string;
+  pathspecs: string[];
 }
 
 /** The resolved effective permission for one (subject, capability, target). */
@@ -279,6 +338,10 @@ export interface AuditEvent {
   target?: string;
   /** Small redacted diagnostic payload serialized by policy. */
   metadata?: string;
+  /** The project whose operation reached this one, when the action did not
+   *  bind it directly (a family migration's start, or the family root a
+   *  deprecated member-qualified selector named). */
+  composition?: string;
 }
 
 /** Admin filter for querying the audit log; unset fields match everything. */
@@ -1071,6 +1134,13 @@ export interface HostedProjectRecord {
   /** Derived (not persisted on the record): the project's home unit — its
    *  'owner' placement — populated when the record is listed for display. */
   unitId?: string;
+  /** The record id of the project that declares this one as a member; absent
+   *  for a family root. A member's rootPath is never persisted: it is derived
+   *  as the parent's root joined with memberPath. */
+  parentProjectId?: string;
+  /** The member's path relative to its parent's root, forward slashes; present
+   *  iff parentProjectId is. */
+  memberPath?: string;
 }
 
 /** What a policy-governed hosted initialization created and applied: the

@@ -11,7 +11,7 @@ import {
   listOrganizationUnits,
   listProjectPlacements,
 } from './organization.js';
-import { listProjectRecords } from './projects.js';
+import { listProjectRecords, listFamilyRecords } from './projects.js';
 import { resolveGitToken, setSecret } from '../utils/secrets.js';
 import type {
   AuditEvent,
@@ -441,18 +441,24 @@ function runMirrorSync(cfg: HostConfig, binding: GitBackingBinding): boolean {
   cloneOrOpen(binding.remote, binding.branch, workdir, binding.credentialRef);
 
   if (binding.scopeKind === 'unit') {
-    // Every project placed in the unit's subtree mirrors as projects/<id>/.wai/.
+    // Every family root placed in the unit's subtree, PLUS every member record
+    // of those families (a member's units come through its family root), mirrors
+    // as projects/<its own id>/.wai/ from its own root.
     const units = listOrganizationUnits(cfg.dataDir);
     const subtree = subtreeUnitIds(units, binding.scopeId!);
     const placedIds = new Set(
       listProjectPlacements(cfg.dataDir)
         .filter((p) => subtree.has(p.unitId))
-        .map((p) => p.projectId),
+        .flatMap((p) => {
+          const family = listFamilyRecords(cfg.dataDir, p.projectId);
+          // A placement of a member itself is not a rung: only a family root's carries its family.
+          return family[0]?.id === p.projectId ? family.map((r) => r.id) : [];
+        }),
     );
     const projectsDir = path.join(workdir, 'projects');
     fs.rmSync(projectsDir, { recursive: true, force: true });
     for (const rec of listProjectRecords(cfg.dataDir)) {
-      if (!placedIds.has(rec.id)) continue;
+      if (!placedIds.has(rec.id) || !rec.rootPath) continue;
       mirrorTree(path.join(rec.rootPath, '.wai'), path.join(projectsDir, rec.id, '.wai'));
     }
   } else {

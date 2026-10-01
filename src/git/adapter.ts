@@ -60,18 +60,23 @@ export function integrateDefault(defaultBranch: string): void {
 }
 
 /**
- * Stage ONLY the given subpath (pathspec-confined — never the whole tree) and
- * commit; returns the new commit SHA, or null when nothing under the subpath
- * changed (a clean scope never produces an empty commit). There is deliberately
- * NO stage-everything operation anymore: `git add -A` was the bug that made a
- * repository shared with the project's own codebase unsafe — wairon must never
- * commit a team's own files.
+ * Stage ONLY the given pathspecs (pathspec-confined — never the whole tree,
+ * never `git add -A`) and commit ONLY them (`git commit -- <pathspecs>`, so a
+ * path staged by anyone else is never swept into the commit); returns the new
+ * commit SHA, or null when nothing under the pathspecs changed (a clean scope
+ * never produces an empty commit). One pathspec is a project's .wai/; several
+ * are one family commit covering every member a family migration touched. A
+ * pathspec that neither exists nor is tracked (a member that never committed
+ * and is gone) is skipped, since git refuses a pathspec matching nothing.
  */
-export function commitScoped(subpath: string, message: string): string | null {
-  git(['add', '--', subpath]);
-  const staged = git(['diff', '--cached', '--name-only', '--', subpath]);
+export function commitScoped(subpaths: string[], message: string): string | null {
+  if (subpaths.length === 0) throw new Error('commitScoped needs at least one pathspec');
+  const live = subpaths.filter((p) => fs.existsSync(path.join(getProjectRoot(), p)) || git(['ls-files', '--', p]) !== '');
+  if (live.length === 0) return null;
+  git(['add', '--', ...live]);
+  const staged = git(['diff', '--cached', '--name-only', '--', ...live]);
   if (!staged) return null;
-  git(['commit', '-m', message, '--', subpath]);
+  git(['commit', '-m', message, '--', ...live]);
   return git(['rev-parse', 'HEAD']);
 }
 

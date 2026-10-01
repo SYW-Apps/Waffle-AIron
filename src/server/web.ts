@@ -3156,11 +3156,10 @@ function opsExportProjectTree(
   cfg: HostConfig,
   sessionId: string,
   project: string,
-  subproject?: string,
   includeDerived?: boolean,
   allowPartial?: boolean,
 ): TreeExportResult {
-  return projectops.exportProjectTree(cfg, sessionId, project, subproject, includeDerived, allowPartial);
+  return projectops.exportProjectTree(cfg, sessionId, project, includeDerived, allowPartial);
 }
 
 /** POST /web/projects/tree/import?projectId=[&replace=1] — project:admin, raw zip body. */
@@ -3169,10 +3168,9 @@ function opsImportProjectTree(
   sessionId: string,
   project: string,
   archive: Uint8Array,
-  subproject?: string,
   replaceExisting?: boolean,
 ): TreeImportResult {
-  return projectops.importProjectTree(cfg, sessionId, project, archive, subproject, replaceExisting);
+  return projectops.importProjectTree(cfg, sessionId, project, archive, replaceExisting);
 }
 // Stage B+C: the selectable-profile catalog and server-global pack adoption.
 function opsListAvailableProfiles(cfg: HostConfig, sessionId: string): AvailableProfile[] {
@@ -3565,7 +3563,6 @@ export async function handleWebRequest(
           cfg,
           sessionId,
           q(url, 'projectId') ?? '',
-          undefined,
           q(url, 'includeDerived') === '1',
           q(url, 'allowPartial') === '1',
         );
@@ -3587,7 +3584,6 @@ export async function handleWebRequest(
             sessionId,
             q(url, 'projectId') ?? '',
             archiveBody(body),
-            undefined,
             q(url, 'replace') === '1',
           ),
         );

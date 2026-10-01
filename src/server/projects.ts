@@ -2,25 +2,35 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { aiPathsAt } from '../config/paths.js';
 import { readYamlFile } from '../utils/yaml.js';
-import { listFilesRecursive } from '../utils/fs.js';
-import { resolveContainedProjectPath } from './adapters/core.js';
-import { declaredMembers } from '../models/project.js';
-import type { HostedProjectRecord, Principal } from './types.js';
+import { listFilesRecursive, runWithProjectRoot } from '../utils/fs.js';
+import { resolveContainedProjectPath, loadProjectConfig } from './adapters/core.js';
+import { declaredMembers, effectiveProjectId } from '../models/project.js';
+import type {
+  HostedProjectRecord,
+  PlannedMemberRecord,
+  Principal,
+  RepositoryScope,
+} from './types.js';
 
 // ---------------------------------------------------------------------------
 // Project Registry (sdd_host)
 //
 // File-backed I/O for hosted-project records at <dataDir>/projects.json, and
-// id → isolated-root resolution for request scoping. Each project lives at
-// <dataDir>/projects/<id>/ with its own .wai/ tree — the isolation unit.
+// id → root resolution for request scoping. A family root lives at
+// <dataDir>/projects/<id>/ (or, for the dev server, the developer's own tree)
+// with its own .wai/ tree — the isolation unit.
 //
-// A selector or narrowing entry MAY be member-qualified — 'projectId::alias'
-// (nested members compose, e.g. 'proj::a::b', one member alias per hop) —
-// binding the MEMBER's root INSIDE the project's isolated tree. A hop is the
-// alias the project declares the member under, the same string a legacy mount
-// id was, so every qualifier minted before stage 3 binds the same root. The
-// qualifier is a NARROWING only: permission capabilities keep resolving over
-// the TOP project; the qualifier can never widen or refine grants.
+// Since stage 7 every member of a hosted family is a record of its own: it
+// carries parentProjectId and memberPath, and its root is never persisted — it
+// is derived on read as its parent's root joined with memberPath through the
+// containment guard, so moving a family's directory moves its members with it.
+// Projects nest like organization units: a narrowing entry naming a project
+// covers that project and every member below it.
+//
+// A member-QUALIFIED selector or narrowing entry ('projectId::alias', one
+// alias per hop) is DEPRECATED: for one release it is mapped to the member's
+// record by walking the aliases each root declares, never to a root no record
+// holds and never wider than the member.
 // ---------------------------------------------------------------------------
 
 /** Path-safe project ids only, so a crafted id can never escape projects/. */
@@ -34,6 +44,7 @@ function registryPath(dataDir: string): string {
   return path.join(dataDir, 'projects.json');
 }
 
+/** The records as stored: a member record carries no rootPath. */
 function load(dataDir: string): HostedProjectRecord[] {
   try {
     return JSON.parse(fs.readFileSync(registryPath(dataDir), 'utf8')) as HostedProjectRecord[];
@@ -42,12 +53,25 @@ function load(dataDir: string): HostedProjectRecord[] {
   }
 }
 
+/** Persist the set; a member record's derived rootPath is never written. */
 function save(dataDir: string, records: HostedProjectRecord[]): void {
   const p = registryPath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(records, null, 2) + '\n');
+  const stored = records.map((r) => (r.parentProjectId ? withoutRoot(r) : r));
+  fs.writeFileSync(tmp, JSON.stringify(stored, null, 2) + '\n');
   fs.renameSync(tmp, p);
+}
+
+function withoutRoot(record: HostedProjectRecord): HostedProjectRecord {
+  const { rootPath: _rootPath, ...rest } = record;
+  return rest as HostedProjectRecord;
+}
+
+/** A member path as records hold it: forward slashes, no leading ./ and no trailing slash. */
+export function normalizeMemberPath(p: string): string {
+  const posix = path.posix.normalize(p.replace(/\\/g, '/'));
+  return posix.replace(/^\.\/+/, '').replace(/\/+$/, '');
 }
 
 /** The isolated root path for a project id. */
@@ -55,13 +79,55 @@ export function projectRoot(dataDir: string, id: string): string {
   return path.join(dataDir, 'projects', id);
 }
 
-/** The isolated root of an EXISTING project, or null. Validates the id first, so
- *  a malformed id can never traverse out of projects/, and a missing project is
- *  reported clearly instead of binding a phantom root. */
+// ── Derived roots ───────────────────────────────────────────────────────────
+
+/**
+ * A record's root: a family root's persisted rootPath, or a member's derived
+ * one — its parent's root joined with memberPath through the containment
+ * guard, recursively. Null when the chain is broken (a parent record gone, a
+ * cycle, or a path that escapes its parent).
+ */
+function derivedRoot(records: HostedProjectRecord[], record: HostedProjectRecord, seen = new Set<string>()): string | null {
+  if (!record.parentProjectId) return record.rootPath ?? null;
+  if (seen.has(record.id) || record.memberPath === undefined) return null;
+  seen.add(record.id);
+  const parent = records.find((r) => r.id === record.parentProjectId);
+  if (!parent) return null;
+  const parentRoot = derivedRoot(records, parent, seen);
+  if (parentRoot === null) return null;
+  try {
+    return resolveContainedProjectPath(parentRoot, record.memberPath);
+  } catch {
+    return null;
+  }
+}
+
+/** The record with its rootPath derived ('' when the chain is broken). */
+function withDerivedRoot(records: HostedProjectRecord[], record: HostedProjectRecord): HostedProjectRecord {
+  if (!record.parentProjectId) return record;
+  return { ...record, rootPath: derivedRoot(records, record) ?? '' };
+}
+
+/** The family root record a record climbs to through parentProjectId, or null for a broken chain. */
+function familyRootOf(records: HostedProjectRecord[], record: HostedProjectRecord): HostedProjectRecord | null {
+  let current: HostedProjectRecord | undefined = record;
+  const seen = new Set<string>();
+  while (current?.parentProjectId) {
+    if (seen.has(current.id)) return null;
+    seen.add(current.id);
+    const parentId: string = current.parentProjectId;
+    current = records.find((r) => r.id === parentId);
+  }
+  return current ?? null;
+}
+
+/** The root of an EXISTING record (a member's derived), or null. Validates the
+ *  id first, so a malformed id can never traverse out of projects/. */
 export function existingProjectRoot(dataDir: string, id: string): string | null {
   if (!isValidProjectId(id)) return null;
-  const rec = load(dataDir).find((r) => r.id === id);
-  return rec ? rec.rootPath : null;
+  const records = load(dataDir);
+  const rec = records.find((r) => r.id === id);
+  return rec ? derivedRoot(records, rec) : null;
 }
 
 /** Allocate an isolated root, create its directory, and persist the record. */
@@ -87,16 +153,11 @@ export function createProjectRecord(dataDir: string, id: string): HostedProjectR
 }
 
 /**
- * Register a project record at a caller-supplied rootPath (the local dev
- * server's single project — admin_orchestrator.registerLocalDevProject is the
- * workflow that admits it). Unlike createProjectRecord — which FORCES the isolated
- * root under <dataDir>/projects/<id> — the dev server's one project IS the
- * developer's own tree (an arbitrary path outside dataDir), so the rootPath is
- * supplied verbatim and no directory is created. Idempotent: upserts by id (a
- * pre-existing record's createdAt is preserved), so restarting `wairon dev` over
- * the same tree reuses the record instead of churning it. resolveProjectRoot then
- * returns this rootPath for a principal scoped to the id, so the whole hosted graph
- * pipeline resolves the id → the cwd unchanged. The id must be a valid project id.
+ * Register a FAMILY ROOT record at a caller-supplied rootPath (the local dev
+ * server's single project, or a hosted detach's relocated member). No
+ * directory is created. Idempotent: upserts by id (a pre-existing record's
+ * createdAt is preserved), and any parentProjectId / memberPath the id held are
+ * cleared — the record written is a family root with its root persisted.
  */
 export function registerProjectRecord(
   dataDir: string,
@@ -119,16 +180,111 @@ export function registerProjectRecord(
   return record;
 }
 
-/** All hosted-project records. */
-export function listProjectRecords(dataDir: string): HostedProjectRecord[] {
-  return load(dataDir);
+/**
+ * Upsert a MEMBER record by id: parentProjectId and memberPath are required and
+ * replace the stored ones (a moved member is relocated, never duplicated); an
+ * existing record's createdAt is kept. A family root record is CONVERTED into a
+ * member (its persisted root dropped). No directory is created or copied and a
+ * member's rootPath is never persisted. Refuses a malformed id, a parent no
+ * record holds, a parent that is the record itself or one of its own members,
+ * and a memberPath that is absolute or escapes its parent.
+ */
+export function registerMemberRecord(dataDir: string, record: HostedProjectRecord): HostedProjectRecord {
+  const memberPath = validMemberShape(record);
+  const records = load(dataDir);
+  refuseParent(records, record);
+  const existing = records.find((r) => r.id === record.id);
+  const member: HostedProjectRecord = {
+    id: record.id,
+    rootPath: '',
+    status: record.status === 'disabled' ? 'disabled' : existing?.status ?? 'active',
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    parentProjectId: record.parentProjectId,
+    memberPath,
+  };
+  const next = existing ? records.map((r) => (r.id === record.id ? member : r)) : [...records, member];
+  save(dataDir, next);
+  return withDerivedRoot(next, member);
 }
 
-/** Deregister a project and remove its isolated tree (idempotent). */
+/** A member record's id and path shape: a valid id, a parent, and a relative path within it. Answers the normalized path. */
+function validMemberShape(record: HostedProjectRecord): string {
+  if (!isValidProjectId(record.id)) {
+    throw new Error(`Invalid project id "${record.id}" (allowed: lowercase letters, digits, hyphen).`);
+  }
+  if (!record.parentProjectId || record.memberPath === undefined) {
+    throw new Error(`Member record "${record.id}" needs a parentProjectId and a memberPath.`);
+  }
+  const memberPath = normalizeMemberPath(record.memberPath);
+  if (escapesParent(memberPath)) {
+    throw new Error(`Member record "${record.id}": the member path "${record.memberPath}" must be relative and stay within its parent.`);
+  }
+  return memberPath;
+}
+
+/** Whether a normalized member path is empty, absolute, or climbs out of its parent. */
+function escapesParent(memberPath: string): boolean {
+  if (memberPath === '' || memberPath === '.' || memberPath === '..') return true;
+  return path.posix.isAbsolute(memberPath) || /^[A-Za-z]:/.test(memberPath) || memberPath.startsWith('../');
+}
+
+/** Refuse a parent no record holds, and a parent that is the record itself or one of its members. */
+function refuseParent(records: HostedProjectRecord[], record: HostedProjectRecord): void {
+  const parent = records.find((r) => r.id === record.parentProjectId);
+  if (!parent) throw new Error(`Member record "${record.id}": no record holds its parent "${record.parentProjectId}".`);
+  if (record.parentProjectId === record.id || descendsFrom(records, parent, record.id)) {
+    throw new Error(`Member record "${record.id}": its parent "${record.parentProjectId}" is the record itself or one of its own members.`);
+  }
+}
+
+/** True when `record` has `ancestorId` somewhere up its parent chain. */
+function descendsFrom(records: HostedProjectRecord[], record: HostedProjectRecord, ancestorId: string): boolean {
+  let current: HostedProjectRecord | undefined = record;
+  const seen = new Set<string>();
+  while (current?.parentProjectId && !seen.has(current.id)) {
+    seen.add(current.id);
+    if (current.parentProjectId === ancestorId) return true;
+    const parentId: string = current.parentProjectId;
+    current = records.find((r) => r.id === parentId);
+  }
+  return false;
+}
+
+/** Set a record's status (active | disabled). Touches no directory. */
+export function setProjectRecordStatus(dataDir: string, id: string, status: string): HostedProjectRecord {
+  if (status !== 'active' && status !== 'disabled') {
+    throw new Error(`Invalid project status "${status}" (allowed: active, disabled).`);
+  }
+  const records = load(dataDir);
+  const existing = records.find((r) => r.id === id);
+  if (!existing) throw new Error(`Unknown project "${id}".`);
+  const record: HostedProjectRecord = { ...existing, status };
+  const next = records.map((r) => (r.id === id ? record : r));
+  save(dataDir, next);
+  return withDerivedRoot(next, record);
+}
+
+/** All hosted-project records, each member with its derived rootPath. */
+export function listProjectRecords(dataDir: string): HostedProjectRecord[] {
+  const records = load(dataDir);
+  return records.map((r) => withDerivedRoot(records, r));
+}
+
+/**
+ * Deregister a project. A family root's isolated tree is removed with it, and
+ * it is refused while a member record still names it as parent; a member
+ * record's directory lies inside its parent's tree and is NEVER removed.
+ * Idempotent for a missing id.
+ */
 export function removeProjectRecord(dataDir: string, id: string): void {
   const records = load(dataDir);
   const rec = records.find((r) => r.id === id);
-  if (rec) {
+  if (!rec) return;
+  if (!rec.parentProjectId) {
+    const members = records.filter((r) => r.parentProjectId === id).map((r) => r.id);
+    if (members.length > 0) {
+      throw new Error(`Project "${id}" still has member record(s) ${members.join(', ')} — remove or detach them first.`);
+    }
     try {
       fs.rmSync(rec.rootPath, { recursive: true, force: true });
     } catch {
@@ -138,13 +294,62 @@ export function removeProjectRecord(dataDir: string, id: string): void {
   save(dataDir, records.filter((r) => r.id !== id));
 }
 
-// ── Subproject-qualified selectors / narrowing entries ──────────────────────
+// ── Families ────────────────────────────────────────────────────────────────
 
-/** Separator joining a project id to its chained-subproject mount chain. */
+/**
+ * The hosted family a record belongs to: its family root record first, then
+ * every record whose parent chain reaches it, depth-first in stored order,
+ * each member with its derived rootPath. [] for an unknown id. Reads no
+ * project file.
+ */
+export function listFamilyRecords(dataDir: string, id: string): HostedProjectRecord[] {
+  const records = load(dataDir);
+  const rec = records.find((r) => r.id === id);
+  if (!rec) return [];
+  const root = familyRootOf(records, rec);
+  if (!root) return [];
+  const out: HostedProjectRecord[] = [];
+  const visit = (r: HostedProjectRecord): void => {
+    if (out.some((o) => o.id === r.id)) return;
+    out.push(withDerivedRoot(records, r));
+    for (const child of records.filter((c) => c.parentProjectId === r.id)) visit(child);
+  };
+  visit(root);
+  return out;
+}
+
+/**
+ * Where a record commits: its family root's isolated root (the family's one
+ * repository) and its own .wai/ pathspec relative to it — '.wai/' for a family
+ * root, '<memberPath chain>/.wai/' for a member. Null for an unknown id or a
+ * broken parent chain.
+ */
+export function projectRepositoryScope(dataDir: string, id: string): RepositoryScope | null {
+  const records = load(dataDir);
+  const rec = records.find((r) => r.id === id);
+  if (!rec) return null;
+  const segments: string[] = [];
+  let current: HostedProjectRecord | undefined = rec;
+  const seen = new Set<string>();
+  while (current?.parentProjectId) {
+    if (seen.has(current.id) || current.memberPath === undefined) return null;
+    seen.add(current.id);
+    segments.unshift(current.memberPath);
+    const parentId: string = current.parentProjectId;
+    current = records.find((r) => r.id === parentId);
+  }
+  if (!current) return null;
+  const prefix = segments.length > 0 ? `${segments.join('/')}/` : '';
+  return { familyRootId: current.id, repositoryRoot: current.rootPath, pathspecs: [`${prefix}.wai/`] };
+}
+
+// ── Member declarations on disk ─────────────────────────────────────────────
+
+/** Separator joining a project id to its member alias chain (deprecated qualifier form). */
 export const SUBPROJECT_SEPARATOR = '::';
 
-/** A parsed possibly-qualified selector/narrowing entry: the TOP project id and
- *  the (possibly empty) chained-subsystem mount chain, in order. */
+/** A parsed possibly-qualified selector/narrowing entry: the family root id and
+ *  the (possibly empty) member alias chain, in order. */
 export interface QualifiedProjectSelector {
   projectId: string;
   mounts: string[];
@@ -152,9 +357,9 @@ export interface QualifiedProjectSelector {
 
 /**
  * Parse a possibly-qualified selector or narrowing entry. The first
- * `::`-segment is the project id, the remainder is the mount chain
+ * `::`-segment is the project id, the remainder is the alias chain
  * ('proj::a::b' → { projectId: 'proj', mounts: ['a', 'b'] }). Returns null for
- * a non-string, an invalid project id, or an empty mount segment.
+ * a non-string, an invalid project id, or an empty alias segment.
  */
 export function parseQualifiedSelector(value: unknown): QualifiedProjectSelector | null {
   if (typeof value !== 'string' || value.length === 0) return null;
@@ -164,29 +369,39 @@ export function parseQualifiedSelector(value: unknown): QualifiedProjectSelector
   return { projectId, mounts };
 }
 
-/**
- * The path the member `alias` is declared under at `root`, read the way the
- * spec loader reads a root's members: its project.yaml `members` entry first
- * and, for one release, a legacy L1 mount of its own spec tree (a subsystem
- * with that id carrying a projectPath). Returns null when `root` declares no
- * member under the alias — an internal subsystem included, which is not a
- * root at all — and the reason when the declaration cannot be followed.
- */
-function memberPathOn(root: string, alias: string): { path: string } | { refused: string } | null {
-  let config: unknown = null;
+/** One member a root declares: its alias and path, or why the declaration cannot be followed. */
+interface MemberDeclaration {
+  alias: string;
+  path?: string;
+  refused?: string;
+}
+
+/** A root's project.yaml, read raw; null when it has none or it cannot be read. */
+function rawConfigAt(root: string): Record<string, unknown> | null {
   try {
     const file = aiPathsAt(root).projectConfig();
-    if (fs.existsSync(file)) config = readYamlFile(file);
+    if (!fs.existsSync(file)) return null;
+    const raw = readYamlFile(file);
+    return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
   } catch {
-    config = null;
+    return null;
   }
-  const declared = config && typeof config === 'object'
-    ? declaredMembers(config as Parameters<typeof declaredMembers>[0]).find((m) => m.alias === alias)
-    : undefined;
-  if (declared) return declared.problem ? { refused: declared.problem } : { path: declared.path };
+}
+
+/**
+ * Every member a root declares, read the way the spec loader reads them: its
+ * project.yaml `members` first and, for one release, each legacy L1 mount of
+ * its own spec tree (a subsystem carrying a projectPath) not already a member.
+ */
+function memberDeclarationsOn(root: string): MemberDeclaration[] {
+  const config = rawConfigAt(root);
+  const out: MemberDeclaration[] = config
+    ? declaredMembers(config as Parameters<typeof declaredMembers>[0]).map((m) =>
+        m.problem ? { alias: m.alias, refused: m.problem } : { alias: m.alias, path: m.path })
+    : [];
   const externals = (config as { externals?: Record<string, unknown> } | null)?.externals;
   const specsDir = aiPathsAt(root).specsDir();
-  if (!fs.existsSync(specsDir)) return null;
+  if (!fs.existsSync(specsDir)) return out;
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
     let raw: unknown;
     try {
@@ -195,64 +410,176 @@ function memberPathOn(root: string, alias: string): { path: string } | { refused
       continue;
     }
     if (!raw || typeof raw !== 'object' || !('parentSystem' in raw)) continue;
-    if ((raw as { id?: unknown }).id !== alias) continue;
+    const alias = (raw as { id?: unknown }).id;
     const pp = (raw as { projectPath?: unknown }).projectPath;
-    if (typeof pp !== 'string' || pp.trim() === '') return null;
-    if (externals?.[alias] !== undefined) {
-      return { refused: `the alias "${alias}" is also declared under \`externals\` — one alias names one project` };
-    }
-    return { path: pp };
+    if (typeof alias !== 'string' || typeof pp !== 'string' || pp.trim() === '') continue;
+    if (out.some((m) => m.alias === alias)) continue;
+    out.push(externals?.[alias] !== undefined
+      ? { alias, refused: `the alias "${alias}" is also declared under \`externals\` — one alias names one project` }
+      : { alias, path: pp });
   }
-  return null;
+  return out;
 }
 
 /**
- * Resolve a member chain to the member's root INSIDE the project's isolated
- * tree. Each hop is a member alias, looked up among the current root's member
- * declarations — its project.yaml `members` and, for one release, its legacy
- * L1 mounts (the alias is the string the legacy mount id was, so a qualifier
- * minted before stage 3 names the same root) — and the member dir is resolved
- * WITHIN the current root under the containment guard (absolute and
- * ../-escaping paths are rejected). An alias that declares no member throws a
- * clear, actionable error — the resolution never silently falls back to the
- * project root, and never binds an internal subsystem.
+ * Resolve a member alias chain to the member's directory INSIDE the family
+ * root's tree, each hop through the containment guard. An alias that declares
+ * no member throws a clear, actionable error — never a silent fallback to the
+ * project root, and never an internal subsystem.
  */
 export function resolveSubprojectMounts(
   projectId: string,
   projectRoot: string,
   mounts: string[],
 ): string {
+  return walkMemberAliases(projectId, projectRoot, mounts).root;
+}
+
+/** The hops of a member alias chain: each member's declared path and the directory it resolves to. */
+function walkMemberAliases(
+  projectId: string,
+  projectRoot: string,
+  mounts: string[],
+): { root: string; hops: { alias: string; path: string; root: string }[] } {
   let root = projectRoot;
   let at = projectId;
+  const hops: { alias: string; path: string; root: string }[] = [];
   for (const alias of mounts) {
-    const member = memberPathOn(root, alias);
+    const member = memberDeclarationsOn(root).find((m) => m.alias === alias);
     if (!member) {
       throw new Error(
         `unknown member "${alias}" on "${at}" — it declares no member under that alias ` +
           '(in project.yaml `members`, or a legacy L1 mount); an internal subsystem is not a member and cannot be bound',
       );
     }
-    if ('refused' in member) {
-      throw new Error(`member "${alias}" on "${at}" cannot be bound: ${member.refused}`);
+    if (member.refused !== undefined || member.path === undefined) {
+      throw new Error(`member "${alias}" on "${at}" cannot be bound: ${member.refused ?? 'no path'}`);
     }
     // Containment guard: the member dir must resolve strictly within the current
-    // root, so a crafted declaration can never escape the project's isolated tree.
+    // root, so a crafted declaration can never escape the family's isolated tree.
     root = resolveContainedProjectPath(root, member.path);
+    hops.push({ alias, path: normalizeMemberPath(member.path), root });
     at = `${at}${SUBPROJECT_SEPARATOR}${alias}`;
   }
-  return root;
+  return { root, hops };
 }
 
 /**
- * Validate ONE possibly-qualified projects-narrowing entry at MINT time: the
- * top project must exist, and for a qualified entry each alias must declare a
- * member of the project it is looked up in (project.yaml `members`, or for one
- * release a legacy L1 mount). An unknown alias, or an internal subsystem,
- * throws with guidance so a broken narrowing is never stored. '*' (no
- * narrowing) is always valid.
+ * DEPRECATED for one release: the member RECORD a member-qualified selector
+ * names — the aliases walked from the family root's root, each hop mapped to
+ * the record whose parentProjectId and memberPath name that directory. Throws
+ * with guidance for a family root no active record holds, an alias that
+ * declares no member, and a directory no record holds (an un-upgraded data dir).
  */
-export function assertMintableNarrowingEntry(dataDir: string, entry: string): void {
-  if (entry === '*') return;
+function resolveQualifiedMember(dataDir: string, qualifier: string): HostedProjectRecord {
+  const parsed = parseQualifiedSelector(qualifier);
+  if (!parsed || parsed.mounts.length === 0) {
+    throw new Error(`invalid member qualifier "${qualifier}" (expected projectId::alias, one alias per hop)`);
+  }
+  const records = load(dataDir);
+  const top = records.find((r) => r.id === parsed.projectId);
+  const topRoot = top ? derivedRoot(records, top) : null;
+  if (!top || top.status !== 'active' || topRoot === null) throw new Error(`unknown project "${parsed.projectId}"`);
+  const { hops } = walkMemberAliases(parsed.projectId, topRoot, parsed.mounts);
+  let current = top;
+  for (const hop of hops) {
+    const next = records.find((r) => r.parentProjectId === current.id && r.memberPath === hop.path);
+    if (!next) {
+      throw new Error(
+        `member "${hop.alias}" of "${current.id}" holds no hosted record yet — run \`wairon host doctor --fix\` to register the family's members`,
+      );
+    }
+    current = next;
+  }
+  return withDerivedRoot(records, current);
+}
+
+/** The project id a member's own project.yaml declares, read through the host core adapter; null when unreadable. */
+function projectIdAt(root: string): string | null {
+  try {
+    if (!fs.existsSync(root)) return null;
+    const config = runWithProjectRoot(root, () => loadProjectConfig());
+    return config ? effectiveProjectId(config) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The members the family rooted at a record declares ON DISK, members of
+ * members included, each answered as the record it should hold — id (its own
+ * project id), parentProjectId (the declaring project's record id), memberPath
+ * as declared — with the pre-stage-7 qualifier that bound it and its action
+ * against the stored records: register, relocate, rename, unchanged, or
+ * unreadable (never skipped). Writes nothing.
+ */
+export function planMemberRecords(dataDir: string, id: string): PlannedMemberRecord[] {
+  const records = load(dataDir);
+  const rec = records.find((r) => r.id === id);
+  if (!rec) return [];
+  const root = familyRootOf(records, rec);
+  const rootDir = root ? derivedRoot(records, root) : null;
+  if (!root || rootDir === null) return [];
+  const out: PlannedMemberRecord[] = [];
+  const walk = (parentId: string, dir: string, qualifier: string, depth: number): void => {
+    if (depth > 32) return;
+    for (const decl of memberDeclarationsOn(dir)) {
+      const planned = planOne(records, root.id, parentId, dir, qualifier, decl);
+      out.push(planned);
+      if (planned.action !== 'unreadable') {
+        walk(planned.record.id, resolveContainedProjectPath(dir, decl.path as string), planned.qualifier, depth + 1);
+      }
+    }
+  };
+  walk(root.id, rootDir, root.id, 0);
+  return out;
+}
+
+/** One declared member as the record it should hold, and its action against the stored records. */
+function planOne(
+  records: HostedProjectRecord[],
+  familyRootId: string,
+  parentId: string,
+  parentDir: string,
+  parentQualifier: string,
+  decl: MemberDeclaration,
+): PlannedMemberRecord {
+  const qualifier = `${parentQualifier}${SUBPROJECT_SEPARATOR}${decl.alias}`;
+  const unreadable = (): PlannedMemberRecord => ({
+    record: { id: decl.alias, rootPath: '', status: 'active', createdAt: '', parentProjectId: parentId, memberPath: decl.path ?? '' },
+    familyRootId, qualifier, action: 'unreadable',
+  });
+  if (decl.refused !== undefined || decl.path === undefined) return unreadable();
+  let dir: string;
+  try {
+    dir = resolveContainedProjectPath(parentDir, decl.path);
+  } catch {
+    return unreadable();
+  }
+  const memberId = projectIdAt(dir);
+  if (memberId === null || !isValidProjectId(memberId)) return unreadable();
+  const memberPath = normalizeMemberPath(decl.path);
+  const record: HostedProjectRecord = { id: memberId, rootPath: dir, status: 'active', createdAt: '', parentProjectId: parentId, memberPath };
+  const holder = records.find((r) => r.id === memberId);
+  if (holder) {
+    const agrees = holder.parentProjectId === parentId && holder.memberPath === memberPath;
+    return { record: { ...record, createdAt: holder.createdAt, status: holder.status }, familyRootId, qualifier, action: agrees ? 'unchanged' : 'relocate' };
+  }
+  const previous = records.find((r) => r.parentProjectId === parentId && r.memberPath === memberPath);
+  return previous
+    ? { record, familyRootId, qualifier, action: 'rename', previousId: previous.id }
+    : { record, familyRootId, qualifier, action: 'register' };
+}
+
+/**
+ * Validate ONE projects-narrowing entry at MINT time and answer what is stored:
+ * '*' and a record id as they are; a DEPRECATED member-qualified entry mapped to
+ * the member's record id. An unknown project, an alias that declares no member,
+ * an internal subsystem, or a member no record holds throws with guidance, so a
+ * broken narrowing is never stored.
+ */
+export function assertMintableNarrowingEntry(dataDir: string, entry: string): string {
+  if (entry === '*') return entry;
   const parsed = parseQualifiedSelector(entry);
   if (!parsed) {
     throw new Error(
@@ -260,84 +587,90 @@ export function assertMintableNarrowingEntry(dataDir: string, entry: string): vo
         `member-qualified as projectId::alias)`,
     );
   }
-  const rec = load(dataDir).find((r) => r.id === parsed.projectId);
-  if (!rec) throw new Error(`unknown project "${parsed.projectId}"`);
-  if (parsed.mounts.length > 0) {
-    resolveSubprojectMounts(parsed.projectId, rec.rootPath, parsed.mounts);
-  }
+  if (parsed.mounts.length > 0) return resolveQualifiedMember(dataDir, entry).id;
+  if (!load(dataDir).some((r) => r.id === parsed.projectId)) throw new Error(`unknown project "${parsed.projectId}"`);
+  return parsed.projectId;
 }
 
-/** The resolved binding of one authorized data-plane request: the root to bind
- *  (the CHILD root when subproject-qualified), the TOP project id (provenance +
- *  permission scope), and the subsystem mount chain when one applied. */
+// ── Binding ─────────────────────────────────────────────────────────────────
+
+/** The resolved binding of one authorized data-plane request: the bound
+ *  record, its root, its family root, and the deprecated qualifier that
+ *  resolved it (for one release). */
 export interface ProjectBinding {
   rootPath: string;
   projectId: string;
-  /** The qualifier's mount chain ('a' or 'a::b'), absent for an unqualified binding. */
-  subproject?: string;
+  familyRootId: string;
+  /** The deprecated member-qualified selector or entry that resolved the record. */
+  via?: string;
 }
 
-/** True when an authorized narrowing entry covers `target`: equal, or `target`
- *  nested strictly deeper under it ('proj' covers 'proj::a'; 'proj::a' covers
- *  'proj::a::b' but never plain 'proj' or a sibling 'proj::b'). */
-function narrowingCovers(entry: string, target: string): boolean {
-  return target === entry || target.startsWith(entry + SUBPROJECT_SEPARATOR);
+/** The record id a narrowing entry names: itself, or — a deprecated qualifier — its member record's id. */
+function entryRecordId(dataDir: string, entry: string): string | null {
+  if (!entry.includes(SUBPROJECT_SEPARATOR)) return entry;
+  try {
+    return resolveQualifiedMember(dataDir, entry).id;
+  } catch {
+    return null;
+  }
+}
+
+/** True when an entry covers the target record: equal to it, or naming a record it descends from. */
+function entryCovers(records: HostedProjectRecord[], entryId: string, target: HostedProjectRecord): boolean {
+  return entryId === target.id || descendsFrom(records, target, entryId);
 }
 
 /**
- * Resolve the binding of the authorized project (or chained subproject). The
- * selector is honored ONLY at or below the principal's authorized set — it can
- * never widen scope: a principal narrowed to 'proj::a' may bind 'proj::a' (or
- * deeper, e.g. 'proj::a::b') but NEVER plain 'proj' or a sibling; a principal
- * with plain 'proj' (or '*') MAY narrow via a qualified selector. A qualified
- * target resolves to the chained child's root inside the project's isolated
- * tree; an unknown or non-chained mount rejects (null) — never a silent
- * fallback to the project root. Returns null for any project outside the
- * authorized set, unknown, or disabled.
+ * Resolve the binding of an authorized target to a hosted RECORD. Coverage
+ * follows the project chain as permissions do: an entry covers a target iff it
+ * is '*', equal to it, or names a project the target descends from. A
+ * deprecated member-qualified selector or entry is first mapped to its member
+ * record (via). A member record is bound only while its derived directory still
+ * holds a project whose id is the record's. Returns null — with no existence
+ * leak — for anything outside the authorized set, unknown or inactive.
  */
 export function resolveProjectBinding(
   dataDir: string,
   principal: Principal,
   selector?: string | null,
 ): ProjectBinding | null {
+  // Step 1: fix the target.
   const authorized = principal.projects;
   const wildcard = authorized.includes('*');
-
-  let target: string | undefined;
-  if (selector) {
-    // The selector cannot widen scope: it must sit at or below an authorized entry.
-    if (!wildcard && !authorized.some((e) => e !== '*' && narrowingCovers(e, selector))) return null;
-    target = selector;
-  } else if (!wildcard && authorized.length === 1) {
-    target = authorized[0]; // single-entry token needs no selector (entry may be qualified)
-  } else {
-    return null; // wildcard/multi-project tokens must name a project
+  let target: string;
+  if (selector) target = selector;
+  else if (!wildcard && authorized.length === 1) target = authorized[0];
+  else return null;
+  // Steps 2-6: a deprecated member-qualified target maps to its member record.
+  let targetId: string | null = target;
+  let via: string | undefined;
+  if (target.includes(SUBPROJECT_SEPARATOR)) {
+    targetId = entryRecordId(dataDir, target);
+    if (targetId === null) return null;
+    via = target;
   }
-
-  const parsed = parseQualifiedSelector(target);
-  if (!parsed) return null;
-  const rec = load(dataDir).find((r) => r.id === parsed.projectId);
-  if (!rec || rec.status !== 'active') return null;
-
-  let rootPath = rec.rootPath;
-  if (parsed.mounts.length > 0) {
-    try {
-      rootPath = resolveSubprojectMounts(parsed.projectId, rec.rootPath, parsed.mounts);
-    } catch {
-      return null; // unknown / non-chained / escaping mount — never the project root
-    }
-  }
-  const binding: ProjectBinding = { rootPath, projectId: parsed.projectId };
-  if (parsed.mounts.length > 0) binding.subproject = parsed.mounts.join(SUBPROJECT_SEPARATOR);
-  return binding;
+  // Steps 7-8: authorize by the project chain, then load the record.
+  const records = load(dataDir);
+  const rec = records.find((r) => r.id === targetId);
+  if (!rec || !isValidProjectId(rec.id)) return null;
+  if (!wildcard && !authorized.some((e) => {
+    const entryId = entryRecordId(dataDir, e);
+    return entryId !== null && entryCovers(records, entryId, rec);
+  })) return null;
+  if (rec.status !== 'active') return null;
+  // Steps 9-11: a member's root is derived, and must still hold the record's project.
+  const rootPath = derivedRoot(records, rec);
+  if (rootPath === null) return null;
+  if (rec.parentProjectId && projectIdAt(rootPath) !== rec.id) return null;
+  const familyRoot = familyRootOf(records, rec);
+  if (!familyRoot) return null;
+  // Step 12.
+  return { rootPath, projectId: rec.id, familyRootId: familyRoot.id, ...(via ? { via } : {}) };
 }
 
 /**
- * Resolve the isolated root of the authorized project (the chained child's root
- * for a subproject-qualified selector/narrowing). The selector is honored ONLY
- * within the principal's authorized set — it can never widen scope. Returns
- * null for any project outside that set, unknown, or disabled. Thin projection
- * of resolveProjectBinding for callers that need only the root path.
+ * Resolve the root of the authorized record — the rootPath projection of
+ * resolveProjectBinding, for callers that need only the root.
  */
 export function resolveProjectRoot(
   dataDir: string,

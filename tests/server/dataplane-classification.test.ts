@@ -10,7 +10,6 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import {
   requiredDataPlaneCapability,
   isExplicitlyClassifiedTool,
-  subprojectConfinementError,
   toolScope,
   mcpChangeChannels,
 } from '../../src/server/request.js';
@@ -23,7 +22,7 @@ import {
 // classification: `sdd_list_external_interfaces` and the topology tools fell into
 // it and demanded project:write for a read. Every tool the hosted server
 // advertises must be classified on purpose — including WHERE it acts, which is
-// what confines a credential narrowed to a chained child (steps 10–11).
+// where it acts.
 // ---------------------------------------------------------------------------
 
 const READS_WITHOUT_A_READ_PREFIX = [
@@ -67,9 +66,7 @@ describe('data-plane tool classification', () => {
       expect(requiredDataPlaneCapability(name), name).toBe('project:write');
       expect(toolScope(name), name).toBe('tree');
       expect(isExplicitlyClassifiedTool(name), name).toBe(true);
-      // Tree-scoped: a credential narrowed to a member may call it on the member's tree (the plan climbs only as far as the reach, and refuses family-partial beyond it).
       const dryRun = { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name, arguments: { dryRun: true } } };
-      expect(subprojectConfinementError('proj', 'kid', dryRun), name).toBeUndefined();
       // A successful call wakes the bound project's channel, as every write does.
       const success = { jsonrpc: '2.0', id: 7, result: { content: [{ type: 'text', text: '{}' }] } };
       expect(mcpChangeChannels(dryRun, 'proj', success), name).toEqual(['project:proj']);
@@ -80,9 +77,6 @@ describe('data-plane tool classification', () => {
     expect(requiredDataPlaneCapability('sdd_rename_component')).toBe('project:write');
     expect(toolScope('sdd_rename_component')).toBe('tree');
     expect(isExplicitlyClassifiedTool('sdd_rename_component')).toBe(true);
-    expect(subprojectConfinementError('proj', 'kid', {
-      jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'sdd_rename_component', arguments: {} },
-    })).toBeUndefined();
   });
 
   it('gates the externals tools on the bound tree: sdd_pin_externals a write, sdd_get_externals_status a read', () => {
@@ -91,20 +85,12 @@ describe('data-plane tool classification', () => {
     expect(isExplicitlyClassifiedTool('sdd_pin_externals')).toBe(true);
     expect(requiredDataPlaneCapability('sdd_get_externals_status')).toBe('project:read');
     expect(toolScope('sdd_get_externals_status')).toBe('tree');
-    for (const name of ['sdd_pin_externals', 'sdd_get_externals_status']) {
-      expect(subprojectConfinementError('proj', 'kid', {
-        jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name, arguments: {} },
-      })).toBeUndefined();
-    }
   });
 
   it('gates a never-listed rename tool as a tree-scoped write by its sdd_rename_ prefix alone, not a hand-kept name list', () => {
     expect(requiredDataPlaneCapability('sdd_rename_anything')).toBe('project:write');
     expect(toolScope('sdd_rename_anything')).toBe('tree');
     expect(isExplicitlyClassifiedTool('sdd_rename_anything')).toBe(true);
-    expect(subprojectConfinementError('proj', 'kid', {
-      jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'sdd_rename_anything', arguments: {} },
-    })).toBeUndefined();
   });
 
   it('classifies sdd_host_pack_impact on purpose: a record-level read the ops orchestrator gates, waking no channel', () => {
@@ -113,8 +99,6 @@ describe('data-plane tool classification', () => {
     const call = { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'sdd_host_pack_impact', arguments: {} } };
     const success = { jsonrpc: '2.0', id: 7, result: { content: [{ type: 'text', text: '{}' }] } };
     expect(mcpChangeChannels(call, 'proj', success)).toEqual([]);
-    // Like every record-level tool it is refused to a credential narrowed to a member.
-    expect(subprojectConfinementError('proj', 'kid', call)?.result.isError).toBe(true);
   });
 
   it('still fails closed for a name nobody classified', () => {
@@ -149,10 +133,11 @@ describe('data-plane tool classification', () => {
   });
 });
 
-describe('subproject confinement by declared tool scope', () => {
-  const call = (name: string): unknown => ({ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name, arguments: {} } });
-
-  it('serves a tool that acts on the bound tree to a credential narrowed to a child', () => {
+describe('declared tool scope', () => {
+  // Since stage 7 a member is a record of its own: a credential bound to a
+  // member acts on the member's own tree AND its own record, so nothing is
+  // confined by scope any more — the scope only says where a tool acts.
+  it('declares the tools that act on the bound tree as tree-scoped', () => {
     for (const name of [
       'sdd_get_status',
       'sdd_update_spec',
@@ -163,11 +148,10 @@ describe('subproject confinement by declared tool scope', () => {
       'sdd_host_import_tree',
     ]) {
       expect(toolScope(name)).toBe('tree');
-      expect(subprojectConfinementError('proj', 'kid', call(name))).toBeUndefined();
     }
   });
 
-  it('refuses a tool that acts on the whole project record', () => {
+  it('declares the tools that act on the project record as record-scoped', () => {
     for (const name of [
       'sdd_host_initialize_project',
       'sdd_host_get_approval_status',
@@ -175,21 +159,6 @@ describe('subproject confinement by declared tool scope', () => {
       'sdd_landscape_list_visible_surfaces',
     ]) {
       expect(toolScope(name)).toBe('record');
-      const refusal = subprojectConfinementError('proj', 'kid', call(name));
-      expect(refusal?.result.isError).toBe(true);
-      expect(refusal?.result.content[0].text).toContain('acts on the whole project "proj"');
     }
-  });
-
-  it('refuses a tool that declares no scope — confinement fails closed', () => {
-    const refusal = subprojectConfinementError('proj', 'kid', call('sdd_brand_new_tool'));
-    expect(refusal?.result.isError).toBe(true);
-    expect(refusal?.result.content[0].text).toContain('declares no scope');
-    expect(refusal?.result.content[0].text).toContain('"proj::kid"');
-  });
-
-  it('leaves an unqualified credential untouched, whatever the tool', () => {
-    expect(subprojectConfinementError('proj', undefined, call('sdd_brand_new_tool'))).toBeUndefined();
-    expect(subprojectConfinementError('proj', undefined, call('sdd_host_commit_project'))).toBeUndefined();
   });
 });
