@@ -1,0 +1,41 @@
+kind: value-object
+id: reach_comparison
+name: ReachComparison
+description: >-
+  One row of the upgrade's no-widening proof: for one member, one permission subject and one
+  capability, the effective permission the data plane resolved for that member before the upgrade
+  (over the family root record) and the one it resolves after (over the member's own record, in the
+  world with the grant set applied). A plan with any unequal row is refused.
+subsystem: sdd_host
+fields:
+  - name: memberId
+    type: string
+    description: The member record
+    optional: false
+  - name: subjectId
+    type: string
+    description: >-
+      The permission subject compared (a user, a service owner, or 'everyone' for a subject with no
+      settings of its own)
+    optional: false
+  - name: capability
+    type: string
+    description: The capability compared
+    optional: false
+  - name: before
+    type: EffectivePermission
+    description: resolvePermission(subject, capability, project, familyRootId) in the world as stored
+    optional: false
+  - name: after
+    type: EffectivePermission
+    description: >-
+      resolvePermission(subject, capability, project, memberId) in the world with the grant set
+      applied
+    optional: false
+  - name: equal
+    type: boolean
+    description: True when before.value equals after.value
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:27:09.521Z'
+updatedAt: '2026-10-01T16:27:09.523Z'

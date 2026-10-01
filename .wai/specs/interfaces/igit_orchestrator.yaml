@@ -36,16 +36,18 @@ methods:
     returns: void
   - name: publish
     description: >-
-      Commit ONLY the scoped subpath (default .wai/), push the working branch, and produce the
-      compare URL; no-op when not git-backed or when the scoped path is clean.
-    signature: 'publish(message: string, subpath: string): GitPublish'
+      Commit ONLY the scoped pathspecs (default ['.wai/']) in one commit, push the working branch,
+      and produce the compare URL; no-op when not git-backed or when every scoped path is clean. A
+      hosted member commits through its family root's repository with its own <path>/.wai/ pathspec;
+      a family migration publishes every touched project's pathspec in one commit.
+    signature: 'publish(message: string, subpaths: string[]): GitPublish'
     returns: GitPublish
     params:
       - name: message
         type: string
-      - name: subpath
-        type: string
-        description: Staging scope relative to the repo root; defaults to .wai/.
+      - name: subpaths
+        type: string[]
+        description: Staging pathspecs relative to the repo root; defaults to ['.wai/'].
         optional: true
   - name: status
     description: >-
@@ -69,4 +71,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T16:31:53.451Z'
-updatedAt: '2026-09-25T22:01:42.630Z'
+updatedAt: '2026-10-01T16:32:39.704Z'

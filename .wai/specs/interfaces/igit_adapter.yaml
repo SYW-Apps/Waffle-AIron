@@ -32,17 +32,21 @@ methods:
     returns: string
   - name: commitScoped
     description: >-
-      Stage ONLY the given subpath (pathspec-confined — never the whole tree) and commit; returns
-      the new commit SHA, or null when nothing under the subpath changed (a clean scope never
-      produces an empty commit).
-    signature: 'commitScoped(subpath: string, message: string): string | null'
+      Stage ONLY the given pathspecs (pathspec-confined — never the whole tree, never `git add -A`)
+      and commit ONLY them (`git commit -- <pathspecs>`, so a path staged by anyone else is never
+      swept into the commit); returns the new commit SHA, or null when nothing under the pathspecs
+      changed (a clean scope never produces an empty commit). One pathspec is a project's .wai/;
+      several are one family commit covering every member a family migration touched.
+    signature: 'commitScoped(subpaths: string[], message: string): string | null'
     returns: string | null
     params:
-      - name: subpath
-        type: string
-        description: Pathspec relative to the repo root, e.g. .wai/ or .wai/specs/<subsystem>/.
       - name: message
         type: string
+      - name: subpaths
+        type: string[]
+        description: >-
+          Pathspecs relative to the repo root, e.g. ['.wai/'], ['.wai/specs/<subsystem>/'] or
+          ['.wai/', 'services/billing/.wai/']; never empty
   - name: isClean
     description: >-
       True when the given subpath holds no uncommitted changes (scoped `status --porcelain --
@@ -65,4 +69,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-04T16:31:59.438Z'
-updatedAt: '2026-09-24T14:31:50.309Z'
+updatedAt: '2026-10-01T16:32:37.251Z'

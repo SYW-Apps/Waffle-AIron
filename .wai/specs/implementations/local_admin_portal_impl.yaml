@@ -271,7 +271,39 @@ methods:
         type: call
         targetComponent: pack_orchestrator
         targetMethod: previewProjectPackRemoval
+  - name: upgradeMembers
+    narrative:
+      - stepNumber: 1
+        description: Plan the member upgrade
+        type: call
+        targetComponent: member_registration
+        targetMethod: plan
+      - stepNumber: 2
+        description: Apply only when asked and the plan is not blocked
+        type: branch
+        condition: apply is requested and the plan has no refusals
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Apply the plan, all or nothing
+        type: call
+        targetComponent: member_registration
+        targetMethod: apply
+      - stepNumber: 4
+        description: Answer the applied report
+        type: return
+        outcome: MemberUpgradeReport (applied or failed)
+      - stepNumber: 5
+        label: report
+        description: 'Drop the plan''s rehearsal: a dry run or a blocked plan writes nothing'
+        type: call
+        targetComponent: member_registration
+        targetMethod: discard
+      - stepNumber: 6
+        description: Answer the plan as a report, not applied
+        type: return
+        outcome: MemberUpgradeReport (dry run)
+    symbol: upgradeMemberRecords
 detail: calls-only
 status: complete
 createdAt: '2026-09-25T22:40:16.874Z'
-updatedAt: '2026-09-29T16:16:56.112Z'
+updatedAt: '2026-10-01T16:34:44.895Z'

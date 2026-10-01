@@ -1,6 +1,6 @@
 id: ihost_surfaces_adapter
 name: Host Surfaces Adapter Interface
-description: Surface-artifact generation for the currently bound hosted project.
+description: Surface-artifact generation and externals status for the currently bound hosted project.
 component: host_surfaces_adapter
 methods:
   - name: exportSurface
@@ -14,6 +14,14 @@ methods:
         type: string
       - name: format
         type: string
+  - name: externalsStatus
+    description: >-
+      Forward getExternalsStatus to the surface portal against the currently bound project root:
+      each declared external's pin against its live producer at signature level, what cannot be
+      compared reported as unavailable, never a pass. The caller must gate on reach itself.
+    signature: 'externalsStatus(): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params: []
 status: complete
 createdAt: '2026-07-11T09:48:46.778Z'
-updatedAt: '2026-09-25T21:33:45.038Z'
+updatedAt: '2026-10-01T16:35:03.858Z'

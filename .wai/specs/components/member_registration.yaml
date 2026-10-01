@@ -1,0 +1,35 @@
+id: member_registration
+name: Member Registration
+description: >-
+  The workflow that makes every member of a hosted family a hosted project record and keeps the
+  records agreeing with the families on disk. (1) The stage-7 upgrade of a data dir (`wairon host
+  doctor`, applied with --fix): plan registers every declared member, members of members included,
+  with parentProjectId and memberPath; writes for each the grant set that keeps its reach exactly
+  today's (no project-to-member rung exists or is added); rewrites every API key narrowing to record
+  ids; proves no-widening over every subject x capability and refuses the whole plan on any
+  inequality or conflict. Its writes go into a rehearsal copy of the host stores, and apply commits
+  them through stage 6's family transaction — staged, journaled, all or nothing, rolled back by
+  recover after a crash — then audits each member and each rewritten key. (2) After a hosted
+  family-shape tool succeeds, reconcile registers new members (placed like their family root, NO
+  grants: membership never implies permission), relocates moved ones, disables departed ones (never
+  deletes: their grants stay for an operator), audits every touched member naming the initiating
+  project as its composition, and publishes ONE commit covering every touched project's .wai/ when
+  the family is git-backed. It holds no state: records, placements, grants, keys and audit live in
+  their repositories, the in-flight upgrade in the transaction's journal.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - project_repository
+  - organization_repository
+  - permission_repository
+  - user_repository
+  - credential_repository
+  - audit_repository
+  - authorization
+  - member_upgrade_rules
+  - host_migration_adapter
+  - host_git_adapter
+status: design
+createdAt: '2026-10-01T16:31:44.124Z'
+updatedAt: '2026-10-01T16:31:44.133Z'

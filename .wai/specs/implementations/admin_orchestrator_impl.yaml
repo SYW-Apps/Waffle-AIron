@@ -728,18 +728,28 @@ methods:
         error: Forbidden — committing a project's specs requires project:write over it
       - stepNumber: 5
         description: >-
-          Bind the project's isolated root and resolve the staging scope: .wai/ by default, or
-          .wai/specs/<subsystem>/ when a subsystem is given (a subsystem scope is a staging
-          convenience only — git history stays per-repo); default the message when none is given
-        type: local
+          Resolve the project's repository scope: its family root's isolated root (the family's one
+          repository) and its own .wai/ pathspec ('.wai/' for a family root, '<member path>/.wai/'
+          for a member) — a member commits through its family root's repository, confined to its own
+          tree
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
       - stepNumber: 6
+        description: >-
+          Bind the repository root and narrow the pathspec to <project .wai>/specs/<subsystem>/ when
+          a subsystem is given (a staging convenience only — git history stays per-repository; a
+          member's own history is the log filtered to its pathspec); default the message, naming the
+          project
+        type: local
+      - stepNumber: 7
         description: >-
           Publish the scoped commit and push (commit = local save, push = the actual backup); a
           clean scope publishes nothing
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the publish outcome
         type: return
         outcome: GitPublish
@@ -1153,4 +1163,4 @@ methods:
         outcome: gate identity
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-30T06:03:25.252Z'
+updatedAt: '2026-10-01T16:32:56.956Z'

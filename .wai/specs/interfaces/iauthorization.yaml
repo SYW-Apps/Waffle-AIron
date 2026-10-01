@@ -38,6 +38,30 @@ methods:
         type: Principal
       - name: capability
         type: string
+  - name: world
+    description: >-
+      Gather the permission world exactly as authorize resolves over it — assignments, organization
+      units, placements, and the stored roles MERGED with the intrinsic built-in roles — for a
+      caller that must reason about resolution itself (the member upgrade proves no-widening over
+      it). A read; performs no authentication.
+    signature: 'world(): PermissionWorld'
+    returns: PermissionWorld
+    params: []
+  - name: reach
+    description: >-
+      Gather the permission world once and answer which of the given hosted records the principal
+      may read (project:read yes) and write (project:write yes), each resolved over its OWN record
+      through the permission rules — a member's reach is never inferred from its parent's. The data
+      plane asks it for the bound project's family, so a family run composes and a family migration
+      writes only within it.
+    signature: 'reach(principal: Principal, projectIds: string[]): FamilyReach'
+    returns: FamilyReach
+    params:
+      - name: principal
+        type: Principal
+      - name: projectIds
+        type: string[]
+        description: The record ids to judge, typically the bound project's family
 status: complete
 createdAt: '2026-07-15T21:31:59.946Z'
-updatedAt: '2026-09-15T21:02:23.722Z'
+updatedAt: '2026-10-01T16:30:20.102Z'

@@ -52,18 +52,16 @@ methods:
       project-lifecycle tools (initialize, lock, approval status, await approval), the four hosted
       landscape discovery tools, the seven hosted project-ops tools (packs list, install and impact;
       policy evaluate and reconcile; producer; commit) and the two tree-transfer tools.
-      sdd_host_pack_impact measures an install or adoption without writing (the report an agent
-      shows its human before sdd_host_pack_install, which stays an unattended write that says it
-      applied). Every one of them is scoped to the ALREADY BOUND project: a project id supplied in
-      the tool arguments is deliberately ignored, so a caller can never act as, or read the
-      neighbourhood of, a project it is not scoped to; initialization carries the new project as its
-      decoded arguments, and interface discovery reads its TARGET project (the neighbour to inspect,
-      still gated by reachability) from arguments. The bound subproject qualifier reaches only the
-      TREE-scoped tools — lock and the two tree transfers — so a qualified credential freezes or
-      transfers exactly the child tree it is scoped to, while permission resolution and audit
-      provenance stay anchored at the TOP project; every record-level tool has already been refused
-      upstream, so none can be reached with a qualifier. A tool that throws answers in the same
-      envelope with isError set, never as a transport failure.
+      sdd_host_pack_impact measures an install or adoption without writing. Every one of them is
+      scoped to the ALREADY BOUND record: a project id supplied in the tool arguments is
+      deliberately ignored, so a caller can never act as, or read the neighbourhood of, a project it
+      is not scoped to; initialization carries the new project as its decoded arguments, and
+      interface discovery reads its TARGET project (the neighbour to inspect, still gated by
+      reachability) from arguments. Since stage 7 a member is a record of its own, so a credential
+      bound to a member reaches the member's OWN record-level tools (status, approval, lock
+      requests, packs, policy, producer, commit, landscape) — the documented widening within the
+      member only; it never reaches its parent's. A tool that throws answers in the same envelope
+      with isError set, never as a transport failure.
     signature: >-
       dispatchProjectLifecycleTool(request: HttpRequest, credential: string, binding:
       ProjectBinding): McpToolResponse | undefined
@@ -77,18 +75,17 @@ methods:
         description: The caller's credential, forwarded so each orchestrator resolves its own permission
       - name: binding
         type: ProjectBinding
-        description: >-
-          The resolved binding: the TOP project id every served tool is scoped to, and the
-          subproject qualifier the tree-scoped ones receive
+        description: 'The resolved binding: the bound record every served tool is scoped to'
   - name: auditToolCall
     description: >-
       Append the redacted mcp.tool.call audit event for one handled data-plane tool call,
       best-effort: an append failure is recorded as a server diagnostic and never fails the request.
-      The event is stamped with the TOP project id for provenance plus the bound subproject
-      qualifier when one applied, and a legacy principal with no resolved subject gets a synthesized
-      service actor so the required actor is always present. Every data-plane outcome flows through
-      this one path — a confinement refusal, a permission refusal, a tool the data plane served
-      itself, and a tool the scoped MCP server served.
+      The event names the bound record as projectId — the member's own id when a member was bound —
+      and, when a deprecated member qualifier resolved the binding, the family root it named as
+      composition; a legacy principal with no resolved subject gets a synthesized service actor so
+      the required actor is always present. Every data-plane outcome flows through this one path — a
+      permission refusal, a tool the data plane served itself, and a tool the scoped MCP server
+      served.
     signature: >-
       auditToolCall(request: HttpRequest, principal: Principal, binding: ProjectBinding, outcome:
       string): void
@@ -102,9 +99,7 @@ methods:
         description: The authenticated caller — actor and tokenId of the event
       - name: binding
         type: ProjectBinding
-        description: >-
-          The TOP project id the event is stamped with, and the bound subproject qualifier recorded
-          alongside it
+        description: The bound record the event names, and the deprecated qualifier recorded as composition
       - name: outcome
         type: string
         description: The outcome derived from the response the call produced
@@ -112,4 +107,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-09-29T16:03:48.147Z'
+updatedAt: '2026-10-01T16:34:00.391Z'

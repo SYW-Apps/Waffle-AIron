@@ -1,0 +1,23 @@
+kind: value-object
+id: planned_role_binding
+name: PlannedRoleBinding
+description: >-
+  A role binding the member upgrade adds to one subject: the copy, anchored at the member's project
+  scope, of a binding the subject holds anchored at the family root's project scope.
+subsystem: sdd_host
+fields:
+  - name: subjectId
+    type: string
+    description: The user or service subject that holds the binding
+    optional: false
+  - name: binding
+    type: RoleBinding
+    description: 'The binding to add: the same role, scopeKind project, scopeId the member''s record id'
+    optional: false
+  - name: copiedFrom
+    type: string
+    description: The project id the copied binding is anchored at (the family root record)
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:27:00.626Z'
+updatedAt: '2026-10-01T16:27:00.628Z'

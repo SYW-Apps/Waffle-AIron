@@ -7,41 +7,83 @@ component: project_index
 methods:
   - name: resolveRoot
     description: >-
-      Resolve the isolated root path of the authorized project, honoring the optional selector only
-      within the principal's authorized set; reject cross-project access (null — no existence leak).
-      Only an active project resolves.
+      Resolve the root path of the authorized hosted record, honoring the optional selector only
+      within the principal's authorized set (record ids, '*', or a deprecated member qualifier
+      mapped to its member's record); reject cross-project access (null — no existence leak). Only
+      an active record resolves.
     signature: 'resolveRoot(principal: Principal, selector: string): string'
     returns: string
   - name: list
-    description: Return all hosted-project records registered under the data root.
+    description: >-
+      Return all hosted-project records registered under the data root — family roots and member
+      records alike, each member with its derived rootPath.
     signature: 'list(): HostedProjectRecord[]'
     returns: HostedProjectRecord[]
   - name: resolveBinding
     description: >-
-      Resolve the FULL binding of an authorized (possibly member-qualified) target: the root to bind
-      (the member root when qualified — each hop a member alias looked up on the current root's
-      member declarations, `members` entries or, for one release, legacy L1 mounts, and
-      containment-resolved through the host core adapter; an alias that declares no member is
-      rejected, never silently the project root), the TOP project id (permission + audit anchor),
-      and the bound member chain. A qualifier's segments are member aliases — the strings the legacy
-      mount ids were, so every existing qualifier binds the same root it bound before stage 3; stage
-      7 turns members into project records with ids of their own. Authorization matrix: an entry
-      covers a target iff equal or the target extends it with '::' — a qualified principal can never
-      bind wider than its qualifier (not the top project, not a sibling); a plain-project or '*'
-      principal may narrow via a qualified selector; a selector can never widen scope. resolveRoot
-      is this binding's rootPath projection.
+      Resolve the FULL binding of an authorized target to a hosted RECORD: the bound record's id,
+      its root (a member record's derived from its parent's root and memberPath through the host
+      core adapter's containment guard) and its family root id. Since stage 7 a member is a record,
+      so a selector or narrowing entry names it by its own id and an entry covers a target iff it is
+      equal or '*' — there is no project-to-member covering: a family root's id never covers its
+      members (the upgrade lists their ids explicitly). DEPRECATED for one release: a
+      member-qualified selector or entry ('projectId::alias', one alias per hop) is first mapped to
+      the member's record id by walking the aliases each root declares (project.yaml `members`, or a
+      legacy L1 mount) and matching the record whose parentProjectId and memberPath name that
+      directory; the binding then carries the qualifier in via. An alias that declares no member, or
+      a directory no record holds, resolves to null — never the family root. Only an active record
+      resolves; anything else is null with no existence leak. resolveRoot is this binding's rootPath
+      projection.
     signature: 'resolveBinding(principal: Principal, selector: string): ProjectBinding | null'
     returns: ProjectBinding | null
   - name: existingRoot
     description: >-
-      The root path of the hosted project registered under this id, or null when the id is malformed
-      or no record holds it. Unscoped by design: an existence lookup for callers that have already
-      authorized the operation it serves, never a resolution a request selector reaches.
+      The root path of the hosted record registered under this id — a member record's derived from
+      its parent's root and memberPath — or null when the id is malformed or no record holds it.
+      Unscoped by design: an existence lookup for callers that have already authorized the operation
+      it serves, never a resolution a request selector reaches.
     signature: 'existingRoot(id: string): string | null'
     returns: string | null
     params:
       - name: id
         type: string
+  - name: family
+    description: >-
+      The hosted family a record belongs to: its family root record first, then every member record
+      below it, depth-first in declaration order, each with its derived root. A record with no
+      members answers just its family root's family. Empty for an unknown id. Records only — it
+      reads no project file.
+    signature: 'family(id: string): HostedProjectRecord[]'
+    returns: HostedProjectRecord[]
+    params:
+      - name: id
+        type: string
+        description: Any record of the family
+  - name: declaredMembers
+    description: >-
+      The members the family rooted at a record declares ON DISK, members of members included: from
+      the record's root, each project.yaml `members` entry (and, for one release, a legacy L1 mount)
+      is followed through the containment guard, and the member's own project id is read from its
+      project.yaml. Each is answered as the record it should hold (id, parentProjectId = the
+      declaring project's id, memberPath as declared), with the pre-stage-7 qualifier that bound it
+      and the action against the stored records (register, relocate, unchanged). A member whose
+      directory or project.yaml cannot be read is answered with action unreadable, never skipped.
+    signature: 'declaredMembers(id: string): PlannedMemberRecord[]'
+    returns: PlannedMemberRecord[]
+    params:
+      - name: id
+        type: string
+        description: A family root record
+  - name: repositoryScope
+    description: >-
+      Where the record commits: its family root's isolated root (the family's one git repository)
+      and the pathspec of the record's own .wai/ relative to it ('.wai/' for a family root,
+      '<memberPath chain>/.wai/' for a member). Null for an unknown id.
+    signature: 'repositoryScope(id: string): RepositoryScope | null'
+    returns: RepositoryScope | null
+    params:
+      - name: id
+        type: string
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-09-27T10:59:59.213Z'
+updatedAt: '2026-10-01T16:28:58.633Z'

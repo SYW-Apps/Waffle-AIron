@@ -8,10 +8,11 @@ component: family_file_adapter
 methods:
   - name: mirror
     description: >-
-      Copy each project's .wai tree (everything under it except .wai/transactions/) into the target
-      directory at the project's path relative to the family root, so the family's layout is
-      reproduced; answer each copied live file's sha256 by its absolute path. Refuses a project root
-      outside the family root.
+      Copy each scoped owner's areas (its .wai tree by default, everything under it except
+      .wai/transactions/; the listed files when the scope names areas) into the target directory at
+      the owner's path relative to the coordinator root, so the layout is reproduced; answer each
+      copied live file's sha256 by its absolute path. Refuses an owner root outside the coordinator
+      root.
     signature: 'mirror(scope: TransactionScope, target: string): Map<string, string>'
     returns: Map<string, string>
     params:
@@ -23,12 +24,12 @@ methods:
         description: The rehearsal directory
   - name: compare
     description: >-
-      The difference between a rehearsal and the live family: every .wai tree found anywhere in the
-      rehearsal (a project the migration created included) and every copied one, file by file,
+      The difference between a rehearsal and the live owners: every .wai tree found anywhere in the
+      rehearsal (a project the migration created included) and every copied area, file by file,
       byte-exact — a file whose bytes differ is a write, one only in the rehearsal a create, one
-      only live a delete — each with its owner (the directory holding that .wai, mapped back to
-      live), its owner-relative path, the base digest the mirror recorded and the staged digest.
-      Ordered by owner then path.
+      only live a delete — each with its owner (mapped back to live), its owner-relative path, the
+      base digest the mirror recorded and the staged digest. Ordered by owner then path. For a scope
+      that names areas only those areas are compared.
     signature: 'compare(rehearsal: Rehearsal): FileChange[]'
     returns: FileChange[]
     params:
@@ -149,4 +150,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:27:16.585Z'
-updatedAt: '2026-10-01T05:53:20.613Z'
+updatedAt: '2026-10-01T16:28:12.973Z'

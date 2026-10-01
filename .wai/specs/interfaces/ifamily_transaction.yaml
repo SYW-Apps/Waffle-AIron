@@ -8,13 +8,15 @@ component: family_transaction
 methods:
   - name: rehearse
     description: >-
-      Open a rehearsal for a scope: a private copy of every scoped project's .wai tree, laid out as
-      the family is, with the digest of every live file copied. Writes nothing into the family.
-      PRECONDITION (accepted with the rehearsal design, to be confirmed by the implementation and
-      pinned by a test): no writer a verb runs on the copy reads source code — the copy holds only
-      .wai trees, so a writer that read a source file would see none there and could write something
-      the live tree would not have produced. A writer found to read code is either given what it
-      reads explicitly or taken off the rehearsal path, never run on the copy silently.
+      Open a rehearsal for a scope: a private copy of every scoped owner's areas (each project's
+      .wai tree by default; the host store files when the hosted member upgrade scopes the data
+      directory), laid out as the owners are, with the digest of every live file copied. Writes
+      nothing live. PRECONDITION (accepted with the rehearsal design, to be confirmed by the
+      implementation and pinned by a test): no writer run on the copy reads anything outside the
+      scoped areas — a family verb's writers read no source code, and the member upgrade's
+      repository writers read only the host stores it scoped. A writer found to read outside them is
+      either given what it reads explicitly or taken off the rehearsal path, never run on the copy
+      silently.
     signature: 'rehearse(scope: TransactionScope): Rehearsal'
     returns: Rehearsal
     params:
@@ -134,4 +136,4 @@ methods:
         description: The staged journals, the coordinator's first
 status: complete
 createdAt: '2026-09-30T20:28:28.502Z'
-updatedAt: '2026-09-30T21:33:42.847Z'
+updatedAt: '2026-10-01T16:28:10.361Z'

@@ -1,0 +1,38 @@
+kind: value-object
+id: planned_member_record
+name: PlannedMemberRecord
+description: >-
+  One member a hosted family declares on disk, as the member registration plans its hosted record:
+  the record it would hold (its own project id, its parent's record id and its path in the parent's
+  directory), the family root whose repository and isolated tree contain it, and the
+  member-qualified selector (top id plus one alias per hop) that reached it before stage 7 — the
+  string old tokens and selectors still carry for one release.
+subsystem: sdd_host
+fields:
+  - name: record
+    type: HostedProjectRecord
+    description: >-
+      The member's hosted record: id = the member's own project id (its project.yaml id),
+      parentProjectId, memberPath; rootPath derived, never persisted
+    optional: false
+  - name: familyRootId
+    type: string
+    description: >-
+      The id of the family root record — the top hosted project whose isolated tree and repository
+      hold the member
+    optional: false
+  - name: qualifier
+    type: string
+    description: >-
+      The pre-stage-7 member-qualified selector that bound the same root ('platform::billing',
+      nested members one alias per hop)
+    optional: false
+  - name: action
+    type: string
+    description: >-
+      register (no record yet), relocate (a record exists and the member's path or parent changed),
+      unchanged (the record already agrees with the family on disk)
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:26:56.046Z'
+updatedAt: '2026-10-01T16:26:56.052Z'

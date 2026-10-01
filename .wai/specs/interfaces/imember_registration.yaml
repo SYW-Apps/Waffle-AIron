@@ -1,0 +1,73 @@
+id: imember_registration
+name: Member Registration Interface
+description: >-
+  Register hosted families' members as hosted project records: the planned, all-or-nothing stage-7
+  upgrade of a data dir, and the reconciliation after each hosted family-shape tool. The data root
+  is wiring supplied ahead of the contract's parameters; the upgrade takes no credential (its
+  authority is the operator's access to the data directory, as the permission-model migration's is).
+component: member_registration
+methods:
+  - name: plan
+    description: >-
+      Plan the stage-7 upgrade: every member the hosted families declare on disk (members of members
+      included) with the record it gets, its grant set, the no-widening proof, and every API key
+      narrowing rewritten. Refuses the whole plan — listing every reason, writing nothing — on a
+      member id another record holds, a member declared twice, an unreadable member, a settings row
+      already scoped at a member's id, or any unequal reach row. An unblocked plan holds a rehearsal
+      of the host stores with every write already made in it, and its file changes. A completed
+      upgrade re-plans empty.
+    signature: 'plan(): MemberUpgradePlan'
+    returns: MemberUpgradePlan
+    params: []
+    guarantees:
+      - idempotent
+  - name: apply
+    description: >-
+      Apply a confirmed, unblocked plan through the family transaction: every host store it changed
+      is swapped in or none is (a crash leaves a journal recover rolls back). On commit, audit one
+      member.registered event per member (projectId = the member, composition = its family root, the
+      copied settings counted) and one token.narrowed event per rewritten key; on failure, audit the
+      failure and answer what was restored. Never locks and touches no project tree.
+    signature: 'apply(plan: MemberUpgradePlan): MemberUpgradeReport'
+    returns: MemberUpgradeReport
+    params:
+      - name: plan
+        type: MemberUpgradePlan
+    guarantees:
+      - atomic
+  - name: discard
+    description: >-
+      Drop a plan's rehearsal without applying it (the dry-run report, or a refused confirmation).
+      Writes nothing live.
+    signature: 'discard(plan: MemberUpgradePlan): void'
+    returns: void
+    params:
+      - name: plan
+        type: MemberUpgradePlan
+    guarantees:
+      - idempotent
+  - name: reconcile
+    description: >-
+      After a hosted family-shape tool (sdd_add_member, sdd_move_member, and the stage-6 family
+      migrations) succeeded at a project, make the family's records agree with the family on disk:
+      register each newly declared member (placed in its family root's units, with NO grants —
+      membership never implies permission), relocate a member whose parent or path changed, disable
+      a record whose member the family no longer declares (never delete it). Audit every touched
+      project as its own event naming it, with the initiating project as composition. When the
+      family is git-backed, publish ONE commit whose pathspecs are every touched project's own .wai/
+      — a family migration is one commit covering every member it touched.
+    signature: 'reconcile(principal: Principal, projectId: string, touched: string[]): MemberReconciliation'
+    returns: MemberReconciliation
+    params:
+      - name: principal
+        type: Principal
+        description: The caller whose tool succeeded — the actor of every audit event
+      - name: projectId
+        type: string
+        description: The bound project the tool ran at — the composition of every event
+      - name: touched
+        type: string[]
+        description: The record ids the tool's report names as written (the applied plan's owners)
+status: design
+createdAt: '2026-10-01T16:31:57.562Z'
+updatedAt: '2026-10-01T16:31:57.570Z'

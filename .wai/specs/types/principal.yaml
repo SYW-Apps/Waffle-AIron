@@ -22,9 +22,10 @@ fields:
   - name: projects
     type: string[]
     description: >-
-      Coarse compatibility projection of the token's project narrowing; "*" denotes no narrowing.
-      Entries may be member-qualified ('projectId::alias', one member alias per hop) — carried
-      through verbatim so root resolution can bind the member's root.
+      Coarse projection of the token's project narrowing; '*' denotes no narrowing (permission rules
+      still gate per record). Entries are hosted record ids — a member is named by its own record id
+      since stage 7. A member-qualified entry ('projectId::alias', one alias per hop) left by an
+      older wairon still resolves for one release, to the member's record.
     optional: false
   - name: subject
     type: PrincipalSubject
@@ -46,4 +47,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-09-27T11:00:27.874Z'
+updatedAt: '2026-10-01T16:28:07.573Z'

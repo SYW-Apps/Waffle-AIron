@@ -1,0 +1,24 @@
+id: member_upgrade_rules
+name: Member Upgrade Rules
+description: >-
+  The pure rules of the stage-7 member upgrade, over values the caller hands in (no I/O). Before
+  stage 7 the data plane resolved every capability on a member over its family root's record (the
+  qualifier narrowed the tree, never the grants), so a member's reach today IS the family root's.
+  The rules compute what keeps that reach exactly once the member resolves over its own record —
+  with no project-to-member rung in the resolver: (1) grants — copy the family root's placements in
+  stored order (the member's unit chain becomes the root's) and every setting anchored at the family
+  root's project scope to the member's project scope: user and everyone-default assignments of every
+  value, 'no' included, and role bindings; nothing from a unit or the instance, which already apply
+  through the placements; (2) compare — resolve every subject x capability over the family root in
+  the stored world and over the member in the world with the grants applied, and report each pair
+  (the plan refuses any inequality); (3) narrowing — rewrite an API key's narrowing to record ids so
+  it reaches exactly the trees it reached.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - permission_rules
+dependencyClass: pure
+status: design
+createdAt: '2026-10-01T16:30:45.193Z'
+updatedAt: '2026-10-01T16:30:45.202Z'

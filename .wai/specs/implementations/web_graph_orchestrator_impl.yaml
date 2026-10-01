@@ -170,6 +170,19 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: buildCanvasDataModel
       - stepNumber: 6
+        description: >-
+          Read the project's hosted family — the member records the canvas's member project nodes
+          stand for
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 7
+        description: >-
+          Link each member project node to its member's record id only when that record is in the
+          caller's read set from step 2; a member the caller may not read stays an unlinked node
+          drawn through its exports (no id leaks)
+        type: local
+      - stepNumber: 8
         description: Return the model
         type: return
         outcome: project canvas model
@@ -227,6 +240,44 @@ methods:
         type: return
         outcome: api explorer html
     symbol: getWebProjectOpenApi
+  - name: getProjectExternals
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the browser session to a Principal through the single auth authority's session
+          bridge (rejects an expired or absent session as unauthenticated)
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: >-
+          Confirm the project is in the caller's resolved read set through the web project
+          orchestrator's scoped list, refusing anything else as Forbidden
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: list
+      - stepNumber: 3
+        description: >-
+          Resolve the project's root within the principal's authorized set through the project
+          repository (a member's own root when the project is a member); an unresolvable one is
+          Forbidden too, with no existence leak
+        type: call
+        targetComponent: project_repository
+        targetMethod: resolveRoot
+      - stepNumber: 4
+        description: Bind that root for the read that follows
+        type: local
+      - stepNumber: 5
+        description: Read the project's externals status over the bound root through the host surfaces adapter
+        type: call
+        targetComponent: host_surfaces_adapter
+        targetMethod: externalsStatus
+      - stepNumber: 6
+        description: Return one status per external
+        type: return
+        outcome: ExternalStatus[]
+    detail: full
+    symbol: getWebProjectExternals
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-09-26T14:49:36.048Z'
+updatedAt: '2026-10-01T16:35:22.968Z'

@@ -20,6 +20,7 @@ dependsOn:
   - authorization
   - project_ops_orchestrator
   - host_migration_adapter
+  - member_registration
 status: complete
 createdAt: '2026-07-04T12:33:41.786Z'
-updatedAt: '2026-09-30T21:05:33.400Z'
+updatedAt: '2026-10-01T16:33:52.390Z'

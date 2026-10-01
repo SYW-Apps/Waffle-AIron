@@ -39,6 +39,34 @@ methods:
         type: call
         targetComponent: position_reader
         targetMethod: match
+  - name: rehearse
+    narrative:
+      - stepNumber: 1
+        description: Route to the family transaction
+        type: call
+        targetComponent: family_transaction
+        targetMethod: rehearse
+  - name: diff
+    narrative:
+      - stepNumber: 1
+        description: Route to the family transaction
+        type: call
+        targetComponent: family_transaction
+        targetMethod: diff
+  - name: commit
+    narrative:
+      - stepNumber: 1
+        description: Route to the family transaction
+        type: call
+        targetComponent: family_transaction
+        targetMethod: commit
+  - name: drop
+    narrative:
+      - stepNumber: 1
+        description: Route to the family transaction
+        type: call
+        targetComponent: family_transaction
+        targetMethod: discard
 status: complete
 createdAt: '2026-09-30T20:36:38.923Z'
-updatedAt: '2026-09-30T21:33:59.977Z'
+updatedAt: '2026-10-01T16:28:30.650Z'

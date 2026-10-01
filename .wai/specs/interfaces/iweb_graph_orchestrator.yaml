@@ -55,7 +55,11 @@ methods:
       getProjectCanvas, which the web app's in-React canvas mounts directly instead of framing the
       static page. Same scoped authorization: the session resolves to a Principal, the project must
       be in the caller's resolved read set (cross-project access is Forbidden, an unknown project
-      indistinguishably so), and the model is built over the project's bound spec tree.
+      indistinguishably so), and the model is built over the project's bound spec tree. Since stage
+      7 this is the FAMILY canvas for a project that declares members: each member renders as a
+      project node (stage 3's project node), carrying the member's hosted record id ONLY when the
+      caller may read that record, so the app links the node to the member's own page; a member the
+      caller may not read stays an unlinked node drawn through its exports.
     signature: 'getProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
     returns: CanvasModel
     params:
@@ -85,8 +89,24 @@ methods:
           The public portal whose API to show; absent shows the only one, or the index when there
           are several
         optional: true
+  - name: getProjectExternals
+    description: >-
+      Relation health for ONE authorized project: its externals status — each declared external's
+      pin compared with its live producer at signature level, per external (drifted, incompatible,
+      unavailable, current), what cannot be compared reported unavailable and never a pass. Same
+      scoped authorization as the canvas: the session resolves to a Principal, the project must be
+      in the caller's resolved read set, and the status is read over the project's bound root. A
+      producer outside the caller's reach is reported unavailable; the caller must gate on reach
+      itself.
+    signature: 'getProjectExternals(sessionId: string, projectId: string): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-09-26T00:00:12.066Z'
+updatedAt: '2026-10-01T16:35:10.571Z'

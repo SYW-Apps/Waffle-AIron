@@ -1,0 +1,113 @@
+id: member_upgrade_rules_impl
+name: Member Upgrade Rules Implementation
+description: >-
+  Pure rules of the member upgrade; to be realized beside the host migration
+  (src/server/member-upgrade-rules.ts is the intended home, named by the implementation pass).
+contract: imember_upgrade_rules
+methods:
+  - name: grants
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Copy the family root's placements in their stored order, each with projectId = the member,
+          the same unit and role, so the member's first placement — the one the resolver's chain
+          follows — is the copy of the root's
+        type: local
+      - stepNumber: 2
+        description: >-
+          Copy every assignment whose scope is (project, familyRootId) — user and everyone-default
+          alike, every value including 'no' and 'approval' — re-scoped to (project, memberId), with
+          a fresh id
+        type: local
+      - stepNumber: 3
+        description: >-
+          For every user record, copy each role binding anchored at (project, familyRootId)
+          re-anchored at (project, memberId), naming the holder
+        type: local
+      - stepNumber: 4
+        description: >-
+          Return the grant set; nothing anchored at a unit or the instance is in it, because the
+          copied placements already reach those rungs
+        type: return
+        outcome: MemberGrantSet
+    detail: full
+  - name: compare
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the after-world: the stored world plus the grant set's placements and assignments,
+          and each user's subject with the copied role bindings added
+        type: local
+      - stepNumber: 2
+        description: >-
+          Derive the subjects: each user record as its permission subject (its id, its diverged
+          subject id as an alias, its role bindings), plus one subject with no settings of its own
+          standing for everyone else
+        type: local
+      - stepNumber: 3
+        description: For every subject and every capability
+        type: loop
+        loopKind: forEach
+        over: subjects x capabilities
+        endStep: 6
+      - stepNumber: 4
+        description: >-
+          Resolve the before value over (project, familyRootId) in the stored world — what the data
+          plane resolved for the member before stage 7
+        type: call
+        targetComponent: permission_rules
+        targetMethod: resolvePermission
+      - stepNumber: 5
+        description: Resolve the after value over (project, memberId) in the after-world
+        type: call
+        targetComponent: permission_rules
+        targetMethod: resolvePermission
+      - stepNumber: 6
+        description: Record the row with equal = (before.value is after.value)
+        type: local
+      - stepNumber: 7
+        description: Return every row
+        type: return
+        outcome: ReachComparison[]
+    detail: full
+  - name: narrowing
+    narrative:
+      - stepNumber: 1
+        description: 'A key narrowed to ''*'' reaches every record it may: nothing to rewrite'
+        type: branch
+        condition: the key's narrowing holds '*'
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Answer no rewrite
+        type: return
+        outcome: 'null'
+      - stepNumber: 3
+        description: >-
+          For each entry: a member-qualified entry becomes the record id of the member whose
+          qualifier it equals plus the ids of every member whose qualifier extends it; a family root
+          id is kept and followed by the ids of every member of its family; any other entry is kept
+        type: local
+      - stepNumber: 4
+        description: Collapse duplicates keeping first order, and compare with the stored narrowing
+        type: branch
+        condition: the rewritten narrowing equals the stored one
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Answer no rewrite
+        type: return
+        outcome: 'null'
+      - stepNumber: 6
+        description: >-
+          State the widening: for a rewritten qualifier, record-level tools (status, approval, lock
+          requests, packs, policy, producers, commit, landscape discovery) now act on the member's
+          own record — within the member only; a family root entry gaining member ids spells the
+          same reach in record ids and states none
+        type: local
+      - stepNumber: 7
+        description: Return the planned rewrite
+        type: return
+        outcome: PlannedNarrowing
+    detail: full
+status: design
+createdAt: '2026-10-01T16:31:10.785Z'
+updatedAt: '2026-10-01T16:31:10.793Z'

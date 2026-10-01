@@ -1,0 +1,30 @@
+kind: value-object
+id: member_reconciliation
+name: MemberReconciliation
+description: >-
+  What reconciling a hosted family's member records with the family on disk did after a family-shape
+  tool succeeded: the members registered (placed like their parent, no grants), the records whose
+  path or parent moved, the records whose member left the family (disabled, never deleted — their
+  grants stay for an operator), and the one commit covering every touched project when the family is
+  git-backed.
+subsystem: sdd_host
+fields:
+  - name: registered
+    type: string[]
+    description: Member record ids created
+    optional: false
+  - name: relocated
+    type: string[]
+    description: Member record ids whose memberPath or parentProjectId changed
+    optional: false
+  - name: departed
+    type: string[]
+    description: Member record ids disabled because the family no longer declares them
+    optional: false
+  - name: commit
+    type: GitPublish
+    description: The family commit, absent when the family is not git-backed or nothing changed
+    optional: true
+methods: []
+createdAt: '2026-10-01T16:27:33.167Z'
+updatedAt: '2026-10-01T16:27:33.169Z'

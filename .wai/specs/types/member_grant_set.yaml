@@ -1,0 +1,37 @@
+kind: value-object
+id: member_grant_set
+name: MemberGrantSet
+description: >-
+  Everything the member upgrade writes so a member record's permission resolution equals what its
+  family root's resolution answered for it before: the family root's placements copied in their
+  stored order (so the member's unit chain is the root's), and every setting anchored at the family
+  root's project scope copied to the member's project scope — user and everyone-default assignments
+  of every value (yes, approval AND no) and role bindings. Nothing is copied from a unit or the
+  instance: those rungs already apply through the copied placements.
+subsystem: sdd_host
+fields:
+  - name: memberId
+    type: string
+    description: The member record the set is written for
+    optional: false
+  - name: familyRootId
+    type: string
+    description: The family root record the settings are copied from
+    optional: false
+  - name: placements
+    type: ProjectPlacement[]
+    description: The family root's placements, same units and roles, same order, projectId = the member
+    optional: false
+  - name: assignments
+    type: PermissionAssignment[]
+    description: >-
+      Every assignment at (project, familyRootId), re-scoped to (project, memberId); values
+      unchanged, 'no' included
+    optional: false
+  - name: roleBindings
+    type: PlannedRoleBinding[]
+    description: Every role binding anchored at (project, familyRootId), re-anchored at (project, memberId)
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:27:05.619Z'
+updatedAt: '2026-10-01T16:27:05.621Z'

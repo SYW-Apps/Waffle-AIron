@@ -1,0 +1,45 @@
+kind: value-object
+id: member_upgrade_plan
+name: MemberUpgradePlan
+description: >-
+  The stage-7 upgrade of a hosted data dir, planned and not yet applied: every member the hosted
+  families declare on disk (members of members included) with the record it gets, the grant set that
+  keeps each member's reach equal to today's, the no-widening proof over every subject and
+  capability, every API key narrowing rewritten, and the refusals that block the whole plan. Its
+  writes were made into a rehearsal copy of the data dir's host stores; changes lists the file-level
+  difference the apply would swap in, all or nothing.
+subsystem: sdd_host
+fields:
+  - name: members
+    type: PlannedMemberRecord[]
+    description: Every declared member, family roots first then depth-first
+    optional: false
+  - name: grants
+    type: MemberGrantSet[]
+    description: One per member to register
+    optional: false
+  - name: reach
+    type: ReachComparison[]
+    description: 'The no-widening proof: every subject x capability x member'
+    optional: false
+  - name: narrowings
+    type: PlannedNarrowing[]
+    description: Every API key whose narrowing changes
+    optional: false
+  - name: refusals
+    type: MigrationFinding[]
+    description: >-
+      What blocks the whole plan: a member id another record holds, a member declared twice, an
+      unreadable member, a settings row already scoped at a member id, an unequal reach row
+    optional: false
+  - name: changes
+    type: FileChange[]
+    description: The host store files the apply would replace, from the rehearsal
+    optional: false
+  - name: rehearsal
+    type: Rehearsal
+    description: The rehearsal the writes were made into; absent once applied or discarded
+    optional: true
+methods: []
+createdAt: '2026-10-01T16:27:23.715Z'
+updatedAt: '2026-10-01T16:27:23.716Z'

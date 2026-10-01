@@ -249,13 +249,13 @@ methods:
         optional: true
   - name: commitProject
     description: >-
-      Authenticate, require project:write over the project, and publish a DELIBERATE, SCOPED backup:
-      stage ONLY .wai/ (or the finer .wai/specs/<subsystem>/ subpath when given), commit, and push —
-      commit is the local save, push is the actual backup; both happen. Never `git add -A`: a shared
-      real repository's own code is never staged. CAVEAT: a subsystem-scoped commit is a staging
-      convenience only — git history is per-repo, so the log still interleaves all commits; the
-      project is the clean unit. A no-op when nothing under the scoped path changed. Returns the
-      publish outcome (commit id or clean).
+      Authenticate, require project:write over the project's OWN record, and publish a DELIBERATE,
+      SCOPED backup through the project's family repository: a family root stages ONLY its .wai/, a
+      member ONLY its own <path>/.wai/ at its family root's repository root (or the finer
+      .../specs/<subsystem>/ when given) — commit, then push. Pathspec-confined staging and a
+      pathspec-confined commit: never `git add -A`, never a parent's or sibling member's tree, never
+      source code. A member's own history is the family log filtered to its pathspec. A no-op when
+      nothing under the scoped path changed. Returns the publish outcome (commit id or clean).
     signature: >-
       commitProject(credential: string, project: string, subsystem: string, message: string):
       GitPublish
@@ -405,4 +405,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-30T16:23:03.628Z'
+updatedAt: '2026-10-01T16:32:59.426Z'

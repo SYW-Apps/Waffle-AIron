@@ -100,13 +100,15 @@ methods:
         outcome: not published
       - stepNumber: 4
         description: >-
-          Commit ONLY the scoped subpath (default .wai/) — pathspec-confined staging, never `git add
-          -A`, so a shared repository's own code is never committed by wairon
+          Commit ONLY the scoped pathspecs (default ['.wai/']) as one commit — pathspec-confined
+          staging AND a pathspec-confined commit, never `git add -A`, so neither a shared
+          repository's own code nor a path someone else staged is committed by wairon; a member's
+          pathspec is its own <path>/.wai/, a family migration's every touched project's
         type: call
         targetComponent: git_adapter
         targetMethod: commitScoped
       - stepNumber: 5
-        description: If the scoped path was clean (no commit produced), publish nothing
+        description: If every scoped path was clean (no commit produced), publish nothing
         type: branch
         condition: the scoped commit produced no commit (clean path)
         onTrueStep: 6
@@ -194,4 +196,4 @@ methods:
         outcome: sync setting persisted
 status: complete
 createdAt: '2026-07-04T16:33:44.730Z'
-updatedAt: '2026-09-25T22:02:01.766Z'
+updatedAt: '2026-10-01T16:35:44.265Z'

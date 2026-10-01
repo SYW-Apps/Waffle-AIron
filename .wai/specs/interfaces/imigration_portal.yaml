@@ -82,6 +82,58 @@ methods:
     endpoint:
       transport: Custom
       address: in-process migration.matchPositions
+  - name: rehearse
+    description: >-
+      Route to the family transaction: open a rehearsal over a scope. Published for the hosted
+      member upgrade, which scopes the host data directory and its store files instead of a family's
+      .wai trees, runs its repository writers against the copy, and commits the difference through
+      the same transaction. The caller must gate on reach itself.
+    signature: 'rehearse(scope: TransactionScope): Rehearsal'
+    returns: Rehearsal
+    params:
+      - name: scope
+        type: TransactionScope
+        description: The coordinator root, the owner roots and the areas to copy
+  - name: diff
+    description: >-
+      Route to the family transaction: the rehearsal's difference from the live owners. Writes
+      nothing.
+    signature: 'diff(rehearsal: Rehearsal): FileChange[]'
+    returns: FileChange[]
+    params:
+      - name: rehearsal
+        type: Rehearsal
+    guarantees:
+      - idempotent
+  - name: commit
+    description: >-
+      Route to the family transaction: make the changes live all or nothing — staged, backed up,
+      journaled under each owner's .wai/transactions/<id>/, swapped, the coordinator marked
+      committed; any failure before the commit point restores every backup, and a crash leaves a
+      journal recover rolls back. The rehearsal is dropped either way.
+    signature: 'commit(rehearsal: Rehearsal, changes: FileChange[], verb: string): TransactionOutcome'
+    returns: TransactionOutcome
+    params:
+      - name: rehearsal
+        type: Rehearsal
+      - name: changes
+        type: FileChange[]
+      - name: verb
+        type: string
+        description: The journal's verb, e.g. member-upgrade
+    guarantees:
+      - atomic
+  - name: drop
+    description: >-
+      Route to the family transaction: discard a rehearsal without committing it (a dry run, or a
+      refused plan). Writes nothing live.
+    signature: 'drop(rehearsal: Rehearsal): void'
+    returns: void
+    params:
+      - name: rehearsal
+        type: Rehearsal
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-30T20:36:31.021Z'
-updatedAt: '2026-09-30T21:33:58.906Z'
+updatedAt: '2026-10-01T16:28:22.087Z'

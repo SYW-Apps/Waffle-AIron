@@ -325,7 +325,12 @@ methods:
       method: GET
       path: /web/tokens
   - name: projectList
-    description: List the projects the caller can manage; forwards to web_project_orchestrator.list.
+    description: >-
+      List the projects the caller can manage; forwards to web_project_orchestrator.list. Since
+      stage 7 member records are listed like any project, each carrying parentProjectId: the SPA
+      draws a member's crumb to its parent (named only when the parent is itself in the list, a
+      neutral crumb otherwise) and lists under each project the members the list holds whose
+      parentProjectId names it. Nothing the caller cannot read is listed or named.
     signature: 'projectList(sessionId: string): HostedProjectRecord[]'
     returns: HostedProjectRecord[]
     params:
@@ -1437,7 +1442,9 @@ methods:
     description: >-
       Serve one authorized project's canvas model as JSON — the data the web app's in-React canvas
       mounts directly. Forwards to the web graph orchestrator's getProjectCanvasModel;
-      session-cookie authenticated, so cross-project access is Forbidden.
+      session-cookie authenticated, so cross-project access is Forbidden. For a project with members
+      it is the family canvas: members are project nodes, each linked to the member's own record
+      when the caller may read it (the SPA navigates to that member's page), unlinked otherwise.
     signature: 'serveProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
     returns: CanvasModel
     params:
@@ -1516,6 +1523,24 @@ methods:
       path: /web/projects/packs/removal-impact
     guarantees:
       - idempotent
+  - name: projectExternalsStatus
+    description: >-
+      Serve one authorized project's relation health as JSON: its externals status, one entry per
+      external (the pin compared with the live producer at signature level; unavailable is never a
+      pass). Forwards to the web graph orchestrator's getProjectExternals; session-cookie
+      authenticated, so cross-project access is Forbidden. The SPA renders it on the project page
+      and colours each relation edge of the family canvas by its external's status.
+    signature: 'projectExternalsStatus(sessionId: string, projectId: string): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/externals
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-09-29T16:17:37.602Z'
+updatedAt: '2026-10-01T16:35:37.139Z'

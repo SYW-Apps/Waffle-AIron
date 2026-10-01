@@ -2,9 +2,10 @@ kind: value-object
 id: transaction_scope
 name: TransactionScope
 description: >-
-  What a rehearsal copies: the family's top root and the project roots under it whose .wai trees the
-  migration reads or writes — every project the family graph holds, plus a project the verb brings
-  in (the one attached or adopted).
+  What a rehearsal copies: the coordinator root and the owner roots under it, and which paths under
+  each owner. A family migration copies every project's .wai tree (the default area); the hosted
+  member upgrade scopes one owner, the host data directory, with its store files as the areas — the
+  same staged, journaled, all-or-nothing commit over different bytes.
 subsystem: sdd_migrations
 fields:
   - name: familyRoot
@@ -17,7 +18,14 @@ fields:
       Each project root to copy, absolute; every one lies within familyRoot (containment is decided
       against the declaring root, so this holds for every member and every adoptable path).
     optional: false
+  - name: areas
+    type: string[]
+    description: >-
+      Paths relative to each owner root to copy, compare and swap, forward slashes; absent means
+      ['.wai'] (every family migration). A file named here that does not exist is a create when the
+      rehearsal writes it. .wai/transactions/ is never an area.
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:56.008Z'
-updatedAt: '2026-09-30T21:33:07.505Z'
+updatedAt: '2026-10-01T16:28:00.385Z'

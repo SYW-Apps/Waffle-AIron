@@ -11,8 +11,10 @@ methods:
     returns: HostedProjectRecord
   - name: remove
     description: >-
-      Delete the project record and recursively remove its isolated tree. Idempotent for a missing
-      id.
+      Delete the project record; for a family root also recursively remove its isolated tree. A
+      member record's directory belongs to its parent's tree and is NEVER removed with the record.
+      Refuses a family root while member records still name it as their parent (remove or detach the
+      members first). Idempotent for a missing id.
     signature: 'remove(id: string): void'
     returns: void
   - name: register
@@ -27,6 +29,31 @@ methods:
         type: string
       - name: rootPath
         type: string
+  - name: registerMember
+    description: >-
+      Upsert a MEMBER record by id: parentProjectId and memberPath are required and replace the
+      stored ones (a moved member is relocated, never duplicated); the creation time of an existing
+      record is kept; no directory is created or copied and rootPath is never persisted. Refuses a
+      malformed id, an id a family root record holds, a parent no record holds, and a memberPath
+      that is absolute or escapes its parent.
+    signature: 'registerMember(record: HostedProjectRecord): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: record
+        type: HostedProjectRecord
+        description: 'The member record: id, parentProjectId, memberPath, status'
+  - name: setStatus
+    description: >-
+      Set a record's status (active | disabled). A member that left its family is disabled, never
+      deleted, so its grants and audit trail stay for an operator. Refuses an unknown id.
+    signature: 'setStatus(id: string, status: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: id
+        type: string
+      - name: status
+        type: string
+        description: active | disabled
 status: complete
 createdAt: '2026-07-19T09:00:02.108Z'
-updatedAt: '2026-09-25T22:38:36.829Z'
+updatedAt: '2026-10-01T16:29:07.337Z'

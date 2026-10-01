@@ -11,6 +11,14 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: exportSurface
+  - name: externalsStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward getExternalsStatus to the surface portal against the currently bound project root
+        type: call
+        targetComponent: surface_portal
+        targetMethod: getExternalsStatus
+    symbol: getExternalsStatus
 status: complete
 createdAt: '2026-07-11T09:48:59.060Z'
-updatedAt: '2026-09-25T21:33:45.146Z'
+updatedAt: '2026-10-01T16:35:05.451Z'

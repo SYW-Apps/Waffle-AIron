@@ -428,6 +428,18 @@ methods:
         type: string
     guarantees:
       - idempotent
+  - name: upgradeMembers
+    description: >-
+      Plan, and with apply commit, the stage-7 member upgrade of the data dir (`wairon host doctor
+      [--fix]`, after the permission-model migration): every hosted family's members registered as
+      records with grants equal to today's reach, every API key narrowing rewritten to record ids,
+      all or nothing. A dry run reports the full plan — members, copied grants, the no-widening
+      rows, rewritten keys, refusals — and writes nothing; a blocked plan is never applied.
+    signature: 'upgradeMembers(apply: boolean): MemberUpgradeReport'
+    returns: MemberUpgradeReport
+    params:
+      - name: apply
+        type: boolean
 status: complete
 createdAt: '2026-09-25T22:39:47.086Z'
-updatedAt: '2026-09-29T16:16:54.762Z'
+updatedAt: '2026-10-01T16:34:41.242Z'
