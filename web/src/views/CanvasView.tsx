@@ -155,7 +155,47 @@ export function CanvasView({
 
   return (
     <AsyncView state={state}>
-      {() => <div ref={hostRef} className="canvas-host" />}
+      {(m) => (
+        <>
+          <FamilyStrip model={m} />
+          <div ref={hostRef} className="canvas-host" />
+        </>
+      )}
     </AsyncView>
+  );
+}
+
+/** A member project node of the family canvas: its record id only when the caller may read that record. */
+interface MemberNode {
+  id: string;
+  name: string;
+  project?: boolean;
+  recordId?: string;
+}
+
+/**
+ * The family canvas's member project nodes as links (stage 7): a member the
+ * caller may read carries its hosted record id and opens its own canvas; any
+ * other member is named as the canvas draws it, unlinked — no id leaks.
+ */
+function FamilyStrip({ model }: { model: unknown }) {
+  const navigate = useNavigate();
+  const members = (((model as { subsystems?: MemberNode[] } | undefined)?.subsystems) ?? []).filter((s) => s.project);
+  if (members.length === 0) return null;
+  return (
+    <div className="canvas-bar">
+      <span className="hint">Members:</span>
+      {members.map((m) =>
+        m.recordId ? (
+          <button key={m.id} className="btn btn-ghost btn-sm" onClick={() => navigate('/projects/' + encodeURIComponent(m.recordId!))} title="Open this member's own page">
+            {m.name} ↗
+          </button>
+        ) : (
+          <span key={m.id} className="subtle" title="You may not open this member">
+            {m.name}
+          </span>
+        ),
+      )}
+    </div>
   );
 }
