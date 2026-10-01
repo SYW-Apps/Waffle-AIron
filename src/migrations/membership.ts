@@ -85,6 +85,19 @@ function hasSystemAt(dir: string): boolean {
   });
 }
 
+/**
+ * Whether a relocation target is taken: it exists and is not an empty
+ * directory. An empty one — a cut-short cleanup after a committed move can
+ * leave it behind — is free, so it never blocks the move back.
+ */
+function occupied(dir: string): boolean {
+  try {
+    return !fs.statSync(dir).isDirectory() || fs.readdirSync(dir).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** The node the bound project is in the graph. */
 function boundNode(family: ProjectFamily, bound: string): ProjectNode {
   return familyNode(family, bound)!;
@@ -188,7 +201,7 @@ export function planDetach(family: ProjectFamily, bound: string, request: Migrat
   if ((done?.source?.path || done?.source?.hosted) && !family.nodes.some((n) => n.parent === bound && n.mountAlias === alias)) return plan;
   // Step 1.
   const member = memberUnder(family, bound, alias, plan);
-  if (member && request.relocation && fs.existsSync(request.relocation.to)) {
+  if (member && request.relocation && occupied(request.relocation.to)) {
     refuse(plan, 'relocation-target-exists', bound, `the member "${alias}" cannot move to ${request.relocation.to}: it already exists`);
   }
   // Steps 2-3.
@@ -364,7 +377,7 @@ function planRelocatedAdopt(
   const target = files.resolve(boundDir, plan.request.path ?? '');
   if (!external.source?.hosted) refuse(plan, 'not-contained', bound, `the external "${alias}" names no source.hosted — a hosted adopt moves a project named by its hosted record id`);
   else if (target === null || path.resolve(target) !== path.resolve(relocation.to)) refuse(plan, 'not-contained', bound, `the member path "${plan.request.path ?? ''}" does not resolve strictly within ${label(bound)} to ${relocation.to}`);
-  else if (fs.existsSync(relocation.to)) refuse(plan, 'relocation-target-exists', bound, `the external "${alias}" cannot be adopted at ${relocation.to}: it already exists`);
+  else if (occupied(relocation.to)) refuse(plan, 'relocation-target-exists', bound, `the external "${alias}" cannot be adopted at ${relocation.to}: it already exists and is not an empty directory`);
   // Where it lives now: the caller's relocation.from, else the hosting binding's record lookup (reach-gated).
   const from = relocation.from ?? (external.source?.hosted !== undefined ? getHostedLookup()?.(external.source.hosted) ?? undefined : undefined);
   if (plan.refusals.length === 0 && !from) refuse(plan, 'not-a-project', bound, `the hosted record "${external.source?.hosted}" is unknown or outside this request's reach — there is no root to adopt from`);

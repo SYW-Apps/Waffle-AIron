@@ -568,7 +568,9 @@ function planOne(
   const holder = records.find((r) => r.id === memberId);
   if (holder) {
     const agrees = holder.parentProjectId === parentId && holder.memberPath === memberPath;
-    return { record: { ...record, createdAt: holder.createdAt, status: holder.status }, familyRootId, qualifier, action: agrees ? 'unchanged' : 'relocate' };
+    // A record disabled when its member left the family returns when the family declares it again.
+    const action = !agrees ? 'relocate' : holder.status === 'disabled' ? 'return' : 'unchanged';
+    return { record: { ...record, createdAt: holder.createdAt, status: holder.status }, familyRootId, qualifier, action };
   }
   const previous = records.find((r) => r.parentProjectId === parentId && r.memberPath === memberPath);
   return previous

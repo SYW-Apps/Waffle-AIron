@@ -164,8 +164,8 @@ export interface PlannedMemberRecord {
   familyRootId: string;
   /** The pre-stage-7 member-qualified selector that reached it. */
   qualifier: string;
-  /** register | relocate | rename | unchanged | unreadable */
-  action: 'register' | 'relocate' | 'rename' | 'unchanged' | 'unreadable';
+  /** register | relocate | rename | return | unchanged | unreadable */
+  action: 'register' | 'relocate' | 'rename' | 'return' | 'unchanged' | 'unreadable';
   /** For action rename: the record id the member held before. */
   previousId?: string;
   /** For action unreadable: why, in words a person acts on. */
@@ -183,6 +183,8 @@ export interface MembershipScreen {
 /** What reconciling a hosted family's member records with the family on disk did. */
 export interface MemberReconciliation {
   registered: string[];
+  /** Member records re-enabled: the family declares their member again after they were disabled as departed. */
+  returned: string[];
   relocated: string[];
   /** 'old->new' for every member record re-keyed by a project rename. */
   renamed: string[];

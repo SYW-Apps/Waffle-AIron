@@ -17,6 +17,7 @@ import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { listCredentials } from '../../src/server/credentials.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { routeData, startHostServer } from '../../src/server/http.js';
+import { getGitBinding } from '../../src/server/admin.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { getExternalsStatus, pinExternals } from '../../src/core/surfaces.js';
 import { validateFamily } from '../../src/core/validation.js';
@@ -230,14 +231,19 @@ describe('hosted detach relocates the member and lists who loses access', () => 
     const event = queryAuditEvents(dataDir, { action: 'member.detached' })[0];
     expect(event).toMatchObject({ projectId: 'billing', composition: 'platform' });
     expect(JSON.parse(event.metadata!).reachLost).toContain('u-view project:read: yes -> no');
+    // The detached project has no git binding of its own: the result and the audit say so, and its status reads not git-backed.
+    expect((JSON.parse(applied.text) as { plan: { notes: string[] } }).plan.notes).toContain('no git binding: enable one for this project');
+    expect(JSON.parse(event.metadata!).gitBinding).toBe('no git binding: enable one for this project');
+    expect(getGitBinding(cfg, MASTER, 'billing').enabled).toBe(false);
     // No transaction is left anywhere.
     expect(fs.existsSync(path.join(dataDir, '.wai', 'transactions'))).toBe(false);
     expect(fs.existsSync(path.join(fam.platform, '.wai', 'transactions'))).toBe(false);
   });
 
-  it('refuses, writing nothing, when the new root is already held', async () => {
+  it('refuses, writing nothing, when the new root holds anything', async () => {
     const { dev } = seedPeople();
     fs.mkdirSync(newRootOf('billing'), { recursive: true });
+    fs.writeFileSync(path.join(newRootOf('billing'), 'stray.txt'), 'someone else\'s file\n');
     const tree = bytes(fam.platform);
     const refused = await call(dev, 'sdd_detach_member', { alias: 'billing' }, 'platform');
     expect(refused.isError).toBe(true);
@@ -276,6 +282,25 @@ describe('detach-then-adopt-is-identity, hosted', () => {
     expect(pick(recordOf('payments'))).toEqual(pick(before.payments));
     expect(listProjectPlacements(dataDir, 'billing')).toEqual(before.placements);
     expect(queryAuditEvents(dataDir, { action: 'member.adopted' })[0]).toMatchObject({ projectId: 'billing', composition: 'platform' });
+  });
+
+  it('an EMPTY directory left at the old place does not block adopting back; a non-empty one does', async () => {
+    const { dev } = seedPeople();
+    expect((await call(dev, 'sdd_detach_member', { alias: 'billing' }, 'platform')).isError).toBe(false);
+    allow(dataDir, 'u-dev', 'project:write', 'project', 'billing');
+    allow(dataDir, 'u-dev', 'project:read', 'project', 'billing');
+    const both = mintUserToken(dataDir, { id: 'tok-both', userId: 'u-dev', projects: ['platform', 'billing'] });
+    // What a cut-short cleanup after the committed move can leave: the directory, empty.
+    fs.mkdirSync(fam.billing, { recursive: true });
+    fs.writeFileSync(path.join(fam.billing, 'stray.txt'), 'x\n');
+    const blocked = await call(both, 'sdd_adopt_member', { alias: 'billing', path: 'packages/billing', dryRun: true }, 'platform');
+    expect(blocked.isError).toBe(true);
+    expect(blocked.text).toMatch(/relocation-target-exists/);
+    fs.rmSync(path.join(fam.billing, 'stray.txt'));
+    const adopted = await call(both, 'sdd_adopt_member', { alias: 'billing', path: 'packages/billing' }, 'platform');
+    expect(adopted.isError, adopted.text).toBe(false);
+    expect(recordOf('billing')).toMatchObject({ parentProjectId: 'platform', memberPath: 'packages/billing' });
+    expect(fs.existsSync(path.join(fam.billing, '.wai', 'project.yaml'))).toBe(true);
   });
 
   it('adopt refuses, writing nothing, when the caller cannot write the adopted record', async () => {
@@ -393,6 +418,39 @@ describe('reconcile: the records follow the family on disk', () => {
     expect(after).toEqual(before);
     expect(queryAuditEvents(dataDir, { action: 'member.renamed' })[0]).toMatchObject({ projectId: 'ledger', composition: 'platform' });
     expect(keyed).toMatch(/^wk_/);
+  });
+
+  it('a member that left the family and is declared again returns: active, listed with exactly who regains reach, audited', async () => {
+    seedPeople();
+    const principal = principalOf('u-dev');
+    const config = path.join(fam.platform, '.wai', 'project.yaml');
+    const declared = fs.readFileSync(config, 'utf8');
+    const subjects = ['u-dev', 'u-view', 'u-unit'].map(principalOf);
+    const caps = ['project:read', 'project:write'];
+    const reachOfDocs = (): string[] => subjects.flatMap((p) => caps.map((c) => `${p.tokenId} ${c} ${authorize(dataDir, p, c, 'project', 'docs').value}`));
+    const before = reachOfDocs();
+    // docs leaves the family: its record is disabled, never deleted.
+    fs.writeFileSync(config, declared.replace('  docs: packages/docs\n', ''));
+    invalidateSpecCache();
+    expect(memberRegistration.reconcile(dataDir, principal, 'platform', ['platform']).departed).toEqual(['docs']);
+    expect(recordOf('docs')!.status).toBe('disabled');
+    // Declared again: it returns, with exactly the reach it had.
+    fs.writeFileSync(config, declared);
+    invalidateSpecCache();
+    const back = memberRegistration.reconcile(dataDir, principal, 'platform', ['platform']);
+    expect(back.returned).toEqual(['docs']);
+    expect(back.registered).toEqual([]);
+    expect(recordOf('docs')!.status).toBe('active');
+    expect(reachOfDocs()).toEqual(before);
+    // The listing names exactly who regains reach: every subject x capability that resolves yes again, nothing else.
+    const regained = before.filter((l) => l.endsWith(' yes')).map((l) => {
+      const [subject, capability] = l.split(' ');
+      return `${subject} ${capability}`;
+    });
+    expect(back.reachChanges.filter((r) => caps.includes(r.capability)).map((r) => `${r.subjectId} ${r.capability}`).sort()).toEqual(regained.sort());
+    expect(back.reachChanges.every((r) => r.memberId === 'docs' && r.before.value === 'no')).toBe(true);
+    const event = queryAuditEvents(dataDir, { action: 'member.returned' })[0];
+    expect(event).toMatchObject({ projectId: 'docs', composition: 'platform' });
   });
 
   it('renaming a hosted family root refuses, writing nothing', async () => {

@@ -753,6 +753,13 @@ function GitTab({ projectId }: { projectId: string }) {
           ) : (
             <div className="panel">
               <h4>Bind the project repository</h4>
+              <p>
+                <Badge tone="warn">not git-backed</Badge>{' '}
+                <span className="hint">
+                  No git binding of its own. A member commits through its family root's repository; a top-level project — a detached
+                  member included — needs one enabled here.
+                </span>
+              </p>
               <p className="hint">wairon manages only the <code>.wai/</code> tree inside your existing repository.</p>
               <div className="row-form">
                 <Field label="Remote URL">

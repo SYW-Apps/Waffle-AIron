@@ -412,7 +412,7 @@ function standIn(parentId: string, alias: string, memberPath?: string): string {
 
 /** One membership change reconcile made, for the reach listing and the audit. */
 interface MembershipChange {
-  kind: 'registered' | 'relocated' | 'renamed' | 'departed';
+  kind: 'registered' | 'returned' | 'relocated' | 'renamed' | 'departed';
   id: string;
   previousId?: string;
   detail: Record<string, unknown>;
@@ -432,28 +432,32 @@ export function reconcile(dataDir: string, principal: Principal, projectId: stri
   // Steps 3-4.
   const world = gatherPermissionWorld(dataDir);
   const users = listUsers(dataDir);
-  // Steps 5-15: register, relocate and re-key, family roots first.
+  // Steps 5-14: register, return, relocate and re-key, family roots first.
   const changes: MembershipChange[] = [];
-  for (const m of declared.filter((d) => d.action === 'register' || d.action === 'relocate' || d.action === 'rename')) {
+  const kindOf = { register: 'registered', return: 'returned', relocate: 'relocated' } as const;
+  for (const m of declared.filter((d) => d.action === 'register' || d.action === 'return' || d.action === 'relocate' || d.action === 'rename')) {
     if (m.action === 'rename' && m.previousId !== undefined) changes.push(rekey(dataDir, world, users, m));
-    registerMemberRecord(dataDir, { ...m.record, rootPath: '' });
-    if (m.action !== 'rename') changes.push({ kind: m.action === 'register' ? 'registered' : 'relocated', id: m.record.id, detail: { parent: m.record.parentProjectId, memberPath: m.record.memberPath } });
+    // Step 13: a returning member's record is active again; it kept its own-scope settings.
+    if (m.action === 'return') setProjectRecordStatus(dataDir, m.record.id, 'active');
+    registerMemberRecord(dataDir, { ...m.record, status: 'active', rootPath: '' });
+    if (m.action !== 'rename') changes.push({ kind: kindOf[m.action as keyof typeof kindOf], id: m.record.id, detail: { parent: m.record.parentProjectId, memberPath: m.record.memberPath } });
   }
-  // Steps 16-17: a record whose member the family no longer declares is disabled, never deleted.
+  // Steps 15-16: a record whose member the family no longer declares is disabled, never deleted.
   for (const r of departedRecords(family, declared, changes)) {
     setProjectRecordStatus(dataDir, r.id, 'disabled');
     changes.push({ kind: 'departed', id: r.id, detail: { parent: r.parentProjectId, memberPath: r.memberPath } });
   }
-  // Steps 18-20: the reach the membership changes altered.
+  // Steps 17-19: the reach the membership changes altered.
   const reachChanges = reachOf(users, world, changes);
-  // Steps 21-23: every touched project audited as its own event, and its repository scope.
+  // Steps 20-22: every touched project audited as its own event, and its repository scope.
   const ids = [...new Set([...touched, ...changes.map((c) => c.id)])];
   for (const id of ids) auditTouched(dataDir, principal, projectId, id, changes.find((c) => c.id === id), reachChanges);
-  // Step 24: one commit over every touched project's own .wai/.
+  // Step 23: one commit over every touched project's own .wai/.
   const commit = publishFamily(dataDir, ids, `wairon: reconcile the family of ${projectId} (${ids.join(', ')})`);
-  // Step 25.
+  // Step 24.
   return {
     registered: changes.filter((c) => c.kind === 'registered').map((c) => c.id),
+    returned: changes.filter((c) => c.kind === 'returned').map((c) => c.id),
     relocated: changes.filter((c) => c.kind === 'relocated').map((c) => c.id),
     renamed: changes.filter((c) => c.kind === 'renamed').map((c) => `${c.previousId}->${c.id}`),
     departed: changes.filter((c) => c.kind === 'departed').map((c) => c.id),
@@ -463,7 +467,7 @@ export function reconcile(dataDir: string, principal: Principal, projectId: stri
 }
 
 /**
- * Steps 6-14: a member a project rename gave a new id. Its OWN-scope settings
+ * Steps 6-12: a member a project rename gave a new id. Its OWN-scope settings
  * and the key entries naming it move to the new id and the old record is
  * deleted — nothing inherited is stored on it, so nothing else moves. Refused
  * (an operator moves them by hand; the old record is disabled as departed)
@@ -477,17 +481,17 @@ function rekey(dataDir: string, world: PermissionWorld, users: HostedUserRecordL
   const unitIds = new Set(world.units.map((u) => u.id));
   const refused = hasOwnSettings(world, users, newId) || unitIds.has(oldId) || unitIds.has(newId);
   if (refused) {
-    // Steps 8-9.
+    // Step 7: refused, it goes straight on to registering the new id.
     return { kind: 'registered', id: newId, detail: { parent: m.record.parentProjectId, memberPath: m.record.memberPath, rekeyRefused: oldId } };
   }
-  // Steps 10-11: the own-scope assignments and role bindings.
+  // Steps 8-9: the own-scope assignments and role bindings.
   const moved = { assignments: world.assignments.filter((a) => a.scopeKind === 'project' && a.scopeId === oldId).length };
   remapScope(dataDir, [{ oldId, newId }]);
   remapUnitReferences(dataDir, [{ oldId, newId }], []);
-  // Steps 12-13: the key entries naming the old id.
+  // Steps 10-11: the key entries naming the old id.
   const keys = listCredentials(dataDir, oldId).filter((k) => k.projects.includes(oldId) && !k.revokedAt);
   for (const k of keys) renarrowCredential(dataDir, k.id, [...new Set(k.projects.map((e) => (e === oldId ? newId : e)))]);
-  // Step 14: the old record; its children are relocated under the new id as the loop reaches them.
+  // Step 12: the old record; its children are relocated under the new id as the loop reaches them.
   removeProjectRecord(dataDir, oldId);
   return { kind: 'renamed', id: newId, previousId: oldId, detail: { ...moved, keys: keys.map((k) => k.id) } };
 }
@@ -501,7 +505,7 @@ function hasOwnSettings(world: PermissionWorld, users: HostedUserRecordLike[], i
     || users.some((u) => (u.roleBindings ?? []).some((b) => b.scopeKind === 'project' && b.scopeId === id));
 }
 
-/** Step 16: the family's member records the family no longer declares (an unreadable declaration keeps the record it names). */
+/** Step 15: the family's member records the family no longer declares (an unreadable declaration keeps the record it names). */
 function departedRecords(family: HostedProjectRecord[], declared: PlannedMemberRecord[], changes: MembershipChange[]): HostedProjectRecord[] {
   const live = new Set(declared.filter((d) => d.action !== 'unreadable').map((d) => d.record.id));
   const held = declared.filter((d) => d.action === 'unreadable').map((d) => `${d.record.parentProjectId}/${d.record.memberPath}`);
@@ -510,13 +514,13 @@ function departedRecords(family: HostedProjectRecord[], declared: PlannedMemberR
     && !held.includes(`${r.parentProjectId}/${r.memberPath}`));
 }
 
-/** Steps 18-20: the rows whose effective permission a membership change altered (a re-key is equal by construction). */
+/** Steps 17-19: the rows whose effective permission a membership change altered (a re-key is equal by construction). */
 function reachOf(users: Parameters<typeof compare>[0], world: PermissionWorld, changes: MembershipChange[]): ReachComparison[] {
   const links: ProjectParentLink[] = listChangedLinks(changes);
   const departed = changes.filter((c) => c.kind === 'departed').map((c) => c.id);
   const after = relink(world, links, departed, [], []);
   return changes.filter((c) => c.kind !== 'renamed').flatMap((c) => {
-    const before = c.kind === 'registered' ? null : c.id;
+    const before = c.kind === 'registered' || c.kind === 'returned' ? null : c.id;
     const now = c.kind === 'departed' ? null : c.id;
     return compare(users, world, before, after, now).filter((r) => !r.equal).map((r) => ({ ...r, memberId: c.id }));
   });
@@ -525,11 +529,11 @@ function reachOf(users: Parameters<typeof compare>[0], world: PermissionWorld, c
 /** The parent links the registered and relocated members hold now. */
 function listChangedLinks(changes: MembershipChange[]): ProjectParentLink[] {
   return changes
-    .filter((c) => c.kind === 'registered' || c.kind === 'relocated')
+    .filter((c) => c.kind === 'registered' || c.kind === 'returned' || c.kind === 'relocated')
     .map((c) => ({ projectId: c.id, parentProjectId: String(c.detail.parent) }));
 }
 
-/** Step 22: one event per touched project, naming it, with the initiating project as composition. */
+/** Step 21: one event per touched project, naming it, with the initiating project as composition. */
 function auditTouched(dataDir: string, principal: Principal, projectId: string, id: string, change: MembershipChange | undefined, reach: ReachComparison[]): void {
   const rows = reach.filter((r) => r.memberId === id);
   audit(dataDir, {
@@ -545,7 +549,7 @@ function reachSummary(rows: ReachComparison[]): string[] {
 }
 
 /**
- * Step 24: ONE commit per family repository whose pathspecs are exactly the
+ * Step 23: ONE commit per family repository whose pathspecs are exactly the
  * touched projects' own .wai/ — never another member's tree, never source
  * code. A family that is not git-backed, or clean paths, publish nothing.
  */
@@ -567,6 +571,9 @@ function publishScopes(scopes: RepositoryScope[], message: string): GitPublish |
 }
 
 // ── detach ──────────────────────────────────────────────────────────────────
+
+/** What a detached project is told about git: the family's repository stays with the family, and none is created. */
+export const NO_GIT_BINDING = 'no git binding: enable one for this project';
 
 /** The host store files a relocation's coordinator contributes: the project records and the organization (placements). */
 const RELOCATION_AREAS = ['projects.json', 'organization.json'];
@@ -604,7 +611,8 @@ export function detach(dataDir: string, principal: Principal, binding: ProjectBi
   // Steps 12-14: the host store writes, made in the rehearsal's copy of the data root.
   const changes = detachHostWrites(plan, dataDir, memberId, newRoot, placements);
   const scopes = touchedScopes(dataDir, family, changes);
-  const planned: MigrationPlan = { ...plan, changes };
+  // The family's repository stays with the family: the detached project has no git binding of its own.
+  const planned: MigrationPlan = { ...plan, changes, notes: [...plan.notes, NO_GIT_BINDING] };
   // Step 15.
   if (!apply) {
     // Steps 24-25.
@@ -627,7 +635,7 @@ export function detach(dataDir: string, principal: Principal, binding: ProjectBi
   audit(dataDir, {
     action: 'member.detached', outcome: 'success', level: 'info', actor: actorOf(principal), tokenId: principal.tokenId,
     projectId: memberId, composition: binding.projectId, target: memberId,
-    metadata: JSON.stringify({ newRoot, reachLost: reachSummary(reachLost) }),
+    metadata: JSON.stringify({ newRoot, reachLost: reachSummary(reachLost), gitBinding: NO_GIT_BINDING }),
   });
   // Steps 19-20.
   const commit = publishScopes(scopes, `wairon: detach ${memberId} from ${binding.projectId} (it moves to its own root)`);
@@ -645,8 +653,17 @@ function detachUnfit(dataDir: string, family: HostedProjectRecord[], member: Pla
   if (!member) return { code: 'not-a-member', project: '', detail: `the bound project declares no readable member "${alias}"` };
   if (member.action === 'register') return { code: 'not-a-member', project: '', detail: `the member "${alias}" holds no hosted record yet — run \`wairon host doctor --fix\` first` };
   const held = listProjectRecords(dataDir).some((r) => r.rootPath && path.resolve(r.rootPath) === path.resolve(newRoot));
-  if (held || fs.existsSync(newRoot)) return { code: 'relocation-target-exists', project: '', detail: `the member's new root ${newRoot} is already held by a record or a directory` };
+  if (held || occupied(newRoot)) return { code: 'relocation-target-exists', project: '', detail: `the member's new root ${newRoot} is already held by a record or a non-empty directory` };
   return family.length === 0 ? { code: 'not-a-member', project: '', detail: 'the bound project belongs to no hosted family' } : null;
+}
+
+/** Whether the new root is taken: it exists and is not an empty directory (an empty one a cut-short cleanup left is free). */
+function occupied(dir: string): boolean {
+  try {
+    return !fs.statSync(dir).isDirectory() || fs.readdirSync(dir).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /** A refused detachment answered before anything was planned or rehearsed. */
