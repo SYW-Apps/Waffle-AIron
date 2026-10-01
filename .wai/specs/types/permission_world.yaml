@@ -3,8 +3,9 @@ id: permission_world
 name: PermissionWorld
 description: >-
   The gathered, read-only data the pure permission rules walk: all relevant assignments, role
-  definitions, the organization-unit tree, and project placements. The calling orchestrator gathers
-  it (I/O); the permission rules perform none.
+  definitions, the organization-unit tree, project placements, and the project-to-parent-project
+  links of member records. The calling orchestrator gathers it (I/O); the permission rules perform
+  none.
 subsystem: sdd_host
 fields:
   - name: assignments
@@ -23,7 +24,13 @@ fields:
     type: ProjectPlacement[]
     description: Project placements, to resolve a project's owning unit.
     optional: false
+  - name: parents
+    type: ProjectParentLink[]
+    description: >-
+      Every member record's link to its parent record — the project rungs of a member's chain,
+      between its own scope and its family root's placement units.
+    optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:29.509Z'
-updatedAt: '2026-09-19T11:07:13.201Z'
+updatedAt: '2026-10-01T16:55:01.132Z'

@@ -15,7 +15,8 @@ dependsOn:
   - permission_repository
   - role_repository
   - permission_rules
+  - project_repository
 dependencyClass: read
 status: complete
 createdAt: '2026-07-15T21:31:49.217Z'
-updatedAt: '2026-09-15T21:02:19.165Z'
+updatedAt: '2026-10-01T16:55:51.898Z'

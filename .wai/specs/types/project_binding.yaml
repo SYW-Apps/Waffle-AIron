@@ -4,10 +4,10 @@ name: ProjectBinding
 description: >-
   The resolved binding of one authorized data-plane request: the hosted project record it binds and
   that record's root. Since stage 7 a member is bound as its own record, so projectId is always the
-  project the request acts on — permissions, audit, approval and record-level tools all anchor
-  there; there is no TOP-project anchor any more. A member-qualified selector or narrowing
-  ('platform::billing') still resolves for one release, to the member's record, and is recorded in
-  via.
+  project the request acts on — permissions (resolved over the record's chain), audit, approval and
+  record-level tools all anchor there. A narrowing entry naming a project covers its members. A
+  member-qualified selector or narrowing ('platform::billing') still resolves for one release, to
+  the member's record, and is recorded in via.
 subsystem: sdd_host
 fields:
   - name: rootPath
@@ -37,4 +37,4 @@ fields:
 methods: []
 sourcePath: src/server/projects.ts
 createdAt: '2026-07-24T20:50:13.159Z'
-updatedAt: '2026-10-01T16:27:52.030Z'
+updatedAt: '2026-10-01T16:55:34.494Z'

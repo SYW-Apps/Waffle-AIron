@@ -31,8 +31,13 @@ fields:
     type: string
     description: >-
       register (no record yet), relocate (a record exists and the member's path or parent changed),
-      unchanged (the record already agrees with the family on disk)
+      rename (a record with another id held this parent and path: a project rename, re-keyed),
+      unchanged (the record agrees with the family on disk), unreadable
     optional: false
+  - name: previousId
+    type: string
+    description: 'For action rename: the record id the member held before'
+    optional: true
 methods: []
 createdAt: '2026-10-01T16:26:56.046Z'
-updatedAt: '2026-10-01T16:26:56.052Z'
+updatedAt: '2026-10-01T16:55:16.019Z'

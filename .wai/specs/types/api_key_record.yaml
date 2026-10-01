@@ -27,14 +27,13 @@ fields:
     type: string[]
     description: >-
       The token's project narrowing: the hosted record ids this token may act on, or "*" for the
-      owner's full accessible set. Since stage 7 a member is a record of its own and is named by its
-      own id; the upgrade rewrites every member-qualified entry ('projectId::alias', one alias per
-      hop) to the member's record id plus the ids of the members below it, and adds a family's
-      member ids to an entry naming its family root, so every key reaches exactly the trees it
-      reached (the documented widening: record-level tools on the member's own record). A qualified
-      entry left unrewritten still resolves for one release, to the member's record. The token
-      carries no permissions of its own — within this narrowing it acts as the owner user's LIVE
-      permission, resolved over each bound record.
+      owner's full accessible set. An entry naming a project covers that project and every member
+      below it, transitively (projects nest like units), so a family root's entry reaches its
+      members with no expansion. Since stage 7 a member is a record of its own; the upgrade rewrites
+      every member-QUALIFIED entry ('projectId::alias', one alias per hop) to the member's record
+      id, and a qualified entry left unrewritten still resolves for one release, to the member's
+      record. The token carries no permissions of its own — within this narrowing it acts as the
+      owner user's LIVE permission, resolved over each bound record's chain.
     optional: false
   - name: createdAt
     type: string
@@ -63,4 +62,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-10-01T16:27:57.380Z'
+updatedAt: '2026-10-01T16:55:29.669Z'

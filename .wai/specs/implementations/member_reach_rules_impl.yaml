@@ -1,0 +1,83 @@
+id: member_reach_rules_impl
+name: Member Reach Rules Implementation
+description: Pure rules of member reach; the implementation pass names their source file.
+contract: imember_reach_rules
+methods:
+  - name: relink
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Copy the world's parent links, drop every link whose projectId is in removed, and add
+          every added link (replacing any link the member already had)
+        type: local
+      - stepNumber: 2
+        description: Return the world with the new links and every other collection unchanged
+        type: return
+        outcome: PermissionWorld
+    detail: full
+  - name: compare
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Derive the subjects: each user record as its permission subject, plus one subject with no
+          settings of its own standing for everyone else
+        type: local
+      - stepNumber: 2
+        description: For every subject and every capability
+        type: loop
+        loopKind: forEach
+        over: subjects x capabilities
+        endStep: 5
+      - stepNumber: 3
+        description: >-
+          Resolve the before value over (project, beforeId) in the before world; 'no' when beforeId
+          is null
+        type: call
+        targetComponent: permission_rules
+        targetMethod: resolvePermission
+      - stepNumber: 4
+        description: >-
+          Resolve the after value over (project, afterId) in the after world; 'no' when afterId is
+          null
+        type: call
+        targetComponent: permission_rules
+        targetMethod: resolvePermission
+      - stepNumber: 5
+        description: Record the row with equal = (before.value is after.value)
+        type: local
+      - stepNumber: 6
+        description: Return every row
+        type: return
+        outcome: ReachComparison[]
+    detail: full
+  - name: narrowing
+    narrative:
+      - stepNumber: 1
+        description: Does any entry carry '::' (a member qualifier)?
+        type: branch
+        condition: an entry of the narrowing is member-qualified
+        onTrueStep: 3
+        onFalseStep: 2
+      - stepNumber: 2
+        description: 'Nothing to rewrite: a project entry covers its members through the chain'
+        type: return
+        outcome: 'null'
+      - stepNumber: 3
+        description: >-
+          Replace each qualified entry by the record id of the member whose qualifier equals it,
+          keep every other entry, collapse duplicates keeping first order
+        type: local
+      - stepNumber: 4
+        description: >-
+          State the widening: record-level tools (status, approval, lock requests, packs, policy,
+          producers, commit, landscape discovery) now act on the member's own record — within the
+          member only
+        type: local
+      - stepNumber: 5
+        description: Return the planned rewrite
+        type: return
+        outcome: PlannedNarrowing
+    detail: full
+status: design
+createdAt: '2026-10-01T16:56:34.586Z'
+updatedAt: '2026-10-01T16:58:54.514Z'

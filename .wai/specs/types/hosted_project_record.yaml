@@ -2,13 +2,15 @@ kind: entity
 id: hosted_project_record
 name: HostedProjectRecord
 description: >-
-  A registered hosted project: maps a project id to its fully-isolated .wai/ root. This is the
-  isolation unit for request scoping, permissions, audit, approval and git binding. Since stage 7 a
-  family's members are records too: a member record carries parentProjectId and memberPath and is a
-  project for every hosted operation — its own permissions (no project-to-member rung: membership
-  never implies permission), audit, approval page, status, lock requests and data-plane binding. A
-  member record never copies its parent's directory: its root is the parent's root plus memberPath,
-  derived on read.
+  A registered hosted project: maps a project id to its .wai/ root. This is the isolation unit for
+  request scoping, permissions, audit, approval and git binding. Since stage 7 a family's members
+  are records too: a member record carries parentProjectId and memberPath and is a project for every
+  hosted operation — its own audit, approval page, status, lock requests and data-plane binding.
+  Projects nest like organization units: a member's permission chain is its own project scope, then
+  its parent's, up to its family root, then the family root's unit placements, then the instance —
+  so access to a project reaches all its members transitively, and the most specific setting wins
+  (an explicit no on the member's own record beats anything inherited). A member record never copies
+  its parent's directory: its root is the parent's root plus memberPath, derived on read.
 subsystem: sdd_host
 fields:
   - name: id
@@ -75,8 +77,8 @@ fields:
     type: string
     description: >-
       The record id of the project that declares this one as a member (its project.yaml `members`);
-      absent for a family root. Names the crumb to the parent and the family the record belongs to;
-      confers no permission.
+      absent for a family root. Names the crumb to the parent and the next rung of the member's
+      permission chain.
     optional: true
   - name: memberPath
     type: string
@@ -88,4 +90,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-10-01T16:27:44.705Z'
+updatedAt: '2026-10-01T16:55:27.219Z'

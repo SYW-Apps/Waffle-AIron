@@ -1,0 +1,72 @@
+id: imember_reach_rules
+name: Member Reach Rules Interface
+description: >-
+  Pure, deterministic rules over supplied values: the world after a membership change, the reach
+  comparison across it, and the token qualifier rewrite.
+component: member_reach_rules
+methods:
+  - name: relink
+    description: >-
+      The permission world with the given parent links added and the given member ids unlinked
+      (their parent link removed). Assignments, roles, units and placements are untouched — a
+      membership change moves no setting, only the chain.
+    signature: 'relink(world: PermissionWorld, added: ProjectParentLink[], removed: string[]): PermissionWorld'
+    returns: PermissionWorld
+    params:
+      - name: world
+        type: PermissionWorld
+      - name: added
+        type: ProjectParentLink[]
+      - name: removed
+        type: string[]
+        description: Member record ids whose parent link is removed
+    guarantees:
+      - idempotent
+  - name: compare
+    description: >-
+      For every subject (each user record as its permission subject — its id, its diverged subject
+      id as alias, its role bindings — plus one subject with no settings of its own, standing for
+      everyone else) and every capability, resolve the before side (beforeId in before; 'no' when
+      beforeId is null — no record) and the after side (afterId in after; 'no' when null) and answer
+      each row with equal set. Callers keep all rows (the upgrade's proof) or only unequal ones (a
+      reach listing).
+    signature: >-
+      compare(users: HostedUserRecord[], before: PermissionWorld, beforeId: string | null, after:
+      PermissionWorld, afterId: string | null): ReachComparison[]
+    returns: ReachComparison[]
+    params:
+      - name: users
+        type: HostedUserRecord[]
+      - name: before
+        type: PermissionWorld
+      - name: beforeId
+        type: string | null
+        description: >-
+          The project resolved before (the family root at upgrade; the member before a change; null
+          when it had no record)
+      - name: after
+        type: PermissionWorld
+      - name: afterId
+        type: string | null
+        description: The project resolved after (null when it will have no record)
+    guarantees:
+      - idempotent
+  - name: narrowing
+    description: >-
+      Rewrite one API key's member-QUALIFIED entries ('platform::billing', one alias per hop) to the
+      record id of the member whose qualifier equals it; every other entry ('*', a project id —
+      which already covers its members through the chain) is kept; duplicates collapse, order kept.
+      Answers null when no entry is qualified, otherwise the rewrite and its documented widening
+      (record-level tools on the member's own record, within the member only).
+    signature: 'narrowing(key: ApiKeyRecord, members: PlannedMemberRecord[]): PlannedNarrowing | null'
+    returns: PlannedNarrowing | null
+    params:
+      - name: key
+        type: ApiKeyRecord
+      - name: members
+        type: PlannedMemberRecord[]
+    guarantees:
+      - idempotent
+status: design
+createdAt: '2026-10-01T16:56:27.256Z'
+updatedAt: '2026-10-01T16:56:27.265Z'

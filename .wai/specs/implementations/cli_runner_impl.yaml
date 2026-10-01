@@ -2781,37 +2781,6 @@ methods:
         type: throw
         error: WaironError
     detail: full
-  - name: runHostDoctor
-    sourcePath: src/commands/host.ts
-    narrative:
-      - stepNumber: 1
-        description: Resolve the host configuration
-        type: local
-      - stepNumber: 2
-        description: Run the permission-model migration via the host adapter, applying it only with --fix
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: migratePermissionModel
-      - stepNumber: 3
-        description: Nothing to migrate?
-        type: branch
-        condition: the report has no findings
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        label: clean
-        description: Report the data as migrated
-        type: return
-        outcome: nothing to migrate
-      - stepNumber: 5
-        label: report
-        description: Print every finding, warning when it was a dry run
-        type: local
-      - stepNumber: 6
-        description: Return after the report
-        type: return
-        outcome: reported
-    detail: full
   - name: runExternals
     sourcePath: src/commands/externals.ts
     narrative:
@@ -3024,6 +2993,52 @@ methods:
         type: call
         targetComponent: cli_runner
         targetMethod: runMigration
+  - name: runHostDoctor
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the host configuration
+        type: local
+      - stepNumber: 2
+        description: Run the permission-model migration via the host adapter, applying it only with --fix
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: migratePermissionModel
+      - stepNumber: 3
+        description: >-
+          Print its findings, or that the data is on the permission model, warning when it was a dry
+          run
+        type: local
+      - stepNumber: 4
+        description: >-
+          Run the stage-7 member upgrade via the host adapter — a dry-run plan, applied all or
+          nothing only with --fix
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: upgradeMembers
+      - stepNumber: 5
+        description: Nothing to upgrade?
+        type: branch
+        condition: the plan has no member to register or relocate, no key to rewrite and no refusal
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Report the members as registered
+        type: return
+        outcome: nothing to upgrade
+      - stepNumber: 7
+        label: members
+        description: >-
+          Print the plan once per family: each member with its parent and path, the reach proof as
+          one line per member (rows compared, all equal — nobody's reach changes), each rewritten
+          key entry with its widening, and every refusal; warn when it was a dry run (re-run with
+          --fix) or a blocked plan (nothing written), and say what was restored when the apply
+          failed
+        type: local
+      - stepNumber: 8
+        description: Return after the report
+        type: return
+        outcome: reported
+    detail: full
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -3039,4 +3054,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-01T05:54:27.870Z'
+updatedAt: '2026-10-01T16:59:20.693Z'

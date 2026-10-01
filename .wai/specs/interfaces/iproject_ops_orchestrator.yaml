@@ -432,17 +432,14 @@ methods:
   - name: exportProjectTree
     description: Forward to admin_orchestrator.exportProjectTree (project:read over the project upstream).
     signature: >-
-      exportProjectTree(credential: string, project: string, subproject?: string, includeDerived?:
-      boolean, allowPartial?: boolean): TreeExportResult
+      exportProjectTree(credential: string, project: string, includeDerived?: boolean,
+      allowPartial?: boolean): TreeExportResult
     returns: TreeExportResult
     params:
       - name: credential
         type: string
       - name: project
         type: string
-      - name: subproject
-        type: string
-        optional: true
       - name: includeDerived
         type: boolean
         optional: true
@@ -457,8 +454,8 @@ methods:
       Forward to admin_orchestrator.importProjectTree (project:admin over the project upstream;
       executable entries always refused).
     signature: >-
-      importProjectTree(credential: string, project: string, archive: bytes, subproject?: string,
-      replaceExisting?: boolean): TreeImportResult
+      importProjectTree(credential: string, project: string, archive: bytes, replaceExisting?:
+      boolean): TreeImportResult
     returns: TreeImportResult
     params:
       - name: credential
@@ -467,9 +464,6 @@ methods:
         type: string
       - name: archive
         type: bytes
-      - name: subproject
-        type: string
-        optional: true
       - name: replaceExisting
         type: boolean
         optional: true
@@ -511,4 +505,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-09-29T16:16:47.114Z'
+updatedAt: '2026-10-01T16:51:46.371Z'

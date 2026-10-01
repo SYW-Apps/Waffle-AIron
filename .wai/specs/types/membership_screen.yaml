@@ -1,0 +1,25 @@
+kind: value-object
+id: membership_screen
+name: MembershipScreen
+description: >-
+  What the hosted data plane learns before it dispatches a membership-changing tool (attach, adopt,
+  detach): whether the hosted model refuses it, and the principals whose reach the change would
+  alter — every subject x capability whose effective permission over the member differs once its
+  parent link is added (attach, adopt: they gain access inherited from the new parent) or removed
+  (detach: they lose it). A dry run's result carries the list; an applied run is audited with it by
+  reconcile.
+subsystem: sdd_host
+fields:
+  - name: refusal
+    type: string
+    description: >-
+      Why the hosted model refuses the call, when it does (a hosted detach of a member whose
+      directory lies inside its parent's isolated tree)
+    optional: true
+  - name: reachChanges
+    type: ReachComparison[]
+    description: The rows whose before and after differ
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:55:21.624Z'
+updatedAt: '2026-10-01T16:55:21.625Z'

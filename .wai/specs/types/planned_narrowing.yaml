@@ -2,13 +2,12 @@ kind: value-object
 id: planned_narrowing
 name: PlannedNarrowing
 description: >-
-  One API key's project narrowing as the member upgrade rewrites it so the key reaches exactly the
-  trees it reached: a member-qualified entry becomes the member's record id plus the record ids of
-  the members below it; a plain family-root entry gains the record id of every member of that family
-  (it reached them through qualified selectors). '*' and entries naming no family are kept. widening
-  states what the key may now do that it could not: call record-level tools (status, approval, lock
-  requests, packs, policy, producers, commit, landscape discovery) on the member's own record —
-  within the member only.
+  One API key's project narrowing as the member upgrade rewrites it: each member-QUALIFIED entry
+  ('platform::billing', one alias per hop) becomes that member's record id. Nothing else changes —
+  an entry naming a project already covers its members through the project chain, so a family-root
+  entry is never expanded, and '*' is kept. widening states what the rewritten entry may now do that
+  it could not: record-level tools (status, approval, lock requests, packs, policy, producers,
+  commit, landscape discovery) on the member's own record — within the member only.
 subsystem: sdd_host
 fields:
   - name: keyId
@@ -29,4 +28,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-10-01T16:27:13.765Z'
-updatedAt: '2026-10-01T16:27:13.767Z'
+updatedAt: '2026-10-01T16:55:18.072Z'

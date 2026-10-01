@@ -1304,17 +1304,14 @@ methods:
       application/zip with a download disposition naming the project. Requires project:read over the
       project upstream.
     signature: >-
-      projectTreeExport(sessionId: string, project: string, subproject?: string, includeDerived?:
-      boolean, allowPartial?: boolean): TreeExportResult
+      projectTreeExport(sessionId: string, project: string, includeDerived?: boolean, allowPartial?:
+      boolean): TreeExportResult
     returns: TreeExportResult
     params:
       - name: sessionId
         type: string
       - name: project
         type: string
-      - name: subproject
-        type: string
-        optional: true
       - name: includeDerived
         type: boolean
         optional: true
@@ -1336,8 +1333,8 @@ methods:
       project:admin over the project upstream, refuses executable entries, and reports where the
       replaced tree was backed up.
     signature: >-
-      projectTreeImport(sessionId: string, project: string, archive: bytes, subproject?: string,
-      replaceExisting?: boolean): TreeImportResult
+      projectTreeImport(sessionId: string, project: string, archive: bytes, replaceExisting?:
+      boolean): TreeImportResult
     returns: TreeImportResult
     params:
       - name: sessionId
@@ -1346,9 +1343,6 @@ methods:
         type: string
       - name: archive
         type: bytes
-      - name: subproject
-        type: string
-        optional: true
       - name: replaceExisting
         type: boolean
         optional: true
@@ -1543,4 +1537,4 @@ methods:
       path: /web/projects/externals
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-01T16:35:37.139Z'
+updatedAt: '2026-10-01T16:51:50.813Z'

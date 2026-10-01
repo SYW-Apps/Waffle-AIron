@@ -142,10 +142,11 @@ methods:
       - stepNumber: 7
         label: authorize
         description: >-
-          Authorize by equality: the target record is covered iff the principal holds '*' or an
-          entry equal to its id (an entry that is itself a deprecated qualifier is mapped to its
-          record the same way first). There is no project-to-member covering: a family root's id
-          never covers a member. Uncovered is null with no existence leak
+          Authorize by the project chain: the target record is covered iff the principal holds '*',
+          an entry equal to its id, or an entry naming a record the target descends from through
+          parentProjectId (an entry that is itself a deprecated qualifier is mapped to its record
+          the same way first) — a token for a project reaches its members, as a grant does.
+          Uncovered is null with no existence leak
         type: local
       - stepNumber: 8
         description: Load the target record; a missing or inactive record is null
@@ -154,16 +155,24 @@ methods:
         description: Is the target a member record?
         type: branch
         condition: the record carries parentProjectId
-        onFalseStep: 11
+        onFalseStep: 12
       - stepNumber: 10
         description: >-
           Derive the member's root: walk parentProjectId up to the family root (which persists its
-          root), then join each memberPath back down through the containment guard; a broken chain
-          (a parent record gone) is null
+          root), then join each memberPath back down through the containment guard, and check the
+          directory still holds a project whose id is the record's (a moved member answers null
+          until reconcile relocates its record); a broken chain (a parent record gone) is null
         type: call
         targetComponent: host_core_adapter
         targetMethod: resolveContainedProjectPath
       - stepNumber: 11
+        description: >-
+          Read the project configuration at the derived root and require its id to be the record's;
+          a mismatch (the member moved, or another project sits there) is null
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 12
         label: bind
         description: >-
           Return the binding: the bound root, the record's own id, its family root id, and via when
@@ -211,4 +220,4 @@ methods:
     symbol: projectRepositoryScope
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-10-01T16:29:57.593Z'
+updatedAt: '2026-10-01T16:56:12.682Z'

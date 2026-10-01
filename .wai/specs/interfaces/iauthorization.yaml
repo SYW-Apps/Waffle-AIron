@@ -2,7 +2,8 @@ id: iauthorization
 name: Authorization Interface
 description: >-
   The I/O-backed authorization seam. The caller has already authenticated (holds a Principal with
-  its permissionSubject); this gathers the permission world and delegates to the pure permission
+  its permissionSubject); this gathers the permission world — including the member records' parent
+  links, so a member resolves through its project chain — and delegates to the pure permission
   rules. Performs no authentication and no workflow routing.
 component: authorization
 methods:
@@ -41,19 +42,20 @@ methods:
   - name: world
     description: >-
       Gather the permission world exactly as authorize resolves over it — assignments, organization
-      units, placements, and the stored roles MERGED with the intrinsic built-in roles — for a
-      caller that must reason about resolution itself (the member upgrade proves no-widening over
-      it). A read; performs no authentication.
+      units, placements, the member records' parent links, and the stored roles MERGED with the
+      intrinsic built-in roles — for a caller that must reason about resolution itself (the member
+      upgrade's reach proof, a membership change's reach listing). A read; performs no
+      authentication.
     signature: 'world(): PermissionWorld'
     returns: PermissionWorld
     params: []
   - name: reach
     description: >-
       Gather the permission world once and answer which of the given hosted records the principal
-      may read (project:read yes) and write (project:write yes), each resolved over its OWN record
-      through the permission rules — a member's reach is never inferred from its parent's. The data
-      plane asks it for the bound project's family, so a family run composes and a family migration
-      writes only within it.
+      may read (project:read yes) and write (project:write yes), each resolved through its OWN chain
+      — its own scope, its parents', its family root's units — so a parent's grant reaches its
+      members and an explicit no on a member removes it. The data plane asks it for the bound
+      project's family, so a family run composes and a family migration writes only within it.
     signature: 'reach(principal: Principal, projectIds: string[]): FamilyReach'
     returns: FamilyReach
     params:
@@ -64,4 +66,4 @@ methods:
         description: The record ids to judge, typically the bound project's family
 status: complete
 createdAt: '2026-07-15T21:31:59.946Z'
-updatedAt: '2026-10-01T16:30:20.102Z'
+updatedAt: '2026-10-01T16:55:58.022Z'
