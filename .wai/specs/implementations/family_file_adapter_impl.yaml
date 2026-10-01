@@ -69,6 +69,21 @@ methods:
     narrative: []
     detail: intent
     intent: Compares fs.statSync(a).dev with fs.statSync(b).dev; a missing path answers false.
+  - name: resolve
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses (null) an empty path, an absolute one on either platform, and one that does not lie
+      strictly within the root lexically. Then follows links: walks up from the resolved directory
+      to its nearest existing ancestor and answers the directory only when that ancestor's real path
+      is the root's real path or lies within it, else null. Never throws for an absent directory: an
+      absent one is judged by the ancestor that exists.
+  - name: holdsProject
+    narrative: []
+    detail: intent
+    intent: >-
+      Answers whether <dir>/.wai/project.yaml exists; an absent directory answers false. Never
+      throws.
 status: complete
 createdAt: '2026-09-30T20:27:27.264Z'
-updatedAt: '2026-09-30T21:33:55.411Z'
+updatedAt: '2026-10-01T05:53:27.597Z'

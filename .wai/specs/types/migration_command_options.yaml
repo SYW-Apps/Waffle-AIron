@@ -40,6 +40,12 @@ fields:
       project rename --project <alias path>: the member whose id moves; the current project when
       absent.
     optional: true
+  - name: widen
+    type: boolean
+    description: >-
+      member detach --widen: widen exactly the exports the family uses that the member exports only
+      to the family to the instance audience, shown in the plan, instead of refusing.
+    optional: true
 methods: []
 createdAt: '2026-09-30T20:37:46.672Z'
-updatedAt: '2026-09-30T20:38:10.713Z'
+updatedAt: '2026-10-01T05:54:10.101Z'

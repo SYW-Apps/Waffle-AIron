@@ -1218,10 +1218,11 @@ memberCmd
 memberCmd
   .command('detach <alias>')
   .description('Take a member out of the family: this project and every family consumer then reach it as an external by path, pinned')
+  .option('--widen', 'widen exactly the exports the family uses that the member gives the family alone to the instance audience (shown in the plan), instead of refusing')
   .option('--report', 'print the plan and write nothing')
   .option('--yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (alias: string, opts) => {
-    await runMemberDetach(alias, { report: opts.report, yes: opts.yes });
+    await runMemberDetach(alias, { widen: opts.widen, report: opts.report, yes: opts.yes });
   });
 
 memberCmd

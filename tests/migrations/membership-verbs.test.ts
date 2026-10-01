@@ -140,6 +140,33 @@ describe('stage 6 — the membership verbs', () => {
 
   // ── detach / adopt ────────────────────────────────────────────────────────
 
+  it('detach --widen: exactly the used family-only exports widened to instance in the member\'s L0, shown in the plan; consumers\' own gates clean; idempotent', () => {
+    const f = buildContractFamily();
+    made.push(f);
+    pinAt(f.billing);
+    // An export nobody uses stays exactly as it is: --widen never widens what the family does not use.
+    const l0 = path.join(f.ledger, '.wai', 'specs', '.index.yaml');
+    fs.writeFileSync(l0, fs.readFileSync(l0, 'utf8').replace(
+      'publicInterfaces:\n',
+      'publicInterfaces:\n  - from: books\n    component: ledger-portal\n    as: ledger-archive\n    audience: project\n',
+    ));
+    invalidateSpecCache();
+    const planned = plan(f.top, { verb: 'detach', alias: 'ledger', widen: true });
+    expect(planned.refusals).toEqual([]);
+    expect(planned.edits.filter((e) => e.kind === 'export').map((e) => `${e.project}|${e.detail}`)).toEqual(['ledger|widen ledger-portal project→instance (used by "billing")']);
+    expect(at(f.top, () => migrations.apply(planned)).applied).toBe(true);
+    const entries = (readYamlFile(l0) as { publicInterfaces: { as?: string; component: string; audience: string }[] }).publicInterfaces;
+    expect(entries.map((e) => `${e.as ?? e.component}:${e.audience}`).sort()).toEqual(['ledger-archive:project', 'ledger-portal:instance']);
+    // Detached, the parent and billing reach ledger by path and their own gates are clean.
+    expect(configOf(f.top).externals).toEqual({ ledger: { source: { path: 'ledger' } } });
+    for (const dir of [f.top, f.billing]) {
+      expect(at(dir, () => validateProject()).issues.filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => i.code), dir).toEqual([]);
+    }
+    // Idempotent: the completed detach --widen re-plans nothing.
+    const again = plan(f.top, { verb: 'detach', alias: 'ledger', widen: true });
+    expect([again.refusals, again.changes]).toEqual([[], []]);
+  });
+
   it('detach: the member leaves the family; the parent and every family consumer reach it by path, the parent pinned last; family-consistent; idempotent', () => {
     const f = family();
     const before = familyFindings(f.top);
@@ -193,8 +220,11 @@ describe('stage 6 — the membership verbs', () => {
     made.push(narrow);
     const untouched = dirHash(narrow.top);
     const refusal = plan(narrow.top, { verb: 'detach', alias: 'ledger' }).refusals;
-    expect(refusal.map((r) => `${r.code} ${r.project}`)).toEqual(['audience-too-narrow billing']);
+    // One refusal per export, naming every project that uses it and the audience it needs.
+    expect(refusal.map((r) => `${r.code} ${r.project}`)).toEqual(['audience-too-narrow ledger']);
     expect(refusal[0].detail).toContain('"ledger-portal"');
+    expect(refusal[0].detail).toContain('"billing" uses it');
+    expect(refusal[0].detail).toContain('needs audience "instance"');
     expect(dirHash(narrow.top)).toEqual(untouched);
     const f = family();
     const cases: [() => ReturnType<typeof plan>, string][] = [

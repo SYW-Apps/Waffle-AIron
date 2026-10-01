@@ -667,9 +667,12 @@ methods:
   - name: sdd_detach_member
     description: >-
       Tool: take a member out of the family; the bound project and every family consumer then reach
-      it as an external by path, pinned. No reference text changes. All-or-nothing; dryRun answers
-      the plan and writes nothing. Never locks.
-    signature: 'sdd_detach_member(alias: string, dryRun?: boolean): FamilyMigrationReport'
+      it as an external by path, pinned. No reference text changes. Refused (audience-too-narrow,
+      each export named with its users) while a family project uses an export the member gives the
+      family alone, unless widen is set: then exactly those used exports are widened to the instance
+      audience in the member's L0, each shown in the plan. All-or-nothing; dryRun answers the plan
+      and writes nothing. Never locks.
+    signature: 'sdd_detach_member(alias: string, widen?: boolean, dryRun?: boolean): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -678,6 +681,10 @@ methods:
       - name: dryRun
         type: boolean
         description: Answer the plan and write nothing
+        optional: true
+      - name: widen
+        type: boolean
+        description: Widen the used family-only exports to instance instead of refusing
         optional: true
     endpoint:
       transport: Custom
@@ -702,4 +709,4 @@ methods:
       address: mcp tools/call sdd_adopt_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:52:43.021Z'
+updatedAt: '2026-10-01T05:54:24.936Z'

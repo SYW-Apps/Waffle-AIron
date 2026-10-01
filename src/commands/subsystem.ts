@@ -140,6 +140,8 @@ export interface MigrationCommandOptions {
   path?: string;
   /** project rename --project: the member whose id moves (an alias path); the current project when absent. */
   project?: string;
+  /** member detach --widen: widen exactly the used family-only exports to the instance audience, shown in the plan. */
+  widen?: boolean;
 }
 
 /**
@@ -282,7 +284,7 @@ export async function runMemberDetach(alias: string, options: MigrationCommandOp
   // Step 1.
   requireProject();
   // Step 2.
-  const request: MigrationRequest = { verb: 'detach', alias };
+  const request: MigrationRequest = { verb: 'detach', alias, ...(options.widen ? { widen: true } : {}) };
   // Step 3.
   await runMigration(request, options);
 }

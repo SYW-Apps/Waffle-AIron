@@ -69,45 +69,58 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          Resolve the new member's path from the bound project's directory under the containment
+          guard, lexically and through links, through the family file adapter (a planner touches no
+          file itself)
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: resolve
+      - stepNumber: 2
+        description: Ask whether that directory already holds a project
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: holdsProject
+      - stepNumber: 3
+        description: >-
           Judge the request against the bound node: no such subsystem, or one already a member, is
           externalize-refused; a path not strictly within the bound project or already holding a
           project is not-contained; the subsystem id already an alias is alias-taken, or a family
           project's id id-collision
         type: local
-      - stepNumber: 2
+      - stepNumber: 4
         description: Is the externalize possible so far?
         type: branch
         condition: a refusal was recorded
-        onFalseStep: 4
-      - stepNumber: 3
+        onFalseStep: 6
+      - stepNumber: 5
         description: Answer the refusals
         type: return
         outcome: refused plan
-      - stepNumber: 4
+      - stepNumber: 6
         label: crossing
         description: Read the bound project's resolved export table
         type: call
         targetComponent: migration_core_adapter
         targetMethod: resolveProjectExports
-      - stepNumber: 5
+      - stepNumber: 7
         description: >-
           From the graph, find each reference of the moved subtree back into the bound project at a
           component whose subsystem does not publish it: externalize-refused, naming it — publishing
           is a design decision to make first
         type: local
-      - stepNumber: 6
+      - stepNumber: 8
         description: >-
           Check every other family project consuming the bound project: each public name it uses
           that the moved subsystem realizes must stay exported through the bound project's
           re-pointed re-exports; one that would not is externalize-refused. Nothing is planned for
           them: the names they use do not move (externalize-updates-siblings)
         type: local
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           Plan the core's externalize, and the new member's external for the bound project pinned in
           the member
         type: local
-      - stepNumber: 8
+      - stepNumber: 10
         description: Answer the plan
         type: return
         outcome: the externalize plan
@@ -189,4 +202,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-09-30T22:58:38.165Z'
+updatedAt: '2026-10-01T05:54:04.499Z'

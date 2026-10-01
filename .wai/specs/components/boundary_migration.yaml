@@ -16,6 +16,7 @@ owns: []
 dependsOn:
   - migration_core_adapter
   - migration_surfaces_adapter
+  - family_file_adapter
 status: complete
 createdAt: '2026-09-30T20:34:50.185Z'
-updatedAt: '2026-09-30T22:58:24.732Z'
+updatedAt: '2026-10-01T05:53:31.643Z'

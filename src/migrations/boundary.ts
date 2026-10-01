@@ -1,7 +1,8 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import * as core from './adapters/core.js';
 import * as surfaces from './adapters/surfaces.js';
+// family_file_adapter: where a path lands and whether a project is there — a planner touches no file itself.
+import * as files from './family-files.js';
 import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import type { InternalizeDestination, ProjectConfig } from '../models/project.js';
 import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
@@ -218,50 +219,35 @@ export function planExternalize(family: ProjectFamily, bound: string, request: M
   const done = configAt(node.directory)?.members?.[id];
   const donePath = typeof done === 'string' ? done : done?.path;
   if (donePath !== undefined && request.path !== undefined && path.resolve(node.directory, donePath) === path.resolve(node.directory, request.path)) return plan;
-  // Step 1: judge the request.
+  // Steps 1-2: where the path lands, and whether a project is already there.
+  const dir = files.resolve(node.directory, request.path ?? '');
+  const occupied = dir !== null && files.holdsProject(dir);
+  // Step 3: judge the request.
   const sub = id.includes('::') ? null : core.loadSpec('subsystem', subKey) as SubsystemSpec | null;
   if (!sub || sub.projectPath || (family.owners.get(subKey) ?? '') !== bound) refuse(plan, 'externalize-refused', bound, `${label(bound)} has no subsystem "${id}" to externalize (it is missing, or already a member)`);
-  const dir = containedDir(node.directory, request.path);
   if (dir === null) refuse(plan, 'not-contained', bound, `the path "${request.path ?? ''}" does not resolve strictly within ${label(bound)}`);
-  else if (family.nodes.some((n) => path.resolve(n.directory) === dir) || fs.existsSync(path.join(dir, '.wai', 'project.yaml'))) {
+  else if (family.nodes.some((n) => path.resolve(n.directory) === dir) || occupied) {
     refuse(plan, 'not-contained', bound, `${dir} already holds a project`);
   }
   const config = configAt(node.directory);
   if (config?.members?.[id] !== undefined || config?.externals?.[id] !== undefined) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares the alias "${id}"`);
   const colliding = family.nodes.find((n) => n.id === id);
   if (colliding) refuse(plan, 'id-collision', colliding.namespace, `${label(colliding.namespace)} already answers to "${id}"`);
-  // Steps 2-3.
+  // Steps 4-5.
   if (plan.refusals.length > 0) return plan;
-  // Step 4: the bound project's export table.
+  // Step 6: the bound project's export table.
   const table = core.resolveProjectExports(bound || undefined);
-  // Step 5: references of the moved subtree back into an unpublished component.
+  // Step 7: references of the moved subtree back into an unpublished component.
   crossingsBack(plan, family, bound, subKey);
-  // Step 6: every other family project's names still resolve.
+  // Step 8: every other family project's names still resolve.
   checkSiblings(plan, family, bound, id, subKey, table);
   if (plan.refusals.length > 0) return plan;
-  // Step 7: the core's externalize, and the new member's pins.
+  // Step 9: the core's externalize, and the new member's pins.
   edit(plan, bound, 'move', `externalize ${id}: its specs into a member at ${posix(path.relative(node.directory, dir!))}, declared as "${id}"`, { root: node.directory, call: 'externalizeSubsystem', args: [id, posix(path.relative(node.directory, dir!))] });
   edit(plan, id, 'pin', `pin the new member's externals (its external for ${node.id ?? 'this project'}, when its specs reference it)`, { root: dir!, call: 'pinExternals', args: [[]] });
   plan.notes.push('Source code is not moved: move the subsystem\'s code into the member yourself.');
-  // Step 8.
+  // Step 10.
   return plan;
-}
-
-/** A directory strictly within a root, lexically and through links; null when it is not. */
-function containedDir(root: string, relPath: string | undefined): string | null {
-  if (!relPath || path.isAbsolute(relPath) || path.win32.isAbsolute(relPath)) return null;
-  const dir = path.resolve(root, relPath);
-  const within = (r: string, d: string): boolean => {
-    const rel = path.relative(r, d);
-    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-  };
-  if (!within(root, dir)) return null;
-  // Through links: the nearest existing ancestor must land inside the root too.
-  let at = dir;
-  while (!fs.existsSync(at) && at !== path.dirname(at)) at = path.dirname(at);
-  const real = fs.realpathSync(at);
-  const realRoot = fs.realpathSync(root);
-  return real === realRoot || within(realRoot, real) ? dir : null;
 }
 
 /** Step 5: every component of the moved subtree naming a component of the bound project that its subsystem does not publish, refused; whether any component reference crosses back. */

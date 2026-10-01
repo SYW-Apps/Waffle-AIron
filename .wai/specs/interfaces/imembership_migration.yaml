@@ -37,16 +37,21 @@ methods:
     description: >-
       Plan taking the member under request.alias out of the family. Refusals: no such member
       (not-a-member); its directory is absent (member-absent); a family project that must be written
-      is out of reach (family-partial); a family project (the bound one included) uses a public name
-      the member exports only to the family (audience project or department) — once the member is
-      outside the family, a pin taken by path sees its instance audience and above, so that use
-      would stop resolving (audience-too-narrow, naming the name and the user: widening it is a
-      design decision to make first, never a move's side effect). Edits: in the bound project, the
-      member removed and an external declared under the SAME alias — `project` its id when that
-      differs from the alias, `source.path` the member's path, its `use` and description carried —
-      and pinned; in every other family project whose external finds the member through the family,
-      a `source.path` to it (relative to that project); in the member, a `source.path` on each of
-      its externals that found a family project through the family, since it leaves the family. No
+      is out of reach (family-partial); without request.widen, a family project (the bound one
+      included) using a public name the member exports only to the family (audience project or
+      department) — once the member is outside the family, a pin taken by path sees its instance
+      audience and above, so that use would stop resolving (audience-too-narrow, one refusal per
+      export naming every project that uses it: widening is a design decision, never a move's silent
+      side effect). Edits: with request.widen, first, in the member, exactly those used exports' L0
+      entries widened to the instance audience through the gated authoring seam, each shown as
+      `widen <name> <audience>→instance (used by …)` and confirmed with the rest — an export no
+      family project uses is never widened; an export no L0 entry of the member names directly
+      cannot be widened and stays audience-too-narrow. Then, in the bound project, the member
+      removed and an external declared under the SAME alias — `project` its id when that differs
+      from the alias, `source.path` the member's path, its `use` and description carried — and
+      pinned; in every other family project whose external finds the member through the family, a
+      `source.path` to it (relative to that project); in the member, a `source.path` on each of its
+      externals that found a family project through the family, since it leaves the family. No
       reference text changes. Notes: consumers outside the family are not affected (they already
       name it by path or not at all).
     signature: 'planDetach(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
@@ -116,4 +121,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:33:39.248Z'
-updatedAt: '2026-09-30T22:58:33.331Z'
+updatedAt: '2026-10-01T05:53:56.910Z'

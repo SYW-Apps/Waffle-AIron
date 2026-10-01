@@ -49,10 +49,12 @@ const ioError = (): Error => Object.assign(new Error('injected EIO'), { code: 'E
 
 describe('stage 6 — property: atomic-or-nothing, for the multi-project verbs', () => {
   const made: ContractFamily[] = [];
+  /** The contract family, billing pinned — ledger's exports widened first unless the verb widens them itself. */
+  let widenItself = false;
   const family = (): ContractFamily => {
     const f = buildContractFamily();
     made.push(f);
-    widen(f.ledger);
+    if (!widenItself) widen(f.ledger);
     pinAt(f.billing);
     return f;
   };
@@ -86,8 +88,11 @@ describe('stage 6 — property: atomic-or-nothing, for the multi-project verbs',
   for (const request of [
     { verb: 'rename', project: 'ledger', newId: 'books-ledger' },
     { verb: 'detach', alias: 'ledger' },
+    // --widen adds a gated-seam write into the member to the same transaction.
+    { verb: 'detach', alias: 'ledger', widen: true },
   ] satisfies MigrationRequest[]) {
-    it(`${request.verb}: a failure at every write position of the commit leaves the family byte-identical`, () => {
+    it(`${request.verb}${'widen' in request ? ' --widen' : ''}: a failure at every write position of the commit leaves the family byte-identical`, () => {
+      widenItself = 'widen' in request;
       const positions = countApplyOperations(request);
       expect(positions).toBeGreaterThan(20);
       for (let k = 1; k <= positions; k++) {

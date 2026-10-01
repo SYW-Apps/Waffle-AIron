@@ -1732,16 +1732,17 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     ({ alias, newAlias, dryRun }) => migrationTool({ verb: 'rename-alias', alias, newAlias }, dryRun),
   );
 
-  reg<{ alias: string; dryRun?: boolean }>(server,
+  reg<{ alias: string; widen?: boolean; dryRun?: boolean }>(server,
     'sdd_detach_member',
     {
-      description: 'Take a member out of the family; the bound project and every family consumer then reach it as an external by path, pinned. No reference text changes. All-or-nothing; dryRun answers the plan and writes nothing. Never locks.',
+      description: 'Take a member out of the family; the bound project and every family consumer then reach it as an external by path, pinned. No reference text changes. Refused (audience-too-narrow, each export named with its users) while a family project uses an export the member gives the family alone, unless widen is set: then exactly those used exports are widened to the instance audience in the member\'s L0, each shown in the plan. All-or-nothing; dryRun answers the plan and writes nothing. Never locks.',
       inputSchema: {
         alias: z.string().describe("The member's alias"),
+        widen: z.boolean().optional().describe('Widen the used family-only exports to the instance audience instead of refusing'),
         dryRun: dryRunArg,
       },
     },
-    ({ alias, dryRun }) => migrationTool({ verb: 'detach', alias }, dryRun),
+    ({ alias, widen, dryRun }) => migrationTool({ verb: 'detach', alias, ...(widen ? { widen: true } : {}) }, dryRun),
   );
 
   reg<{ alias: string; dryRun?: boolean }>(server,

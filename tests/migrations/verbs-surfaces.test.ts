@@ -139,6 +139,7 @@ describe('stage 6 — the verbs as MCP tools (dryRun)', () => {
       expect(tool, name).toBeDefined();
       expect(Object.keys(tool!.inputSchema.properties ?? {}), name).toContain('dryRun');
     }
+    expect(Object.keys(tools.find((t) => t.name === 'sdd_detach_member')!.inputSchema.properties ?? {})).toContain('widen');
 
     const before = dirHash(f.top);
     const dry = await c.callTool({ name: 'sdd_detach_member', arguments: { alias: 'ledger', dryRun: true } });

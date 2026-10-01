@@ -23,6 +23,8 @@ export interface MigrationRequest {
   destination?: InternalizeDestination;
   /** attach: what the member is to the bound project, written into its `members` entry. */
   description?: string;
+  /** detach: widen exactly the used family-only exports to the instance audience instead of refusing. */
+  widen?: boolean;
   /** false: plan without rehearsing (doctor's summary). Absent or true: a full plan. */
   rehearse?: boolean;
 }

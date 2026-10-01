@@ -769,11 +769,14 @@ applied to every project it touches or to none of them.
     or an external), and the current project's references through it; nothing in any
     member or sibling changes. An external whose alias was its producer id keeps naming
     that producer, now explicitly.
-  - `wairon member detach <alias>` — the member leaves the family: the parent and every
-    family consumer reach it as an external by `source.path`, the parent's pinned. A
+  - `wairon member detach <alias> [--widen]` — the member leaves the family: the parent and
+    every family consumer reach it as an external by `source.path`, the parent's pinned. A
     consumer using a name the member exports only to the family (audience `project` or
-    `department`) refuses the detach (`audience-too-narrow`): outside the family a pin
-    sees `instance` and above, and widening an export is a design decision.
+    `department`) refuses the detach (`audience-too-narrow`, one refusal per export naming
+    its users): outside the family a pin sees `instance` and above. With `--widen` the plan
+    instead widens exactly those used exports to `instance` in the member's L0, through the
+    gated authoring seam, each shown (`widen <export> project→instance (used by …)`) and
+    confirmed with the rest — never an unused export, never silently.
   - `wairon member adopt <alias>` — detach's inverse: an external found by a path inside
     the current project becomes a member again. Detach then adopt gives back the member's
     specs byte for byte and every configuration semantically.
@@ -782,7 +785,9 @@ applied to every project it touches or to none of them.
     project. Its own metadata goes to a home instead of being deleted: its L0 vision onto
     the `--into` subsystem's description, its boundaries, requirements and databases into
     the parent's L0 (merged by identity), its target language, profile and design depth
-    onto the moved subsystems, its members and externals into the parent's configuration,
+    onto the moved subsystems (a project type that is no subsystem profile, such as
+    `fullstack`, is listed as not carried rather than stamped), its members and externals
+    into the parent's configuration,
     its packs adopted or dropped as `--packs` says, and the names other family projects
     use from it re-exported by the parent. Every other family project that consumed it is
     re-pointed at the parent. What has no home — its lock, pins and derived outputs — is
@@ -804,7 +809,7 @@ applied to every project it touches or to none of them.
   was. A crash mid-swap leaves a journal.
 - **Never a lock.** Every verb names the projects to re-lock; a rename names every project
   it wrote, the renamed one first.
-- **MCP.** `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`,
+- **MCP.** `sdd_attach_member`, `sdd_detach_member` (with `widen`), `sdd_adopt_member`,
   `sdd_rename_project` and `sdd_rename_member_alias` are new; `sdd_internalize_member`
   gains `into`, `packs` and `exports`, and it and `sdd_externalize_subsystem` now run the
   family migration. Each takes `dryRun`, which answers the plan and writes nothing; a

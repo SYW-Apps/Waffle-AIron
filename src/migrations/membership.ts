@@ -1,7 +1,9 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import * as core from './adapters/core.js';
 import * as surfaces from './adapters/surfaces.js';
+import * as authoring from './adapters/authoring.js';
+// family_file_adapter: where a path lands (the containment guard, through links) — a planner touches no file itself.
+import * as files from './family-files.js';
 import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import {
   admits,
@@ -53,22 +55,6 @@ const edit = (plan: MigrationPlan, project: string, kind: string, detail: string
 };
 const label = (key: string): string => (key === '' ? 'the top project' : `"${key}"`);
 
-/** A directory strictly within a root, lexically and through links; null when it is not. */
-function containedDir(root: string, relPath: string | undefined): string | null {
-  if (!relPath || path.isAbsolute(relPath) || path.win32.isAbsolute(relPath)) return null;
-  const dir = path.resolve(root, relPath);
-  const within = (r: string, d: string): boolean => {
-    const rel = path.relative(r, d);
-    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-  };
-  if (!within(root, dir)) return null;
-  // Through links: the nearest existing ancestor must land inside the root too.
-  let at = dir;
-  while (!fs.existsSync(at) && at !== path.dirname(at)) at = path.dirname(at);
-  const real = fs.realpathSync(at);
-  const realRoot = fs.realpathSync(root);
-  return real === realRoot || within(realRoot, real) ? dir : null;
-}
 
 /** A project's configuration, read under its own binding; null when it has none or it fails its schema. */
 function configAt(dir: string): ProjectConfig | null {
@@ -110,7 +96,7 @@ export function planAttach(family: ProjectFamily, bound: string, request: Migrat
   const node = boundNode(family, bound);
   const alias = request.alias ?? '';
   // Step 1: the path, under the containment guard.
-  const dir = containedDir(node.directory, request.path);
+  const dir = files.resolve(node.directory, request.path ?? '');
   if (dir === null) refuse(plan, 'not-contained', bound, `the path "${request.path ?? ''}" does not resolve strictly within ${label(bound)} (${node.directory})`);
   // Step 2: the alias against the bound project's alias table.
   const config = configAt(node.directory) ?? ({} as ProjectConfig);
@@ -208,7 +194,11 @@ export function planDetach(family: ProjectFamily, bound: string, request: Migrat
   const outward = member.externals.filter((e) => e.sourceKind === 'family' && e.producer !== undefined && !leaving(e.producer));
   if (member.mountForm === 'mount') refuse(plan, 'not-a-member', bound, `${label(bound)} declares "${alias}" in the legacy L1 mount form — run \`wairon doctor --fix\` first, which moves it into \`members\``);
   if (!plan.whole) refuse(plan, 'family-partial', '', 'the family\'s top is out of this request\'s reach, and a consumer of the member could live there — run from the top project');
-  familyOnlyUses(plan, family, member, table);
+  const narrow = familyOnlyUses(family, member, table);
+  if (!plan.request.widen) refuseNarrow(plan, member, narrow);
+  if (plan.refusals.length > 0) return plan;
+  // With --widen, each of them is widened in the member's L0 first — or refused when no entry names it.
+  if (plan.request.widen) planWidening(plan, member, narrow);
   if (plan.refusals.length > 0) return plan;
   // Step 6: the member's declaration.
   const boundDir = familyNode(family, bound)!.directory;
@@ -219,23 +209,59 @@ export function planDetach(family: ProjectFamily, bound: string, request: Migrat
   return plan;
 }
 
+/** One export of the member the family uses below the instance audience, with who uses it. */
+interface NarrowExport {
+  name: string;
+  audience: string;
+  users: string[];
+}
+
 /**
  * Step 5: every public name a family project reaches in the member that the
- * member exports below the instance audience. Outside the family, a pin taken
- * by path sees instance and above, so each such use would stop resolving:
- * audience-too-narrow — widening an export is a design decision, never a
- * detach's side effect.
+ * member exports below the instance audience, with its users. Outside the
+ * family, a pin taken by path sees instance and above, so each such use would
+ * stop resolving.
  */
-function familyOnlyUses(plan: MigrationPlan, family: ProjectFamily, member: ProjectNode, table: ResolvedExportTable): void {
+function familyOnlyUses(family: ProjectFamily, member: ProjectNode, table: ResolvedExportTable): NarrowExport[] {
   const floor = SURFACE_AUDIENCES.indexOf('instance');
-  const seen = new Set<string>();
+  const out = new Map<string, NarrowExport>();
   for (const ref of family.authoredReferences) {
     const user = family.owners.get(ref.specId) ?? '';
-    if (ref.producer !== member.namespace || withinMember(family, member, user) || !ref.publicName || seen.has(`${user}|${ref.publicName}`)) continue;
-    seen.add(`${user}|${ref.publicName}`);
+    if (ref.producer !== member.namespace || withinMember(family, member, user) || !ref.publicName) continue;
     const audience = table.entries.find((e) => e.publicName === ref.publicName)?.audience ?? 'instance';
     if (SURFACE_AUDIENCES.indexOf(audience as (typeof SURFACE_AUDIENCES)[number]) >= floor) continue;
-    refuse(plan, 'audience-too-narrow', user, `${label(user)} uses "${ref.publicName}", which ${label(member.namespace)} exports to audience "${audience}" only — outside the family a pin sees "instance" and above, so the use would stop resolving; widen the export (a design decision) before detaching`);
+    const held = out.get(ref.publicName) ?? { name: ref.publicName, audience, users: [] };
+    if (!held.users.includes(user)) held.users.push(user);
+    out.set(ref.publicName, held);
+  }
+  return [...out.values()];
+}
+
+/** Without --widen: one audience-too-narrow per export, naming every project that uses it — widening is a design decision, never a silent side effect. */
+function refuseNarrow(plan: MigrationPlan, member: ProjectNode, narrow: NarrowExport[]): void {
+  for (const e of narrow) {
+    refuse(plan, 'audience-too-narrow', member.namespace, `${label(member.namespace)} exports "${e.name}" to audience "${e.audience}" only, and ${e.users.map(label).join(', ')} use${e.users.length === 1 ? 's' : ''} it — outside the family a pin sees "instance" and above, so the use would stop resolving; it needs audience "instance" (detach --widen widens exactly the used exports)`);
+  }
+}
+
+/**
+ * With --widen: each used family-only export's L0 entry in the member widened
+ * to the instance audience, through the gated authoring seam — exactly those,
+ * each shown. An export no L0 entry of the member names directly (one reached
+ * through a wholesale re-export) cannot be widened here and stays refused.
+ */
+function planWidening(plan: MigrationPlan, member: ProjectNode, narrow: NarrowExport[]): void {
+  if (narrow.length === 0) return;
+  const system = runWithProjectRoot(member.directory, () => core.loadSpec('system', 'system')) as { publicInterfaces?: Record<string, unknown>[] } | null;
+  const entries = system?.publicInterfaces ?? [];
+  for (const e of narrow) {
+    const entry = entries.find((x) => (x.as ?? x.component ?? x.typeDef) === e.name);
+    if (!entry) {
+      refuse(plan, 'audience-too-narrow', member.namespace, `${label(member.namespace)} exports "${e.name}" to audience "${e.audience}" only through no L0 entry of its own (a wholesale re-export) — --widen cannot widen it; give it an entry at audience "instance" by hand`);
+      continue;
+    }
+    const delta = { publicInterfaces: [{ ...entry, audience: 'instance' }] };
+    edit(plan, member.namespace, 'export', `widen ${e.name} ${e.audience}→instance (used by ${e.users.map(label).join(', ')})`, { root: member.directory, call: 'updateSpecGated', args: ['system', 'system', delta] });
   }
 }
 
@@ -290,7 +316,8 @@ export function planAdopt(family: ProjectFamily, bound: string, request: Migrati
   let dir: string | null = null;
   if (!external) refuse(plan, 'not-an-external', bound, `${label(bound)} declares no external "${alias}"`);
   else {
-    dir = containedDir(boundDir, external.source?.path);
+    // Step 2: where its source path lands, under the containment guard.
+    dir = files.resolve(boundDir, external.source?.path ?? '');
     if (dir === null) refuse(plan, 'not-contained', bound, `the external "${alias}" ${external.source?.path ? `is found at "${external.source.path}", which is not strictly within ${label(bound)}` : 'names no source.path'}`);
     else if (nodeAt(family, dir)) refuse(plan, 'already-member', nodeAt(family, dir)!.namespace, `${dir} is already the family project ${label(nodeAt(family, dir)!.namespace)}`);
   }
@@ -354,8 +381,10 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
       for (const e of planned) writeOne(rehearsal, e.write);
       break;
     case 'detach':
-      // Steps 6-8: the member removed, the external declared, the source paths given; step 9: the pin last.
-      for (const e of planned.filter((x) => x.write.call !== 'pinExternals')) writeOne(rehearsal, e.write);
+      // Step 6: the member's widened exports first (--widen), through the gated seam.
+      for (const e of planned.filter((x) => x.write.call === 'updateSpecGated')) writeOne(rehearsal, e.write);
+      // Steps 7-9: the member removed, the external declared, the source paths given; step 10: the pin last.
+      for (const e of planned.filter((x) => x.write.call !== 'pinExternals' && x.write.call !== 'updateSpecGated')) writeOne(rehearsal, e.write);
       for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
       break;
     case 'adopt':
@@ -381,6 +410,7 @@ function writeOne(rehearsal: Rehearsal, w: PlannedWrite): void {
       case 'removeExternal': return core.removeExternal(args[0]);
       case 'pinExternals': return surfaces.pinExternals(args[0]);
       case 'unpin': return surfaces.unpin(args[0]);
+      case 'updateSpecGated': return authoring.updateSpecGated(args[0], args[1], args[2]);
       default: throw new Error(`membership_migration makes no "${w.call}" write`);
     }
   });

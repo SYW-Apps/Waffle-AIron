@@ -119,6 +119,34 @@ methods:
       - name: b
         type: string
         description: Absolute path
+  - name: resolve
+    description: >-
+      Resolve a path relative to a project root under the containment guard: the absolute directory
+      when it lies strictly within the root lexically and, through links, its nearest existing
+      ancestor lands strictly within the root's real path too; null for an empty, absolute,
+      ../-escaping or link-escaping path, or the root itself. A planner's read of where a path
+      lands, so no planner touches the file system. Writes nothing.
+    signature: 'resolve(root: string, path: string): string | null'
+    returns: string | null
+    params:
+      - name: root
+        type: string
+        description: The project root the path is relative to, absolute
+      - name: path
+        type: string
+        description: The path as declared or requested
+    guarantees:
+      - idempotent
+  - name: holdsProject
+    description: 'Whether a directory already holds a wairon project: a .wai/project.yaml there. Writes nothing.'
+    signature: 'holdsProject(dir: string): boolean'
+    returns: boolean
+    params:
+      - name: dir
+        type: string
+        description: The directory, absolute
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-30T20:27:16.585Z'
-updatedAt: '2026-09-30T21:33:54.328Z'
+updatedAt: '2026-10-01T05:53:20.613Z'

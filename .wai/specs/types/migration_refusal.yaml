@@ -18,8 +18,9 @@ fields:
       finding kinds passed through as it is: project-absent, mount-field-conflict,
       mount-field-unhomed (family-partial and member-absent as above). family-partial: a project the
       plan must write lies above the highest root in reach, or a member it must write is absent or
-      out of reach — each named. audience-too-narrow: a detach would leave a family consumer using a
-      name the member exports only to the family.
+      out of reach — each named. audience-too-narrow: a detach without --widen would leave a family
+      consumer using an export the member exports only to the family — one per export, naming its
+      users (or an export no L0 entry names directly, which --widen cannot widen).
     optional: false
   - name: project
     type: string
@@ -32,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:12.010Z'
-updatedAt: '2026-09-30T22:50:00.551Z'
+updatedAt: '2026-10-01T05:54:17.295Z'

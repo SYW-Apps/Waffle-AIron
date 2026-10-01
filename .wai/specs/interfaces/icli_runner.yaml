@@ -611,8 +611,10 @@ methods:
         description: '--report, --yes'
   - name: runMemberDetach
     description: >-
-      `wairon member detach <alias> [--report] [--yes]`: take a member out of the family; the
-      current project and every family consumer then reach it as an external by path, pinned.
+      `wairon member detach <alias> [--widen] [--report] [--yes]`: take a member out of the family;
+      the current project and every family consumer then reach it as an external by path, pinned.
+      Refused while a family project uses an export the member gives the family alone, unless
+      --widen: then exactly those exports are widened to the instance audience, shown in the plan.
       Through runMigration.
     signature: 'runMemberDetach(alias: string, options: MigrationCommandOptions): Promise<void>'
     returns: Promise<void>
@@ -622,7 +624,7 @@ methods:
         description: The member's alias
       - name: options
         type: MigrationCommandOptions
-        description: '--report, --yes'
+        description: '--widen, --report, --yes'
   - name: runMemberAdopt
     description: >-
       `wairon member adopt <alias> [--report] [--yes]`: make the current project's external found by
@@ -638,4 +640,4 @@ methods:
         description: '--report, --yes'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T20:40:36.140Z'
+updatedAt: '2026-10-01T05:54:26.986Z'

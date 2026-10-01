@@ -256,6 +256,48 @@ export function prune(dir: string, stopAt: string): string[] {
   return removed;
 }
 
+/**
+ * ifamily_file_adapter.resolve — a path relative to a project root under the
+ * containment guard: the absolute directory when it lies strictly within the
+ * root lexically and, through links, its nearest existing ancestor lands
+ * within the root's real path too; null otherwise. Writes nothing.
+ */
+export function resolve(root: string, path: string): string | null {
+  const dir = lexicalTarget(root, path);
+  return dir !== null && landsWithin(root, dir) ? dir : null;
+}
+
+/** Whether a directory lies strictly below a root (not the root itself). */
+function strictlyWithin(root: string, dir: string): boolean {
+  const rel = nodePath.relative(root, dir);
+  return rel !== '' && !rel.startsWith('..') && !nodePath.isAbsolute(rel);
+}
+
+/** The directory a relative path names below a root, read lexically; null for an empty, absolute or escaping path. */
+function lexicalTarget(root: string, path: string): string | null {
+  if (!path || nodePath.isAbsolute(path) || nodePath.win32.isAbsolute(path)) return null;
+  const dir = nodePath.resolve(root, path);
+  return strictlyWithin(root, dir) ? dir : null;
+}
+
+/** Through links: the directory's nearest existing ancestor lands at or below the root's real path. */
+function landsWithin(root: string, dir: string): boolean {
+  let at = dir;
+  while (!fs.existsSync(at) && at !== nodePath.dirname(at)) at = nodePath.dirname(at);
+  try {
+    const real = fs.realpathSync(at);
+    const realRoot = fs.realpathSync(root);
+    return real === realRoot || strictlyWithin(realRoot, real);
+  } catch {
+    return false;
+  }
+}
+
+/** ifamily_file_adapter.holdsProject — whether a directory already holds a wairon project (a .wai/project.yaml). Writes nothing. */
+export function holdsProject(dir: string): boolean {
+  return fs.existsSync(nodePath.join(dir, '.wai', 'project.yaml'));
+}
+
 /** ifamily_file_adapter.sameVolume — whether two existing paths share a device; a missing path answers false. */
 export function sameVolume(a: string, b: string): boolean {
   try {
