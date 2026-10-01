@@ -19,9 +19,10 @@ methods:
         outcome: yes (instance-admin)
       - stepNumber: 3
         description: >-
-          Build the target's ancestor chain leaf->root: for a project, its own scope then its
-          placement unit and that unit's ancestors; for a unit, the unit and its ancestors; ending
-          at the instance root
+          Build the target's ancestor chain leaf->root: for a project, its own scope, then —
+          following the world's parent links, each visited once — every parent project scope up to
+          its family root, then the family root's placement unit and that unit's ancestors; for a
+          unit, the unit and its ancestors; ending at the instance root
         type: local
       - stepNumber: 4
         description: Walk the ancestor chain, stopping at the nearest scope with a definitive value
@@ -81,7 +82,9 @@ methods:
         description: Determine the subject's view of every scope
         type: loop
         loopKind: forEach
-        over: each unit and each placed project in the world
+        over: >-
+          each unit, each placed project and each member project (from the parent links) in the
+          world
         endStep: 8
       - stepNumber: 5
         description: >-
@@ -95,8 +98,9 @@ methods:
         onFalseStep: 8
       - stepNumber: 7
         description: >-
-          Record the scope as actionable; add its ancestor units to the context set only when they
-          are not themselves actionable (actionable always wins over context).
+          Record the scope as actionable; add its ancestor units (a member's: its family root's
+          units) to the context set only when they are not themselves actionable (actionable always
+          wins over context).
         type: local
       - stepNumber: 8
         description: Advance to the next scope
@@ -109,4 +113,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-15T20:30:34.619Z'
-updatedAt: '2026-09-15T20:58:58.678Z'
+updatedAt: '2026-10-01T16:55:48.409Z'

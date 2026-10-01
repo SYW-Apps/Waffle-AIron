@@ -68,7 +68,47 @@ methods:
         targetComponent: project_write_registry
         targetMethod: register
     symbol: registerProjectRecord
+  - name: family
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: family
+    symbol: listFamilyRecords
+  - name: declaredMembers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: declaredMembers
+    symbol: planMemberRecords
+  - name: repositoryScope
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: repositoryScope
+    symbol: projectRepositoryScope
+  - name: registerMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project write registry
+        type: call
+        targetComponent: project_write_registry
+        targetMethod: registerMember
+    symbol: registerMemberRecord
+  - name: setStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project write registry
+        type: call
+        targetComponent: project_write_registry
+        targetMethod: setStatus
+    symbol: setProjectRecordStatus
 detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:36.287Z'
-updatedAt: '2026-09-25T22:45:11.427Z'
+updatedAt: '2026-10-01T16:29:27.549Z'

@@ -1,0 +1,864 @@
+id: member_registration_impl
+name: Member Registration Implementation
+description: >-
+  The stage-7 member upgrade, the family upkeep around a data-plane tool, and the membership screen.
+  It writes records and key narrowings, never a grant or a placement: a member's reach is inherited
+  through its project chain. The upgrade's writes are made by the ordinary repositories wired to the
+  rehearsal's copy of the data root, and committed by the family transaction with the data directory
+  as its one owner and the project-record and credential store files as its areas.
+contract: imember_registration
+sourcePath: src/server/members.ts
+injectedParams:
+  - dataDir
+methods:
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: List every hosted record; the family roots are those without parentProjectId
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 2
+        description: For every family root
+        type: loop
+        loopKind: forEach
+        over: family root records
+        endStep: 3
+      - stepNumber: 3
+        description: >-
+          Read the members it declares on disk, nested included, each as the record it should hold
+          with its pre-stage-7 qualifier and its action
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredMembers
+      - stepNumber: 4
+        description: >-
+          Collect refusals: a member id another record holds (a family root, or a member of another
+          family), one member id declared twice, an unreadable member — named by its qualifier and
+          path, with the reason the declaration read gave (its own problem, a path escaping its
+          parent, a missing directory, an unreadable or invalid project.yaml, no valid project id)
+        type: local
+      - stepNumber: 5
+        description: Gather the permission world exactly as the resolver sees it
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 6
+        description: List every user and service record (the subjects of the proof)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 7
+        description: >-
+          Refuse every member to register whose id already has a setting scoped at it (an assignment
+          or a role binding left by an earlier record of that id): it would decide before the
+          inherited chain
+        type: local
+      - stepNumber: 8
+        description: 'Build the after-world: the stored world with a parent link for every member to register'
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: relink
+      - stepNumber: 9
+        description: For every member to register
+        type: loop
+        loopKind: forEach
+        over: planned members whose action is register
+        endStep: 10
+      - stepNumber: 10
+        description: >-
+          Prove no-widening for it: today's reach over its family root in the stored world against
+          its own record through its chain in the after-world, every subject x capability; equal by
+          construction, and every unequal row becomes a refusal
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: compare
+      - stepNumber: 11
+        description: List every API key
+        type: call
+        targetComponent: credential_repository
+        targetMethod: list
+      - stepNumber: 12
+        description: For every key
+        type: loop
+        loopKind: forEach
+        over: keys
+        endStep: 13
+      - stepNumber: 13
+        description: Plan its qualified entries' rewrite, keeping it when one is answered
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: narrowing
+      - stepNumber: 14
+        description: A blocked or empty plan opens no rehearsal
+        type: branch
+        condition: there is a refusal, or no member to register or relocate and no narrowing to rewrite
+        onFalseStep: 16
+      - stepNumber: 15
+        description: >-
+          Return the plan without a rehearsal or changes: blocked (refusals listed) or already
+          complete
+        type: return
+        outcome: MemberUpgradePlan (blocked or empty)
+      - stepNumber: 16
+        label: rehearse
+        description: >-
+          Open a rehearsal scoped to the data directory as the one owner, with the project-record
+          and credential store files as its areas
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: rehearse
+      - stepNumber: 17
+        description: >-
+          With the repositories wired to the rehearsal's copy of the data root, for every member to
+          register or relocate (family roots first, so a parent record exists before its members)
+        type: loop
+        loopKind: forEach
+        over: planned members whose action is register or relocate
+        endStep: 18
+      - stepNumber: 18
+        description: >-
+          Upsert its member record: its own id, parentProjectId, memberPath — nothing else: no
+          grant, no placement
+        type: call
+        targetComponent: project_repository
+        targetMethod: registerMember
+      - stepNumber: 19
+        description: For every planned narrowing
+        type: loop
+        loopKind: forEach
+        over: planned narrowings
+        endStep: 20
+      - stepNumber: 20
+        description: Rewrite the key's qualified entries in the rehearsal
+        type: call
+        targetComponent: credential_repository
+        targetMethod: renarrow
+      - stepNumber: 21
+        description: Compute the file changes the apply would swap in
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: diff
+      - stepNumber: 22
+        description: Return the plan with its rehearsal and changes
+        type: return
+        outcome: MemberUpgradePlan
+    detail: full
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Refuse a blocked plan or one without a rehearsal (empty, already applied or discarded)
+        type: branch
+        condition: the plan has refusals or no rehearsal
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse, naming the refusals; nothing is written
+        type: throw
+        error: the member upgrade plan is blocked or holds nothing to apply
+      - stepNumber: 3
+        label: commit
+        description: >-
+          Commit the rehearsal's changes through the family transaction, all or nothing; a live
+          store that moved since the plan refuses at staging
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: commit
+      - stepNumber: 4
+        description: Did the transaction commit?
+        type: branch
+        condition: the outcome is committed
+        onFalseStep: 10
+      - stepNumber: 5
+        description: For every member registered or relocated
+        type: loop
+        loopKind: forEach
+        over: applied members
+        endStep: 6
+      - stepNumber: 6
+        description: >-
+          Audit member.registered naming the member as projectId, its family root as composition,
+          its parent, and the reach proof's row count (all equal)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 7
+        description: For every rewritten key
+        type: loop
+        loopKind: forEach
+        over: applied narrowings
+        endStep: 8
+      - stepNumber: 8
+        description: >-
+          Audit token.narrowed naming the key id, the narrowing before and after, and the documented
+          widening
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 9
+        description: Return the report as applied
+        type: return
+        outcome: MemberUpgradeReport (applied)
+      - stepNumber: 10
+        label: failed
+        description: Audit member.upgrade failed with what failed and whether every store was restored
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 11
+        description: Return the report as not applied, with the outcome
+        type: return
+        outcome: MemberUpgradeReport (not applied)
+    detail: full
+  - name: discard
+    narrative:
+      - stepNumber: 1
+        description: A plan without a rehearsal has nothing to drop
+        type: branch
+        condition: the plan holds a rehearsal
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Drop the rehearsal
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: drop
+      - stepNumber: 3
+        description: Done
+        type: return
+        outcome: void
+    detail: full
+  - name: pending
+    narrative:
+      - stepNumber: 1
+        description: List every hosted record; the family roots are those without parentProjectId
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 2
+        description: For every family root
+        type: loop
+        loopKind: forEach
+        over: family root records
+        endStep: 3
+      - stepNumber: 3
+        description: Read the members it declares on disk and count those whose action is register
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredMembers
+      - stepNumber: 4
+        description: Return the count
+        type: return
+        outcome: number of members awaiting `host doctor --fix`
+    detail: full
+  - name: recover
+    narrative:
+      - stepNumber: 1
+        description: For the family root's root and, when different, the bound project's root
+        type: loop
+        loopKind: forEach
+        over: the bound family's roots
+        endStep: 2
+      - stepNumber: 2
+        description: >-
+          Recover (fix) every transaction under the root; a failure is logged and the next root
+          continues
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: recover
+      - stepNumber: 3
+        description: For every transaction found
+        type: loop
+        loopKind: forEach
+        over: recovered transactions
+        endStep: 4
+      - stepNumber: 4
+        description: >-
+          Audit it as migration.recovered (id, verb, coordinator phase, rolled-back | cleaned |
+          refused) naming the project it was found under, and write the same line to the server log,
+          so an operator sees a rollback nobody asked for
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 5
+        description: Return what was found and done
+        type: return
+        outcome: RecoveredTransaction[]
+    detail: full
+    symbol: recoverUnfinishedMigrations
+  - name: reconcile
+    narrative:
+      - stepNumber: 1
+        description: 'Read the bound project''s hosted family: its family root first, then its member records'
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 2
+        description: Read the members the family root declares on disk now
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredMembers
+      - stepNumber: 3
+        description: Gather the permission world before the change
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 4
+        description: List every user and service record (the subjects of the reach listing)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 5
+        description: >-
+          For every declared member whose action is register, relocate, rename or return (family
+          roots first, so a parent record exists before its members)
+        type: loop
+        loopKind: forEach
+        over: declared members to register, relocate, rename or return
+        endStep: 14
+      - stepNumber: 6
+        description: Is it a project rename (another record id held this parent and path)?
+        type: branch
+        condition: the action is rename
+        onFalseStep: 13
+      - stepNumber: 7
+        description: >-
+          Refuse the re-key when the new id already has a setting at its own scope (moving the old
+          ones would merge two subjects' access), or when the old or new id is also an organization
+          unit id (the scope remaps are kind-blind and would rewrite the unit's settings too). A
+          refused re-key is recorded for the audit below and goes straight on to registering the new
+          id: the old record stays (disabled with the departed), the new one is registered with only
+          its inheritance, and an operator moves the own-scope settings by hand
+        type: branch
+        condition: the new id holds settings, or the old or new id is also a unit id
+        onTrueStep: 13
+        onFalseStep: 8
+      - stepNumber: 8
+        label: rekey
+        description: >-
+          Move every assignment scoped at the old member's own project scope to the new id (explicit
+          member-level yes and no alike) — nothing inherited is stored on the member, so nothing
+          else moves
+        type: call
+        targetComponent: permission_repository
+        targetMethod: remapScope
+      - stepNumber: 9
+        description: Move every role binding anchored at the old member's own scope to the new id
+        type: call
+        targetComponent: user_repository
+        targetMethod: remapUnitReferences
+      - stepNumber: 10
+        description: List the API keys whose narrowing names the old id
+        type: call
+        targetComponent: credential_repository
+        targetMethod: list
+      - stepNumber: 11
+        description: Rewrite each such key's entry from the old id to the new one
+        type: call
+        targetComponent: credential_repository
+        targetMethod: renarrow
+      - stepNumber: 12
+        description: >-
+          Delete the old member record (a member record's deletion never touches its directory); its
+          children are relocated under the new id as the loop reaches them
+        type: call
+        targetComponent: project_repository
+        targetMethod: remove
+      - stepNumber: 13
+        label: return
+        description: >-
+          When the member returns — the family declares it again after its record was disabled as
+          departed — set the record active again (its own-scope settings were kept, so it regains
+          exactly its inherited reach and those)
+        type: call
+        targetComponent: project_repository
+        targetMethod: setStatus
+      - stepNumber: 14
+        label: upsert
+        description: >-
+          Upsert the member record with its id, parent and path — no grant and no placement: it
+          inherits through its parent
+        type: call
+        targetComponent: project_repository
+        targetMethod: registerMember
+      - stepNumber: 15
+        description: For every stored member record of the family the family no longer declares
+        type: loop
+        loopKind: forEach
+        over: departed member records
+        endStep: 16
+      - stepNumber: 16
+        description: 'Disable it — never delete: its own-scope settings and audit trail stay for an operator'
+        type: call
+        targetComponent: project_repository
+        targetMethod: setStatus
+      - stepNumber: 17
+        description: >-
+          Build the after-world: parent links added for registered, relocated, returned and renamed
+          members, removed for departed ones
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: relink
+      - stepNumber: 18
+        description: For every member whose membership changed
+        type: loop
+        loopKind: forEach
+        over: registered, returned, reparented, renamed and departed members
+        endStep: 19
+      - stepNumber: 19
+        description: >-
+          Compare its reach before and after (a registration or a return widens it from none, a
+          departure narrows it to none, a reparenting moves it; a re-key is equal by construction)
+          and keep the rows that differ
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: compare
+      - stepNumber: 20
+        description: >-
+          For every touched project (the tool's written owners plus every record registered,
+          returned, relocated, renamed or disabled)
+        type: loop
+        loopKind: forEach
+        over: touched record ids
+        endStep: 22
+      - stepNumber: 21
+        description: >-
+          Audit the change as its own event — member.registered, member.returned, member.relocated,
+          member.renamed (with the settings and key entries moved, or the refused re-key) or
+          member.departed; or family.changed for a project the tool wrote whose membership did not
+          change — with projectId = the touched project, composition = the project the tool ran at,
+          actor = the principal, and the principals whose reach it changed
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 22
+        label: scope
+        description: >-
+          Collect its repository scope: the family's one repository root and the project's own .wai/
+          pathspec
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
+      - stepNumber: 23
+        description: >-
+          Publish ONE commit at the family's repository root whose pathspecs are exactly the touched
+          projects' own .wai/ — never another member's tree and never source code; a family that is
+          not git-backed, or touched paths that are clean, publish nothing
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 24
+        description: >-
+          Return what was registered, returned, relocated, renamed, disabled, the reach changes, and
+          the commit
+        type: return
+        outcome: MemberReconciliation
+    detail: full
+  - name: screen
+    narrative:
+      - stepNumber: 1
+        description: Is the call a project rename?
+        type: branch
+        condition: tool is sdd_rename_project
+        onFalseStep: 5
+      - stepNumber: 2
+        description: Read the bound project's hosted family, to tell a family root from a member
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 3
+        description: >-
+          The renamed project is a FAMILY ROOT when the binding is a family root and the call names
+          no member path: it is refused with "renaming a hosted family root's id is not supported; a
+          member can be renamed, or the root recreated". A member — bound itself, or named by its
+          alias path — is let through: reconcile re-keys it afterwards, and its reach does not
+          change
+        type: local
+      - stepNumber: 4
+        description: Return the refusal, or nothing to list
+        type: return
+        outcome: MembershipScreen (rename)
+      - stepNumber: 5
+        label: listing
+        description: Gather the permission world exactly as the resolver sees it
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 6
+        description: List every user and service record (the subjects of the listing)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 7
+        description: >-
+          Build the after-world: a parent link from the incoming member (its alias/path standing in
+          for the id it has no record under yet) to the bound project
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: relink
+      - stepNumber: 8
+        description: >-
+          Compare every subject x capability before (no record) and after (the incoming member
+          through its new chain), keeping the rows that differ — who gains access
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: compare
+      - stepNumber: 9
+        description: Return the reach changes, with no refusal
+        type: return
+        outcome: MembershipScreen (attach/adopt)
+    detail: full
+  - name: detach
+    narrative:
+      - stepNumber: 1
+        description: 'Read the bound project''s hosted family: its family root first, then its member records'
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 2
+        description: >-
+          Read the family's declared members, to resolve the alias to the member's record and
+          directory
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredMembers
+      - stepNumber: 3
+        description: >-
+          Fix the new root — the isolated root a new hosted project with the member's id would be
+          allocated — and refuse when a record holds it, when a NON-EMPTY directory is there (an
+          empty one, left by a cut-short cleanup, is free), or when a family project's record id
+          differs from its project id (a hosted source names a producer by record id)
+        type: local
+      - stepNumber: 4
+        description: Gather the permission world exactly as the resolver sees it
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 5
+        description: List every user and service record (the subjects of the listing)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 6
+        description: Read the family root's placements, the units the detached project keeps
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 7
+        description: >-
+          Build the after-world: the member's parent link removed and the member placed in the
+          family root's units
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: relink
+      - stepNumber: 8
+        description: >-
+          Compare every subject x capability over the member (and each member below it, which moves
+          with it) before and after, keeping the rows that drop — who loses access because the
+          inherited project rungs are cut
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: compare
+      - stepNumber: 9
+        description: >-
+          Plan the detach with a relocation: the member's directory moved to the new root inside the
+          transaction, externals written with source.hosted, the host data directory as coordinator
+          contributing its project-record and organization store files
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: plan
+      - stepNumber: 10
+        description: Did the plan refuse?
+        type: branch
+        condition: the plan has refusals
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Answer the detachment with its refusals and the reach it would have cut; nothing was
+          rehearsed or written
+        type: return
+        outcome: MemberDetachment (refused)
+      - stepNumber: 12
+        label: host-writes
+        description: >-
+          With the repositories wired to the rehearsal's copy of the data root, make the member's
+          record a top-level record at its new root (parentProjectId and memberPath cleared, root
+          persisted)
+        type: call
+        targetComponent: project_repository
+        targetMethod: register
+      - stepNumber: 13
+        description: >-
+          Place it in each of its former family root's units, in their stored order, so its unit
+          rungs stay
+        type: call
+        targetComponent: organization_repository
+        targetMethod: placeProject
+      - stepNumber: 14
+        description: >-
+          Compute every file change: the family edits, the move (creates at the new root, deletes at
+          the old directory) and the host stores
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: diff
+      - stepNumber: 15
+        description: Apply only when asked
+        type: branch
+        condition: apply is requested
+        onFalseStep: 24
+      - stepNumber: 16
+        description: >-
+          Commit everything through the family transaction, all or nothing: each file is staged,
+          backed up and journaled before any live file moves, a live file that changed since the
+          rehearsal refuses at staging, any failure before the commit point restores every backup,
+          and a crash mid-swap leaves a journal the next bind's recover rolls back
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: commit
+      - stepNumber: 17
+        description: Did the transaction commit?
+        type: branch
+        condition: the outcome is committed
+        onFalseStep: 22
+      - stepNumber: 18
+        description: >-
+          Audit member.detached naming the member as projectId and the bound project as composition,
+          with its new root, every principal who lost access, and the note "no git binding: enable
+          one for this project" — the family's repository stays with the family and none is created
+          for it
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 19
+        description: Collect the family repository scope of every touched family project
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
+      - stepNumber: 20
+        description: >-
+          Publish ONE commit at the family's repository root covering the touched family projects'
+          .wai/ (the member's old path among them, now deleted); a family that is not git-backed
+          publishes nothing
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 21
+        description: >-
+          Answer the detachment as applied, its notes saying "no git binding: enable one for this
+          project"
+        type: return
+        outcome: MemberDetachment (applied)
+      - stepNumber: 22
+        label: failed
+        description: Audit member.detach failed with what failed and whether every file was restored
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 23
+        description: Answer the detachment as not applied, with the outcome
+        type: return
+        outcome: MemberDetachment (not applied)
+      - stepNumber: 24
+        label: dry
+        description: 'A dry run: drop the rehearsal, writing nothing live'
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: drop
+      - stepNumber: 25
+        description: 'Answer the planned detachment: the move, the new root, the losers'
+        type: return
+        outcome: MemberDetachment (dry run)
+    detail: full
+  - name: adopt
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Plan the adopt with a relocation: the external's source.hosted producer resolved through
+          the hosting binding's record lookup, its isolated root as relocation.from, the member path
+          under the bound project as relocation.to, the host data directory as coordinator
+          contributing its project-record and organization store files; the plan names the adopted
+          project (its id and current root)
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: plan
+      - stepNumber: 2
+        description: Did the plan refuse?
+        type: branch
+        condition: the plan has refusals
+        onTrueStep: 6
+        onFalseStep: 3
+      - stepNumber: 3
+        label: check
+        description: Read the adopted record's hosted family — itself and the members it carries
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 4
+        description: >-
+          Resolve the caller's write over BOTH the bound project and the adopted record, each
+          through its own chain
+        type: call
+        targetComponent: authorization
+        targetMethod: reach
+      - stepNumber: 5
+        description: >-
+          Refuse when the caller cannot write both records, or when a member the adopted record
+          carries would derive a root under the target that collides with an existing directory or
+          escapes the family root
+        type: branch
+        condition: either record is not writable, or a carried member cannot be held at the target
+        onFalseStep: 8
+      - stepNumber: 6
+        label: refuse
+        description: Drop the rehearsal, if one was opened, writing nothing
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: drop
+      - stepNumber: 7
+        description: >-
+          Answer the adoption refused — the plan's refusals, or the record the caller cannot write,
+          or the member that cannot be held
+        type: return
+        outcome: MemberAdoption (refused)
+      - stepNumber: 8
+        label: reach
+        description: Gather the permission world exactly as the resolver sees it
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 9
+        description: List every user and service record (the subjects of the listing)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 10
+        description: >-
+          Build the after-world: a parent link from the adopted project to the bound project, and
+          its own placements (from the world) removed
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: relink
+      - stepNumber: 11
+        description: >-
+          Compare every subject x capability over the adopted project (and each member below it,
+          which moves with it) before and after, keeping the rows that differ — who gains access
+          through the new parent chain, and whose access through the former placements changes
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: compare
+      - stepNumber: 12
+        description: >-
+          With the repositories wired to the rehearsal's copy of the data root, convert the adopted
+          record into a member — parentProjectId the bound project, memberPath the target, its
+          persisted root dropped
+        type: call
+        targetComponent: project_repository
+        targetMethod: registerMember
+      - stepNumber: 13
+        description: >-
+          Remove each of its own placements (as the world lists them): a member takes its units from
+          its family root
+        type: call
+        targetComponent: organization_repository
+        targetMethod: deletePlacement
+      - stepNumber: 14
+        description: >-
+          Compute every file change: the family edits, the move (creates at the member path, deletes
+          at the isolated root) and the host stores
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: diff
+      - stepNumber: 15
+        description: Apply only when asked
+        type: branch
+        condition: apply is requested
+        onFalseStep: 24
+      - stepNumber: 16
+        description: >-
+          Commit everything through the family transaction, all or nothing: staged, backed up and
+          journaled before any live file moves; a changed live file refuses at staging; any failure
+          before the commit point restores every backup; a crash leaves a journal the next bind's
+          recover rolls back
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: commit
+      - stepNumber: 17
+        description: Did the transaction commit?
+        type: branch
+        condition: the outcome is committed
+        onFalseStep: 22
+      - stepNumber: 18
+        description: >-
+          Audit member.adopted naming the adopted project as projectId and the bound project as
+          composition, with its member path, the removed placements and every reach change
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 19
+        description: >-
+          Collect the family repository scope of every touched family project, the adopted member's
+          included
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
+      - stepNumber: 20
+        description: >-
+          Publish ONE commit at the family's repository root covering those pathspecs; a family that
+          is not git-backed publishes nothing
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 21
+        description: Answer the adoption as applied
+        type: return
+        outcome: MemberAdoption (applied)
+      - stepNumber: 22
+        label: failed
+        description: Audit member.adopt failed with what failed and whether every file was restored
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 23
+        description: Answer the adoption as not applied, with the outcome
+        type: return
+        outcome: MemberAdoption (not applied)
+      - stepNumber: 24
+        label: dry
+        description: 'A dry run: drop the rehearsal, writing nothing live'
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: drop
+      - stepNumber: 25
+        description: 'Answer the planned adoption: the move, the member path, the reach changes'
+        type: return
+        outcome: MemberAdoption (dry run)
+    detail: full
+  - name: recoverData
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Find the transactions unfinished under the data directory, resolving each only when fix is
+          asked (a report-only pass writes nothing); a failure is logged and answers nothing
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: recover
+      - stepNumber: 2
+        description: For every transaction found
+        type: loop
+        loopKind: forEach
+        over: recovered transactions
+        endStep: 3
+      - stepNumber: 3
+        description: >-
+          When it was resolved, audit it as migration.recovered by the operator (id, verb,
+          coordinator phase, rolled-back | cleaned | refused) and write the same line to the server
+          log, so an operator sees a rollback nobody asked for
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 4
+        description: Return what was found and done
+        type: return
+        outcome: RecoveredTransaction[]
+    detail: full
+status: complete
+createdAt: '2026-10-01T16:32:31.247Z'
+updatedAt: '2026-10-01T19:55:29.901Z'

@@ -83,65 +83,145 @@ methods:
     symbol: resolveProjectRoot
   - name: list
     narrative: []
-    intent: Loads the persisted set and returns every hosted-project record.
+    intent: >-
+      Loads the persisted set and returns every hosted-project record, each member record carrying
+      its derived rootPath (its family root's root joined with the memberPath chain).
     calls:
       - project_store.read
     symbol: listProjectRecords
+  - name: existingRoot
+    narrative: []
+    intent: >-
+      Refuses a malformed id with null, then loads the persisted set and returns the record's root:
+      a family root's persisted rootPath, or for a member record its family root's rootPath joined
+      with each memberPath down the parent chain (null when the chain is broken); null when no
+      record holds the id.
+    calls:
+      - project_store.read
+    symbol: existingProjectRoot
   - name: resolveBinding
     narrative:
       - stepNumber: 1
         description: >-
-          Parse the target — the explicit selector, or the principal's single narrowing entry: first
-          '::'-segment = TOP project id, remainder = the member chain, one member alias per hop (the
-          same strings the mount chain held: every legacy mount's id becomes its member's alias, so
-          an existing qualifier names the same root); a malformed target returns null
+          Fix the target: the explicit selector, or the principal's single narrowing entry when it
+          holds exactly one non-wildcard entry; a wildcard or multi-entry principal naming no
+          selector gets null
         type: local
       - stepNumber: 2
-        description: >-
-          Authorize with at-or-below coverage: an entry covers the target iff equal or the target
-          extends it with '::' (wildcard passes) — a qualified principal can never reach the top
-          project or a sibling; an uncovered target returns null with no existence leak
-        type: local
+        description: Is the target a deprecated member-qualified form ('projectId::alias', one alias per hop)?
+        type: branch
+        condition: the target contains '::'
+        onFalseStep: 7
       - stepNumber: 3
-        description: Resolve the TOP project record; a missing or inactive project returns null
+        description: >-
+          DEPRECATED for one release: parse the first segment as the family root id and the rest as
+          the alias chain; a malformed qualifier, or a family root no active record holds, is null
         type: local
       - stepNumber: 4
-        description: Walk the member chain hop by hop
+        description: Walk the alias chain hop by hop from the family root's root
         type: loop
         loopKind: forEach
-        over: member-alias hops in the qualifier chain
-        endStep: 6
+        over: aliases in the qualifier chain
+        endStep: 5
       - stepNumber: 5
+        label: hop
         description: >-
-          Look up the alias among the current root's member declarations — its project.yaml
-          `members` and, for one release, its legacy L1 mounts: an alias that declares no member
-          fails with an actionable error — never a silent fallback to the project root, and never an
-          internal subsystem, which is not a root at all
-        type: local
-      - stepNumber: 6
-        description: >-
-          Resolve the child directory within the current root through the host core adapter's
-          containment guard (escape rejected) and advance the current root
+          Look the alias up among the current root's member declarations (project.yaml `members`, or
+          a legacy L1 mount) and resolve its directory within the current root through the
+          containment guard; an alias that declares no member is null — never the family root, never
+          an internal subsystem
         type: call
         targetComponent: host_core_adapter
         targetMethod: resolveContainedProjectPath
-      - stepNumber: 7
+      - stepNumber: 6
         description: >-
-          Return the binding: bound root, TOP project id, and the joined member chain (absent when
-          unqualified)
+          Map the reached directory to the member record whose parentProjectId and memberPath name
+          it, and keep the qualifier as via; a directory no record holds (an un-upgraded data dir)
+          is null
+        type: local
+      - stepNumber: 7
+        label: authorize
+        description: >-
+          Authorize by the project chain: the target record is covered iff the principal holds '*',
+          an entry equal to its id, or an entry naming a record the target descends from through
+          parentProjectId (an entry that is itself a deprecated qualifier is mapped to its record
+          the same way first) — a token for a project reaches its members, as a grant does.
+          Uncovered is null with no existence leak
+        type: local
+      - stepNumber: 8
+        description: Load the target record; a missing or inactive record is null
+        type: local
+      - stepNumber: 9
+        description: Is the target a member record?
+        type: branch
+        condition: the record carries parentProjectId
+        onFalseStep: 12
+      - stepNumber: 10
+        description: >-
+          Derive the member's root: walk parentProjectId up to the family root (which persists its
+          root), then join each memberPath back down through the containment guard, and check the
+          directory still holds a project whose id is the record's (a moved member answers null
+          until reconcile relocates its record); a broken chain (a parent record gone) is null
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: resolveContainedProjectPath
+      - stepNumber: 11
+        description: >-
+          Read the project configuration at the derived root and require its id to be the record's;
+          a mismatch (the member moved, or another project sits there) is null
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 12
+        label: bind
+        description: >-
+          Return the binding: the bound root, the record's own id, its family root id, and via when
+          a deprecated qualifier resolved it
         type: return
         outcome: ProjectBinding or null
     detail: full
-    intent: ''
     symbol: resolveProjectBinding
-  - name: existingRoot
+  - name: family
     narrative: []
     intent: >-
-      Refuses a malformed id with null, then loads the persisted set and returns the rootPath of the
-      record holding the id, or null when none does.
+      Loads the persisted set, climbs parentProjectId from the given record to its family root, then
+      collects the family root followed by every record whose parent chain reaches it, depth-first
+      in the order the parents declare them, each member with its derived rootPath. Returns [] for
+      an unknown id. Reads no project file.
     calls:
       - project_store.read
-    symbol: existingProjectRoot
+    symbol: listFamilyRecords
+  - name: declaredMembers
+    narrative: []
+    intent: >-
+      Loads the persisted set and the family root record, then walks the family on disk from its
+      root: for each root, reads its project configuration and follows every `members` entry (and,
+      for one release, a legacy L1 mount) through the containment guard, reads the member's own
+      project id from its project.yaml, and recurses into it. Each member is answered as the record
+      it should hold — id, parentProjectId the declaring project's id, memberPath as declared — with
+      the qualifier that bound it before stage 7 and its action against the stored records: register
+      when no record holds the id, relocate when one does with another parent or path, rename when a
+      record of another id holds this parent and path, return when the record agreeing with it is
+      disabled (it left the family and is declared again), unchanged when it agrees and is active,
+      unreadable when its declaration, directory or project.yaml cannot be followed or read (never
+      skipped), with the reason: the declaration's own problem, a path escaping its parent, a
+      missing directory, a project.yaml that cannot be read or fails its schema, or no valid project
+      id. Writes nothing.
+    calls:
+      - project_store.read
+      - host_core_adapter.loadProjectConfig
+      - host_core_adapter.resolveContainedProjectPath
+    symbol: planMemberRecords
+  - name: repositoryScope
+    narrative: []
+    intent: >-
+      Loads the persisted set, climbs from the record to its family root and answers the family
+      root's id and root as the repository, with the record's own pathspec: '.wai/' for a family
+      root, the memberPath chain joined with forward slashes plus '/.wai/' for a member. Null for an
+      unknown id or a broken parent chain.
+    calls:
+      - project_store.read
+    symbol: projectRepositoryScope
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-09-27T10:59:55.660Z'
+updatedAt: '2026-10-01T19:51:39.563Z'

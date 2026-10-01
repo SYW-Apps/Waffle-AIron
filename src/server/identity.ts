@@ -20,7 +20,7 @@ import {
 import * as userRepo from './users.js';
 import { listAssignments } from './permissions.js';
 import * as auditRepo from './audit.js';
-import { assertMintableNarrowingEntry, parseQualifiedSelector } from './projects.js';
+import { assertMintableNarrowingEntry } from './projects.js';
 import { removeAllWebSessionsForSubject } from './websessions.js';
 import {
   authorize,
@@ -40,6 +40,7 @@ import type {
   HostConfig,
   HostedUserRecord,
   IdentityProviderConfig,
+  MintedToken,
   Principal,
   PrincipalSubject,
 } from './types.js';
@@ -298,7 +299,7 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
  * metadata and appends a redacted audit event. Returns the plaintext token
  * exactly once.
  */
-export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): string {
+export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): MintedToken {
   const principal = requirePrincipal(cfg, credential);
 
   if (!isInstanceAdmin(principal)) {
@@ -309,16 +310,17 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
   // instance-admin bearer — the env-anchored paths are the only super-admin routes.
   assertNotReservedSubjectId(cfg, [request.ownerUserId]);
 
-  // The token's project NARROWING (never a grant): which projects it may name.
-  // ['*'] (or omitted) = the owner's full accessible set, still resolved live.
-  // An entry MAY be member-qualified ('projectId::alias', nested members
-  // composing, one alias per hop) — validated at MINT time: each alias must
-  // declare a member. An unknown project, an unknown alias or an internal
-  // subsystem is rejected with guidance, never stored broken.
-  const projects = request.projects?.length ? request.projects : ['*'];
-  for (const p of projects) {
-    assertMintableNarrowingEntry(cfg.dataDir, p);
-  }
+  // The token's project NARROWING (never a grant): which records it may name,
+  // each covering its members. ['*'] (or omitted) = the owner's full accessible
+  // set, still resolved live. A member-qualified entry ('projectId::alias') is
+  // DEPRECATED: for one release it is accepted and STORED as the member's
+  // record id; an unknown project, an alias that declares no member, or a
+  // member no record holds is rejected with guidance, never stored broken.
+  const requested = request.projects?.length ? request.projects : ['*'];
+  const stored = requested.map((p) => ({ asked: p, as: assertMintableNarrowingEntry(cfg.dataDir, p) }));
+  const projects = [...new Set(stored.map((e) => e.as))];
+  // The caller learns what each deprecated qualified entry was stored as.
+  const mapped = stored.filter((e) => e.as !== e.asked).map((e) => `${e.asked} -> ${e.as}`);
 
   // Refuse minting a token for a user record that has been deactivated — else
   // deactivation could be undone by minting fresh tokens for the inactive owner.
@@ -355,7 +357,7 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
     buildAuditEvent(principal, 'token.mint', 'security', 'admin', { target: record.id }),
   );
 
-  return token; // plaintext, shown exactly once
+  return { token, mapped }; // plaintext, shown exactly once
 }
 
 /**
@@ -413,30 +415,19 @@ export function mintSelfToken(
 ): string {
   const principal = requirePrincipal(cfg, credential);
 
-  // Parse the possibly-qualified project id: permission resolves over the TOP
-  // project — a member qualifier narrows reach, never what the token may do.
-  const parsed = parseQualifiedSelector(projectId);
-  if (!parsed) {
-    throw new Error(
-      `invalid project id "${projectId}" (expected a project id, optionally ` +
-        `member-qualified as projectId::alias)`,
-    );
-  }
+  // The record the token names: a project id as it is, or — a deprecated
+  // member-qualified id, for one release — the member's own record id. An
+  // unknown project or member is rejected with guidance, never stored broken.
+  const recordId = assertMintableNarrowingEntry(cfg.dataDir, projectId);
 
-  // Self-scoped authorization through permission rules: the caller must ALREADY hold
-  // a yes-valued permission over this exact (TOP) project (a unit-scoped
-  // assignment covers its own subtree, never another tenant's).
-  if (authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', parsed.projectId).value !== 'yes') {
+  // Self-scoped authorization through permission rules: the caller must ALREADY
+  // hold a yes-valued permission over that record, through its own chain (a
+  // parent's grant reaches its members; an explicit no on a member removes it).
+  if (authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', recordId).value !== 'yes') {
     throw new ForbiddenError('caller lacks project:read on the requested project');
   }
-  if (write && authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', parsed.projectId).value !== 'yes') {
+  if (write && authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', recordId).value !== 'yes') {
     throw new ForbiddenError('caller lacks project:write on the requested project');
-  }
-
-  // A subproject qualifier is validated at MINT time — the named subsystem must
-  // exist on the project and carry a projectPath; never store a broken mount.
-  if (parsed.mounts.length > 0) {
-    assertMintableNarrowingEntry(cfg.dataDir, projectId);
   }
 
   // Mint the token owned by the caller, NARROWED to exactly the one project. It
@@ -447,11 +438,11 @@ export function mintSelfToken(
   const record: ApiKeyRecord = {
     id: crypto.randomBytes(6).toString('hex'),
     keyHash: hashToken(token),
-    projects: [projectId],
+    projects: [recordId],
     createdAt: new Date().toISOString(),
     ownerSubject: owner,
     createdBySubject: owner,
-    label: `agent token (${projectId})`,
+    label: `agent token (${recordId})`,
   };
   createCredential(cfg.dataDir, record);
 
@@ -1001,7 +992,10 @@ export async function handleIdentityRequest(
 
     // POST /identity/tokens
     if (req.method === 'POST' && parts.length === 2 && parts[1] === 'tokens') {
-      return sendJson(res, 201, { key: mintToken(cfg, credential, body as TokenMintRequest) });
+      {
+        const minted = mintToken(cfg, credential, body as TokenMintRequest);
+        return sendJson(res, 201, { key: minted.token, mapped: minted.mapped });
+      }
     }
     // DELETE /identity/tokens/{id}
     if (req.method === 'DELETE' && parts.length === 3 && parts[1] === 'tokens') {

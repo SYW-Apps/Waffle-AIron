@@ -34,7 +34,21 @@ fields:
       Each copied live file (absolute) → sha256 of its bytes when copied: the base every FileChange
       is planned against.
     optional: false
+  - name: areas
+    type: string[]
+    description: >-
+      The scope's areas when it named any (the hosted member upgrade: the host store files): only
+      these, per copied owner, are compared. Absent for a family migration, which compares every
+      .wai tree.
+    optional: true
+  - name: whole
+    type: string[]
+    description: >-
+      The scope's owners copied whole (a relocated project's old directory and its new root): every
+      file under them, whatever the file, is compared, so a move reads as deletes at the old place
+      and creates at the new. Absent for every other transaction.
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:23.894Z'
-updatedAt: '2026-09-30T21:33:06.075Z'
+updatedAt: '2026-10-01T18:06:29.931Z'

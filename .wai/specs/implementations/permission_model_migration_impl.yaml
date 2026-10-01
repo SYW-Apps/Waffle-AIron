@@ -86,7 +86,10 @@ methods:
         targetComponent: project_repository
         targetMethod: list
       - stepNumber: 15
-        description: List the placements, and record every unplaced project as a finding
+        description: >-
+          List the placements, and record every unplaced FAMILY ROOT as a finding — a member record
+          (one with parentProjectId) is never unplaced: it takes its units from its family root and
+          is never swept into the 'unassigned' unit
         type: call
         targetComponent: organization_repository
         targetMethod: listPlacements
@@ -147,4 +150,4 @@ methods:
     symbol: migratePermissionModel
 status: complete
 createdAt: '2026-09-25T22:56:53.266Z'
-updatedAt: '2026-09-25T23:00:36.427Z'
+updatedAt: '2026-10-01T17:05:56.180Z'

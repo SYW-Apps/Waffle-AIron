@@ -1,6 +1,8 @@
 id: ihost_migration_adapter
 name: Host Migration Client Adapter Interface
-description: One forward to migration_portal.recover.
+description: >-
+  Forwards to the migration portal: recovery of unfinished transactions under a root, and the family
+  transaction the member upgrade commits the host stores through.
 component: host_migration_adapter
 methods:
   - name: recover
@@ -19,6 +21,56 @@ methods:
         description: Resolve (true) or only report (false)
     guarantees:
       - idempotent
+  - name: rehearse
+    description: 'Forward to migration_portal.rehearse: open a rehearsal over the scoped owners'' areas.'
+    signature: 'rehearse(scope: TransactionScope): Rehearsal'
+    returns: Rehearsal
+    params:
+      - name: scope
+        type: TransactionScope
+  - name: diff
+    description: 'Forward to migration_portal.diff: the rehearsal''s difference from the live owners.'
+    signature: 'diff(rehearsal: Rehearsal): FileChange[]'
+    returns: FileChange[]
+    params:
+      - name: rehearsal
+        type: Rehearsal
+    guarantees:
+      - idempotent
+  - name: commit
+    description: 'Forward to migration_portal.commit: the changes made live all or nothing.'
+    signature: 'commit(rehearsal: Rehearsal, changes: FileChange[], verb: string): TransactionOutcome'
+    returns: TransactionOutcome
+    params:
+      - name: rehearsal
+        type: Rehearsal
+      - name: changes
+        type: FileChange[]
+      - name: verb
+        type: string
+    guarantees:
+      - atomic
+  - name: drop
+    description: 'Forward to migration_portal.drop: discard a rehearsal, writing nothing live.'
+    signature: 'drop(rehearsal: Rehearsal): void'
+    returns: void
+    params:
+      - name: rehearsal
+        type: Rehearsal
+    guarantees:
+      - idempotent
+  - name: plan
+    description: >-
+      Forward to migration_portal.plan: plan a family migration from the bound project — used by the
+      hosted detach with a relocation, whose rehearsal the host then writes its store changes into
+      before committing.
+    signature: 'plan(request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: request
+        type: MigrationRequest
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-30T21:05:23.712Z'
-updatedAt: '2026-09-30T21:34:11.401Z'
+updatedAt: '2026-10-01T17:03:54.106Z'

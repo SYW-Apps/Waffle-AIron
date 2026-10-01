@@ -11,15 +11,19 @@ methods:
     returns: HostedProjectRecord
   - name: remove
     description: >-
-      Delete the project record and recursively remove its isolated tree. Idempotent for a missing
-      id.
+      Delete the project record; for a family root also recursively remove its isolated tree. A
+      member record's directory belongs to its parent's tree and is NEVER removed with the record.
+      Refuses a family root while member records still name it as their parent (remove or detach the
+      members first). Idempotent for a missing id.
     signature: 'remove(id: string): void'
     returns: void
   - name: register
     description: >-
       Upsert a project record pointing at an existing directory the caller names, instead of
       allocating one under the data root; the first registration's creation time is kept across
-      repeats. Refuses a malformed id.
+      repeats. The record written is a family root: any parentProjectId and memberPath the id held
+      are cleared and the root is persisted — which is how a hosted detach makes a relocated member
+      top-level. Refuses a malformed id.
     signature: 'register(id: string, rootPath: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
@@ -27,6 +31,34 @@ methods:
         type: string
       - name: rootPath
         type: string
+  - name: registerMember
+    description: >-
+      Upsert a MEMBER record by id: parentProjectId and memberPath are required and replace the
+      stored ones (a moved member is relocated, never duplicated); the creation time of an existing
+      record is kept; no directory is created or copied and rootPath is never persisted. A record
+      that is a family root is CONVERTED into a member — its persisted root dropped — which is how a
+      hosted adopt makes a relocated top-level project a member (its files were moved under the
+      parent in the same transaction). Refuses a malformed id, a parent no record holds, a parent
+      that is the record itself or one of its own members, and a memberPath that is absolute or
+      escapes its parent.
+    signature: 'registerMember(record: HostedProjectRecord): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: record
+        type: HostedProjectRecord
+        description: 'The member record: id, parentProjectId, memberPath, status'
+  - name: setStatus
+    description: >-
+      Set a record's status (active | disabled). A member that left its family is disabled, never
+      deleted, so its grants and audit trail stay for an operator. Refuses an unknown id.
+    signature: 'setStatus(id: string, status: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: id
+        type: string
+      - name: status
+        type: string
+        description: active | disabled
 status: complete
 createdAt: '2026-07-19T09:00:02.108Z'
-updatedAt: '2026-09-25T22:38:36.829Z'
+updatedAt: '2026-10-01T17:08:58.399Z'

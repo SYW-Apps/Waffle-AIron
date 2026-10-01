@@ -1,0 +1,21 @@
+id: member_reach_rules
+name: Member Reach Rules
+description: >-
+  Pure rules for how membership changes who can reach a hosted project, over values the caller hands
+  in (no I/O). Projects nest like units, so a member's reach comes through its parent chain; these
+  rules never write a grant. relink answers the permission world with parent links added or removed
+  (what a registration, an attach, an adopt or a detach does to the chain). compare resolves every
+  subject x capability before and after such a change and answers the rows — the upgrade's
+  no-widening proof (today's reach over the family root vs the member's new chain: equal by
+  construction, any difference refuses) and a membership change's reach listing (the rows that
+  differ are the principals who gain or lose access). narrowing rewrites an API key's
+  member-QUALIFIED entries to record ids.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - permission_rules
+dependencyClass: pure
+status: complete
+createdAt: '2026-10-01T16:56:18.256Z'
+updatedAt: '2026-10-01T17:39:41.568Z'

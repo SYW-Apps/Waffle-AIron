@@ -46,15 +46,17 @@ export function sync(): void {
 }
 
 /**
- * Commit ONLY the scoped subpath (default .wai/) of the working tree, push the
- * working branch, and return the compare URL. No-op (published=false) when not
- * git-backed OR when the scoped path is clean — a quiet project never commits
- * noise. Commit = the local save, push = the actual backup; both happen.
+ * Commit ONLY the scoped pathspecs (default ['.wai/']) of the working tree as
+ * one commit, push the working branch, and return the compare URL. No-op
+ * (published=false) when not git-backed OR when every scoped path is clean — a
+ * quiet project never commits noise. A hosted member commits through its
+ * family root's repository with its own <path>/.wai/ pathspec; a family
+ * migration publishes every touched project's pathspec in one commit.
  */
-export function publish(message: string, subpath: string = DEFAULT_SCOPE): GitPublish {
+export function publish(message: string, subpaths: string[] = [DEFAULT_SCOPE]): GitPublish {
   const config = readGitConfig();
   if (!config || !config.enabled) return { published: false };
-  const commitSha = adapter.commitScoped(subpath, message);
+  const commitSha = adapter.commitScoped(subpaths.length > 0 ? subpaths : [DEFAULT_SCOPE], message);
   if (commitSha === null) return { published: false }; // clean scope
   adapter.push(config.workingBranch);
   const compareUrl = adapter.compareUrl(config.remote, config.defaultBranch, config.workingBranch);

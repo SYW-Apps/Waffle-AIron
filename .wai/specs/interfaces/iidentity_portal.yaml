@@ -6,9 +6,12 @@ description: >-
 component: identity_portal
 methods:
   - name: mintToken
-    description: Mint a user-bound MCP/API token from a TokenMintRequest; plaintext is returned once.
-    signature: 'mintToken(credential: string, request: TokenMintRequest): string'
-    returns: string
+    description: >-
+      Mint a user-bound MCP/API token from a TokenMintRequest; the plaintext is returned once (as
+      `key`), with `mapped` naming each deprecated member-qualified narrowing entry and the member
+      record id it was stored as.
+    signature: 'mintToken(credential: string, request: TokenMintRequest): MintedToken'
+    returns: MintedToken
     params:
       - name: credential
         type: string
@@ -183,4 +186,4 @@ methods:
       path: /identity/audit/count
 status: complete
 createdAt: '2026-07-08T20:19:45.785Z'
-updatedAt: '2026-07-15T22:49:31.938Z'
+updatedAt: '2026-10-01T18:07:02.281Z'

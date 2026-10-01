@@ -23,8 +23,8 @@ import {
   listProjectRecords,
   removeProjectRecord,
   existingProjectRoot,
-  resolveSubprojectMounts,
-  SUBPROJECT_SEPARATOR,
+  listFamilyRecords,
+  projectRepositoryScope,
 } from './projects.js';
 import * as hostCore from './adapters/core.js';
 import * as hostGit from './adapters/git.js';
@@ -45,6 +45,7 @@ import type {
   Principal,
   PrincipalSubject,
   DisplayRole,
+  RepositoryScope,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -264,24 +265,21 @@ export function hostedApprover(subject?: PrincipalSubject): ApproverIdentity {
 }
 
 /**
- * Step 1 of executeApprovedLock: the root the action
- * concerns. Without a qualifier that is the project's own isolated root; WITH one
- * it is the CHAINED CHILD's tree, resolved through the project registry's
- * containment-checked qualified resolution — the SAME seam the data plane binds
- * through, so a qualifier can never resolve outside the project root.
- *
- * `subproject` is the member chain only ('a' or 'a::b', one member alias per
- * hop), exactly as ProjectBinding.subproject carries it — never the project id.
- * An alias that declares no member, an internal subsystem, or an escaping path
- * THROWS (the helper's
- * own actionable errors): the resolution never silently falls back to the project
- * root, because that fallback is precisely the confinement failure being closed.
+ * The root a lifecycle action concerns: the record's own root — a member
+ * record's derived from its parent's root and memberPath (stage 7: a member is
+ * a record of its own, so no qualifier exists).
  */
-function boundLifecycleRoot(cfg: HostConfig, projectId: string, subproject?: string): string {
+function boundLifecycleRoot(cfg: HostConfig, projectId: string): string {
   const root = existingProjectRoot(cfg.dataDir, projectId);
   if (!root) throw new Error(`Unknown project "${projectId}".`);
-  if (!subproject) return root;
-  return resolveSubprojectMounts(projectId, root, subproject.split(SUBPROJECT_SEPARATOR));
+  return root;
+}
+
+/** The record's repository scope: its family root's repository root and its own .wai/ pathspec. */
+function repositoryScopeOf(cfg: HostConfig, projectId: string): RepositoryScope {
+  const scope = projectRepositoryScope(cfg.dataDir, projectId);
+  if (!scope) throw new Error(`Unknown project "${projectId}".`);
+  return scope;
 }
 
 /**
@@ -315,15 +313,14 @@ function renderIdentity(stateId: StateId): string {
 }
 
 /**
- * The gate identity of the tree a lock of this project (or of the member the
- * qualifier binds) would certify NOW, rendered `<algorithm>:<digest>`.
+ * The gate identity of the tree a lock of this project's own record would certify NOW, rendered `<algorithm>:<digest>`.
  * Pre-authorized like executeApprovedLock and for the same caller: the project
  * lifecycle orchestrator records it on a project:lock request when the request
  * is created, so the approved execution can refuse a tree that moved after the
  * request. Read-only: no sync, no validation, no write.
  */
-export function gateIdentity(cfg: HostConfig, projectId: string, subproject?: string): string {
-  const root = boundLifecycleRoot(cfg, projectId, subproject);
+export function gateIdentity(cfg: HostConfig, projectId: string): string {
+  const root = boundLifecycleRoot(cfg, projectId);
   return runWithProjectRoot(root, () => renderIdentity(computeGateStateId()));
 }
 
@@ -343,25 +340,26 @@ export function gateIdentity(cfg: HostConfig, projectId: string, subproject?: st
  * written; and the record is format 2 (`members`, never `children`). It
  * writes one file, the bound root's .wai/lock.json, and nothing below it.
  *
- * An optional `subproject` qualifier binds the member's tree instead of the
- * project's own. The git binding is read from the BOUND root, so a member
- * carries none and both the sync and the publish no-op naturally — a member
- * lock never commits or pushes against the parent's repository. The frozen
- * member tree persists in the project's working tree but is NOT staged by the
- * project's own .wai/-scoped commit: a member lives outside that pathspec.
+ * It locks the project's OWN record: a member is a record since stage 7, so
+ * its own tree is bound. Git goes through the project's family repository:
+ * sync at the family root's repository root, and publish ONLY the project's own
+ * .wai/ pathspec there, so a member's lock reaches the remote without sweeping
+ * its parent's or siblings' trees.
  */
 export function executeApprovedLock(
   cfg: HostConfig,
   projectId: string,
   approver: ApproverIdentity,
-  subproject?: string,
   expected?: string,
 ): LockRecord {
-  const root = boundLifecycleRoot(cfg, projectId, subproject);
+  // Step 1: the family repository scope, and the project's own root to bind.
+  const scope = repositoryScopeOf(cfg, projectId);
+  const root = boundLifecycleRoot(cfg, projectId);
   return runWithProjectRoot(root, () => {
-    // Git-backed: pull the default branch into the working branch first so the
-    // lock (and PR) is based on the latest. No-op for native projects.
-    hostGit.sync();
+    // Step 2: git-backed — pull the default branch into the working branch at
+    // the family repository root first, so the lock (and PR) is based on the
+    // latest. No-op for a native family.
+    runWithProjectRoot(scope.repositoryRoot, () => hostGit.sync());
     // Capture what the record will certify before anything is judged.
     const captured = computeGateStateId();
     refuseUnrequestedDesign(captured, expected);
@@ -378,7 +376,7 @@ export function executeApprovedLock(
     // Write the record BEFORE publishing, so the commit that ships the specs
     // also contains the approval that certifies them.
     hostCore.writeLockRecord(record);
-    return publishLock(record);
+    return publishLock(record, scope);
   });
 }
 
@@ -468,15 +466,16 @@ function withoutCodes(analysis: CodeAnalysis): CodeAnalysis {
 }
 
 /**
- * Git-backed: the lock is the semantic checkpoint — commit ONLY the .wai/ tree
- * (pathspec-scoped) with a message referencing the certified identity, and
- * push. No-op for a native project and for a member-scoped lock (no binding at
- * the bound member root). Only a real publish has a commit to record: the two
- * published fields are known only AFTER the commit, so they are re-written into
- * a record the commit already carries.
+ * Git-backed: the lock is the semantic checkpoint — commit ONLY the project's
+ * own .wai/ pathspec at the family repository root with a message referencing
+ * the certified identity, and push. No-op for a native family or a clean
+ * pathspec. Only a real publish has a commit to record: the two published
+ * fields are known only AFTER the commit, so they are re-written into a record
+ * the commit already carries.
  */
-function publishLock(record: LockRecord): LockRecord {
-  const publish = hostGit.publish(`wairon lock: ${record.projectId ?? 'project'} @ ${renderIdentity(record.stateId)}`);
+function publishLock(record: LockRecord, scope: RepositoryScope): LockRecord {
+  const message = `wairon lock: ${record.projectId ?? 'project'} @ ${renderIdentity(record.stateId)}`;
+  const publish = runWithProjectRoot(scope.repositoryRoot, () => hostGit.publish(message, scope.pathspecs));
   if (!publish.published) return record;
   const published: LockRecord = { ...record, commitSha: publish.commitSha, compareUrl: publish.compareUrl };
   hostCore.writeLockRecord(published);
@@ -563,12 +562,12 @@ export function syncGit(cfg: HostConfig, credential: string | null, project: str
 }
 
 /**
- * Publish a DELIBERATE, SCOPED backup commit: stage ONLY .wai/ (or the finer
- * .wai/specs/<subsystem>/ subpath when given), commit, and push — commit is the
- * local save, push is the actual backup; both happen. A clean scope publishes
- * nothing. CAVEAT: a subsystem-scoped commit is a staging convenience only —
- * git history is per-repo, so the log still interleaves all commits; the
- * project is the clean unit.
+ * Publish a DELIBERATE, SCOPED backup commit through the project's family
+ * repository: a family root stages ONLY its .wai/, a member ONLY its own
+ * <path>/.wai/ (or the finer .../specs/<subsystem>/ when given), commit, and
+ * push. Never `git add -A`, never a parent's or sibling member's tree, never
+ * source code. A clean scope publishes nothing. A member's own history is the
+ * family log filtered to its pathspec.
  */
 export function commitProject(
   cfg: HostConfig,
@@ -581,13 +580,16 @@ export function commitProject(
   if (authorize(cfg.dataDir, principal, 'project:write', 'project', project).value !== 'yes') {
     throw new AdminAuthError('Forbidden — committing a project\'s specs requires project:write over it');
   }
-  const root = existingProjectRoot(cfg.dataDir, project);
-  if (!root) throw new Error(`Unknown project "${project}".`);
-  const scope = subsystem ? `.wai/specs/${subsystem}/` : '.wai/';
+  // Step 5: the family repository and the project's own .wai/ pathspec — a
+  // member commits through its family root's repository, confined to its tree.
+  const scope = repositoryScopeOf(cfg, project);
+  // Step 6: narrow to one subsystem when given; default the message.
+  const pathspecs = subsystem ? scope.pathspecs.map((p) => `${p}specs/${subsystem}/`) : scope.pathspecs;
   const msg =
     message ??
     `wairon commit: ${project}${subsystem ? ` (${subsystem})` : ''} @ ${new Date().toISOString()}`;
-  return runWithProjectRoot(root, () => hostGit.publish(msg, scope));
+  // Step 7.
+  return runWithProjectRoot(scope.repositoryRoot, () => hostGit.publish(msg, pathspecs));
 }
 
 /** Read a project's git-backing status (remote/branch, sync setting, scoped
@@ -622,23 +624,33 @@ export function configureGitSync(
 
 /**
  * Pre-authorized sweep for the host supervisor's periodic backup timer — NO
- * authentication; never exposed on any portal. For each git-bound project whose
- * binding enables periodic sync and whose interval has elapsed, publish a
- * .wai/-scoped commit+push, skipping clean projects (skip-if-clean) so a quiet
- * project never commits noise. One project's failure never aborts the sweep.
+ * authentication; never exposed on any portal. For each git-bound FAMILY ROOT
+ * whose binding enables periodic sync and whose interval has elapsed, publish
+ * one commit+push covering the family's pathspecs (its own .wai/ and every
+ * member record's <path>/.wai/); a clean family commits nothing (the scoped
+ * commit is skip-if-clean by construction). A member record has no repository
+ * of its own and is never iterated alone. One family's failure never aborts
+ * the sweep.
  */
 export function runPeriodicGitSync(cfg: HostConfig): void {
-  for (const rec of listProjectRecords(cfg.dataDir)) {
+  // Steps 1-2: every family root record.
+  for (const rec of listProjectRecords(cfg.dataDir).filter((r) => !r.parentProjectId)) {
     try {
+      // Step 3: the family root's root and the family's pathspecs.
+      const pathspecs = familyPathspecs(cfg, rec.id);
       runWithProjectRoot(rec.rootPath, () => {
+        // Steps 4-5.
         const backing = hostGit.status();
         if (!backing.enabled || backing.periodicSyncMinutes === undefined) return;
         const due =
           backing.lastSyncAt === undefined ||
           Date.now() - Date.parse(backing.lastSyncAt) >= backing.periodicSyncMinutes * 60_000;
         if (!due) return;
-        if (backing.skipIfClean !== false && backing.dirty !== true) return;
-        hostGit.publish(`wairon periodic sync: ${rec.id} @ ${new Date().toISOString()}`);
+        // A memberless family's dirtiness is the root's .wai/ status; a family
+        // with members is judged by the scoped commit itself.
+        if (backing.skipIfClean !== false && backing.dirty !== true && pathspecs.length === 1) return;
+        // Step 6.
+        hostGit.publish(`wairon periodic sync: ${rec.id} @ ${new Date().toISOString()}`, pathspecs);
       });
     } catch (err) {
       console.error(
@@ -647,6 +659,13 @@ export function runPeriodicGitSync(cfg: HostConfig): void {
       );
     }
   }
+}
+
+/** A family's pathspecs at its root's repository: the root's .wai/ and every member record's <path>/.wai/. */
+function familyPathspecs(cfg: HostConfig, familyRootId: string): string[] {
+  const specs = listFamilyRecords(cfg.dataDir, familyRootId)
+    .flatMap((r) => projectRepositoryScope(cfg.dataDir, r.id)?.pathspecs ?? []);
+  return [...new Set(specs)];
 }
 
 // ── Producers ───────────────────────────────────────────────────────────────
@@ -712,11 +731,8 @@ export function listSecrets(_cfg: HostConfig, credential: string | null): string
 
 // ── Spec-tree transfer (.waitree) ─────────────────────────────────────────
 //
-// The hosted half of local↔hosted migration. Both are TREE-scoped like lock:
-// a `subproject` qualifier (a member chain, one alias per hop) binds that
-// MEMBER's tree, so a credential narrowed to one member exports/imports
-// exactly that member while permission resolution stays anchored at the top
-// project.
+// The hosted half of local↔hosted migration. A member is exported and
+// imported by its own record id: its own tree is bound.
 
 /**
  * Pack a hosted project's spec tree into a .waitree archive. Requires
@@ -727,7 +743,6 @@ export function exportProjectTree(
   cfg: HostConfig,
   credential: string | null,
   project: string,
-  subproject?: string,
   includeDerived?: boolean,
   allowPartial?: boolean,
 ): TreeExportResult {
@@ -735,7 +750,8 @@ export function exportProjectTree(
   if (authorize(cfg.dataDir, principal, 'project:read', 'project', project).value !== 'yes') {
     throw new AdminAuthError("Forbidden — exporting a project's spec tree requires project:read over it");
   }
-  const root = boundLifecycleRoot(cfg, project, subproject);
+  // Step 5: the project's own root — a member's own root when it is a member record.
+  const root = boundLifecycleRoot(cfg, project);
   return runWithProjectRoot(root, () => hostCore.exportSpecTree(includeDerived, allowPartial));
 }
 
@@ -751,14 +767,13 @@ export function importProjectTree(
   credential: string | null,
   project: string,
   archive: Uint8Array,
-  subproject?: string,
   replaceExisting?: boolean,
 ): TreeImportResult {
   const principal = requirePrincipal(cfg, credential);
   if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
     throw new AdminAuthError("Forbidden — importing a project's spec tree requires project:admin over it");
   }
-  const root = boundLifecycleRoot(cfg, project, subproject);
+  const root = boundLifecycleRoot(cfg, project);
   return runWithProjectRoot(root, () =>
     hostCore.importSpecTree(archive, {
       destDir: root,

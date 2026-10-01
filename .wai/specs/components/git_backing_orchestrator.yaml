@@ -6,9 +6,14 @@ description: >-
   unit, or instance-level project:admin for the instance binding and listings), and run a sync —
   mirror-export every subtree project's .wai/ tree (unit binding) or the instance-structure JSON
   collections excluding the secret store (instance binding) into the backing repo's working copy,
-  then commit+push skip-if-clean through the git backing adapter. Also exposes the pre-authorized
-  periodic sweep the host supervisor's timer drives. Writes are audited at security level
-  (bind/unbind) or info level (sync).
+  then commit+push skip-if-clean through the git backing adapter. Since stage 7 a member is a record
+  with no placement of its own (its units come through its family root), so a unit's subtree is
+  every family root placed in it PLUS every member record of those families, each mirrored as
+  projects/<its own id>/.wai/ from its own root — before stage 7 a member's .wai/ lay inside its
+  parent's tree but outside the parent's .wai/ and was never mirrored. The mirror working copy is
+  wairon's alone, which is why its commit may stage it wholesale; no project's repository is ever
+  staged that way. Also exposes the pre-authorized periodic sweep the host supervisor's timer
+  drives. Writes are audited at security level (bind/unbind) or info level (sync).
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -24,4 +29,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-16T15:38:36.519Z'
-updatedAt: '2026-08-11T17:06:08.352Z'
+updatedAt: '2026-10-01T16:59:37.278Z'

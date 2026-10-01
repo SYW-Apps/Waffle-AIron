@@ -10,8 +10,11 @@ methods:
   - name: list
     description: >-
       Resolve the session to a Principal, resolve the caller's project scope over the organization
-      tree, and return the hosted project records within that scope (a super-admin sees all). A
-      read; not audited.
+      tree and the project chain, and return the hosted project records within that scope (a
+      super-admin sees all). Member records are projects like any other: a member is listed when the
+      caller may read it through its own chain — which a read on its parent grants by inheritance,
+      unless an explicit no on the member's own record removes it; each keeps parentProjectId (the
+      crumb) and memberPath. A read; not audited.
     signature: 'list(sessionId: string): HostedProjectRecord[]'
     returns: HostedProjectRecord[]
     params:
@@ -71,4 +74,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-09-29T16:16:13.660Z'
+updatedAt: '2026-10-01T16:59:50.260Z'

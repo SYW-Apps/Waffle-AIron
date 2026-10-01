@@ -1,6 +1,6 @@
 import * as path from 'path';
-import { getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import type { ExternalBinding, ProjectFamily, ProjectNode } from '../models/index.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
+import type { ExternalBinding, ProjectFamily, ProjectNode, ResolvedExternal } from '../models/index.js';
 // core_orchestrator.resolveChainingParent (the reach-gated detection) and the
 // spec repository's graph and export usage, all on the one core module.
 import { exportUsage, graph, resolveChainingParent } from './specs.js';
@@ -18,7 +18,31 @@ import { exportUsage, graph, resolveChainingParent } from './specs.js';
 // mapped onto that producer's public names. Every binding is scoped with
 // runWithProjectRoot, so the caller's binding is restored on every path. It
 // holds no state: the graph belongs to the spec repository.
+//
+// A source.hosted external (stage 7) names a producer by its hosted record id,
+// in another isolated root no path reaches: it is resolved through the
+// request binding's hosted record lookup, which answers only a record the
+// request may read. Outside a hosted server there is no lookup, and the
+// external is unavailable — never a pass: the consumer's own gate still judges
+// it against its pin.
 // ---------------------------------------------------------------------------
+
+/** The reason a source.hosted external cannot be read outside a hosted server. */
+export function hostedOnlyProducer(id: string): string {
+  return `hosted-only producer \`${id}\`: available only through the hosted server`;
+}
+
+/** Step 10: a source.hosted external bound to the root the hosting server's record lookup answers, or unresolved. */
+function resolveHosted(external: ResolvedExternal): ResolvedExternal {
+  if (external.sourceKind !== 'hosted' || external.hosted === undefined) return external;
+  const lookup = getHostedLookup();
+  const unresolved = (problem: string): ResolvedExternal => ({ ...external, sourceKind: 'unresolved', problem });
+  if (!lookup) return unresolved(hostedOnlyProducer(external.hosted));
+  const root = lookup(external.hosted);
+  return root === null
+    ? unresolved(`the hosted producer \`${external.hosted}\` is unknown or outside this request's reach`)
+    : { ...external, directory: path.resolve(root) };
+}
 
 /** A directory as a comparable key: resolved, and case-folded where the filesystem folds case. */
 function dirKey(dir: string): string {
@@ -60,13 +84,17 @@ export function resolveDeclared(): ExternalBinding[] {
     const family = graph();
     const node = consumerNode(family, bound);
     if (!node) return null;
-    return node.externals.map((external): ExternalBinding => ({
-      external,
-      ...(external.sourceKind === 'family' && external.producer !== undefined
-        ? { usage: exportUsage(node.namespace, external.producer) }
-        : {}),
-      reachable: whole,
-    }));
+    return node.externals.map((declared): ExternalBinding => {
+      // Step 10: a hosted producer through the record lookup.
+      const external = resolveHosted(declared);
+      return {
+        external,
+        ...(external.sourceKind === 'family' && external.producer !== undefined
+          ? { usage: exportUsage(node.namespace, external.producer) }
+          : {}),
+        reachable: whole,
+      };
+    });
   });
   return answer(top) ?? answer(bound) ?? [];
 }

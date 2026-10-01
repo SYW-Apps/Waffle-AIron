@@ -24,8 +24,9 @@ fields:
   - name: path
     type: string
     description: >-
-      attach: the existing project's root; externalize: the new member's root — relative to the
-      bound project.
+      attach: the existing project's root; externalize: the new member's root; adopt with a
+      relocation (hosted): the member path to adopt it at, since a source.hosted external names no
+      directory — relative to the bound project.
     optional: true
   - name: project
     type: string
@@ -67,7 +68,14 @@ fields:
       the member exports only to the family, instead of refusing audience-too-narrow — each widening
       shown in the plan and confirmed with it.
     optional: true
+  - name: relocation
+    type: MemberRelocation
+    description: >-
+      detach and adopt on a hosted instance: move the project between its family's tree and an
+      isolated root of its own in the same transaction — detach writes hosted sources instead of
+      path sources, adopt removes them. Absent everywhere else.
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:03.011Z'
-updatedAt: '2026-10-01T05:54:08.815Z'
+updatedAt: '2026-10-01T18:07:23.007Z'

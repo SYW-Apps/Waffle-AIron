@@ -1,0 +1,41 @@
+kind: value-object
+id: member_relocation
+name: MemberRelocation
+description: >-
+  How a detach or an adopt also MOVES the project, as the hosted server asks for it, inside the same
+  transaction as the verb's file edits and the host store writes, all or nothing. Detach: the
+  member's directory leaves its family root's isolated tree for an isolated root of its own (to).
+  Adopt, its exact inverse: a top-level project named by an external's source.hosted leaves its own
+  isolated root (from) for the member path inside the adopting project's tree (to). The coordinator
+  is the host data directory, which contains every family root and every isolated root, so every
+  owner lies within it. With a relocation, detach writes hosted sources instead of path sources (a
+  path cannot cross isolated roots) and adopt removes them; a hosted project's record id is its
+  project id (member records are keyed by it, and the hosted caller refuses a family whose root
+  record id differs from its project id).
+subsystem: sdd_migrations
+fields:
+  - name: to
+    type: string
+    description: >-
+      Where the project's files go, absolute: detach — the member's new isolated root (where a new
+      hosted project with its id would be allocated); adopt — the member path inside the adopting
+      project's tree. Must not exist, or be an empty directory
+    optional: false
+  - name: coordinator
+    type: string
+    description: The host data directory, absolute — the transaction's coordinator and an owner itself
+    optional: false
+  - name: areas
+    type: string[]
+    description: The host store files the coordinator owner contributes (project records, organization)
+    optional: false
+  - name: from
+    type: string
+    description: >-
+      adopt: the adopted project's current isolated root, absolute (the root the hosting binding's
+      record lookup answers for its source.hosted id). Absent for detach, whose source is the
+      member's own directory
+    optional: true
+methods: []
+createdAt: '2026-10-01T17:03:04.052Z'
+updatedAt: '2026-10-01T19:52:10.432Z'

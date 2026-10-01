@@ -246,7 +246,7 @@ rules:
             at: 'runDoctor'
             covers:
               - '26:cli_mcp_adapter.installMcpServer'
-      # 75 finding(s), 101 unit(s).
+      # 62 finding(s), 82 unit(s).
       - kind: drift
         why: >-
           A narrative does not declare a call the code makes across a component boundary that
@@ -266,39 +266,6 @@ rules:
             at: 'computeStateIdAt'
             covers:
               - 'spec_loader.loadSystemSpec'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: credential_repository_impl
-            at: 'create'
-            covers:
-              - 'credential_store.read'
-              - 'credential_store.write'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: credential_repository_impl
-            at: 'findByToken'
-            covers:
-              - 'credential_store.read'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: credential_repository_impl
-            at: 'list'
-            covers:
-              - 'credential_store.read'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: credential_repository_impl
-            at: 'listByOwner'
-            covers:
-              - 'credential_store.read'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: credential_repository_impl
-            at: 'revoke'
-            covers:
-              - 'credential_store.read'
-              - 'credential_store.write'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: credential_repository_impl
-            at: 'revokeAllForOwner'
-            covers:
-              - 'credential_store.read'
-              - 'credential_store.write'
           - code: UNDECLARED_COLOCATED_CALL
             spec: extension_orchestrator_impl
             at: 'diagnoseProjectPacks'
@@ -426,11 +393,6 @@ rules:
               - 'permission_store.replaceAll'
           - code: UNDECLARED_COLOCATED_CALL
             spec: project_index_impl
-            at: 'resolveBinding'
-            covers:
-              - 'project_store.read'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: project_index_impl
             at: 'resolveRoot'
             covers:
               - 'project_repository.resolveBinding'
@@ -492,28 +454,6 @@ rules:
             covers:
               - 'policy_store.replaceActive'
               - 'project_policy_orchestrator.appendAuditBestEffort'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: project_repository_impl
-            at: 'create'
-            covers:
-              - 'project_store.read'
-              - 'project_store.write'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: project_repository_impl
-            at: 'list'
-            covers:
-              - 'project_store.read'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: project_repository_impl
-            at: 'remove'
-            covers:
-              - 'project_store.read'
-              - 'project_store.write'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: project_repository_impl
-            at: 'resolveBinding'
-            covers:
-              - 'project_store.read'
           - code: UNDECLARED_COLOCATED_CALL
             spec: role_repository_impl
             at: 'create'
@@ -645,17 +585,6 @@ rules:
             at: 'resolve'
             covers:
               - 'secret_store.read'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: project_repository_impl
-            at: 'existingRoot'
-            covers:
-              - 'project_store.read'
-          - code: UNDECLARED_COLOCATED_CALL
-            spec: project_repository_impl
-            at: 'register'
-            covers:
-              - 'project_store.read'
-              - 'project_store.write'
       # 1 finding(s), 2 unit(s).
       - kind: undecided
         why: >-
@@ -779,7 +708,7 @@ rules:
             at: 'hydrateFromFiles'
             covers:
               - '3:surface_store.put'
-      # 26 finding(s), 48 unit(s).
+      # 26 finding(s), 46 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of export-conformance, after the 90 realization handles that
@@ -913,8 +842,6 @@ rules:
               - 'SUBPROJECT_SEPARATOR'
               - 'assertMintableNarrowingEntry'
               - 'isValidProjectId'
-              - 'parseQualifiedSelector'
-              - 'resolveSubprojectMounts'
           - code: UNDECLARED_EXPORT
             spec: role_index_impl
             at: 'src/server/roles.ts'
@@ -1214,7 +1141,7 @@ rules:
             at: 'WebSession'
             covers:
               - 'projects'
-      # 184 finding(s), 209 unit(s).
+      # 174 finding(s), 197 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of param-conformance on the signatures the contracts describe in
@@ -1425,13 +1352,11 @@ rules:
             at: 'auditToolCall'
             covers:
               - 'outcome'
-              - 'subproject'
           - code: UNDECLARED_PARAM
             spec: host_request_orchestrator_impl
             at: 'dispatchProjectLifecycleTool'
             covers:
               - 'body'
-              - 'subproject'
           - code: UNDECLARED_PARAM
             spec: host_request_orchestrator_impl
             at: 'handle'
@@ -1796,56 +1721,6 @@ rules:
             at: 'updateRole'
             covers:
               - 'role'
-          - code: UNDECLARED_PARAM
-            spec: project_lifecycle_orchestrator_impl
-            at: 'awaitApproval'
-            covers:
-              - 'timeoutSeconds'
-          - code: UNDECLARED_PARAM
-            spec: project_lifecycle_orchestrator_impl
-            at: 'decideRequest'
-            covers:
-              - 'decision'
-          - code: UNDECLARED_PARAM
-            spec: project_lifecycle_orchestrator_impl
-            at: 'executeApprovedRequest'
-            covers:
-              - 'requestId'
-          - code: UNDECLARED_PARAM
-            spec: project_lifecycle_orchestrator_impl
-            at: 'getApprovalStatus'
-            covers:
-              - 'requestId'
-          - code: UNDECLARED_PARAM
-            spec: project_lifecycle_orchestrator_impl
-            at: 'initializeProject'
-            covers:
-              - 'request'
-          - code: PARAM_OPTIONALITY
-            spec: project_lifecycle_orchestrator_impl
-            at: 'listPendingRequests'
-            covers:
-              - 'projectId'
-          - code: UNDECLARED_PARAM
-            spec: project_lifecycle_orchestrator_impl
-            at: 'listPendingRequests'
-            covers:
-              - 'projectId'
-          - code: PARAM_NAME_MISMATCH
-            spec: project_lifecycle_orchestrator_impl
-            at: 'lockProject'
-            covers:
-              - 'subproject'
-          - code: PARAM_OPTIONALITY
-            spec: project_lifecycle_orchestrator_impl
-            at: 'lockProject'
-            covers:
-              - 'subproject'
-          - code: UNDECLARED_PARAM
-            spec: project_lifecycle_orchestrator_impl
-            at: 'lockProject'
-            covers:
-              - 'subproject'
           - code: PARAM_NAME_MISMATCH
             spec: project_ops_orchestrator_impl
             at: 'setExposurePolicy'

@@ -88,7 +88,7 @@ describe('data-plane audit helpers (steps 12–17)', () => {
   // ── append behavior ────────────────────────────────────────────────────────
 
   it('appends exactly one mcp.tool.call event for a successful non-read tool call', () => {
-    auditToolCall(dataDir, withSubject, 'demo', call('sdd_add_component'), 'success');
+    auditToolCall(dataDir, withSubject, { projectId: 'demo' }, call('sdd_add_component'), 'success');
 
     const events = queryAuditEvents(dataDir, {});
     expect(events).toHaveLength(1);
@@ -106,16 +106,16 @@ describe('data-plane audit helpers (steps 12–17)', () => {
   });
 
   it('appends nothing for a successful read-only call under the default policy', () => {
-    auditToolCall(dataDir, withSubject, 'demo', call('sdd_get_status'), 'success');
+    auditToolCall(dataDir, withSubject, { projectId: 'demo' }, call('sdd_get_status'), 'success');
     expect(countAuditEvents(dataDir, {})).toBe(0);
     // The default (secure) policy never even touches disk for an excluded read.
     expect(fs.existsSync(path.join(dataDir, 'audit-events.json'))).toBe(false);
   });
 
   it("records outcome 'failed' for a failing tool call (a failed read is still captured)", () => {
-    auditToolCall(dataDir, withSubject, 'demo', call('sdd_validate_tree'), 'failed');
+    auditToolCall(dataDir, withSubject, { projectId: 'demo' }, call('sdd_validate_tree'), 'failed');
     // Reads are only excludable when they SUCCEED, so a failed read is captured.
-    auditToolCall(dataDir, withSubject, 'demo', call('sdd_get_status'), 'failed');
+    auditToolCall(dataDir, withSubject, { projectId: 'demo' }, call('sdd_get_status'), 'failed');
 
     const events = queryAuditEvents(dataDir, {});
     expect(events).toHaveLength(2);
@@ -124,7 +124,7 @@ describe('data-plane audit helpers (steps 12–17)', () => {
   });
 
   it('synthesizes a service actor for a legacy principal without a subject', () => {
-    auditToolCall(dataDir, legacy, 'demo', call('sdd_add_subsystem'), 'success');
+    auditToolCall(dataDir, legacy, { projectId: 'demo' }, call('sdd_add_subsystem'), 'success');
     const [e] = queryAuditEvents(dataDir, {});
     expect(e.actor).toEqual({ userId: 'token:tok-legacy', kind: 'service', issuer: 'local' });
     expect(e.tokenId).toBe('tok-legacy');
@@ -137,7 +137,7 @@ describe('data-plane audit helpers (steps 12–17)', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(() =>
-      auditToolCall(dataDir, withSubject, 'demo', call('sdd_add_component'), 'success'),
+      auditToolCall(dataDir, withSubject, { projectId: 'demo' }, call('sdd_add_component'), 'success'),
     ).not.toThrow();
     expect(spy).toHaveBeenCalledOnce();
 

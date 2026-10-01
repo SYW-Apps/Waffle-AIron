@@ -345,9 +345,10 @@ methods:
   - name: mintToken
     description: >-
       Mint an owner-bound API token acting as its owner's live permission, narrowed to the named
-      projects (instance admin); shown once.
-    signature: 'mintToken(credential: string | null, request: TokenMintRequest): string'
-    returns: string
+      projects (instance admin); shown once, with each deprecated member-qualified entry and the
+      member record id it was stored as.
+    signature: 'mintToken(credential: string | null, request: TokenMintRequest): MintedToken'
+    returns: MintedToken
     params:
       - name: credential
         type: string | null
@@ -421,6 +422,17 @@ methods:
         type: string
       - name: name
         type: string
+  - name: upgradeMembers
+    description: >-
+      Plan, and with apply commit, the stage-7 member upgrade of the data dir (`wairon host doctor
+      [--fix]`, after the permission-model migration): every hosted family's members registered as
+      records, member-qualified key entries rewritten to record ids, nobody's reach changed; a dry
+      run writes nothing.
+    signature: 'upgradeMembers(apply: boolean): MemberUpgradeReport'
+    returns: MemberUpgradeReport
+    params:
+      - name: apply
+        type: boolean
 status: complete
 createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-09-29T16:16:57.818Z'
+updatedAt: '2026-10-01T18:07:05.246Z'

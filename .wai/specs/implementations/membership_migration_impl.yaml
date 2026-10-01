@@ -66,7 +66,8 @@ methods:
       - stepNumber: 1
         description: >-
           Find the member under the alias in the bound node: none is not-a-member; its directory
-          absent is member-absent
+          absent is member-absent; with a relocation (hosted), a relocation target that already
+          exists and is not an empty directory is relocation-target-exists
         type: local
       - stepNumber: 2
         description: Is there a member to detach?
@@ -108,10 +109,12 @@ methods:
           widened to the instance audience, shown as `widen <name> <audience>→instance (used by …)`
           — only those used names, never another; then in the bound project, the member removed and
           an external declared under the same alias (`project` its id when that differs from the
-          alias, `source.path` its path, its `use` and description), then pinned; in each collected
-          consumer, its external's `source.path` to the member relative to that consumer; in the
-          member, each collected external's `source.path` relative to it. No reference is respelled:
-          the alias is unchanged
+          alias, its source, its `use` and description), then pinned; in each collected consumer,
+          its external's source to the member; in the member, each collected external's source. The
+          source is `source.path` relative to the declaring project locally, and `source.hosted`
+          (the producer's id, which is its hosted record id) with a relocation — then the member's
+          move to the relocation target is planned too, made after its edits and before the pin. No
+          reference is respelled: the alias is unchanged
         type: local
       - stepNumber: 8
         description: Answer the plan
@@ -126,15 +129,21 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 2
         description: >-
-          Resolve the external's source path from the bound project's directory under the
-          containment guard, lexically and through links, through the family file adapter
+          Resolve where the adoptee lives: locally, the external's source path from the bound
+          project's directory under the containment guard, lexically and through links, through the
+          family file adapter; with a relocation (hosted), the external must name a source.hosted
+          record, the adoptee is read at relocation.from, and request.path is resolved the same way
+          as the member path it moves to
         type: call
         targetComponent: family_file_adapter
         targetMethod: resolve
       - stepNumber: 3
         description: >-
-          Judge the external: none is not-an-external; no source path, or one not strictly within
-          the bound project, is not-contained; a family node already at the directory is
+          Judge the external: none is not-an-external; locally no source path, or one not strictly
+          within the bound project, is not-contained; with a relocation, no source.hosted is
+          not-contained, and a member path that is not strictly within the bound project, or does
+          not equal relocation.to, is not-contained, and a target that already exists and is not an
+          empty directory is relocation-target-exists; a family node already at the directory is
           already-member
         type: local
       - stepNumber: 4
@@ -162,11 +171,13 @@ methods:
       - stepNumber: 8
         description: >-
           Plan the edits: in the bound project, the external's pin removed, the external removed and
-          a member declared under the same alias with its path, `use` and description; in every
-          other family project, an external source path that resolves to the adoptee removed; in the
-          adoptee, each external source path that resolves to a family project removed. A source
-          path that was already redundant before a detach is named as a note: adopt removes it too,
-          so detach-then-adopt is exact only without one
+          a member declared under the same alias with its path (relocated: request.path), `use` and
+          description; in every other family project, an external source (`source.path`, or
+          `source.hosted` naming the adoptee) that resolves to the adoptee removed; in the adoptee,
+          each external source that resolves to a family project removed. With a relocation the
+          adoptee's move from relocation.from to relocation.to is planned too, made last. A source
+          that was already redundant before a detach is named as a note: adopt removes it too, so
+          detach-then-adopt is exact only without one
         type: local
       - stepNumber: 9
         description: Answer the plan
@@ -187,7 +198,7 @@ methods:
           - value: detach
             step: 6
           - value: adopt
-            step: 12
+            step: 13
       - stepNumber: 3
         label: attach
         description: Bind the attached project's rehearsal root and declare its id when the plan says so
@@ -202,7 +213,7 @@ methods:
       - stepNumber: 5
         description: Attach written
         type: jump
-        toStep: 16
+        toStep: 18
       - stepNumber: 6
         description: >-
           Bind the member's rehearsal root and widen each planned export of its L0 to the instance
@@ -231,42 +242,57 @@ methods:
         targetMethod: repointExternal
       - stepNumber: 10
         description: >-
+          With a relocation (hosted), move the member's rehearsal image — every file under its
+          directory, its own members included — to the relocation target's image, after every edit
+          of the member and before the pin reads it
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: move
+      - stepNumber: 11
+        description: >-
           Last, bind the bound project's rehearsal root again and pin the new external, reading the
           member's final state
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
-      - stepNumber: 11
+      - stepNumber: 12
         description: Detach written
         type: jump
-        toStep: 16
-      - stepNumber: 12
+        toStep: 18
+      - stepNumber: 13
         label: adopt
         description: Bind the bound project's rehearsal root and remove the external's pin
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: unpin
-      - stepNumber: 13
+      - stepNumber: 14
         description: Remove the external
         type: call
         targetComponent: migration_core_adapter
         targetMethod: removeExternal
-      - stepNumber: 14
+      - stepNumber: 15
         description: Declare the member under the same alias with the external's path, `use` and description
         type: call
         targetComponent: migration_core_adapter
         targetMethod: declareMember
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           For each planned consumer and for the adoptee, bind its rehearsal root and remove each
           planned redundant source path
         type: call
         targetComponent: migration_core_adapter
         targetMethod: repointExternal
-      - stepNumber: 16
+      - stepNumber: 17
+        description: >-
+          With a relocation (hosted), last, move the adoptee's rehearsal image from its isolated
+          root to the member path's image, after every edit of it
+        type: call
+        targetComponent: family_file_adapter
+        targetMethod: move
+      - stepNumber: 18
         label: restore
         description: Restore the caller's binding
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:06.370Z'
-updatedAt: '2026-10-01T05:53:50.526Z'
+updatedAt: '2026-10-01T19:52:09.236Z'

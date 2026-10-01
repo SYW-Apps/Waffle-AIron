@@ -346,6 +346,13 @@ without `::` is local.
 | `wairon member attach <alias> <path> [--description <text>]` | Make the **existing** project at `<path>` a member, keeping its L0, subsystems, packs and lock; its id is declared when it only defaulted one (the id its lock approved, else its effective id). Refused when its id collides with a family project's |
 | `wairon member detach <alias> [--widen]` | Take a member out of the family: this project and every family consumer reach it as an external by `source.path`, this project's pinned. Refused (`audience-too-narrow`, each export named with its users) while a family project uses a name the member exports only to the family; `--widen` instead widens exactly those used exports to `instance` in the member's L0, each shown in the plan |
 | `wairon member adopt <alias>` | Make this project's external found by a path inside it a member again — detach's inverse |
+
+On a hosted instance a member is a project record of its own and inherits access
+from its parent; `sdd_detach_member` there also **moves** the member to an
+isolated root of its own (writing `source: { hosted: <id> }` for its consumers,
+since no path crosses isolated roots) and `sdd_adopt_member` with `path` moves it
+back. A `source.hosted` external outside a hosted server is reported as
+"hosted-only producer `<id>`: available only through the hosted server".
 | `wairon member rename-alias <old> <new>` | Rename one alias of this project (a member or an external) and respell this project's references through it; no member or sibling changes |
 | `wairon member internalize <alias> [--into <subsystem>] [--packs adopt\|drop] [--export <name>…]` | Fold a member — every subsystem of it — into this project. Its own metadata goes to a home: its L0 vision onto the `--into` subsystem, its boundaries, requirements and databases into this L0, its language, profile and depth onto the moved subsystems, its members and externals into this configuration, its packs adopted or dropped; what has no home (its lock, pins, derived outputs) is deleted and listed. Every family project that consumed it is re-pointed here |
 | `wairon project rename <new-id> [--project <alias path>]` | Move a project's id — this project's, or a member's named by its alias path — and every reference to the old id family-wide; the old id is kept in `previousIds`. Lists every project it writes to re-lock |
@@ -458,7 +465,8 @@ Runs **in-process** (no running server needed), so it works over SSH /
 | `wairon host project create --id <id>` | Provision a new isolated project (its own `.wai/` tree) |
 | `wairon host project list` | List hosted projects |
 | `wairon host project destroy --id <id>` | Remove a project and its tree |
-| `wairon host key mint --project <id\|*> [--role editor\|admin]` | Mint an API key (plaintext shown once) |
+| `wairon host key mint --project <id\|*> [--owner <userId>] [--role editor\|admin]` | Mint an API key (plaintext shown once). A token naming a project covers its members; a deprecated member-qualified `--project platform::billing` is stored as the member's record id, and the command says what it mapped |
+| `wairon host doctor [--fix]` | Inspect the data dir and, with `--fix`, migrate it: roll back a transaction a crash left unfinished there, apply the permission-model migration, then register every hosted family's members as records of their own (no grant written — access is inherited through the parent chain — and every member-qualified key entry rewritten to a record id), all or nothing, audited |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
 | `wairon host lock --project <id>` | The same lock flow as `wairon lock` (design gate, `members`, `code` beside the claim, format 2) against the hosted project |

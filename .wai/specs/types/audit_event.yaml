@@ -45,7 +45,9 @@ fields:
     optional: true
   - name: projectId
     type: string
-    description: Hosted project affected by the action, when project-scoped.
+    description: >-
+      Hosted project affected by the action, when project-scoped — the member's own record id when a
+      member was acted on, never its parent's.
     optional: true
   - name: requestId
     type: string
@@ -61,7 +63,15 @@ fields:
       Small redacted diagnostic payload serialized by policy; must not contain secrets or full spec
       bodies.
     optional: true
+  - name: composition
+    type: string
+    description: >-
+      The project whose operation reached this one, when the action did not bind it directly: the
+      project a family migration or family run was started at, or the family root a deprecated
+      member-qualified selector named. Absent when the request bound the project itself. With
+      projectId it answers both who owns the change and where it was initiated.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:52.040Z'
-updatedAt: '2026-09-19T11:07:05.419Z'
+updatedAt: '2026-10-01T16:27:54.532Z'

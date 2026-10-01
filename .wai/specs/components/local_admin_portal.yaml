@@ -31,7 +31,8 @@ dependsOn:
   - permission_model_migration
   - project_repository
   - host_server
+  - member_registration
 portalType: Custom
 status: complete
 createdAt: '2026-09-25T22:39:10.822Z'
-updatedAt: '2026-09-25T23:00:19.065Z'
+updatedAt: '2026-10-01T16:34:46.034Z'

@@ -58,6 +58,9 @@ export interface CanvasModel {
     /** A member project's node (stage 3): its id is the member's key, its name the
      *  alias its parent declares it under; the member's specs hang under it. */
     project?: boolean;
+    /** Hosted (stage 7): a member project node's record id, present only when the
+     *  caller may read that record — the web app links the node to its page. */
+    recordId?: string;
     /** Opt-in deep expansion: with Internals on, this subsystem's box renders
      *  its WHOLE subtree (nested boundary boxes + leaf tiles + direct relation
      *  lines) instead of one layer. Never set by buildCanvasModel — the hosted

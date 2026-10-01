@@ -27,6 +27,29 @@ export interface MigrationRequest {
   widen?: boolean;
   /** false: plan without rehearsing (doctor's summary). Absent or true: a full plan. */
   rehearse?: boolean;
+  /**
+   * detach and adopt on a hosted instance: move the project between its
+   * family's tree and an isolated root of its own in the same transaction.
+   * Absent everywhere else.
+   */
+  relocation?: MemberRelocation;
+}
+
+/**
+ * member_relocation — how a hosted detach or adopt also MOVES the project,
+ * inside the same transaction as the verb's edits and the host store writes.
+ * The coordinator (the host data directory) contains every family root and
+ * every isolated root, so every owner lies within it.
+ */
+export interface MemberRelocation {
+  /** Where the project's files go, absolute: detach — its new isolated root; adopt — the member path. Must not exist. */
+  to: string;
+  /** The host data directory, absolute: the transaction's coordinator and an owner itself. */
+  coordinator: string;
+  /** The host store files the coordinator owner contributes, relative to it. */
+  areas: string[];
+  /** adopt: the adopted project's current isolated root, absolute. Absent for detach. */
+  from?: string;
 }
 
 /** planned_edit — one semantic change a migration makes in one owner project. */
@@ -67,7 +90,7 @@ export interface MigrationRefusal {
 export interface FileChange {
   /** The owner project's root directory, absolute. */
   project: string;
-  /** The file, relative to the owner's root, forward slashes (always under .wai/). */
+  /** The file, relative to the owner's root, forward slashes (under .wai/, or anywhere in a whole owner). */
   path: string;
   /** write | create | delete */
   action: 'write' | 'create' | 'delete';
@@ -81,6 +104,18 @@ export interface FileChange {
 export interface TransactionScope {
   familyRoot: string;
   projects: string[];
+  /**
+   * Paths relative to each owner root to copy, compare and swap, forward
+   * slashes; absent means ['.wai'] (every family migration). A file named here
+   * that does not exist is a create when the rehearsal writes it.
+   */
+  areas?: string[];
+  /**
+   * Owner roots copied, compared and swapped IN FULL (every file under them,
+   * .wai/transactions/ excluded): a relocated project's old directory, whose
+   * files leave as deletes, and its new root, whose files arrive as creates.
+   */
+  whole?: string[];
 }
 
 /** rehearsal — a private copy of a family's .wai trees. */
@@ -92,6 +127,10 @@ export interface Rehearsal {
   roots: Map<string, string>;
   /** Each copied live file (absolute) → sha256 of its bytes when copied. */
   baseDigests: Map<string, string>;
+  /** The scope's areas, when it named any: only these are compared. */
+  areas?: string[];
+  /** The scope's owners copied whole: every file under them is compared. */
+  whole?: string[];
 }
 
 /** The phases a journal passes through. */

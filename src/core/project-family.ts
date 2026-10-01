@@ -137,6 +137,8 @@ function bindExternals(node: ProjectNode, root: ScannedProjectRoot, nodes: Proje
   return declaredExternals(root.config).map((decl): ResolvedExternal => {
     const unresolved = (problem: string): ResolvedExternal => ({ alias: decl.alias, project: decl.project, sourceKind: 'unresolved', audience: 'instance', problem });
     if (decl.problem) return unresolved(decl.problem);
+    // A hosted record id is resolved by external_producers through the hosting server's record lookup.
+    if (decl.sourceHosted !== undefined) return { alias: decl.alias, project: decl.project, sourceKind: 'hosted', hosted: decl.sourceHosted, audience: 'instance' };
     if (decl.sourcePath !== undefined) {
       const directory = path.resolve(node.directory, decl.sourcePath);
       const found = nodes.find((n) => dirKey(n.directory) === dirKey(directory));

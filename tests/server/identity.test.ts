@@ -13,7 +13,7 @@ import {
   revokeAllForOwner,
 } from '../../src/server/credentials.js';
 import { createWebSession, getWebSessionById } from '../../src/server/websessions.js';
-import { createProjectRecord } from '../../src/server/projects.js';
+import { createProjectRecord, registerMemberRecord } from '../../src/server/projects.js';
 import { upsertUser as repoUpsertUser } from '../../src/server/users.js';
 import { createUnit, placeProject } from '../../src/server/organization.js';
 import { mintUserToken, allow, seedSubsystem, seedChainedMount } from './helpers.js';
@@ -146,7 +146,10 @@ describe('identity orchestrator (sdd_host)', () => {
   it('mints a token as instance-admin: returns plaintext, persists a hashed narrowing-only record, and audits token.mint', () => {
     createProjectRecord(dataDir, 'proj-a');
 
-    const token = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'ci token', projects: ['proj-a'] });
+    const minted = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'ci token', projects: ['proj-a'] });
+    const token = minted.token;
+    // Nothing was mapped: every entry was stored as asked.
+    expect(minted.mapped).toEqual([]);
 
     expect(token).toMatch(/^wk_[0-9a-f]+$/);
     const rec = persistedByHash(hashToken(token));
@@ -227,30 +230,43 @@ describe('identity orchestrator (sdd_host)', () => {
     }
   });
 
-  // ── subproject-qualified narrowing (validated at MINT time) ────────────────
+  // ── member-qualified narrowing (deprecated; mapped at MINT time) ──────────
   //
-  // A narrowing entry / mintSelfToken projectId MAY be subproject-qualified
-  // ('projectId::subsystemId', nested mounts composing): the named subsystem
-  // must exist on that project and carry a projectPath, validated at MINT time
-  // so a broken mount is never stored; permission keeps resolving over the TOP
-  // project (the qualifier narrows reach, never grants).
+  // Since stage 7 a member is a hosted record named by its own id. A
+  // member-qualified entry ('projectId::alias', nested members one alias per
+  // hop) is accepted for one release and STORED as the member's record id; an
+  // alias that declares no member, an internal subsystem, or a member no record
+  // holds is rejected with guidance, never stored broken.
 
-  describe('subproject-qualified narrowing', () => {
+  describe('member-qualified narrowing (deprecated)', () => {
     beforeEach(() => {
       const projRoot = createProjectRecord(dataDir, 'proj-a').rootPath;
       const billingDir = seedChainedMount(projRoot, 'billing', 'packages/billing');
       seedChainedMount(billingDir, 'payments', 'sub/payments'); // nested chain
       seedSubsystem(projRoot, 'plain'); // exists, but NOT chained (no projectPath)
+      // The stage-7 records of the two members.
+      registerMemberRecord(dataDir, { id: 'billing', rootPath: '', status: 'active', createdAt: '', parentProjectId: 'proj-a', memberPath: 'packages/billing' });
+      registerMemberRecord(dataDir, { id: 'payments', rootPath: '', status: 'active', createdAt: '', parentProjectId: 'billing', memberPath: 'sub/payments' });
     });
 
-    it('mintToken accepts valid qualified entries (nested included) and stores them verbatim', () => {
-      const token = identity.mintToken(cfg, MASTER, {
+    it('mintToken accepts qualified entries (nested included) and stores the members\' record ids', () => {
+      const minted = identity.mintToken(cfg, MASTER, {
         ownerUserId: 'u-owner',
         label: 'sub token',
         projects: ['proj-a::billing', 'proj-a::billing::payments'],
       });
-      const rec = persistedByHash(hashToken(token));
-      expect(rec!.projects).toEqual(['proj-a::billing', 'proj-a::billing::payments']);
+      const rec = persistedByHash(hashToken(minted.token));
+      expect(rec!.projects).toEqual(['billing', 'payments']);
+      // The caller is told what each deprecated qualified entry was stored as.
+      expect(minted.mapped).toEqual(['proj-a::billing -> billing', 'proj-a::billing::payments -> payments']);
+    });
+
+    it('mintToken rejects a qualified entry whose member holds no record yet, pointing at host doctor', () => {
+      const projRoot = createProjectRecord(dataDir, 'proj-b').rootPath;
+      seedChainedMount(projRoot, 'ledger', 'packages/ledger');
+      expect(() =>
+        identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-b::ledger'] }),
+      ).toThrow(/holds no hosted record yet.*host doctor --fix/);
     });
 
     it('mintToken rejects an UNKNOWN mount with an actionable error — never stored broken', () => {
@@ -267,14 +283,13 @@ describe('identity orchestrator (sdd_host)', () => {
       ).toThrow(/an internal subsystem is not a member/);
     });
 
-    it('mintSelfToken mints a qualified token: permission anchors on the TOP project, entry stored verbatim', () => {
-      // The caller holds read over the TOP project only — that is what the
-      // qualifier narrows, so the mint is authorized.
+    it('mintSelfToken maps a qualified id to the member record; the parent grant reaches it by inheritance', () => {
+      // The caller holds read over the PARENT only — inherited by the member.
       const caller = tokenWith('project:read', 'project', 'proj-a');
       const token = identity.mintSelfToken(cfg, caller, 'proj-a::billing', false);
       const rec = persistedByHash(hashToken(token));
-      expect(rec!.projects).toEqual(['proj-a::billing']);
-      expect(rec!.label).toContain('proj-a::billing');
+      expect(rec!.projects).toEqual(['billing']);
+      expect(rec!.label).toContain('billing');
       expect(auditQuery(dataDir, { action: 'token.mint.self' })).toHaveLength(1);
     });
 
@@ -288,7 +303,7 @@ describe('identity orchestrator (sdd_host)', () => {
       );
     });
 
-    it('mintSelfToken authorization anchors on the TOP project: no proj-a read → 403 even for a valid mount', () => {
+    it('mintSelfToken authorization resolves over the member chain: no read anywhere on it → 403', () => {
       const caller = plainToken(); // owner with NO assignments at all
       expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::billing', false)).toThrow(ForbiddenError);
     });
@@ -588,7 +603,7 @@ describe('identity orchestrator (sdd_host)', () => {
     ).toThrow(/instance admin/i);
 
     // MASTER mints; the owner's authority resolves live from THEIR assignments.
-    expect(identity.mintToken(cfg, MASTER, { ownerUserId: 'u-o', label: 't', projects: ['p-web'] })).toMatch(/^wk_/);
+    expect(identity.mintToken(cfg, MASTER, { ownerUserId: 'u-o', label: 't', projects: ['p-web'] }).token).toMatch(/^wk_/);
   });
 
   // ── pruneAuditEvents ─────────────────────────────────────────────────────────

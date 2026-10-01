@@ -1,0 +1,236 @@
+id: imember_registration
+name: Member Registration Interface
+description: >-
+  Register hosted families' members as hosted project records and keep them in step with the
+  families on disk: the planned, all-or-nothing stage-7 upgrade of a data dir, the family upkeep
+  around each data-plane tool (recover before, reconcile after), and the screen of a
+  membership-changing tool. It never writes a grant: a member's reach comes through its project
+  chain (its own scope, its parents', its family root's units). The data root is wiring supplied
+  ahead of the contract's parameters; the upgrade takes no credential (its authority is the
+  operator's access to the data directory, as the permission-model migration's is).
+component: member_registration
+methods:
+  - name: plan
+    description: >-
+      Plan the stage-7 upgrade: every member the hosted families declare on disk (members of members
+      included) with the record it gets, the no-widening proof (every subject x capability, today's
+      reach over the family root vs the member's own record through its new chain — equal by
+      construction), and every API key whose member-qualified entries are rewritten to record ids.
+      Writes no grant and no placement. Refuses the whole plan — listing every reason, writing
+      nothing — on a member id another record holds, a member declared twice, an unreadable member
+      (named by its qualifier and its path, with why: the declaration's own problem, a path escaping
+      its parent, a missing directory, a project.yaml that cannot be read or fails its schema, or no
+      valid project id), a setting already scoped at a member's id, or any unequal reach row. An
+      unblocked plan holds a rehearsal of the host stores with the record and key writes made in it,
+      and its file changes. A completed upgrade re-plans empty.
+    signature: 'plan(): MemberUpgradePlan'
+    returns: MemberUpgradePlan
+    params: []
+    guarantees:
+      - idempotent
+  - name: apply
+    description: >-
+      Apply a confirmed, unblocked plan through the family transaction: every host store it changed
+      is swapped in or none is (a crash leaves a journal recover rolls back). On commit, audit one
+      member.registered event per member (projectId = the member, composition = its family root, its
+      parent named, the reach proof summarized) and one token.narrowed event per rewritten key; on
+      failure, audit the failure and answer what was restored. Never locks and touches no project
+      tree.
+    signature: 'apply(plan: MemberUpgradePlan): MemberUpgradeReport'
+    returns: MemberUpgradeReport
+    params:
+      - name: plan
+        type: MemberUpgradePlan
+    guarantees:
+      - atomic
+  - name: discard
+    description: >-
+      Drop a plan's rehearsal without applying it (the dry-run report, or a blocked plan). Writes
+      nothing live.
+    signature: 'discard(plan: MemberUpgradePlan): void'
+    returns: void
+    params:
+      - name: plan
+        type: MemberUpgradePlan
+    guarantees:
+      - idempotent
+  - name: pending
+    description: >-
+      How many members the hosted families declare on disk that hold no record yet — the count the
+      server logs at boot as awaiting `wairon host doctor --fix`. Reads only; plans nothing.
+    signature: 'pending(): number'
+    returns: number
+    params: []
+  - name: recover
+    description: >-
+      Before any tool reads or writes a bound family: roll back every family migration a crash left
+      unfinished under the family root's root and the bound project's root — a transaction whose
+      coordinator never committed is restored from its backups, one that did has only its
+      directories cleaned, one that cannot be resolved (a coordinator or owner out of reach, a
+      missing backup) is left for an operator — and audit each as a migration.recovered event naming
+      the project it was found under, with the same line in the server log. Housekeeping that only
+      returns the family to the state an earlier request left it in, so it runs whatever the
+      credential's permission; a failure is logged and never fails the request.
+    signature: 'recover(principal: Principal, binding: ProjectBinding): RecoveredTransaction[]'
+    returns: RecoveredTransaction[]
+    params:
+      - name: principal
+        type: Principal
+        description: The caller — the actor of the recovery events
+      - name: binding
+        type: ProjectBinding
+        description: The bound record and its family root
+    guarantees:
+      - idempotent
+  - name: screen
+    description: >-
+      Before the data plane dispatches a membership-changing tool it does not serve itself
+      (sdd_attach_member, sdd_rename_project): for attach, list the principals whose reach the
+      change alters — the member is added under the bound project, so everyone the bound project's
+      chain grants gains access to it (a dry run's result carries the listing; reconcile audits the
+      applied change); for sdd_rename_project whose renamed project is a FAMILY ROOT (bound at a
+      family root and naming no member path), refuse with "renaming a hosted family root's id is not
+      supported; a member can be renamed, or the root recreated" (a member rename — bound at the
+      member, or naming its alias path — is allowed and re-keyed by reconcile).
+    signature: 'screen(binding: ProjectBinding, tool: string, alias: string, path: string): MembershipScreen'
+    returns: MembershipScreen
+    params:
+      - name: binding
+        type: ProjectBinding
+        description: The bound record (the parent for attach and adopt, the declaring project for detach)
+      - name: tool
+        type: string
+      - name: alias
+        type: string
+        description: The member alias the call names
+      - name: path
+        type: string
+        description: The member path the call names (attach, adopt)
+        optional: true
+  - name: reconcile
+    description: >-
+      After a hosted family-shape tool (sdd_add_member, sdd_move_member, and the stage-6 family
+      migrations) succeeded at a project, make the family's records agree with the family on disk:
+      register each newly declared member (no grant, no placement — it inherits through its parent),
+      re-enable a member the family declares again after its record was disabled as departed (it
+      goes back to active with the own-scope settings it kept, and regains exactly that reach),
+      relocate a member whose parent or path changed, re-key a member a project rename gave a new id
+      (the settings on its OWN scope — assignments, role bindings anchored there — and the key
+      entries naming it move to the new id; nothing inherited moves, because nothing inherited is
+      stored on it), disable a record whose member the family no longer declares (never delete it).
+      List every principal whose reach changed through those membership changes, and audit every
+      touched project as its own event naming it — member.registered, member.returned,
+      member.relocated, member.renamed, member.departed, or family.changed for a project the tool
+      wrote whose membership did not change — with the initiating project as composition and its
+      reach changes. When the family is git-backed, publish ONE commit whose pathspecs are every
+      touched project's own .wai/.
+    signature: 'reconcile(principal: Principal, projectId: string, touched: string[]): MemberReconciliation'
+    returns: MemberReconciliation
+    params:
+      - name: principal
+        type: Principal
+        description: The caller whose tool succeeded — the actor of every audit event
+      - name: projectId
+        type: string
+        description: The bound project the tool ran at — the composition of every event
+      - name: touched
+        type: string[]
+        description: The record ids the tool's report names as written (the applied plan's owners)
+  - name: detach
+    description: >-
+      Serve a hosted sdd_detach_member: detach RELOCATES the member, because on hosted every
+      member's directory lies inside its family root's isolated tree and a detached project needs an
+      isolated root of its own. One plan, one transaction: the family detach edits (externals
+      written with source.hosted, since a path cannot cross isolated roots), the member's directory
+      moved to the isolated root a new hosted project with its id would get (its files as creates
+      there and deletes at the old place, members of the member moving with it), its record made a
+      top-level record (parentProjectId and memberPath cleared, root persisted) and placed in its
+      former family root's units. The new root must be free: held by no record, and absent or an
+      empty directory (one a cut-short cleanup left behind). The plan lists the move, the new root
+      and every principal who LOSES access (detach cuts the inherited project rungs; the unit rungs
+      stay through the placement). A dry run answers the plan and writes nothing; applied, it
+      commits all or nothing (a crash leaves a journal recover rolls back on the next bind), audits
+      member.detached with the losers and the new root, and publishes one family commit covering the
+      touched family projects' .wai/. The detached project has NO git binding of its own afterwards
+      — the family's repository stays with the family and none is created for it: the result's notes
+      and the audit event say "no git binding: enable one for this project", and its git status
+      reads not git-backed until one is enabled.
+    signature: >-
+      detach(principal: Principal, binding: ProjectBinding, alias: string, apply: boolean):
+      MemberDetachment
+    returns: MemberDetachment
+    params:
+      - name: principal
+        type: Principal
+        description: The caller — the actor of the audit event
+      - name: binding
+        type: ProjectBinding
+        description: The bound project the member is detached from
+      - name: alias
+        type: string
+        description: The member alias
+      - name: apply
+        type: boolean
+        description: False for a dry run
+  - name: adopt
+    description: >-
+      Serve a hosted sdd_adopt_member — the exact inverse of detach. The external under the alias
+      names a top-level hosted project by source.hosted; adopt RELOCATES it back: its directory
+      moves from its own isolated root into the bound project's tree at the member path, in one
+      transaction with the family adopt edits (the hosted sources that named it, and its own into
+      the family, removed) and the host store writes — its record converted into a member
+      (parentProjectId and memberPath set, the persisted root dropped) and its own placements
+      removed, since a member takes its units from its family root. Refuses cleanly, writing
+      nothing, when the caller lacks project:write on BOTH the bound project and the adopted record,
+      when the adopted record carries members of its own whose directories could not be held at the
+      target (a derived root that would collide with an existing directory or escape the family
+      root), or for any refusal the plan names. The plan lists every principal who GAINS access
+      through the new parent chain and anyone whose access through the former placements changes. A
+      dry run answers the plan and writes nothing; applied, it commits all or nothing (a crash
+      leaves a journal recover rolls back on the next bind), audits member.adopted with the reach
+      changes, and publishes one family commit covering the touched family projects' .wai/, the
+      adopted member's included. detach-then-adopt-is-identity holds hosted as locally: the moved
+      files are byte-identical (the move copies bytes; only configuration a verb edited is
+      semantically identical), the parent semantically identical, the record and its (absent)
+      placements as before the detach.
+    signature: >-
+      adopt(principal: Principal, binding: ProjectBinding, alias: string, path: string, apply:
+      boolean): MemberAdoption
+    returns: MemberAdoption
+    params:
+      - name: principal
+        type: Principal
+        description: The caller — its write on both records is required, and it is the actor of the audit event
+      - name: binding
+        type: ProjectBinding
+        description: The bound project that adopts
+      - name: alias
+        type: string
+        description: The external alias that names the project by source.hosted
+      - name: path
+        type: string
+        description: The member path to adopt it at, relative to the bound project's root
+      - name: apply
+        type: boolean
+        description: False for a dry run
+  - name: recoverData
+    description: >-
+      Before the server serves, and from `wairon host doctor`: find every transaction a crash left
+      unfinished under the host data directory — a crashed member upgrade, or a hosted detach or
+      adopt the data directory coordinated — and with fix resolve each (a transaction whose
+      coordinator never committed is restored from its backups, one that did has only its
+      directories cleaned, one that cannot be resolved is left for an operator), auditing each as a
+      migration.recovered event by the operator with the same line in the server log. Without fix it
+      only reports them and writes nothing. A failure is reported and never prevents the server from
+      starting.
+    signature: 'recoverData(fix: boolean): RecoveredTransaction[]'
+    returns: RecoveredTransaction[]
+    params:
+      - name: fix
+        type: boolean
+        description: Resolve (true) or only report (false)
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-10-01T16:31:57.562Z'
+updatedAt: '2026-10-01T19:51:20.678Z'

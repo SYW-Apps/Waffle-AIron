@@ -7,7 +7,10 @@ import type { FileChange, Rehearsal, TransactionScope } from './types.js';
 // family_file_adapter — file I/O on the LIVE family's .wai trees for a staged
 // transaction: mirror them into a rehearsal, compare a rehearsal with them,
 // read and digest a live file, replace a live file with a staged one, remove
-// one, and prune or recreate directories.
+// one, and prune or recreate directories. A scope may also name owners WHOLE
+// (a relocated project's old directory and its new root): every file under
+// them is mirrored and compared, so a move — made in the rehearsal by move —
+// reads as deletes at the old place and creates at the new.
 //
 // The swap is a same-volume rename (MoveFileEx with replace-existing on
 // Windows, rename(2) elsewhere), so a reader sees the old file or the new one
@@ -107,42 +110,110 @@ function within(root: string, candidate: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !nodePath.isAbsolute(rel));
 }
 
-/** ifamily_file_adapter.mirror — copy each project's .wai tree into the target at its path from the family root. */
+/** Every file under an area of an owner (a file area answers itself), relative to the owner, forward slashes; .wai/transactions/ never. */
+function areaFiles(owner: string, area: string): string[] {
+  const out: string[] = [];
+  const walk = (rel: string): void => {
+    if (rel === `${WAI}/${TRANSACTIONS}`) return;
+    const abs = nodePath.join(owner, ...rel.split('/'));
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(abs);
+    } catch {
+      return;
+    }
+    // Following no link: a linked subtree is not the owner's own bytes.
+    if (stat.isSymbolicLink()) return;
+    if (stat.isFile()) {
+      out.push(rel);
+      return;
+    }
+    if (!stat.isDirectory()) return;
+    for (const name of fs.readdirSync(abs)) walk(`${rel}/${name}`);
+  };
+  walk(area.split(nodePath.sep).join('/').replace(/\/+$/, ''));
+  return out.sort();
+}
+
+/** Every file under an owner, whatever the file — .wai/transactions/ never, no link followed — relative to it, forward slashes. */
+function everyFile(owner: string): string[] {
+  const out: string[] = [];
+  const walk = (dir: string, rel: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const relPath = rel ? `${rel}/${entry.name}` : entry.name;
+      if (relPath === `${WAI}/${TRANSACTIONS}`) continue;
+      // Following no link: a linked subtree is not the owner's own bytes.
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) walk(nodePath.join(dir, entry.name), relPath);
+      else if (entry.isFile()) out.push(relPath);
+    }
+  };
+  walk(owner, '');
+  return out.sort();
+}
+
+/** Whether a directory lies within (or is) any of the whole owners. */
+function insideWhole(whole: string[], dir: string): boolean {
+  return whole.some((w) => within(w, dir));
+}
+
+/** The files a scope copies from one owner: its .wai tree, or exactly its areas. */
+function scopedFiles(owner: string, areas: string[] | undefined): string[] {
+  return areas ? [...new Set(areas.flatMap((a) => areaFiles(owner, a)))].sort() : waiFiles(owner);
+}
+
+/** ifamily_file_adapter.mirror — copy each scoped owner's areas (its .wai tree by default) into the target at its path from the coordinator root. */
 export function mirror(scope: TransactionScope, target: string): Map<string, string> {
   const digests = new Map<string, string>();
-  for (const project of scope.projects) {
-    if (!within(scope.familyRoot, project)) {
-      throw new Error(`${project} does not lie within the family root ${scope.familyRoot}; a rehearsal copies only the family's own trees`);
+  const whole = scope.whole ?? [];
+  for (const owner of [...scope.projects, ...whole]) {
+    if (!within(scope.familyRoot, owner)) {
+      throw new Error(`${owner} does not lie within the family root ${scope.familyRoot}; a rehearsal copies only the family's own trees`);
     }
-    const at = nodePath.join(target, nodePath.relative(scope.familyRoot, project));
-    for (const rel of waiFiles(project)) {
-      const live = nodePath.join(project, ...rel.split('/'));
-      let bytes: Buffer;
-      try {
-        bytes = fs.readFileSync(live);
-      } catch (e) {
-        throw new Error(`could not copy ${live} into the rehearsal: ${e instanceof Error ? e.message : String(e)}`);
-      }
-      const copy = nodePath.join(at, ...rel.split('/'));
-      fs.mkdirSync(nodePath.dirname(copy), { recursive: true });
-      fs.writeFileSync(copy, bytes);
-      digests.set(live, sha256(bytes));
-    }
+  }
+  // An owner inside a whole owner is copied once, by the whole owner.
+  for (const project of scope.projects.filter((p) => !insideWhole(whole, p))) {
+    copyFiles(project, scopedFiles(project, scope.areas), nodePath.join(target, nodePath.relative(scope.familyRoot, project)), digests);
+  }
+  for (const owner of whole) {
+    copyFiles(owner, everyFile(owner), nodePath.join(target, nodePath.relative(scope.familyRoot, owner)), digests);
   }
   return digests;
 }
 
-/** ifamily_file_adapter.compare — the rehearsal's byte difference from the live family, per owner then path. */
+/** Copy an owner's files (relative paths) to the same paths under `at`, recording each live file's digest. */
+function copyFiles(owner: string, rels: string[], at: string, digests: Map<string, string>): void {
+  fs.mkdirSync(at, { recursive: true });
+  for (const rel of rels) {
+    const live = nodePath.join(owner, ...rel.split('/'));
+    let bytes: Buffer;
+    try {
+      bytes = fs.readFileSync(live);
+    } catch (e) {
+      throw new Error(`could not copy ${live} into the rehearsal: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    const copy = nodePath.join(at, ...rel.split('/'));
+    fs.mkdirSync(nodePath.dirname(copy), { recursive: true });
+    fs.writeFileSync(copy, bytes);
+    digests.set(live, sha256(bytes));
+  }
+}
+
+/** ifamily_file_adapter.compare — the rehearsal's byte difference from the live owners, per owner then path. */
 export function compare(rehearsal: Rehearsal): FileChange[] {
   const changes: FileChange[] = [];
   const seen = new Set<string>();
-  for (const owner of waiOwners(rehearsal.directory)) {
-    const live = nodePath.join(rehearsal.familyRoot, nodePath.relative(rehearsal.directory, owner));
-    for (const rel of waiFiles(owner)) {
-      seen.add(nodePath.join(live, ...rel.split('/')));
-      const change = changeOf(rehearsal, live, rel, sha256(fs.readFileSync(nodePath.join(owner, ...rel.split('/')))));
-      if (change) changes.push(change);
-    }
+  // Each compared file: live owner, its rehearsal image, the file relative to both.
+  for (const [live, copyRoot, rel] of comparedFiles(rehearsal)) {
+    seen.add(nodePath.join(live, ...rel.split('/')));
+    const change = changeOf(rehearsal, live, rel, sha256(fs.readFileSync(nodePath.join(copyRoot, ...rel.split('/')))));
+    if (change) changes.push(change);
   }
   // A copied live file the rehearsal no longer holds is a delete.
   for (const [liveFile, base] of rehearsal.baseDigests) {
@@ -151,6 +222,25 @@ export function compare(rehearsal: Rehearsal): FileChange[] {
     changes.push({ project: owner, path: slash(nodePath.relative(owner, liveFile)), action: 'delete', baseDigest: base });
   }
   return changes.sort(byOwnerThenPath);
+}
+
+/**
+ * The files a comparison reads, as [live owner, rehearsal image, relative path]:
+ * every copied owner's areas (a scope that names them), else every .wai tree in
+ * the rehearsal — an owner inside a whole owner left to it — and then every
+ * whole owner file by file, whatever the file.
+ */
+function comparedFiles(rehearsal: Rehearsal): [string, string, string][] {
+  const whole = rehearsal.whole ?? [];
+  const owners: [string, string, string[]][] = rehearsal.areas
+    ? [...rehearsal.roots].map(([live, copy]) => [live, copy, scopedFiles(copy, rehearsal.areas)])
+    : waiOwners(rehearsal.directory).map((copy) => [nodePath.join(rehearsal.familyRoot, nodePath.relative(rehearsal.directory, copy)), copy, waiFiles(copy)]);
+  const imageOf = (live: string): string => nodePath.join(rehearsal.directory, nodePath.relative(rehearsal.familyRoot, live));
+  const all: [string, string, string[]][] = [
+    ...owners.filter(([live]) => !insideWhole(whole, live)),
+    ...whole.map((live): [string, string, string[]] => [live, imageOf(live), everyFile(imageOf(live))]),
+  ];
+  return all.flatMap(([live, copy, rels]) => rels.map((rel): [string, string, string] => [live, copy, rel]));
 }
 
 /** One rehearsal file against its live base: a write, a create, or nothing when the bytes are equal. */
@@ -165,10 +255,30 @@ function changeOf(rehearsal: Rehearsal, live: string, rel: string, staged: strin
 const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const byOwnerThenPath = (a: FileChange, b: FileChange): number => order(a.project, b.project) || order(a.path, b.path);
 
-/** The copied project whose .wai holds a live file: the deepest root that contains it. */
+/** The copied project whose .wai holds a live file: the whole owner holding it, else the deepest root that contains it. */
 function ownerOf(rehearsal: Rehearsal, liveFile: string): string {
-  const roots = [...rehearsal.roots.keys()].filter((r) => within(nodePath.join(r, WAI), liveFile));
+  const whole = (rehearsal.whole ?? []).find((w) => within(w, liveFile));
+  if (whole !== undefined) return whole;
+  const roots = [...rehearsal.roots.keys()].filter((r) => within(rehearsal.areas ? r : nodePath.join(r, WAI), liveFile));
   return roots.sort((a, b) => b.length - a.length)[0] ?? nodePath.dirname(nodePath.dirname(liveFile));
+}
+
+/**
+ * ifamily_file_adapter.move — every file under `from` renamed to the same
+ * relative path under `to` (inside a rehearsal), the emptied directories below
+ * `from` pruned, `from` included. Refuses a target that already holds a file.
+ */
+export function move(from: string, to: string): void {
+  const rels = everyFile(from);
+  const taken = rels.find((rel) => fs.existsSync(nodePath.join(to, ...rel.split('/'))));
+  if (taken !== undefined) throw new Error(`cannot move ${from} to ${to}: ${nodePath.join(to, ...taken.split('/'))} already exists`);
+  for (const rel of rels) {
+    const target = nodePath.join(to, ...rel.split('/'));
+    makeDirs(nodePath.dirname(target));
+    replace(nodePath.join(from, ...rel.split('/')), target);
+  }
+  for (const rel of rels) prune(nodePath.dirname(nodePath.join(from, ...rel.split('/'))), nodePath.dirname(from));
+  prune(from, nodePath.dirname(from));
 }
 
 /** ifamily_file_adapter.read — a file's bytes, or null when it is absent. */

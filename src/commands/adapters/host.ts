@@ -41,6 +41,7 @@ export {
   seedDefaultProvider,
   upsertUnit,
   migratePermissionModel,
+  upgradeMemberRecords,
   startHostServer,
   AdminAuthError,
   LockValidationError,

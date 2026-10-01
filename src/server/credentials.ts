@@ -1,6 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import * as crypto from 'crypto';
+import { load, save } from './credential-store.js';
 import type { ApiKeyRecord } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -16,26 +15,6 @@ const HASH_NS = 'wairon:token:v1';
 /** Salted hash of a bearer token. */
 export function hashToken(token: string): string {
   return crypto.createHash('sha256').update(`${HASH_NS}:${token}`).digest('hex');
-}
-
-function storePath(dataDir: string): string {
-  return path.join(dataDir, 'auth', 'credentials.json');
-}
-
-function load(dataDir: string): ApiKeyRecord[] {
-  try {
-    return JSON.parse(fs.readFileSync(storePath(dataDir), 'utf8')) as ApiKeyRecord[];
-  } catch {
-    return [];
-  }
-}
-
-function save(dataDir: string, records: ApiKeyRecord[]): void {
-  const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(records, null, 2) + '\n');
-  fs.renameSync(tmp, p);
 }
 
 /** Constant-time compare of two hex digests. */
@@ -105,4 +84,21 @@ export function listCredentials(dataDir: string, project: string): ApiKeyRecord[
  */
 export function listByOwner(dataDir: string, ownerUserId: string): ApiKeyRecord[] {
   return load(dataDir).filter((r) => r.ownerSubject?.userId === ownerUserId);
+}
+
+/**
+ * Replace one credential's project narrowing with the given entries (record ids
+ * or '*'), leaving the hash, owner, label and expiry untouched — the member
+ * upgrade's token rewrite. Refuses an empty narrowing and an unknown or revoked
+ * id.
+ */
+export function renarrowCredential(dataDir: string, id: string, projects: string[]): ApiKeyRecord {
+  if (projects.length === 0) throw new Error(`Credential "${id}": a narrowing cannot be empty.`);
+  const records = load(dataDir);
+  const rec = records.find((r) => r.id === id);
+  if (!rec) throw new Error(`Unknown credential "${id}".`);
+  if (rec.revokedAt) throw new Error(`Credential "${id}" is revoked.`);
+  rec.projects = [...projects];
+  save(dataDir, records);
+  return rec;
 }

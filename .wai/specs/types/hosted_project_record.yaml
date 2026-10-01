@@ -2,9 +2,15 @@ kind: entity
 id: hosted_project_record
 name: HostedProjectRecord
 description: >-
-  A registered hosted project: maps a project id to its fully-isolated .wai/ root under the data
-  directory. This is the isolation unit for request scoping, wholly separate from
-  subsystem/projectPath chaining, and may be owned or created by a user identity.
+  A registered hosted project: maps a project id to its .wai/ root. This is the isolation unit for
+  request scoping, permissions, audit, approval and git binding. Since stage 7 a family's members
+  are records too: a member record carries parentProjectId and memberPath and is a project for every
+  hosted operation — its own audit, approval page, status, lock requests and data-plane binding.
+  Projects nest like organization units: a member's permission chain is its own project scope, then
+  its parent's, up to its family root, then the family root's unit placements, then the instance —
+  so access to a project reaches all its members transitively, and the most specific setting wins
+  (an explicit no on the member's own record beats anything inherited). A member record never copies
+  its parent's directory: its root is the parent's root plus memberPath, derived on read.
 subsystem: sdd_host
 fields:
   - name: id
@@ -13,7 +19,11 @@ fields:
     optional: false
   - name: rootPath
     type: string
-    description: Absolute filesystem root of the project's isolated .wai/ tree
+    description: >-
+      Absolute filesystem root of the project's .wai/ tree. Persisted for a family root (its
+      isolated root under the data directory, or the dev server's working tree); for a member record
+      NEVER persisted — the project index derives it as the parent's root joined with memberPath
+      through the containment guard, so moving a family's directory moves its members with it.
     optional: false
   - name: status
     type: string
@@ -63,7 +73,21 @@ fields:
       Optional MCP server display name for clients that cannot override server names. Defaults to
       "Wairon - <displayName or id>" when omitted.
     optional: true
+  - name: parentProjectId
+    type: string
+    description: >-
+      The record id of the project that declares this one as a member (its project.yaml `members`);
+      absent for a family root. Names the crumb to the parent and the next rung of the member's
+      permission chain.
+    optional: true
+  - name: memberPath
+    type: string
+    description: >-
+      The member's path relative to its parent's root, forward slashes, exactly as the parent
+      declares it; present iff parentProjectId is. The member's alias is not stored: the parent's
+      project.yaml owns it.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-09-19T11:07:08.577Z'
+updatedAt: '2026-10-01T16:55:27.219Z'

@@ -526,8 +526,10 @@ methods:
     returns: Promise<void>
   - name: runHostDoctor
     description: >-
-      Inspect the hosted data dir for pre-permission-model shapes and, with --fix, migrate them in
-      place (`wairon host doctor`).
+      Inspect the hosted data dir for pre-permission-model shapes and for hosted families whose
+      members are not yet records, and with --fix migrate both (`wairon host doctor`): the
+      permission-model migration first, then the stage-7 member upgrade (records registered,
+      member-qualified key entries rewritten, nobody's reach changed), all or nothing.
     signature: 'runHostDoctor(options: { fix?: boolean; dataDir?: string }): Promise<void>'
     returns: Promise<void>
   - name: runExternals
@@ -640,4 +642,4 @@ methods:
         description: '--report, --yes'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-01T05:54:26.986Z'
+updatedAt: '2026-10-01T16:59:22.472Z'

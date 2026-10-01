@@ -6,6 +6,7 @@ import { remapScope, removeAssignmentsForScopes } from './permissions.js';
 import { remapUnitReferences } from './users.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
 import { authorize } from './authorization.js';
+import { listFamilyRecords } from './projects.js';
 import { ForbiddenError } from './identity.js';
 import { listSecretKeys, setSecret as storeSecret } from '../utils/secrets.js';
 import type {
@@ -264,6 +265,12 @@ export function placeProject(cfg: HostConfig, sessionId: string, projectId: stri
   const existingOwners = organization
     .listProjectPlacements(cfg.dataDir, projectId)
     .filter((p) => p.role === 'owner');
+  // Steps 5-7: a member takes its units from its family root — a placement of
+  // its own would not be a rung of its permission chain, so it is refused.
+  const family = listFamilyRecords(cfg.dataDir, projectId);
+  if (family.length > 0 && family[0].id !== projectId) {
+    throw new Error('A member takes its units from its family root; place the family root instead');
+  }
   const placement: ProjectPlacement = {
     id: existingOwners[0]?.id ?? '',
     projectId,

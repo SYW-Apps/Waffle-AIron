@@ -20,15 +20,17 @@ methods:
       which could exceed a non-super-admin minter's own authority (confused deputy), so only the
       env-anchored instance-admin — who dominates every owner — may mint on another user's behalf (a
       user mints their own single-project tokens via mintSelfToken). Mint a token narrowed to
-      request.projects; a member-qualified entry ('projectId::alias', one member alias per hop) is
-      validated at mint time — each alias must declare a member of the project it is looked up in,
-      through its project.yaml `members` or, for one release, a legacy L1 mount (an unknown alias,
-      or an internal subsystem, is rejected with guidance, never stored broken). The token carries
-      no grants and permission rules gate per project at use time. Persist only the hashed
-      credential record, append a redacted token.mint audit event, and return the plaintext exactly
-      once.
-    signature: 'mintToken(credential: string, request: TokenMintRequest): string'
-    returns: string
+      request.projects, each entry a hosted record id or '*' — a member is named by its own record
+      id since stage 7. A member-qualified entry ('projectId::alias', one alias per hop) is
+      DEPRECATED: for one release it is accepted and stored as the member's record id (mapped
+      through the project repository's binding resolution; an alias that declares no member, or a
+      member no record holds, is rejected with guidance, never stored broken), and the answer says
+      so: MintedToken.mapped carries '<qualified entry> -> <record id>' for each. The token carries
+      no grants and permission rules gate per record at use time. Persist only the hashed credential
+      record, append a redacted token.mint audit event, and return the plaintext exactly once with
+      the mapping.
+    signature: 'mintToken(credential: string, request: TokenMintRequest): MintedToken'
+    returns: MintedToken
     params:
       - name: credential
         type: string
@@ -280,4 +282,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-09-27T11:00:18.219Z'
+updatedAt: '2026-10-01T18:06:57.853Z'

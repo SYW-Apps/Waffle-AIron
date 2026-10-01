@@ -23,12 +23,14 @@ import { SharingTab } from './Sharing';
 import { SpecsTab } from './SpecsEditor';
 import type {
   DoctrineChange,
+  ExternalStatus,
   GitBackingStatus,
   ImpactFinding,
   PackDescriptor,
   PackImpact,
   PolicyEvaluationResult,
   ProducerConfig,
+  ProjectRecord,
   TreeImportResult,
 } from '../types';
 
@@ -751,6 +753,13 @@ function GitTab({ projectId }: { projectId: string }) {
           ) : (
             <div className="panel">
               <h4>Bind the project repository</h4>
+              <p>
+                <Badge tone="warn">not git-backed</Badge>{' '}
+                <span className="hint">
+                  No git binding of its own. A member commits through its family root's repository; a top-level project — a detached
+                  member included — needs one enabled here.
+                </span>
+              </p>
               <p className="hint">wairon manages only the <code>.wai/</code> tree inside your existing repository.</p>
               <div className="row-form">
                 <Field label="Remote URL">
@@ -887,6 +896,132 @@ function TransferTab({ projectId }: { projectId: string }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Hosted families in the app (stage 7). A member is a project record of its
+// own that names the project declaring it (parentProjectId): it shows a crumb
+// to that parent — named only when the parent is itself in the caller's list,
+// a neutral crumb otherwise — and a project lists the members the caller can
+// see under it. Nothing the caller cannot read is listed or named.
+// ---------------------------------------------------------------------------
+
+/** One project in family order: members right under their parent, with their depth. */
+export interface FamilyRow {
+  project: ProjectRecord;
+  depth: number;
+}
+
+/**
+ * The caller's projects in family order: each top-level project (or a member
+ * whose parent the caller cannot see) followed by its visible members,
+ * depth-first, siblings in the order the list holds them.
+ */
+export function familyOrder(projects: ProjectRecord[]): FamilyRow[] {
+  const ids = new Set(projects.map((p) => p.id));
+  const rows: FamilyRow[] = [];
+  const placed = new Set<string>();
+  const visit = (p: ProjectRecord, depth: number): void => {
+    if (placed.has(p.id)) return;
+    placed.add(p.id);
+    rows.push({ project: p, depth });
+    for (const child of projects.filter((c) => c.parentProjectId === p.id)) visit(child, depth + 1);
+  };
+  for (const p of projects.filter((x) => !x.parentProjectId || !ids.has(x.parentProjectId))) visit(p, 0);
+  // A cycle the store should never hold still lists every project once.
+  for (const p of projects) visit(p, 0);
+  return rows;
+}
+
+/** A member's crumb to its parent: named and linked when the parent is in the caller's list, neutral otherwise. */
+export function ParentCrumb(props: { project: ProjectRecord; projects: ProjectRecord[] }) {
+  const nav = useNavigate();
+  const parentId = props.project.parentProjectId;
+  if (!parentId) return null;
+  const visible = props.projects.some((p) => p.id === parentId);
+  return visible ? (
+    <button className="btn btn-ghost btn-sm back-link" onClick={() => nav(`/projects/${encodeURIComponent(parentId)}`)}>
+      ↑ member of {parentId}
+    </button>
+  ) : (
+    <span className="hint">↑ member of a project outside your view</span>
+  );
+}
+
+/** The members of a project the caller can see, each linking to its own page. */
+export function MemberLinks(props: { projectId: string; projects: ProjectRecord[] }) {
+  const nav = useNavigate();
+  const members = props.projects.filter((p) => p.parentProjectId === props.projectId);
+  if (members.length === 0) return null;
+  return (
+    <div className="row-actions" style={{ justifyContent: 'flex-start' }}>
+      <span className="hint">Members:</span>
+      {members.map((m) => (
+        <button key={m.id} className="btn btn-ghost btn-sm" onClick={() => nav(`/projects/${encodeURIComponent(m.id)}`)}>
+          {m.id}
+          {m.memberPath ? <code className="subtle"> {m.memberPath}</code> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** How an external's relation health reads at a glance. Unavailable is never a pass. */
+export function externalTone(s: ExternalStatus): { tone: 'ok' | 'warn' | 'bad' | 'neutral'; label: string } {
+  if (!s.reachable) return { tone: 'warn', label: s.outOfReach ? 'out of reach' : 'unavailable' };
+  if (s.stale) return { tone: 'bad', label: 'stale' };
+  if (s.drifted) return { tone: 'warn', label: 'drifted' };
+  if (!s.pinned) return { tone: 'warn', label: 'not pinned' };
+  if (s.uses.some((u) => u.state === 'unavailable')) return { tone: 'neutral', label: 'pinned · not comparable here' };
+  return { tone: 'ok', label: 'current' };
+}
+
+/**
+ * Relation health of one project: its externals status, one row per external,
+ * from GET /web/projects/externals. What cannot be compared is reported as
+ * unavailable with its reason, never as a pass.
+ */
+export function RelationsPanel(props: { projectId: string }) {
+  const enc = encodeURIComponent(props.projectId);
+  const state = useAsync<{ externals: ExternalStatus[] }>(
+    () => get(`/web/projects/externals?projectId=${enc}`),
+    [props.projectId],
+    [`project:${props.projectId}`, 'projects'],
+  );
+  return (
+    <AsyncView state={state}>
+      {(d) =>
+        d.externals.length === 0 ? (
+          <p className="hint">This project declares no externals.</p>
+        ) : (
+          <div className="stack-sm">
+            {d.externals.map((s) => {
+              const health = externalTone(s);
+              return (
+                <details key={s.alias} className="panel">
+                  <summary>
+                    <strong>{s.alias}</strong> <span className="subtle">→ {s.project}</span>{' '}
+                    <Badge tone={health.tone}>{health.label}</Badge> <span className="hint">{s.sourceKind}</span>
+                  </summary>
+                  {s.detail && <p className="hint">{s.detail}</p>}
+                  {s.uses.length > 0 && (
+                    <ul className="finding-list">
+                      {s.uses.map((u, i) => (
+                        <li key={i}>
+                          <code>{[u.publicName, u.member].filter(Boolean).join('.') || '(the external)'}</code> — {u.state}
+                          {u.detail ? <span className="hint"> — {u.detail}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </details>
+              );
+            })}
+          </div>
+        )
+      }
+    </AsyncView>
+  );
+}
+
 // ── Ops shell ────────────────────────────────────────────────────────────────
 
 const OPS_TABS = [
@@ -897,6 +1032,7 @@ const OPS_TABS = [
   { id: 'git', label: 'Git' },
   { id: 'transfer', label: 'Transfer' },
   { id: 'sharing', label: 'Sharing' },
+  { id: 'relations', label: 'Relations' },
 ];
 
 export function ProjectOps() {
@@ -905,6 +1041,10 @@ export function ProjectOps() {
   const splat = params['*'] ?? '';
   const nav = useNavigate();
   const base = `/projects/${encodeURIComponent(projectId)}`;
+  // The caller's projects: a member's crumb to its parent, and a project's visible members.
+  const projects = useAsync<{ projects: ProjectRecord[] }>(() => get('/web/projects'), [], ['projects']);
+  const listed = projects.data?.projects ?? [];
+  const self = listed.find((p) => p.id === projectId);
 
   // The tab (and, on Specs, the open spec) live in the URL path so a view is
   // shareable and the canvas can deep-link into it. `/projects/<id>` → Specs;
@@ -932,7 +1072,9 @@ export function ProjectOps() {
           <button className="btn btn-ghost btn-sm back-link" onClick={() => nav('/projects')}>
             ← Projects
           </button>
+          {self && <ParentCrumb project={self} projects={listed} />}
           <h2>{projectId} · operations</h2>
+          <MemberLinks projectId={projectId} projects={listed} />
         </div>
         <Button variant="ghost" onClick={() => nav(`/canvas/${encodeURIComponent(projectId)}`)}>
           Open canvas
@@ -947,6 +1089,7 @@ export function ProjectOps() {
         {tab === 'git' && <GitTab projectId={projectId} />}
         {tab === 'transfer' && <TransferTab projectId={projectId} />}
         {tab === 'sharing' && <SharingTab projectId={projectId} />}
+        {tab === 'relations' && <RelationsPanel projectId={projectId} />}
       </div>
     </div>
   );

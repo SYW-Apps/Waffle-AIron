@@ -1,8 +1,9 @@
 // ---------------------------------------------------------------------------
 // host_migration_adapter — sdd_host's client hop into sdd_migrations: identity
-// re-export of the migration portal's recover. The data plane rolls back a
-// family migration a crash left unfinished under a hosted project's roots when
-// it next binds that project, before any tool touches the tree. The caller
-// must gate on reach itself.
+// re-exports of the migration portal. recover rolls back a family migration a
+// crash left unfinished under a hosted project's roots when the data plane
+// next binds it; rehearse, diff, commit and drop are the family transaction
+// the hosted member upgrade commits the host stores through; plan serves the
+// hosted detach. The caller must gate on reach itself.
 // ---------------------------------------------------------------------------
-export { recover } from '../../migrations/index.js';
+export { recover, rehearse, diff, commit, drop, plan } from '../../migrations/index.js';

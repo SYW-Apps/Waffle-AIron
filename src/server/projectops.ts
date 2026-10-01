@@ -44,11 +44,10 @@ export function exportProjectTree(
   cfg: HostConfig,
   credential: string | null,
   project: string,
-  subproject?: string,
   includeDerived?: boolean,
   allowPartial?: boolean,
 ): TreeExportResult {
-  return admin.exportProjectTree(cfg, credential, project, subproject, includeDerived, allowPartial);
+  return admin.exportProjectTree(cfg, credential, project, includeDerived, allowPartial);
 }
 
 export function importProjectTree(
@@ -56,10 +55,9 @@ export function importProjectTree(
   credential: string | null,
   project: string,
   archive: Uint8Array,
-  subproject?: string,
   replaceExisting?: boolean,
 ): TreeImportResult {
-  return admin.importProjectTree(cfg, credential, project, archive, subproject, replaceExisting);
+  return admin.importProjectTree(cfg, credential, project, archive, replaceExisting);
 }
 
 // ── packs ─────────────────────────────────────────────────────────────────────

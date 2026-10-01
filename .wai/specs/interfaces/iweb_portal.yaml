@@ -325,7 +325,12 @@ methods:
       method: GET
       path: /web/tokens
   - name: projectList
-    description: List the projects the caller can manage; forwards to web_project_orchestrator.list.
+    description: >-
+      List the projects the caller can manage; forwards to web_project_orchestrator.list. Since
+      stage 7 member records are listed like any project, each carrying parentProjectId: the SPA
+      draws a member's crumb to its parent (named only when the parent is itself in the list, a
+      neutral crumb otherwise) and lists under each project the members the list holds whose
+      parentProjectId names it. Nothing the caller cannot read is listed or named.
     signature: 'projectList(sessionId: string): HostedProjectRecord[]'
     returns: HostedProjectRecord[]
     params:
@@ -1299,17 +1304,14 @@ methods:
       application/zip with a download disposition naming the project. Requires project:read over the
       project upstream.
     signature: >-
-      projectTreeExport(sessionId: string, project: string, subproject?: string, includeDerived?:
-      boolean, allowPartial?: boolean): TreeExportResult
+      projectTreeExport(sessionId: string, project: string, includeDerived?: boolean, allowPartial?:
+      boolean): TreeExportResult
     returns: TreeExportResult
     params:
       - name: sessionId
         type: string
       - name: project
         type: string
-      - name: subproject
-        type: string
-        optional: true
       - name: includeDerived
         type: boolean
         optional: true
@@ -1331,8 +1333,8 @@ methods:
       project:admin over the project upstream, refuses executable entries, and reports where the
       replaced tree was backed up.
     signature: >-
-      projectTreeImport(sessionId: string, project: string, archive: bytes, subproject?: string,
-      replaceExisting?: boolean): TreeImportResult
+      projectTreeImport(sessionId: string, project: string, archive: bytes, replaceExisting?:
+      boolean): TreeImportResult
     returns: TreeImportResult
     params:
       - name: sessionId
@@ -1341,9 +1343,6 @@ methods:
         type: string
       - name: archive
         type: bytes
-      - name: subproject
-        type: string
-        optional: true
       - name: replaceExisting
         type: boolean
         optional: true
@@ -1437,7 +1436,12 @@ methods:
     description: >-
       Serve one authorized project's canvas model as JSON — the data the web app's in-React canvas
       mounts directly. Forwards to the web graph orchestrator's getProjectCanvasModel;
-      session-cookie authenticated, so cross-project access is Forbidden.
+      session-cookie authenticated, so cross-project access is Forbidden. For a project with members
+      it is the family canvas: each member is a project node, carrying the member's record id only
+      when the caller may read that record. The SPA shows those members in a strip of links above
+      the canvas, each opening the member's own project page; a member the caller may not read is
+      named there unlinked. The canvas nodes themselves are not clickable and its edges are not
+      coloured by relation health — both wait for a future engine hook.
     signature: 'serveProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
     returns: CanvasModel
     params:
@@ -1516,6 +1520,28 @@ methods:
       path: /web/projects/packs/removal-impact
     guarantees:
       - idempotent
+  - name: projectExternalsStatus
+    description: >-
+      Serve one authorized project's relation health as JSON: its externals status, one entry per
+      external (the pin compared with the live producer at signature level; unavailable is never a
+      pass). Forwards to the web graph orchestrator's getProjectExternals; session-cookie
+      authenticated, so cross-project access is Forbidden. Its reach is the caller's listed projects
+      — the web project orchestrator's scoped list, which holds every project the caller may read,
+      write or administer, not only read: the family above the project is read when the family root
+      is in that list, and a source.hosted producer when its record is. The SPA renders it on the
+      project page's Relations tab, one row per external with its state and reason; it does not
+      colour the canvas's edges (a future engine hook).
+    signature: 'projectExternalsStatus(sessionId: string, projectId: string): ExternalStatus[]'
+    returns: ExternalStatus[]
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/externals
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-09-29T16:17:37.602Z'
+updatedAt: '2026-10-01T19:50:02.571Z'

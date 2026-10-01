@@ -29,30 +29,20 @@ methods:
   - name: lockProject
     description: >-
       Execute-primary project lock. Authenticate the caller and resolve their project:write
-      permission over the project: yes -> lock directly via the admin plane's pre-authorized
-      executeApprovedLock and return a completed ProjectActionOutcome carrying the lock record;
-      approval -> create a pending project:lock ApprovalRequest and return a pending-approval
-      outcome; no -> Forbidden. An optional subproject qualifier confines the ACTION to a chained
-      child's tree: on the direct path it is forwarded to the pre-authorized entry, which freezes
-      that child's own spec tree instead of the whole project; on the APPROVAL path it is recorded
-      in the request's payload (the same mechanism project:init uses to carry its execution input)
-      and named in the summary, so the approved execution stays confined and an approval can never
-      widen the scope the requester was bound to. Permission resolution and audit provenance stay
-      anchored at the TOP project id — a qualifier narrows which tree is acted on, never which
-      grants apply.
-    signature: 'lockProject(credential: string, projectId: string, subproject?: string): ProjectActionOutcome'
+      permission over the project's OWN record: yes -> lock directly via the admin plane's
+      pre-authorized executeApprovedLock and return a completed ProjectActionOutcome carrying the
+      lock record; approval -> create a pending project:lock ApprovalRequest and return a
+      pending-approval outcome; no -> Forbidden. Since stage 7 a member is a record of its own, so
+      locking a member is locking its record — the subproject qualifier parameter is retired. A
+      pending request recorded with a member qualifier before the upgrade executes, for one release,
+      on the member record the qualifier maps to, never wider.
+    signature: 'lockProject(credential: string, projectId: string): ProjectActionOutcome'
     returns: ProjectActionOutcome
     params:
       - name: credential
         type: string
       - name: projectId
         type: string
-      - name: subproject
-        type: string
-        description: >-
-          Chained-subsystem mount chain ('a' or 'a::b') to confine the lock to; absent locks the
-          project's own tree.
-        optional: true
     guarantees:
       - atomic
   - name: getApprovalStatus
@@ -89,14 +79,14 @@ methods:
       — a yes-permission caller executes directly and never enters the approval path, so this guard
       cannot deadlock); record the approve/deny decision; then AUTO-EXECUTE an approved request
       immediately by dispatching by kind to the pre-authorized entrypoints (project:init ->
-      executeApprovedInit; project:lock -> the admin plane, forwarding any subproject qualifier
-      recorded on the request's payload so the execution stays confined to the tree the requester
-      was bound to, and the request's gateStateId as the expected identity) and mark it completed.
-      Audit at security level. A project:lock whose pinned identity no longer matches the tree is
-      CANCELLED, with the reason recorded on it ("the design changed since it was requested
-      (requested <id>, now <id>); request the lock again"), and the call refuses with that reason.
-      Any other failure at execution leaves the approval approved, not completed (retryable via
-      executeApprovedRequest).
+      executeApprovedInit; project:lock -> the admin plane on the request's record id — a member's
+      own record for a member lock; a request recorded with a member qualifier before the upgrade is
+      mapped, for one release, to that member's record, never wider — with the request's gateStateId
+      as the expected identity) and mark it completed. Audit at security level. A project:lock whose
+      pinned identity no longer matches the tree is CANCELLED, with the reason recorded on it ("the
+      design changed since it was requested (requested <id>, now <id>); request the lock again"),
+      and the call refuses with that reason. Any other failure at execution leaves the approval
+      approved, not completed (retryable via executeApprovedRequest).
     signature: 'decideRequest(credential: string, decision: ApprovalDecision): ApprovalRequest'
     returns: ApprovalRequest
     params:
@@ -112,12 +102,12 @@ methods:
       require the request to be approved and unexpired, then dispatch by kind: project:init to the
       policy orchestrator's pre-authorized executeApprovedInit (which enforces pack policy,
       provisions the project via the admin plane, applies required/default packs, and records the
-      profile selection), and project:lock to the admin plane's pre-authorized executeApprovedLock —
-      forwarding any subproject qualifier recorded on the request's payload and its gateStateId, so
-      this retry path confines and pins exactly as the auto-execute path does, and cancels the
-      request with the same reason when the tree moved after the request; mark the approval
-      completed, and audit the execution at security level. Rejects pending, denied, expired,
-      completed, cancelled, or unauthorized requests.
+      profile selection), and project:lock to the admin plane's pre-authorized executeApprovedLock
+      on the request's record id (a pre-upgrade member qualifier mapped to its member record for one
+      release) with its gateStateId, so this retry path confines and pins exactly as the
+      auto-execute path does, and cancels the request with the same reason when the tree moved after
+      the request; mark the approval completed, and audit the execution at security level. Rejects
+      pending, denied, expired, completed, cancelled, or unauthorized requests.
     signature: 'executeApprovedRequest(credential: string, requestId: string): string'
     returns: string
     params:
@@ -143,4 +133,4 @@ methods:
         type: number
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-09-30T16:36:22.051Z'
+updatedAt: '2026-10-01T16:53:13.015Z'

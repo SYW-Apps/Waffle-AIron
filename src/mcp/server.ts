@@ -1745,12 +1745,13 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     ({ alias, widen, dryRun }) => migrationTool({ verb: 'detach', alias, ...(widen ? { widen: true } : {}) }, dryRun),
   );
 
-  reg<{ alias: string; dryRun?: boolean }>(server,
+  reg<{ alias: string; path?: string; dryRun?: boolean }>(server,
     'sdd_adopt_member',
     {
-      description: "Make the bound project's external found by a path inside it a member — sdd_detach_member's inverse. All-or-nothing; dryRun answers the plan and writes nothing. Never locks.",
+      description: "Make the bound project's external a member — sdd_detach_member's inverse. Locally the external is found by a path inside the bound project and adopted where it is; on a hosted instance it names a project by source.hosted and `path` says where to adopt it (the hosting server relocates it there). All-or-nothing; dryRun answers the plan and writes nothing. Never locks.",
       inputSchema: {
         alias: z.string().describe("The external's alias"),
+        path: z.string().optional().describe('Hosted: the member path to adopt a source.hosted external at, relative to the bound project; a source.path external is adopted where it is'),
         dryRun: dryRunArg,
       },
     },

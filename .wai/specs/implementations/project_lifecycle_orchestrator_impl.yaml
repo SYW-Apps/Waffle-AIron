@@ -8,6 +8,8 @@ description: >-
   pre-authorized entrypoints. Audit appends are best-effort and never fail the primary action.
 contract: iproject_lifecycle_orchestrator
 sourcePath: src/server/projectlifecycle.ts
+injectedParams:
+  - cfg
 methods:
   - name: initializeProject
     narrative:
@@ -138,9 +140,8 @@ methods:
       - stepNumber: 4
         description: >-
           Authorized: lock directly via the admin plane's pre-authorized entry, forwarding the
-          project id AND the optional subproject qualifier so the freeze lands on the chained
-          child's tree when one was supplied — the permission just resolved and the audit below stay
-          anchored at the TOP project id.
+          project id — a member's own record id when a member is locked; no qualifier exists any
+          more
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -157,22 +158,18 @@ methods:
         error: Forbidden — caller may not lock this project
       - stepNumber: 8
         description: >-
-          Approval required: capture the gate identity of the tree the request is about (the
-          project's, or the member's the requester is confined to) through the admin plane, so the
-          approved execution can refuse a tree that moved after the request
+          Approval required: capture the gate identity of the project's tree (a member's own tree
+          when the project is a member) through the admin plane, so the approved execution can
+          refuse a tree that moved after the request
         type: call
         targetComponent: admin_orchestrator
         targetMethod: gateIdentity
       - stepNumber: 9
         description: >-
-          Build the pending project:lock ApprovalRequest: kind, the TOP project id, the requester's
-          subject and token id, expiry, a redacted human summary, and gateStateId = the identity
-          just captured. When the caller is bound to a subproject, record that qualifier in the
-          request's payload (payloadType naming the scope shape) — the SAME mechanism a project:init
-          request already uses to carry what its execution needs — so the approved action stays
-          confined to that child tree instead of silently widening to the whole project when someone
-          approves it. The summary names the subproject too, so an approver sees the real scope
-          before deciding.
+          Build the pending project:lock ApprovalRequest: kind, the project's own record id (a
+          member's when a member is locked), the requester's subject and token id, expiry, a
+          redacted human summary naming the project, and gateStateId = the identity just captured.
+          No qualifier is recorded: the record id alone confines the approved action
         type: local
       - stepNumber: 10
         description: Create the pending approval request
@@ -376,12 +373,11 @@ methods:
             step: 16
       - stepNumber: 14
         description: >-
-          project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
-          subproject qualifier recorded on the request's payload when it carries one (so an approved
-          subproject lock freezes exactly that child tree and an approval can never widen the scope
-          the requester was confined to) and the request's gateStateId as the expected identity (so
-          an approval never certifies a design other than the one requested; a request without one
-          executes against the tree as it stands).
+          project:lock — execute through the admin plane's pre-authorized lock entry on the
+          request's record id (a request recorded with a member qualifier before the upgrade is
+          mapped, for one release, to that member's record, never wider) with the request's
+          gateStateId as the expected identity (so an approval never certifies a design other than
+          the one requested; a request without one executes against the tree as it stands).
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -535,10 +531,10 @@ methods:
             step: 17
       - stepNumber: 15
         description: >-
-          project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
-          subproject qualifier recorded on the request's payload when it carries one and the
-          request's gateStateId as the expected identity (the retry path must confine and pin
-          exactly as the auto-execute path does).
+          project:lock — execute through the admin plane's pre-authorized lock entry on the
+          request's record id (a pre-upgrade qualifier mapped to its member record for one release)
+          with the request's gateStateId as the expected identity (the retry path must confine and
+          pin exactly as the auto-execute path does).
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -655,4 +651,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-09-30T16:38:51.795Z'
+updatedAt: '2026-10-01T18:11:24.624Z'

@@ -1,4 +1,5 @@
 import * as http from 'http';
+import * as memberRegistration from './members.js';
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -489,7 +490,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
       // raw stream use /web/projects/tree/import.
       if (req.method === 'GET' && parts.length === 4 && parts[3] === 'tree') {
         const allowPartial = url.searchParams.get('allowPartial') === '1';
-        const exported = admin.exportProjectTree(cfg, cred, parts[2], undefined, undefined, allowPartial);
+        const exported = admin.exportProjectTree(cfg, cred, parts[2], undefined, allowPartial);
         res.writeHead(200, {
           'content-type': 'application/zip',
           'content-disposition': `attachment; filename="${exported.suggestedFileName}"`,
@@ -502,7 +503,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
         return sendJson(
           res,
           200,
-          admin.importProjectTree(cfg, cred, parts[2], archive, undefined, body.replaceExisting === true),
+          admin.importProjectTree(cfg, cred, parts[2], archive, body.replaceExisting === true),
         );
       }
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'lock') return sendJson(res, 200, admin.lockProject(cfg, cred, parts[2]));
@@ -721,6 +722,26 @@ export function warnIfDataDirUnmigrated(cfg: HostConfig): void {
   }
 }
 
+/**
+ * Count the hosted families' members that hold no record yet and, when any do,
+ * log one line saying how many await `wairon host doctor --fix` (until then
+ * they are reached only through the deprecated member-qualified selectors).
+ * Reads only; any failure is swallowed so it never prevents the server from
+ * starting.
+ */
+export function warnIfMembersPending(cfg: HostConfig): void {
+  try {
+    const count = memberRegistration.pending(cfg.dataDir);
+    if (count === 0) return;
+    console.error(
+      `[wairon members] ${count} member(s) of hosted families hold no project record yet and await `
+      + '`wairon host doctor --fix` (run it without --fix first for the plan).',
+    );
+  } catch (err) {
+    console.error(`[wairon members] member check skipped: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 /** Bind the data-plane and admin-plane listeners and begin accepting connections. */
 /** The literal placeholder shipped in .env.example — never a real credential. */
 export const PLACEHOLDER_ADMIN_TOKEN = 'replace-with-a-random-64-hex-character-token';
@@ -753,6 +774,12 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   bootstrapInstance(cfg);
 
   warnIfDataDirUnmigrated(cfg);
+  // Step 4: before serving, roll back what a crash left unfinished under the
+  // data directory (a crashed member upgrade, a hosted detach or adopt) —
+  // audited and logged; a failure never prevents the server from starting.
+  memberRegistration.recoverData(cfg.dataDir, true);
+  // Step 5: members that hold no record yet await `wairon host doctor --fix`.
+  warnIfMembersPending(cfg);
 
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));
   const adminServer = http.createServer((req, res) => {

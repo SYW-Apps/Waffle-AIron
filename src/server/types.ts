@@ -1,6 +1,8 @@
 import type { LockRecord } from '../core/lockfile.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
 import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
+import type { GitPublish } from '../git/types.js';
+import type { MigrationPlan, TransactionOutcome } from '../migrations/types.js';
 
 // ---------------------------------------------------------------------------
 // Hosting value types (sdd_host)
@@ -123,6 +125,118 @@ export interface PermissionWorld {
   roles: Role[];
   units: OrganizationUnitRecord[];
   placements: ProjectPlacement[];
+  /** Every member record's link to its parent record — the project rungs of a
+   *  member's chain, between its own scope and its family root's units. */
+  parents: ProjectParentLink[];
+}
+
+/** One rung of the project-to-parent-project chain: a member record and the
+ *  record of the project that declares it. Projects nest like units. */
+export interface ProjectParentLink {
+  projectId: string;
+  parentProjectId: string;
+}
+
+/** A request's reach into its bound project's hosted family, per record through
+ *  each record's own chain. */
+export interface FamilyReach {
+  /** Family record ids with project:read yes. */
+  readable: string[];
+  /** Family record ids with project:write yes. */
+  writable: string[];
+}
+
+/** One row of a reach comparison: one project, subject and capability, before
+ *  and after a change. */
+export interface ReachComparison {
+  memberId: string;
+  subjectId: string;
+  capability: string;
+  before: EffectivePermission;
+  after: EffectivePermission;
+  equal: boolean;
+}
+
+/** One member a hosted family declares on disk, as the member registration
+ *  plans its hosted record. */
+export interface PlannedMemberRecord {
+  record: HostedProjectRecord;
+  familyRootId: string;
+  /** The pre-stage-7 member-qualified selector that reached it. */
+  qualifier: string;
+  /** register | relocate | rename | return | unchanged | unreadable */
+  action: 'register' | 'relocate' | 'rename' | 'return' | 'unchanged' | 'unreadable';
+  /** For action rename: the record id the member held before. */
+  previousId?: string;
+  /** For action unreadable: why, in words a person acts on. */
+  reason?: string;
+}
+
+/** What the data plane learns before it dispatches a membership-changing tool
+ *  it does not serve itself: who gains access through an attach, or why the
+ *  hosted model refuses a family root's rename. */
+export interface MembershipScreen {
+  refusal?: string;
+  reachChanges: ReachComparison[];
+}
+
+/** What reconciling a hosted family's member records with the family on disk did. */
+export interface MemberReconciliation {
+  registered: string[];
+  /** Member records re-enabled: the family declares their member again after they were disabled as departed. */
+  returned: string[];
+  relocated: string[];
+  /** 'old->new' for every member record re-keyed by a project rename. */
+  renamed: string[];
+  departed: string[];
+  reachChanges: ReachComparison[];
+  commit?: GitPublish;
+}
+
+/** A hosted detach, planned or applied: it relocates the member into an isolated root of its own. */
+export interface MemberDetachment {
+  memberId: string;
+  plan: MigrationPlan;
+  newRoot: string;
+  reachLost: ReachComparison[];
+  applied: boolean;
+  outcome?: TransactionOutcome;
+  commit?: GitPublish;
+}
+
+/** A hosted adopt, planned or applied — detach's inverse: it relocates the project back into the family's tree. */
+export interface MemberAdoption {
+  memberId: string;
+  plan: MigrationPlan;
+  memberPath: string;
+  reachChanges: ReachComparison[];
+  applied: boolean;
+  outcome?: TransactionOutcome;
+  commit?: GitPublish;
+}
+
+/** An administrative token mint's answer: the plaintext, shown once, and each
+ *  deprecated member-qualified entry with the record id it was stored as. */
+export interface MintedToken {
+  token: string;
+  /** '<qualified entry> -> <member record id>' per mapped entry. */
+  mapped: string[];
+}
+
+/** One API key's narrowing as the member upgrade rewrites it. */
+export interface PlannedNarrowing {
+  keyId: string;
+  before: string[];
+  after: string[];
+  widening: string;
+}
+
+/** Where a hosted project's specs are committed: its family root's repository
+ *  and the project's own .wai/ pathspec relative to it. */
+export interface RepositoryScope {
+  familyRootId: string;
+  repositoryRoot: string;
+  pathspecs: string[];
 }
 
 /** The resolved effective permission for one (subject, capability, target). */
@@ -279,6 +393,10 @@ export interface AuditEvent {
   target?: string;
   /** Small redacted diagnostic payload serialized by policy. */
   metadata?: string;
+  /** The project whose operation reached this one, when the action did not
+   *  bind it directly (a family migration's start, or the family root a
+   *  deprecated member-qualified selector named). */
+  composition?: string;
 }
 
 /** Admin filter for querying the audit log; unset fields match everything. */
@@ -1071,6 +1189,13 @@ export interface HostedProjectRecord {
   /** Derived (not persisted on the record): the project's home unit — its
    *  'owner' placement — populated when the record is listed for display. */
   unitId?: string;
+  /** The record id of the project that declares this one as a member; absent
+   *  for a family root. A member's rootPath is never persisted: it is derived
+   *  as the parent's root joined with memberPath. */
+  parentProjectId?: string;
+  /** The member's path relative to its parent's root, forward slashes; present
+   *  iff parentProjectId is. */
+  memberPath?: string;
 }
 
 /** What a policy-governed hosted initialization created and applied: the

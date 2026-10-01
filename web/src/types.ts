@@ -91,6 +91,34 @@ export interface ProjectRecord {
   id: string;
   status: string;
   unitId?: string;
+  /** Stage 7: a member record names the project that declares it (its crumb). */
+  parentProjectId?: string;
+  /** Stage 7: a member's path inside its parent's tree. */
+  memberPath?: string;
+}
+
+/** One used member of an external, against the live producer. */
+export interface ExternalUseStatus {
+  publicName?: string;
+  member?: string;
+  /** unchanged | changed | removed | unlocked | unavailable */
+  state: string;
+  code?: string;
+  detail?: string;
+}
+
+/** Relation health of one external: its pin against the live producer; unavailable is never a pass. */
+export interface ExternalStatus {
+  alias: string;
+  project: string;
+  sourceKind: string;
+  pinned: boolean;
+  reachable: boolean;
+  stale: boolean;
+  drifted?: boolean;
+  outOfReach?: boolean;
+  detail?: string;
+  uses: ExternalUseStatus[];
 }
 
 export interface WebContext {

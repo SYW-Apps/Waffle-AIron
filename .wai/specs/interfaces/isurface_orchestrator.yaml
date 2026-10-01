@@ -58,17 +58,18 @@ methods:
     description: >-
       The `wairon externals pin` / sdd_pin_externals workflow. For each declared external (the named
       aliases, else all): project the producer's resolved project export table at the consumer's
-      audience ceiling (project for a family producer, instance for a source.path one) into
-      .wai/externals/<alias>.yaml, and record in .wai/externals.lock.yaml the producer id, the
-      snapshot path, the snapshot's canonical content digest and the `used` map — every public name
-      the consumer's references land on, `alias::name` references and bare names bound through the
-      alias's `use` import alike (export usage), each used member with its canonical signature
+      audience ceiling (project for a family producer, instance for a source.path or source.hosted
+      one) into .wai/externals/<alias>.yaml, and record in .wai/externals.lock.yaml the producer id,
+      the snapshot path, the snapshot's canonical content digest and the `used` map — every public
+      name the consumer's references land on, `alias::name` references and bare names bound through
+      the alias's `use` import alike (export usage), each used member with its canonical signature
       digest; a name imported by `use` but referenced nowhere is not used. An unchanged snapshot is
       not rewritten; with no aliases named, lock entries and snapshots for aliases no longer
       declared are removed. An alias the project does not declare is refused before anything is
       written; an unresolved or unreachable producer is reported and leaves its previous pin in
-      place. The caller must gate on reach itself: a producer the request may not read is reported
-      unreachable, never read.
+      place — a source.hosted external pinned outside a hosted server is reported as "hosted-only
+      producer `<id>`: available only through the hosted server". The caller must gate on reach
+      itself: a producer the request may not read is reported unreachable, never read.
     signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
     returns: ExternalPin[]
     params:
@@ -85,10 +86,11 @@ methods:
       the live producer (decision 19) by canonical digest: unchanged, changed, removed, or unlocked
       (used now but not in the lock). Anything it cannot compare — an unreachable producer, an
       unexported reference, a producer outside the family — is unavailable with
-      EXTERNAL_CHECK_UNAVAILABLE, never a pass. A producer whose root lies outside the request's
-      reach is marked outOfReach and never read, so a caller that narrowed the reach to its
-      selection learns which externals it did not select. It only reports: it writes nothing and
-      fails nothing.
+      EXTERNAL_CHECK_UNAVAILABLE, never a pass; a source.hosted external read outside a hosted
+      server says why in its reason: "hosted-only producer `<id>`: available only through the hosted
+      server". A producer whose root lies outside the request's reach is marked outOfReach and never
+      read, so a caller that narrowed the reach to its selection learns which externals it did not
+      select. It only reports: it writes nothing and fails nothing.
     signature: 'getExternalsStatus(): ExternalStatus[]'
     returns: ExternalStatus[]
     params: []
@@ -163,4 +165,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-09-30T20:23:23.010Z'
+updatedAt: '2026-10-01T17:07:59.610Z'

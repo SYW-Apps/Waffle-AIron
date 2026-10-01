@@ -11,6 +11,7 @@ import { lockProject, decideRequest, executeApprovedRequest } from '../../src/se
 import * as hostCore from '../../src/server/adapters/core.js';
 import { computeGateStateId, validateAsComplete } from '../../src/server/adapters/validator.js';
 import { registerProjectRecord } from '../../src/server/projects.js';
+import { upgradeMemberRecords } from '../../src/server/local-admin.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { setAssignment } from '../../src/server/permissions.js';
 import { decideApprovalRequest, getApprovalRequestById } from '../../src/server/approvals.js';
@@ -57,9 +58,11 @@ beforeEach(() => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-hosted-approval-data-'));
   cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
   fam = buildApprovalFamily();
-  // The approval family IS the hosted project "top"; its members bind through the mount.
+  // The approval family IS the hosted project "top"; the stage-7 upgrade makes
+  // each of its members (mid, mid's leaf, sib) a hosted record of its own.
   registerProjectRecord(dataDir, 'top', fam.top);
   invalidateSpecCache();
+  expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
 });
 
 afterEach(() => {
@@ -98,11 +101,11 @@ function dirHash(dir: string): string {
   return h.digest('hex');
 }
 
-/** Each member approved at its own root, bottom-up, through the hosted member-scoped lock. */
+/** Each member approved at its own root, bottom-up, through its own hosted record's lock. */
 function lockMembers(): void {
-  executeApprovedLock(cfg, 'top', APPROVER, 'mid::leaf');
-  executeApprovedLock(cfg, 'top', APPROVER, 'mid');
-  executeApprovedLock(cfg, 'top', APPROVER, 'sib');
+  executeApprovedLock(cfg, 'leaf', APPROVER);
+  executeApprovedLock(cfg, 'mid', APPROVER);
+  executeApprovedLock(cfg, 'sib', APPROVER);
   invalidateSpecCache();
 }
 
@@ -133,8 +136,8 @@ function addUnimplementedComponent(): void {
 
 describe('hosted lock — format 2', () => {
   it('records format 2: members (subject + state), code beside the claim, the design half, the approver, never children', () => {
-    executeApprovedLock(cfg, 'top', APPROVER, 'mid::leaf');
-    const mid = executeApprovedLock(cfg, 'top', APPROVER, 'mid');
+    executeApprovedLock(cfg, 'leaf', APPROVER);
+    const mid = executeApprovedLock(cfg, 'mid', APPROVER);
     invalidateSpecCache();
 
     const record = executeApprovedLock(cfg, 'top', APPROVER);
@@ -159,7 +162,7 @@ describe('hosted lock — format 2', () => {
   });
 
   it('a member-scoped lock records the member at its own root and writes nothing at the parent', () => {
-    const leaf = executeApprovedLock(cfg, 'top', APPROVER, 'mid::leaf');
+    const leaf = executeApprovedLock(cfg, 'leaf', APPROVER);
     expect(leaf.format).toBe(2);
     expect(readLockRecordAt(fam.leaf)).toMatchObject({ stateId: leaf.stateId });
     expect(fs.existsSync(lockFile(fam.mid))).toBe(false);
@@ -174,7 +177,7 @@ describe('hosted lock — code findings are recorded beside the claim and never 
     const run = runWithProjectRoot(fam.sib, () => validateAsComplete());
     expect(run.issues.filter((i) => i.code === 'MISSING_SOURCE_FILE' && i.severity === 'error')).not.toHaveLength(0);
 
-    const record = executeApprovedLock(cfg, 'top', APPROVER, 'sib');
+    const record = executeApprovedLock(cfg, 'sib', APPROVER);
 
     expect(record.code!.errors).toBeGreaterThanOrEqual(1);
     expect(record.validationResult).toMatchObject({ valid: true, errors: 0 });
@@ -183,7 +186,7 @@ describe('hosted lock — code findings are recorded beside the claim and never 
 
   it('the lockProject outcome states the code findings beside the claim', () => {
     addUnimplementedComponent();
-    const outcome = lockProject(cfg, MASTER, 'top', 'sib');
+    const outcome = lockProject(cfg, MASTER, 'sib');
     expect(outcome.status).toBe('completed');
     expect(outcome.summary).toMatch(/code: [1-9]\d* errors recorded beside the claim/);
     expect(outcome.lock!.code!.errors).toBeGreaterThanOrEqual(1);
@@ -195,7 +198,7 @@ describe('hosted lock — code findings are recorded beside the claim and never 
     const iface = path.join(fam.sib, '.wai', 'specs', 'aside', 'engine', '.interface.yaml');
     fs.writeFileSync(iface, fs.readFileSync(iface, 'utf8').replace("returns: void", 'returns: NoSuchType'));
     invalidateSpecCache();
-    expect(() => executeApprovedLock(cfg, 'top', APPROVER, 'sib')).toThrow(LockValidationError);
+    expect(() => executeApprovedLock(cfg, 'sib', APPROVER)).toThrow(LockValidationError);
     expect(fs.existsSync(lockFile(fam.sib))).toBe(false);
   });
 });
@@ -203,16 +206,16 @@ describe('hosted lock — code findings are recorded beside the claim and never 
 describe('hosted lock — composition.requireApprovedMembers', () => {
   it('refuses, naming each direct member not approved and its state, and writes nothing', () => {
     fam.setComposition(['requireApprovedMembers: true']);
-    executeApprovedLock(cfg, 'top', APPROVER, 'mid::leaf');
-    executeApprovedLock(cfg, 'top', APPROVER, 'mid');
+    executeApprovedLock(cfg, 'leaf', APPROVER);
+    executeApprovedLock(cfg, 'mid', APPROVER);
     touch(fam.mid, 'edited after its lock');
 
     expect(() => executeApprovedLock(cfg, 'top', APPROVER))
       .toThrow(/requireApprovedMembers.*mid \(drifted\).*sib \(never\)/);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
 
-    executeApprovedLock(cfg, 'top', APPROVER, 'mid');
-    executeApprovedLock(cfg, 'top', APPROVER, 'sib');
+    executeApprovedLock(cfg, 'mid', APPROVER);
+    executeApprovedLock(cfg, 'sib', APPROVER);
     invalidateSpecCache();
     const record = executeApprovedLock(cfg, 'top', APPROVER);
     expect(record.members).toMatchObject({ mid: { state: 'approved' }, sib: { state: 'approved' } });
@@ -246,7 +249,7 @@ describe('hosted lock — inputs captured before validation, confirmed before wr
         once = true;
         // A member lock is its own hosted lock at its own root.
         const bound = original(...args);
-        executeApprovedLock(cfg, 'top', APPROVER, 'sib');
+        executeApprovedLock(cfg, 'sib', APPROVER);
         invalidateSpecCache();
         return bound;
       }
@@ -311,10 +314,10 @@ describe('hosted approval requests pin the gate identity at request time', () =>
   }
 
   /** A pending project:lock request from a requester who needs approval, and a decider who may decide. */
-  function requestLock(subproject?: string): { id: string; gateStateId?: string; requester: string; decider: string } {
+  function requestLock(project = 'top'): { id: string; gateStateId?: string; requester: string; decider: string } {
     const requester = mintToken('rq', 'u-requester');
     allow('u-requester', 'project:write', 'approval');
-    const outcome = lockProject(cfg, requester, 'top', subproject);
+    const outcome = lockProject(cfg, requester, project);
     expect(outcome.status).toBe('pending-approval');
     const decider = mintToken('dc', 'u-decider');
     allow('u-decider', 'approval:decide', 'yes');
@@ -331,7 +334,7 @@ describe('hosted approval requests pin the gate identity at request time', () =>
     expect(getApprovalRequestById(dataDir, id)!.gateStateId).toBe(gateStateId);
     // A member-scoped request pins the member's identity, not the project's.
     const member = requestLock('sib');
-    expect(member.gateStateId).toBe(gateIdentity(cfg, 'top', 'sib'));
+    expect(member.gateStateId).toBe(gateIdentity(cfg, 'sib'));
     expect(member.gateStateId).not.toBe(gateStateId);
   });
 
@@ -388,7 +391,7 @@ describe('hosted approval requests pin the gate identity at request time', () =>
 
   it('a member moving after the request moves the parent\'s identity too, and refuses', () => {
     const { id, decider } = requestLock();
-    executeApprovedLock(cfg, 'top', APPROVER, 'sib');
+    executeApprovedLock(cfg, 'sib', APPROVER);
     invalidateSpecCache();
     expect(() => approve(decider, id)).toThrow(MOVED_REASON);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
@@ -398,7 +401,7 @@ describe('hosted approval requests pin the gate identity at request time', () =>
   it('a direct executeApprovedLock with a stale expected identity says why, writes nothing', () => {
     const expected = gateIdentity(cfg, 'top');
     touch(fam.top, 'edited after the identity was taken');
-    expect(() => executeApprovedLock(cfg, 'top', APPROVER, undefined, expected))
+    expect(() => executeApprovedLock(cfg, 'top', APPROVER, expected))
       .toThrow(/design changed since the lock was requested \(requested .*, now .*\); request the lock again\. Nothing was written/);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
   });

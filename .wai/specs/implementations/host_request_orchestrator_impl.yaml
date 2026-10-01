@@ -1,14 +1,15 @@
 id: host_request_orchestrator_impl
 name: Host Request Orchestrator Implementation
 description: >-
-  Per-request data-plane workflow: authenticate, resolve and bind the authorized project scope, then
-  dispatch the sdd_* call — routing the execute-primary project-lifecycle tools
-  (sdd_host_initialize_project, sdd_host_lock_project, sdd_host_get_approval_status,
-  sdd_host_await_approval) to the project lifecycle orchestrator, the hosted landscape discovery
-  tools to the surface exchange orchestrator (currentProjectId = the bound project), and every other
-  tool to the scoped MCP server after enforcing the granular data-plane permission through the
-  authorization component (project:read for reads, project:write for writes — unknown tools fail
-  closed as writes) over the bound project.
+  Per-request data-plane workflow: authenticate, resolve and bind the authorized hosted record (a
+  member is a record of its own since stage 7), resolve the request's reach into the record's family
+  per record, then dispatch the sdd_* call — routing the execute-primary project-lifecycle tools to
+  the project lifecycle orchestrator, the hosted landscape discovery tools to the surface exchange
+  orchestrator (currentProjectId = the bound record), and every other tool to the scoped MCP server
+  after enforcing the granular data-plane permission through the authorization component
+  (project:read for reads, project:write for writes — unknown tools fail closed as writes) over the
+  bound record; after an applied family-shape tool succeeds, the family's member records are
+  reconciled.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
 methods:
@@ -113,10 +114,9 @@ methods:
         toStep: 39
       - stepNumber: 7
         description: >-
-          Execute-or-request a project lock, passing the credential, the TOP project id, AND the
-          bound subproject qualifier when the binding carries one — so a qualified credential
-          freezes exactly the child tree it is scoped to, while permission resolution and audit stay
-          anchored at the top project.
+          Execute-or-request a project lock on the BOUND record — a member's own record when a
+          member is bound, so its lock request, approval page and status are its own; the qualifier
+          argument is no longer passed (a member is never reached through its parent)
         type: call
         targetComponent: project_lifecycle_orchestrator
         targetMethod: lockProject
@@ -255,10 +255,9 @@ methods:
         toStep: 39
       - stepNumber: 33
         description: >-
-          Export the BOUND tree as a .waitree archive, forwarding the bound subproject qualifier so
-          a credential narrowed to a chained child exports exactly that child — project:read gated
-          upstream. The bytes are base64-encoded into the tool result, bounded by the same body cap
-          every data-plane response is.
+          Export the BOUND record's tree as a .waitree archive — a member's own tree when a member
+          is bound — project:read gated upstream. The bytes are base64-encoded into the tool result,
+          bounded by the same body cap every data-plane response is.
         type: call
         targetComponent: project_ops_orchestrator
         targetMethod: exportProjectTree
@@ -268,9 +267,8 @@ methods:
         toStep: 39
       - stepNumber: 35
         description: >-
-          Import a base64-decoded .waitree archive into the BOUND tree, forwarding the bound
-          subproject qualifier — project:admin gated upstream, executable entries always refused,
-          and the replaced tree backed up.
+          Import a base64-decoded .waitree archive into the BOUND record's tree — project:admin
+          gated upstream, executable entries always refused, and the replaced tree backed up.
         type: call
         targetComponent: project_ops_orchestrator
         targetMethod: importProjectTree
@@ -305,7 +303,8 @@ methods:
       - stepNumber: 1
         description: >-
           Build the redacted AuditEvent (action mcp.tool.call, actor and tokenId from the principal,
-          project id, tool name as target, outcome)
+          the bound record's id as projectId — the member's own id when a member was bound — the
+          family root a deprecated qualifier named as composition, tool name as target, outcome)
         type: local
       - stepNumber: 2
         description: Append the audit event without letting a failure fail the request
@@ -358,9 +357,10 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
-          Resolve the full authorized binding through the project repository — the root to bind (the
-          member root for a member-qualified narrowing/selector, one member alias per hop), the TOP
-          project id (permission + audit anchor), and the bound member chain; cross-project access
+          Resolve the authorized binding through the project repository: the bound hosted RECORD (a
+          member is a record of its own, bound by its own id), its root, its family root id, and —
+          for one release — the deprecated member qualifier that resolved it; a narrowing entry
+          naming a project covers its members (projects nest like units); cross-project access
           rejected
         type: call
         targetComponent: project_repository
@@ -377,90 +377,57 @@ methods:
         outcome: 403 Forbidden
       - stepNumber: 9
         description: >-
-          Bind the request-scoped project root together with the request's REACH: the top project's
-          root and whether the credential is authorized for that top project. A credential narrowed
-          to a member binds the member root with no parent reach. The reach no longer changes any
-          project's own verdict — validation's owner gate reads only the bound project's own files
-          and pins (stage 4) — it bounds what a family run may compose and what any reach-gated read
-          (externals status, pinning) may open, and nothing is read above the member's root for a
-          narrowed credential.
-        type: local
+          Read the bound project's hosted family: its family root and every member record, with
+          their roots
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
       - stepNumber: 10
+        description: >-
+          Resolve the request's REACH into that family per record, each through its own chain (its
+          own scope, its parents', the family root's units): which family projects the principal may
+          read and which it may write
+        type: call
+        targetComponent: authorization
+        targetMethod: reach
+      - stepNumber: 11
+        description: >-
+          Bind the request-scoped project root together with the request's reach: the family root's
+          root and the readable and writable family roots. The reach never changes any project's own
+          verdict — validation's owner gate reads only the bound project's own files and pins (stage
+          4) — it bounds what a family run may compose, what a reach-gated read (externals status,
+          pinning) may open, and which members a family migration may write: a migration that would
+          have to write a project outside the writable set refuses family-partial, naming it. The
+          caller must gate on reach itself.
+        type: local
+      - stepNumber: 12
         label: recover-migrations
         description: >-
-          Roll back any family migration a crash left unfinished under the bound project's roots
-          (the top root, and the bound member root when the binding narrows to one) BEFORE any tool
-          reads or writes that tree: a transaction whose coordinator never committed is restored
-          from its backups, one that did has only its directories cleaned, and one that cannot be
-          resolved (a coordinator or owner out of reach, a missing backup) is left for an operator.
-          A hosted project has no person to run `wairon doctor --fix` in its directory, so the
-          server does it on the next bind. It is housekeeping that only puts the family back into
-          the state an earlier request left it in, so it runs whatever the credential's permission;
-          a failure here is logged and never fails the request
+          Family upkeep before the tool: roll back any family migration a crash left unfinished
+          under the bound family's roots, and audit each rollback — owned by member registration,
+          which also reconciles after the tool. Housekeeping that runs whatever the credential's
+          permission; a failure is logged and never fails the request
         type: call
-        targetComponent: host_migration_adapter
+        targetComponent: member_registration
         targetMethod: recover
-      - stepNumber: 11
-        description: Did the recovery find an unfinished transaction?
-        type: branch
-        condition: the recovery answered at least one transaction
-        onFalseStep: 13
-      - stepNumber: 12
-        label: audit-recovery
-        description: >-
-          Audit each transaction the recovery found as a migration.recovered event (its id, verb,
-          coordinator phase and what was done: rolled-back, cleaned or refused) and write the same
-          line to the server log, so an operator sees a rollback nobody asked for; the request then
-          proceeds
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
       - stepNumber: 13
-        label: confine
-        description: >-
-          Confine a member-qualified credential by the called tool's declared scope. A TREE-scoped
-          tool — every scoped spec tool (the sdd_rename_ tools among them), lock, the two tree
-          transfer tools, and the seven family-migration tools (sdd_attach_member,
-          sdd_detach_member, sdd_adopt_member, sdd_rename_project, sdd_rename_member_alias,
-          sdd_internalize_member, sdd_externalize_subsystem), whose plan climbs only as far as the
-          request's reach and refuses family-partial where it would have to write beyond it — acts
-          on the bound member tree (lock and transfer receive the qualifier). A RECORD-scoped tool
-          acts on the project record or its repository, or answers for the hosted project's
-          relations to other projects, so serving it would let a token scoped to one member reach
-          the whole parent — the qualifier would narrow nothing. A tool with no declared scope is
-          treated as record-scoped: confinement fails closed, so a tool added later is refused under
-          a narrowed credential until it declares its scope.
-        type: branch
-        condition: >-
-          the resolved binding carries a member qualifier AND the called tool is not declared
-          TREE-scoped (a record-scoped tool — initialize, approval status, await approval, the six
-          project-ops tools, the four landscape discovery tools — or a tool with no declared scope)
-        onFalseStep: 15
-      - stepNumber: 14
-        description: >-
-          Refuse as an isError tool result (HTTP still 200, and the refusal still flows through the
-          SAME best-effort audit path) naming the tool and the bound qualifier, and stating that the
-          tool acts on the whole project or declares no scope, so an unqualified credential is
-          required. Never a silent success and never a partial action.
-        type: return
-        outcome: refused a tool outside the bound child on a subproject-qualified binding
-      - stepNumber: 15
+        label: dispatch
         description: >-
           Offer the call to the project-lifecycle, landscape and project-ops dispatch, which serves
           it from the matching orchestrator instead of the scoped MCP server
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: dispatchProjectLifecycleTool
-      - stepNumber: 16
+      - stepNumber: 14
         description: >-
           A tool the dispatch serves answers with a response envelope: continue to the shared
           audit-event step, skipping the ordinary permission gate and scoped MCP server dispatch. A
           tool it does not serve answers with nothing and falls through to both.
         type: branch
         condition: the dispatch answered with a response envelope
-        onTrueStep: 23
-        onFalseStep: 17
-      - stepNumber: 17
+        onTrueStep: 34
+        onFalseStep: 15
+      - stepNumber: 15
         description: >-
           Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_
           (sdd_get_externals_status among them), or when it is one of the explicitly listed read
@@ -476,22 +443,22 @@ methods:
           sdd_pin_externals, sdd_get_externals_status and the family-migration tools act on the
           bound (possibly narrowed) tree
         type: local
-      - stepNumber: 18
+      - stepNumber: 16
         description: >-
           Resolve the caller's required capability (project:read or project:write) over the bound
           project through the authorization component
         type: call
         targetComponent: authorization
         targetMethod: authorize
-      - stepNumber: 19
+      - stepNumber: 17
         description: >-
           If the effective value is not yes, reject with a clear MCP error that the required
           data-plane permission is missing for the bound project
         type: branch
         condition: the effective value is not yes
-        onTrueStep: 20
-        onFalseStep: 21
-      - stepNumber: 20
+        onTrueStep: 18
+        onFalseStep: 19
+      - stepNumber: 18
         description: >-
           Reject with a clear MCP error that the required data-plane permission is missing for the
           bound project
@@ -499,20 +466,117 @@ methods:
         error: >-
           Forbidden — the caller lacks the required data-plane permission (project:read or
           project:write) for this project
+      - stepNumber: 19
+        description: >-
+          Is the call membership-changing — sdd_attach_member, sdd_adopt_member, sdd_detach_member
+          or sdd_rename_project, dry run or applied? On hosted, membership decides reach (a member
+          inherits its parent's access), and a detach or an adopt must move storage between isolated
+          roots, so these are handled first
+        type: branch
+        condition: >-
+          the called tool is sdd_attach_member, sdd_adopt_member, sdd_detach_member or
+          sdd_rename_project
+        onFalseStep: 30
+      - stepNumber: 20
+        description: Is it a detach?
+        type: branch
+        condition: the called tool is sdd_detach_member
+        onFalseStep: 23
       - stepNumber: 21
+        description: >-
+          Serve the hosted detach whole through member registration — it relocates the member into
+          an isolated root of its own in one transaction with the family edits and host stores, and
+          answers the plan (dry run) or the applied detachment with the principals who lose access,
+          as the tool result; the scoped server never runs it on hosted
+        type: call
+        targetComponent: member_registration
+        targetMethod: detach
+      - stepNumber: 22
+        description: Continue to the shared audit step
+        type: jump
+        toStep: 34
+      - stepNumber: 23
+        description: Is it an adopt?
+        type: branch
+        condition: the called tool is sdd_adopt_member
+        onFalseStep: 26
+      - stepNumber: 24
+        description: >-
+          Serve the hosted adopt whole through member registration — detach's inverse: it relocates
+          the source.hosted project back into the bound project's tree at the member path in one
+          transaction, converts its record into a member, removes its own placements, and answers
+          the plan (dry run) or the applied adoption with every reach change, as the tool result
+        type: call
+        targetComponent: member_registration
+        targetMethod: adopt
+      - stepNumber: 25
+        description: Continue to the shared audit step
+        type: jump
+        toStep: 34
+      - stepNumber: 26
+        label: screen
+        description: >-
+          Screen it: for attach, list every principal who gains access through the new parent; for a
+          project rename, decide whether the hosted model refuses it (a family root's rename)
+        type: call
+        targetComponent: member_registration
+        targetMethod: screen
+      - stepNumber: 27
+        description: Does the hosted model refuse it?
+        type: branch
+        condition: the screen carries a refusal
+        onFalseStep: 30
+      - stepNumber: 28
+        description: >-
+          Answer an isError tool result (HTTP still 200) with the refusal — "renaming a hosted
+          family root's id is not supported; a member can be renamed, or the root recreated";
+          nothing is dispatched
+        type: local
+      - stepNumber: 29
+        description: Continue to the shared audit step
+        type: jump
+        toStep: 34
+      - stepNumber: 30
+        label: serve
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 22
-        description: Connect the scoped server to the request transport and process the JSON-RPC message
+      - stepNumber: 31
+        description: >-
+          Connect the scoped server to the request transport and process the JSON-RPC message; a
+          screened DRY-RUN result carries the screen's reach changes beside the plan (who gains or
+          loses access), so a human approves the membership change with its access consequences in
+          view
         type: local
-      - stepNumber: 23
+      - stepNumber: 32
+        description: >-
+          Did an APPLIED family-shape tool succeed — sdd_add_member, sdd_move_member, or a stage-6
+          family migration the scoped server ran (attach, adopt, rename project, rename alias,
+          internalize, externalize; a hosted detach is served by member registration above) called
+          without dryRun? Those change which projects the family holds or where, so the hosted
+          records must follow
+        type: branch
+        condition: the call was an applied family-shape tool and its outcome is success
+        onFalseStep: 34
+      - stepNumber: 33
+        description: >-
+          Reconcile the family's member records with the family on disk — register new members
+          (placed like their family root, no grants), relocate moved ones, disable departed ones —
+          audit every touched project naming it with the bound project as composition, and publish
+          one commit covering every touched project's .wai/ when the family is git-backed (touched =
+          the owners the tool's report names as written). A reconciliation failure is logged and
+          audited, never turns the tool's success into a failure
+        type: call
+        targetComponent: member_registration
+        targetMethod: reconcile
+      - stepNumber: 34
+        label: audit
         description: Audit the handled data-plane tool call on the shared best-effort path
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: auditToolCall
-      - stepNumber: 24
+      - stepNumber: 35
         description: Return the MCP response
         type: return
         outcome: MCP response
@@ -533,4 +597,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-09-30T21:06:09.274Z'
+updatedAt: '2026-10-01T17:10:01.097Z'

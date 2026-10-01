@@ -37,23 +37,30 @@ methods:
     description: >-
       Plan taking the member under request.alias out of the family. Refusals: no such member
       (not-a-member); its directory is absent (member-absent); a family project that must be written
-      is out of reach (family-partial); without request.widen, a family project (the bound one
-      included) using a public name the member exports only to the family (audience project or
-      department) — once the member is outside the family, a pin taken by path sees its instance
-      audience and above, so that use would stop resolving (audience-too-narrow, one refusal per
-      export naming every project that uses it: widening is a design decision, never a move's silent
-      side effect). Edits: with request.widen, first, in the member, exactly those used exports' L0
-      entries widened to the instance audience through the gated authoring seam, each shown as
-      `widen <name> <audience>→instance (used by …)` and confirmed with the rest — an export no
-      family project uses is never widened; an export no L0 entry of the member names directly
-      cannot be widened and stays audience-too-narrow. Then, in the bound project, the member
-      removed and an external declared under the SAME alias — `project` its id when that differs
-      from the alias, `source.path` the member's path, its `use` and description carried — and
-      pinned; in every other family project whose external finds the member through the family, a
-      `source.path` to it (relative to that project); in the member, a `source.path` on each of its
-      externals that found a family project through the family, since it leaves the family. No
-      reference text changes. Notes: consumers outside the family are not affected (they already
-      name it by path or not at all).
+      is out of reach (family-partial); with request.relocation, relocation.to already exists and is
+      not an empty directory (relocation-target-exists; an empty one, left by a cut-short cleanup,
+      is free); without request.widen, a family project (the bound one included) using a public name
+      the member exports only to the family (audience project or department) — once the member is
+      outside the family, a pin taken by path or hosted id sees its instance audience and above, so
+      that use would stop resolving (audience-too-narrow, one refusal per export naming every
+      project that uses it: widening is a design decision, never a move's silent side effect).
+      Edits: with request.widen, first, in the member, exactly those used exports' L0 entries
+      widened to the instance audience through the gated authoring seam, each shown as `widen <name>
+      <audience>→instance (used by …)` and confirmed with the rest — an export no family project
+      uses is never widened; an export no L0 entry of the member names directly cannot be widened
+      and stays audience-too-narrow. Then, in the bound project, the member removed and an external
+      declared under the SAME alias — `project` its id when that differs from the alias, its source,
+      its `use` and description carried — and pinned; in every other family project whose external
+      finds the member through the family, a source to it; in the member, a source on each of its
+      externals that found a family project through the family, since it leaves the family. The
+      source is `source.path` (relative to the declaring project) locally, and `source.hosted` (the
+      producer's record id) when the request carries a relocation — a path cannot cross the hosted
+      server's isolated roots. With request.relocation the member is also MOVED: every file under
+      its directory is written under relocation.to in the rehearsal and removed from its old place
+      (the scope names both whole), so the move is part of the plan's file changes — creates at the
+      new root, deletes at the old — and commits with everything else, all or nothing. No reference
+      text changes. Notes: consumers outside the family are not affected (they already name it by
+      path, by hosted id, or not at all).
     signature: 'planDetach(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -72,22 +79,30 @@ methods:
     description: >-
       Plan making the bound project's external under request.alias a member. Refusals: no such
       external (not-an-external); it names no source.path, or its path is not strictly within the
-      bound project (not-contained); the directory holds no project (not-a-project); it is already
-      some family project's member (already-member); its id equals another family project's id
+      bound project (not-contained) — unless the request carries a relocation, when a source.hosted
+      external is adopted from relocation.from into relocation.to (request.path, within the bound
+      project); the target already exists and is not an empty directory (relocation-target-exists;
+      an empty one is free); the directory holds no project (not-a-project); it is already some
+      family project's member (already-member); its id equals another family project's id
       (id-collision). Edits: in the bound project, the external and its pin removed and a member
-      declared under the same alias with the external's path, `use` and description; in every other
-      family project, an external `source.path` that resolves to the adopted project removed, since
-      the family now supplies it; in the adopted project, each external `source.path` that resolves
-      to a family project removed likewise. It is planDetach's inverse, and the property
-      detach-then-adopt-is-identity says exactly this (accepted): the member project is
-      BYTE-identical to before the detach when the detach did not write it (it named no family
-      project through the family), and otherwise SEMANTICALLY identical — its first configuration
-      write materializes the schema's defaults the file left out, as every registry save does; the
-      parent and every other family project are SEMANTICALLY identical — the same member, external
-      and pin declarations with the same values — but not necessarily byte-identical, since a
-      re-declared member is appended to `members` rather than restored to its old position.
-      Precondition: no family project held a redundant source.path to the member before the detach;
-      the plan names one when it does, because adopt removes it too.
+      declared under the same alias with the external's path (or, relocated, request.path), `use`
+      and description; in every other family project, an external source (`source.path`, or
+      `source.hosted` naming the adopted project) that resolves to the adopted project removed,
+      since the family now supplies it; in the adopted project, each external source that resolves
+      to a family project removed likewise. With request.relocation the adopted project is also
+      MOVED: every file under relocation.from is written under relocation.to in the rehearsal and
+      removed from its old place (the scope names both whole), so the move commits with everything
+      else, all or nothing. It is planDetach's inverse, and the property
+      detach-then-adopt-is-identity says exactly this (accepted), locally and hosted alike: the
+      member project is BYTE-identical to before the detach when the detach did not write it (it
+      named no family project through the family) — a relocation copies bytes, so the move itself
+      never changes one — and otherwise SEMANTICALLY identical — its first configuration write
+      materializes the schema's defaults the file left out, as every registry save does; the parent
+      and every other family project are SEMANTICALLY identical — the same member, external and pin
+      declarations with the same values — but not necessarily byte-identical, since a re-declared
+      member is appended to `members` rather than restored to its old position. Precondition: no
+      family project held a redundant source to the member before the detach; the plan names one
+      when it does, because adopt removes it too.
     signature: 'planAdopt(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -121,4 +136,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:33:39.248Z'
-updatedAt: '2026-10-01T05:53:56.910Z'
+updatedAt: '2026-10-01T19:52:06.842Z'

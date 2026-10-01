@@ -83,9 +83,13 @@ const PORTAL_SOURCES: Record<string, string> = {
   startHostServer: 'http',
 };
 
+/** The one method the portal composes itself (its narrative plans, then applies or discards). */
+const COMPOSED = ['upgradeMemberRecords'];
+
 describe('local_admin_portal (sdd_host)', () => {
   it('publishes exactly the owning workflows, each by identity', () => {
-    expect(Object.keys(localAdmin).sort()).toEqual(Object.keys(PORTAL_SOURCES).sort());
+    expect(Object.keys(localAdmin).sort()).toEqual([...Object.keys(PORTAL_SOURCES), ...COMPOSED].sort());
+    for (const name of COMPOSED) expect(typeof (localAdmin as Record<string, unknown>)[name], name).toBe('function');
     for (const [name, owner] of Object.entries(PORTAL_SOURCES)) {
       expect((localAdmin as Record<string, unknown>)[name], name).toBe(OWNERS[owner][name]);
     }

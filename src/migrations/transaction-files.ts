@@ -172,4 +172,12 @@ export function close(owner: string, id: string): void {
   } catch {
     // already gone, or not empty after all: nothing to prune
   }
+  // A relocated project's old place, or a rolled-back relocation's new root,
+  // holds nothing at all now: no empty directory is left behind for a later
+  // move to find in its way.
+  try {
+    if (fs.readdirSync(owner).length === 0) fs.rmdirSync(owner);
+  } catch {
+    // already gone, or not empty: nothing to prune
+  }
 }

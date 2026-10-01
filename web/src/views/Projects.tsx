@@ -15,7 +15,7 @@ import {
   useToast,
 } from '../ui';
 import { UnitSelect } from '../components/UnitSelect';
-import { PackImpactSummary } from './ProjectOps';
+import { familyOrder, PackImpactSummary, type FamilyRow } from './ProjectOps';
 import type { GovernedProjectCreation, OrganizationUnitRecord, ProjectRecord } from '../types';
 
 function statusTone(status: string): 'ok' | 'warn' | 'neutral' {
@@ -150,26 +150,44 @@ export function Projects() {
 
       <AsyncView state={projects}>
         {(d) => (
-          <DataTable<ProjectRecord>
-            rowKey={(p) => p.id}
+          <DataTable<FamilyRow>
+            rowKey={(r) => r.project.id}
             empty="No projects in your scope yet."
-            rows={d.projects}
+            rows={familyOrder(d.projects)}
             columns={[
-              { key: 'id', header: 'Project', cell: (p) => <strong>{p.id}</strong> },
-              { key: 'status', header: 'Status', cell: (p) => <Badge tone={statusTone(p.status)}>{p.status}</Badge> },
+              {
+                key: 'id',
+                header: 'Project',
+                cell: ({ project: p, depth }) => (
+                  <div className="cell-stack" style={{ paddingLeft: depth * 18 }}>
+                    <strong>{depth > 0 ? '↳ ' : ''}{p.id}</strong>
+                    {p.parentProjectId && (
+                      <span className="hint">
+                        member of {d.projects.some((x) => x.id === p.parentProjectId) ? p.parentProjectId : 'a project outside your view'}
+                        {p.memberPath ? <> at <code className="subtle">{p.memberPath}</code></> : null}
+                      </span>
+                    )}
+                  </div>
+                ),
+              },
+              { key: 'status', header: 'Status', cell: ({ project: p }) => <Badge tone={statusTone(p.status)}>{p.status}</Badge> },
               {
                 key: 'unit',
                 header: 'Unit',
-                cell: (p) => (
-                  <button className="btn btn-ghost btn-sm" onClick={() => setPlacing(p)} title="Place this project in an organization unit">
-                    {p.unitId ? <code className="subtle">{p.unitId}</code> : <span className="hint">— set unit</span>}
-                  </button>
-                ),
+                cell: ({ project: p }) =>
+                  p.parentProjectId ? (
+                    // A member takes its units from its family root: it is never placed itself.
+                    <span className="hint">from its family root</span>
+                  ) : (
+                    <button className="btn btn-ghost btn-sm" onClick={() => setPlacing(p)} title="Place this project in an organization unit">
+                      {p.unitId ? <code className="subtle">{p.unitId}</code> : <span className="hint">— set unit</span>}
+                    </button>
+                  ),
               },
               {
                 key: 'act',
                 header: '',
-                cell: (p) => (
+                cell: ({ project: p }) => (
                   <div className="row-actions">
                     <Button size="sm" variant="primary" onClick={() => nav(`/canvas/${encodeURIComponent(p.id)}`)}>
                       Open canvas

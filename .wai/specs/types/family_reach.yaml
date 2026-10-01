@@ -1,0 +1,23 @@
+kind: value-object
+id: family_reach
+name: FamilyReach
+description: >-
+  A request's reach into the hosted family of its bound project, resolved per record through each
+  record's own chain (its own scope, then its parents', then the family root's units): the family
+  projects the principal may read (what a family run may compose and a reach-gated read may open)
+  and those it may write (what a family migration may write; it refuses family-partial beyond them).
+  A parent grant reaches its members by inheritance; an explicit no on a member's own record removes
+  that member.
+subsystem: sdd_host
+fields:
+  - name: readable
+    type: string[]
+    description: Family record ids with project:read yes
+    optional: false
+  - name: writable
+    type: string[]
+    description: Family record ids with project:write yes
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:27:35.796Z'
+updatedAt: '2026-10-01T16:55:32.863Z'

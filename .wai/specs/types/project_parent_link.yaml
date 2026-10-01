@@ -1,0 +1,20 @@
+kind: value-object
+id: project_parent_link
+name: ProjectParentLink
+description: >-
+  One rung of the project-to-parent-project chain the permission rules walk: a member record and the
+  record of the project that declares it. Projects nest like organization units, so access granted
+  on a project reaches every member below it, transitively, unless a nearer setting decides.
+subsystem: sdd_host
+fields:
+  - name: projectId
+    type: string
+    description: The member record
+    optional: false
+  - name: parentProjectId
+    type: string
+    description: The record that declares it (its next rung up)
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:54:59.156Z'
+updatedAt: '2026-10-01T16:54:59.158Z'

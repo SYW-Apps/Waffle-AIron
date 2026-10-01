@@ -10,7 +10,9 @@ methods:
     description: >-
       Create or update one project placement: stamp id and createdAt on create and validate that the
       target unitId resolves to an existing organization unit. Persist the full placement collection
-      durably and refresh the store.
+      durably and refresh the store. The registry owns one aggregate and reads no project record, so
+      whether the project is a MEMBER (which takes its units from its family root and is never
+      placed) is checked by every placing workflow before it calls here.
     signature: 'placeProject(placement: ProjectPlacement): ProjectPlacement'
     returns: ProjectPlacement
     params:
@@ -83,4 +85,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-09T22:05:44.376Z'
-updatedAt: '2026-07-15T21:19:38.331Z'
+updatedAt: '2026-10-01T17:05:57.962Z'

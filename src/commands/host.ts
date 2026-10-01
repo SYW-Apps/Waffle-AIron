@@ -427,18 +427,76 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
  * resolves to zero permissions under the live-owner model.
  */
 export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {}): Promise<void> {
+  // Step 1.
   const cfg = resolveHostConfig(options);
-  const report = localAdmin.migratePermissionModel(cfg.dataDir, options.fix === true);
+  const fix = options.fix === true;
+  // Steps 2-3: the permission-model migration first.
+  const report = localAdmin.migratePermissionModel(cfg.dataDir, fix);
   if (report.findings.length === 0) {
     logger.success('Hosted data is on the permission model — nothing to migrate.');
+  } else {
+    logger.info(`${report.findings.length} finding(s)${report.applied ? ' — applied' : ' (dry run; re-run with --fix to apply)'}:`);
+    for (const f of report.findings) {
+      logger.info(`  [${f.area.padEnd(8)}] ${f.detail}`);
+    }
+    if (!report.applied) {
+      logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
+    }
+  }
+  // Step 4: then the stage-7 member upgrade — a dry-run plan, applied all or nothing only with --fix.
+  const upgrade = localAdmin.upgradeMemberRecords(cfg.dataDir, fix);
+  const plan = upgrade.plan;
+  const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
+  // Steps 5-6.
+  if (upgrade.recovered.length === 0 && writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
+    logger.success('Hosted members are records — nothing to upgrade.');
     return;
   }
-  logger.info(`${report.findings.length} finding(s)${report.applied ? ' — applied' : ' (dry run; re-run with --fix to apply)'}:`);
-  for (const f of report.findings) {
-    logger.info(`  [${f.area.padEnd(8)}] ${f.detail}`);
+  // Step 7.
+  printRecovered(upgrade.recovered, fix);
+  if (writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
+    logger.success('Hosted members are records — nothing to upgrade.');
+    return;
   }
-  if (!report.applied) {
-    logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
+  printMemberUpgrade(upgrade, fix);
+}
+
+/** Step 7: each transaction a crash left unfinished under the data directory, and what was done about it. */
+function printRecovered(recovered: ReturnType<typeof localAdmin.upgradeMemberRecords>['recovered'], fix: boolean): void {
+  for (const t of recovered) {
+    const line = `  unfinished ${t.verb} transaction ${t.id} (coordinator phase ${t.phase}): ${t.action} — ${t.detail}`;
+    if (t.action === 'refused') logger.error(line);
+    else logger.info(line);
+  }
+  if (recovered.length > 0 && !fix) logger.warn('A crashed transaction is pending under the data directory — re-run with --fix to roll it back first.');
+}
+
+/** Step 7: the member upgrade plan, once per family, with its proof, key rewrites and refusals. */
+function printMemberUpgrade(upgrade: ReturnType<typeof localAdmin.upgradeMemberRecords>, fix: boolean): void {
+  const plan = upgrade.plan;
+  const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
+  for (const familyRootId of [...new Set(writes.map((m) => m.familyRootId))]) {
+    logger.info(`Family ${familyRootId}:`);
+    for (const m of writes.filter((w) => w.familyRootId === familyRootId)) {
+      const rows = plan.reach.filter((r) => r.memberId === m.record.id);
+      const verdict = rows.every((r) => r.equal) ? 'all equal — nobody’s reach changes' : 'NOT all equal';
+      logger.info(`  ${m.action} ${m.record.id} (parent ${m.record.parentProjectId}, path ${m.record.memberPath}) — `
+        + `reach: ${rows.length} row(s) compared, ${verdict}`);
+    }
+  }
+  for (const n of plan.narrowings) {
+    logger.info(`  key ${n.keyId}: ${n.before.join(', ')} → ${n.after.join(', ')} (${n.widening})`);
+  }
+  for (const r of plan.refusals) logger.error(`  refused [${r.area}] ${r.detail}`);
+  if (plan.refusals.length > 0) {
+    logger.warn('The member upgrade is blocked — nothing was written.');
+  } else if (upgrade.applied) {
+    logger.success(`Member upgrade applied (${upgrade.outcome?.written.length ?? 0} store file(s) swapped in).`);
+  } else if (upgrade.outcome) {
+    logger.error(`Member upgrade failed: ${upgrade.outcome.failure ?? 'unknown'} — `
+      + (upgrade.outcome.restored ? 'every store was restored.' : `NOT restored: ${upgrade.outcome.unrestored.join(', ')}`));
+  } else if (!fix) {
+    logger.warn('Member upgrade NOT applied (dry run; re-run with --fix to apply).');
   }
 }
 
@@ -531,15 +589,19 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         // permissions — it acts as the owner's LIVE permission, narrowed to the
         // named project. Seed the owner's authority with `host permission set`.
         if (options.owner) {
-          const key = localAdmin.mintToken(cfg, cred, {
+          const minted = localAdmin.mintToken(cfg, cred, {
             ownerUserId: options.owner,
             label: options.label ?? `cli token (${options.project})`,
             projects: options.project === '*' ? ['*'] : [options.project],
           });
           logger.success(`API key minted for owner "${options.owner}" (shown once — store it now):`);
           logger.blank();
-          console.log(`  ${chalk.bold(key)}`);
+          console.log(`  ${chalk.bold(minted.token)}`);
           logger.blank();
+          // A deprecated member-qualified entry is stored as the member's own record id: say so.
+          for (const line of minted.mapped) {
+            logger.warn(`Narrowing ${line}: a member is a record of its own since stage 7, so the token names it by its id (qualified entries are deprecated).`);
+          }
           break;
         }
         const role = (options.role ?? 'editor') as DisplayRole;

@@ -2,29 +2,39 @@ kind: value-object
 id: project_binding
 name: ProjectBinding
 description: >-
-  The resolved binding of one authorized data-plane request: which filesystem root the request
-  operates on and which hosted project it belongs to for provenance. When the narrowing/selector is
-  subproject-qualified, rootPath is the mounted CHILD root while projectId stays the TOP project
-  (audit + permissions anchor there).
+  The resolved binding of one authorized data-plane request: the hosted project record it binds and
+  that record's root. Since stage 7 a member is bound as its own record, so projectId is always the
+  project the request acts on — permissions (resolved over the record's chain), audit, approval and
+  record-level tools all anchor there. A narrowing entry naming a project covers its members. A
+  member-qualified selector or narrowing ('platform::billing') still resolves for one release, to
+  the member's record, and is recorded in via.
 subsystem: sdd_host
 fields:
   - name: rootPath
     type: string
     description: >-
-      Absolute root the request binds — the project's isolated root, or the mounted chained-child
-      root for a subproject-qualified binding.
+      Absolute root the request binds — the bound record's root (a member record's is derived from
+      its parent's root and memberPath).
     optional: false
   - name: projectId
     type: string
-    description: The TOP hosted project id — permission resolution and audit provenance always anchor here.
+    description: >-
+      The bound hosted record's id — the member's own id when a member is bound. Permission
+      resolution, audit and every record-level tool anchor here.
     optional: false
-  - name: subproject
+  - name: familyRootId
     type: string
     description: >-
-      The bound member chain ('a' or 'a::b', one member alias per hop) when the binding is
-      member-qualified; absent for a plain project binding.
+      The family root record of the bound project (itself for a family root): whose repository the
+      project commits through and whose family the request's reach is resolved over.
+    optional: false
+  - name: via
+    type: string
+    description: >-
+      The deprecated member-qualified selector or narrowing entry that resolved to this record, kept
+      for one release; recorded in audit as the initiating composition (its first segment).
     optional: true
 methods: []
 sourcePath: src/server/projects.ts
 createdAt: '2026-07-24T20:50:13.159Z'
-updatedAt: '2026-09-27T11:00:30.319Z'
+updatedAt: '2026-10-01T16:55:34.494Z'

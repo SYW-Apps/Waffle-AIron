@@ -691,10 +691,11 @@ methods:
       address: mcp tools/call sdd_detach_member
   - name: sdd_adopt_member
     description: >-
-      Tool: make the bound project's external found by a path inside it a member —
-      sdd_detach_member's inverse. All-or-nothing; dryRun answers the plan and writes nothing. Never
-      locks.
-    signature: 'sdd_adopt_member(alias: string, dryRun?: boolean): FamilyMigrationReport'
+      Tool: make the bound project's external a member — sdd_detach_member's inverse. Locally the
+      external is found by a path inside the bound project; on a hosted instance it names a project
+      by source.hosted and path says where to adopt it (the hosting server relocates it there).
+      All-or-nothing; dryRun answers the plan and writes nothing. Never locks.
+    signature: 'sdd_adopt_member(alias: string, path?: string, dryRun?: boolean): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -704,9 +705,15 @@ methods:
         type: boolean
         description: Answer the plan and write nothing
         optional: true
+      - name: path
+        type: string
+        description: >-
+          Hosted: the member path to adopt a source.hosted external at, relative to the bound
+          project; a source.path external is adopted where it is
+        optional: true
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_adopt_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-01T05:54:24.936Z'
+updatedAt: '2026-10-01T18:07:25.469Z'

@@ -204,26 +204,22 @@ methods:
       Pre-authorized entry for the approval workflow: performs the same privileged action as
       lockProject but WITHOUT credential authentication — the caller
       (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
-      exposed on any portal. An optional member qualifier ('a' or 'a::b', one member alias per hop)
-      binds the MEMBER's tree instead of the project's own, resolved through the project
-      repository's containment-checked qualified resolution (the same seam the data plane binds
-      through, so a qualifier can never resolve outside the project root). Because the git binding
-      is read from the BOUND root, a member-scoped lock finds no repository binding there and
-      therefore performs no sync and no publish: the member is not the git unit. The frozen member
-      tree persists in the project's working tree, but note it is NOT staged by the project's own
-      .wai/-scoped commit either — a member lives outside that pathspec — so reaching a remote
-      requires a commit whose scope covers the member's path. Stage 5: the gate identity is CAPTURED
-      before validation and confirmed unchanged before the record is written (refused otherwise,
-      nothing written); when `expected` is given (an approval request's recorded gateStateId) the
-      captured identity must equal it, so an approval never certifies a design other than the one
-      requested; the lock gates on the design half of the as-complete run only; the record carries
-      format 2, each direct member's subject and state (`members`, never `children`), and the code
-      results beside the claim (`code`); and with composition.requireApprovedMembers it refuses
-      while a direct member is drifted or never approved, naming each. Nothing is ever written below
-      the bound root.
+      exposed on any portal. It locks the project's OWN record: a member is a record since stage 7,
+      so its own tree is bound (derived from its parent's root and memberPath) and no qualifier
+      exists. Git goes through the project's family repository: sync at the family root's repository
+      root, and publish ONLY the project's own .wai/ pathspec there, so a member's lock reaches the
+      remote without sweeping its parent's or siblings' trees. Stage 5: the gate identity is
+      CAPTURED before validation and confirmed unchanged before the record is written (refused
+      otherwise, nothing written); when `expected` is given (an approval request's recorded
+      gateStateId) the captured identity must equal it, so an approval never certifies a design
+      other than the one requested; the lock gates on the design half of the as-complete run only;
+      the record carries format 2, each direct member's subject and state (`members`, never
+      `children`), and the code results beside the claim (`code`); and with
+      composition.requireApprovedMembers it refuses while a direct member is drifted or never
+      approved, naming each. Nothing is ever written below the bound project.
     signature: >-
-      executeApprovedLock(projectId: string, approver: ApproverIdentity, subproject?: string,
-      expected?: string): LockRecord
+      executeApprovedLock(projectId: string, approver: ApproverIdentity, expected?: string):
+      LockRecord
     returns: LockRecord
     params:
       - name: projectId
@@ -235,12 +231,6 @@ methods:
           the decider on an approved request (hostedApprover; the bootstrap master credential when
           there is no subject). Recorded as the record's lockedBy. Pre-authorized callers resolve
           it; nothing here re-authenticates.
-      - name: subproject
-        type: string
-        description: >-
-          Member chain to bind instead of the project root — one member alias per hop ('a' or
-          'a::b'), the same strings the legacy mount ids were; absent binds the project's own tree.
-        optional: true
       - name: expected
         type: string
         description: >-
@@ -249,13 +239,13 @@ methods:
         optional: true
   - name: commitProject
     description: >-
-      Authenticate, require project:write over the project, and publish a DELIBERATE, SCOPED backup:
-      stage ONLY .wai/ (or the finer .wai/specs/<subsystem>/ subpath when given), commit, and push —
-      commit is the local save, push is the actual backup; both happen. Never `git add -A`: a shared
-      real repository's own code is never staged. CAVEAT: a subsystem-scoped commit is a staging
-      convenience only — git history is per-repo, so the log still interleaves all commits; the
-      project is the clean unit. A no-op when nothing under the scoped path changed. Returns the
-      publish outcome (commit id or clean).
+      Authenticate, require project:write over the project's OWN record, and publish a DELIBERATE,
+      SCOPED backup through the project's family repository: a family root stages ONLY its .wai/, a
+      member ONLY its own <path>/.wai/ at its family root's repository root (or the finer
+      .../specs/<subsystem>/ when given) — commit, then push. Pathspec-confined staging and a
+      pathspec-confined commit: never `git add -A`, never a parent's or sibling member's tree, never
+      source code. A member's own history is the family log filtered to its pathspec. A no-op when
+      nothing under the scoped path changed. Returns the publish outcome (commit id or clean).
     signature: >-
       commitProject(credential: string, project: string, subsystem: string, message: string):
       GitPublish
@@ -286,10 +276,12 @@ methods:
   - name: runPeriodicGitSync
     description: >-
       Pre-authorized internal entry for the host supervisor's periodic backup timer — performs NO
-      authentication and is never exposed on any portal. Iterates the git-bound projects whose
-      binding enables periodic sync, and for each publishes a .wai/-scoped commit+push, skipping
-      clean projects (skip-if-clean) so a quiet project never commits noise. Failures are recorded
-      per project and never abort the sweep.
+      authentication and is never exposed on any portal. Iterates the git-bound FAMILY ROOT records
+      whose binding enables periodic sync, and for each publishes one commit+push covering the
+      family's pathspecs (its own .wai/ and every member record's <path>/.wai/), skipping clean
+      families (skip-if-clean) so a quiet family never commits noise. A member record has no
+      repository of its own and is never iterated alone. Failures are recorded per family and never
+      abort the sweep.
     signature: 'runPeriodicGitSync(): void'
     returns: void
     params: []
@@ -317,24 +309,18 @@ methods:
   - name: exportProjectTree
     description: >-
       Pack a hosted project's spec tree into a .waitree archive. Requires project:read over the
-      project — the same grant that already reads every spec individually, so bulk export grants
-      nothing new. TREE-scoped: a member qualifier binds that member's tree, so a credential
-      narrowed to one member exports exactly that member.
+      project's own record — the same grant that already reads every spec individually, so bulk
+      export grants nothing new. A member is exported by its own record id; no qualifier exists
+      since stage 7.
     signature: >-
-      exportProjectTree(credential: string, project: string, subproject?: string, includeDerived?:
-      boolean, allowPartial?: boolean): TreeExportResult
+      exportProjectTree(credential: string, project: string, includeDerived?: boolean,
+      allowPartial?: boolean): TreeExportResult
     returns: TreeExportResult
     params:
       - name: credential
         type: string
       - name: project
         type: string
-      - name: subproject
-        type: string
-        description: >-
-          Member chain ('a' or 'a::b', one member alias per hop) — binds the member's tree instead
-          of the project root
-        optional: true
       - name: includeDerived
         type: boolean
         optional: true
@@ -347,14 +333,14 @@ methods:
   - name: importProjectTree
     description: >-
       Replace a hosted project's spec tree from a .waitree archive. Requires project:admin over the
-      project — strictly above project:write, because this replaces the entire design rather than
-      editing one spec. Refuses an occupied destination unless replaceExisting is set, always
-      refuses executable entries (the archive arrived over the wire, and executable doctrine
+      project's own record — strictly above project:write, because this replaces the entire design
+      rather than editing one spec. Refuses an occupied destination unless replaceExisting is set,
+      always refuses executable entries (the archive arrived over the wire, and executable doctrine
       installs only through the trusted filesystem), and moves the previous tree aside to a backup.
-      TREE-scoped through the same qualifier binding as export.
+      A member is imported into by its own record id.
     signature: >-
-      importProjectTree(credential: string, project: string, archive: bytes, subproject?: string,
-      replaceExisting?: boolean): TreeImportResult
+      importProjectTree(credential: string, project: string, archive: bytes, replaceExisting?:
+      boolean): TreeImportResult
     returns: TreeImportResult
     params:
       - name: credential
@@ -363,12 +349,6 @@ methods:
         type: string
       - name: archive
         type: bytes
-      - name: subproject
-        type: string
-        description: >-
-          Member chain ('a' or 'a::b', one member alias per hop) — replaces that member's tree
-          instead of the project's own
-        optional: true
       - name: replaceExisting
         type: boolean
         optional: true
@@ -388,21 +368,17 @@ methods:
   - name: gateIdentity
     description: >-
       Pre-authorized, like executeApprovedLock and for the same caller: the gate identity of the
-      tree a lock of this project (or of the member the qualifier binds) would certify NOW, rendered
-      `<algorithm>:<digest>`. Read-only — no sync, no validation, no write.
-      project_lifecycle_orchestrator records it on a project:lock request when it is created, so the
-      approved execution can refuse a tree that moved after the request.
-    signature: 'gateIdentity(projectId: string, subproject?: string): string'
+      tree a lock of this project's own record would certify NOW, rendered `<algorithm>:<digest>`.
+      Read-only — no sync, no validation, no write. project_lifecycle_orchestrator records it on a
+      project:lock request when it is created, so the approved execution can refuse a tree that
+      moved after the request.
+    signature: 'gateIdentity(projectId: string): string'
     returns: string
     params:
       - name: projectId
         type: string
-      - name: subproject
-        type: string
-        description: Member chain to bind instead of the project root, exactly as executeApprovedLock takes it.
-        optional: true
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-09-30T16:23:03.628Z'
+updatedAt: '2026-10-01T16:53:07.981Z'

@@ -11,15 +11,17 @@ import { moveMountToMembers } from '../../src/core/provision.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { seedSubsystem, seedChainedMount } from './helpers.js';
+import { upgradeMemberRecords } from '../../src/server/local-admin.js';
 import type { Principal } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
 // Stage 3: a hosted token qualifier keeps its text, and each hop is read as a
 // member alias — looked up in project.yaml `members` or, for one release, a
-// legacy L1 mount. A qualifier minted against the mount form therefore binds
-// the SAME root after the project moves its mounts into `members`, and nothing
+// legacy L1 mount. Stage 7: each member is a hosted record of its own, and a
+// (deprecated) qualifier maps to that record. A qualifier therefore binds the
+// SAME record after the project moves its mounts into `members`, and nothing
 // widens: an internal subsystem is still no root, and a qualified principal
-// still binds neither its top project nor a sibling.
+// still binds neither its family root nor a sibling.
 // ---------------------------------------------------------------------------
 
 const principalWith = (projects: string[]): Principal => ({ tokenId: 'tok-x', role: 'editor', projects, authenticated: true });
@@ -51,6 +53,8 @@ describe('hosted member qualifiers: the same root before and after the mounts mo
     initialize(otherDir, 'other');
     seedSubsystem(demoRoot, 'plain');
     invalidateSpecCache();
+    // Stage 7: billing, payments and other become hosted records.
+    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
   });
 
   afterEach(() => {
@@ -75,7 +79,9 @@ describe('hosted member qualifiers: the same root before and after the mounts mo
 
   it('binds each qualifier to the same root whether the member is a legacy mount or a `members` entry', () => {
     const before = bindings();
-    expect(before.narrowedToBilling).toEqual({ rootPath: path.resolve(billingDir), projectId: 'demo', subproject: 'billing' });
+    expect(before.narrowedToBilling).toEqual({ rootPath: path.resolve(billingDir), projectId: 'billing', familyRootId: 'demo', via: 'demo::billing' });
+    expect(before.narrowedToPayments).toMatchObject({ projectId: 'payments', familyRootId: 'demo' });
+    expect(before.wildcardSelector).toMatchObject({ projectId: 'other', familyRootId: 'demo' });
     expect(before.internalSubsystem).toBeNull();
     expect(before.widenToTop).toBeNull();
     expect(before.widenToSibling).toBeNull();
@@ -97,14 +103,15 @@ describe('hosted member qualifiers: the same root before and after the mounts mo
 
   it('validates the same narrowing entries at mint time in either form, and refuses an internal subsystem', () => {
     const entries = ['demo', 'demo::billing', 'demo::billing::payments', 'demo::other'];
-    for (const entry of entries) expect(() => assertMintableNarrowingEntry(dataDir, entry)).not.toThrow();
+    const stored = ['demo', 'billing', 'payments', 'other'];
+    expect(entries.map((e) => assertMintableNarrowingEntry(dataDir, e))).toEqual(stored);
     expect(() => assertMintableNarrowingEntry(dataDir, 'demo::plain')).toThrow(/an internal subsystem is not a member/);
 
     runWithProjectRoot(demoRoot, () => { moveMountToMembers('billing'); moveMountToMembers('other'); });
     runWithProjectRoot(billingDir, () => moveMountToMembers('payments'));
     invalidateSpecCache();
 
-    for (const entry of entries) expect(() => assertMintableNarrowingEntry(dataDir, entry)).not.toThrow();
+    expect(entries.map((e) => assertMintableNarrowingEntry(dataDir, e))).toEqual(stored);
     expect(() => assertMintableNarrowingEntry(dataDir, 'demo::plain')).toThrow(/an internal subsystem is not a member/);
   });
 });

@@ -13,10 +13,18 @@ methods:
       the family's top; the verb's edits and refusals — for verb chaining, the chaining migration's
       own plan carried whole, its blocking findings as refusals; and, when nothing refuses and the
       request does not ask otherwise, the rehearsal and its file changes, and the owners to re-lock.
-      A pending transaction anywhere the plan reads refuses it (transaction-pending, naming `wairon
-      doctor --fix`). A core writer's refusal met during the rehearsal becomes the plan's refusal
-      (internalize-refused, externalize-refused), the rehearsal dropped. Writes nothing into the
-      family.
+      The request's reach is two sets of project roots: those it may READ (the climb stops where it
+      may not read above a root) and those it may WRITE — a plan that must write a project outside
+      the writable set refuses (family-partial), naming it. Locally both sets are every root the
+      request can open; on the hosted data plane they are the family records the credential may read
+      and write, each judged through its own permission chain. A request carrying a relocation
+      (hosted detach) is rehearsed with the relocation's coordinator (the host data directory) as
+      the coordinator and an owner contributing its store files, and with the member's old directory
+      and its new root named whole, so the member's move, the family edits and the host store writes
+      the caller makes in the same rehearsal commit as one transaction. A pending transaction
+      anywhere the plan reads refuses it (transaction-pending, naming `wairon doctor --fix`). A core
+      writer's refusal met during the rehearsal becomes the plan's refusal (internalize-refused,
+      externalize-refused), the rehearsal dropped. Writes nothing into the family.
     signature: 'plan(request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -82,4 +90,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:35:39.470Z'
-updatedAt: '2026-09-30T22:58:31.638Z'
+updatedAt: '2026-10-01T17:03:45.725Z'

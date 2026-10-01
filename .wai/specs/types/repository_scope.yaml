@@ -1,0 +1,26 @@
+kind: value-object
+id: repository_scope
+name: RepositoryScope
+description: >-
+  Where a hosted project's specs are committed: the repository root (its family root record's
+  isolated root, which holds the family's one git binding) and the pathspecs confined to the
+  project's own .wai/ relative to it. A family root's pathspecs are ['.wai/']; a member's are
+  ['<path from the family root>/.wai/'] — never a member's parent's or sibling's tree, and never
+  source code.
+subsystem: sdd_host
+fields:
+  - name: familyRootId
+    type: string
+    description: The family root record whose repository is used
+    optional: false
+  - name: repositoryRoot
+    type: string
+    description: The family root's isolated root, absolute
+    optional: false
+  - name: pathspecs
+    type: string[]
+    description: Forward-slash pathspecs relative to repositoryRoot, each ending in .wai/
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:27:29.766Z'
+updatedAt: '2026-10-01T16:27:39.624Z'

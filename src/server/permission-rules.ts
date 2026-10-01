@@ -70,16 +70,40 @@ function unitChain(unitId: string, world: PermissionWorld): Scope[] {
 }
 
 /**
+ * The project rungs of a project's chain, leaf first: its own scope, then —
+ * following the world's parent links, each visited once — every parent project
+ * up to its family root. Projects nest like units.
+ */
+function projectChain(projectId: string, world: PermissionWorld): string[] {
+  const chain: string[] = [];
+  let current: string | undefined = projectId;
+  while (current !== undefined && !chain.includes(current)) {
+    chain.push(current);
+    const at: string = current;
+    current = (world.parents ?? []).find((l) => l.projectId === at)?.parentProjectId;
+  }
+  return chain;
+}
+
+/** The units a project takes from its family root's placement: the unit and its ancestors. */
+function familyRootUnits(projectId: string, world: PermissionWorld): Scope[] {
+  const chain = projectChain(projectId, world);
+  const familyRoot = chain[chain.length - 1];
+  const placement = world.placements.find((p) => p.projectId === familyRoot);
+  return placement ? unitChain(placement.unitId, world) : [];
+}
+
+/**
  * Build the target's ancestor chain leaf->root, ending at the instance root.
- * A project's chain begins at its own project scope, then continues through the
- * unit it is placed in and that unit's ancestors — so a project-scoped setting
- * outranks its owning unit's.
+ * A project's chain is its own project scope, then each parent project scope up
+ * to its family root, then the FAMILY ROOT's placement unit and that unit's
+ * ancestors (a placement of a member itself is not a rung) — so a project-scoped
+ * setting outranks its parent's, and a parent's outranks the owning unit's.
  */
 function ancestorChain(targetScopeKind: string, targetScopeId: string, world: PermissionWorld): Scope[] {
   if (targetScopeKind === 'project') {
-    const placement = world.placements.find((p) => p.projectId === targetScopeId);
-    const unitPart = placement ? unitChain(placement.unitId, world) : [];
-    return [{ kind: 'project', id: targetScopeId }, ...unitPart, INSTANCE_ROOT];
+    const projects = projectChain(targetScopeId, world).map((id) => ({ kind: 'project' as const, id }));
+    return [...projects, ...familyRootUnits(targetScopeId, world), INSTANCE_ROOT];
   }
   if (targetScopeKind === 'unit') {
     return [...unitChain(targetScopeId, world), INSTANCE_ROOT];
@@ -228,21 +252,18 @@ export function resolvePermission(
   return { value: 'no', source: 'instance-default' };
 }
 
-/** Every unit and placed project in the world, as resolvable scopes. */
+/** Every unit, placed project and member project in the world, as resolvable scopes. */
 function allScopes(world: PermissionWorld): { kind: 'unit' | 'project'; id: string }[] {
-  const projectIds = [...new Set(world.placements.map((p) => p.projectId))];
+  const projectIds = [...new Set([...world.placements.map((p) => p.projectId), ...(world.parents ?? []).map((l) => l.projectId)])];
   return [
     ...world.units.map((u) => ({ kind: 'unit' as const, id: u.id })),
     ...projectIds.map((id) => ({ kind: 'project' as const, id })),
   ];
 }
 
-/** The ancestor UNITS of a scope (excluding the scope itself), nearest first. */
+/** The ancestor UNITS of a scope (excluding the scope itself), nearest first — a member's are its family root's. */
 function ancestorUnitsOf(scope: { kind: 'unit' | 'project'; id: string }, world: PermissionWorld): string[] {
-  if (scope.kind === 'project') {
-    const placement = world.placements.find((p) => p.projectId === scope.id);
-    return placement ? unitChain(placement.unitId, world).map((s) => s.id as string) : [];
-  }
+  if (scope.kind === 'project') return familyRootUnits(scope.id, world).map((s) => s.id as string);
   return unitChain(scope.id, world)
     .map((s) => s.id as string)
     .filter((id) => id !== scope.id);

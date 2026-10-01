@@ -15,8 +15,9 @@ dependsOn:
   - backup_schedule
   - instance_bootstrap
   - permission_model_migration
+  - member_registration
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:33:41.732Z'
-updatedAt: '2026-09-25T22:57:01.693Z'
+updatedAt: '2026-10-01T16:59:27.537Z'

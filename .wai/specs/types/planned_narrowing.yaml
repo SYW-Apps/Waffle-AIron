@@ -1,0 +1,31 @@
+kind: value-object
+id: planned_narrowing
+name: PlannedNarrowing
+description: >-
+  One API key's project narrowing as the member upgrade rewrites it: each member-QUALIFIED entry
+  ('platform::billing', one alias per hop) becomes that member's record id. Nothing else changes —
+  an entry naming a project already covers its members through the project chain, so a family-root
+  entry is never expanded, and '*' is kept. widening states what the rewritten entry may now do that
+  it could not: record-level tools (status, approval, lock requests, packs, policy, producers,
+  commit, landscape discovery) on the member's own record — within the member only.
+subsystem: sdd_host
+fields:
+  - name: keyId
+    type: string
+    description: The credential id
+    optional: false
+  - name: before
+    type: string[]
+    description: The stored narrowing
+    optional: false
+  - name: after
+    type: string[]
+    description: 'The rewritten narrowing: record ids only, no qualifier'
+    optional: false
+  - name: widening
+    type: string
+    description: The documented widening, or empty when the rewrite only spells the same reach in record ids
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:27:13.765Z'
+updatedAt: '2026-10-01T16:55:18.072Z'

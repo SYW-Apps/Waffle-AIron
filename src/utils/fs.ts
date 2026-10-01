@@ -109,7 +109,24 @@ interface RequestScope {
    * stops there has not read the family whole.
    */
   narrowed?: boolean;
+  /**
+   * Hosted: the roots of family records the request may NOT write (each judged
+   * through its own permission chain). A family migration whose plan writes one
+   * of them refuses family-partial.
+   */
+  unwritableRoots?: string[];
+  /**
+   * Hosted: the record lookup an external's `source.hosted` resolves through —
+   * the root of a hosted record the request may read, or null for one it may
+   * not (unknown and unreadable alike). Absent outside a hosted request, where a
+   * hosted source is unavailable.
+   */
+  hostedLookup?: HostedRecordLookup;
 }
+
+/** A hosted record id to the root of a record the request may read; null for any other id. */
+export type HostedRecordLookup = (recordId: string) => string | null;
+
 const requestRootStore = new AsyncLocalStorage<RequestScope>();
 
 /**
@@ -134,16 +151,35 @@ export function runWithProjectRoot<T>(dir: string, fn: () => T): T {
 /** Bind a hosted request's root together with its reach (see RequestScope). */
 export function runWithProjectBinding<T>(
   dir: string,
-  reach: { topRoot: string; parentReach: boolean; narrowed?: boolean },
+  reach: { topRoot: string; parentReach: boolean; narrowed?: boolean; unwritableRoots?: string[]; hostedLookup?: HostedRecordLookup },
   fn: () => T,
 ): T {
   return requestRootStore.run(
     {
       root: path.resolve(dir), topRoot: path.resolve(reach.topRoot), parentReach: reach.parentReach,
       ...(reach.narrowed ? { narrowed: true } : {}),
+      ...(reach.unwritableRoots ? { unwritableRoots: reach.unwritableRoots.map((r) => path.resolve(r)) } : {}),
+      ...(reach.hostedLookup ? { hostedLookup: reach.hostedLookup } : {}),
     },
     fn,
   );
+}
+
+/** The hosted record lookup of the current request, or null outside a hosted request. */
+export function getHostedLookup(): HostedRecordLookup | null {
+  return requestRootStore.getStore()?.hostedLookup ?? null;
+}
+
+/**
+ * Run `fn` with the current binding's hosted record lookup replaced — a
+ * rehearsal answers a record at its image in the copy. Outside a hosted
+ * request (no lookup to replace) `fn` runs unchanged: replacing nothing can
+ * never lend a request a lookup it did not have.
+ */
+export function runWithHostedLookup<T>(lookup: HostedRecordLookup, fn: () => T): T {
+  const scope = requestRootStore.getStore();
+  if (!scope?.hostedLookup) return fn();
+  return requestRootStore.run({ ...scope, hostedLookup: lookup }, fn);
 }
 
 /** The request-scoped root if one is bound, else null. */
@@ -152,10 +188,14 @@ export function getRequestProjectRoot(): string | null {
 }
 
 /** The current hosted request's reach, or null outside a hosted request binding. */
-export function getRequestParentReach(): { topRoot?: string; parentReach: boolean; narrowed?: boolean } | null {
+export function getRequestParentReach(): { topRoot?: string; parentReach: boolean; narrowed?: boolean; unwritableRoots?: string[] } | null {
   const scope = requestRootStore.getStore();
   if (!scope || scope.parentReach === undefined) return null;
-  return { topRoot: scope.topRoot, parentReach: scope.parentReach, ...(scope.narrowed ? { narrowed: true } : {}) };
+  return {
+    topRoot: scope.topRoot, parentReach: scope.parentReach,
+    ...(scope.narrowed ? { narrowed: true } : {}),
+    ...(scope.unwritableRoots ? { unwritableRoots: scope.unwritableRoots } : {}),
+  };
 }
 
 /** Override the project root. Pass an absolute path to the dir containing .wai/,

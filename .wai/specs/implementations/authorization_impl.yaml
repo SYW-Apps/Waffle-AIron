@@ -21,16 +21,23 @@ methods:
         targetComponent: organization_repository
         targetMethod: listPlacements
       - stepNumber: 3
+        description: >-
+          Gather the hosted records and project the member records' parent links (projects nest like
+          units: a member's chain climbs through its parents to its family root's units)
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 4
         description: Gather the relevant permission assignments
         type: call
         targetComponent: permission_repository
         targetMethod: listAssignments
-      - stepNumber: 4
+      - stepNumber: 5
         description: Gather the role definitions the principal's bindings reference
         type: call
         targetComponent: role_repository
         targetMethod: list
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Assemble the PermissionWorld from the gathered assignments, units, and placements, and a
           role set that MERGES the stored (admin-defined) roles with the intrinsic built-in reserved
@@ -39,12 +46,12 @@ methods:
           resolves without any seed row in the role store — there is no seeding step to forget and
           no silent admin lockout.
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: Resolve the principal's effective permission for the capability at the target scope
         type: call
         targetComponent: permission_rules
         targetMethod: resolvePermission
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the effective permission
         type: return
         outcome: the effective permission
@@ -61,30 +68,101 @@ methods:
         targetComponent: organization_repository
         targetMethod: listPlacements
       - stepNumber: 3
+        description: >-
+          Gather the hosted records and project the member records' parent links, so member projects
+          are judged through their chains too
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 4
         description: Gather the relevant permission assignments
         type: call
         targetComponent: permission_repository
         targetMethod: listAssignments
-      - stepNumber: 4
+      - stepNumber: 5
         description: Gather the role definitions
         type: call
         targetComponent: role_repository
         targetMethod: list
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Assemble the PermissionWorld (stored roles MERGED with the intrinsic built-in reserved
           roles such as 'sso-admin', which are always present without a seed row).
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: Compute the scopes actionable for the capability plus their ancestor breadcrumb
         type: call
         targetComponent: permission_rules
         targetMethod: resolveVisibleScopes
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the visible scopes
         type: return
         outcome: the visible scopes
+  - name: world
+    narrative:
+      - stepNumber: 1
+        description: Gather all organization units
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listUnits
+      - stepNumber: 2
+        description: Gather all project placements
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 3
+        description: Gather the hosted records and project the member records' parent links
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 4
+        description: Gather every permission assignment
+        type: call
+        targetComponent: permission_repository
+        targetMethod: listAssignments
+      - stepNumber: 5
+        description: Gather the stored role definitions
+        type: call
+        targetComponent: role_repository
+        targetMethod: list
+      - stepNumber: 6
+        description: >-
+          Assemble and return the PermissionWorld, the stored roles MERGED with the intrinsic
+          built-in reserved roles exactly as authorize assembles it
+        type: return
+        outcome: PermissionWorld
+    detail: full
+    symbol: gatherPermissionWorld
+  - name: reach
+    narrative:
+      - stepNumber: 1
+        description: Gather the permission world once, as world does
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 2
+        description: For every given record id
+        type: loop
+        loopKind: forEach
+        over: projectIds
+        endStep: 4
+      - stepNumber: 3
+        description: Resolve the principal's project:read over the record's OWN project scope
+        type: call
+        targetComponent: permission_rules
+        targetMethod: resolvePermission
+      - stepNumber: 4
+        description: Resolve its project:write over the same scope, collecting each record whose value is yes
+        type: call
+        targetComponent: permission_rules
+        targetMethod: resolvePermission
+      - stepNumber: 5
+        description: Return the readable and writable record ids
+        type: return
+        outcome: FamilyReach
+    detail: full
+    symbol: resolveFamilyReach
 detail: full
 status: complete
 createdAt: '2026-07-15T21:32:08.971Z'
-updatedAt: '2026-09-23T21:19:39.272Z'
+updatedAt: '2026-10-01T16:55:54.750Z'

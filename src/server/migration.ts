@@ -393,9 +393,11 @@ export function migratePermissionModel(dataDir: string, apply: boolean): Migrati
   }
 
   // 6. Unplaced projects: every project is placed — permission rules enumerate
-  //    units + PLACED projects, so an unplaced one is in NOBODY's view.
+  //    units + PLACED projects, so an unplaced one is in NOBODY's view. Only
+  //    a FAMILY ROOT can be unplaced: a member record takes its units from its
+  //    family root and is never swept into the 'unassigned' unit.
   const placedIds = new Set(listProjectPlacements(dataDir).map((p) => p.projectId));
-  const unplaced = listProjectRecords(dataDir).filter((r) => !placedIds.has(r.id));
+  const unplaced = listProjectRecords(dataDir).filter((r) => !r.parentProjectId && !placedIds.has(r.id));
   if (unplaced.length > 0) {
     found('projects', `${unplaced.length} project(s) are placed in no organization unit: ${unplaced.map((r) => r.id).join(', ')} — placed into the 'unassigned' root unit`);
     if (apply) {

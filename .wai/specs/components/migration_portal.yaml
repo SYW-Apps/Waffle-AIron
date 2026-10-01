@@ -7,15 +7,18 @@ description: >-
   validate lines that report a pending transaction, and the MCP member tools: plan, apply a
   confirmed plan, discard one, recover (or only report) unfinished transactions, and — a pure read —
   the positional match the upgrade report explains, which lives here with the migration that writes
-  from it. It terminates the in-process call and routes each write to the family migration workflow,
-  because a Portal never performs the write itself. The caller must gate on reach itself.
+  from it. It also publishes the family transaction itself (rehearse, diff, commit, drop) for the
+  hosted member upgrade, which scopes the host data directory's store files and commits them through
+  the same all-or-nothing transaction. It terminates the in-process call and routes each write to a
+  workflow, because a Portal never performs the write itself. The caller must gate on reach itself.
 subsystem: sdd_migrations
 componentType: Portal
 owns: []
 dependsOn:
   - family_migration_orchestrator
   - position_reader
+  - family_transaction
 portalType: Custom
 status: complete
 createdAt: '2026-09-30T20:36:26.062Z'
-updatedAt: '2026-09-30T21:33:58.388Z'
+updatedAt: '2026-10-01T16:28:28.267Z'

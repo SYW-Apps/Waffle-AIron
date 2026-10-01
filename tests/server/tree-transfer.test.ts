@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { upgradeMemberRecords } from '../../src/server/local-admin.js';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
@@ -259,17 +260,23 @@ describe('hosted spec-tree transfer', () => {
     expect(fs.readdirSync(targetRoot).filter((e) => e.startsWith('.wai-staging-'))).toEqual([]);
   });
 
-  it('is TREE-scoped: a subproject-qualified credential exports exactly that child', async () => {
+  it('exports a member by its own record: the member tree, through a qualified token too (one release)', async () => {
     createPlacedProject(cfg, MASTER, 'parent');
     const root = seedTree('parent', 'Parent System');
     const childDir = seedChainedMount(root, 'billing', 'packages/billing');
-    fs.writeFileSync(path.join(childDir, '.wai', 'project.yaml'), 'schemaVersion: 1.0.0\nname: Billing\n');
+    fs.writeFileSync(
+      path.join(childDir, '.wai', 'project.yaml'),
+      "schemaVersion: 1.0.0\nid: billing\nname: Billing\ntargets: []\ncreatedAt: '2026-01-01T00:00:00.000Z'\nupdatedAt: '2026-01-01T00:00:00.000Z'\n",
+    );
     fs.writeFileSync(
       path.join(childDir, '.wai', 'specs', '.index.yaml'),
       "schemaVersion: 1.0.0\nname: Billing\nvision: v\nboundaries: []\nglobalRequirements: []\n" +
         "createdAt: '2026-01-01T00:00:00.000Z'\nupdatedAt: '2026-01-01T00:00:00.000Z'\n",
     );
     invalidateSpecCache();
+    // Stage 7: the member becomes a hosted record of its own.
+    const up = upgradeMemberRecords(dataDir, true);
+    expect(up.applied, JSON.stringify({ m: up.plan.members, r: up.plan.refusals, o: up.outcome })).toBe(true);
 
     allow(dataDir, 'u-child', 'project:read', 'project', 'parent');
     const childToken = mintUserToken(dataDir, {
@@ -281,9 +288,13 @@ describe('hosted spec-tree transfer', () => {
     const exported = await call(childToken, 'parent::billing', 'sdd_host_export_tree');
     expect(exported.isError, exported.text).toBe(false);
     const payload = JSON.parse(exported.text);
-    // The CHILD's own tree, not the parent's — the qualifier bound the child root.
+    // The member's own tree, not the parent's — the qualifier maps to its record.
     expect(payload.projectName).toBe('Billing');
     expect(payload.roots).toEqual(['.']);
+    // And by its own record id, with the parent's grant inherited.
+    const byId = await call(childToken, 'billing', 'sdd_host_export_tree');
+    expect(byId.isError, byId.text).toBe(false);
+    expect(JSON.parse(byId.text).projectName).toBe('Billing');
   });
 
   it('honours allowPartial: refuses a partial export by default, builds it when set', async () => {

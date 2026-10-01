@@ -29,16 +29,18 @@ methods:
       - stepNumber: 4
         label: copied
         description: >-
-          Mirror every scoped project's .wai tree into it at its path from the family root,
-          recording each live file's digest. Only .wai trees are copied: every writer run on the
-          copy must read nothing outside them (the rehearsal precondition)
+          Mirror every scoped owner's areas (each project's .wai tree by default) and every owner
+          the scope names whole (a relocated project's old directory and new root) into it at its
+          path from the coordinator root, recording each live file's digest. Only the scoped areas
+          and whole owners are copied: every writer run on the copy must read nothing outside them
+          (the rehearsal precondition)
         type: call
         targetComponent: family_file_adapter
         targetMethod: mirror
       - stepNumber: 5
         description: >-
-          Answer the rehearsal: its id, directory, family root, each project's rehearsal root and
-          the base digests
+          Answer the rehearsal: its id, directory, coordinator root, each owner's rehearsal root,
+          the base digests, and the areas and whole owners it compares
         type: return
         outcome: the Rehearsal
       - stepNumber: 6
@@ -286,7 +288,8 @@ methods:
         label: roll-back
         description: >-
           Read the journal of every owner the coordinator lists; an owner out of reach refuses the
-          transaction, naming it
+          transaction, naming it — unless the coordinator never left staging, when nothing live
+          moved and an owner whose root does not exist yet (a relocation's new root) staged nothing
         type: call
         targetComponent: transaction_repository
         targetMethod: readJournal
@@ -462,4 +465,4 @@ methods:
         targetMethod: saveJournal
 status: complete
 createdAt: '2026-09-30T20:29:10.401Z'
-updatedAt: '2026-09-30T21:33:44.049Z'
+updatedAt: '2026-10-01T18:07:51.621Z'

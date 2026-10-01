@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { buildHostedFamily } from './hosted-family.js';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -135,6 +137,25 @@ describe('container-level git backing (sdd_host)', () => {
     // Audited: a security-level bind + an info-level sync.
     expect(queryAuditEvents(dataDir, { action: 'git.backing.bind' })).toHaveLength(1);
     expect(queryAuditEvents(dataDir, { action: 'git.backing.sync' }).length).toBeGreaterThanOrEqual(1);
+  }, 30_000);
+
+  it("stage 7: a unit binding mirrors each placed family root's member records too, each from its own root", () => {
+    const unit = seedUnit(dataDir, 'acme');
+    const fam = buildHostedFamily(dataDir);
+    placeProject(dataDir, { id: '', projectId: 'platform', unitId: unit.id, role: 'owner', createdAt: '', createdBy: subjectOf('seeder') });
+    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+    const remote = seedBareRemote(base, 'acme-family');
+    const stored = bindScope(cfg, MASTER, bindingFor({ scopeKind: 'unit', scopeId: unit.id, remote }));
+    expect(syncScope(cfg, MASTER, stored.id)).toBe(true);
+    const checkout = inspect(base, remote);
+    for (const id of ['platform', 'billing', 'payments', 'docs']) {
+      expect(fs.existsSync(path.join(checkout, 'projects', id, '.wai', 'project.yaml')), id).toBe(true);
+    }
+    // Each member is mirrored from its OWN root (its .wai/ alone, not its parent's tree).
+    // (Line endings normalized: a checkout's endings follow the platform's git settings.)
+    const text = (f: string): string => fs.readFileSync(f, 'utf8').split(String.fromCharCode(13)).join('');
+    expect(text(path.join(checkout, 'projects', 'payments', '.wai', 'project.yaml')))
+      .toBe(text(path.join(fam.payments, '.wai', 'project.yaml')));
   }, 30_000);
 
   it('a brand-new EMPTY remote is seeded on the first sync (branch created) — not a clone failure', () => {

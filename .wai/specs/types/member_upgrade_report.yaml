@@ -1,0 +1,31 @@
+kind: value-object
+id: member_upgrade_report
+name: MemberUpgradeReport
+description: >-
+  The answer of the stage-7 upgrade (`wairon host doctor`, and with --fix its apply): the unfinished
+  transactions found under the data directory first (resolved with --fix, reported otherwise), the
+  plan as reported, whether it was applied, and the transaction outcome when it was attempted.
+subsystem: sdd_host
+fields:
+  - name: plan
+    type: MemberUpgradePlan
+    description: The plan, rehearsal dropped
+    optional: false
+  - name: applied
+    type: boolean
+    description: True only when the transaction committed
+    optional: false
+  - name: outcome
+    type: TransactionOutcome
+    description: The transaction outcome, absent for a dry run or a refused plan
+    optional: true
+  - name: recovered
+    type: RecoveredTransaction[]
+    description: >-
+      Every unfinished transaction found under the data directory before planning — a crashed
+      upgrade, or a hosted detach or adopt the data directory coordinated — rolled back or cleaned
+      with --fix, only reported without it
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:27:26.465Z'
+updatedAt: '2026-10-01T18:06:42.950Z'

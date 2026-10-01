@@ -17,7 +17,11 @@ methods:
     symbol: createProjectRecord
   - name: remove
     narrative: []
-    intent: Deletes the record and recursively removes the isolated project tree; a missing id is a no-op.
+    intent: >-
+      Loads the persisted set; for a family root refuses while a member record names it as parent,
+      then deletes the record and recursively removes its isolated tree; for a member record deletes
+      only the record and never touches its directory (it lies inside the parent's tree). A missing
+      id is a no-op.
     calls:
       - project_store.read
       - project_store.write
@@ -32,6 +36,27 @@ methods:
       - project_store.read
       - project_store.write
     symbol: registerProjectRecord
+  - name: registerMember
+    narrative: []
+    intent: >-
+      Validates the id shape, requires parentProjectId and a relative memberPath that does not
+      escape its parent, loads the persisted set, refuses an id held by a family root record and a
+      parent no record holds, then replaces the member record holding the id (keeping its createdAt,
+      replacing parentProjectId and memberPath) or appends a new active member record, never
+      persisting a rootPath and never creating or copying a directory; persists the set.
+    calls:
+      - project_store.read
+      - project_store.write
+    symbol: registerMemberRecord
+  - name: setStatus
+    narrative: []
+    intent: >-
+      Refuses a status other than active or disabled and an unknown id; loads the persisted set,
+      sets the record's status and persists the set. Touches no directory.
+    calls:
+      - project_store.read
+      - project_store.write
+    symbol: setProjectRecordStatus
 status: complete
 createdAt: '2026-07-19T09:00:09.975Z'
-updatedAt: '2026-09-25T22:45:12.266Z'
+updatedAt: '2026-10-01T16:29:24.117Z'

@@ -294,17 +294,18 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Bind the root this lock concerns: the project's isolated root, or — when a member
-          qualifier was supplied (one member alias per hop) — the member's tree, resolved through
-          the project repository's containment-checked qualified resolution so a qualifier can never
-          resolve outside the project root. Every step below operates on the bound tree, and nothing
-          below it is ever written.
-        type: local
+          Resolve the project's repository scope — its family root's isolated root (the family's one
+          git binding) and its own .wai/ pathspec — and bind the project's own root (a member
+          record's derived from its parent's root and memberPath; no qualifier exists any more).
+          Every step below validates and writes the bound tree only; nothing below it is ever
+          written
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
       - stepNumber: 2
         description: >-
-          Sync the default branch into the working branch so the lock is based on the latest (no-op
-          for a native project, and for a member-scoped lock: the git binding is read from the BOUND
-          root and a member carries none).
+          Sync the default branch into the working branch at the family repository root so the lock
+          is based on the latest (a no-op for a native family).
         type: call
         targetComponent: host_git_adapter
         targetMethod: sync
@@ -428,16 +429,16 @@ methods:
         targetMethod: writeLockRecord
       - stepNumber: 20
         description: >-
-          Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
-          the PR from. A no-op for a native project and for a member-scoped lock (no binding at the
-          bound member root)
+          Commit ONLY the project's own .wai/ pathspec at the family repository root and push,
+          returning the commit and compare URL a human opens the PR from. A no-op for a native
+          family
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
       - stepNumber: 21
         description: Only a real publish has a commit to record.
         type: branch
-        condition: nothing was published (native project, or a member-scoped lock)
+        condition: nothing was published (native family, or a clean pathspec)
         onTrueStep: 22
         onFalseStep: 23
       - stepNumber: 22
@@ -728,18 +729,28 @@ methods:
         error: Forbidden — committing a project's specs requires project:write over it
       - stepNumber: 5
         description: >-
-          Bind the project's isolated root and resolve the staging scope: .wai/ by default, or
-          .wai/specs/<subsystem>/ when a subsystem is given (a subsystem scope is a staging
-          convenience only — git history stays per-repo); default the message when none is given
-        type: local
+          Resolve the project's repository scope: its family root's isolated root (the family's one
+          repository) and its own .wai/ pathspec ('.wai/' for a family root, '<member path>/.wai/'
+          for a member) — a member commits through its family root's repository, confined to its own
+          tree
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
       - stepNumber: 6
+        description: >-
+          Bind the repository root and narrow the pathspec to <project .wai>/specs/<subsystem>/ when
+          a subsystem is given (a staging convenience only — git history stays per-repository; a
+          member's own history is the log filtered to its pathspec); default the message, naming the
+          project
+        type: local
+      - stepNumber: 7
         description: >-
           Publish the scoped commit and push (commit = local save, push = the actual backup); a
           clean scope publishes nothing
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the publish outcome
         type: return
         outcome: GitPublish
@@ -823,13 +834,17 @@ methods:
         targetComponent: project_repository
         targetMethod: list
       - stepNumber: 2
-        description: For each hosted project
+        description: >-
+          For each hosted FAMILY ROOT record (a member record has no repository of its own and is
+          swept with its family)
         type: loop
         loopKind: forEach
-        over: the hosted project records
+        over: the hosted family root records
         endStep: 7
       - stepNumber: 3
-        description: Bind the iterated project's isolated root
+        description: >-
+          Bind the family root's isolated root and collect the family's pathspecs: its own .wai/ and
+          every member record's <path>/.wai/
         type: local
       - stepNumber: 4
         description: Read the project's git-backing status
@@ -845,7 +860,9 @@ methods:
         onTrueStep: 6
         onFalseStep: 7
       - stepNumber: 6
-        description: Publish the .wai/-scoped backup commit and push
+        description: >-
+          Publish one backup commit covering the family's pathspecs and push — never a path outside
+          a project's .wai/
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
@@ -1059,9 +1076,8 @@ methods:
         error: Forbidden — exporting a project's spec tree requires project:read over it
       - stepNumber: 5
         description: >-
-          Bind the tree the action concerns: the project's isolated root, or the CHAINED CHILD's
-          root when a subproject qualifier was supplied (resolved through the containment-checked
-          qualified resolution, never silently falling back to the project root)
+          Bind the project's root — a member's own root when the project is a member record (derived
+          from its parent's root and memberPath through the containment guard)
         type: local
       - stepNumber: 6
         description: Pack the bound tree into a .waitree archive within that scope
@@ -1097,9 +1113,7 @@ methods:
         type: throw
         error: Forbidden — importing a project's spec tree requires project:admin over it
       - stepNumber: 5
-        description: >-
-          Bind the tree the action concerns: the project's isolated root, or the CHAINED CHILD's
-          root when a subproject qualifier was supplied
+        description: Bind the project's root — a member's own root when the project is a member record
         type: local
       - stepNumber: 6
         description: >-
@@ -1139,8 +1153,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Bind the root exactly as executeApprovedLock does: the project's isolated root, or the
-          member the qualifier names through the containment-checked qualified resolution
+          Bind the root exactly as executeApprovedLock does: the project's own root — a member
+          record's derived from its parent's root and memberPath
         type: local
       - stepNumber: 2
         description: Compute the bound tree's gate identity
@@ -1153,4 +1167,4 @@ methods:
         outcome: gate identity
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-09-30T06:03:25.252Z'
+updatedAt: '2026-10-01T16:58:56.697Z'

@@ -1,14 +1,23 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { runWithProjectRoot, runWithProjectBinding } from '../utils/fs.js';
+import { runWithProjectRoot, runWithProjectBinding, type HostedRecordLookup } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
-import { authorize } from './authorization.js';
+import { authorize, resolveFamilyReach } from './authorization.js';
 import { WEB_SESSION_PREFIX } from './types.js';
-import { resolveProjectBinding, existingProjectRoot, SUBPROJECT_SEPARATOR } from './projects.js';
+import {
+  resolveProjectBinding,
+  existingProjectRoot,
+  listFamilyRecords,
+  SUBPROJECT_SEPARATOR,
+} from './projects.js';
+import type { ProjectBinding } from './projects.js';
+import { recoverUnfinishedMigrations } from './members.js';
+import * as memberRegistration from './members.js';
+import type { MemberAdoption, MemberDetachment, MembershipScreen, ReachComparison } from './types.js';
 import { createScopedServer } from './adapters/mcp.js';
 import * as hostCore from './adapters/core.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import * as hostMigrations from './adapters/migrations.js';
 import {
   initializeProject,
   lockProject,
@@ -34,15 +43,15 @@ import type {
 // Host Request Orchestrator (sdd_host)
 //
 // The per-request data-plane workflow: authenticate the bearer token, resolve
-// and bind the authorized project's isolated root, then dispatch the sdd_* tool
+// and bind the authorized hosted RECORD's root, then dispatch the sdd_* tool
 // call into a fresh, reused MCP server within that scope. Because the whole
 // dispatch runs inside runWithProjectRoot, every sdd_* handler resolves to the
-// bound project's .wai/ tree with no other changes. A member-qualified
-// narrowing/selector ('projectId::alias', one member alias per hop) binds the
-// MEMBER's root — every scoped tool then operates on the member's tree — while permission
-// capabilities keep resolving over the TOP project (a qualifier narrows reach,
-// never refines grants) and audit events keep the TOP project id for
-// provenance, additionally recording the bound qualifier.
+// bound project's .wai/ tree with no other changes. Since stage 7 a member is a
+// record of its own: it is bound by its own id, its permissions resolve over
+// its own chain (its scope, its parents', its family root's units), and audit
+// names it. A deprecated member-qualified selector ('projectId::alias') still
+// resolves, for one release, to the member's record; the family root it named
+// is recorded as the event's composition.
 // ---------------------------------------------------------------------------
 
 import { bearerToken, sendJson } from './httpio.js';
@@ -101,19 +110,19 @@ export function deriveMcpOutcome(response: unknown): 'success' | 'failed' {
  * never fail the request. A legacy principal with no resolved subject gets a
  * synthesized service actor so the (required) actor is always present.
  *
- * `projectId` is always the TOP project id (provenance); when the request bound
- * a chained subproject, the qualifier's mount chain is additionally recorded in
- * the event's redacted metadata ({"subproject":"a::b"}), the same way similar
- * diagnostic details are recorded — old events without it stay readable.
+ * The event names the bound record as `projectId` — the member's own id when
+ * a member was bound. When a deprecated member qualifier resolved the binding
+ * (via), the family root it named is recorded as `composition`.
  */
 export function auditToolCall(
   dataDir: string,
   principal: Principal,
-  projectId: string,
+  binding: Pick<ProjectBinding, 'projectId' | 'via'>,
   body: unknown,
   outcome: string,
-  subproject?: string,
 ): void {
+  const projectId = binding.projectId;
+  const composition = binding.via?.split(SUBPROJECT_SEPARATOR)[0];
   const target = mcpToolTarget(body);
   if (!target) return; // no dispatchable tool/method → nothing to audit
   const actor: PrincipalSubject = principal.subject ?? {
@@ -132,7 +141,7 @@ export function auditToolCall(
     tokenId: principal.tokenId,
     projectId,
     target,
-    ...(subproject ? { metadata: JSON.stringify({ subproject }) } : {}),
+    ...(composition ? { composition } : {}),
   };
   try {
     appendAuditEvent(dataDir, event, DEFAULT_AUDIT_POLICY);
@@ -141,65 +150,6 @@ export function auditToolCall(
       `[sdd_host] audit append failed for ${event.action} (target=${target}): ` +
         (e instanceof Error ? e.message : String(e)),
     );
-  }
-}
-
-/**
- * Steps 10–12: roll back any family migration a crash left unfinished under the
- * bound project's roots — the top root, and the bound member root when the
- * binding narrows to one — before any tool reads or writes that tree, and audit
- * each transaction found (migration.recovered) with a server log line. A hosted
- * project has no person to run `wairon doctor --fix` in its directory, so the
- * server does it on the next bind. It only puts the family back into the state
- * an earlier request left it in, so it runs whatever the credential's
- * permission; a failure is logged and never fails the request.
- */
-function recoverUnfinishedMigrations(
-  dataDir: string,
-  principal: Principal,
-  projectId: string,
-  roots: string[],
-): void {
-  for (const root of [...new Set(roots)]) {
-    let found;
-    try {
-      // Step 10.
-      found = hostMigrations.recover(root, true);
-    } catch (e) {
-      console.error(`[sdd_host] family-migration recovery failed for project ${projectId}: ${e instanceof Error ? e.message : String(e)}`);
-      continue;
-    }
-    // Steps 11–12.
-    for (const t of found) auditRecovery(dataDir, principal, projectId, t);
-  }
-}
-
-/** Step 12: one migration.recovered audit event and server log line per transaction. */
-function auditRecovery(
-  dataDir: string,
-  principal: Principal,
-  projectId: string,
-  t: { id: string; verb: string; phase: string; action: string },
-): void {
-  console.error(`[sdd_host] project ${projectId}: unfinished family migration ${t.id} (${t.verb}, coordinator phase ${t.phase}) — ${t.action}`);
-  const actor: PrincipalSubject = principal.subject ?? { userId: `token:${principal.tokenId}`, kind: 'service', issuer: 'local' };
-  const event: AuditEvent = {
-    id: '',
-    timestamp: '',
-    level: t.action === 'refused' ? 'warning' : 'info',
-    category: 'project',
-    action: 'migration.recovered',
-    outcome: t.action === 'refused' ? 'failed' : 'success',
-    actor,
-    tokenId: principal.tokenId,
-    projectId,
-    target: t.id,
-    metadata: JSON.stringify({ verb: t.verb, phase: t.phase, action: t.action }),
-  };
-  try {
-    appendAuditEvent(dataDir, event, DEFAULT_AUDIT_POLICY);
-  } catch (e) {
-    console.error(`[sdd_host] audit append failed for migration.recovered (target=${t.id}): ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
@@ -241,29 +191,17 @@ const PROJECT_OPS_TOOLS = new Set<string>([
   'sdd_host_commit_project',
 ]);
 
-/** The two spec-tree transfer tools. Dispatched like the project-ops tools, but
- *  TREE-scoped rather than record-level: they act on the BOUND tree and receive
- *  the binding's subproject qualifier, exactly as lock does, so a
- *  credential narrowed to a chained child transfers precisely that child. That
- *  is why they are deliberately absent from PROJECT_RECORD_TOOLS. */
+/** The two spec-tree transfer tools, dispatched like the project-ops tools on
+ *  the BOUND record's tree (a member's own tree when a member is bound). */
 const TREE_TRANSFER_TOOLS = new Set<string>([
   'sdd_host_export_tree',
   'sdd_host_import_tree',
 ]);
 
 /** The RECORD-level hosted tools: they act on the hosted project RECORD (or its
- *  repository), or answer for that project's relations to other projects, never
- *  on the bound spec tree, so they always receive the TOP project id. A
- *  subproject-qualified credential is REFUSED them (steps 10–11) — serving them
- *  would let a token scoped to one chained child act on, or see, the whole
- *  parent, i.e. the qualifier would narrow nothing. The landscape discovery tools
- *  belong here: a chained child is no hosted project of its own, so a credential
- *  narrowed to it has no landscape to discover.
- *
- *  The TREE-scoped tools — sdd_host_lock_project and the two tree transfer tools —
- *  are deliberately ABSENT: they are confined by FORWARDING the qualifier (steps
- *  16/18) so the action lands on exactly the child tree the credential is scoped
- *  to. */
+ *  repository), or answer for that project's relations to other projects. Since
+ *  stage 7 a credential bound to a member reaches the member's OWN record-level
+ *  tools — within the member only, never its parent's. */
 const PROJECT_RECORD_TOOLS = new Set<string>([
   'sdd_host_initialize_project',
   'sdd_host_get_approval_status',
@@ -375,14 +313,11 @@ export function requiredDataPlaneCapability(toolName: string): 'project:read' | 
   return 'project:write';
 }
 
-/** Where a hosted tool acts: on the bound spec TREE — which a subproject
- *  qualifier narrows to the child — or on the hosted project RECORD, its
- *  repository, or its relations to other projects. */
+/** Where a hosted tool acts: on the bound spec TREE, or on the hosted project
+ *  RECORD, its repository, or its relations to other projects. */
 export type ToolScope = 'tree' | 'record';
 
-/** The TREE-scoped hosted tools the data plane dispatches itself. They receive
- *  the binding's subproject qualifier, so under a narrowed credential they act on
- *  exactly the bound child tree. */
+/** The TREE-scoped hosted tools the data plane dispatches itself. */
 const TREE_SCOPED_HOST_TOOLS = new Set<string>([
   'sdd_host_lock_project',
   ...TREE_TRANSFER_TOOLS,
@@ -392,10 +327,7 @@ const TREE_SCOPED_HOST_TOOLS = new Set<string>([
  * The scope a tool declares, or undefined when it declares none. Every ordinary
  * sdd_* tool the scoped server serves — each explicit read (by prefix or by
  * name) and each explicit write (by prefix — the sdd_rename_ tools among
- * them, see step 10) — acts on the bound tree; the hosted tools are declared
- * one by one. Confinement reads this and fails closed on undefined: a tool
- * added without a declared scope is refused under a narrowed credential until
- * it declares one.
+ * them) — acts on the bound tree; the hosted tools are declared one by one.
  */
 export function toolScope(toolName: string): ToolScope | undefined {
   if (PROJECT_RECORD_TOOLS.has(toolName)) return 'record';
@@ -488,62 +420,6 @@ function dataPlanePermissionError(
   };
 }
 
-// ── Subproject confinement guard (steps 10–11 of handleRequest) ──────────────
-//
-// A hosted token may be narrowed to a member project ('projectId::alias'),
-// and the data plane then binds the CHILD root for every ordinary sdd_* tool. The
-// RECORD-level hosted tools bypass that binding by construction: they act on the
-// hosted project record with the TOP project id. Serving one to a qualified
-// credential would let a token scoped to one child lock, publish, produce, install
-// packs or reconcile policy across the WHOLE parent — not an escalation (a
-// narrowing never widens grants) but a confinement failure, with no workaround.
-// So they are refused BEFORE any dispatch.
-
-/**
- * Steps 10–11: under a subproject-qualified binding, serve only a tool that
- * declares itself TREE-scoped (toolScope). A RECORD-scoped tool acts on the whole
- * project, and a tool that declares no scope cannot be trusted not to, so both
- * are refused — confinement fails closed. Returns the `isError` tool-result
- * response to send (HTTP still 200; the caller still runs the SAME best-effort
- * audit path), or undefined to let the call proceed.
- *
- * Never a silent success and never a partial action: the refusal happens before the
- * lifecycle dispatch AND before the ordinary permission gate, so nothing the tool
- * would have done can have started. An unqualified binding is untouched.
- */
-export function subprojectConfinementError(
-  projectId: string,
-  subproject: string | undefined,
-  body: unknown,
-): { jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined {
-  if (!subproject) return undefined;
-  const msg = jsonRpcRequest(body);
-  if (!msg || msg.method !== 'tools/call') return undefined;
-  const name = msg.params?.name;
-  if (typeof name !== 'string') return undefined;
-  const scope = toolScope(name);
-  if (scope === 'tree') return undefined;
-
-  const bound = `${projectId}${SUBPROJECT_SEPARATOR}${subproject}`;
-  const why = scope === 'record'
-    ? `${name} acts on the whole project "${projectId}", but this credential is bound to subproject "${bound}". `
-    : `${name} declares no scope, and this credential is bound to subproject "${bound}", which serves only ` +
-      `tools that act on the bound tree. `;
-  return {
-    jsonrpc: '2.0',
-    id: msg.id ?? null,
-    result: {
-      content: [
-        {
-          type: 'text',
-          text: `Refused — ${why}An unqualified credential for "${projectId}" is required to call ${name}.`,
-        },
-      ],
-      isError: true,
-    },
-  };
-}
-
 /**
  * Steps 10–24: when the message is a `tools/call` for one of the five execute-primary
  * project-lifecycle tools or one of the hosted landscape discovery tools, dispatch it to
@@ -560,18 +436,14 @@ export function subprojectConfinementError(
  * as its decoded ProjectInitRequest arguments, and interface discovery reads its TARGET
  * project (the neighbour to inspect, still gated by reachability) from arguments.projectId.
  *
- * `subproject` is the bound mount chain (absent for an unqualified binding). It reaches
- * ONLY the two TREE-scoped lifecycle tools (steps 16/18) — a lock or promotion then
- * concerns exactly that child tree, while permission resolution and audit provenance stay
- * anchored at the TOP project id. Every RECORD-level tool has already been refused
- * upstream by subprojectConfinementError, so none of them can be reached with a qualifier.
+ * Every one of them acts on the bound RECORD — a member's own record when a
+ * member is bound (the documented widening within the member only).
  */
 export async function dispatchProjectLifecycleTool(
   cfg: HostConfig,
   credential: string | null,
   projectId: string,
   body: unknown,
-  subproject?: string,
 ): Promise<{ jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined> {
   const msg = jsonRpcRequest(body);
   if (!msg || msg.method !== 'tools/call') return undefined;
@@ -598,9 +470,9 @@ export async function dispatchProjectLifecycleTool(
         value = initializeProject(cfg, credential, args as unknown as ProjectInitRequest);
         break;
       case 'sdd_host_lock_project':
-        // Bound project (args ignored) + the bound qualifier: a qualified
-        // credential freezes exactly the child tree it is scoped to.
-        value = lockProject(cfg, credential, projectId, subproject);
+        // The BOUND record (args ignored): a member's own lock request,
+        // approval page and status when a member is bound.
+        value = lockProject(cfg, credential, projectId);
         break;
       case 'sdd_host_await_approval':
         // Long-poll for a decision on the caller's own approval request.
@@ -679,8 +551,7 @@ export async function dispatchProjectLifecycleTool(
         );
         break;
       case 'sdd_host_export_tree': {
-        // TREE-scoped: the bound qualifier is forwarded, so a credential scoped
-        // to a chained child exports exactly that child. The archive rides the
+        // The BOUND record's tree. The archive rides the
         // JSON-RPC result as base64 and is therefore bounded by the same body
         // cap as every other data-plane response — a tree too large for that is
         // an honest failure pointing at the raw-upload route, never a truncation.
@@ -688,7 +559,6 @@ export async function dispatchProjectLifecycleTool(
           cfg,
           credential,
           projectId,
-          subproject,
           undefined,
           args.allowPartial === true,
         );
@@ -713,7 +583,6 @@ export async function dispatchProjectLifecycleTool(
           credential,
           projectId,
           decoded,
-          subproject,
           args.replaceExisting === true,
         );
         break;
@@ -769,10 +638,9 @@ export async function handleMcpRequest(
     };
   }
 
-  // Resolve the authorized binding. A subproject-qualified narrowing/selector
-  // resolves to the mounted CHILD root (rejected — never widened to the project
-  // root — when the mount is unknown or non-chained); the binding keeps the TOP
-  // project id for permission resolution and audit provenance.
+  // Step 6: resolve the authorized binding to a hosted RECORD — a member is a
+  // record of its own; a deprecated member qualifier maps to its member record
+  // (via), never wider; a narrowing entry naming a project covers its members.
   const binding = resolveProjectBinding(cfg.dataDir, principal, projectSelector(req));
   if (!binding) {
     sendJson(res, 403, { error: 'project not authorized, unknown, or not specified' });
@@ -797,74 +665,60 @@ export async function handleMcpRequest(
     return;
   }
 
-  // Parent reach: validating a chained child can resolve its verdict through the
-  // parent tree. Only a credential authorized for the TOP project may do that — a
-  // token narrowed to 'proj::kid' binds the child and must not learn what the
-  // parent contains through a validation result.
-  const topRoot = existingProjectRoot(cfg.dataDir, binding.projectId) ?? binding.rootPath;
-  const parentReach = principal.projects.includes('*') || principal.projects.includes(binding.projectId);
+  // Steps 9-11: bind the root together with the request's reach into its family.
+  const reach = familyReachOf(cfg, principal, binding);
 
-  await runWithProjectBinding(binding.rootPath, { topRoot, parentReach }, async () => {
-    // The TOP project id from the resolved binding — permission capabilities and
-    // audit provenance always anchor here, even when the bound root is a chained
-    // subproject's child tree (binding.subproject carries the qualifier).
+  await runWithProjectBinding(binding.rootPath, reach, async () => {
+    // The bound record — permissions, audit and record-level tools anchor here.
     const projectId = binding.projectId;
-    const subproject = binding.subproject;
 
-    // Steps 10–12: a family migration a crash left unfinished is rolled back
-    // before any tool touches the tree, and audited.
-    recoverUnfinishedMigrations(cfg.dataDir, principal, projectId, [topRoot, binding.rootPath]);
+    // Step 12: family upkeep before the tool — a family migration a crash left
+    // unfinished is rolled back and audited (never fails the request).
+    recoverBoundFamily(cfg, principal, binding);
 
-    // Steps 10–11: confine a subproject-qualified credential by the called tool's
-    // declared scope. A RECORD-scoped tool acts on the hosted project record with
-    // the TOP project id, never on the bound tree, so a qualified credential would
-    // reach the WHOLE parent through it — the qualifier would narrow nothing — and
-    // a tool that declares no scope is treated the same way (fail closed). Refuse
-    // BEFORE any dispatch (and before the ordinary permission gate) as an isError
-    // tool result (HTTP still 200), flowing through the SAME best-effort audit
-    // path every other outcome uses. TREE-scoped tools pass: lock and tree
-    // transfer are confined by forwarding the qualifier below, and the ordinary
-    // sdd_* tools act on the bound child tree.
-    const confinementError = subprojectConfinementError(projectId, subproject, body);
-    if (confinementError !== undefined) {
-      sendJson(res, 200, confinementError);
-      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(confinementError), subproject);
-      return;
-    }
-
-    // Steps 12–24: the five execute-primary project-lifecycle tools and the hosted
-    // landscape discovery tools are handled here, bypassing the scoped sdd_* MCP
-    // server. The record-level ones receive the TOP project id; the TREE-scoped
-    // lock additionally receives the bound qualifier. The response still
-    // flows through the SAME best-effort audit path (auditToolCall) the scoped
-    // dispatch uses.
-    const dispatchedResponse = await dispatchProjectLifecycleTool(cfg, cred, projectId, body, subproject);
+    // Steps 13–14: the execute-primary project-lifecycle tools, the hosted
+    // landscape discovery tools and the project-ops tools are handled here,
+    // bypassing the scoped sdd_* MCP server, on the BOUND record. The response
+    // still flows through the SAME best-effort audit path (auditToolCall).
+    const dispatchedResponse = await dispatchProjectLifecycleTool(cfg, cred, projectId, body);
     if (dispatchedResponse !== undefined) {
       sendJson(res, 200, dispatchedResponse);
-      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(dispatchedResponse), subproject);
+      auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(dispatchedResponse));
       // Realtime: nudge the channels a successful lifecycle mutation touched.
       for (const ch of mcpChangeChannels(body, projectId, dispatchedResponse)) publishChange(ch);
       return;
     }
 
-    // Steps 25–27: enforce the granular data-plane permission BEFORE dispatching
+    // Steps 15–18: enforce the granular data-plane permission BEFORE dispatching
     // an ordinary sdd_* tool. A read tool needs project:read, every other tool
     // project:write (fail closed), resolved LIVE through hierarchical
-    // permission rules over the TOP project (a subproject qualifier narrows
-    // which tree is bound, never which grants apply). Capabilities match EXACTLY —
-    // there is no wildcard capability, and the '*'@instance instance-admin
-    // marker is reserved (setAssignment rejects it); only the env-anchored
-    // instance-admin subjects bypass the walk. A refusal is an isError tool
-    // result (HTTP still 200) and the tool is never dispatched; it still flows
-    // through the SAME best-effort audit path.
+    // permission rules over the BOUND record's own chain. Capabilities match
+    // EXACTLY — there is no wildcard capability, and the '*'@instance
+    // instance-admin marker is reserved (setAssignment rejects it); only the
+    // env-anchored instance-admin subjects bypass the walk. A refusal is an
+    // isError tool result (HTTP still 200) and the tool is never dispatched; it
+    // still flows through the SAME best-effort audit path.
     const permissionError = dataPlanePermissionError(cfg, principal, projectId, body);
     if (permissionError !== undefined) {
       sendJson(res, 200, permissionError);
-      auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(permissionError), subproject);
+      auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(permissionError));
       return;
     }
 
-    // Step 28: every other tool dispatches into a fresh scoped MCP server.
+    // Steps 19–29: a membership-changing tool is handled first — on hosted,
+    // membership decides reach, and a detach or an adopt moves storage between
+    // isolated roots: member registration serves those whole; attach and a
+    // project rename are screened.
+    const membership = serveMembershipTool(cfg, principal, binding, body);
+    if (membership.response !== undefined) {
+      sendJson(res, 200, membership.response);
+      auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(membership.response));
+      for (const ch of mcpChangeChannels(body, projectId, membership.response)) publishChange(ch);
+      if (deriveMcpOutcome(membership.response) === 'success') publishChange('projects');
+      return;
+    }
+
+    // Steps 30–31: every other tool dispatches into a fresh scoped MCP server.
     const server = createScopedServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -881,19 +735,222 @@ export async function handleMcpRequest(
     const forward = transport.send.bind(transport);
     transport.send = (message, options) => {
       const m = message as { result?: unknown; error?: unknown };
-      if (m.result !== undefined || m.error !== undefined) response = message;
+      if (m.result !== undefined || m.error !== undefined) {
+        // Step 31: a screened dry run carries who gains access beside the plan.
+        withReachListing(m.result, membership.screen, body);
+        response = message;
+      }
       return forward(message, options);
     };
 
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
 
-    // Steps 23–27: audit the handled data-plane tool call (best-effort).
-    auditToolCall(cfg.dataDir, principal, projectId, body, deriveMcpOutcome(response), subproject);
+    // Steps 32–33: an applied family-shape tool that succeeded — the family's
+    // member records follow the family on disk.
+    reconcileAfter(cfg, principal, binding, body, response);
+
+    // Step 34: audit the handled data-plane tool call (best-effort).
+    auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(response));
     // Realtime: a successful sdd_* WRITE changed the spec tree — nudge the
     // project channel so open canvases/views refetch (spec-tree change → live).
     for (const ch of mcpChangeChannels(body, projectId, response)) publishChange(ch);
   });
+}
+
+// ── Membership changes on hosted (steps 19–33 of handleRequest) ─────────────
+
+/** The membership-changing tools: on hosted, membership decides reach. */
+const MEMBERSHIP_TOOLS = new Set(['sdd_attach_member', 'sdd_adopt_member', 'sdd_detach_member', 'sdd_rename_project']);
+
+/** The family-shape tools the scoped server runs whose applied success the hosted records must follow. */
+const FAMILY_SHAPE_TOOLS = new Set([
+  'sdd_add_member',
+  'sdd_move_member',
+  'sdd_attach_member',
+  'sdd_rename_project',
+  'sdd_rename_member_alias',
+  'sdd_internalize_member',
+  'sdd_externalize_subsystem',
+]);
+
+/** A tools/call's name and arguments, or null for any other message. */
+function toolCall(body: unknown): { id: unknown; name: string; args: Record<string, unknown> } | null {
+  const msg = jsonRpcRequest(body);
+  if (!msg || msg.method !== 'tools/call' || typeof msg.params?.name !== 'string') return null;
+  return { id: msg.id ?? null, name: msg.params.name, args: (msg.params.arguments ?? {}) as Record<string, unknown> };
+}
+
+/** Who gains or loses what, one line per principal, capability and project. */
+function reachLines(rows: ReachComparison[]): string[] {
+  return rows.map((r) => `${r.memberId}: ${r.subjectId} ${r.capability} ${r.before.value} -> ${r.after.value}`);
+}
+
+/**
+ * Steps 19–29: serve a hosted detach or adopt whole through member
+ * registration (each relocates the project between its family's tree and an
+ * isolated root of its own), or screen an attach or a project rename. Answers
+ * the response to send for a tool served or refused here, else the screen the
+ * scoped server's dry run carries (or nothing at all).
+ */
+function serveMembershipTool(
+  cfg: HostConfig,
+  principal: Principal,
+  binding: ProjectBinding,
+  body: unknown,
+): { response?: { jsonrpc: '2.0'; id: unknown; result: McpToolResult }; screen?: MembershipScreen } {
+  const call = toolCall(body);
+  // Step 19.
+  if (!call || !MEMBERSHIP_TOOLS.has(call.name)) return {};
+  const apply = call.args.dryRun !== true;
+  const answer = (result: McpToolResult): { response: { jsonrpc: '2.0'; id: unknown; result: McpToolResult } } => ({ response: { jsonrpc: '2.0', id: call.id, result } });
+  try {
+    switch (call.name) {
+      case 'sdd_detach_member':
+        // Steps 20–22.
+        return answer(relocationResult('detach', memberRegistration.detach(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), apply), apply));
+      case 'sdd_adopt_member':
+        // Steps 23–25.
+        return answer(relocationResult('adopt', memberRegistration.adopt(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), String(call.args.path ?? ''), apply), apply));
+      default: {
+        // Steps 26–29: attach and a project rename are screened.
+        const named = call.name === 'sdd_rename_project' ? String(call.args.project ?? '') : String(call.args.alias ?? '');
+        const screened = memberRegistration.screen(cfg.dataDir, binding, call.name, named, typeof call.args.path === 'string' ? call.args.path : undefined);
+        if (screened.refusal !== undefined) return answer({ content: [{ type: 'text', text: screened.refusal }], isError: true });
+        return { screen: screened };
+      }
+    }
+  } catch (err) {
+    return answer(toolErrorResult(err));
+  }
+}
+
+/** A hosted detach or adopt as its tool answers it: refused or failed is an error, with the whole report. */
+function relocationResult(verb: 'detach' | 'adopt', report: MemberDetachment | MemberAdoption, apply: boolean): McpToolResult {
+  const plan = report.plan;
+  const reach = 'reachLost' in report ? report.reachLost : report.reachChanges;
+  const view = {
+    dryRun: !apply,
+    applied: report.applied,
+    memberId: report.memberId,
+    ...('newRoot' in report ? { newRoot: report.newRoot } : { memberPath: report.memberPath }),
+    reach: reachLines(reach),
+    relock: plan.relock,
+    ...(report.outcome ? { outcome: { committed: report.outcome.committed, restored: report.outcome.restored, unrestored: report.outcome.unrestored, ...(report.outcome.failure ? { failure: report.outcome.failure } : {}) } } : {}),
+    ...(report.commit ? { commit: report.commit } : {}),
+    plan: {
+      verb: plan.request.verb,
+      edits: plan.edits.map((e) => ({ project: e.project, kind: e.kind, detail: e.detail })),
+      refusals: plan.refusals,
+      changes: plan.changes.map((c) => ({ project: c.project, path: c.path, action: c.action })),
+      notes: plan.notes,
+    },
+  };
+  const text = JSON.stringify(view, null, 2);
+  if (plan.refusals.length > 0) return { content: [{ type: 'text', text: `the hosted ${verb} is refused; nothing was written.\n${text}` }], isError: true };
+  if (apply && !report.applied) return { content: [{ type: 'text', text: `the hosted ${verb} failed and ${report.outcome?.restored ? 'everything was restored exactly as before' : 'some files could not be restored: an operator must run `wairon host doctor --fix`'}.\n${text}` }], isError: true };
+  return { content: [{ type: 'text', text }] };
+}
+
+/**
+ * Step 31: a screened DRY RUN of attach carries who gains access through the
+ * new parent beside the plan, so a person approves the membership change with
+ * its access consequences in view.
+ */
+function withReachListing(result: unknown, screened: MembershipScreen | undefined, body: unknown): void {
+  const call = toolCall(body);
+  if (!screened || !call || call.args.dryRun !== true || !result || typeof result !== 'object') return;
+  const r = result as { content?: { type: string; text: string }[]; isError?: boolean };
+  if (r.isError || !Array.isArray(r.content)) return;
+  const lines = reachLines(screened.reachChanges);
+  r.content.push({ type: 'text', text: lines.length > 0 ? `Reach changes — who gains access through the new parent:\n${lines.join('\n')}` : 'Reach changes: none — nobody gains or loses access.' });
+}
+
+/**
+ * Steps 32–33: after an APPLIED family-shape tool succeeded, reconcile the
+ * family's member records (touched = the owners the tool's report names as
+ * written, the bound record when it names none). A failure is logged and
+ * audited, never turns the tool's success into a failure.
+ */
+function reconcileAfter(cfg: HostConfig, principal: Principal, binding: ProjectBinding, body: unknown, response: unknown): void {
+  const call = toolCall(body);
+  if (!call || !FAMILY_SHAPE_TOOLS.has(call.name) || call.args.dryRun === true || deriveMcpOutcome(response) !== 'success') return;
+  try {
+    memberRegistration.reconcile(cfg.dataDir, principal, binding.projectId, writtenOwners(cfg, binding, response));
+    publishChange('projects');
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error(`[sdd_host] member reconciliation failed after ${call.name} at ${binding.projectId}: ${detail}`);
+    try {
+      appendAuditEvent(cfg.dataDir, {
+        id: '', timestamp: '', level: 'warning', category: 'project', action: 'member.reconcile', outcome: 'failed',
+        actor: principal.subject ?? { userId: `token:${principal.tokenId}`, kind: 'service', issuer: 'local' },
+        tokenId: principal.tokenId, projectId: binding.projectId, target: call.name, metadata: JSON.stringify({ failure: detail }),
+      }, DEFAULT_AUDIT_POLICY);
+    } catch { /* best-effort */ }
+  }
+}
+
+/** The family record ids whose roots the tool's report names as written; the bound record when it names none. */
+function writtenOwners(cfg: HostConfig, binding: ProjectBinding, response: unknown): string[] {
+  const changes = (response as { result?: { structuredContent?: { plan?: { changes?: { project?: string }[] } } } } | undefined)
+    ?.result?.structuredContent?.plan?.changes ?? [];
+  const key = (p: string): string => (process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p));
+  const roots = new Set(changes.map((c) => c.project ?? '').filter(Boolean).map(key));
+  const ids = listFamilyRecords(cfg.dataDir, binding.projectId).filter((r) => r.rootPath && roots.has(key(r.rootPath))).map((r) => r.id);
+  return ids.length > 0 ? ids : [binding.projectId];
+}
+
+/**
+ * Steps 9–11: the request's reach into the bound record's hosted family, each
+ * record judged through its own chain AND the credential's narrowing: the
+ * family root's root as the ceiling, whether the family root is readable (a
+ * family run may compose the whole family only then), and the roots of family
+ * records the request may not write (a family migration that must write one
+ * refuses family-partial). The caller must gate on reach itself.
+ */
+function familyReachOf(
+  cfg: HostConfig,
+  principal: Principal,
+  binding: ProjectBinding,
+): { topRoot: string; parentReach: boolean; unwritableRoots: string[]; hostedLookup: HostedRecordLookup } {
+  // Step 9: the bound project's hosted family, family root first.
+  const family = listFamilyRecords(cfg.dataDir, binding.projectId);
+  // Step 10: which family records the principal may read and write.
+  const reach = resolveFamilyReach(cfg.dataDir, principal, family.map((r) => r.id));
+  // The credential's narrowing covers a record iff it binds it (a token for a project reaches its members).
+  const covered = (id: string): boolean => resolveProjectBinding(cfg.dataDir, principal, id) !== null;
+  // Step 11.
+  const topRoot = existingProjectRoot(cfg.dataDir, binding.familyRootId) ?? binding.rootPath;
+  const parentReach = reach.readable.includes(binding.familyRootId) && covered(binding.familyRootId);
+  const unwritableRoots = family
+    .filter((r) => r.rootPath && !(reach.writable.includes(r.id) && covered(r.id)))
+    .map((r) => r.rootPath);
+  return { topRoot, parentReach, unwritableRoots, hostedLookup: hostedRecordLookup(cfg, principal) };
+}
+
+/**
+ * The record lookup an external's source.hosted resolves through (stage 7):
+ * the root of a hosted record the credential's narrowing covers AND whose own
+ * chain grants project:read; null for anything else, unknown and unreadable
+ * alike, so it never says whether a record exists. The caller must gate on
+ * reach itself, and this is where a hosted producer is gated.
+ */
+function hostedRecordLookup(cfg: HostConfig, principal: Principal): HostedRecordLookup {
+  return (recordId: string): string | null => {
+    const bound = resolveProjectBinding(cfg.dataDir, principal, recordId);
+    if (!bound || recordId.includes(SUBPROJECT_SEPARATOR)) return null;
+    return authorize(cfg.dataDir, principal, 'project:read', 'project', bound.projectId).value === 'yes' ? bound.rootPath : null;
+  };
+}
+
+/** Step 12: roll back a crashed family migration under the bound family before the tool runs; never fails the request. */
+function recoverBoundFamily(cfg: HostConfig, principal: Principal, binding: ProjectBinding): void {
+  try {
+    recoverUnfinishedMigrations(cfg.dataDir, principal, binding);
+  } catch (e) {
+    console.error(`[sdd_host] family upkeep failed for project ${binding.projectId}: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /**

@@ -1,0 +1,43 @@
+kind: value-object
+id: reach_comparison
+name: ReachComparison
+description: >-
+  One row of a reach comparison: for one project, one permission subject and one capability, the
+  effective permission before and after a change. The upgrade compares the family root (what the
+  data plane resolved for a member until now) with the member's own record through its new project
+  chain — equal by construction, any unequal row refuses the plan. A membership change (attach,
+  adopt, detach, a member registered or departed) compares the project before and after its parent
+  link changes — the rows that differ are exactly the principals who gain or lose access.
+subsystem: sdd_host
+fields:
+  - name: memberId
+    type: string
+    description: >-
+      The project compared (the member's record id, or the declared alias/path of a member that has
+      no record yet)
+    optional: false
+  - name: subjectId
+    type: string
+    description: >-
+      The permission subject compared (a user, a service owner, or 'everyone' for a subject with no
+      settings of its own)
+    optional: false
+  - name: capability
+    type: string
+    description: The capability compared
+    optional: false
+  - name: before
+    type: EffectivePermission
+    description: The effective permission before the change (no for a project that had no record)
+    optional: false
+  - name: after
+    type: EffectivePermission
+    description: The effective permission after the change (no for a project that will have no record)
+    optional: false
+  - name: equal
+    type: boolean
+    description: True when before.value equals after.value
+    optional: false
+methods: []
+createdAt: '2026-10-01T16:27:09.521Z'
+updatedAt: '2026-10-01T16:55:11.030Z'
