@@ -109,6 +109,12 @@ interface RequestScope {
    * stops there has not read the family whole.
    */
   narrowed?: boolean;
+  /**
+   * Hosted: the roots of family records the request may NOT write (each judged
+   * through its own permission chain). A family migration whose plan writes one
+   * of them refuses family-partial.
+   */
+  unwritableRoots?: string[];
 }
 const requestRootStore = new AsyncLocalStorage<RequestScope>();
 
@@ -134,13 +140,14 @@ export function runWithProjectRoot<T>(dir: string, fn: () => T): T {
 /** Bind a hosted request's root together with its reach (see RequestScope). */
 export function runWithProjectBinding<T>(
   dir: string,
-  reach: { topRoot: string; parentReach: boolean; narrowed?: boolean },
+  reach: { topRoot: string; parentReach: boolean; narrowed?: boolean; unwritableRoots?: string[] },
   fn: () => T,
 ): T {
   return requestRootStore.run(
     {
       root: path.resolve(dir), topRoot: path.resolve(reach.topRoot), parentReach: reach.parentReach,
       ...(reach.narrowed ? { narrowed: true } : {}),
+      ...(reach.unwritableRoots ? { unwritableRoots: reach.unwritableRoots.map((r) => path.resolve(r)) } : {}),
     },
     fn,
   );
@@ -152,10 +159,14 @@ export function getRequestProjectRoot(): string | null {
 }
 
 /** The current hosted request's reach, or null outside a hosted request binding. */
-export function getRequestParentReach(): { topRoot?: string; parentReach: boolean; narrowed?: boolean } | null {
+export function getRequestParentReach(): { topRoot?: string; parentReach: boolean; narrowed?: boolean; unwritableRoots?: string[] } | null {
   const scope = requestRootStore.getStore();
   if (!scope || scope.parentReach === undefined) return null;
-  return { topRoot: scope.topRoot, parentReach: scope.parentReach, ...(scope.narrowed ? { narrowed: true } : {}) };
+  return {
+    topRoot: scope.topRoot, parentReach: scope.parentReach,
+    ...(scope.narrowed ? { narrowed: true } : {}),
+    ...(scope.unwritableRoots ? { unwritableRoots: scope.unwritableRoots } : {}),
+  };
 }
 
 /** Override the project root. Pass an absolute path to the dir containing .wai/,

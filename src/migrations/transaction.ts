@@ -51,7 +51,7 @@ const ORDER: Record<FileChange['action'], number> = { create: 0, write: 1, delet
 
 // ── rehearse / diff / discard ───────────────────────────────────────────────
 
-/** ifamily_transaction.rehearse — a private copy of every scoped project's .wai tree. */
+/** ifamily_transaction.rehearse — a private copy of every scoped owner's areas (each project's .wai tree by default). */
 export function rehearse(scope: TransactionScope): Rehearsal {
   // Step 1.
   const id = crypto.randomBytes(4).toString('hex');
@@ -63,7 +63,7 @@ export function rehearse(scope: TransactionScope): Rehearsal {
   // must read nothing outside them (the rehearsal precondition).
   let baseDigests: Map<string, string>;
   try {
-    baseDigests = files.mirror({ familyRoot, projects }, directory);
+    baseDigests = files.mirror({ familyRoot, projects, ...(scope.areas ? { areas: scope.areas } : {}) }, directory);
   } catch (e) {
     // Steps 6-7.
     repository.dropRehearsal(id);
@@ -71,7 +71,7 @@ export function rehearse(scope: TransactionScope): Rehearsal {
   }
   // Step 5.
   const roots = new Map(projects.map((p) => [p, path.join(directory, path.relative(familyRoot, p))]));
-  return { id, directory, familyRoot, roots, baseDigests };
+  return { id, directory, familyRoot, roots, baseDigests, ...(scope.areas ? { areas: [...scope.areas] } : {}) };
 }
 
 /** ifamily_transaction.diff — the rehearsal's difference from the live family. */

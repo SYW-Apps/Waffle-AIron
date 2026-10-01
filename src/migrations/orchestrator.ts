@@ -178,8 +178,23 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
   }
   // Step 15: the copy's difference from the live family.
   const changes = transaction.diff(rehearsal);
+  // A hosted request may write only the family records it may write: a plan
+  // that must write any other refuses family-partial, naming it.
+  const outside = unwritableOwners(changes);
+  if (outside.length > 0) {
+    transaction.discard(rehearsal);
+    return { ...plan, refusals: [...plan.refusals, ...outside.map((o) => ({ code: 'family-partial', project: o, detail: `the plan must write ${o}, which this request may not write` }))] };
+  }
   // Steps 16-17.
   return { ...plan, rehearsal, changes, relock: relockOf(plan, changes) };
+}
+
+/** The changed owners the hosted request may not write (none outside a hosted request). */
+function unwritableOwners(changes: FileChange[]): string[] {
+  const denied = getRequestParentReach()?.unwritableRoots ?? [];
+  if (denied.length === 0) return [];
+  const owners = [...new Set(changes.map((c) => path.resolve(c.project)))];
+  return owners.filter((o) => denied.includes(o));
 }
 
 /** Step 4: the producers family projects name by a path inside the family root — a pin taken on the copy reads them there. */

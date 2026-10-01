@@ -107,7 +107,37 @@ function within(root: string, candidate: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !nodePath.isAbsolute(rel));
 }
 
-/** ifamily_file_adapter.mirror — copy each project's .wai tree into the target at its path from the family root. */
+/** Every file under an area of an owner (a file area answers itself), relative to the owner, forward slashes; .wai/transactions/ never. */
+function areaFiles(owner: string, area: string): string[] {
+  const out: string[] = [];
+  const walk = (rel: string): void => {
+    if (rel === `${WAI}/${TRANSACTIONS}`) return;
+    const abs = nodePath.join(owner, ...rel.split('/'));
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(abs);
+    } catch {
+      return;
+    }
+    // Following no link: a linked subtree is not the owner's own bytes.
+    if (stat.isSymbolicLink()) return;
+    if (stat.isFile()) {
+      out.push(rel);
+      return;
+    }
+    if (!stat.isDirectory()) return;
+    for (const name of fs.readdirSync(abs)) walk(`${rel}/${name}`);
+  };
+  walk(area.split(nodePath.sep).join('/').replace(/\/+$/, ''));
+  return out.sort();
+}
+
+/** The files a scope copies from one owner: its .wai tree, or exactly its areas. */
+function scopedFiles(owner: string, areas: string[] | undefined): string[] {
+  return areas ? [...new Set(areas.flatMap((a) => areaFiles(owner, a)))].sort() : waiFiles(owner);
+}
+
+/** ifamily_file_adapter.mirror — copy each scoped owner's areas (its .wai tree by default) into the target at its path from the coordinator root. */
 export function mirror(scope: TransactionScope, target: string): Map<string, string> {
   const digests = new Map<string, string>();
   for (const project of scope.projects) {
@@ -115,7 +145,8 @@ export function mirror(scope: TransactionScope, target: string): Map<string, str
       throw new Error(`${project} does not lie within the family root ${scope.familyRoot}; a rehearsal copies only the family's own trees`);
     }
     const at = nodePath.join(target, nodePath.relative(scope.familyRoot, project));
-    for (const rel of waiFiles(project)) {
+    fs.mkdirSync(at, { recursive: true });
+    for (const rel of scopedFiles(project, scope.areas)) {
       const live = nodePath.join(project, ...rel.split('/'));
       let bytes: Buffer;
       try {
@@ -132,16 +163,24 @@ export function mirror(scope: TransactionScope, target: string): Map<string, str
   return digests;
 }
 
-/** ifamily_file_adapter.compare — the rehearsal's byte difference from the live family, per owner then path. */
+/** ifamily_file_adapter.compare — the rehearsal's byte difference from the live owners, per owner then path. */
 export function compare(rehearsal: Rehearsal): FileChange[] {
   const changes: FileChange[] = [];
   const seen = new Set<string>();
-  for (const owner of waiOwners(rehearsal.directory)) {
-    const live = nodePath.join(rehearsal.familyRoot, nodePath.relative(rehearsal.directory, owner));
-    for (const rel of waiFiles(owner)) {
-      seen.add(nodePath.join(live, ...rel.split('/')));
-      const change = changeOf(rehearsal, live, rel, sha256(fs.readFileSync(nodePath.join(owner, ...rel.split('/')))));
-      if (change) changes.push(change);
+  const visit = (live: string, copyRoot: string, rel: string): void => {
+    seen.add(nodePath.join(live, ...rel.split('/')));
+    const change = changeOf(rehearsal, live, rel, sha256(fs.readFileSync(nodePath.join(copyRoot, ...rel.split('/')))));
+    if (change) changes.push(change);
+  };
+  if (rehearsal.areas) {
+    // A scope that names areas: only those areas of each copied owner.
+    for (const [live, copyRoot] of rehearsal.roots) {
+      for (const rel of scopedFiles(copyRoot, rehearsal.areas)) visit(live, copyRoot, rel);
+    }
+  } else {
+    for (const owner of waiOwners(rehearsal.directory)) {
+      const live = nodePath.join(rehearsal.familyRoot, nodePath.relative(rehearsal.directory, owner));
+      for (const rel of waiFiles(owner)) visit(live, owner, rel);
     }
   }
   // A copied live file the rehearsal no longer holds is a delete.
@@ -167,7 +206,7 @@ const byOwnerThenPath = (a: FileChange, b: FileChange): number => order(a.projec
 
 /** The copied project whose .wai holds a live file: the deepest root that contains it. */
 function ownerOf(rehearsal: Rehearsal, liveFile: string): string {
-  const roots = [...rehearsal.roots.keys()].filter((r) => within(nodePath.join(r, WAI), liveFile));
+  const roots = [...rehearsal.roots.keys()].filter((r) => within(rehearsal.areas ? r : nodePath.join(r, WAI), liveFile));
   return roots.sort((a, b) => b.length - a.length)[0] ?? nodePath.dirname(nodePath.dirname(liveFile));
 }
 

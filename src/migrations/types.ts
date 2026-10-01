@@ -81,6 +81,12 @@ export interface FileChange {
 export interface TransactionScope {
   familyRoot: string;
   projects: string[];
+  /**
+   * Paths relative to each owner root to copy, compare and swap, forward
+   * slashes; absent means ['.wai'] (every family migration). A file named here
+   * that does not exist is a create when the rehearsal writes it.
+   */
+  areas?: string[];
 }
 
 /** rehearsal — a private copy of a family's .wai trees. */
@@ -92,6 +98,8 @@ export interface Rehearsal {
   roots: Map<string, string>;
   /** Each copied live file (absolute) → sha256 of its bytes when copied. */
   baseDigests: Map<string, string>;
+  /** The scope's areas, when it named any: only these are compared. */
+  areas?: string[];
 }
 
 /** The phases a journal passes through. */
