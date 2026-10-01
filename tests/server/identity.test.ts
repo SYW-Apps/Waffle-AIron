@@ -146,7 +146,10 @@ describe('identity orchestrator (sdd_host)', () => {
   it('mints a token as instance-admin: returns plaintext, persists a hashed narrowing-only record, and audits token.mint', () => {
     createProjectRecord(dataDir, 'proj-a');
 
-    const token = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'ci token', projects: ['proj-a'] });
+    const minted = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'ci token', projects: ['proj-a'] });
+    const token = minted.token;
+    // Nothing was mapped: every entry was stored as asked.
+    expect(minted.mapped).toEqual([]);
 
     expect(token).toMatch(/^wk_[0-9a-f]+$/);
     const rec = persistedByHash(hashToken(token));
@@ -247,13 +250,15 @@ describe('identity orchestrator (sdd_host)', () => {
     });
 
     it('mintToken accepts qualified entries (nested included) and stores the members\' record ids', () => {
-      const token = identity.mintToken(cfg, MASTER, {
+      const minted = identity.mintToken(cfg, MASTER, {
         ownerUserId: 'u-owner',
         label: 'sub token',
         projects: ['proj-a::billing', 'proj-a::billing::payments'],
       });
-      const rec = persistedByHash(hashToken(token));
+      const rec = persistedByHash(hashToken(minted.token));
       expect(rec!.projects).toEqual(['billing', 'payments']);
+      // The caller is told what each deprecated qualified entry was stored as.
+      expect(minted.mapped).toEqual(['proj-a::billing -> billing', 'proj-a::billing::payments -> payments']);
     });
 
     it('mintToken rejects a qualified entry whose member holds no record yet, pointing at host doctor', () => {
@@ -598,7 +603,7 @@ describe('identity orchestrator (sdd_host)', () => {
     ).toThrow(/instance admin/i);
 
     // MASTER mints; the owner's authority resolves live from THEIR assignments.
-    expect(identity.mintToken(cfg, MASTER, { ownerUserId: 'u-o', label: 't', projects: ['p-web'] })).toMatch(/^wk_/);
+    expect(identity.mintToken(cfg, MASTER, { ownerUserId: 'u-o', label: 't', projects: ['p-web'] }).token).toMatch(/^wk_/);
   });
 
   // ── pruneAuditEvents ─────────────────────────────────────────────────────────

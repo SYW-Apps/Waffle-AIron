@@ -5,6 +5,7 @@ import { readYamlFile } from '../utils/yaml.js';
 import { listFilesRecursive, runWithProjectRoot } from '../utils/fs.js';
 import { resolveContainedProjectPath, loadProjectConfig } from './adapters/core.js';
 import { declaredMembers, effectiveProjectId } from '../models/project.js';
+import * as projectStore from './project-store.js';
 import type {
   HostedProjectRecord,
   PlannedMemberRecord,
@@ -40,27 +41,14 @@ export function isValidProjectId(id: unknown): id is string {
   return typeof id === 'string' && ID_RE.test(id);
 }
 
-function registryPath(dataDir: string): string {
-  return path.join(dataDir, 'projects.json');
-}
-
-/** The records as stored: a member record carries no rootPath. */
+/** The records as stored (project_store.read): a member record carries no rootPath. */
 function load(dataDir: string): HostedProjectRecord[] {
-  try {
-    return JSON.parse(fs.readFileSync(registryPath(dataDir), 'utf8')) as HostedProjectRecord[];
-  } catch {
-    return [];
-  }
+  return projectStore.load(dataDir);
 }
 
-/** Persist the set; a member record's derived rootPath is never written. */
+/** Persist the set (project_store.write); a member record's derived rootPath is never written. */
 function save(dataDir: string, records: HostedProjectRecord[]): void {
-  const p = registryPath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  const stored = records.map((r) => (r.parentProjectId ? withoutRoot(r) : r));
-  fs.writeFileSync(tmp, JSON.stringify(stored, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  projectStore.save(dataDir, records.map((r) => (r.parentProjectId ? withoutRoot(r) : r)));
 }
 
 function withoutRoot(record: HostedProjectRecord): HostedProjectRecord {
@@ -505,6 +493,22 @@ function projectIdAt(root: string): string | null {
   }
 }
 
+/** A member directory's own project id, or why none can be read — in words a person acts on. */
+function memberIdAt(dir: string): { id: string } | { reason: string } {
+  if (!fs.existsSync(dir)) return { reason: `its directory ${dir} does not exist` };
+  if (!fs.existsSync(aiPathsAt(dir).projectConfig())) return { reason: `${dir} holds no .wai/project.yaml` };
+  let id: string | null;
+  try {
+    const config = runWithProjectRoot(dir, () => loadProjectConfig());
+    id = config ? effectiveProjectId(config) : null;
+  } catch (e) {
+    return { reason: `its .wai/project.yaml cannot be read or fails its schema: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  if (id === null) return { reason: 'its .wai/project.yaml declares no project id, and its name yields none' };
+  if (!isValidProjectId(id)) return { reason: `its project id "${id}" is not a valid hosted record id (lowercase letters, digits, hyphen)` };
+  return { id };
+}
+
 /**
  * The members the family rooted at a record declares ON DISK, members of
  * members included, each answered as the record it should hold — id (its own
@@ -545,19 +549,20 @@ function planOne(
   decl: MemberDeclaration,
 ): PlannedMemberRecord {
   const qualifier = `${parentQualifier}${SUBPROJECT_SEPARATOR}${decl.alias}`;
-  const unreadable = (): PlannedMemberRecord => ({
+  const unreadable = (reason: string): PlannedMemberRecord => ({
     record: { id: decl.alias, rootPath: '', status: 'active', createdAt: '', parentProjectId: parentId, memberPath: decl.path ?? '' },
-    familyRootId, qualifier, action: 'unreadable',
+    familyRootId, qualifier, action: 'unreadable', reason,
   });
-  if (decl.refused !== undefined || decl.path === undefined) return unreadable();
+  if (decl.refused !== undefined || decl.path === undefined) return unreadable(`its declaration cannot be followed: ${decl.refused ?? 'it names no path'}`);
   let dir: string;
   try {
     dir = resolveContainedProjectPath(parentDir, decl.path);
-  } catch {
-    return unreadable();
+  } catch (e) {
+    return unreadable(`its path "${decl.path}" does not stay within its parent: ${e instanceof Error ? e.message : String(e)}`);
   }
-  const memberId = projectIdAt(dir);
-  if (memberId === null || !isValidProjectId(memberId)) return unreadable();
+  const read = memberIdAt(dir);
+  if ('reason' in read) return unreadable(read.reason);
+  const memberId = read.id;
   const memberPath = normalizeMemberPath(decl.path);
   const record: HostedProjectRecord = { id: memberId, rootPath: dir, status: 'active', createdAt: '', parentProjectId: parentId, memberPath };
   const holder = records.find((r) => r.id === memberId);

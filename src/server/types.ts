@@ -1,6 +1,8 @@
 import type { LockRecord } from '../core/lockfile.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
 import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
+import type { GitPublish } from '../git/types.js';
+import type { MigrationPlan, TransactionOutcome } from '../migrations/types.js';
 
 // ---------------------------------------------------------------------------
 // Hosting value types (sdd_host)
@@ -166,6 +168,57 @@ export interface PlannedMemberRecord {
   action: 'register' | 'relocate' | 'rename' | 'unchanged' | 'unreadable';
   /** For action rename: the record id the member held before. */
   previousId?: string;
+  /** For action unreadable: why, in words a person acts on. */
+  reason?: string;
+}
+
+/** What the data plane learns before it dispatches a membership-changing tool
+ *  it does not serve itself: who gains access through an attach, or why the
+ *  hosted model refuses a family root's rename. */
+export interface MembershipScreen {
+  refusal?: string;
+  reachChanges: ReachComparison[];
+}
+
+/** What reconciling a hosted family's member records with the family on disk did. */
+export interface MemberReconciliation {
+  registered: string[];
+  relocated: string[];
+  /** 'old->new' for every member record re-keyed by a project rename. */
+  renamed: string[];
+  departed: string[];
+  reachChanges: ReachComparison[];
+  commit?: GitPublish;
+}
+
+/** A hosted detach, planned or applied: it relocates the member into an isolated root of its own. */
+export interface MemberDetachment {
+  memberId: string;
+  plan: MigrationPlan;
+  newRoot: string;
+  reachLost: ReachComparison[];
+  applied: boolean;
+  outcome?: TransactionOutcome;
+  commit?: GitPublish;
+}
+
+/** A hosted adopt, planned or applied — detach's inverse: it relocates the project back into the family's tree. */
+export interface MemberAdoption {
+  memberId: string;
+  plan: MigrationPlan;
+  memberPath: string;
+  reachChanges: ReachComparison[];
+  applied: boolean;
+  outcome?: TransactionOutcome;
+  commit?: GitPublish;
+}
+
+/** An administrative token mint's answer: the plaintext, shown once, and each
+ *  deprecated member-qualified entry with the record id it was stored as. */
+export interface MintedToken {
+  token: string;
+  /** '<qualified entry> -> <member record id>' per mapped entry. */
+  mapped: string[];
 }
 
 /** One API key's narrowing as the member upgrade rewrites it. */

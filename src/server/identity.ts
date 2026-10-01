@@ -40,6 +40,7 @@ import type {
   HostConfig,
   HostedUserRecord,
   IdentityProviderConfig,
+  MintedToken,
   Principal,
   PrincipalSubject,
 } from './types.js';
@@ -298,7 +299,7 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
  * metadata and appends a redacted audit event. Returns the plaintext token
  * exactly once.
  */
-export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): string {
+export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): MintedToken {
   const principal = requirePrincipal(cfg, credential);
 
   if (!isInstanceAdmin(principal)) {
@@ -316,7 +317,10 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
   // record id; an unknown project, an alias that declares no member, or a
   // member no record holds is rejected with guidance, never stored broken.
   const requested = request.projects?.length ? request.projects : ['*'];
-  const projects = [...new Set(requested.map((p) => assertMintableNarrowingEntry(cfg.dataDir, p)))];
+  const stored = requested.map((p) => ({ asked: p, as: assertMintableNarrowingEntry(cfg.dataDir, p) }));
+  const projects = [...new Set(stored.map((e) => e.as))];
+  // The caller learns what each deprecated qualified entry was stored as.
+  const mapped = stored.filter((e) => e.as !== e.asked).map((e) => `${e.asked} -> ${e.as}`);
 
   // Refuse minting a token for a user record that has been deactivated — else
   // deactivation could be undone by minting fresh tokens for the inactive owner.
@@ -353,7 +357,7 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
     buildAuditEvent(principal, 'token.mint', 'security', 'admin', { target: record.id }),
   );
 
-  return token; // plaintext, shown exactly once
+  return { token, mapped }; // plaintext, shown exactly once
 }
 
 /**
@@ -988,7 +992,10 @@ export async function handleIdentityRequest(
 
     // POST /identity/tokens
     if (req.method === 'POST' && parts.length === 2 && parts[1] === 'tokens') {
-      return sendJson(res, 201, { key: mintToken(cfg, credential, body as TokenMintRequest) });
+      {
+        const minted = mintToken(cfg, credential, body as TokenMintRequest);
+        return sendJson(res, 201, { key: minted.token, mapped: minted.mapped });
+      }
     }
     // DELETE /identity/tokens/{id}
     if (req.method === 'DELETE' && parts.length === 3 && parts[1] === 'tokens') {

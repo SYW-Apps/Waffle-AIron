@@ -448,12 +448,27 @@ export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {
   const plan = upgrade.plan;
   const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
   // Steps 5-6.
-  if (writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
+  if (upgrade.recovered.length === 0 && writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
     logger.success('Hosted members are records — nothing to upgrade.');
     return;
   }
   // Step 7.
+  printRecovered(upgrade.recovered, fix);
+  if (writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
+    logger.success('Hosted members are records — nothing to upgrade.');
+    return;
+  }
   printMemberUpgrade(upgrade, fix);
+}
+
+/** Step 7: each transaction a crash left unfinished under the data directory, and what was done about it. */
+function printRecovered(recovered: ReturnType<typeof localAdmin.upgradeMemberRecords>['recovered'], fix: boolean): void {
+  for (const t of recovered) {
+    const line = `  unfinished ${t.verb} transaction ${t.id} (coordinator phase ${t.phase}): ${t.action} — ${t.detail}`;
+    if (t.action === 'refused') logger.error(line);
+    else logger.info(line);
+  }
+  if (recovered.length > 0 && !fix) logger.warn('A crashed transaction is pending under the data directory — re-run with --fix to roll it back first.');
 }
 
 /** Step 7: the member upgrade plan, once per family, with its proof, key rewrites and refusals. */
@@ -574,15 +589,19 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         // permissions — it acts as the owner's LIVE permission, narrowed to the
         // named project. Seed the owner's authority with `host permission set`.
         if (options.owner) {
-          const key = localAdmin.mintToken(cfg, cred, {
+          const minted = localAdmin.mintToken(cfg, cred, {
             ownerUserId: options.owner,
             label: options.label ?? `cli token (${options.project})`,
             projects: options.project === '*' ? ['*'] : [options.project],
           });
           logger.success(`API key minted for owner "${options.owner}" (shown once — store it now):`);
           logger.blank();
-          console.log(`  ${chalk.bold(key)}`);
+          console.log(`  ${chalk.bold(minted.token)}`);
           logger.blank();
+          // A deprecated member-qualified entry is stored as the member's own record id: say so.
+          for (const line of minted.mapped) {
+            logger.warn(`Narrowing ${line}: a member is a record of its own since stage 7, so the token names it by its id (qualified entries are deprecated).`);
+          }
           break;
         }
         const role = (options.role ?? 'editor') as DisplayRole;

@@ -88,13 +88,16 @@ export type { MemberUpgradeReport, MemberUpgradePlan } from './members.js';
  * blocked plan writes nothing.
  */
 export function upgradeMemberRecords(dataDir: string, apply: boolean): MemberUpgradeReport {
-  // Step 1.
+  // Step 1: what a crash left unfinished under the data directory — resolved
+  // (and audited) with apply, only reported without it.
+  const recovered = memberRegistration.recoverData(dataDir, apply);
+  // Step 2.
   const plan = memberRegistration.plan(dataDir);
-  // Steps 2-4.
+  // Steps 3-5.
   if (apply && plan.refusals.length === 0 && plan.rehearsal) {
-    return memberRegistration.apply(dataDir, plan);
+    return { ...memberRegistration.apply(dataDir, plan), recovered };
   }
-  // Steps 5-6.
+  // Steps 6-7.
   memberRegistration.discard(plan);
-  return { plan: { ...plan, rehearsal: undefined }, applied: false };
+  return { plan: { ...plan, rehearsal: undefined }, applied: false, recovered };
 }

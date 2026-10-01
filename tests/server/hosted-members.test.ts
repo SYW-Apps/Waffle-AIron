@@ -324,7 +324,8 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
     expect(report.applied).toBe(false);
     const details = report.plan.refusals.map((r) => r.detail).join('\n');
     expect(details).toMatch(/platform::docs: the id docs is already held by another record \(a family root\)/);
-    expect(details).toMatch(/platform::billing::payments: the member's directory or project\.yaml cannot be read/);
+    // The unreadable member is named, where it is declared, and why it cannot be read.
+    expect(details).toMatch(/platform::billing::payments \(at "sub\/payments" in billing\) is unreadable: .*payments holds no \.wai\/project\.yaml/);
     expect(details).toMatch(/platform::billing: the id billing already has a setting scoped at it/);
     expect(stores()).toEqual(before);
   });

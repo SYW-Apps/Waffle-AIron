@@ -774,7 +774,11 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   bootstrapInstance(cfg);
 
   warnIfDataDirUnmigrated(cfg);
-  // Step 4: members that hold no record yet await `wairon host doctor --fix`.
+  // Step 4: before serving, roll back what a crash left unfinished under the
+  // data directory (a crashed member upgrade, a hosted detach or adopt) —
+  // audited and logged; a failure never prevents the server from starting.
+  memberRegistration.recoverData(cfg.dataDir, true);
+  // Step 5: members that hold no record yet await `wairon host doctor --fix`.
   warnIfMembersPending(cfg);
 
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));

@@ -24,6 +24,7 @@ import * as hostCore from '../../src/server/adapters/core.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
 import { seedChainedMount } from './helpers.js';
 import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import * as memberRegistration from '../../src/server/members.js';
 import type { HostConfig } from '../../src/server/types.js';
 import type { ApproverIdentity } from '../../src/models/lock.js';
 
@@ -335,6 +336,41 @@ describe('git-backed projects (sdd_git)', () => {
     expect(git(['diff', '--cached', '--name-only'], root)).toContain('src/team-code.ts');
     expect(git(['status', '--porcelain', '--', 'README.md'], root)).toContain('README.md');
     expect(git(['branch'], remote)).toContain('wairon/work');
+  });
+
+  // Stage 7 wave B: after a hosted family-shape change, reconcile registers the
+  // new member and publishes ONE family commit whose pathspecs are exactly the
+  // touched projects' own .wai/ — never source code, never an untouched member.
+  it('reconcile publishes one family commit over every touched project', { timeout: 30_000 }, () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+    const billing = seedChainedMount(root, 'billing', 'packages/billing');
+    runWithProjectRoot(billing, () => hostCore.provisionProject('billing'));
+    invalidateSpecCache();
+    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+    git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'add', '-A'], root);
+    git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'commit', '-qm', 'scaffold'], root);
+
+    // The family-shape change on disk: a new member declared and scaffolded, an untouched member edited, team code beside it.
+    const tools = seedChainedMount(root, 'tools', 'packages/tools');
+    runWithProjectRoot(tools, () => hostCore.provisionProject('tools'));
+    fs.writeFileSync(path.join(billing, '.wai', 'note.yaml'), 'note: not part of this change\n');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src', 'team-code.ts'), 'export const x = 1;\n');
+    invalidateSpecCache();
+    const headBefore = git(['rev-parse', 'HEAD'], root);
+    const principal = { tokenId: 't-op', role: 'admin', projects: ['*'], authenticated: true, subject: { userId: 'u-op', kind: 'human', issuer: 'local' } };
+    const result = memberRegistration.reconcile(dataDir, principal, 'demo', ['demo']);
+    expect(result.registered).toEqual(['tools']);
+    expect(result.commit?.published).toBe(true);
+
+    // Exactly ONE new commit, covering the touched projects' own .wai/ and nothing else.
+    expect(git(['rev-parse', 'HEAD~1'], root)).toBe(headBefore);
+    const files = git(['show', '--name-only', '--format=', 'HEAD'], root).split(/\r?\n/).filter(Boolean);
+    expect(files.some((f) => f.startsWith('.wai/'))).toBe(true);
+    expect(files.some((f) => f.startsWith('packages/tools/.wai/'))).toBe(true);
+    for (const f of files) expect(f.startsWith('.wai/') || f.startsWith('packages/tools/.wai/'), f).toBe(true);
+    expect(git(['status', '--porcelain', '--', 'packages/billing/.wai/note.yaml'], root)).toContain('note.yaml');
   });
 
   it('sync integrates a collaborator commit from the default branch', () => {

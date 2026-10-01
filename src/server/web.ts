@@ -29,9 +29,9 @@ import {
   touchWebSession,
   listWebSessionsBySubject,
 } from './websessions.js';
-import { resolveProjectRoot } from './projects.js';
+import { existingProjectRoot, listFamilyRecords, resolveProjectRoot } from './projects.js';
 import * as shareadmin from './shareadmin.js';
-import { runWithProjectRoot } from '../utils/fs.js';
+import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
 import * as hostSurfaces from './adapters/surfaces.js';
 import { validateAsComplete } from './adapters/validator.js';
@@ -44,6 +44,7 @@ import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import type { ProducerConfig } from '../producers/index.js';
 import type { PackImpact } from '../models/pack-impact.js';
+import type { ExternalStatus } from '../models/index.js';
 import type {
   ApiKeyRecord,
   ApprovalDecision,
@@ -517,6 +518,15 @@ export function getProjectCanvasModel(cfg: HostConfig, sessionId: string, projec
 }
 
 /**
+ * Return one authorized project's relation health — its externals status, one
+ * entry per external — by delegating to the web graph orchestrator, which
+ * authenticates the session and scopes the read to the caller's reach.
+ */
+export function getProjectExternals(cfg: HostConfig, sessionId: string, projectId: string): ExternalStatus[] {
+  return getWebProjectExternals(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
  * Return one authorized project's API explorer page by delegating to the web
  * graph orchestrator, which authenticates the session, scopes the project and
  * chooses between the explorer and the index of the project's APIs.
@@ -661,7 +671,56 @@ export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, pro
   if (!root) {
     throw new ForbiddenError('project not authorized or unknown');
   }
-  return runWithProjectRoot(root, () => hostCore.buildCanvasDataModel());
+  const model = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel());
+  // Steps 6-7: the family canvas — a member project node is linked to its
+  // member's record only when the caller may read that record; any other member
+  // stays an unlinked node drawn through its exports (no id leaks).
+  const readable = new Set(webproject.listProjects(cfg, sessionId).map((r) => r.id));
+  const members = new Set(listFamilyRecords(cfg.dataDir, projectId).filter((r) => r.parentProjectId !== undefined).map((r) => r.id));
+  return withMemberLinks(model, (id) => members.has(id) && readable.has(id));
+}
+
+/** The canvas model with each member project node carrying its record id when the caller may read it. */
+function withMemberLinks<T>(model: T, linkable: (id: string) => boolean): T {
+  const m = model as { subsystems?: { id: string; project?: boolean; recordId?: string }[] };
+  if (!Array.isArray(m.subsystems)) return model;
+  return {
+    ...model,
+    subsystems: m.subsystems.map((s) => (s.project && linkable(s.id) ? { ...s, recordId: s.id } : s)),
+  } as T;
+}
+
+/**
+ * Relation health for ONE authorized project: its externals status, each
+ * declared external's pin compared with its live producer, read over the
+ * project's root bound with the caller's reach — the family above it only when
+ * the caller may read the family root, a hosted producer only when the caller
+ * may read that record. Unavailable is never a pass.
+ */
+export function getWebProjectExternals(cfg: HostConfig, sessionId: string, projectId: string): ExternalStatus[] {
+  // Step 1.
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  // Step 2.
+  const readable = webproject.listProjects(cfg, sessionId);
+  if (!readable.some((r) => r.id === projectId)) throw new ForbiddenError('project not authorized or unknown');
+  // Step 3.
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new ForbiddenError('project not authorized or unknown');
+  // Steps 4-6: bound with the caller's reach — the caller must gate on reach itself.
+  return runWithProjectBinding(root, readReach(cfg, projectId, root, readable), () => hostSurfaces.getExternalsStatus());
+}
+
+/** The caller's read reach around a project: its family root (when readable) and a hosted record lookup over its readable records. */
+function readReach(cfg: HostConfig, projectId: string, root: string, readable: HostedProjectRecord[]): { topRoot: string; parentReach: boolean; hostedLookup: (id: string) => string | null } {
+  const ids = new Set(readable.map((r) => r.id));
+  const familyRoot = listFamilyRecords(cfg.dataDir, projectId)[0];
+  const parentReach = familyRoot !== undefined && ids.has(familyRoot.id);
+  return {
+    topRoot: parentReach ? familyRoot.rootPath : root,
+    parentReach,
+    hostedLookup: (id) => (ids.has(id) ? existingProjectRoot(cfg.dataDir, id) : null),
+  };
 }
 
 /**
@@ -3446,6 +3505,13 @@ export async function handleWebRequest(
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
       const projectId = url.searchParams.get('projectId') ?? '';
       return sendJson(res, 200, getProjectCanvasModel(cfg, sessionId, projectId));
+    }
+
+    // GET /web/projects/externals?projectId= → one authorized project's relation
+    // health: its externals status, one entry per external. Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'externals') {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      return sendJson(res, 200, { externals: getProjectExternals(cfg, sessionId, projectId) });
     }
 
     // GET /web/openapi?projectId= → the project's full public surface as an

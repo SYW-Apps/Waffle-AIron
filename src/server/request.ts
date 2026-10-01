@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { runWithProjectRoot, runWithProjectBinding } from '../utils/fs.js';
+import { runWithProjectRoot, runWithProjectBinding, type HostedRecordLookup } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
 import { authorize, resolveFamilyReach } from './authorization.js';
 import { WEB_SESSION_PREFIX } from './types.js';
@@ -12,6 +13,8 @@ import {
 } from './projects.js';
 import type { ProjectBinding } from './projects.js';
 import { recoverUnfinishedMigrations } from './members.js';
+import * as memberRegistration from './members.js';
+import type { MemberAdoption, MemberDetachment, MembershipScreen, ReachComparison } from './types.js';
 import { createScopedServer } from './adapters/mcp.js';
 import * as hostCore from './adapters/core.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
@@ -702,6 +705,19 @@ export async function handleMcpRequest(
       return;
     }
 
+    // Steps 19–29: a membership-changing tool is handled first — on hosted,
+    // membership decides reach, and a detach or an adopt moves storage between
+    // isolated roots: member registration serves those whole; attach and a
+    // project rename are screened.
+    const membership = serveMembershipTool(cfg, principal, binding, body);
+    if (membership.response !== undefined) {
+      sendJson(res, 200, membership.response);
+      auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(membership.response));
+      for (const ch of mcpChangeChannels(body, projectId, membership.response)) publishChange(ch);
+      if (deriveMcpOutcome(membership.response) === 'success') publishChange('projects');
+      return;
+    }
+
     // Steps 30–31: every other tool dispatches into a fresh scoped MCP server.
     const server = createScopedServer();
     const transport = new StreamableHTTPServerTransport({
@@ -719,12 +735,20 @@ export async function handleMcpRequest(
     const forward = transport.send.bind(transport);
     transport.send = (message, options) => {
       const m = message as { result?: unknown; error?: unknown };
-      if (m.result !== undefined || m.error !== undefined) response = message;
+      if (m.result !== undefined || m.error !== undefined) {
+        // Step 31: a screened dry run carries who gains access beside the plan.
+        withReachListing(m.result, membership.screen, body);
+        response = message;
+      }
       return forward(message, options);
     };
 
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
+
+    // Steps 32–33: an applied family-shape tool that succeeded — the family's
+    // member records follow the family on disk.
+    reconcileAfter(cfg, principal, binding, body, response);
 
     // Step 34: audit the handled data-plane tool call (best-effort).
     auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(response));
@@ -732,6 +756,149 @@ export async function handleMcpRequest(
     // project channel so open canvases/views refetch (spec-tree change → live).
     for (const ch of mcpChangeChannels(body, projectId, response)) publishChange(ch);
   });
+}
+
+// ── Membership changes on hosted (steps 19–33 of handleRequest) ─────────────
+
+/** The membership-changing tools: on hosted, membership decides reach. */
+const MEMBERSHIP_TOOLS = new Set(['sdd_attach_member', 'sdd_adopt_member', 'sdd_detach_member', 'sdd_rename_project']);
+
+/** The family-shape tools the scoped server runs whose applied success the hosted records must follow. */
+const FAMILY_SHAPE_TOOLS = new Set([
+  'sdd_add_member',
+  'sdd_move_member',
+  'sdd_attach_member',
+  'sdd_rename_project',
+  'sdd_rename_member_alias',
+  'sdd_internalize_member',
+  'sdd_externalize_subsystem',
+]);
+
+/** A tools/call's name and arguments, or null for any other message. */
+function toolCall(body: unknown): { id: unknown; name: string; args: Record<string, unknown> } | null {
+  const msg = jsonRpcRequest(body);
+  if (!msg || msg.method !== 'tools/call' || typeof msg.params?.name !== 'string') return null;
+  return { id: msg.id ?? null, name: msg.params.name, args: (msg.params.arguments ?? {}) as Record<string, unknown> };
+}
+
+/** Who gains or loses what, one line per principal, capability and project. */
+function reachLines(rows: ReachComparison[]): string[] {
+  return rows.map((r) => `${r.memberId}: ${r.subjectId} ${r.capability} ${r.before.value} -> ${r.after.value}`);
+}
+
+/**
+ * Steps 19–29: serve a hosted detach or adopt whole through member
+ * registration (each relocates the project between its family's tree and an
+ * isolated root of its own), or screen an attach or a project rename. Answers
+ * the response to send for a tool served or refused here, else the screen the
+ * scoped server's dry run carries (or nothing at all).
+ */
+function serveMembershipTool(
+  cfg: HostConfig,
+  principal: Principal,
+  binding: ProjectBinding,
+  body: unknown,
+): { response?: { jsonrpc: '2.0'; id: unknown; result: McpToolResult }; screen?: MembershipScreen } {
+  const call = toolCall(body);
+  // Step 19.
+  if (!call || !MEMBERSHIP_TOOLS.has(call.name)) return {};
+  const apply = call.args.dryRun !== true;
+  const answer = (result: McpToolResult): { response: { jsonrpc: '2.0'; id: unknown; result: McpToolResult } } => ({ response: { jsonrpc: '2.0', id: call.id, result } });
+  try {
+    switch (call.name) {
+      case 'sdd_detach_member':
+        // Steps 20–22.
+        return answer(relocationResult('detach', memberRegistration.detach(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), apply), apply));
+      case 'sdd_adopt_member':
+        // Steps 23–25.
+        return answer(relocationResult('adopt', memberRegistration.adopt(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), String(call.args.path ?? ''), apply), apply));
+      default: {
+        // Steps 26–29: attach and a project rename are screened.
+        const named = call.name === 'sdd_rename_project' ? String(call.args.project ?? '') : String(call.args.alias ?? '');
+        const screened = memberRegistration.screen(cfg.dataDir, binding, call.name, named, typeof call.args.path === 'string' ? call.args.path : undefined);
+        if (screened.refusal !== undefined) return answer({ content: [{ type: 'text', text: screened.refusal }], isError: true });
+        return { screen: screened };
+      }
+    }
+  } catch (err) {
+    return answer(toolErrorResult(err));
+  }
+}
+
+/** A hosted detach or adopt as its tool answers it: refused or failed is an error, with the whole report. */
+function relocationResult(verb: 'detach' | 'adopt', report: MemberDetachment | MemberAdoption, apply: boolean): McpToolResult {
+  const plan = report.plan;
+  const reach = 'reachLost' in report ? report.reachLost : report.reachChanges;
+  const view = {
+    dryRun: !apply,
+    applied: report.applied,
+    memberId: report.memberId,
+    ...('newRoot' in report ? { newRoot: report.newRoot } : { memberPath: report.memberPath }),
+    reach: reachLines(reach),
+    relock: plan.relock,
+    ...(report.outcome ? { outcome: { committed: report.outcome.committed, restored: report.outcome.restored, unrestored: report.outcome.unrestored, ...(report.outcome.failure ? { failure: report.outcome.failure } : {}) } } : {}),
+    ...(report.commit ? { commit: report.commit } : {}),
+    plan: {
+      verb: plan.request.verb,
+      edits: plan.edits.map((e) => ({ project: e.project, kind: e.kind, detail: e.detail })),
+      refusals: plan.refusals,
+      changes: plan.changes.map((c) => ({ project: c.project, path: c.path, action: c.action })),
+      notes: plan.notes,
+    },
+  };
+  const text = JSON.stringify(view, null, 2);
+  if (plan.refusals.length > 0) return { content: [{ type: 'text', text: `the hosted ${verb} is refused; nothing was written.\n${text}` }], isError: true };
+  if (apply && !report.applied) return { content: [{ type: 'text', text: `the hosted ${verb} failed and ${report.outcome?.restored ? 'everything was restored exactly as before' : 'some files could not be restored: an operator must run `wairon host doctor --fix`'}.\n${text}` }], isError: true };
+  return { content: [{ type: 'text', text }] };
+}
+
+/**
+ * Step 31: a screened DRY RUN of attach carries who gains access through the
+ * new parent beside the plan, so a person approves the membership change with
+ * its access consequences in view.
+ */
+function withReachListing(result: unknown, screened: MembershipScreen | undefined, body: unknown): void {
+  const call = toolCall(body);
+  if (!screened || !call || call.args.dryRun !== true || !result || typeof result !== 'object') return;
+  const r = result as { content?: { type: string; text: string }[]; isError?: boolean };
+  if (r.isError || !Array.isArray(r.content)) return;
+  const lines = reachLines(screened.reachChanges);
+  r.content.push({ type: 'text', text: lines.length > 0 ? `Reach changes — who gains access through the new parent:\n${lines.join('\n')}` : 'Reach changes: none — nobody gains or loses access.' });
+}
+
+/**
+ * Steps 32–33: after an APPLIED family-shape tool succeeded, reconcile the
+ * family's member records (touched = the owners the tool's report names as
+ * written, the bound record when it names none). A failure is logged and
+ * audited, never turns the tool's success into a failure.
+ */
+function reconcileAfter(cfg: HostConfig, principal: Principal, binding: ProjectBinding, body: unknown, response: unknown): void {
+  const call = toolCall(body);
+  if (!call || !FAMILY_SHAPE_TOOLS.has(call.name) || call.args.dryRun === true || deriveMcpOutcome(response) !== 'success') return;
+  try {
+    memberRegistration.reconcile(cfg.dataDir, principal, binding.projectId, writtenOwners(cfg, binding, response));
+    publishChange('projects');
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error(`[sdd_host] member reconciliation failed after ${call.name} at ${binding.projectId}: ${detail}`);
+    try {
+      appendAuditEvent(cfg.dataDir, {
+        id: '', timestamp: '', level: 'warning', category: 'project', action: 'member.reconcile', outcome: 'failed',
+        actor: principal.subject ?? { userId: `token:${principal.tokenId}`, kind: 'service', issuer: 'local' },
+        tokenId: principal.tokenId, projectId: binding.projectId, target: call.name, metadata: JSON.stringify({ failure: detail }),
+      }, DEFAULT_AUDIT_POLICY);
+    } catch { /* best-effort */ }
+  }
+}
+
+/** The family record ids whose roots the tool's report names as written; the bound record when it names none. */
+function writtenOwners(cfg: HostConfig, binding: ProjectBinding, response: unknown): string[] {
+  const changes = (response as { result?: { structuredContent?: { plan?: { changes?: { project?: string }[] } } } } | undefined)
+    ?.result?.structuredContent?.plan?.changes ?? [];
+  const key = (p: string): string => (process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p));
+  const roots = new Set(changes.map((c) => c.project ?? '').filter(Boolean).map(key));
+  const ids = listFamilyRecords(cfg.dataDir, binding.projectId).filter((r) => r.rootPath && roots.has(key(r.rootPath))).map((r) => r.id);
+  return ids.length > 0 ? ids : [binding.projectId];
 }
 
 /**
@@ -746,7 +913,7 @@ function familyReachOf(
   cfg: HostConfig,
   principal: Principal,
   binding: ProjectBinding,
-): { topRoot: string; parentReach: boolean; unwritableRoots: string[] } {
+): { topRoot: string; parentReach: boolean; unwritableRoots: string[]; hostedLookup: HostedRecordLookup } {
   // Step 9: the bound project's hosted family, family root first.
   const family = listFamilyRecords(cfg.dataDir, binding.projectId);
   // Step 10: which family records the principal may read and write.
@@ -759,7 +926,22 @@ function familyReachOf(
   const unwritableRoots = family
     .filter((r) => r.rootPath && !(reach.writable.includes(r.id) && covered(r.id)))
     .map((r) => r.rootPath);
-  return { topRoot, parentReach, unwritableRoots };
+  return { topRoot, parentReach, unwritableRoots, hostedLookup: hostedRecordLookup(cfg, principal) };
+}
+
+/**
+ * The record lookup an external's source.hosted resolves through (stage 7):
+ * the root of a hosted record the credential's narrowing covers AND whose own
+ * chain grants project:read; null for anything else, unknown and unreadable
+ * alike, so it never says whether a record exists. The caller must gate on
+ * reach itself, and this is where a hosted producer is gated.
+ */
+function hostedRecordLookup(cfg: HostConfig, principal: Principal): HostedRecordLookup {
+  return (recordId: string): string | null => {
+    const bound = resolveProjectBinding(cfg.dataDir, principal, recordId);
+    if (!bound || recordId.includes(SUBPROJECT_SEPARATOR)) return null;
+    return authorize(cfg.dataDir, principal, 'project:read', 'project', bound.projectId).value === 'yes' ? bound.rootPath : null;
+  };
 }
 
 /** Step 12: roll back a crashed family migration under the bound family before the tool runs; never fails the request. */

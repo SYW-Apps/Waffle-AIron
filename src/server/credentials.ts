@@ -1,6 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import * as crypto from 'crypto';
+import { load, save } from './credential-store.js';
 import type { ApiKeyRecord } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -16,26 +15,6 @@ const HASH_NS = 'wairon:token:v1';
 /** Salted hash of a bearer token. */
 export function hashToken(token: string): string {
   return crypto.createHash('sha256').update(`${HASH_NS}:${token}`).digest('hex');
-}
-
-function storePath(dataDir: string): string {
-  return path.join(dataDir, 'auth', 'credentials.json');
-}
-
-function load(dataDir: string): ApiKeyRecord[] {
-  try {
-    return JSON.parse(fs.readFileSync(storePath(dataDir), 'utf8')) as ApiKeyRecord[];
-  } catch {
-    return [];
-  }
-}
-
-function save(dataDir: string, records: ApiKeyRecord[]): void {
-  const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(records, null, 2) + '\n');
-  fs.renameSync(tmp, p);
 }
 
 /** Constant-time compare of two hex digests. */
