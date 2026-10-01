@@ -200,9 +200,11 @@ methods:
       project id from its project.yaml, and recurses into it. Each member is answered as the record
       it should hold — id, parentProjectId the declaring project's id, memberPath as declared — with
       the qualifier that bound it before stage 7 and its action against the stored records: register
-      when no record holds the id, relocate when one does with another parent or path, unchanged
-      when it agrees, unreadable when its directory or project.yaml cannot be read (never skipped).
-      Writes nothing.
+      when no record holds the id, relocate when one does with another parent or path, rename when a
+      record of another id holds this parent and path, unchanged when it agrees, unreadable when its
+      declaration, directory or project.yaml cannot be followed or read (never skipped), with the
+      reason: the declaration's own problem, a path escaping its parent, a missing directory, a
+      project.yaml that cannot be read or fails its schema, or no valid project id. Writes nothing.
     calls:
       - project_store.read
       - host_core_adapter.loadProjectConfig
@@ -220,4 +222,4 @@ methods:
     symbol: projectRepositoryScope
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-10-01T16:56:12.682Z'
+updatedAt: '2026-10-01T18:09:15.548Z'

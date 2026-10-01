@@ -804,7 +804,9 @@ methods:
         description: Record the audit append failure as a server diagnostic and continue
         type: local
       - stepNumber: 15
-        description: Return the plaintext token (shown exactly once)
+        description: >-
+          Return the plaintext token (shown exactly once) with the mapping of every deprecated
+          member-qualified entry to the record id it was stored as
         type: return
         outcome: plaintext token returned once
     detail: full
@@ -1063,4 +1065,4 @@ methods:
     symbol: tryAppendAudit
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-09-23T21:19:40.989Z'
+updatedAt: '2026-10-01T18:07:17.430Z'

@@ -8,6 +8,8 @@ description: >-
   pre-authorized entrypoints. Audit appends are best-effort and never fail the primary action.
 contract: iproject_lifecycle_orchestrator
 sourcePath: src/server/projectlifecycle.ts
+injectedParams:
+  - cfg
 methods:
   - name: initializeProject
     narrative:
@@ -649,4 +651,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-01T16:52:03.118Z'
+updatedAt: '2026-10-01T18:11:24.624Z'

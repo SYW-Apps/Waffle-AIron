@@ -346,9 +346,10 @@ methods:
   - name: mintToken
     description: >-
       Mint an owner-bound API token acting as its owner's live permission, narrowed to the named
-      projects (instance admin); shown once.
-    signature: 'mintToken(credential: string | null, request: TokenMintRequest): string'
-    returns: string
+      projects (instance admin); shown once, with each deprecated member-qualified entry and the
+      member record id it was stored as.
+    signature: 'mintToken(credential: string | null, request: TokenMintRequest): MintedToken'
+    returns: MintedToken
     params:
       - name: credential
         type: string | null
@@ -431,11 +432,13 @@ methods:
   - name: upgradeMembers
     description: >-
       Plan, and with apply commit, the stage-7 member upgrade of the data dir (`wairon host doctor
-      [--fix]`, after the permission-model migration): every hosted family's members registered as
-      records (no grants: they inherit through their parent chain), every member-qualified API key
-      entry rewritten to a record id, the proof that nobody's reach changes checked before writing,
-      all or nothing. A dry run reports the full plan — members, the reach proof, rewritten keys,
-      refusals — and writes nothing; a blocked plan is never applied.
+      [--fix]`, after the permission-model migration): first every transaction a crash left
+      unfinished under the data directory — resolved and audited with apply, reported without it;
+      then every hosted family's members registered as records (no grants: they inherit through
+      their parent chain), every member-qualified API key entry rewritten to a record id, the proof
+      that nobody's reach changes checked before writing, all or nothing. A dry run reports the full
+      plan — the unfinished transactions, members, the reach proof, rewritten keys, refusals — and
+      writes nothing; a blocked plan is never applied.
     signature: 'upgradeMembers(apply: boolean): MemberUpgradeReport'
     returns: MemberUpgradeReport
     params:
@@ -443,4 +446,4 @@ methods:
         type: boolean
 status: complete
 createdAt: '2026-09-25T22:39:47.086Z'
-updatedAt: '2026-10-01T16:59:24.557Z'
+updatedAt: '2026-10-01T18:09:31.700Z'

@@ -17,10 +17,12 @@ methods:
       reach over the family root vs the member's own record through its new chain — equal by
       construction), and every API key whose member-qualified entries are rewritten to record ids.
       Writes no grant and no placement. Refuses the whole plan — listing every reason, writing
-      nothing — on a member id another record holds, a member declared twice, an unreadable member,
-      a setting already scoped at a member's id, or any unequal reach row. An unblocked plan holds a
-      rehearsal of the host stores with the record and key writes made in it, and its file changes.
-      A completed upgrade re-plans empty.
+      nothing — on a member id another record holds, a member declared twice, an unreadable member
+      (named by its qualifier and its path, with why: the declaration's own problem, a path escaping
+      its parent, a missing directory, a project.yaml that cannot be read or fails its schema, or no
+      valid project id), a setting already scoped at a member's id, or any unequal reach row. An
+      unblocked plan holds a rehearsal of the host stores with the record and key writes made in it,
+      and its file changes. A completed upgrade re-plans empty.
     signature: 'plan(): MemberUpgradePlan'
     returns: MemberUpgradePlan
     params: []
@@ -86,9 +88,10 @@ methods:
       (sdd_attach_member, sdd_rename_project): for attach, list the principals whose reach the
       change alters — the member is added under the bound project, so everyone the bound project's
       chain grants gains access to it (a dry run's result carries the listing; reconcile audits the
-      applied change); for sdd_rename_project bound at a FAMILY ROOT, refuse with "renaming a hosted
-      family root's id is not supported; a member can be renamed, or the root recreated" (a member
-      rename is allowed and re-keyed by reconcile).
+      applied change); for sdd_rename_project whose renamed project is a FAMILY ROOT (bound at a
+      family root and naming no member path), refuse with "renaming a hosted family root's id is not
+      supported; a member can be renamed, or the root recreated" (a member rename — bound at the
+      member, or naming its alias path — is allowed and re-keyed by reconcile).
     signature: 'screen(binding: ProjectBinding, tool: string, alias: string, path: string): MembershipScreen'
     returns: MembershipScreen
     params:
@@ -203,6 +206,24 @@ methods:
       - name: apply
         type: boolean
         description: False for a dry run
-status: design
+  - name: recoverData
+    description: >-
+      Before the server serves, and from `wairon host doctor`: find every transaction a crash left
+      unfinished under the host data directory — a crashed member upgrade, or a hosted detach or
+      adopt the data directory coordinated — and with fix resolve each (a transaction whose
+      coordinator never committed is restored from its backups, one that did has only its
+      directories cleaned, one that cannot be resolved is left for an operator), auditing each as a
+      migration.recovered event by the operator with the same line in the server log. Without fix it
+      only reports them and writes nothing. A failure is reported and never prevents the server from
+      starting.
+    signature: 'recoverData(fix: boolean): RecoveredTransaction[]'
+    returns: RecoveredTransaction[]
+    params:
+      - name: fix
+        type: boolean
+        description: Resolve (true) or only report (false)
+    guarantees:
+      - idempotent
+status: complete
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-01T17:09:06.708Z'
+updatedAt: '2026-10-01T18:09:57.469Z'

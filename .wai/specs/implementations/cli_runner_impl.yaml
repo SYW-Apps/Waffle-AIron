@@ -2704,7 +2704,9 @@ methods:
         onFalseStep: 6
       - stepNumber: 4
         label: mint_owned
-        description: Mint an owner-bound token via the host adapter
+        description: >-
+          Mint an owner-bound token via the host adapter, and print it once together with each
+          deprecated member-qualified entry and the member record id it was stored as
         type: call
         targetComponent: cli_host_adapter
         targetMethod: mintToken
@@ -3022,7 +3024,9 @@ methods:
       - stepNumber: 5
         description: Nothing to upgrade?
         type: branch
-        condition: the plan has no member to register or relocate, no key to rewrite and no refusal
+        condition: >-
+          no unfinished transaction was found, and the plan has no member to register or relocate,
+          no key to rewrite and no refusal
         onFalseStep: 7
       - stepNumber: 6
         description: Report the members as registered
@@ -3031,11 +3035,12 @@ methods:
       - stepNumber: 7
         label: members
         description: >-
-          Print the plan once per family: each member with its parent and path, the reach proof as
-          one line per member (rows compared, all equal — nobody's reach changes), each rewritten
-          key entry with its widening, and every refusal; warn when it was a dry run (re-run with
-          --fix) or a blocked plan (nothing written), and say what was restored when the apply
-          failed
+          Print each unfinished transaction found under the data directory (rolled back or cleaned
+          with --fix, pending without it), then the plan once per family: each member with its
+          parent and path, the reach proof as one line per member (rows compared, all equal —
+          nobody's reach changes), each rewritten key entry with its widening, and every refusal (an
+          unreadable member named with why); warn when it was a dry run (re-run with --fix) or a
+          blocked plan (nothing written), and say what was restored when the apply failed
         type: local
       - stepNumber: 8
         description: Return after the report
@@ -3057,4 +3062,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-01T17:08:02.273Z'
+updatedAt: '2026-10-01T18:09:38.534Z'

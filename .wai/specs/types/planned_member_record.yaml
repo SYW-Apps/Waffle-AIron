@@ -38,6 +38,13 @@ fields:
     type: string
     description: 'For action rename: the record id the member held before'
     optional: true
+  - name: reason
+    type: string
+    description: >-
+      For action unreadable: why, in words a person acts on — the declaration's own problem, a path
+      that escapes its parent, a missing directory, a project.yaml that cannot be read or fails its
+      schema, or no valid project id
+    optional: true
 methods: []
 createdAt: '2026-10-01T16:26:56.046Z'
-updatedAt: '2026-10-01T16:55:16.019Z'
+updatedAt: '2026-10-01T18:06:40.811Z'

@@ -149,6 +149,23 @@ methods:
         description: The directory, absolute
     guarantees:
       - idempotent
+  - name: move
+    description: >-
+      Move every file under one directory to the same relative path under another, inside a
+      rehearsal — a relocated project's image moved from its old place to its new one, so the
+      rehearsal's difference reads as deletes at the old place and creates at the new. Each file is
+      renamed with replace's retries; the emptied directories below the source are pruned. Refuses a
+      target that already holds a file. Never touches a live family: the caller passes rehearsal
+      paths.
+    signature: 'move(from: string, to: string): void'
+    returns: void
+    params:
+      - name: from
+        type: string
+        description: The directory whose files move, absolute
+      - name: to
+        type: string
+        description: Where they go, absolute; created as needed
 status: complete
 createdAt: '2026-09-30T20:27:16.585Z'
-updatedAt: '2026-10-01T17:03:26.802Z'
+updatedAt: '2026-10-01T18:07:32.615Z'

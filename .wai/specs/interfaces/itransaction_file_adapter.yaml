@@ -108,10 +108,11 @@ methods:
         description: The file, relative to the owner's root
   - name: close
     description: >-
-      Remove an owner's transaction directory, .wai/transactions/ itself when empty, and then the
-      owner's .wai/ when nothing else is left in it (a project the migration took apart, such as an
-      internalized member, leaves no empty .wai behind for a later command to mistake for a
-      project).
+      Remove an owner's transaction directory, .wai/transactions/ itself when empty, then the
+      owner's .wai/ when nothing else is left in it, and then the owner's root itself when that left
+      it empty (a project the migration took apart, such as an internalized member, leaves no empty
+      .wai behind for a later command to mistake for a project; a relocated project leaves no empty
+      directory at its old place, and a relocation that was rolled back none at its new one).
     signature: 'close(owner: string, id: string): void'
     returns: void
     params:
@@ -123,4 +124,4 @@ methods:
         description: The transaction id
 status: complete
 createdAt: '2026-09-30T20:26:08.028Z'
-updatedAt: '2026-09-30T22:28:23.450Z'
+updatedAt: '2026-10-01T18:07:47.302Z'

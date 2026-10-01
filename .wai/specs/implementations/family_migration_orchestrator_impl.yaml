@@ -187,7 +187,11 @@ methods:
           Copy every family project's .wai tree, the project the verb brings in (attach, adopt), and
           every project a family project names as an external by a path inside the family root, into
           a private rehearsal — so a pin taken on the copy reads the same producer the live pin
-          would
+          would. A request carrying a relocation (hosted detach and adopt) is rehearsed with the
+          relocation's coordinator (the host data directory) as the coordinator and an owner
+          contributing its store files as areas, and with the project's old directory and its new
+          root named whole (a family project inside them is copied once, by them); its writers run
+          with the hosted record lookup answering the relocated project at its new place in the copy
         type: call
         targetComponent: family_transaction
         targetMethod: rehearse
@@ -374,4 +378,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-09-30T22:58:38.719Z'
+updatedAt: '2026-10-01T18:07:57.239Z'

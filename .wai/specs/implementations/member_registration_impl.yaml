@@ -34,7 +34,9 @@ methods:
       - stepNumber: 4
         description: >-
           Collect refusals: a member id another record holds (a family root, or a member of another
-          family), one member id declared twice, an unreadable member
+          family), one member id declared twice, an unreadable member — named by its qualifier and
+          path, with the reason the declaration read gave (its own problem, a path escaping its
+          parent, a missing directory, an unreadable or invalid project.yaml, no valid project id)
         type: local
       - stepNumber: 5
         description: Gather the permission world exactly as the resolver sees it
@@ -460,9 +462,11 @@ methods:
         targetMethod: family
       - stepNumber: 3
         description: >-
-          A bound FAMILY ROOT is refused with "renaming a hosted family root's id is not supported;
-          a member can be renamed, or the root recreated". A bound member is let through — reconcile
-          re-keys it afterwards, and its reach does not change
+          The renamed project is a FAMILY ROOT when the binding is a family root and the call names
+          no member path: it is refused with "renaming a hosted family root's id is not supported; a
+          member can be renamed, or the root recreated". A member — bound itself, or named by its
+          alias path — is let through: reconcile re-keys it afterwards, and its reach does not
+          change
         type: local
       - stepNumber: 4
         description: Return the refusal, or nothing to list
@@ -819,6 +823,34 @@ methods:
         type: return
         outcome: MemberAdoption (dry run)
     detail: full
-status: design
+  - name: recoverData
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Find the transactions unfinished under the data directory, resolving each only when fix is
+          asked (a report-only pass writes nothing); a failure is logged and answers nothing
+        type: call
+        targetComponent: host_migration_adapter
+        targetMethod: recover
+      - stepNumber: 2
+        description: For every transaction found
+        type: loop
+        loopKind: forEach
+        over: recovered transactions
+        endStep: 3
+      - stepNumber: 3
+        description: >-
+          When it was resolved, audit it as migration.recovered by the operator (id, verb,
+          coordinator phase, rolled-back | cleaned | refused) and write the same line to the server
+          log, so an operator sees a rollback nobody asked for
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 4
+        description: Return what was found and done
+        type: return
+        outcome: RecoveredTransaction[]
+    detail: full
+status: complete
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-01T17:39:42.064Z'
+updatedAt: '2026-10-01T18:09:58.290Z'

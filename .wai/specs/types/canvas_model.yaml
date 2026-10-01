@@ -21,7 +21,11 @@ fields:
     optional: false
   - name: subsystems
     type: object[]
-    description: Each subsystem's id, name and description.
+    description: >-
+      Each subsystem's id, name and description — and, for a project with members, each member as a
+      project node (stage 3); on a hosted instance a member node carries its hosted record id
+      (recordId) only when the caller may read that record, so the app links it to the member's own
+      page.
     optional: false
   - name: components
     type: object[]
@@ -36,4 +40,4 @@ fields:
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-09-20T16:41:02.469Z'
+updatedAt: '2026-10-01T18:08:38.748Z'

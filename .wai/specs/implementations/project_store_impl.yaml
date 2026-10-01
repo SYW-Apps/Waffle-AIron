@@ -1,8 +1,10 @@
 id: project_store_impl
 name: Project Record Store Implementation
-description: Read-through file I/O over the data-dir project registry file.
+description: >-
+  Read-through file I/O over the data-dir project registry file, in a module of its own so every
+  repository, index and registry hop into it is a real import edge.
 contract: iproject_store
-sourcePath: src/server/projects.ts
+sourcePath: src/server/project-store.ts
 methods:
   - name: read
     narrative: []
@@ -16,4 +18,4 @@ methods:
     symbol: save
 status: complete
 createdAt: '2026-07-19T09:00:07.147Z'
-updatedAt: '2026-07-19T09:00:59.728Z'
+updatedAt: '2026-10-01T18:09:46.078Z'

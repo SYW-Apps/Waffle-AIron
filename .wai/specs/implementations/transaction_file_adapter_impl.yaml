@@ -60,7 +60,7 @@ methods:
     intent: >-
       Removes <owner>/.wai/transactions/<id>/ recursively (ENOENT is success, a Windows EBUSY/EPERM
       retried briefly), then .wai/transactions/ when only its .gitignore remains, then <owner>/.wai/
-      when that left it empty.
+      when that left it empty, then <owner> itself when that left it empty.
 status: complete
 createdAt: '2026-09-30T20:26:54.730Z'
-updatedAt: '2026-09-30T22:28:24.730Z'
+updatedAt: '2026-10-01T18:07:48.560Z'

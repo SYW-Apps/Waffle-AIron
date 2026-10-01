@@ -41,7 +41,14 @@ fields:
       these, per copied owner, are compared. Absent for a family migration, which compares every
       .wai tree.
     optional: true
+  - name: whole
+    type: string[]
+    description: >-
+      The scope's owners copied whole (a relocated project's old directory and its new root): every
+      file under them, whatever the file, is compared, so a move reads as deletes at the old place
+      and creates at the new. Absent for every other transaction.
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:23.894Z'
-updatedAt: '2026-10-01T17:39:46.709Z'
+updatedAt: '2026-10-01T18:06:29.931Z'

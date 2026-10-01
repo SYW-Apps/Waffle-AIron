@@ -11,21 +11,24 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      For each project root, refuses one that does not lie within the family root, then walks its
-      .wai tree (skipping .wai/transactions/ and following no link), copying each file to the same
-      relative path under the target and hashing the live bytes it read. Answers the digests by live
-      absolute path. A read failure throws naming the file; the caller drops the half-made
-      rehearsal.
+      For each scoped owner, refuses one that does not lie within the coordinator root, then copies
+      its areas (its .wai tree by default, skipping .wai/transactions/ and following no link; the
+      named files and directories when the scope names areas) and, for each owner the scope names
+      whole, every file under it except .wai/transactions/, to the same relative path under the
+      target, hashing the live bytes it read. Owners lying inside a whole owner are copied once, by
+      the whole owner. Answers the digests by live absolute path. A read failure throws naming the
+      file; the caller drops the half-made rehearsal.
   - name: compare
     narrative: []
     detail: intent
     intent: >-
-      Walks every .wai directory in the rehearsal tree and every live .wai the mirror copied, pairs
-      files by path relative to the family root, and emits a FileChange for each pair whose bytes
-      differ (write), each rehearsal-only file (create) and each live-only file under a copied tree
-      (delete). The owner is the directory holding the .wai, mapped back to its live path;
-      baseDigest comes from the rehearsal's recorded digests, stagedDigest is hashed from the
-      rehearsal bytes. A file present in both with equal bytes is not a change, so a writer that
+      Walks every .wai directory in the rehearsal tree (or, for a scope that names areas, every
+      copied owner's areas) and every whole owner's image, pairs files by path relative to the
+      coordinator root, and emits a FileChange for each pair whose bytes differ (write), each
+      rehearsal-only file (create) and each live-only file the mirror copied (delete). The owner is
+      the directory holding the .wai — or the whole owner for a file under one — mapped back to its
+      live path; baseDigest comes from the rehearsal's recorded digests, stagedDigest is hashed from
+      the rehearsal bytes. A file present in both with equal bytes is not a change, so a writer that
       re-saved identically adds nothing.
   - name: read
     narrative: []
@@ -84,6 +87,14 @@ methods:
     intent: >-
       Answers whether <dir>/.wai/project.yaml exists; an absent directory answers false. Never
       throws.
+  - name: move
+    narrative: []
+    detail: intent
+    intent: >-
+      Walks every file under the source (following no link), refuses when the target already holds a
+      file at any of their paths, then for each creates the missing parent directories under the
+      target and renames the file there with replace's bounded retries; finally prunes the emptied
+      directories below the source, the source included. Throws the first failure naming the file.
 status: complete
 createdAt: '2026-09-30T20:27:27.264Z'
-updatedAt: '2026-10-01T05:53:27.597Z'
+updatedAt: '2026-10-01T18:07:37.662Z'
