@@ -873,8 +873,9 @@ its own.
   `sdd_attach_member`'s dry run carries the principals who gain access beside the plan;
   `sdd_detach_member` and `sdd_adopt_member` list everyone who loses or gains access; every
   applied change is audited with the reach it changed (`member.registered`,
-  `member.relocated`, `member.renamed`, `member.departed`, `member.detached`,
-  `member.adopted`).
+  `member.returned`, `member.relocated`, `member.renamed`, `member.departed`,
+  `member.detached`, `member.adopted`; `family.changed` for a project a family-shape tool
+  wrote without changing its membership).
 - **Hosted detach and adopt relocate.** Every hosted record has an isolated root, so a
   detached member cannot stay inside its family's tree. A hosted detach **moves** the member
   — its files leave as deletes and arrive in a new isolated root as creates, its own members
@@ -891,7 +892,8 @@ its own.
   server" — unavailable, never a pass.
 - **Reconcile.** After an applied `sdd_add_member`, `sdd_move_member` or family migration on
   hosted, the family's records follow the family on disk: new members are registered,
-  moved ones relocated, departed ones disabled (never deleted), and a renamed member is
+  moved ones relocated, departed ones disabled (never deleted) — and re-enabled when the family
+  declares them again (`member.returned`, listing exactly who regains reach) — and a renamed member is
   re-keyed — its own-scope settings and the key entries naming it move to the new id, with
   no widening.
 - **One family commit.** A git-backed family commits through its family root's repository:
@@ -906,7 +908,9 @@ its own.
   a crumb to a member's parent (named only when you can see the parent) and lists members
   under their parent. The family canvas links each member to its own page when you may read
   it. `GET /web/projects/externals` answers a project's relation health — its externals
-  status, per external — shown on the project's new *Relations* tab.
+  status, per external — shown on the project's new *Relations* tab. Its reach is your listed
+  projects (read, write or administer). Colouring the canvas's relation edges and clicking a
+  member node open are a future engine hook; the canvas shows a strip of member links instead.
 
 **Upgrading.**
 
@@ -928,7 +932,15 @@ its own.
   id and says what it mapped (`platform::billing -> billing`); the admin API answers it as
   `mapped`. Mint new tokens by record id.
 - **Hosted detach and adopt move directories** and name the projects they write to re-lock.
-  `sdd_adopt_member` takes `path` on hosted (where to adopt a `source.hosted` external).
+  `sdd_adopt_member` takes `path` on hosted (where to adopt a `source.hosted` external). An
+  empty directory at the target — what a cut-short cleanup after a committed move can leave
+  — counts as free; a non-empty one refuses (`relocation-target-exists`).
+- **A detached project has no git binding.** The family's repository stays with the family
+  and none is created for the detached project: the detach result and its audit event say
+  "no git binding: enable one for this project", and its Git status reads not git-backed.
+  Enable a binding for it (`wairon host git enable --project <id> --remote <url>`,
+  `POST /admin/projects/{id}/git`, or the project's Git tab) if its
+  history should keep being published.
 - **`source.path` is optional** in `externals` now that `source.hosted` exists; a source
   naming both or neither is reported as the declaration's problem.
 - **Library callers:** `mintToken` answers `{ token, mapped }` instead of the bare token.
