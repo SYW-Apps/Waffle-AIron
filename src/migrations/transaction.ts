@@ -59,11 +59,13 @@ export function rehearse(scope: TransactionScope): Rehearsal {
   const directory = repository.openRehearsal(id);
   const familyRoot = path.resolve(scope.familyRoot);
   const projects = [...new Set(scope.projects.map((p) => path.resolve(p)))];
-  // Steps 3-4: only .wai trees are copied — every writer run on the copy
-  // must read nothing outside them (the rehearsal precondition).
+  const whole = scope.whole ? [...new Set(scope.whole.map((p) => path.resolve(p)))] : undefined;
+  // Steps 3-4: only the scoped areas and whole owners are copied — every
+  // writer run on the copy must read nothing outside them (the rehearsal
+  // precondition).
   let baseDigests: Map<string, string>;
   try {
-    baseDigests = files.mirror({ familyRoot, projects, ...(scope.areas ? { areas: scope.areas } : {}) }, directory);
+    baseDigests = files.mirror({ familyRoot, projects, ...(scope.areas ? { areas: scope.areas } : {}), ...(whole ? { whole } : {}) }, directory);
   } catch (e) {
     // Steps 6-7.
     repository.dropRehearsal(id);
@@ -71,7 +73,7 @@ export function rehearse(scope: TransactionScope): Rehearsal {
   }
   // Step 5.
   const roots = new Map(projects.map((p) => [p, path.join(directory, path.relative(familyRoot, p))]));
-  return { id, directory, familyRoot, roots, baseDigests, ...(scope.areas ? { areas: [...scope.areas] } : {}) };
+  return { id, directory, familyRoot, roots, baseDigests, ...(scope.areas ? { areas: [...scope.areas] } : {}), ...(whole ? { whole } : {}) };
 }
 
 /** ifamily_transaction.diff — the rehearsal's difference from the live family. */
@@ -401,8 +403,10 @@ function resolveOne(journal: TransactionJournal): RecoveredTransaction {
     for (const owner of [...owners.filter((o) => o !== coordinator.owner), coordinator.owner]) repository.close(owner, journal.id);
     return { ...base, owners, phase, action: 'cleaned', detail: 'it had committed; its transaction directories were removed' };
   }
-  // Step 12: every owner's journal; an owner whose root is gone refuses the transaction.
-  const absent = owners.filter((o) => !fs.existsSync(o));
+  // Step 12: every owner's journal; an owner whose root is gone refuses the
+  // transaction — unless the coordinator never left staging: nothing live moved,
+  // so an owner whose root does not exist yet (a relocation's new root) staged nothing.
+  const absent = phase === 'staging' ? [] : owners.filter((o) => !fs.existsSync(o));
   if (absent.length > 0) {
     return { ...base, owners, phase, action: 'refused', detail: `owner(s) out of reach: ${absent.join(', ')}` };
   }

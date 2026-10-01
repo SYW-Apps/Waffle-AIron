@@ -32,6 +32,9 @@ function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+/** How a source.hosted external's reason begins when it is read outside a hosted server. */
+const HOSTED_ONLY = 'hosted-only producer';
+
 /** One line per alias: its outcome, the used-name count and each unexported reference. */
 function printPins(pins: ExternalPin[]): void {
   if (!pins.length) {
@@ -41,6 +44,11 @@ function printPins(pins: ExternalPin[]): void {
   const outcome = (o: ExternalPin['outcome']): string =>
     o === 'pinned' ? chalk.green(o) : o === 'unchanged' ? chalk.gray(o) : chalk.yellow(o);
   for (const pin of pins) {
+    // A source.hosted external outside a hosted server: say where it is available, never a bare unresolved.
+    if (pin.outcome === 'unresolved' && pin.detail?.startsWith(HOSTED_ONLY)) {
+      logger.info(`${chalk.cyan(pin.alias)} → ${pin.project ?? '?'}: ${chalk.yellow(pin.detail)}`);
+      continue;
+    }
     const what = pin.digest ? ` ${pin.usedNames} used name(s), ${pin.digest.slice(0, 19)}…` : '';
     logger.info(`${chalk.cyan(pin.alias)} → ${pin.project ?? '?'}: ${outcome(pin.outcome)}${what}${pin.detail ? ` — ${pin.detail}` : ''}`);
     for (const ref of pin.unexported) {

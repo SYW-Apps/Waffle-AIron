@@ -5,7 +5,7 @@ import * as membership from './membership.js';
 import * as identity from './identity.js';
 import * as boundary from './boundary.js';
 import * as transaction from './transaction.js';
-import { getProjectRoot, getRequestParentReach, runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithHostedLookup, runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import type { ChainingMigrationPlan } from './chaining-migration.js';
 import type { ProjectFamily } from '../models/project-family.js';
 import {
@@ -19,6 +19,7 @@ import {
   type PlannedEdit,
   type RecoveredTransaction,
   type Rehearsal,
+  type TransactionScope,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -62,8 +63,9 @@ export function plan(request: MigrationRequest): MigrationPlan {
   // Step 4: the project graph of the highest root reached, and the bound project's key in it.
   const family = runWithProjectRoot(top, () => core.projectFamily());
   const boundKey = family.nodes.find((n) => path.resolve(n.directory) === path.resolve(bound))?.namespace ?? '';
-  // Steps 5-7: an unfinished transaction refuses the plan.
-  const pending = unfinished(top, bound);
+  // Steps 5-7: an unfinished transaction refuses the plan — under the
+  // relocation's coordinator too, which journals a hosted detach or adopt.
+  const pending = unfinished(top, bound, request.relocation?.coordinator);
   if (pending.length > 0) return refusedForPending(request, top, whole, pending);
   // Steps 8-23: the verb's planner — a verb reads the live family under the top root's binding; the chaining migration climbs from the caller's.
   const planned = request.verb === 'chaining' ? route(request, family, boundKey) : runWithProjectRoot(top, () => route(request, family, boundKey));
@@ -72,9 +74,10 @@ export function plan(request: MigrationRequest): MigrationPlan {
 }
 
 /** Step 5: the transactions a crash left under the family root and the bound root, writing nothing. */
-function unfinished(top: string, bound: string): RecoveredTransaction[] {
+function unfinished(top: string, bound: string, coordinator?: string): RecoveredTransaction[] {
   const found = transaction.recover(top, false);
   if (path.resolve(bound) !== path.resolve(top)) found.push(...transaction.recover(bound, false));
+  if (coordinator !== undefined) found.push(...transaction.recover(coordinator, false));
   return found.filter((t, i) => found.findIndex((u) => u.id === t.id) === i);
 }
 
@@ -166,10 +169,10 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
   // Step 4: every family project, a project the verb brings in (attach, adopt), and every
   // producer a family project names by a path inside the family root (a pin reads it).
   const projects = [...family.nodes.map((n) => n.directory), ...broughtIn(plan, family), ...pathProducers(plan, family)];
-  const rehearsal = transaction.rehearse({ familyRoot: plan.familyRoot, projects });
+  const rehearsal = transaction.rehearse(scopeOf(plan, projects));
   // Steps 5-14: the verb's own writes on the copy; a writer's refusal ends the region.
   try {
-    onCopy(rehearsal, () => writeVerb(plan, rehearsal));
+    onCopy(rehearsal, () => relocatedLookup(plan, rehearsal, () => writeVerb(plan, rehearsal)));
   } catch (e) {
     // Steps 18-19.
     transaction.discard(rehearsal);
@@ -187,6 +190,57 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
   }
   // Steps 16-17.
   return { ...plan, rehearsal, changes, relock: relockOf(plan, changes) };
+}
+
+/** The relocated project's directory and where it goes, when the plan moves one (a hosted detach or adopt). */
+function movedOf(plan: MigrationPlan): { from: string; to: string } | null {
+  const relocation = plan.request.relocation;
+  const move = plan.edits.find((e) => e.write?.call === 'move');
+  if (!relocation || !move?.write) return null;
+  return { from: path.resolve(move.write.root), to: path.resolve(relocation.to) };
+}
+
+/**
+ * Step 4: what the rehearsal copies. A family migration copies every project's
+ * .wai tree under the family root. A relocated plan is coordinated by the host
+ * data directory instead — an owner itself, contributing its store files — and
+ * names the moved project's old directory and its new root whole, so the move,
+ * the family edits and the host store writes commit as one transaction.
+ */
+function scopeOf(plan: MigrationPlan, projects: string[]): TransactionScope {
+  const relocation = plan.request.relocation;
+  const moved = movedOf(plan);
+  if (!relocation || !moved) return { familyRoot: plan.familyRoot, projects };
+  return {
+    familyRoot: relocation.coordinator,
+    projects: [relocation.coordinator, ...projects],
+    areas: ['.wai', ...relocation.areas],
+    whole: [moved.from, moved.to],
+  };
+}
+
+/**
+ * Run the writers with the hosted record lookup answering a project at its
+ * image in the copy — the relocated project at its new place — so a pin taken
+ * on the copy reads the producer as the commit will leave it. Outside a
+ * relocated plan the writers run unchanged.
+ */
+function relocatedLookup<T>(plan: MigrationPlan, rehearsal: Rehearsal, run: () => T): T {
+  const moved = movedOf(plan);
+  const live = getHostedLookup();
+  if (!moved || !live) return run();
+  const copied = [...rehearsal.roots.keys(), ...(rehearsal.whole ?? [])].filter((r) => r !== path.resolve(rehearsal.familyRoot));
+  const inside = (root: string, dir: string): boolean => {
+    const rel = path.relative(root, dir);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  };
+  return runWithHostedLookup((id) => {
+    const root = live(id);
+    if (root === null) return null;
+    const at = path.resolve(root);
+    if (inside(moved.from, at)) return path.join(rehearsalRoot(rehearsal, moved.to), path.relative(moved.from, at));
+    return copied.some((r) => inside(r, at)) ? rehearsalRoot(rehearsal, at) : at;
+  }, run);
 }
 
 /** The changed owners the hosted request may not write (none outside a hosted request). */
@@ -262,7 +316,10 @@ function onCopy<T>(rehearsal: Rehearsal, run: () => T): T {
 function relockOf(plan: MigrationPlan, changes: FileChange[]): string[] {
   const ended = new Set(changes.filter((c) => c.action === 'delete' && c.path === '.wai/project.yaml').map((c) => path.resolve(c.project)));
   const owners = [...new Set(changes.map((c) => path.resolve(c.project)))].filter((o) => !ended.has(o));
-  if (plan.request.verb !== 'rename') return owners.filter((owner) => core.approvalRecord(owner) !== null);
+  // A relocated project carries its lock to its new root, where it is re-locked.
+  const moved = movedOf(plan);
+  const relocated = moved !== null && core.approvalRecord(moved.from) !== null ? [moved.to] : [];
+  if (plan.request.verb !== 'rename') return [...owners.filter((owner) => core.approvalRecord(owner) !== null), ...relocated];
   const renamed = plan.edits.find((e) => e.write?.call === 'renameId')?.write?.root;
   const first = renamed !== undefined ? path.resolve(renamed) : undefined;
   return [...owners.filter((o) => o === first), ...owners.filter((o) => o !== first)];

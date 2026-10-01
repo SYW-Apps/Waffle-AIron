@@ -440,11 +440,17 @@ export type ProjectProfileSelection = z.infer<typeof ProjectProfileSelectionSche
 /**
  * external_source — where an external's producer is found when the family does
  * not hold it: the producer project's root directory, relative to the declaring
- * project's root (an absolute path is kept as written). A hosted source is
- * stage 7 and is not part of this shape.
+ * project's root (an absolute path is kept as written), or — on a hosted
+ * instance — the producer's hosted project record id (stage 7), which reaches a
+ * producer in another isolated root where no path can. Exactly one of the two
+ * is set; a source naming both or neither is REPORTED (the declaration's
+ * problem), never unreadable. A hosted source is read live only through the
+ * hosting server's record lookup within the request's reach; anywhere else it
+ * is unavailable, never a pass.
  */
 export const ExternalSourceSchema = z.object({
-  path: z.string(),
+  path: z.string().optional(),
+  hosted: z.string().optional(),
 });
 export type ExternalSource = z.infer<typeof ExternalSourceSchema>;
 
@@ -1031,10 +1037,22 @@ export interface DeclaredExternal {
   project: string;
   /** The declaration's `source.path`, as written. */
   sourcePath?: string;
+  /** The declaration's `source.hosted`, as written: the producer's hosted record id (stage 7). */
+  sourceHosted?: string;
   /** Why the declaration cannot be used as written. */
   problem?: string;
   /** The declaration's `use` as written, deduplicated in first-seen order; empty when it imports nothing. */
   use: string[];
+}
+
+/** A source that names both or neither of `path` and `hosted` — exactly one of the two says where the producer is. */
+function sourceProblem(source: ExternalSource | undefined): string | undefined {
+  if (source === undefined) return undefined;
+  const named = (source.path !== undefined ? 1 : 0) + (source.hosted !== undefined ? 1 : 0);
+  if (named === 1) return undefined;
+  return named === 0
+    ? 'its `source` names neither `path` nor `hosted` — give exactly one'
+    : 'its `source` names both `path` and `hosted` — give exactly one';
 }
 
 /** One `use` entry: `*`, or a public name of [a-z0-9-_]+. */
@@ -1068,11 +1086,12 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Par
         ? `the alias "${alias}" is also declared under \`members\` — one alias names one project`
         : !PROJECT_ID_RE.test(project)
           ? `the producer id "${project}" breaks the project-id grammar`
-          : imports.problem;
+          : sourceProblem(declaration?.source) ?? imports.problem;
     return {
       alias,
       project,
       ...(declaration?.source?.path !== undefined ? { sourcePath: declaration.source.path } : {}),
+      ...(declaration?.source?.hosted !== undefined ? { sourceHosted: declaration.source.hosted } : {}),
       ...(problem ? { problem } : {}),
       use: imports.use,
     };

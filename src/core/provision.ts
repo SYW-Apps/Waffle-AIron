@@ -1137,7 +1137,8 @@ function carryDeclarations(scan: InternalizeScan, result: InternalizeResult): vo
   const bound = projectConfigRepository.load() ?? ({} as ProjectConfig);
   for (const [alias, decl] of Object.entries(scan.config?.externals ?? {})) {
     if (carriedExternal(scan, alias, decl) === 'parent') continue;
-    const source = decl.source && !path.isAbsolute(decl.source.path)
+    // A path is re-expressed from the new owner; a hosted record id names the same producer from anywhere.
+    const source = decl.source?.path !== undefined && !path.isAbsolute(decl.source.path)
       ? { path: toPosixPath(path.relative(root, path.resolve(scan.memberDir, decl.source.path))) }
       : decl.source;
     if (bound.members?.[alias] === undefined) {

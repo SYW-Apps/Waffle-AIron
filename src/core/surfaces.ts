@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { safeFilenamePart } from '../utils/filenames.js';
@@ -600,12 +600,15 @@ function isWithinDir(dir: string, target: string): boolean {
 
 /**
  * Why a producer's root cannot be read, or null when it can. The caller must
- * gate on reach itself: a root outside the request's reach is never read.
+ * gate on reach itself: a root outside the request's reach is never read. A
+ * hosted producer's root was answered by the hosting server's record lookup,
+ * which answers only a record the request may read — that is its reach check.
  */
-function producerUnreadable(directory: string | undefined): string | null {
+function producerUnreadable(external: ResolvedExternal): string | null {
+  const directory = external.directory;
   if (!directory) return 'the producer has no root directory';
   const reach = getRequestParentReach();
-  if (reach) {
+  if (reach && external.sourceKind !== 'hosted') {
     const bound = getProjectRoot();
     const ceiling = reach.parentReach ? reach.topRoot ?? bound : bound;
     if (!isWithinDir(ceiling, directory)) return OUT_OF_REACH;
@@ -646,7 +649,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
   const { external } = binding;
   const unexported = binding.usage?.unexported ?? [];
   // Step 8: bind the producer's root, when it can be read.
-  const unreadable = producerUnreadable(external.directory);
+  const unreadable = producerUnreadable(external);
   let snapshot: SurfaceSnapshot;
   try {
     if (unreadable) throw new Error(unreadable);
@@ -778,8 +781,8 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
   const base = { alias: external.alias, project: external.project, sourceKind: external.sourceKind, pinned };
   // Step 5: can the live producer be read?
   const unreadable = external.sourceKind === 'unresolved'
-    ? `the external does not resolve: ${external.problem}`
-    : producerUnreadable(external.directory);
+    ? (hostedOnly(external) ? external.problem! : `the external does not resolve: ${external.problem}`)
+    : producerUnreadable(external);
   let live: SurfaceSnapshot | null = null;
   let reason = unreadable;
   if (!reason) {
@@ -794,7 +797,7 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
     // Step 10: nothing could be compared - never a pass. A producer whose root
     // lies outside the request's reach, or one the climb could not look for
     // because the reach stopped it, was never read: it is out of reach.
-    const outOfReach = reason === OUT_OF_REACH || (!binding.reachable && external.sourceKind !== 'family');
+    const outOfReach = reason === OUT_OF_REACH || hostedOutOfReach(external) || (!binding.reachable && external.sourceKind !== 'family');
     return {
       ...base, reachable: false, stale: false, uses: unavailableUses(entry, reason!), detail: reason!,
       ...(outOfReach ? { outOfReach: true } : {}),
@@ -802,7 +805,7 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
   }
   // Step 8: a producer outside the family has no used members to compare.
   const drifted = entry !== undefined ? contentDigest(live) !== entry.digest : undefined;
-  if (external.sourceKind === 'path') {
+  if (external.sourceKind === 'path' || external.sourceKind === 'hosted') {
     return { ...base, reachable: true, stale: false, ...(drifted !== undefined ? { drifted } : {}), uses: [{ state: 'unavailable', code: CHECK_UNAVAILABLE, detail: OUTSIDE_FAMILY }], detail: OUTSIDE_FAMILY };
   }
   const uses = compareUses(entry, binding.usage, live);
@@ -813,6 +816,16 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
     ...(drifted !== undefined ? { drifted } : {}),
     uses,
   };
+}
+
+/** A source.hosted external read outside a hosted server: its problem says so, and nothing is wrong with the external. */
+function hostedOnly(external: ResolvedExternal): boolean {
+  return external.hosted !== undefined && external.sourceKind === 'unresolved' && getHostedLookup() === null;
+}
+
+/** A source.hosted external the hosting server's record lookup did not answer: unknown or outside the request's reach. */
+function hostedOutOfReach(external: ResolvedExternal): boolean {
+  return external.hosted !== undefined && external.sourceKind === 'unresolved' && getHostedLookup() !== null;
 }
 
 /**

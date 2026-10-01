@@ -110,14 +110,16 @@ export interface ResolvedExternal {
   alias: string;
   /** The producer id the declaration names (its `project`, else the alias). */
   project: string;
-  /** family | path | unresolved */
-  sourceKind: 'family' | 'path' | 'unresolved';
+  /** family | path | hosted | unresolved */
+  sourceKind: 'family' | 'path' | 'hosted' | 'unresolved';
   /** For a family producer: parent | sibling | member | family. */
   relation?: 'parent' | 'sibling' | 'member' | 'family';
   /** The producer's key in the family graph, for a family producer. */
   producer?: string;
   /** The producer's root directory, absolute. */
   directory?: string;
+  /** The source.hosted record id the declaration names, resolved or not. */
+  hosted?: string;
   /** The audience ceiling the consumer sees. */
   audience: string;
   /** Why the external is unresolved or unusable. */
