@@ -132,6 +132,8 @@ describe('stage 6 — internalize: where each piece of the member goes (the desi
     // Row: its packs, adopted as the destination says (pinned at the member's version).
     expect(configOf(f.top).extensions).toMatchObject({ packs: [{ name: 'acme-rules', version: '1.0.0' }] });
     expect(result.placed).toContain('pack acme-rules@1.0.0 adopted');
+    // lowlevel-os is a subsystem profile and interfaces a design depth: nothing was held back.
+    expect(result.notCarried).toEqual([]);
     // Row: the destination's exports → the parent's L0, re-exported from the moved subsystem.
     expect(l0.publicInterfaces).toEqual([{ from: 'pay', component: 'pay-portal', audience: 'project' }]);
     // Row: what has no home — its project.yaml, lock, pins and derived outputs — is deleted, every file listed.
@@ -145,6 +147,21 @@ describe('stage 6 — internalize: where each piece of the member goes (the desi
       'project.yaml: .wai/project.yaml',
     ]);
     expect(fs.existsSync(path.join(f.svc, '.wai'))).toBe(false);
+  });
+
+  it('a projectType that is no subsystem profile (fullstack, a project kind) is not stamped but listed as not carried — no UNKNOWN_PROFILE; a valid depth still is', () => {
+    const f = family();
+    const file = path.join(f.svc, '.wai', 'project.yaml');
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('projectType: lowlevel-os', 'projectType: fullstack'));
+    const result = at(f.top, () => internalizeMember('svc', { home: 'pay', packs: 'drop' }));
+    expect(result.notCarried).toEqual(['projectType fullstack not stamped on pay, settle: not a subsystem profile (a project kind, or no built-in profile or loaded pack registers it)']);
+    invalidateSpecCache();
+    setProjectRoot(f.top);
+    for (const id of ['pay', 'settle']) {
+      expect(loadSubsystemSpec(id)?.profile).toBeUndefined();
+      expect(loadSubsystemSpec(id)?.designDepth).toBe('interfaces');
+    }
+    expect(at(f.top, () => validateProject()).issues.filter((i) => i.code === 'UNKNOWN_PROFILE')).toEqual([]);
   });
 
   it('packs drop: the parent selects nothing new, and the drop is placed', () => {

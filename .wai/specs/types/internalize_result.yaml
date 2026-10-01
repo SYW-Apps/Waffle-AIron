@@ -36,7 +36,15 @@ fields:
       approval ends with the project), its pins and snapshots, its derived outputs (agents, context,
       guides), its legacy surfaces.
     optional: false
+  - name: notCarried
+    type: string[]
+    description: >-
+      One line per piece of the member's metadata deliberately not carried, with the reason — e.g.
+      "projectType fullstack not stamped on billing, ledger: not a subsystem profile (a project
+      kind, or no built-in or loaded pack registers it)" — so a value the moved subsystems cannot
+      hold is listed rather than raising UNKNOWN_PROFILE.
+    optional: false
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-30T20:21:50.730Z'
-updatedAt: '2026-09-30T20:21:50.732Z'
+updatedAt: '2026-10-01T05:54:12.251Z'

@@ -493,7 +493,11 @@ methods:
           Place what the member held for its subsystems: append its L0 vision to the home
           subsystem's description as a paragraph naming the member, and stamp its targetLanguage,
           projectType (as profile) and designDepth on each moved subsystem that states none of its
-          own, where they differ from the bound project's
+          own, where they differ from the bound project's — the projectType only when it is a
+          subsystem profile (built in, or registered by a pack the bound project loads) and the
+          designDepth only when it is a design depth; a value a subsystem cannot hold is not stamped
+          and is listed in the result's notCarried with the reason, never left to raise
+          UNKNOWN_PROFILE
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
@@ -1934,4 +1938,4 @@ methods:
         targetMethod: rewriteReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:22:29.337Z'
+updatedAt: '2026-10-01T05:54:21.856Z'

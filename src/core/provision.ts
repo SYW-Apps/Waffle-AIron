@@ -41,9 +41,11 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import { admits, declaredMembers, effectiveProjectId, memberDeclarationOf, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { admits, declaredMembers, DesignDepthSchema, effectiveProjectId, memberDeclarationOf, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 // extension_orchestrator: the installed packs a member's required packs are pinned from.
-import { listInstalledPacks } from './extensions.js';
+import { listInstalledPacks, loadProjectExtensions } from './extensions.js';
+// The built-in subsystem profiles, so internalize stamps only a profile a subsystem can hold.
+import { BUILTIN_PROFILES } from './rules/types.js';
 import type { InstalledPack } from './packstore.js';
 import { isNewerVersion } from '../utils/version.js';
 import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/identity-rename.js';
@@ -752,6 +754,8 @@ export interface InternalizeResult {
   placed: string[];
   externals: string[];
   deleted: string[];
+  /** Each piece of metadata deliberately not carried, with the reason. */
+  notCarried: string[];
 }
 
 /** The member's .wai entries this write knows, by the group its deleted list names them under. */
@@ -811,7 +815,7 @@ export function internalizeMember(alias: string, destination: InternalizeDestina
   if (refusals.length > 0) {
     throw new WaironError(`cannot internalize "${alias}": the member cannot be taken in whole — ${refusals.join('; ')}.`);
   }
-  const result: InternalizeResult = { subsystems: scan.subsystems, types: scan.types, placed: [], externals: [], deleted: [] };
+  const result: InternalizeResult = { subsystems: scan.subsystems, types: scan.types, placed: [], externals: [], deleted: [], notCarried: [] };
   // What crosses the old boundary, read BEFORE anything moves.
   const intoMember = crossingReferences(family, '', member.namespace);
   const backOut = crossingReferences(family, member.namespace, '');
@@ -1004,18 +1008,26 @@ function placeOnSubsystems(scan: InternalizeScan, result: InternalizeResult): vo
     ['designDepth', scan.config?.rules?.designDepth, bound?.rules?.designDepth],
   ];
   const stamped = new Map<string, string[]>();
+  const refused = new Map<string, string[]>();
   for (const id of scan.subsystems) {
     const sub = loadSubsystemSpec(id);
     if (!sub) continue;
     const next: Record<string, unknown> = { ...sub };
     for (const [field, value, boundValue] of stamps) {
       if (value === undefined || value === boundValue || next[field] !== undefined) continue;
+      // A value a subsystem cannot hold is listed, never stamped to raise UNKNOWN_PROFILE.
+      const why = unholdable(field, value);
+      if (why !== null) {
+        refused.set(why, [...(refused.get(why) ?? []), id]);
+        continue;
+      }
       next[field] = value;
       stamped.set(`${field} ${value}`, [...(stamped.get(`${field} ${value}`) ?? []), id]);
     }
     if (Object.keys(next).length !== Object.keys(sub).length) saveSpec('subsystem', next as SubsystemSpec);
   }
   for (const [what, ids] of stamped) result.placed.push(`${what} → ${ids.join(', ')}`);
+  for (const [why, ids] of refused) result.notCarried.push(why.replace('{ids}', ids.join(', ')));
   if (!saysMoreThanItsName(scan.system)) return;
   const home = loadSubsystemSpec(scan.home);
   if (!home) return;
@@ -1024,6 +1036,23 @@ function placeOnSubsystems(scan: InternalizeScan, result: InternalizeResult): vo
     saveSpec('subsystem', { ...home, description: home.description ? `${home.description}\n\n${paragraph}` : paragraph });
   }
   result.placed.push(`L0 vision → ${scan.home} description`);
+}
+
+/**
+ * Why a member's value cannot be stamped on a subsystem, with `{ids}` for the
+ * subsystems it was not stamped on; null when it can. A projectType becomes a
+ * subsystem profile only when it is one — built in, or registered by a pack
+ * the bound project loads — and a designDepth only when it is a design depth.
+ */
+function unholdable(field: string, value: string): string | null {
+  if (field === 'profile') {
+    const registered = (BUILTIN_PROFILES as readonly string[]).includes(value) || loadProjectExtensions().profiles[value] !== undefined;
+    return registered ? null : `projectType ${value} not stamped on {ids}: not a subsystem profile (a project kind, or no built-in profile or loaded pack registers it)`;
+  }
+  if (field === 'designDepth' && !DesignDepthSchema.safeParse(value).success) {
+    return `designDepth ${value} not stamped on {ids}: not a design depth (components | interfaces | implementations | narratives)`;
+  }
+  return null;
 }
 
 /** Step 14: requirements, boundaries and databases merged by identity; re-exports re-pointed; the destination's exports added. */

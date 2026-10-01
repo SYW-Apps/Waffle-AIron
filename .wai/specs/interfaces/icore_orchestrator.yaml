@@ -148,23 +148,26 @@ methods:
       own metadata to a home instead of deleting it — its L0 vision appended to the destination's
       home subsystem description; its L0 boundaries, globalRequirements and databases merged into
       the bound project's L0 by identity; its targetLanguage, projectType and designDepth stamped on
-      each moved subsystem that states none and where they differ from the bound project's; its own
-      members declared as the bound project's members (paths re-expressed from the bound root) and
-      its externals other than the parent declared as the bound project's (their `use` kept); its
-      packs adopted or dropped as the destination says; the destination's `exports` added to the
-      bound project's L0 as re-exports from the moved subsystems. Then remove it from `members` (or
-      delete its legacy L1 mount), delete what remains of its .wai project — its lock, its pins, its
-      derived outputs, every one listed — and re-save every reference from where it now lives: the
-      parent's `alias::name` references and the member's `<parent id>::name` references become local
-      ids, and the parent's L0 re-exports from the member become re-exports of the moved subsystems.
-      Pins of the carried externals and references from OTHER projects of the family are the family
-      migration's (boundary_migration), not this write's. Throws, before anything moves, if the
-      alias declares no member, if the home names no subsystem of either side, if a moved subsystem,
-      type or spec file would land on an existing one, if a carried alias is already declared
-      differently, if a pack differs and the destination says neither adopt nor drop, if the member
-      carries conformance debt or severity overrides the parent does not share, if a destination
-      export collides with a public name the parent already exports, or if the member's .wai holds a
-      file this write does not recognise — each named.
+      each moved subsystem that states none and where they differ from the bound project's — a
+      projectType only when it is a subsystem profile (built in, or registered by a pack the bound
+      project loads) and a designDepth only when it is a design depth, any other listed in the
+      result's notCarried with the reason; its own members declared as the bound project's members
+      (paths re-expressed from the bound root) and its externals other than the parent declared as
+      the bound project's (their `use` kept); its packs adopted or dropped as the destination says;
+      the destination's `exports` added to the bound project's L0 as re-exports from the moved
+      subsystems. Then remove it from `members` (or delete its legacy L1 mount), delete what remains
+      of its .wai project — its lock, its pins, its derived outputs, every one listed — and re-save
+      every reference from where it now lives: the parent's `alias::name` references and the
+      member's `<parent id>::name` references become local ids, and the parent's L0 re-exports from
+      the member become re-exports of the moved subsystems. Pins of the carried externals and
+      references from OTHER projects of the family are the family migration's (boundary_migration),
+      not this write's. Throws, before anything moves, if the alias declares no member, if the home
+      names no subsystem of either side, if a moved subsystem, type or spec file would land on an
+      existing one, if a carried alias is already declared differently, if a pack differs and the
+      destination says neither adopt nor drop, if the member carries conformance debt or severity
+      overrides the parent does not share, if a destination export collides with a public name the
+      parent already exports, or if the member's .wai holds a file this write does not recognise —
+      each named.
     signature: 'internalizeMember(alias: string, destination: InternalizeDestination): InternalizeResult'
     returns: InternalizeResult
     params:
@@ -952,4 +955,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:21:42.019Z'
+updatedAt: '2026-10-01T05:54:36.226Z'
