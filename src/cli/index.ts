@@ -127,8 +127,10 @@ program
   .option('--no-recurse', 'accepted for one release: generating only this project\'s layer is now the default')
   .option('--no-prune', 'do not remove wairon-managed agent files that are no longer in the topology')
   .option('--dry-run', 'preview what would be generated without writing files')
+  .option('--global', 'also write (and prune) a target whose output directory resolves outside the project root, backing up each file replaced there')
   .action(async (opts) => {
     await runGenerate({
+      global: opts.global === true,
       target: opts.target,
       domain: opts.domain,
       domains: opts.domains,
@@ -395,9 +397,10 @@ program
   .description('Health check: flags stale generated guides/skills, an unregistered MCP server, spec-tree issues and the chaining migration still pending')
   .option('--fix', 'regenerate stale in-project guides/context/skills, register the MCP server, then apply the chaining migration once confirmed')
   .option('--report <section>', "print one section's report and nothing else, writing nothing (chaining | composed-validation); never combines with --fix")
-  .option('-y, --yes', "answer the chaining migration's confirmation (for a non-interactive --fix)")
+  .option('-y, --yes', "answer the chaining migration's confirmation (for a non-interactive --fix); a write outside the project root also needs --global")
+  .option('--global', 'consent to the --fix writes outside the project root (a machine-wide MCP config, the legacy global plugin); with --yes it answers their confirmation, and each replaced file is backed up beside itself')
   .action(async (opts) => {
-    await runDoctor({ fix: opts.fix, report: opts.report, yes: opts.yes });
+    await runDoctor({ fix: opts.fix, report: opts.report, yes: opts.yes, global: opts.global === true });
   });
 
 // ---------------------------------------------------------------------------

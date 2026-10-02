@@ -54,6 +54,29 @@ export function pathExists(targetPath: string): boolean {
 }
 
 /**
+ * Whether `target` lies outside the directory `root` — lexically, after both
+ * are resolved. A write there touches state no single project owns (a user's
+ * home configuration, a sibling checkout), which is why a project-scoped
+ * command lists such writes and asks before making them.
+ */
+export function isOutsideRoot(root: string, target: string): boolean {
+  const rel = path.relative(path.resolve(root), path.resolve(target));
+  return rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
+}
+
+/**
+ * Copy `file` beside itself as `<file>.wairon-backup-<timestamp>` and answer
+ * the copy's path — the previous value of a file wairon is about to replace
+ * outside the project, kept so the replacement can always be undone. The
+ * timestamp is the ISO instant with `:` and `.` made filename-safe.
+ */
+export function backupBeside(file: string, at: Date = new Date()): string {
+  const backup = `${file}.wairon-backup-${at.toISOString().replace(/[:.]/g, '-')}`;
+  fs.copyFileSync(file, backup);
+  return backup;
+}
+
+/**
  * List all files (non-recursively) in a directory with a given extension.
  * Returns an empty array if the directory does not exist.
  */

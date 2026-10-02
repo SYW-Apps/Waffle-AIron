@@ -23,10 +23,14 @@ methods:
       are one text) and prunes stale managed files against the FULL resolved topology; when OFF (the
       default), the desired state is ZERO agent files — any leftover wairon:managed agent files are
       removed once, and only guides and skills are (re)injected. Hand-authored files and
-      .wai/agents/ guidance files are never touched either way.
+      .wai/agents/ guidance files are never touched either way. Generate writes nothing outside the
+      project root unless asked: a target whose output directory resolves outside it is named and
+      skipped, both write and prune, until `--global` is given — and then every file there it
+      replaces or prunes is first backed up beside itself. The derived context documents are kept
+      current whenever the project keeps a context directory, exactly as `doctor --fix` keeps them.
     signature: >-
       runGenerate(options: { target?: string; domain?: string; domains?: string; root?: boolean;
-      dryRun?: boolean; family?: boolean }): Promise<void>
+      dryRun?: boolean; family?: boolean; global?: boolean }): Promise<void>
     returns: Promise<void>
   - name: runValidate
     description: >-
@@ -316,16 +320,21 @@ methods:
       can — regenerating stale guides, context and skills, registering the MCP server, retiring
       Specialists into Orchestrators — and then the chaining migration, which it prints and applies
       only after confirmation (--yes answers it for a non-interactive run; without either nothing of
-      it is written). With --report chaining it prints the chaining plan per project; with --report
-      composed-validation it prints what stage 4 changed in each project's verdict (today's gate
-      against the totals its lock recorded, and every new finding with its reason) — either report
-      changes nothing and never combines with --fix.
+      it is written). A repair that would write OUTSIDE the project root — a machine-wide MCP
+      configuration such as Antigravity's global mcp_config.json, the legacy global plugin — is
+      listed in its own plan with the file and the old and new value, and needs its own
+      confirmation: --yes covers it only together with --global, a terminal asks, and a run with
+      neither skips it and says so; a replaced file is kept beside itself as
+      <file>.wairon-backup-<timestamp>. With --report chaining it prints the chaining plan per
+      project; with --report composed-validation it prints what stage 4 changed in each project's
+      verdict (today's gate against the totals its lock recorded, and every new finding with its
+      reason) — either report changes nothing and never combines with --fix.
     signature: 'runDoctor(options?: DoctorOptions): Promise<void>'
     returns: Promise<void>
     params:
       - name: options
         type: DoctorOptions
-        description: '--fix, --report <section> and --yes; none given is a plain health check'
+        description: '--fix, --report <section>, --yes and --global; none given is a plain health check'
         optional: true
   - name: runLockCheck
     description: >-
@@ -642,4 +651,4 @@ methods:
         description: '--report, --yes'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-01T16:59:22.472Z'
+updatedAt: '2026-10-01T23:45:49.036Z'

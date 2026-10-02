@@ -34,7 +34,7 @@ import {
   diagnoseProjectPacks,
   pinInstalledPacksAsSelections,
 } from './adapters/core.js';
-import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot } from '../utils/fs.js';
+import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot, isOutsideRoot } from '../utils/fs.js';
 import { checkSkillFreshness, exportSddSkills } from './adapters/skills.js';
 // A configuration's enabled targets are the project_config type's own behaviour.
 import { activeTargetTypes } from '../models/project.js';
@@ -43,7 +43,10 @@ import { computeGateStateId, validateProject } from './validate.js';
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
 // a command has no business reaching a Store to get it.
 import { describeApprover } from '../models/lock.js';
-import { claudeMcpConfigPath } from './mcp.js';
+import {
+  claudeMcpConfigPath, planMcpInstall, runMcpInstall, findLegacyPlugin, retireLegacyPlugin,
+  type McpConfigWrite, type McpInstallOptions,
+} from './mcp.js';
 // The chaining migration is a family migration of sdd_migrations since stage 6,
 // reached through the migration portal: planned, applied through the family
 // transaction (rehearsed, staged, swapped all-or-nothing), and recovered after
@@ -134,8 +137,10 @@ export interface DoctorOptions {
   fix?: boolean;
   /** Print one section's report and nothing else, writing nothing: `chaining` or `composed-validation`. */
   report?: string;
-  /** Answer the chaining migration's confirmation for a non-interactive run. */
+  /** Answer the chaining migration's confirmation for a non-interactive run (not a write outside the project root). */
   yes?: boolean;
+  /** Consent to the --fix writes outside the project root; with --yes it answers their confirmation. */
+  global?: boolean;
 }
 
 export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
@@ -450,10 +455,10 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   }
 
   // ── Legacy global Antigravity plugin — should NOT exist (name collides with
-  //    the wairon MCP server). Flag it for removal if a stale copy is present.
-  const pluginDir = path.join(os.homedir(), '.gemini', 'config', 'plugins', 'wairon');
-  if (fs.existsSync(pluginDir)) {
-    line(tally, 'warn', `Legacy Antigravity plugin present (${pluginDir}) — it collides with the wairon MCP server. Remove it with \`wairon doctor --fix\`.`);
+  //    the wairon MCP server). Flag it for retirement if a stale copy is present.
+  const pluginDir = findLegacyPlugin();
+  if (pluginDir) {
+    line(tally, 'warn', `Legacy Antigravity plugin present (${pluginDir}) — it collides with the wairon MCP server. Move it aside with \`wairon doctor --fix --global\` (it is outside the project, so --fix asks first).`);
   }
   logger.blank();
 
@@ -462,10 +467,11 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 }
 
 /**
- * Apply the safe, in-project fixes: regenerate context files, skills, and local
- * guides (so their version stamps match the installed wairon), and register the
- * MCP server for any active backend that lacks it. The global Antigravity plugin
- * writes outside the project, so it is reported but not auto-fixed.
+ * Apply the fixes: regenerate context files, skills, and local guides (so their
+ * version stamps match the installed wairon), the spec repairs, the chaining
+ * migration once confirmed, and the MCP registration. Every write outside the
+ * project root — a machine-wide MCP config, the legacy global plugin — is
+ * listed in its own plan and made only with its own confirmation.
  */
 async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   // The heading first, so every line below — the recovery's included — reads as a fix applied.
@@ -570,34 +576,111 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   // so its gated L0 writes save specs under current names into a repaired tree.
   await migrateChaining(options, tally);
 
-  // Register / repair the MCP server. The install is now self-healing, so this
-  // also rewrites a stale launch path. Claude uses the project config; Antigravity
-  // (agy) only reads its GLOBAL mcp_config.json, so register there for it.
-  const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
-  if (targets.includes('claude')) {
-    try {
-      await runMcpInstall({ backend: 'claude', global: false });
-    } catch (e) {
-      console.log(`  ${icon('warn')} MCP install for claude failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-  if (targets.includes('gemini') || targets.includes('agy')) {
-    // Global for Antigravity (the file it reads); also fine for the Gemini CLI.
-    const global = targets.includes('agy');
-    try {
-      await runMcpInstall({ backend: 'gemini', global });
-    } catch (e) {
-      console.log(`  ${icon('warn')} MCP install for gemini failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    // Cleanup/migration (belongs in --fix, not install): drop the legacy plugin
-    // whose name collides with the wairon MCP server.
-    try {
-      const { removeLegacyGlobalPlugin } = require('./mcp.js') as typeof import('./mcp.js');
-      if (removeLegacyGlobalPlugin()) console.log(`  ${icon('ok')} Removed the legacy global Antigravity plugin (name collided with the MCP server).`);
-    } catch { /* ignore */ }
-  }
+  await repairMcpRegistration(options, targets);
 
   logger.blank();
+}
+
+
+// ── writes outside the project root ─────────────────────────────────────────
+
+/** One MCP install doctor makes, with what it would write. */
+interface PlannedInstall {
+  install: McpInstallOptions;
+  writes: McpConfigWrite[];
+}
+
+/**
+ * Steps 26-33 of --fix: register or repair the MCP server. Claude uses the
+ * project's .mcp.json; Antigravity (agy) only reads its GLOBAL mcp_config.json,
+ * so for it the registration is a write outside the project. Every install is
+ * planned first: one that stays inside the project root runs at once, as it
+ * always has; one that would replace a machine-wide file — and the legacy
+ * global plugin's retirement — is printed as its own plan and made only once
+ * confirmed (--yes counts only together with --global).
+ */
+async function repairMcpRegistration(options: DoctorOptions, targets: string[]): Promise<void> {
+  const installs: McpInstallOptions[] = [];
+  if (targets.includes('claude')) installs.push({ backend: 'claude', global: false });
+  const gemini = targets.includes('gemini') || targets.includes('agy');
+  // Global for Antigravity (the file it reads); also fine for the Gemini CLI.
+  if (gemini) installs.push({ backend: 'gemini', global: targets.includes('agy') });
+
+  const outside: PlannedInstall[] = [];
+  for (const install of installs) {
+    let writes: McpConfigWrite[];
+    try {
+      writes = planMcpInstall(install);
+    } catch (e) {
+      console.log(`  ${icon('warn')} MCP install for ${install.backend} could not be planned: ${e instanceof Error ? e.message : String(e)}`);
+      continue;
+    }
+    if (writes.some((w) => w.outsideProject && !w.upToDate)) outside.push({ install, writes });
+    else await installMcp(install);
+  }
+
+  // Cleanup/migration (belongs in --fix, not install): the legacy plugin whose
+  // name collides with the wairon MCP server.
+  const plugin = gemini ? findLegacyPlugin() : null;
+  if (outside.length === 0 && !plugin) return;
+
+  printOutsideWrites(outside, plugin);
+  if (!(await confirmOutsideWrites(options))) return;
+  for (const planned of outside) await installMcp(planned.install);
+  if (plugin) retireLegacyPlugin();
+}
+
+/** One install, its failure reported as a warning rather than ending --fix. */
+async function installMcp(install: McpInstallOptions): Promise<void> {
+  try {
+    await runMcpInstall(install);
+  } catch (e) {
+    console.log(`  ${icon('warn')} MCP install for ${install.backend} failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/** Step 30: every write outside the project root, as its own plan — file, old value, new value. */
+function printOutsideWrites(outside: PlannedInstall[], plugin: string | null): void {
+  console.log(`  ${icon('warn')} ${chalk.bold('Writes outside this project')} — machine-wide state every project on this machine shares:`);
+  for (const { writes } of outside) {
+    for (const w of writes.filter((x) => x.outsideProject && !x.upToDate)) {
+      console.log(`      ${w.path} (${w.backend} MCP registration)`);
+      console.log(`        mcpServers.wairon now: ${describeMcpEntry(w.before)}`);
+      console.log(`        mcpServers.wairon new: ${describeMcpEntry(w.after)}`);
+      console.log('        the file is backed up beside itself before it is replaced');
+    }
+  }
+  if (plugin) console.log(`      ${plugin} (legacy Antigravity plugin) — moved aside, not deleted`);
+}
+
+/** An MCP entry as the plan prints it: its JSON, any bearer credential redacted, summarised when large. */
+function describeMcpEntry(entry: unknown): string {
+  if (entry === undefined || entry === null) return '(none)';
+  const text = JSON.stringify(entry, (key, value) =>
+    (key === 'Authorization' && typeof value === 'string' ? value.replace(/^(\S+\s+).+$/, '$1***') : value));
+  const LIMIT = 200;
+  return text.length <= LIMIT ? text : `${text.slice(0, LIMIT)}… (${text.length} characters)`;
+}
+
+/**
+ * Step 30's question: the writes outside the project root take their OWN
+ * consent. --yes answers it only together with --global; a terminal asks; a run
+ * with neither skips every one of them and says so.
+ */
+async function confirmOutsideWrites(options: DoctorOptions): Promise<boolean> {
+  if (options.yes && options.global) return true;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    const why = options.global
+      ? 'no terminal to confirm them'
+      : (options.yes ? '--yes does not cover a write outside the project without --global' : 'no terminal to confirm them and no --global');
+    console.log(`  ${icon('warn')} Skipped the writes outside this project: ${why}. Nothing outside the project was written — re-run with \`wairon doctor --fix --yes --global\` to apply them.`);
+    return false;
+  }
+  const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
+    { type: 'confirm', name: 'confirmed', message: 'Apply the writes outside this project listed above?', default: false },
+  ]);
+  if (!confirmed) console.log(`  ${icon('warn')} Skipped the writes outside this project. Nothing outside the project was written.`);
+  return confirmed;
 }
 
 // ── the chaining migration ──────────────────────────────────────────────────
@@ -841,7 +924,10 @@ function printChainingPlan(migration: ChainingMigrationPlan): void {
 const projectLabel = (project: string): string => (project === '' ? '(top root)' : project);
 
 function printProjectMigration(p: ProjectMigration): void {
-  console.log(`  ${chalk.bold(projectLabel(p.project))} ${chalk.gray(p.directory)}`);
+  // A chained member's family can sit ABOVE this project: its writes are in
+  // this plan and its confirmation, and marked so nobody misreads their reach.
+  const above = isOutsideRoot(getProjectRoot(), p.directory) ? chalk.yellow(' (outside this project\'s root — the family above it)') : '';
+  console.log(`  ${chalk.bold(projectLabel(p.project))} ${chalk.gray(p.directory)}${above}`);
   if (p.idToWrite) console.log(`    id: declare "${p.idToWrite}"`);
   if (p.createsSystem) console.log('    L0: create a minimal one — the project exports and has none');
   for (const e of p.exports) console.log(`    L0 entry: ${describeEntry(e)}`);

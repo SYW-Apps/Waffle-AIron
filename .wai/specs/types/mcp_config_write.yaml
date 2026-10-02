@@ -1,0 +1,41 @@
+kind: value-object
+id: mcp_config_write
+name: McpConfigWrite
+description: >-
+  One write an MCP install would make, stated before it is made: which backend, which file, whether
+  that file lies outside the project root, and the wairon entry the file holds now beside the one it
+  would hold. A caller that writes on someone else's machine-wide configuration (doctor --fix) plans
+  with it, prints it and asks before the install runs.
+subsystem: sdd_cli
+fields:
+  - name: backend
+    type: string
+    description: claude | gemini — the backend this write registers the server for
+    optional: false
+  - name: path
+    type: string
+    description: The configuration file the entry goes into
+    optional: false
+  - name: outsideProject
+    type: boolean
+    description: >-
+      Whether that file lies outside the bound project root — a machine-wide configuration every
+      project on the machine shares
+    optional: false
+  - name: before
+    type: json
+    description: The wairon entry the file holds now; absent when it holds none (or the file does not exist)
+    optional: true
+  - name: after
+    type: json
+    description: The wairon entry the install would write
+    optional: false
+  - name: upToDate
+    type: boolean
+    description: Whether the file already holds exactly that entry, so the install writes nothing
+    optional: false
+methods: []
+componentClass: cli_mcp_adapter
+sourcePath: src/commands/mcp.ts
+createdAt: '2026-10-01T23:45:59.829Z'
+updatedAt: '2026-10-01T23:45:59.831Z'
