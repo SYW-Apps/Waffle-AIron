@@ -164,8 +164,8 @@ export interface PlannedMemberRecord {
   familyRootId: string;
   /** The pre-stage-7 member-qualified selector that reached it. */
   qualifier: string;
-  /** register | relocate | rename | return | unchanged | unreadable */
-  action: 'register' | 'relocate' | 'rename' | 'return' | 'unchanged' | 'unreadable';
+  /** register | relocate | rename | return | retire | unchanged | unreadable */
+  action: 'register' | 'relocate' | 'rename' | 'return' | 'retire' | 'unchanged' | 'unreadable';
   /** For action rename: the record id the member held before. */
   previousId?: string;
   /** For action unreadable: why, in words a person acts on. */

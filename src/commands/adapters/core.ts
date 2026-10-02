@@ -10,6 +10,8 @@ export {
   loadSystemSpec,
   createMember,
   moveMember,
+  // `wairon member update` (stage 8): a git member's pinned commit moved.
+  advanceMember,
   composeAgentBrief,
   exportSpecTree,
   importSpecTree,

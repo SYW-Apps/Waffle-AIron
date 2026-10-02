@@ -171,6 +171,13 @@ interface MemberNode {
   name: string;
   project?: boolean;
   recordId?: string;
+  /** Stage 8: where it is stored — a part subsystem's `part <alias> · …`, or a referenced project's storage. */
+  storage?: string;
+}
+
+/** A storage badge beside a member or a part (stage 8): how it is stored, never what it is. */
+function StorageBadge({ storage }: { storage?: string }) {
+  return storage ? <code className="subtle" title="Where its files are stored"> {storage}</code> : null;
 }
 
 /**
@@ -180,22 +187,31 @@ interface MemberNode {
  */
 function FamilyStrip({ model }: { model: unknown }) {
   const navigate = useNavigate();
-  const members = (((model as { subsystems?: MemberNode[] } | undefined)?.subsystems) ?? []).filter((s) => s.project);
-  if (members.length === 0) return null;
+  const nodes = ((model as { subsystems?: MemberNode[] } | undefined)?.subsystems) ?? [];
+  const members = nodes.filter((s) => s.project);
+  // Stage 8: a part's subsystems are this project's own — listed with their storage, never as projects.
+  const parts = nodes.filter((s) => !s.project && s.storage);
+  if (members.length === 0 && parts.length === 0) return null;
   return (
     <div className="canvas-bar">
-      <span className="hint">Members:</span>
+      {members.length > 0 ? <span className="hint">Members:</span> : null}
       {members.map((m) =>
         m.recordId ? (
           <button key={m.id} className="btn btn-ghost btn-sm" onClick={() => navigate('/projects/' + encodeURIComponent(m.recordId!))} title="Open this member's own page">
-            {m.name} ↗
+            {m.name} ↗<StorageBadge storage={m.storage} />
           </button>
         ) : (
           <span key={m.id} className="subtle" title="You may not open this member">
-            {m.name}
+            {m.name}<StorageBadge storage={m.storage} />
           </span>
         ),
       )}
+      {parts.length > 0 ? <span className="hint">Parts:</span> : null}
+      {parts.map((p) => (
+        <span key={p.id} className="subtle" title="A subsystem of this project stored elsewhere">
+          {p.name}<StorageBadge storage={p.storage} />
+        </span>
+      ))}
     </div>
   );
 }

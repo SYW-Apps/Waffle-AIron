@@ -259,6 +259,12 @@ function memberAgentIds(alias: string, memberDir: string): string[] {
   }
 }
 
+/** Whether `target` is `dir` or lies under it. */
+function isWithinDir(dir: string, target: string): boolean {
+  const rel = path.relative(path.resolve(dir), path.resolve(target));
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
 /** One layer's topology; `delegate` lists each member's own agents by reference. */
 function resolveLayer(delegate: boolean): AgentRecord[] {
   projectFilesCache.clear();
@@ -290,6 +296,13 @@ function resolveLayer(delegate: boolean): AgentRecord[] {
     ...loadSubsystemSpecs().filter((s) => isLocal(s.id)),
     ...members,
   ] as (ReturnType<typeof loadSubsystemSpecs>[number] & { form?: 'members' | 'mount' })[];
+  // Stage 8: the parts this layer declares — their subsystems are this
+  // layer's own (no delegating owner); a git part's files are read-only here.
+  const parts = graph().nodes.find((n) => n.namespace === '')?.parts ?? [];
+  const readOnlyPartDirs = parts.filter((p) => p.storage === 'git' && p.directory !== undefined).map((p) => p.directory!);
+  const partOf = new Map(parts.flatMap((p) => p.subsystems.map((s) => [s, p.storage === 'git'
+    ? `Stored in the part "${p.alias}", fetched from git at ${p.commit ?? 'its pinned commit'}: read-only here — change it in its own repository, then \`wairon member update ${p.alias}\`.`
+    : `Stored in the part "${p.alias}" (${p.storage === 'path' ? 'a sibling checkout' : 'its own folder'}); it is this project's own subsystem.`] as const)));
   const components = loadComponentSpecs().filter((c) => isLocal(c.id) && isLocal(c.subsystem));
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
@@ -420,16 +433,22 @@ function resolveLayer(delegate: boolean): AgentRecord[] {
       dependencies = Array.from(depSubsystems);
     }
 
+    // Stage 8: a part's subsystems are this project's own, so the same owner
+    // covers them — its spec files where the part stores them. A part fetched
+    // from git is read-only here (its files are the fetch cache's): it is read,
+    // never owned, and changed in its own repository.
+    const writable = ownedPaths.filter((p) => !readOnlyPartDirs.some((dir) => isWithinDir(dir, path.resolve(getProjectRoot(), p))));
+    const partNote = partOf.get(sub.id);
     agents.push({
       id: `${sub.id}-owner`,
       name: `${sub.name} Owner`,
-      description: `Owns the ${sub.id} subsystem. ${summarize(sub.description)}`,
+      description: `Owns the ${sub.id} subsystem. ${summarize(sub.description)}${partNote ? ` ${partNote}` : ''}`,
       template: 'domain-owner',
       creationReason: `Automatically inferred from L1 subsystem spec: ${sub.id}`,
       domainRoot: sub.id,
-      ownedPaths,
+      ownedPaths: writable,
       readPaths: ['**'],
-      writePaths: ownedPaths,
+      writePaths: writable,
       tags: ['owner', 'domain', 'sdd'],
       dependencies,
       variantGuidance: buildVariantGuidance(subComponents, components, variantsById),

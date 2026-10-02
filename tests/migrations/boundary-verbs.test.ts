@@ -341,12 +341,13 @@ describe('stage 6 — externalize, family-wide', () => {
     for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
   });
 
+  // Stage 8: externalize defaults to a part; these are the externalize AS PROJECT properties (the move composed with a promote).
   it('property: externalize-updates-siblings — a sibling using a name the moved subsystem realizes keeps resolving, and nothing of it is written; family-consistent', () => {
     const f = shopFamily();
     roots.push(f.top);
     const before = familyFindings(f.top);
     const shopBytes = waiState(f.shop);
-    const report = migrate(f.top, { verb: 'externalize', subsystem: 'orders', path: 'services/orders' });
+    const report = migrate(f.top, { verb: 'externalize', subsystem: 'orders', path: 'services/orders', as: 'project' });
     expect(report.applied).toBe(true);
     expect(configOf(f.top).members).toEqual({ shop: 'shop', orders: 'services/orders' });
     expect(fs.existsSync(path.join(f.top, 'services', 'orders', '.wai', 'specs', 'orders', 'orders-portal', '.index.yaml'))).toBe(true);
@@ -360,7 +361,7 @@ describe('stage 6 — externalize, family-wide', () => {
     // The new member comes with its own state (never locked: MEMBER_UNAPPROVED names it); nothing else is new.
     const itsOwn = (i: { project?: string; message: string }): boolean => i.project === 'orders' || /"orders"/.test(i.message);
     expect(newFindings(before, familyFindings(f.top, itsOwn)), familyLines(f.top).join('\n')).toEqual([]);
-    const again = plan(f.top, { verb: 'externalize', subsystem: 'orders', path: 'services/orders' });
+    const again = plan(f.top, { verb: 'externalize', subsystem: 'orders', path: 'services/orders', as: 'project' });
     expect([again.refusals, again.changes], JSON.stringify(again.refusals)).toEqual([[], []]);
   });
 
@@ -380,7 +381,7 @@ describe('stage 6 — externalize, family-wide', () => {
       arrange(f);
       invalidateSpecCache();
       const before = dirHash(f.top);
-      const planned = plan(f.top, { verb: 'externalize', subsystem: args.subsystem, path: args.path });
+      const planned = plan(f.top, { verb: 'externalize', subsystem: args.subsystem, path: args.path, as: 'project' });
       expect(planned.refusals.map((r) => r.code), name).toContain(code);
       if (why) expect(planned.refusals.map((r) => r.detail).join('\n'), name).toMatch(why);
       expect(at(f.top, () => migrations.apply(planned)).applied, name).toBe(false);

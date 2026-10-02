@@ -148,7 +148,7 @@ async function runInitAsMember(
     if (declared) alias = declared.alias;
     // Step 11: scaffold this directory's project and declare it in the
     // parent's `members`; no L1 spec is written into the parent.
-    creation = createMember(alias, relPath);
+    creation = createMember(alias, relPath, undefined, 'project');
   } finally {
     setProjectRoot(prevOverride);
   }

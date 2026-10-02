@@ -15,7 +15,7 @@ import {
   type ExternalDeclaration,
   type ExternalSource,
 } from '../models/project.js';
-import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding } from '../utils/fs.js';
+import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
@@ -77,7 +77,7 @@ import { resolveNarrativeLabels } from './narrative-labels.js';
 import { buildGraphModel } from './diagram.js';
 // The export index is an owned face of this Repository: the facade forwards
 // its two reads 1:1 (spec_loader resolveSubsystemExports / resolveProjectExports).
-import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf } from './exports.js';
+import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf, pinnedUsageOf } from './exports.js';
 // The pure export resolver the scan resolves every project's tables through,
 // before it binds any `alias::name` against them.
 import { resolveProjectTable, resolveSubsystemTables } from './exports.js';
@@ -183,6 +183,13 @@ export interface ScannedProjectRoot {
   problems: ProjectFamilyProblem[];
   /** The parts this root declares (stage 8), in declaration order: its own subsystems stored elsewhere. */
   parts: ScannedPart[];
+  /**
+   * The referenced project members this root declares (stage 8): a `../` or
+   * git source whose content is a project's, located where it is stored — the
+   * sibling checkout, or the fetch cache at its pinned commit — and never read
+   * into this root. A hosted member is located by the hosting server instead.
+   */
+  referenced: ScannedPart[];
 }
 
 /**
@@ -559,6 +566,19 @@ function projectContentAt(dir: string): boolean {
   if (pathExists(paths.specsSystem())) return true;
   if (pathExists(path.join(paths.root(), 'lock.json'))) return true;
   return rawConfigAt(dir)?.id !== undefined;
+}
+
+/**
+ * Whether a root's own externals lock pins a member as a referenced PROJECT
+ * (stage 8): what an uncached member's kind falls back to offline.
+ */
+function pinnedAsMember(dir: string, alias: string): boolean {
+  try {
+    const lock = readYamlFile(path.join(aiPathsAt(dir).root(), 'externals.lock.yaml')) as { externals?: Record<string, { role?: string }> } | null;
+    return lock?.externals?.[alias]?.role === 'member';
+  } catch {
+    return false;
+  }
 }
 
 /** The fields a part's configuration must not declare: they are a project's (stage 8). */
@@ -2663,6 +2683,7 @@ export class SpecWorkspace {
       authoredReferences: [],
       problems: [],
       parts: [],
+      referenced: [],
     };
     const raw: RawRoot = {
       record, aliasPath, dir: path.resolve(dir), index: emptyIndex(), mounts: [], members: [],
@@ -2785,8 +2806,10 @@ export class SpecWorkspace {
     const located = this.memberRoot(raw, decl);
     if (located === null) return;
     if ('unavailable' in located) {
-      if (asserted === 'project') {
+      // An uncached project member falls back to its pin (stage 8): asserted, or pinned as a member.
+      if (asserted === 'project' || pinnedAsMember(raw.dir, decl.alias)) {
         decl.kind = 'project';
+        raw.record.referenced.push({ alias: decl.alias, storage: decl.storage, partOf: null, subsystems: [], specIds: [], availability: 'unavailable', reason: located.unavailable });
         return;
       }
       decl.kind = 'part';
@@ -2802,6 +2825,20 @@ export class SpecWorkspace {
         : 'its tree declares no id, holds no L0 and carries no lock — drop the `as`, or create the project content with `wairon member promote`'}`);
     }
     if (kind === 'part') this.readPart(raw, decl, located.dir, located.commit);
+    else if (decl.storage !== 'contained') this.recordReferenced(raw, decl, located.dir, located.commit);
+  }
+
+  /**
+   * A referenced project member (stage 8): where its root is — the sibling
+   * checkout or the fetch cache at its pinned commit — for the family run and
+   * the externals plane to open; nothing of it is read into this root.
+   */
+  private recordReferenced(raw: RawRoot, decl: MemberDeclarationRead, dir: string, commit: string | undefined): void {
+    const provenance = commit ?? gitSource.head(dir);
+    raw.record.referenced.push({
+      alias: decl.alias, storage: decl.storage, directory: dir, ...(provenance ? { commit: provenance } : {}),
+      partOf: null, subsystems: [], specIds: [], availability: decl.storage === 'git' ? 'cache' : 'live',
+    });
   }
 
   /**
@@ -2811,6 +2848,11 @@ export class SpecWorkspace {
    * the fetch cache — or why it cannot be read.
    */
   private memberRoot(raw: RawRoot, decl: MemberDeclarationRead): { dir: string; commit?: string } | { unavailable: string } | null {
+    // A hosted project's roots are isolated (stage 8): it reaches another root
+    // only by a `hosted:` source, so a `../` or git source is never read there.
+    if ((decl.storage === 'git' || decl.storage === 'path') && getHostedLookup() !== null) {
+      return { unavailable: `the member "${decl.alias}" is declared with a ${decl.storage === 'git' ? 'git' : '`../` sibling'} source, which a hosted instance does not read: a hosted project reaches another root only by a \`hosted:\` source` };
+    }
     if (decl.storage === 'git') {
       const url = decl.source?.git ?? '';
       const commit = decl.source?.commit;
@@ -6619,6 +6661,15 @@ export function resolveProjectExports(project?: string): ResolvedExportTable {
 /** ispec_loader.exportUsage — one consumer's references into one producer, forwarded 1:1 to the export index. */
 export function exportUsage(consumer: string, producer: string): ExportUsage {
   return exportUsageOf(consumer, producer);
+}
+
+/**
+ * ispec_loader.pinnedUsage — one consumer's references into a producer the
+ * scan did not read, counted by the public name they spell (stage 8),
+ * forwarded 1:1 to the export index.
+ */
+export function pinnedUsage(consumer: string, alias: string): ExportUsage {
+  return pinnedUsageOf(consumer, alias);
 }
 
 /** ispec_loader.graph — the project graph of the current scan, forwarded 1:1 to the project family index. */

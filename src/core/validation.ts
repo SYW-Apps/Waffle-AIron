@@ -493,7 +493,10 @@ function runOwnersGate(
   // Step 10: the bound project's pinned externals — its own lock and
   // snapshots, never the producer — what a reference into a project outside
   // the scan is judged against.
-  const pinnedExternals = listPinnedExternals();
+  // A part declared with a `../` or git source is no producer (stage 8): its
+  // specs are this project's own, so it has no pin to be judged against.
+  const parts = new Set(projectFamily().nodes.find((n) => n.namespace === '')?.parts.map((p) => p.alias) ?? []);
+  const pinnedExternals = listPinnedExternals().filter((p) => !parts.has(p.alias));
   // Source-code model (per-sourcePath declaration/export/import/anchor facts)
   // — what structural conformance checks realization against. The declared
   // source roots widen the walked set with the files no spec names yet, which
@@ -1057,6 +1060,15 @@ function directMemberSubjects(): Record<string, string> {
     if (node.parent !== '' || node.mountAlias === undefined) continue;
     const record = approvalRecord(node.directory);
     subjects[node.mountAlias] = record ? `${record.stateId.algorithm}:${record.stateId.digest}` : NEVER_SUBJECT;
+  }
+  // Stage 8: each referenced project member (a `../` or git source), at the
+  // root the scan located — its sibling checkout or the fetch cache at its
+  // pinned commit. A hosted one is located by the hosting server alone, so it
+  // does not enter an identity that must read the same everywhere.
+  for (const external of family.nodes.find((n) => n.namespace === '')?.externals ?? []) {
+    if (external.role !== 'member' || external.sourceKind === 'hosted') continue;
+    const record = external.directory ? approvalRecord(external.directory) : null;
+    subjects[external.alias] = record ? `${record.stateId.algorithm}:${record.stateId.digest}` : NEVER_SUBJECT;
   }
   // A declared member with no project on disk carries no decision at all.
   for (const problem of family.problems) {

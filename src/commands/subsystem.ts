@@ -1,12 +1,12 @@
 import * as nodePath from 'path';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
-import { getProjectRoot } from '../utils/fs.js';
 // cli_core_adapter — every call these commands make into another subsystem
 // lands on the adapter's own module.
 import inquirer from 'inquirer';
 import {
   createMember,
+  advanceMember,
   moveMember,
   projectConfigExists,
 } from './adapters/core.js';
@@ -57,6 +57,8 @@ export {
 
 interface MemberAddOptions {
   description?: string;
+  /** --project: create an independent project instead of a part (stage 8). */
+  project?: boolean;
 }
 
 /** The initialized-project guard every member command opens with. */
@@ -64,11 +66,6 @@ function requireProject(): void {
   if (!projectConfigExists()) {
     throw new WaironError('Not inside an initialized wairon project. Run `wairon init` first.');
   }
-}
-
-/** A path as the terminal shows it: relative to where the command ran. */
-function shown(memberPath: string): string {
-  return nodePath.relative(process.cwd(), nodePath.resolve(getProjectRoot(), memberPath)) || '.';
 }
 
 /**
@@ -88,21 +85,89 @@ export function reportMemberPacks(creation: MemberCreation): void {
   }
 }
 
-export async function runMemberAdd(alias: string, memberPath: string, options: MemberAddOptions = {}): Promise<void> {
+/**
+ * icli_runner.runMemberAdd — `wairon member add <alias> <source> [--project]`:
+ * create a member at a source in the members grammar — a PART by default
+ * (stage 8: its subsystems are this project's own), a project with --project.
+ */
+export async function runMemberAdd(alias: string, source: string, options: MemberAddOptions = {}): Promise<void> {
   logger.header('wairon member add');
   // Step 1: an initialized project.
   requireProject();
-  // Steps 2-3: the member needs a path.
-  if (!memberPath) {
-    throw new WaironError('a path is required: wairon member add <alias> <path>');
+  // Steps 2-3: the member needs a source.
+  if (!source) {
+    throw new WaironError('a source is required: wairon member add <alias> <path | ../path | git-url[#commit]>');
   }
-  // Step 4: scaffold the member and declare it in `members`.
-  const creation = createMember(alias, memberPath, options.description);
-  // Step 5: the confirmation, what was applied, and next steps.
-  logger.success(`Added member "${alias}" → ${memberPath} (declared in project.yaml \`members\`)`);
-  logger.info(`Scaffolded its project at ${shown(memberPath)} — its project id is "${alias}".`);
-  reportMemberPacks(creation);
-  logger.info(`Design it from its own root, and export what others consume from its L0; reference it here as ${alias}::<name>.`);
+  // Step 4: create the member — a part, or with --project a project — and declare it.
+  const creation = createMember(alias, source, options.description, options.project ? 'project' : undefined);
+  // Step 5: the confirmation, what was applied, and the growth path.
+  const where = creation.storage === 'git' ? `${source.split('#')[0]} at ${creation.commit}` : source;
+  logger.success(`Added the ${creation.as} "${alias}" → ${where} (declared in project.yaml \`members\`)`);
+  if (creation.as === 'project') {
+    logger.info(`It is an independent project — its id is "${alias}". Design it from its own root, export what others consume from its L0, and reference it here as ${alias}::<name>.`);
+    reportMemberPacks(creation);
+  } else {
+    logger.info(`Its subsystems are this project's own: write them by their local ids, judged and locked with this project. \`wairon member promote ${alias}\` makes it a project when it needs its own team, release, approval or public surface.`);
+  }
+}
+
+/**
+ * icli_runner.runMemberPromote — `wairon member promote <alias> [--id <id>]`
+ * (stage 8): a part becomes an independent project in place. Through
+ * runMigration: plan first, confirmed, all or nothing, never locks.
+ */
+export async function runMemberPromote(alias: string, options: MigrationCommandOptions & { id?: string }): Promise<void> {
+  // Step 1: an initialized project.
+  requireProject();
+  // Step 2: the request, with --id.
+  const request: MigrationRequest = { verb: 'promote', alias, ...(options.id !== undefined ? { newId: options.id } : {}) };
+  // Step 3: the shared flow.
+  await runMigration(request, options);
+}
+
+/**
+ * icli_runner.runMemberDemote — `wairon member demote <alias> [--home <subsystem>]`
+ * (stage 8): a project member becomes a part of this project in place —
+ * promote's inverse. Through runMigration.
+ */
+export async function runMemberDemote(alias: string, options: MigrationCommandOptions): Promise<void> {
+  // Step 1: an initialized project.
+  requireProject();
+  // Step 2: the request, its destination from --home and the pack choice.
+  const destination: InternalizeDestination = { home: options.into ?? '', ...(options.packs !== undefined ? { packs: options.packs } : {}) };
+  // Step 3: the shared flow.
+  await runMigration({ verb: 'demote', alias, destination }, options);
+}
+
+/**
+ * icli_runner.runMemberUpdate — `wairon member update <alias> [--ref | --commit]
+ * [--report]` (stage 8): move a git member's pinned commit, printing what
+ * changed in its spec files first. Never locks.
+ */
+export async function runMemberUpdate(alias: string, options: { ref?: string; commit?: string; report?: boolean }): Promise<void> {
+  logger.header('wairon member update');
+  // Step 1: an initialized project.
+  requireProject();
+  // Step 2: move the pin — a dry run with --report.
+  const advance = advanceMember(alias, options.ref, options.commit, options.report);
+  // Step 3: the commits, the spec files that moved, and what the move leaves stale.
+  logger.info(`${alias}: ${advance.from || '(no commit)'} → ${advance.to}${advance.ref ? ` (${advance.ref})` : ''}`);
+  if (advance.from === advance.to) {
+    logger.success(`"${alias}" is already at ${advance.to}: nothing to update.`);
+    return;
+  }
+  for (const [label, files] of [['added', advance.added], ['changed', advance.changed], ['removed', advance.removed]] as const) {
+    for (const file of files) logger.info(`  ${label}: ${file}`);
+  }
+  if (advance.added.length + advance.changed.length + advance.removed.length === 0) logger.info('  no spec file changed');
+  if (!advance.written) {
+    logger.info('Report only: nothing was written. Run without --report to move the pin.');
+    return;
+  }
+  logger.success(`"${alias}" now pins ${advance.to}.`);
+  if (advance.added.length + advance.changed.length + advance.removed.length > 0) {
+    logger.warn('Its content moved, so this project\'s lock reads stale until it is re-locked (`wairon lock`).');
+  }
 }
 
 export async function runMemberMove(alias: string, newPath: string): Promise<void> {
@@ -142,6 +207,10 @@ export interface MigrationCommandOptions {
   project?: string;
   /** member detach --widen: widen exactly the used family-only exports to the instance audience, shown in the plan. */
   widen?: boolean;
+  /** subsystem externalize --as part|project (stage 8): a storage move, or the move composed with a promote. */
+  as?: string;
+  /** member promote --id: the new project's id; the alias when absent. */
+  id?: string;
 }
 
 /**
@@ -299,7 +368,7 @@ export async function runMemberAdopt(alias: string, options: MigrationCommandOpt
   await runMigration(request, options);
 }
 
-/** icli_runner.runSubsystemExternalize — `wairon subsystem externalize <id> --path <dir>`: a subsystem becomes a member, family-wide. */
+/** icli_runner.runSubsystemExternalize — `wairon subsystem externalize <id> --path <dir> [--as project]`: a subsystem's specs move into a part, or with --as project into a member project. */
 export async function runSubsystemExternalize(id: string, options: MigrationCommandOptions = {}): Promise<void> {
   // Step 1: an initialized project.
   requireProject();
@@ -307,8 +376,8 @@ export async function runSubsystemExternalize(id: string, options: MigrationComm
   if (!options.path) {
     throw new WaironError("--path (the member's destination) is required.");
   }
-  // Step 4: the request.
-  const request: MigrationRequest = { verb: 'externalize', subsystem: id, path: options.path };
+  // Step 4: the request, with --as (a part by default).
+  const request: MigrationRequest = { verb: 'externalize', subsystem: id, path: options.path, ...(options.as !== undefined ? { as: options.as } : {}) };
   // Step 5: the shared flow; source code is the user's to move.
   await runMigration(request, options);
 }

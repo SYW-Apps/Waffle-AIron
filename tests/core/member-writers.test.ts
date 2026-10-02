@@ -88,7 +88,7 @@ describe('createMember', () => {
   it('scaffolds the member project and declares it in `members`, writing no L1 spec', () => {
     rootDir = makeRoot();
     const before = specFilesOf(rootDir);
-    createMember('billing', 'packages/billing', 'Invoices and payments');
+    createMember('billing', 'packages/billing', 'Invoices and payments', 'project');
 
     // Declared in the parent's project.yaml, long form (it carries a description).
     expect(membersOf(rootDir)).toEqual({ billing: { source: 'packages/billing', description: 'Invoices and payments' } });
@@ -110,7 +110,7 @@ describe('createMember', () => {
 
   it('writes the shorthand without a description, and a vision naming the member of this project', () => {
     rootDir = makeRoot();
-    createMember('ledger', 'services\\ledger');
+    createMember('ledger', 'services\\ledger', undefined, 'project');
     expect(membersOf(rootDir)).toEqual({ ledger: 'services/ledger' });
     const l0 = readYamlFile(path.join(rootDir, 'services', 'ledger', '.wai', 'specs', '.index.yaml')) as { vision: string };
     expect(l0.vision).toBe('Member ledger of the root-system project');
@@ -118,13 +118,13 @@ describe('createMember', () => {
 
   it('is idempotent and never clobbers an existing member project', () => {
     rootDir = makeRoot();
-    createMember('billing', 'packages/billing');
+    createMember('billing', 'packages/billing', undefined, 'project');
     const configFile = path.join(rootDir, '.wai', 'project.yaml');
     const configBytes = fs.readFileSync(configFile);
     const marker = path.join(rootDir, 'packages', 'billing', '.wai', 'keep.txt');
     fs.writeFileSync(marker, 'keep');
 
-    createMember('billing', 'packages/billing');
+    createMember('billing', 'packages/billing', undefined, 'project');
     expect(fs.existsSync(marker)).toBe(true);
     expect(fs.readFileSync(configFile).equals(configBytes)).toBe(true);
   });
@@ -137,7 +137,7 @@ describe('createMember', () => {
       path.join(memberDir, '.wai', 'specs', '.index.yaml'),
       `schemaVersion: 1.0.0\nname: PreExistingBilling\nvision: keep me\nboundaries: []\nglobalRequirements: []\ncreatedAt: '${now}'\nupdatedAt: '${now}'\n`,
     );
-    createMember('billing', 'packages/billing');
+    createMember('billing', 'packages/billing', undefined, 'project');
     expect(fs.existsSync(path.join(memberDir, '.wai', 'project.yaml'))).toBe(true);
     const sys = fs.readFileSync(path.join(memberDir, '.wai', 'specs', '.index.yaml'), 'utf8');
     expect(sys).toMatch(/PreExistingBilling/);
@@ -146,23 +146,24 @@ describe('createMember', () => {
 
   it('refuses a malformed alias or an empty path before anything is written', () => {
     rootDir = makeRoot();
-    expect(() => createMember('Billing!', 'packages/billing')).toThrow(/an alias and a path are required/);
-    expect(() => createMember('billing', '  ')).toThrow(/an alias and a path are required/);
+    expect(() => createMember('Billing!', 'packages/billing', undefined, 'project')).toThrow(/an alias and a path are required/);
+    expect(() => createMember('billing', '  ', undefined, 'project')).toThrow(/an alias and a path are required/);
     expect(fs.existsSync(path.join(rootDir, 'packages'))).toBe(false);
     expect(membersOf(rootDir)).toBeUndefined();
   });
 
   it('refuses an escaping or absolute path before anything is scaffolded', () => {
     rootDir = makeRoot();
-    expect(() => createMember('outside', '../outside')).toThrow();
+    // Stage 8: a leading `../` is the explicit way out (a sibling member); an inner `..` escapes.
+    expect(() => createMember('outside', 'packages/../../outside', undefined, 'project')).toThrow();
     expect(() => createMember('abs', path.join(os.tmpdir(), 'abs-member'))).toThrow();
     expect(membersOf(rootDir)).toBeUndefined();
   });
 
   it('refuses a different member under an alias already declared', () => {
     rootDir = makeRoot();
-    createMember('billing', 'packages/billing');
-    expect(() => createMember('billing', 'packages/other')).toThrow(/already declared/);
+    createMember('billing', 'packages/billing', undefined, 'project');
+    expect(() => createMember('billing', 'packages/other', undefined, 'project')).toThrow(/already declared/);
     expect(membersOf(rootDir)).toEqual({ billing: 'packages/billing' });
   });
 });
@@ -178,7 +179,7 @@ describe('moveMember', () => {
 
   it('relocates a `members` member and points its entry there, keeping its description', () => {
     rootDir = makeRoot();
-    createMember('billing', 'packages/billing', 'Invoices');
+    createMember('billing', 'packages/billing', 'Invoices', 'project');
     moveMember('billing', 'services/billing');
 
     expect(fs.existsSync(path.join(rootDir, 'packages', 'billing'))).toBe(false);
@@ -213,7 +214,7 @@ describe('moveMember', () => {
 
   it('refuses a target that already exists, leaving the member where it was', () => {
     rootDir = makeRoot();
-    createMember('billing', 'packages/billing');
+    createMember('billing', 'packages/billing', undefined, 'project');
     fs.mkdirSync(path.join(rootDir, 'services', 'billing'), { recursive: true });
     expect(() => moveMember('billing', 'services/billing')).toThrow(/already exists/);
     expect(membersOf(rootDir)).toEqual({ billing: 'packages/billing' });
@@ -221,7 +222,7 @@ describe('moveMember', () => {
 
   it('refuses a new path that escapes the project', () => {
     rootDir = makeRoot();
-    createMember('billing', 'packages/billing');
+    createMember('billing', 'packages/billing', undefined, 'project');
     expect(() => moveMember('billing', '../escaped')).toThrow();
     expect(membersOf(rootDir)).toEqual({ billing: 'packages/billing' });
   });
@@ -239,7 +240,7 @@ describe('member discovery and the doctor backfill', () => {
   it('lists the direct members in both forms, `members` first, each with its alias and form', () => {
     rootDir = makeRoot();
     writeLegacyMount(subsystemSpec('legacy', 'packages/legacy'), 'legacy');
-    createMember('billing', 'packages/billing');
+    createMember('billing', 'packages/billing', undefined, 'project');
     const direct = listDirectChainedSubprojects(rootDir).map((m) => ({ ...m, dir: path.relative(rootDir, m.dir).split(path.sep).join('/') }));
     expect(direct).toEqual([
       { dir: 'packages/billing', alias: 'billing', form: 'members' },
@@ -251,7 +252,9 @@ describe('member discovery and the doctor backfill', () => {
     rootDir = makeRoot();
     writeLegacyMount(subsystemSpec('billing', 'packages/old'), 'billing');
     projectConfigRepository.declareMember('billing', { path: 'packages/new' });
-    fs.mkdirSync(path.join(rootDir, 'packages', 'new'), { recursive: true });
+    // A project member (stage 8: a lock makes it one — an empty folder would be a part, never a chained project).
+    fs.mkdirSync(path.join(rootDir, 'packages', 'new', '.wai'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, 'packages', 'new', '.wai', 'lock.json'), '{}');
     const direct = listDirectChainedSubprojects(rootDir);
     expect(direct).toHaveLength(1);
     expect(direct[0]).toMatchObject({ alias: 'billing', form: 'members' });
@@ -260,7 +263,7 @@ describe('member discovery and the doctor backfill', () => {
 
   it('detects and backfills a member missing project.yaml, in either form, declaring the alias as its id', () => {
     rootDir = makeRoot();
-    createMember('billing', 'packages/billing');
+    createMember('billing', 'packages/billing', undefined, 'project');
     writeLegacyMount(subsystemSpec('legacy', 'packages/legacy'), 'legacy');
     const billing = path.join(rootDir, 'packages', 'billing');
     const legacy = path.join(rootDir, 'packages', 'legacy');
@@ -280,9 +283,9 @@ describe('member discovery and the doctor backfill', () => {
 
   it('walks nested members recursively', () => {
     rootDir = makeRoot();
-    createMember('core', 'core');
+    createMember('core', 'core', undefined, 'project');
     setProjectRoot(path.join(rootDir, 'core'));
-    createMember('transpiler', 'transpiler');
+    createMember('transpiler', 'transpiler', undefined, 'project');
     setProjectRoot(rootDir);
     invalidateSpecCache();
     const nested = path.join(rootDir, 'core', 'transpiler');

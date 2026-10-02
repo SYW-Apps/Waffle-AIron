@@ -45,7 +45,7 @@ const REFUSALS: [string, Record<string, unknown>][] = [
   ['sdd_define_interface', { id: 'ic', name: 'IC', description: 'd', component: 'nowhere' }],
   ['sdd_write_narrative', { id: 'c_impl', name: 'C', description: 'd', contract: 'inowhere' }],
   ['sdd_set_public_interfaces', { subsystem: 'nowhere', publicInterfaces: [] }],
-  ['sdd_add_member', { alias: 'Not An Alias', path: 'x' }],
+  ['sdd_add_member', { alias: 'Not An Alias', source: 'x' }],
   ['sdd_move_member', { alias: 'nowhere', newPath: 'x' }],
   ['sdd_externalize_subsystem', { subsystem: 'nowhere', path: 'x' }],
   ['sdd_internalize_member', { alias: 'nowhere' }],

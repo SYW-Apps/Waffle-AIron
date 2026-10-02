@@ -131,31 +131,70 @@ function relationOf(consumer: ProjectNode, producer: ProjectNode): ResolvedExter
 
 /** A family producer: the consumer sees `project`. */
 function familyExternal(alias: string, project: string, consumer: ProjectNode, producer: ProjectNode): ResolvedExternal {
-  return { alias, project, sourceKind: 'family', relation: relationOf(consumer, producer), producer: producer.namespace, directory: producer.directory, audience: 'project' };
+  return { alias, project, sourceKind: 'family', relation: relationOf(consumer, producer), producer: producer.namespace, directory: producer.directory, audience: 'project', role: 'external' };
 }
 
-/** Bind each of the node's declared externals to its producer. */
+/**
+ * Bind each of the node's declared externals to its producer (role external),
+ * then each of its referenced project members (role member, stage 8) exactly
+ * the same way.
+ */
 function bindExternals(node: ProjectNode, root: ScannedProjectRoot, nodes: ProjectNode[]): ResolvedExternal[] {
   if (!root.config) return [];
-  return declaredExternals(root.config).map((decl): ResolvedExternal => {
-    const unresolved = (problem: string): ResolvedExternal => ({ alias: decl.alias, project: decl.project, sourceKind: 'unresolved', audience: 'instance', problem });
-    if (decl.problem) return unresolved(decl.problem);
-    // A hosted record id is resolved by external_producers through the hosting server's record lookup.
-    if (decl.sourceHosted !== undefined) return { alias: decl.alias, project: decl.project, sourceKind: 'hosted', hosted: decl.sourceHosted, audience: 'instance' };
-    if (decl.sourcePath !== undefined) {
-      const directory = path.resolve(node.directory, decl.sourcePath);
-      const found = nodes.find((n) => dirKey(n.directory) === dirKey(directory));
-      if (!found) return { alias: decl.alias, project: decl.project, sourceKind: 'path', directory, audience: 'instance' };
-      if (found.id !== decl.project) {
-        return unresolved(`the family project at source.path "${decl.sourcePath}" answers to ${found.id === undefined ? 'no id' : `"${found.id}"`}, not "${decl.project}"`);
-      }
-      return familyExternal(decl.alias, decl.project, node, found);
+  return [...declaredExternals(root.config).map((decl) => bindExternal(decl, node, nodes)), ...bindReferencedMembers(node, root)];
+}
+
+/**
+ * Stage 8: each referenced project member — a `../`, git or hosted source whose
+ * content is a project's — bound as a producer outside the family at audience
+ * instance: a sibling checkout or a git member at the root the scan located
+ * (its pinned commit in the fetch cache), a hosted one left for the hosted
+ * record lookup. A part is no producer: its specs are the node's own.
+ */
+function bindReferencedMembers(node: ProjectNode, root: ScannedProjectRoot): ResolvedExternal[] {
+  const out: ResolvedExternal[] = [];
+  for (const member of declaredMembers(root.config ?? {})) {
+    if (member.problem || member.storage === 'contained' || root.parts.some((p) => p.alias === member.alias)) continue;
+    const base = { alias: member.alias, project: member.alias, audience: 'instance', role: 'member' as const };
+    if (member.storage === 'hosted') {
+      out.push({ ...base, sourceKind: 'hosted', hosted: member.source.hosted });
+      continue;
     }
-    const holders = nodes.filter((n) => n.id === decl.project && n !== node);
-    if (holders.length === 0) return unresolved(`no project of the family answers to "${decl.project}", and no source.path says where to find it`);
-    if (holders.length > 1) return unresolved(`${holders.length} projects of the family answer to "${decl.project}" (${holders.map((n) => `"${n.namespace || '(the bound root)'}"`).join(', ')}), so the declaration could mean either`);
-    return familyExternal(decl.alias, decl.project, node, holders[0]);
-  });
+    const located = root.referenced.find((r) => r.alias === member.alias);
+    const sourceKind = member.storage === 'git' ? 'git' : 'path';
+    const directory = located?.directory ?? (member.storage === 'path' ? path.resolve(node.directory, member.source.path ?? '') : undefined);
+    const commit = located?.commit ?? member.source.commit;
+    out.push({
+      ...base, sourceKind,
+      ...(directory !== undefined ? { directory } : {}),
+      ...(commit !== undefined ? { commit } : {}),
+      ...(located?.availability === 'unavailable' ? { problem: located.reason } : {}),
+    });
+  }
+  return out;
+}
+
+/** One declared external bound to its producer. */
+function bindExternal(decl: ReturnType<typeof declaredExternals>[number], node: ProjectNode, nodes: ProjectNode[]): ResolvedExternal {
+  const unresolved = (problem: string): ResolvedExternal => ({ alias: decl.alias, project: decl.project, sourceKind: 'unresolved', audience: 'instance', problem, role: 'external' });
+  if (decl.problem) return unresolved(decl.problem);
+  // A hosted record id is resolved by external_producers through the hosting server's record lookup.
+  if (decl.sourceHosted !== undefined) return { alias: decl.alias, project: decl.project, sourceKind: 'hosted', hosted: decl.sourceHosted, audience: 'instance', role: 'external' };
+  // A git producer (stage 8): external_producers resolves its ref and materializes it.
+  if (decl.sourceGit !== undefined) return { alias: decl.alias, project: decl.project, sourceKind: 'git', audience: 'instance', role: 'external' };
+  if (decl.sourcePath !== undefined) {
+    const directory = path.resolve(node.directory, decl.sourcePath);
+    const found = nodes.find((n) => dirKey(n.directory) === dirKey(directory));
+    if (!found) return { alias: decl.alias, project: decl.project, sourceKind: 'path', directory, audience: 'instance', role: 'external' };
+    if (found.id !== decl.project) {
+      return unresolved(`the family project at source.path "${decl.sourcePath}" answers to ${found.id === undefined ? 'no id' : `"${found.id}"`}, not "${decl.project}"`);
+    }
+    return familyExternal(decl.alias, decl.project, node, found);
+  }
+  const holders = nodes.filter((n) => n.id === decl.project && n !== node);
+  if (holders.length === 0) return unresolved(`no project of the family answers to "${decl.project}", and no source.path says where to find it`);
+  if (holders.length > 1) return unresolved(`${holders.length} projects of the family answer to "${decl.project}" (${holders.map((n) => `"${n.namespace || '(the bound root)'}"`).join(', ')}), so the declaration could mean either`);
+  return familyExternal(decl.alias, decl.project, node, holders[0]);
 }
 
 /** The specs a reference collection reads, loaded once. */

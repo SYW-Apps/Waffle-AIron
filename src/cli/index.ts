@@ -70,6 +70,9 @@ import {
   runProjectRename,
   runSubsystemExternalize,
   runMemberInternalize,
+  runMemberPromote,
+  runMemberDemote,
+  runMemberUpdate,
 } from '../commands/subsystem.js';
 import { composeAgentBrief, loadProjectConfig, resolveAgentTopology } from '../commands/adapters/core.js';
 import { summarize } from '../models/execution.js';
@@ -1189,11 +1192,22 @@ const memberCmd = program
   .description('Manage members — the projects this project contains, declared in project.yaml `members`');
 
 memberCmd
-  .command('add <alias> <path>')
-  .description('Create a member: scaffold a wairon project at <path> (its id = <alias>) and declare it in project.yaml `members`')
-  .option('--description <text>', 'what the member is to this project (also its bootstrapped L0 vision)')
-  .action(async (alias: string, memberPath: string, opts) => {
-    await runMemberAdd(alias, memberPath, { description: opts.description });
+  .command('add <alias> <source>')
+  .description('Create a member at <source> — services/x (contained), ../x (a sibling checkout) or a git URL[#commit] — a PART by default (its subsystems are this project\'s own), or with --project an independent project')
+  .option('--project', 'create an independent project (its id = <alias>, its own L0 and lock) instead of a part')
+  .option('--description <text>', 'what the member is to this project (also a project\'s bootstrapped L0 vision)')
+  .action(async (alias: string, source: string, opts) => {
+    await runMemberAdd(alias, source, { description: opts.description, project: opts.project });
+  });
+
+memberCmd
+  .command('update <alias>')
+  .description("Move a git member's pinned commit to its ref's head (or --ref / --commit), printing the spec files it adds, changes and removes; never locks")
+  .option('--ref <ref>', 'the branch or tag to follow this time')
+  .option('--commit <sha>', 'an exact commit to pin')
+  .option('--report', 'print what would change and write nothing')
+  .action(async (alias: string, opts) => {
+    await runMemberUpdate(alias, { ref: opts.ref, commit: opts.commit, report: opts.report });
   });
 
 memberCmd
@@ -1258,6 +1272,27 @@ memberCmd
     await runMemberInternalize(alias, { into: opts.into, packs: opts.packs, exports: opts.export, report: opts.report, yes: opts.yes });
   });
 
+memberCmd
+  .command('promote <alias>')
+  .description('Make a part an independent project in place: its id, an L0 exporting what this project uses of it, references respelled alias::name, pins on both sides')
+  .option('--id <id>', "the new project's id (default: the alias)")
+  .option('--report', 'print the plan and write nothing')
+  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberPromote(alias, { id: opts.id, report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('demote <alias>')
+  .description("Make a project member a part of this project in place (promote's inverse); refused while another family project consumes it")
+  .option('--home <subsystem>', "the subsystem that receives the member's L0 vision (required when it holds several subsystems and its vision says more than its name)")
+  .option('--packs <adopt|drop>', 'what to do with a pack only the member selects')
+  .option('--report', 'print the plan and write nothing')
+  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberDemote(alias, { into: opts.home, packs: opts.packs, report: opts.report, yes: opts.yes });
+  });
+
 // ---------------------------------------------------------------------------
 // project rename — a project's id, family-wide
 // ---------------------------------------------------------------------------
@@ -1277,7 +1312,7 @@ projectCmd
   });
 
 // ---------------------------------------------------------------------------
-// subsystem externalize — turn an internal subsystem into a member
+// subsystem externalize — move an internal subsystem's specs into a part (or a member project)
 // ---------------------------------------------------------------------------
 
 const subsystemCmd = program
@@ -1286,12 +1321,13 @@ const subsystemCmd = program
 
 subsystemCmd
   .command('externalize <id>')
-  .description('Turn an internal subsystem into a member project at --path, family-wide and all or nothing (moves its specs, declares it in `members`, exports and imports what crosses the new boundary; you move the source code)')
-  .requiredOption('--path <dir>', 'destination directory for the member project')
+  .description("Move an internal subsystem's specs into a part at --path — a storage move, nothing else changes — or with --as project into a member project, family-wide and all or nothing (you move the source code)")
+  .requiredOption('--path <dir>', "the part's directory (a new one, or an existing part's)")
+  .option('--as <part|project>', 'part (default): a storage move; project: the move followed by a promote')
   .option('--report', 'print the plan and write nothing')
   .option('--yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (id: string, opts) => {
-    await runSubsystemExternalize(id, { path: opts.path, report: opts.report, yes: opts.yes });
+    await runSubsystemExternalize(id, { path: opts.path, as: opts.as, report: opts.report, yes: opts.yes });
   });
 
 // ---------------------------------------------------------------------------

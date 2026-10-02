@@ -25,6 +25,7 @@ import {
   contentDigest,
   memberDigest,
   declaredExternals,
+  declaredMembers,
   type PinnedExternal,
   type ExportUsage,
   type ExternalBinding,
@@ -390,11 +391,17 @@ export function loadSurfaceSnapshots(): SurfaceSnapshot[] {
  * malformed, is answered with its problem instead of a snapshot. Writes nothing.
  */
 export function listPinnedExternals(): PinnedExternal[] {
-  // Step 1: the declared aliases and producer ids only — nothing is bound.
+  // Step 1: the declared aliases and producer ids only — nothing is bound. A
+  // referenced project member (stage 8: a `../`, git or hosted source) is
+  // judged against its pin exactly as an external; a part among them is
+  // dropped by the gate, which knows what the scan found it to be.
   let declared: { alias: string; project: string }[] = [];
   try {
     const config = loadProjectConfig();
-    declared = config ? declaredExternals(config) : [];
+    declared = config ? [
+      ...declaredExternals(config),
+      ...declaredMembers(config).filter((m) => !m.problem && m.storage !== 'contained').map((m) => ({ alias: m.alias, project: m.alias })),
+    ] : [];
   } catch {
     // A configuration that fails its schema is reported by the paths that load it.
     return [];
@@ -581,9 +588,6 @@ export function listFamilyPins(): FamilyPin[] {
 /** The code on every comparison that could not be made — never a pass. */
 const CHECK_UNAVAILABLE = 'EXTERNAL_CHECK_UNAVAILABLE';
 
-/** Why a producer outside the family has no used members to compare here. */
-const OUTSIDE_FAMILY = 'the producer is outside the family, so the scan cannot map this project\'s references onto its live table here — the owner\'s gate judges each use against the pin (`wairon validate`)';
-
 /** An alias the project does not declare, named to pin: refused before anything is written. */
 export class UnknownExternalAliasError extends Error {
   constructor(unknown: string[], declared: string[]) {
@@ -609,9 +613,13 @@ function isWithinDir(dir: string, target: string): boolean {
  */
 function producerUnreadable(external: ResolvedExternal): string | null {
   const directory = external.directory;
-  if (!directory) return 'the producer has no root directory';
+  if (!directory) return external.problem ?? 'the producer has no root directory';
   const reach = getRequestParentReach();
-  if (reach && external.sourceKind !== 'hosted') {
+  // A git producer is a fetched commit, never a root above the family; a
+  // referenced member is a root the declaring project names explicitly (stage
+  // 8) — neither is the family's to read within a ceiling, and neither ever
+  // has a directory on a hosted instance.
+  if (reach && external.sourceKind !== 'hosted' && external.sourceKind !== 'git' && external.role !== 'member') {
     const bound = getProjectRoot();
     const ceiling = reach.parentReach ? reach.topRoot ?? bound : bound;
     if (!isWithinDir(ceiling, directory)) return OUT_OF_REACH;
@@ -669,7 +677,11 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
   if (snapshotChanged) externalsRepository.saveSnapshot(external.alias, snapshot);
   // Step 14: the lock entry — `used` maps each used member to its digest.
   const { used, missing } = usedDigests(binding.usage, snapshot);
-  const entry: ExternalLockEntry = { project: external.project, snapshot: `.wai/externals/${external.alias}.yaml`, digest, used };
+  const entry: ExternalLockEntry = {
+    project: external.project, snapshot: `.wai/externals/${external.alias}.yaml`, digest, used,
+    ...(external.commit !== undefined ? { commit: external.commit } : {}),
+    ...(external.role === 'member' ? { role: 'member' } : {}),
+  };
   const entryChanged = canonicalize(lock.externals[external.alias] ?? null) !== canonicalize(entry);
   lock.externals[external.alias] = entry;
   return {
@@ -886,11 +898,9 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
       ...(outOfReach ? { outOfReach: true } : {}),
     };
   }
-  // Step 8: a producer outside the family has no used members to compare.
+  // Step 8: every used member compared at signature level, for every producer
+  // alike — family, path, git, hosted, a referenced project (stage 8).
   const drifted = entry !== undefined ? contentDigest(live) !== entry.digest : undefined;
-  if (external.sourceKind === 'path' || external.sourceKind === 'hosted') {
-    return { ...base, reachable: true, stale: false, ...(drifted !== undefined ? { drifted } : {}), uses: [{ state: 'unavailable', code: CHECK_UNAVAILABLE, detail: OUTSIDE_FAMILY }], detail: OUTSIDE_FAMILY };
-  }
   const uses = compareUses(entry, binding.usage, live);
   return {
     ...base,

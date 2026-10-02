@@ -362,6 +362,8 @@ interface MemberDeclaration {
   alias: string;
   path?: string;
   refused?: string;
+  /** A `hosted:` source (stage 8): its own top-level record, related to the declarer but not contained by it. */
+  hosted?: boolean;
 }
 
 /** A root's project.yaml, read raw; null when it has none or it cannot be read. */
@@ -384,8 +386,13 @@ function rawConfigAt(root: string): Record<string, unknown> | null {
 function memberDeclarationsOn(root: string): MemberDeclaration[] {
   const config = rawConfigAt(root);
   const out: MemberDeclaration[] = config
-    ? declaredMembers(config as Parameters<typeof declaredMembers>[0]).map((m) =>
-        m.problem ? { alias: m.alias, refused: m.problem } : { alias: m.alias, path: m.path })
+    ? declaredMembers(config as Parameters<typeof declaredMembers>[0]).map((m): MemberDeclaration => {
+        if (m.problem) return { alias: m.alias, refused: m.problem };
+        if (m.storage === 'hosted') return { alias: m.alias, hosted: true };
+        // A hosted instance reads no `../` or git source: its roots are isolated (stage 8).
+        if (m.storage !== 'contained') return { alias: m.alias, refused: `its ${m.storage === 'git' ? 'git' : '`../` sibling'} source is not read on a hosted instance — a hosted project reaches another root only by a \`hosted:\` source` };
+        return { alias: m.alias, path: m.path };
+      })
     : [];
   const externals = (config as { externals?: Record<string, unknown> } | null)?.externals;
   const specsDir = aiPathsAt(root).specsDir();
@@ -528,9 +535,13 @@ export function planMemberRecords(dataDir: string, id: string): PlannedMemberRec
   const walk = (parentId: string, dir: string, qualifier: string, depth: number): void => {
     if (depth > 32) return;
     for (const decl of memberDeclarationsOn(dir)) {
+      // A `hosted:` project member is its own top-level record (stage 8): not contained, never registered here.
+      if (decl.hosted) continue;
       const planned = planOne(records, root.id, parentId, dir, qualifier, decl);
+      // A part is part of its parent's record and never one of its own: only a record it left behind is retired.
+      if (planned === null) continue;
       out.push(planned);
-      if (planned.action !== 'unreadable') {
+      if (planned.action !== 'unreadable' && planned.action !== 'retire') {
         walk(planned.record.id, resolveContainedProjectPath(dir, decl.path as string), planned.qualifier, depth + 1);
       }
     }
@@ -539,7 +550,28 @@ export function planMemberRecords(dataDir: string, id: string): PlannedMemberRec
   return out;
 }
 
-/** One declared member as the record it should hold, and its action against the stored records. */
+/** Whether a member root holds a project's content — an id, an L0 or a lock — or is a part (stage 8). */
+function holdsProjectContent(dir: string): boolean {
+  const paths = aiPathsAt(dir);
+  if (fs.existsSync(paths.specsSystem()) || fs.existsSync(path.join(paths.root(), 'lock.json'))) return true;
+  return rawConfigAt(dir)?.id !== undefined;
+}
+
+/**
+ * Whether a member record was retired as a part (stage 8): disabled, and its
+ * folder holding no project content any more — reached through its parent's
+ * record from now on.
+ */
+export function isRetiredPart(record: HostedProjectRecord): boolean {
+  return record.status === 'disabled' && record.parentProjectId !== undefined && !!record.rootPath
+    && fs.existsSync(record.rootPath) && !holdsProjectContent(record.rootPath);
+}
+
+/**
+ * One declared member as the record it should hold, and its action against
+ * the stored records; null for a part that holds no record (stage 8), and
+ * `retire` for a record whose member's content is now a part's.
+ */
 function planOne(
   records: HostedProjectRecord[],
   familyRootId: string,
@@ -547,7 +579,7 @@ function planOne(
   parentDir: string,
   parentQualifier: string,
   decl: MemberDeclaration,
-): PlannedMemberRecord {
+): PlannedMemberRecord | null {
   const qualifier = `${parentQualifier}${SUBPROJECT_SEPARATOR}${decl.alias}`;
   const unreadable = (reason: string): PlannedMemberRecord => ({
     record: { id: decl.alias, rootPath: '', status: 'active', createdAt: '', parentProjectId: parentId, memberPath: decl.path ?? '' },
@@ -559,6 +591,12 @@ function planOne(
     dir = resolveContainedProjectPath(parentDir, decl.path);
   } catch (e) {
     return unreadable(`its path "${decl.path}" does not stay within its parent: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  // A part is part of its parent's record (stage 8): a record its member held as a project is retired.
+  if (fs.existsSync(dir) && !holdsProjectContent(dir)) {
+    const memberPath = normalizeMemberPath(decl.path);
+    const held = records.find((r) => r.parentProjectId === parentId && r.memberPath === memberPath && r.status === 'active');
+    return held ? { record: held, familyRootId, qualifier, action: 'retire', reason: `part of ${parentId}` } : null;
   }
   const read = memberIdAt(dir);
   if ('reason' in read) return unreadable(read.reason);

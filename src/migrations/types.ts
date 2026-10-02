@@ -12,7 +12,7 @@ import type { ReferenceEdit } from '../models/project-family.js';
 
 /** migration_request — one family migration as a person or an agent asks for it. */
 export interface MigrationRequest {
-  /** attach | rename | rename-alias | detach | adopt | internalize | externalize | chaining */
+  /** attach | rename | rename-alias | detach | adopt | internalize | externalize | promote | demote | chaining */
   verb: string;
   alias?: string;
   path?: string;
@@ -33,6 +33,8 @@ export interface MigrationRequest {
    * Absent everywhere else.
    */
   relocation?: MemberRelocation;
+  /** externalize (stage 8): part (the default) — a storage move — or project, the move followed by a promote. */
+  as?: string;
 }
 
 /**

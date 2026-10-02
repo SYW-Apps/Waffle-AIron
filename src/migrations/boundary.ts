@@ -4,7 +4,7 @@ import * as surfaces from './adapters/surfaces.js';
 // family_file_adapter: where a path lands and whether a project is there — a planner touches no file itself.
 import * as files from './family-files.js';
 import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import type { InternalizeDestination, ProjectConfig } from '../models/project.js';
+import { memberLocationOf, type InternalizeDestination, type ProjectConfig } from '../models/project.js';
 import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SystemSpec } from '../models/specs.js';
 import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedWrite, type Rehearsal } from './types.js';
@@ -90,6 +90,9 @@ interface Consumer {
 export function planInternalize(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan {
   const plan = emptyPlan(family, request);
   const alias = request.alias ?? '';
+  // Stage 8: a part is a storage move only — its specs are already the project's own.
+  const part = familyNode(family, bound)?.parts.find((p) => p.alias === alias);
+  if (part) return planPartInternalize(plan, family, bound, alias, part);
   // Step 1.
   const member = memberUnder(family, bound, alias, plan);
   // Steps 2-3.
@@ -107,6 +110,23 @@ export function planInternalize(family: ProjectFamily, bound: string, request: M
   const destination: InternalizeDestination = { ...(request.destination ?? { home: '' }), exports };
   internalizeEdits(plan, family, bound, member, alias, consumers, destination, carried);
   // Step 10.
+  return plan;
+}
+
+/**
+ * planInternalize for a PART (stage 8): the core's internalize moves its
+ * subsystems in and removes the member entry and the part's .wai; no reference
+ * changes and no other family project is touched.
+ */
+function planPartInternalize(plan: MigrationPlan, family: ProjectFamily, bound: string, alias: string, part: ProjectNode['parts'][number]): MigrationPlan {
+  if (part.storage === 'git') refuse(plan, 'read-only', bound, `the part "${alias}" is fetched from git (${part.commit ?? 'its pinned commit'}): its files are the fetch cache's — internalize it in a checkout of its repository`);
+  else if (part.directory === undefined) refuse(plan, 'member-absent', bound, `${label(bound)}'s part "${alias}" cannot be read: ${part.reason ?? 'its directory is absent'}`);
+  else if (!insideFamily(plan, part.directory)) refuse(plan, 'not-contained', bound, `the part "${alias}" is stored outside the family root (${part.directory}), where one transaction cannot write it`);
+  if (plan.refusals.length > 0) return plan;
+  const node = familyNode(family, bound)!;
+  edit(plan, bound, 'move', `internalize ${alias}: the part's subsystems (${part.subsystems.join(', ') || 'none'}) move into ${label(bound)}'s own specs folder — a storage move, no reference changes`,
+    { root: node.directory, call: 'internalizeMember', args: [alias, { home: '' }] });
+  plan.edits.push({ project: bound, kind: 'delete', detail: `what remains of ${alias}'s .wai (its PartOf, its pin of the parent): deleted, each listed` });
   return plan;
 }
 
@@ -217,24 +237,37 @@ export function planExternalize(family: ProjectFamily, bound: string, request: M
   const subKey = keyIn(bound, id);
   // A completed externalize plans nothing: the id is a member at that path, and no subsystem of ours any more.
   const done = configAt(node.directory)?.members?.[id];
-  const donePath = typeof done === 'string' ? done : done?.path;
+  const donePath = done === undefined ? undefined : memberLocationOf(done);
+  const asProject = request.as === 'project';
   if (donePath !== undefined && request.path !== undefined && path.resolve(node.directory, donePath) === path.resolve(node.directory, request.path)) return plan;
   // Steps 1-2: where the path lands, and whether a project is already there.
   const dir = files.resolve(node.directory, request.path ?? '');
   const occupied = dir !== null && files.holdsProject(dir);
   // Step 3: judge the request.
   const sub = id.includes('::') ? null : core.loadSpec('subsystem', subKey) as SubsystemSpec | null;
-  if (!sub || sub.projectPath || (family.owners.get(subKey) ?? '') !== bound) refuse(plan, 'externalize-refused', bound, `${label(bound)} has no subsystem "${id}" to externalize (it is missing, or already a member)`);
+  const inPart = node.parts.some((p) => p.subsystems.includes(subKey));
+  if (!sub || sub.projectPath || (family.owners.get(subKey) ?? '') !== bound || inPart) refuse(plan, 'externalize-refused', bound, `${label(bound)} has no subsystem "${id}" to externalize (it is missing, already in a part, or a member)`);
+  if (request.as !== undefined && request.as !== 'part' && request.as !== 'project') refuse(plan, 'externalize-refused', bound, `\`as: ${request.as}\` — a member is a part or a project`);
   if (dir === null) refuse(plan, 'not-contained', bound, `the path "${request.path ?? ''}" does not resolve strictly within ${label(bound)}`);
   else if (family.nodes.some((n) => path.resolve(n.directory) === dir) || occupied) {
     refuse(plan, 'not-contained', bound, `${dir} already holds a project`);
   }
+  // An existing part at that directory is joined (stage 8): its alias is taken by it, rightly.
+  const joined = dir === null ? undefined : node.parts.find((p) => p.directory !== undefined && path.resolve(p.directory) === dir);
   const config = configAt(node.directory);
-  if (config?.members?.[id] !== undefined || config?.externals?.[id] !== undefined) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares the alias "${id}"`);
-  const colliding = family.nodes.find((n) => n.id === id);
+  if (!joined && (config?.members?.[id] !== undefined || config?.externals?.[id] !== undefined)) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares the alias "${id}"`);
+  if (joined && asProject) refuse(plan, 'externalize-refused', bound, `externalize into the part "${joined.alias}" and promote the part, rather than externalize as a project into it`);
+  const colliding = asProject ? family.nodes.find((n) => n.id === id) : undefined;
   if (colliding) refuse(plan, 'id-collision', colliding.namespace, `${label(colliding.namespace)} already answers to "${id}"`);
   // Steps 4-5.
   if (plan.refusals.length > 0) return plan;
+  // As a part (the default): a storage move — nothing crosses, so nothing more is checked.
+  if (!asProject) {
+    edit(plan, bound, 'move', `externalize ${id}: its specs into ${joined ? `the part "${joined.alias}"` : `a part at ${posix(path.relative(node.directory, dir!))}, declared as "${id}"`} — a storage move; no reference, export or pin changes`,
+      { root: node.directory, call: 'externalizeSubsystem', args: [id, posix(path.relative(node.directory, dir!))] });
+    plan.notes.push('Source code is not moved: move the subsystem\'s code yourself if it should live beside its specs.');
+    return plan;
+  }
   // Step 6: the bound project's export table.
   const table = core.resolveProjectExports(bound || undefined);
   // Step 7: references of the moved subtree back into an unpublished component.
@@ -242,8 +275,8 @@ export function planExternalize(family: ProjectFamily, bound: string, request: M
   // Step 8: every other family project's names still resolve.
   checkSiblings(plan, family, bound, id, subKey, table);
   if (plan.refusals.length > 0) return plan;
-  // Step 9: the core's externalize, and the new member's pins.
-  edit(plan, bound, 'move', `externalize ${id}: its specs into a member at ${posix(path.relative(node.directory, dir!))}, declared as "${id}"`, { root: node.directory, call: 'externalizeSubsystem', args: [id, posix(path.relative(node.directory, dir!))] });
+  // Step 9: the core's externalize as a project, and the new member's pins.
+  edit(plan, bound, 'move', `externalize ${id} as a project: its specs into a member at ${posix(path.relative(node.directory, dir!))}, declared as "${id}", then promoted`, { root: node.directory, call: 'externalizeSubsystem', args: [id, posix(path.relative(node.directory, dir!)), 'project'] });
   edit(plan, id, 'pin', `pin the new member's externals (its external for ${node.id ?? 'this project'}, when its specs reference it)`, { root: dir!, call: 'pinExternals', args: [[]] });
   plan.notes.push('Source code is not moved: move the subsystem\'s code into the member yourself.');
   // Step 10.
@@ -300,9 +333,158 @@ function checkSiblings(plan: MigrationPlan, family: ProjectFamily, bound: string
   }
 }
 
+// ── stage 8: the one entry, promote and demote ─────────────────────────────
+
+/** iboundary_migration.plan — the one entry for the four boundary and storage verbs, routed to that verb's planner. Writes nothing. */
+export function plan(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan {
+  // Step 1: route by verb.
+  switch (request.verb) {
+    case 'internalize':
+      // Step 2.
+      return planInternalize(family, bound, request);
+    case 'externalize':
+      // Step 4.
+      return planExternalize(family, bound, request);
+    case 'promote':
+      // Step 6.
+      return planPromote(family, bound, request);
+    case 'demote':
+      // Step 8.
+      return planDemote(family, bound, request);
+    default:
+      throw new Error(`boundary_migration plans no "${request.verb}": internalize | externalize | promote | demote`);
+  }
+}
+
+/** A directory strictly inside the plan's family root, where a rehearsal can copy it. */
+function insideFamily(plan: MigrationPlan, dir: string): boolean {
+  const rel = path.relative(plan.familyRoot, dir);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/**
+ * iboundary_migration.planPromote — plan `member promote <alias>`: the part
+ * becomes an independent project IN PLACE. Writes nothing; the core's own
+ * refusals (an unpublished component either side uses) surface when the plan
+ * is rehearsed.
+ */
+export function planPromote(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan {
+  const plan = emptyPlan(family, request);
+  const alias = request.alias ?? '';
+  const newId = request.newId ?? alias;
+  const node = familyNode(family, bound)!;
+  // Step 1: the part — none is not-a-part; one fetched from git is read-only.
+  const part = node.parts.find((p) => p.alias === alias);
+  if (!part) {
+    refuse(plan, 'not-a-part', bound, `${label(bound)} declares no part "${alias}"`);
+    return plan;
+  }
+  if (part.storage === 'git') refuse(plan, 'read-only', bound, `the part "${alias}" is fetched from git (${part.commit ?? 'its pinned commit'}): promote it in a checkout of its repository — a cross-repository migration is not planned as one change`);
+  else if (part.directory === undefined) refuse(plan, 'member-absent', bound, `the part "${alias}" cannot be read: ${part.reason ?? 'its directory is absent'}`);
+  else if (!insideFamily(plan, part.directory)) refuse(plan, 'not-contained', bound, `the part "${alias}" is stored outside the family root (${part.directory}), where one transaction cannot write it — promote it from a root that contains both`);
+  // Step 2: the bound project's export table, for what other family projects use of it.
+  const table = core.resolveProjectExports(bound || undefined);
+  // Step 3: what crosses the would-be boundary.
+  const inPart = new Set(part.subsystems);
+  const allSubs = runWithProjectRoot(node.directory, () => [...family.owners].filter(([, o]) => o === bound)
+    .map(([k]) => core.loadSpec('subsystem', k) as SubsystemSpec | null).filter((s): s is SubsystemSpec => s !== null && !s.projectPath));
+  for (const s of allSubs) {
+    for (const link of s.trustedLinks ?? []) {
+      if (inPart.has(s.id) === inPart.has(link.subsystem)) continue;
+      refuse(plan, 'trusted-link-crosses', bound, `the trustedLink from "${s.id}" to "${link.subsystem}" would cross a project boundary — remove or replace it first`);
+    }
+  }
+  const collision = family.nodes.find((n) => n.id === newId);
+  if (collision) refuse(plan, 'id-collision', collision.namespace, `${label(collision.namespace)} already answers to "${newId}"`);
+  const config = configAt(node.directory);
+  if (newId !== alias && (config?.members?.[newId] !== undefined || config?.externals?.[newId] !== undefined)) {
+    refuse(plan, 'alias-taken', bound, `${label(bound)} already declares the alias "${newId}"`);
+  }
+  // Every other family project's used names realized in the part must stay
+  // exported: through an L0 entry re-exporting from a part subsystem, which the
+  // promote re-points at the new project (externalize-updates-siblings).
+  const partSpecs = new Set(part.specIds);
+  const system = runWithProjectRoot(node.directory, () => core.loadSpec('system', 'system')) as SystemSpec | null;
+  const entries = (system?.publicInterfaces ?? []) as { from?: string; as?: string; component?: string; typeDef?: string }[];
+  for (const ref of family.authoredReferences) {
+    const owner = family.owners.get(ref.specId) ?? '';
+    if (ref.producer !== bound || owner === bound || !ref.publicName) continue;
+    const exported = table.entries.find((e) => e.publicName === ref.publicName);
+    const target = exported?.component ?? exported?.typeDef;
+    if (target === undefined || !partSpecs.has(target)) continue;
+    const entry = entries.find((e) => (e.as ?? e.component ?? e.typeDef) === ref.publicName || (e.from !== undefined && e.component === undefined && e.typeDef === undefined));
+    if (entry?.from === undefined || !inPart.has(entry.from)) {
+      refuse(plan, 'externalize-updates-siblings', owner, `${label(owner)} uses "${ref.publicName}", which the part "${alias}" realizes and ${label(bound)}'s L0 does not re-export from one of its subsystems — after the promote it would not resolve; re-export it with \`from: <its subsystem>\` first`);
+    }
+  }
+  // Steps 4-5.
+  if (plan.refusals.length > 0) return plan;
+  // Step 6: the core's promote, then the pins on both sides.
+  edit(plan, bound, 'promote', `promote ${alias}: its project content created in place (id ${newId}, an L0 exporting what ${label(bound)} uses of it), references across the new boundary respelled`,
+    { root: node.directory, call: 'promoteMember', args: [alias, newId] });
+  edit(plan, newId, 'pin', `pin the new project's external for ${node.id ?? 'this project'} (when its specs reference it)`, { root: part.directory!, call: 'pinExternals', args: [[]] });
+  if (part.storage !== 'contained') edit(plan, bound, 'pin', `pin ${alias} (a project stored outside ${label(bound)} is judged against its pin)`, { root: node.directory, call: 'pinExternals', args: [[alias]] });
+  plan.notes.push(`"${newId}" has no lock yet: lock it at its own root (\`wairon lock\`) once it validates.`);
+  // Step 7.
+  return plan;
+}
+
+/**
+ * iboundary_migration.planDemote — plan `member demote <alias>`: the project
+ * member becomes a part of the bound project IN PLACE, promote's inverse.
+ * Writes nothing; the core's internalize refusals surface on rehearsal.
+ */
+export function planDemote(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan {
+  const plan = emptyPlan(family, request);
+  const alias = request.alias ?? '';
+  const node = familyNode(family, bound)!;
+  // Step 1: the project member — none is not-a-member, a part is one already, git is read-only.
+  const member = family.nodes.find((n) => n.parent === bound && n.mountAlias === alias);
+  const referenced = node.externals.find((e) => e.role === 'member' && e.alias === alias);
+  if (node.parts.some((p) => p.alias === alias)) {
+    refuse(plan, 'not-a-member', bound, `"${alias}" is already a part of ${label(bound)}`);
+    return plan;
+  }
+  if (!member && !referenced) {
+    refuse(plan, 'not-a-member', bound, `${label(bound)} declares no project member "${alias}"`);
+    return plan;
+  }
+  if (referenced?.sourceKind === 'git') refuse(plan, 'read-only', bound, `the member "${alias}" is fetched from git: demote it in a checkout of its repository`);
+  if (referenced?.sourceKind === 'hosted') refuse(plan, 'read-only', bound, `the member "${alias}" is a hosted record: a part lives in its parent's tree`);
+  const dir = member?.directory ?? referenced?.directory;
+  if (!member && referenced?.sourceKind === 'path' && dir !== undefined && !insideFamily(plan, dir)) {
+    refuse(plan, 'not-contained', bound, `the member "${alias}" is stored outside the family root (${dir}), where one transaction cannot write it — demote it from a root that contains both`);
+  }
+  // Step 2: every family project OTHER than the bound one that consumes it — a part has no exports.
+  if (member) {
+    const users = new Map<string, Set<string>>();
+    for (const ref of family.references) {
+      if (ref.producer !== member.namespace || ref.consumer === bound || ref.consumer === member.namespace) continue;
+      users.set(ref.consumer, new Set([...(users.get(ref.consumer) ?? []), ref.publicName ?? ref.target]));
+    }
+    for (const [consumer, names] of users) {
+      refuse(plan, 'consumed-elsewhere', consumer, `${label(consumer)} uses ${[...names].map((n) => `"${n}"`).join(', ')} of "${alias}" — a part has no exports; repoint it at ${label(bound)}'s exports first, or keep the boundary`);
+    }
+  }
+  if (!plan.whole) refuse(plan, 'family-partial', '', 'the family\'s top is out of this request\'s reach, and a consumer of the member could live there — run from the top project');
+  // Step 3: its configuration, for what the destination must place.
+  void (dir !== undefined ? configAt(dir) : null);
+  // Steps 4-5.
+  if (plan.refusals.length > 0) return plan;
+  // Step 6: the core's demote, and the bound project's pin of it removed.
+  const destination: InternalizeDestination = request.destination ?? { home: '' };
+  edit(plan, bound, 'demote', `demote ${alias}: its project content removed in place${destination.home ? `, its L0 vision to ${destination.home}` : ''}${destination.packs ? `, its packs ${destination.packs === 'adopt' ? 'adopted' : 'dropped'}` : ''}; references across the old boundary become local ids`,
+    { root: node.directory, call: 'demoteMember', args: [alias, destination] });
+  edit(plan, bound, 'pin', `pin ${alias} removed (a part is not pinned: its specs are ${label(bound)}'s own)`, { root: node.directory, call: 'unpin', args: [alias] });
+  plan.edits.push({ project: member?.namespace ?? alias, kind: 'delete', detail: `${alias}'s L0, lock, pins and derived outputs end with its boundary: deleted, each listed` });
+  if (dir !== undefined && core.approvalRecord(dir)) plan.notes.push(`"${alias}"'s own approval ends with it: its lock is deleted, and ${label(bound)} is re-locked instead.`);
+  // Step 7.
+  return plan;
+}
+
 // ── write ───────────────────────────────────────────────────────────────────
 
-/** iboundary_migration.write — make a confirmed internalize or externalize plan's writes in the rehearsal roots. */
+/** iboundary_migration.write — make a confirmed internalize, externalize, promote or demote plan's writes in the rehearsal roots. */
 export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   const planned = plan.edits.filter((e): e is PlannedEdit & { write: PlannedWrite } => e.write !== undefined);
   // Steps 1-2: every hop below is a scoped binding; which verb?
@@ -320,13 +502,32 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
     for (const e of planned.filter((x) => x.write.call === 'repointExternal')) writeOne(rehearsal, e.write);
     // Step 9: last, the pins.
     for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
+    // Step 10.
     return;
   }
-  // Step 11: the core's externalize — a core refusal propagates.
-  for (const e of planned.filter((x) => x.write.call === 'externalizeSubsystem')) writeOne(rehearsal, e.write);
-  // Step 12: the new member's pin.
-  for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
-  // Step 13: the caller's binding is back.
+  // Step 11: externalize, or a composition verb?
+  if (plan.request.verb === 'externalize') {
+    // Step 12: the core's externalize — into a part, or as a project; a core refusal propagates.
+    for (const e of planned.filter((x) => x.write.call === 'externalizeSubsystem')) writeOne(rehearsal, e.write);
+    // Step 13: the new project's pin (a part needs none).
+    for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
+    // Step 14.
+    return;
+  }
+  // Step 15: promote or demote?
+  if (plan.request.verb === 'promote') {
+    // Step 16: the core's promote — a core refusal propagates.
+    for (const e of planned.filter((x) => x.write.call === 'promoteMember')) writeOne(rehearsal, e.write);
+    // Step 17: the pins LAST, on both sides.
+    for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
+    // Step 18.
+    return;
+  }
+  // Step 19: the core's demote — a core refusal propagates.
+  for (const e of planned.filter((x) => x.write.call === 'demoteMember')) writeOne(rehearsal, e.write);
+  // Step 20: the bound project's pin of the member removed.
+  for (const e of planned.filter((x) => x.write.call === 'unpin')) writeOne(rehearsal, e.write);
+  // Step 21: the caller's binding is back.
 }
 
 /** The planned reference edits grouped per spec, in plan order. */
@@ -345,7 +546,9 @@ function writeOne(rehearsal: Rehearsal, w: PlannedWrite): void {
   runWithProjectRoot(rehearsalRoot(rehearsal, w.root), () => {
     switch (w.call) {
       case 'internalizeMember': return core.internalizeMember(args[0], args[1]);
-      case 'externalizeSubsystem': return core.externalizeSubsystem(args[0], args[1]);
+      case 'externalizeSubsystem': return core.externalizeSubsystem(args[0], args[1], args[2]);
+      case 'promoteMember': return core.promoteMember(args[0], args[1]);
+      case 'demoteMember': return core.demoteMember(args[0], args[1]);
       case 'importNames': return core.importNames(args[0], args[1]);
       case 'unpin': return surfaces.unpin(args[0]);
       case 'removeExternal': return core.removeExternal(args[0]);

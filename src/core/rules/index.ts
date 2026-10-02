@@ -630,7 +630,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         if (r.form === 'alias' && segments.length === 2) {
           const [alias, name] = segments;
           const member = suppliers.find((s) => s.alias === alias && s.section === 'members');
-          if (member && !member.table) return unavailable(`the member "${alias}" is absent on disk, so its export table cannot be read`);
+          // A referenced project member (stage 8) is judged against its pin, as an external is.
+          if (member && !member.table && !member.pin) return unavailable(`the member "${alias}" is absent on disk, so its export table cannot be read`);
           const pin = pinnedExternals.find((p) => p.alias === alias);
           if (!pin?.snapshot) return unavailable(pin?.problem ?? `the external "${alias}" was never pinned (run \`wairon externals pin\`)`);
           const ids = kind === 'type' ? (pin.snapshot.exportedTypes ?? []).map((t) => t.id) : pin.snapshot.interfaces.map((e) => e.id);

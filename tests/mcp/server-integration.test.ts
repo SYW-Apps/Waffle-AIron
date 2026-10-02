@@ -252,7 +252,7 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     expect(errorsOf(before)).toEqual([]);
 
     // --- externalize ---
-    unwrapText(await client.callTool({ name: 'sdd_externalize_subsystem', arguments: { subsystem: 'core', path: 'packages/core' } }));
+    unwrapText(await client.callTool({ name: 'sdd_externalize_subsystem', arguments: { subsystem: 'core', path: 'packages/core', as: 'project' } }));
 
     // A member, declared in project.yaml `members` — no L1 mount is written.
     expect((readYamlFile(path.join(projDir, '.wai', 'project.yaml')) as { members?: unknown }).members).toEqual({ core: 'packages/core' });
@@ -293,7 +293,7 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     const members = (): unknown => (readYamlFile(path.join(projDir, '.wai', 'project.yaml')) as { members?: Record<string, unknown> }).members?.ext;
     // sdd_add_member scaffolds the member project and declares it in `members`.
     unwrapText(await client.callTool({ name: 'sdd_add_member', arguments: {
-      alias: 'ext', path: 'packages/ext', description: 'external from birth',
+      alias: 'ext', source: 'packages/ext', description: 'external from birth', as: 'project',
     } }));
     expect(fs.existsSync(path.join(projDir, 'packages', 'ext', '.wai', 'specs', '.index.yaml'))).toBe(true);
     expect(members()).toEqual({ source: 'packages/ext', description: 'external from birth' });

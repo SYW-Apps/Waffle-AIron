@@ -70,7 +70,7 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     seed();
 
     // --- externalize core into ./packages/core ---
-    externalizeSubsystem('core', 'packages/core');
+    externalizeSubsystem('core', 'packages/core', 'project');
     invalidateSpecCache();
 
     // core is now a member, declared in project.yaml `members` — no L1 mount is written
@@ -119,9 +119,9 @@ describe('subsystem migration (externalize <-> internalize)', () => {
 
   it('refuses to externalize a member and to internalize a subsystem that is no member', () => {
     seed();
-    externalizeSubsystem('core', 'packages/core');
+    externalizeSubsystem('core', 'packages/core', 'project');
     invalidateSpecCache();
-    expect(() => externalizeSubsystem('core', 'packages/core2')).toThrow(/already a member/);
+    expect(() => externalizeSubsystem('core', 'packages/core2', 'project')).toThrow(/already in a part, or a member/);
     expect(() => internalizeMember('cli', { home: '' })).toThrow(/no member is declared under that alias/);
   });
 
@@ -129,7 +129,7 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     seed();
     writeLegacyMount({ id: 'old', name: 'old', description: 'd', parentSystem: 'root-sys', publicInterfaces: [], trustedLinks: [], projectPath: 'packages/old', createdAt: now, updatedAt: now } as SubsystemSpec, 'old');
     invalidateSpecCache();
-    expect(() => externalizeSubsystem('old', 'packages/old2')).toThrow(/already a member/);
+    expect(() => externalizeSubsystem('old', 'packages/old2', 'project')).toThrow(/already in a part, or a member/);
   });
 
   it("re-expresses the moved implementations' file paths against the new root — the same files — and back", () => {
@@ -150,7 +150,7 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     } as any);
     invalidateSpecCache();
 
-    externalizeSubsystem('core', 'packages/core');
+    externalizeSubsystem('core', 'packages/core', 'project');
     invalidateSpecCache();
     const own = workspaceFor(path.join(root, 'packages', 'core')).loadImplementationSpec('core_orch_impl');
     expect(own?.sourcePath).toBe('src/orch.ts');
@@ -195,7 +195,7 @@ describe('subsystem migration (externalize <-> internalize)', () => {
       .map((f) => readYamlFile(f) as any)
       .find((y) => y && y.id === 'core_orch_impl');
 
-    externalizeSubsystem('core', 'packages/core');
+    externalizeSubsystem('core', 'packages/core', 'project');
     invalidateSpecCache();
     const childRaw = rawImpl(path.join(root, 'packages', 'core'));
     expect(childRaw.sourcePath).toBe('src/orch.ts');
@@ -361,7 +361,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     // the top's own shared_portal, so nothing is unresolved before the move.
     expect(before).toEqual([]);
 
-    externalizeSubsystem('billing', 'packages/billing');
+    externalizeSubsystem('billing', 'packages/billing', 'project');
 
     expect(referenceFindings(verdict(fam.root), 'billing::').filter((f) => !before.includes(f))).toEqual([]);
     // What the member stores: a bare id into the parent names the parent by its
@@ -395,7 +395,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
   it('from the child root the references into the parent are judged against its pins alone — unpinned, unavailable', () => {
     const fam = family();
     root = fam.root;
-    externalizeSubsystem('billing', 'packages/billing');
+    externalizeSubsystem('billing', 'packages/billing', 'project');
 
     const fromChild = verdict(fam.childDir);
 
@@ -417,7 +417,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     const authored = storedReferences(fam.root, 'billing');
     const before = referenceFindings(verdict(fam.root));
 
-    externalizeSubsystem('billing', 'packages/billing');
+    externalizeSubsystem('billing', 'packages/billing', 'project');
     expect(storedReferences(fam.childDir, 'billing')).not.toEqual(authored);
     internalizeMember('billing', { home: '' });
 
@@ -431,7 +431,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     // One list naming both a billing component and a component outside billing.
     saveComponentSpec(comp('billing_orch', 'billing', 'Orchestrator', { dependsOn: ['billing_adapter', 'shared_portal'] }));
 
-    externalizeSubsystem('billing', 'packages/billing');
+    externalizeSubsystem('billing', 'packages/billing', 'project');
 
     expect(stored(fam.childDir, 'billing/billing_orch/.index.yaml').dependsOn).toEqual(['billing_adapter', 'top::shared_portal']);
     expect(callTargets(stored(fam.childDir, 'billing/billing_orch/.implementation.yaml'))).toEqual(['billing_adapter']);
@@ -469,7 +469,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     // cannot be named from here (wairon never writes `super::`), so nothing moves.
     setProjectRoot(parDir);
     invalidateSpecCache();
-    expect(() => externalizeSubsystem('billing', 'packages/billing')).toThrow(/climb.*above this project.*doctor --fix/);
+    expect(() => externalizeSubsystem('billing', 'packages/billing', 'project')).toThrow(/climb.*above this project.*doctor --fix/);
     expect(fs.existsSync(path.join(parDir, 'packages', 'billing'))).toBe(false);
     expect(stored(parDir, 'billing/billing_adapter/.index.yaml').dependsOn).toEqual(['super::top_portal']);
   });
@@ -485,7 +485,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     saveComponentSpec(comp('billing_adapter', 'billing', 'Adapter', { dependsOn: ['top_portal'] }));
     invalidateSpecCache();
 
-    externalizeSubsystem('billing', 'packages/billing');
+    externalizeSubsystem('billing', 'packages/billing', 'project');
     const billingDir = path.join(top, 'packages', 'billing');
     expect(stored(billingDir, 'billing/billing_adapter/.index.yaml').dependsOn).toEqual(['top::top_portal']);
     expect(referenceFindings(verdict(top))).toEqual([]);

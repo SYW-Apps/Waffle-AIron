@@ -21,6 +21,7 @@ import { relink, compare, narrowing } from './member-reach.js';
 import * as hostMigrations from './adapters/migrations.js';
 import * as hostGit from './adapters/git.js';
 import { runWithProjectRoot } from '../utils/fs.js';
+import { parseMemberSource } from '../models/project.js';
 import type { ProjectBinding } from './projects.js';
 import type { MigrationFinding } from './migration.js';
 import type { GitPublish } from '../git/types.js';
@@ -384,6 +385,17 @@ export const ROOT_RENAME_REFUSED = "renaming a hosted family root's id is not su
  * root. A member rename is let through; reconcile re-keys it.
  */
 export function screen(dataDir: string, binding: ProjectBinding, tool: string, alias: string, path?: string): MembershipScreen {
+  // Stage 8: a hosted root reaches another only by a `hosted:` source — a `../` or git source is refused before dispatch.
+  if (path !== undefined && (tool === 'sdd_add_member' || tool === 'sdd_attach_member')) {
+    const storage = parseMemberSource(path).storage;
+    if (storage === 'path' || storage === 'git') {
+      return { refusal: `a member declared with a ${storage === 'git' ? 'git' : '`../` sibling'} source is refused on a hosted instance: hosted projects are isolated roots, and one reaches another only by a \`hosted:\` source`, reachChanges: [] };
+    }
+  }
+  // A member created in this project's own tree changes nobody's reach: a part is reached through this record, a project inherits it.
+  if (tool === 'sdd_add_member') return { reachChanges: [] };
+  // Stage 8: a demote retires the member's record — its specs are reached through this project's record alone.
+  if (tool === 'sdd_demote_member') return screenDemote(dataDir, binding, alias);
   // Step 1.
   if (tool === 'sdd_rename_project') {
     // Step 2.
@@ -403,6 +415,22 @@ export function screen(dataDir: string, binding: ProjectBinding, tool: string, a
   return { reachChanges: compare(users, world, null, after, incoming).filter((r) => !r.equal) };
 }
 
+/**
+ * Steps 5-8 for a demote (stage 8): the member's record retired — its parent
+ * link and its member-own settings gone, its specs reached through the bound
+ * project's chain alone. Lists whoever a member-own `no` denied (they gain
+ * access) and every token narrowed to the member alone (it loses its reach).
+ */
+function screenDemote(dataDir: string, binding: ProjectBinding, alias: string): MembershipScreen {
+  const declared = planMemberRecords(dataDir, binding.projectId)
+    .find((d) => d.record.parentProjectId === binding.projectId && d.qualifier.endsWith(`${SUBPROJECT_SEPARATOR}${alias}`) && d.action !== 'unreadable');
+  if (!declared || declared.action === 'register') return { reachChanges: [] };
+  const world = gatherPermissionWorld(dataDir);
+  const users = listUsers(dataDir);
+  const after = relink(world, [], [declared.record.id], [], []);
+  return { reachChanges: compare(users, world, declared.record.id, after, binding.projectId).filter((r) => !r.equal) };
+}
+
 /** The id an incoming member stands under before it has a record: never a record id (it carries the separator). */
 function standIn(parentId: string, alias: string, memberPath?: string): string {
   return `${parentId}${SUBPROJECT_SEPARATOR}${alias || memberPath || 'member'}`;
@@ -412,7 +440,7 @@ function standIn(parentId: string, alias: string, memberPath?: string): string {
 
 /** One membership change reconcile made, for the reach listing and the audit. */
 interface MembershipChange {
-  kind: 'registered' | 'returned' | 'relocated' | 'renamed' | 'departed';
+  kind: 'registered' | 'returned' | 'relocated' | 'renamed' | 'departed' | 'retired';
   id: string;
   previousId?: string;
   detail: Record<string, unknown>;
@@ -442,7 +470,12 @@ export function reconcile(dataDir: string, principal: Principal, projectId: stri
     registerMemberRecord(dataDir, { ...m.record, status: 'active', rootPath: '' });
     if (m.action !== 'rename') changes.push({ kind: kindOf[m.action as keyof typeof kindOf], id: m.record.id, detail: { parent: m.record.parentProjectId, memberPath: m.record.memberPath } });
   }
-  // Steps 15-16: a record whose member the family no longer declares is disabled, never deleted.
+  // Steps 15-16: a record whose member the family no longer declares as a project is disabled,
+  // never deleted — departed, or retired because its member is now a part of its parent (stage 8).
+  for (const m of declared.filter((d) => d.action === 'retire')) {
+    setProjectRecordStatus(dataDir, m.record.id, 'disabled');
+    changes.push({ kind: 'retired', id: m.record.id, detail: { parent: m.record.parentProjectId, memberPath: m.record.memberPath, reason: `part of ${m.record.parentProjectId}` } });
+  }
   for (const r of departedRecords(family, declared, changes)) {
     setProjectRecordStatus(dataDir, r.id, 'disabled');
     changes.push({ kind: 'departed', id: r.id, detail: { parent: r.parentProjectId, memberPath: r.memberPath } });
@@ -460,7 +493,7 @@ export function reconcile(dataDir: string, principal: Principal, projectId: stri
     returned: changes.filter((c) => c.kind === 'returned').map((c) => c.id),
     relocated: changes.filter((c) => c.kind === 'relocated').map((c) => c.id),
     renamed: changes.filter((c) => c.kind === 'renamed').map((c) => `${c.previousId}->${c.id}`),
-    departed: changes.filter((c) => c.kind === 'departed').map((c) => c.id),
+    departed: changes.filter((c) => c.kind === 'departed' || c.kind === 'retired').map((c) => c.id),
     reachChanges,
     ...(commit ? { commit } : {}),
   };
@@ -517,11 +550,12 @@ function departedRecords(family: HostedProjectRecord[], declared: PlannedMemberR
 /** Steps 17-19: the rows whose effective permission a membership change altered (a re-key is equal by construction). */
 function reachOf(users: Parameters<typeof compare>[0], world: PermissionWorld, changes: MembershipChange[]): ReachComparison[] {
   const links: ProjectParentLink[] = listChangedLinks(changes);
-  const departed = changes.filter((c) => c.kind === 'departed').map((c) => c.id);
+  const departed = changes.filter((c) => c.kind === 'departed' || c.kind === 'retired').map((c) => c.id);
   const after = relink(world, links, departed, [], []);
   return changes.filter((c) => c.kind !== 'renamed').flatMap((c) => {
     const before = c.kind === 'registered' || c.kind === 'returned' ? null : c.id;
-    const now = c.kind === 'departed' ? null : c.id;
+    // A retired record's specs are reached through its parent's record from now on (stage 8).
+    const now = c.kind === 'departed' ? null : c.kind === 'retired' ? String(c.detail.parent ?? '') || null : c.id;
     return compare(users, world, before, after, now).filter((r) => !r.equal).map((r) => ({ ...r, memberId: c.id }));
   });
 }

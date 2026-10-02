@@ -142,9 +142,15 @@ export {
   // spec_maintenance_portal updateMember (stage 8): an existing member's
   // declaration changed — doctor --fix's `path` → `source` rewrite.
   updateMember,
+  // spec_maintenance_portal promoteMember / demoteMember / advanceMember
+  // (stage 8): a part made a project in place and back, and a git member's
+  // pinned commit moved.
+  promoteMember,
+  demoteMember,
+  advanceMember,
 } from './provision.js';
 export type { InternalizeResult } from './provision.js';
-export type { MemberCreation } from './provision.js';
+export type { MemberCreation, MemberAdvance } from './provision.js';
 
 // The tree's content identity (approval_portal computeStateId — the snapshot
 // and archive stamps) and the bound project's OWN content identity

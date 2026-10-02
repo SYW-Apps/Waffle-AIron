@@ -112,16 +112,16 @@ function route(request: MigrationRequest, family: ProjectFamily, bound: string):
       // Step 17.
       return identity.planAliasRename(family, bound, request);
     case 'internalize':
-      // Step 19.
-      return boundary.planInternalize(family, bound, request);
+    case 'externalize':
+    case 'promote':
+    case 'demote':
+      // Step 19: a boundary or storage verb, through the boundary migration's one entry.
+      return boundary.plan(family, bound, request);
     case 'chaining':
       // Step 21: its own climb, from the caller's binding.
       return fromChaining(request, chaining.plan());
-    case 'externalize':
-      // Step 23.
-      return boundary.planExternalize(family, bound, request);
     default:
-      throw new Error(`there is no "${request.verb}" family migration: attach | detach | adopt | rename | rename-alias | internalize | externalize | chaining`);
+      throw new Error(`there is no "${request.verb}" family migration: attach | detach | adopt | rename | rename-alias | internalize | externalize | promote | demote | chaining`);
   }
 }
 
@@ -168,7 +168,7 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
   const family = runWithProjectRoot(plan.familyRoot, () => core.projectFamily());
   // Step 4: every family project, a project the verb brings in (attach, adopt), and every
   // producer a family project names by a path inside the family root (a pin reads it).
-  const projects = [...family.nodes.map((n) => n.directory), ...broughtIn(plan, family), ...pathProducers(plan, family)];
+  const projects = [...family.nodes.map((n) => n.directory), ...broughtIn(plan, family), ...pathProducers(plan, family), ...partDirectories(plan, family)];
   const rehearsal = transaction.rehearse(scopeOf(plan, projects));
   // Steps 5-14: the verb's own writes on the copy; a writer's refusal ends the region.
   try {
@@ -260,6 +260,20 @@ function pathProducers(plan: MigrationPlan, family: ProjectFamily): string[] {
   return family.nodes.flatMap((n) => n.externals.filter((e) => e.sourceKind === 'path' && e.directory && inside(e.directory)).map((e) => e.directory!));
 }
 
+/**
+ * Step 4 (stage 8): each family project's parts stored inside the family root
+ * — the project's own subsystems in another folder, which a promote, demote,
+ * internalize or externalize writes. A folder an externalize creates needs no
+ * copy: the rehearsal finds every .wai tree it holds.
+ */
+function partDirectories(plan: MigrationPlan, family: ProjectFamily): string[] {
+  const inside = (dir: string): boolean => {
+    const rel = path.relative(plan.familyRoot, dir);
+    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  };
+  return family.nodes.flatMap((n) => n.parts.filter((p) => p.directory !== undefined && inside(p.directory)).map((p) => p.directory!));
+}
+
 /** Step 4: the roots a verb writes that the family graph does not hold yet — a project attached or adopted. */
 function broughtIn(plan: MigrationPlan, family: ProjectFamily): string[] {
   const known = new Set(family.nodes.map((n) => path.resolve(n.directory)));
@@ -282,6 +296,8 @@ function writeVerb(plan: MigrationPlan, rehearsal: Rehearsal): void {
       return;
     case 'internalize':
     case 'externalize':
+    case 'promote':
+    case 'demote':
       // Step 11.
       boundary.write(plan, rehearsal);
       return;

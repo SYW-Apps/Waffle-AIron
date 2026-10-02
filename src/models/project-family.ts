@@ -113,8 +113,8 @@ export interface ResolvedExternal {
   alias: string;
   /** The producer id the declaration names (its `project`, else the alias). */
   project: string;
-  /** family | path | hosted | unresolved */
-  sourceKind: 'family' | 'path' | 'hosted' | 'unresolved';
+  /** family | path | git | hosted | unresolved */
+  sourceKind: 'family' | 'path' | 'git' | 'hosted' | 'unresolved';
   /** For a family producer: parent | sibling | member | family. */
   relation?: 'parent' | 'sibling' | 'member' | 'family';
   /** The producer's key in the family graph, for a family producer. */
@@ -127,6 +127,14 @@ export interface ResolvedExternal {
   audience: string;
   /** Why the external is unresolved or unusable. */
   problem?: string;
+  /**
+   * external | member (stage 8): declared under `externals`, or a referenced
+   * project member — declared under `members` with a `../`, git or hosted
+   * source, its content a project's — bound and judged exactly as an external.
+   */
+  role: 'external' | 'member';
+  /** git: the commit the directory holds — a member's pinned commit, an external's ref head when resolved. */
+  commit?: string;
 }
 
 /** project_node — one project root of the family the scan read, keyed by its in-memory key. */
