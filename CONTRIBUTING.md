@@ -89,10 +89,10 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 277 files / 4615 tests |
+| `npx vitest run` | 280 files / 4633 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
 | `npm run build` | clean |
-| `node dist/cli/index.js validate` | 0 errors, 0 warnings, 0 notices; register 319 findings / 424 units |
+| `node dist/cli/index.js validate` | 0 errors, 0 warnings, 0 notices; register 318 findings / 423 units |
 | `node dist/cli/index.js validate --ci` | passes |
 
 The counts are a floor, not a target — they move as the suite grows, so update
@@ -144,6 +144,11 @@ Inserting a step into an L5 narrative renumbers every later step, and
 wrong before, and the failure is quiet: a branch keeps a plausible number that
 now points one step past where it meant to land, and nothing but a careful
 re-read catches it.
+
+Only STORED jumps relocate. A jump the delta itself writes — on a step it
+inserts, appends or edits — is read in the numbering the whole delta leaves
+behind, after all of its inserts and deletes, so write it as the final
+narrative will number it.
 
 Every jump-by-number field has a symbolic twin resolved at write time —
 `label` on the step, and `onTrueLabel` / `onFalseLabel` / `toLabel` / `endLabel`
