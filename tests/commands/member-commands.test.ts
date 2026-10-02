@@ -70,7 +70,7 @@ describe('wairon member add|move|internalize', () => {
     const output = captureOutput();
     await runMemberAdd('billing', 'services/billing', { description: 'Invoices' });
 
-    expect(membersOf(root)).toEqual({ billing: { path: 'services/billing', description: 'Invoices' } });
+    expect(membersOf(root)).toEqual({ billing: { source: 'services/billing', description: 'Invoices' } });
     expect(fs.existsSync(path.join(root, 'services', 'billing', '.wai', 'project.yaml'))).toBe(true);
     expect((readYamlFile(path.join(root, 'services', 'billing', '.wai', 'project.yaml')) as { id?: string }).id).toBe('billing');
     invalidateSpecCache();
@@ -116,7 +116,7 @@ describe('wairon member add|move|internalize', () => {
     fs.mkdirSync(path.join(root, 'services', 'claims', '.wai', 'specs'), { recursive: true });
     invalidateSpecCache();
     await runMemberMove('claims', 'modules/claims');
-    expect(membersOf(root)).toEqual({ billing: 'modules/billing', claims: { path: 'modules/claims', description: 'Claims' } });
+    expect(membersOf(root)).toEqual({ billing: 'modules/billing', claims: { source: 'modules/claims', description: 'Claims' } });
     expect(fs.existsSync(path.join(root, '.wai', 'specs', 'claims', '.index.yaml'))).toBe(false);
   });
 

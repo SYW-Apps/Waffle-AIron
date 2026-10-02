@@ -26,7 +26,7 @@ import { describeApprover } from '../models/lock.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
 import { computeGateStateId, familyApprovals, type ValidationResult } from '../core/validation.js';
-import { designOnly, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
+import { designOnly, memberPinOf, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
 
 // ---------------------------------------------------------------------------
 // cli_lock_adapter — the core-side half of `wairon lock` (lockTree, realized
@@ -221,7 +221,13 @@ function summarize(gate: ValidationResult, members: ProjectApproval[]): void {
   logger.info(codeLine(gate.analysis));
   // A member's own edits never show up in this project's spec diff: what this
   // project reviews is the member's APPROVAL — its state, and whether its pin moved.
+  // A part's specs ARE in the diff above (stage 8); a part stored elsewhere is
+  // named with the commit being approved.
   for (const m of members) {
+    if (m.as === 'part') {
+      if (m.commit !== undefined) logger.info(`  part ${m.alias ?? m.key}: approved at commit ${m.commit}`);
+      continue;
+    }
     const pin = m.pinned === 'moved' ? ' — its pin moved since the last approval' : '';
     logger.info(`  member ${m.alias ?? m.key}: ${m.state}${m.upgraded ? ' (pre-stage-5 lock, re-lock once)' : ''}${pin}`);
   }
@@ -247,7 +253,8 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
 
   // Steps 4-6: the configuration, and a parent that requires approved members.
   const config = loadProjectConfig();
-  const unapproved = members.filter((m) => m.state !== 'approved');
+  // A PROJECT member only: a part has no approval of its own — this lock is its approval (stage 8).
+  const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
   if (config?.composition?.requireApprovedMembers && unapproved.length > 0) {
     throw new LockRefusedError(
       `composition.requireApprovedMembers: direct member(s) not approved — ${unapproved.map(describeMemberState).join(', ')}. `
@@ -342,16 +349,10 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   return record;
 }
 
-/** Each direct member's alias → {project, subject, state} as it stands now. */
+/** Each direct member's alias → a project member's {as: project, project, subject, state} or a part's {as: part, contentDigest, commit, state} as it stands now. */
 function memberPins(members: ProjectApproval[]): Record<string, MemberPin> {
   const pins: Record<string, MemberPin> = {};
-  for (const m of members) {
-    pins[m.alias ?? m.key] = {
-      ...(m.projectId !== undefined ? { project: m.projectId } : {}),
-      ...(m.subject !== undefined ? { subject: m.subject } : {}),
-      state: m.state,
-    };
-  }
+  for (const m of members) pins[m.alias ?? m.key] = memberPinOf(m);
   return pins;
 }
 

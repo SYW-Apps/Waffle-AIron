@@ -30,8 +30,14 @@ export interface MemberPin {
   project?: string;
   /** The member's recorded gate identity, `<algorithm>:<digest>`; absent when it had no lock. */
   subject?: string;
-  /** approved | drifted | never, as it stood when the parent locked. Recorded, never hashed. */
+  /** approved | drifted | never, as it stood when the parent locked (a part records approved). Recorded, never hashed. */
   state: ProjectApprovalState;
+  /** part | project, as the member's content made it when the parent locked; absent in a record written before stage 8. */
+  as?: 'part' | 'project';
+  /** The commit the member was read at when the parent locked. Provenance only: never read by a verdict. */
+  commit?: string;
+  /** Part only: its content digest (ScannedPart.contentDigest) when the parent locked. */
+  contentDigest?: string;
 }
 
 export interface LockRecord {

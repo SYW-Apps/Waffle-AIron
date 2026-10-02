@@ -30,7 +30,7 @@ import { canonicalize } from '../../utils/canonical-json.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
+import type { DeclaredMember, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
 import type { CarriedFindingEntry, FindingParts } from './types.js';
 import {
   ArchProfile,
@@ -248,6 +248,8 @@ export interface BuildContextOptions {
   surfaceSnapshots?: SurfaceSnapshot[];
   /** The validated root's identity against its lock (see RuleContext.projectIdentity); absent when none was resolved. */
   projectIdentity?: ProjectIdentity;
+  /** The bound root's declared members (see RuleContext.declaredMembers); absent when its configuration is unreadable. */
+  declaredMembers?: DeclaredMember[];
   /** The resolved export tables (see RuleContext.exportTables); absent when none were gathered. */
   exportTables?: import('../../models/exports.js').ResolvedExportTable[];
   /** The project graph of the run's scan (see RuleContext.projectFamily); absent on a candidate run. */
@@ -999,6 +1001,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     variants: opts.variants ?? [],
     surfaceSnapshots,
     ...(opts.projectIdentity ? { projectIdentity: opts.projectIdentity } : {}),
+    ...(opts.declaredMembers ? { declaredMembers: opts.declaredMembers } : {}),
     ...(opts.exportTables ? { exportTables: opts.exportTables } : {}),
     ...(opts.projectFamily ? { projectFamily: opts.projectFamily } : {}),
     ...(opts.exportUsages ? { exportUsages: opts.exportUsages } : {}),

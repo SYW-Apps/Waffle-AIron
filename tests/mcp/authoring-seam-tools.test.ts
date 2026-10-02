@@ -257,14 +257,14 @@ describe('the member tools — sdd_add_member, sdd_move_member, sdd_internalize_
     const added = await call('sdd_add_member', { alias: 'billing', path: 'packages/billing', description: 'Invoices' });
     expect(added.isError ?? false, textOf(added)).toBe(false);
     expect(textOf(added)).toContain('Added member "billing" at packages/billing');
-    expect(members(root)).toEqual({ billing: { path: 'packages/billing', description: 'Invoices' } });
+    expect(members(root)).toEqual({ billing: { source: 'packages/billing', description: 'Invoices' } });
     expect(fs.existsSync(path.join(root, 'packages', 'billing', '.wai', 'project.yaml'))).toBe(true);
     invalidateSpecCache();
     expect(loadSubsystemSpec('billing')).toBeNull();
 
     const moved = await call('sdd_move_member', { alias: 'billing', newPath: 'services/billing' });
     expect(moved.isError ?? false, textOf(moved)).toBe(false);
-    expect(members(root)).toEqual({ billing: { path: 'services/billing', description: 'Invoices' } });
+    expect(members(root)).toEqual({ billing: { source: 'services/billing', description: 'Invoices' } });
     expect(fs.existsSync(path.join(root, 'services', 'billing', '.wai', 'project.yaml'))).toBe(true);
 
     const bad = await call('sdd_add_member', { alias: 'Bad Alias', path: 'x' });

@@ -21,7 +21,7 @@ import {
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { CarriedDebtKind, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
+import type { CarriedDebtKind, DeclaredMember, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
 import type { ExportUsage, ResolvedExportTable } from '../../models/exports.js';
@@ -433,6 +433,13 @@ export interface RuleContext {
    */
   projectIdentity?: ProjectIdentity;
   /**
+   * The bound root's declared members (project_config.declaredMembers), read
+   * by the validator from its configuration — so the member-declarations rule
+   * names a deprecated long-form `path` without I/O (stage 8). Absent when the
+   * root has no readable configuration, and on a candidate run.
+   */
+  declaredMembers?: DeclaredMember[];
+  /**
    * The resolved export tables — one per loaded subsystem, then the bound
    * root's L0 table, then each member project's L0 table — gathered by the validator through the core adapter, so the
    * export-tables rule judges the resolver's problems without resolving
@@ -701,5 +708,14 @@ export interface SddRule {
   judges?: RuleJudgement;
   /** Every issue code this rule can emit, with default severity and summary. */
   codes: RuleCode[];
+  /**
+   * Stage 8: whether the rule's verdict needs the whole system's specs —
+   * reachability and unused detection, topic pairing, cycles across
+   * subsystems, hydration. Such a rule is skipped (and named in
+   * PART_JUDGED_ALONE) when a part is judged alone against its pinned parent
+   * excerpt. Absent means false: a rule that judges what it is handed runs
+   * everywhere.
+   */
+  needsWholeTree?: boolean;
   check(ctx: RuleContext): void;
 }

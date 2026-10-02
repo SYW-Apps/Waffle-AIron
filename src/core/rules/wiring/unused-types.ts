@@ -9,6 +9,8 @@ import { fieldTypeRefs, methodTypeRefs, typeMatchesRef } from '../../../models/i
  */
 export const unusedTypesRule: SddRule = {
   name: 'unused-types',
+  // Stage 8: its verdict needs the whole system's specs, so a part judged alone skips it.
+  needsWholeTree: true,
   judges: 'design',
   description:
     'Flags types no field of any type, no interface method signature and no other type\'s method signature references. References are matched through the type-reference grammar (generic arguments, collections, qualified ids), and the declaring type\'s own generic parameters are left out — a type parameter is not a reference to a type. A type named only by its OWN methods stays unused, the way a function that only calls itself is.',

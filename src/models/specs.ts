@@ -1554,14 +1554,64 @@ export const ExternalLockEntrySchema = z.object({
   snapshot: z.string(),
   digest: z.string(),
   used: z.record(z.record(z.string())).default({}),
+  /** The producer's commit at pin time (stage 8): provenance, never compared by a verdict. */
+  commit: z.string().optional(),
+  /** external | member | parent (stage 8); absent reads as external. */
+  role: z.string().optional(),
 });
 export type ExternalLockEntry = z.infer<typeof ExternalLockEntrySchema>;
 
-/** externals_lock — the content of .wai/externals.lock.yaml: one entry per pinned alias. */
+/**
+ * externals_lock — the content of .wai/externals.lock.yaml: one entry per
+ * pinned producer, and — in a non-contained part's lock (stage 8) — its
+ * parent, whose snapshot is a ParentExcerpt.
+ */
 export const ExternalsLockSchema = z.object({
   externals: z.record(ExternalLockEntrySchema).default({}),
+  parent: ExternalLockEntrySchema.optional(),
 });
 export type ExternalsLock = z.infer<typeof ExternalsLockSchema>;
+
+/**
+ * parent_excerpt — the pinned slice of a parent that a part opened alone is
+ * judged against (stage 8): the parent's specs the part's files reference,
+ * verbatim and canonical, closed over what judging them needs, plus the
+ * governing configuration the parent judges its parts under. Stored in the
+ * part's .wai/externals/<parent id>.yaml and named by its lock's `parent`.
+ */
+export const ParentExcerptSchema = z.object({
+  /** The parent's project id at pin time; must equal the part's PartOf.project. */
+  project: z.string(),
+  /** The commit of the work tree holding the parent at pin time — provenance only. */
+  commit: z.string().optional(),
+  /** The parent's governing projectType. */
+  projectType: z.string().optional(),
+  /** The parent's rule configuration, as its configuration records it. */
+  rules: z.record(z.unknown()).default({}),
+  /** The parent's pack selections as its configuration records them. */
+  packs: z.array(z.union([z.string(), z.record(z.unknown())])).default([]),
+  /** The parent's spec documents the part references, and the closure judging them needs (its L0 included). */
+  specs: z.array(z.record(z.unknown())).default([]),
+  /** sha256:… over the canonical excerpt without its commit. */
+  digest: z.string(),
+});
+export type ParentExcerpt = z.infer<typeof ParentExcerptSchema>;
+
+/**
+ * pinned_parent — a part's parent as the part's own gate judges against it
+ * (stage 8): the lock's parent entry and the excerpt it names, read from the
+ * part's own files and nothing else.
+ */
+export interface PinnedParent {
+  /** The parent's id: the part's PartOf.project. */
+  project: string;
+  /** The lock's parent entry; absent when the part was never pinned. */
+  entry?: ExternalLockEntry;
+  /** The excerpt the entry names; absent when unpinned, or the file is missing or malformed. */
+  excerpt?: ParentExcerpt;
+  /** Why there is nothing to judge against. */
+  problem?: string;
+}
 
 /**
  * pinned_external — one declared external as the owner's gate judges against

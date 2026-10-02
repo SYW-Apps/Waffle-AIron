@@ -229,7 +229,7 @@ describe('stage 4 — the positional migration', () => {
     expect(firstPin).toBeGreaterThan(0);
     expect(rel.slice(firstPin).every((w) => /externals(\/|\.lock)/.test(w))).toBe(true);
     // The named imports, where each consumer declares its producer.
-    expect(configOf(f.top).members).toMatchObject({ shared: { path: 'shared', use: ['index-value'] } });
+    expect(configOf(f.top).members).toMatchObject({ shared: { source: 'shared', use: ['index-value'] } });
     expect(configOf(f.app).externals).toEqual({ shared: { use: ['waffler-error'] }, ui: { use: ['banner-style'] } });
     // ui exports what app imports; app's pin of ui carries it.
     const uiL0 = yaml.load(fs.readFileSync(path.join(f.ui, '.wai', 'specs', '.index.yaml'), 'utf8')) as { publicInterfaces: { typeDef?: string }[] };

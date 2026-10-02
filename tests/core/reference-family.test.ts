@@ -189,7 +189,7 @@ describe('reference family: the loader without position', () => {
     expect(moveMountToMembers('shared')).toBe(true);
     expect(fs.existsSync(mountFile)).toBe(false);
     const config = yaml.load(fs.readFileSync(path.join(family.top, '.wai', 'project.yaml'), 'utf8')) as { members: unknown };
-    expect(config.members).toEqual({ core: 'core', shared: { path: 'shared', description: 'The vocabulary every project speaks' } });
+    expect(config.members).toEqual({ core: 'core', shared: { source: 'shared', description: 'The vocabulary every project speaks' } });
     bind(family.top);
     const shared = projectFamilyGraph().nodes.find((n) => n.namespace === 'shared')!;
     expect(shared.mountForm).toBe('members');

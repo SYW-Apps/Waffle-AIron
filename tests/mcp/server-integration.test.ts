@@ -296,12 +296,12 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
       alias: 'ext', path: 'packages/ext', description: 'external from birth',
     } }));
     expect(fs.existsSync(path.join(projDir, 'packages', 'ext', '.wai', 'specs', '.index.yaml'))).toBe(true);
-    expect(members()).toEqual({ path: 'packages/ext', description: 'external from birth' });
+    expect(members()).toEqual({ source: 'packages/ext', description: 'external from birth' });
 
     // sdd_move_member relocates it.
     unwrapText(await client.callTool({ name: 'sdd_move_member', arguments: { alias: 'ext', newPath: 'services/ext' } }));
     expect(fs.existsSync(path.join(projDir, 'packages', 'ext'))).toBe(false);
     expect(fs.existsSync(path.join(projDir, 'services', 'ext', '.wai', 'specs', '.index.yaml'))).toBe(true);
-    expect(members()).toEqual({ path: 'services/ext', description: 'external from birth' });
+    expect(members()).toEqual({ source: 'services/ext', description: 'external from birth' });
   }, 120_000);
 });

@@ -19,8 +19,11 @@ import {
   type ExternalSource,
   type MemberDeclaration,
   memberDeclarationOf,
+  memberLocationOf,
+  parseMemberSource,
   effectiveProjectId,
   withPack,
+  type PartOf,
 } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
@@ -66,6 +69,8 @@ export interface ProjectConfigRepository {
   declareExternal(alias: string, declaration: ExternalDeclaration): boolean;
   declareMember(alias: string, declaration: MemberDeclaration): boolean;
   setMemberPath(alias: string, path: string): boolean;
+  updateMember(alias: string, changes: MemberDeclaration): boolean;
+  setPartOf(partOf: PartOf | null): boolean;
   removeMember(alias: string): boolean;
   importNames(alias: string, names: string[]): boolean;
   renameId(from: string, to: string): boolean;
@@ -177,7 +182,9 @@ function storeOver(adapter: ProjectConfigFsAdapter, root: string): ProjectConfig
       if (!checked.success) {
         throw new WaironError(`Refusing to write an invalid .wai/project.yaml at ${root}: ${checked.error.message}`);
       }
-      adapter.writeDocument(overlayKnownFields(ProjectConfigSchema, config, currentDocument()));
+      // A part's configuration is its schema version and partOf alone (stage 8).
+      const document = config.partOf !== undefined ? { schemaVersion: config.schemaVersion, partOf: config.partOf } : config;
+      adapter.writeDocument(overlayKnownFields(ProjectConfigSchema, document, currentDocument()));
     },
     exists() {
       return adapter.documentExists();
@@ -691,9 +698,23 @@ function editDocumentText(text: string, document: PlainValue, root: string): str
 }
 
 /** Parse the document against the schema, defaults applied, with the loader's error on failure. */
+/** The stand-in timestamp a part's configuration (which records none) is read with. */
+const PART_EPOCH = '1970-01-01T00:00:00.000Z';
+
+/**
+ * A non-contained part's configuration (stage 8) holds its partOf and nothing
+ * a project declares — no name, no timestamps. It is read with an empty name
+ * (so it answers to no id) and stand-in timestamps, which are never written:
+ * the store writes a part's configuration as its partOf alone.
+ */
+function asReadable(document: ProjectConfigDocument | null): ProjectConfigDocument | null {
+  if (!isPlainObject(document) || document.partOf === undefined) return document;
+  return { name: '', createdAt: PART_EPOCH, updatedAt: PART_EPOCH, ...document };
+}
+
 function parseConfig(document: ProjectConfigDocument | null, root: string): ProjectConfig {
   try {
-    return ProjectConfigSchema.parse(document);
+    return ProjectConfigSchema.parse(asReadable(document));
   } catch (e: unknown) {
     throw new WaironError(
       `Invalid .wai/project.yaml: ${e instanceof Error ? e.message : String(e)}\n(project root: ${root})`,
@@ -954,7 +975,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       if (!EXTERNAL_ALIAS_RE.test(alias)) {
         throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: an alias must fit [a-z0-9-_]+.`);
       }
-      assertMemberPath(alias, declaration.path, root);
+      assertMemberSource(alias, memberLocationOf(declaration), root);
       const config = current();
       if (config.externals?.[alias] !== undefined) {
         throw new WaironError(
@@ -987,15 +1008,51 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       return true;
     },
     setMemberPath(alias, memberPath) {
-      assertMemberPath(alias, memberPath, root);
+      assertMemberSource(alias, memberPath, root);
       const config = current();
       const existing = config.members?.[alias];
       if (existing === undefined) {
         throw new WaironError(`Refusing to move the member "${alias}" at ${root}: \`members\` declares no "${alias}".`);
       }
-      if (memberDeclarationOf(existing).path === memberPath) return false;
-      const next = typeof existing === 'string' ? memberPath : { ...existing, path: memberPath };
+      if (memberLocationOf(existing) === memberPath) return false;
+      const next = memberValue({ ...memberDeclarationOf(existing), path: undefined, source: memberPath });
       save({ ...config, members: { ...config.members, [alias]: next } });
+      return true;
+    },
+    updateMember(alias, changes) {
+      const config = current();
+      const existing = config.members?.[alias];
+      if (existing === undefined) {
+        throw new WaironError(`Refusing to update the member "${alias}" at ${root}: \`members\` declares no "${alias}".`);
+      }
+      const merged = mergedMember(memberDeclarationOf(existing), changes);
+      assertMemberSource(alias, merged.source, root);
+      assertMemberAs(alias, merged.as, root);
+      const written = memberValue(merged);
+      if (sameValue(existing as PlainValue, written as PlainValue)) return false;
+      save({ ...config, members: { ...config.members, [alias]: written } });
+      return true;
+    },
+    setPartOf(partOf) {
+      // None yet reads as empty: a fresh part's configuration is created.
+      const config = store.read();
+      if (partOf !== null) {
+        const declared = PROJECT_FIELDS.filter((field) => store.declares(field));
+        if (declared.length > 0) {
+          throw new WaironError(
+            `Refusing to make the configuration at ${root} a part's: it declares ${declared.map((f) => `\`${f}\``).join(', ')}, which only a project declares. `
+            + 'A project is never quietly turned into a part — `wairon member demote` moves those fields first.',
+          );
+        }
+      }
+      if (sameValue((config?.partOf ?? null) as PlainValue, partOf as PlainValue)) return false;
+      if (partOf === null) {
+        if (!config) return false;
+        const { partOf: _dropped, ...rest } = config;
+        store.write(rest as ProjectConfig);
+        return true;
+      }
+      store.write(partConfig(partOf, config));
       return true;
     },
     removeMember(alias) {
@@ -1088,14 +1145,53 @@ function heldBinding(existing: unknown, declaration: { use?: unknown }): unknown
   return Object.fromEntries(Object.entries(existing).filter(([key]) => key !== 'use'));
 }
 
-/** A member's value as it is written: the shorthand when it carries only a path, else the long form. */
+/**
+ * A member's value as it is written (stage 8): the shorthand — its source alone
+ * — when it carries nothing else, else the long form with `source`. The
+ * deprecated `path` key is never written: it is read as the source.
+ */
 function memberValue(declaration: MemberDeclaration): string | MemberDeclaration {
-  if (declaration.description === undefined && declaration.use === undefined) return declaration.path;
+  const source = memberLocationOf(declaration) ?? '';
+  const { as, ref, dir, description, use } = declaration;
+  if (as === undefined && ref === undefined && dir === undefined && description === undefined && use === undefined) return source;
   return {
-    path: declaration.path,
-    ...(declaration.description !== undefined ? { description: declaration.description } : {}),
-    ...(declaration.use !== undefined ? { use: declaration.use } : {}),
+    source,
+    ...(as !== undefined ? { as } : {}),
+    ...(ref !== undefined ? { ref } : {}),
+    ...(dir !== undefined ? { dir } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(use !== undefined ? { use } : {}),
   };
+}
+
+/**
+ * A member's declaration with changes merged in (stage 8): a deprecated
+ * `path` becomes `source`; every field the changes name is set, an empty `as`
+ * or `use` drops it, and every other field is kept.
+ */
+function mergedMember(held: MemberDeclaration, changes: MemberDeclaration): MemberDeclaration {
+  const merged: MemberDeclaration = { ...held, path: undefined, source: memberLocationOf(held) };
+  for (const [field, value] of Object.entries(changes) as [keyof MemberDeclaration, unknown][]) {
+    if (value === undefined) continue;
+    (merged as Record<string, unknown>)[field === 'path' ? 'source' : field] = value;
+  }
+  if (merged.as === '') delete merged.as;
+  if (Array.isArray(merged.use) && merged.use.length === 0) delete merged.use;
+  return merged;
+}
+
+/** Refuse an `as` other than part or project, before anything is written. */
+function assertMemberAs(alias: string, as: string | undefined, root: string): void {
+  if (as === undefined || as === 'part' || as === 'project') return;
+  throw new WaironError(`Refusing to update the member "${alias}" at ${root}: \`as: ${as}\` — a member is a part or a project.`);
+}
+
+/** The fields only a project's configuration declares: a part's declares none of them (setPartOf). */
+const PROJECT_FIELDS = ['id', 'members', 'externals', 'composition', 'rules', 'extensions', 'targets'];
+
+/** A part's configuration: its schema version and partOf, nothing a project declares. */
+function partConfig(partOf: PartOf, held: ProjectConfig | null): ProjectConfig {
+  return parseConfig({ schemaVersion: held?.schemaVersion ?? '1.0.0', partOf }, '(part)');
 }
 
 /** Refuse a `use` entry that is neither `*` nor a public name, before anything is read. */
@@ -1119,16 +1215,21 @@ function heldImports(config: ProjectConfig, alias: string, root: string): string
 function withImports(config: ProjectConfig, alias: string, use: string[]): ProjectConfig {
   const external = config.externals?.[alias];
   if (external !== undefined) return { ...config, externals: { ...config.externals, [alias]: { ...external, use } } };
-  return { ...config, members: { ...config.members, [alias]: { ...memberDeclarationOf(config.members![alias]), use } } };
+  return { ...config, members: { ...config.members, [alias]: memberValue({ ...memberDeclarationOf(config.members![alias]), use }) } };
 }
 
-/** Refuse an empty or absolute member path before anything is read. */
-function assertMemberPath(alias: string, memberPath: string, root: string): void {
-  if (typeof memberPath !== 'string' || memberPath.trim() === '') {
-    throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: its path is empty.`);
+/**
+ * Refuse a member source the one location grammar does not read — empty,
+ * absolute, with an inner `..`, or a git source without its full commit —
+ * before anything is read (stage 8).
+ */
+function assertMemberSource(alias: string, source: string | undefined, root: string): void {
+  if (typeof source !== 'string' || source.trim() === '') {
+    throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: its source is empty.`);
   }
-  if (path.isAbsolute(memberPath) || path.win32.isAbsolute(memberPath)) {
-    throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: "${memberPath}" is absolute, and a member path is relative to the project declaring it.`);
+  const parsed = parseMemberSource(source);
+  if (parsed.problem) {
+    throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: ${parsed.problem}.`);
   }
 }
 
@@ -1209,6 +1310,8 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     declareExternal(alias, declaration) { return registry.declareExternal(alias, declaration); },
     declareMember(alias, declaration) { return registry.declareMember(alias, declaration); },
     setMemberPath(alias, memberPath) { return registry.setMemberPath(alias, memberPath); },
+    updateMember(alias, changes) { return registry.updateMember(alias, changes); },
+    setPartOf(partOf) { return registry.setPartOf(partOf); },
     removeMember(alias) { return registry.removeMember(alias); },
     importNames(alias, names) { return registry.importNames(alias, names); },
     renameId(from, to) { return registry.renameId(from, to); },
@@ -1249,6 +1352,8 @@ export const projectConfigRepository: ProjectConfigRepository = {
   declareExternal(alias, declaration) { return bound().declareExternal(alias, declaration); },
   declareMember(alias, declaration) { return bound().declareMember(alias, declaration); },
   setMemberPath(alias, memberPath) { return bound().setMemberPath(alias, memberPath); },
+  updateMember(alias, changes) { return bound().updateMember(alias, changes); },
+  setPartOf(partOf) { return bound().setPartOf(partOf); },
   removeMember(alias) { return bound().removeMember(alias); },
   importNames(alias, names) { return bound().importNames(alias, names); },
   renameId(from, to) { return bound().renameId(from, to); },

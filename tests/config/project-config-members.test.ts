@@ -56,7 +56,7 @@ describe('project_config_registry.declareMember', () => {
     expect(keys.indexOf('members')).toBe(keys.indexOf('externals') + 1);
     expect(membersOf(root)).toEqual({
       billing: 'services/billing',
-      ledger: { path: 'services/ledger', description: 'The ledger of record' },
+      ledger: { source: 'services/ledger', description: 'The ledger of record' },
     });
     expect(repo.load()?.members).toEqual(membersOf(root));
   });
@@ -98,7 +98,7 @@ describe('project_config_registry.setMemberPath / removeMember', () => {
     expect(repo.setMemberPath('ledger', 'apps/ledger')).toBe(false);
     expect(membersOf(root)).toEqual({
       billing: 'apps/billing',
-      ledger: { path: 'apps/ledger', description: 'The ledger of record' },
+      ledger: { source: 'apps/ledger', description: 'The ledger of record' },
     });
     expect(() => repo.setMemberPath('crm', 'apps/crm')).toThrow(/declares no "crm"/);
     expect(() => repo.setMemberPath('billing', '')).toThrow(/empty/);

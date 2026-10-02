@@ -164,7 +164,7 @@ describe('stage 3 — the position migration over the reference family', () => {
     }
     // The member entry carries the mount's description; no L1 document is left.
     const members = (yaml.load(fs.readFileSync(path.join(f.top, '.wai', 'project.yaml'), 'utf8')) as { members: unknown }).members;
-    expect(members).toEqual({ core: 'core', shared: { path: 'shared', description: 'The vocabulary every project speaks' } });
+    expect(members).toEqual({ core: 'core', shared: { source: 'shared', description: 'The vocabulary every project speaks' } });
     expect(fs.existsSync(path.join(f.top, '.wai', 'specs', 'shared', '.index.yaml'))).toBe(false);
     // The rewritten text, on disk.
     const lowering = yaml.load(fs.readFileSync(path.join(f.transpiler, '.wai', 'specs', 'lowering', 'lowering-core', '.index.yaml'), 'utf8')) as { dependsOn: string[] };

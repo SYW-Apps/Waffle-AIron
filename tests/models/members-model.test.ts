@@ -10,15 +10,16 @@ const TS = '2026-01-01T00:00:00.000Z';
 const config = (extra: Record<string, unknown>) => ProjectConfigSchema.parse({ name: 'Waffly', createdAt: TS, updatedAt: TS, ...extra });
 
 describe('project_config.declaredMembers', () => {
-  it('reads the shorthand as { path } and the long form as written, in declaration order', () => {
+  it('reads the shorthand as its source and the long form as written, in declaration order', () => {
     expect(declaredMembers(config({
       members: {
         billing: 'services/billing',
         ledger: { path: 'services/ledger', description: 'The ledger of record' },
       },
     }))).toEqual([
-      { alias: 'billing', path: 'services/billing', use: [] },
-      { alias: 'ledger', path: 'services/ledger', description: 'The ledger of record', use: [] },
+      { alias: 'billing', path: 'services/billing', use: [], source: { path: 'services/billing' }, storage: 'contained', deprecatedPath: false },
+      // The pre-stage-8 long-form `path` is read as the source for one release, flagged.
+      { alias: 'ledger', path: 'services/ledger', description: 'The ledger of record', use: [], source: { path: 'services/ledger' }, storage: 'contained', deprecatedPath: true },
     ]);
   });
 
@@ -40,7 +41,7 @@ describe('project_config.declaredMembers', () => {
     expect(members.map((m) => m.alias)).toEqual(['Billing.Svc', 'empty', 'rooted', 'drive', 'shared']);
     expect(members.map((m) => m.problem ?? '')).toEqual([
       expect.stringContaining('breaks [a-z0-9-_]+'),
-      expect.stringContaining('empty path'),
+      expect.stringContaining('source is empty'),
       expect.stringContaining('absolute path'),
       expect.stringContaining('absolute path'),
       expect.stringContaining('also declared under `externals`'),

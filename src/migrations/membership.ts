@@ -10,6 +10,7 @@ import {
   admits,
   effectiveProjectId,
   memberDeclarationOf,
+  memberLocationOf,
   requiredPolicies,
   EXTERNAL_ALIAS_RE,
   type ExternalDeclaration,
@@ -122,7 +123,8 @@ export function planAttach(family: ProjectFamily, bound: string, request: Migrat
   const config = configAt(node.directory) ?? ({} as ProjectConfig);
   // A completed attach plans nothing: the alias already declares this directory.
   const held = config.members?.[alias];
-  if (dir !== null && held !== undefined && path.resolve(node.directory, memberDeclarationOf(held).path) === dir) return plan;
+  const heldPath = held !== undefined ? memberLocationOf(held) : undefined;
+  if (dir !== null && heldPath !== undefined && path.resolve(node.directory, heldPath) === dir) return plan;
   if (!EXTERNAL_ALIAS_RE.test(alias)) refuse(plan, 'alias-taken', bound, `"${alias}" is no alias: an alias must fit [a-z0-9-_]+`);
   else if (config.members?.[alias] !== undefined || config.externals?.[alias] !== undefined) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares "${alias}"`);
   if (dir !== null) {
@@ -225,7 +227,8 @@ export function planDetach(family: ProjectFamily, bound: string, request: Migrat
   if (plan.refusals.length > 0) return plan;
   // Step 6: the member's declaration.
   const boundDir = familyNode(family, bound)!.directory;
-  const declared = memberDeclarationOf(configAt(boundDir)?.members?.[alias] ?? posix(path.relative(boundDir, member.directory)));
+  const held = memberDeclarationOf(configAt(boundDir)?.members?.[alias] ?? posix(path.relative(boundDir, member.directory)));
+  const declared = { ...held, path: memberLocationOf(held) ?? posix(path.relative(boundDir, member.directory)) };
   // Step 7: the edits.
   detachEdits(plan, family, bound, member, alias, declared, consumers, outward);
   // Step 8.

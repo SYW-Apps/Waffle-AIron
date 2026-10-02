@@ -7,7 +7,11 @@ import {
   loadImplementationSpecs,
   loadTypeSpecs,
   graph,
+  scanAllSpecs,
 } from './specs.js';
+import * as path from 'path';
+import { getProjectRoot } from '../utils/fs.js';
+import type { ImplementationSpec } from '../models/specs.js';
 import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 
 // ---------------------------------------------------------------------------
@@ -63,14 +67,14 @@ function inIdentityOrder<T extends { id: string }>(specs: T[]): T[] {
 }
 
 /** The canonical digest of one tree reading, in identity order. */
-function digestTree(keep: (id: string) => boolean): StateId {
+function digestTree(keep: (id: string) => boolean, asStored: (impl: ImplementationSpec) => ImplementationSpec = (impl) => impl): StateId {
   const kind = <T extends { id: string }>(specs: T[]): T[] => inIdentityOrder(specs.filter((s) => keep(s.id)));
   const tree = {
     system: loadSystemSpec(),
     subsystems: kind(loadSubsystemSpecs()),
     components: kind(loadComponentSpecs()),
     interfaces: kind(loadInterfaceSpecs()),
-    implementations: kind(loadImplementationSpecs()),
+    implementations: kind(loadImplementationSpecs().map(asStored)),
     types: kind(loadTypeSpecs()),
   };
   const digest = crypto.createHash('sha256').update(canonicalize(tree)).digest('hex');
@@ -95,8 +99,37 @@ export function computeStateId(): StateId {
  * marker as computeStateId, so for a project with no members the two agree.
  */
 export function computeOwnStateId(): StateId {
-  const owners = graph().owners;
-  return digestTree((id) => (owners.get(id) ?? '') === '');
+  const family = graph();
+  const owners = family.owners;
+  // Stage 8: a part's specs are the project's own, digested as stored in the
+  // part — its implementations' file paths from the part's root — so moving
+  // the part's storage leaves the identity unchanged (storage-is-orthogonal).
+  const parts = family.nodes.find((n) => n.namespace === '')?.parts ?? [];
+  const files = scanAllSpecs().paths.implementation;
+  const root = getProjectRoot();
+  const asStored = (impl: ImplementationSpec): ImplementationSpec => {
+    const file = files[impl.id];
+    const part = file === undefined ? undefined : parts.find((p) => p.directory !== undefined && isInside(p.directory, file));
+    return part?.directory !== undefined ? fromPartRoot(impl, root, part.directory) : impl;
+  };
+  return digestTree((id) => (owners.get(id) ?? '') === '', asStored);
+}
+
+/** Whether a file lies inside a directory. */
+function isInside(dir: string, file: string): boolean {
+  const rel = path.relative(dir, file);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/** An implementation's file paths re-expressed from the project root to its part's root, as the part's file stores them. */
+function fromPartRoot(impl: ImplementationSpec, root: string, partDir: string): ImplementationSpec {
+  const from = (p: string): string => (path.isAbsolute(p) ? p : path.relative(partDir, path.resolve(root, p)).split(path.sep).join('/'));
+  return {
+    ...impl,
+    ...(impl.sourcePath ? { sourcePath: from(impl.sourcePath) } : {}),
+    ...(impl.simPath ? { simPath: from(impl.simPath) } : {}),
+    methods: impl.methods.map((m) => (m.sourcePath ? { ...m, sourcePath: from(m.sourcePath) } : m)),
+  };
 }
 
 /** True when two StateIds are the same identity: same algorithm, same digest. */

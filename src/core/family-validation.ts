@@ -520,6 +520,23 @@ export function projectApprovals(depth?: number): ProjectApproval[] {
       pinned: pinOf(parentRecord(parentKey), problem.id, undefined),
     });
   }
+  // Stage 8: each part of a selected project, answered as a part — approved
+  // exactly when its declaring project is (its approval is that project's),
+  // with its content digest and the commit it was read at.
+  for (const node of selected) {
+    const declaring = entries.find((e) => e.key === node.namespace);
+    for (const part of node.parts) {
+      entries.push({
+        key: node.namespace === '' ? part.alias : `${node.namespace}::${part.alias}`,
+        alias: part.alias,
+        parent: node.namespace,
+        as: 'part',
+        state: declaring?.state ?? 'never',
+        ...(part.contentDigest !== undefined ? { contentDigest: part.contentDigest } : {}),
+        ...(part.commit !== undefined ? { commit: part.commit } : {}),
+      });
+    }
+  }
   // Step 10: root first.
   return entries;
 }

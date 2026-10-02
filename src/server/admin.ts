@@ -6,7 +6,7 @@ import type { LockRecord, MemberPin } from '../core/lockfile.js';
 import type { StateId } from '../core/statehash.js';
 import type { ValidationResult } from '../core/validation.js';
 import type { ProjectConfig } from '../models/project.js';
-import { designOnly, type ApproverIdentity, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
+import { designOnly, memberPinOf, type ApproverIdentity, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
 import { effectiveProjectId } from '../models/project.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
@@ -399,7 +399,8 @@ function refuseDesignErrors(gate: ValidationResult): ValidationResult {
 
 /** composition.requireApprovedMembers: refuse, naming each direct member not approved. */
 function refuseUnapprovedMembers(required: boolean, members: ProjectApproval[]): void {
-  const unapproved = members.filter((m) => m.state !== 'approved');
+  // A PROJECT member only: a part's approval is this lock (stage 8).
+  const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
   if (!required || unapproved.length === 0) return;
   const named = unapproved.map((m) => `${m.alias ?? m.key} (${m.state}${
     m.upgraded ? ' — approved under the pre-stage-5 identity, re-lock it once' : ''})`);
@@ -446,16 +447,10 @@ function lockRecordOf(
   };
 }
 
-/** Each direct member's alias → {project, subject, state} as it stands now. */
+/** Each direct member's alias → a project member's {as: project, project, subject, state} or a part's {as: part, contentDigest, commit, state} (stage 8). */
 function memberPins(members: ProjectApproval[]): Record<string, MemberPin> {
   const pins: Record<string, MemberPin> = {};
-  for (const m of members) {
-    pins[m.alias ?? m.key] = {
-      ...(m.projectId !== undefined ? { project: m.projectId } : {}),
-      ...(m.subject !== undefined ? { subject: m.subject } : {}),
-      state: m.state,
-    };
-  }
+  for (const m of members) pins[m.alias ?? m.key] = memberPinOf(m);
   return pins;
 }
 

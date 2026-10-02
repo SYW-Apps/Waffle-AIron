@@ -91,7 +91,7 @@ describe('createMember', () => {
     createMember('billing', 'packages/billing', 'Invoices and payments');
 
     // Declared in the parent's project.yaml, long form (it carries a description).
-    expect(membersOf(rootDir)).toEqual({ billing: { path: 'packages/billing', description: 'Invoices and payments' } });
+    expect(membersOf(rootDir)).toEqual({ billing: { source: 'packages/billing', description: 'Invoices and payments' } });
     // Nothing was written into the parent's spec tree: a member carries no content there.
     expect(specFilesOf(rootDir)).toEqual(before);
     invalidateSpecCache();
@@ -183,7 +183,7 @@ describe('moveMember', () => {
 
     expect(fs.existsSync(path.join(rootDir, 'packages', 'billing'))).toBe(false);
     expect(fs.existsSync(path.join(rootDir, 'services', 'billing', '.wai', 'project.yaml'))).toBe(true);
-    expect(membersOf(rootDir)).toEqual({ billing: { path: 'services/billing', description: 'Invoices' } });
+    expect(membersOf(rootDir)).toEqual({ billing: { source: 'services/billing', description: 'Invoices' } });
   });
 
   it('moves a legacy L1 mount into `members` first, deleting the L1 document, then relocates it', () => {
@@ -197,7 +197,7 @@ describe('moveMember', () => {
     // wairon never rewrites the L1 form: the mount document is gone …
     expect(fs.existsSync(mountFile)).toBe(false);
     // … and the member is declared in `members`, at its new path, its description carried.
-    expect(membersOf(rootDir)).toEqual({ billing: { path: 'services/billing', description: 'subsystem billing' } });
+    expect(membersOf(rootDir)).toEqual({ billing: { source: 'services/billing', description: 'subsystem billing' } });
     expect(fs.existsSync(path.join(rootDir, 'services', 'billing', '.wai', 'project.yaml'))).toBe(true);
     invalidateSpecCache();
     expect(graph().nodes.find((n) => n.mountAlias === 'billing')?.mountForm).toBe('members');

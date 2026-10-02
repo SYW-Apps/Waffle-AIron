@@ -106,6 +106,11 @@ export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './s
 // each bound to its producer — a dispatch to the external-producers workflow.
 export { resolveDeclared as resolveExternals } from './external-producers.js';
 
+// spec_tree_portal excerptParent (stage 8): with a part's root bound, the
+// excerpt of its parent it can be judged against alone — a dispatch to the
+// part-context read.
+export { excerpt as excerptParent } from './part-context.js';
+
 // Project provisioning and the member writers
 // (spec_maintenance_portal provisionProject, createMember, moveMember,
 // externalizeSubsystem, internalizeMember; spec_tree_portal
@@ -134,6 +139,9 @@ export {
   // project_config_portal declareMember: an existing project declared as a
   // member under the containment guard (member attach / adopt).
   declareMember,
+  // spec_maintenance_portal updateMember (stage 8): an existing member's
+  // declaration changed — doctor --fix's `path` → `source` rewrite.
+  updateMember,
 } from './provision.js';
 export type { InternalizeResult } from './provision.js';
 export type { MemberCreation } from './provision.js';

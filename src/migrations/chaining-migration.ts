@@ -135,6 +135,8 @@ export interface ProjectMigration {
   droppedKeys: string[];
   /** The `use` entries apply adds (stage 4's positional step), in alias then name order. */
   imports: PlannedImport[];
+  /** Stage 8: the aliases of its members declared with the deprecated long-form `path`, rewritten to the one location key, in declaration order. */
+  locations: string[];
 }
 
 /** chaining_migration_plan — the migration of one family, planned and not yet applied. */
@@ -179,7 +181,7 @@ export function blocked(migration: ChainingMigrationPlan): boolean {
 
 function hasWrites(p: ProjectMigration): boolean {
   return p.idToWrite !== undefined || p.createsSystem || p.exports.length > 0 || p.externals.length > 0 || p.pins.length > 0
-    || p.members.length > 0 || p.supersededPins.length > 0 || p.imports.length > 0;
+    || p.members.length > 0 || p.supersededPins.length > 0 || p.imports.length > 0 || p.locations.length > 0;
 }
 
 // ── plan ────────────────────────────────────────────────────────────────────
@@ -257,7 +259,7 @@ function entryOf(ctx: Planning, node: ProjectNode): ProjectMigration {
   if (!entry) {
     entry = {
       project: node.namespace, directory: node.directory, exports: [], externals: [], pins: [], supersededPins: [],
-      createsSystem: false, members: [], droppedKeys: [], imports: [],
+      createsSystem: false, members: [], droppedKeys: [], imports: [], locations: [],
     };
     ctx.projects.set(node.namespace, entry);
   }
@@ -595,6 +597,12 @@ function mergePosition(ctx: Planning): void {
     if (!parent || !child) continue;
     entryOf(ctx, parent).members.push(member);
     for (const carried of member.carried) mergeCarried(entryOf(ctx, child), carried);
+  }
+  // Stage 8: each deprecated long-form `path`, rewritten in its declaring project.
+  for (const location of planned.locations) {
+    const slash = location.lastIndexOf('/');
+    const node = familyNode(ctx.family, location.slice(0, slash));
+    if (node) entryOf(ctx, node).locations.push(location.slice(slash + 1));
   }
   ctx.rewrites = planned.rewrites.map((r) => spelledWithPlannedAlias(ctx, r));
   // A project whose specs are rewritten is one apply writes into.

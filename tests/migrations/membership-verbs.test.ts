@@ -87,7 +87,7 @@ describe('stage 6 — the membership verbs', () => {
       'tools|id|id: tools (declared)',
       '|member|members: tools → tools (an existing project, kept as it is)',
     ]);
-    expect(configOf(f.top).members).toEqual({ ledger: 'ledger', billing: 'billing', tools: { path: 'tools', description: 'The build tools' } });
+    expect(configOf(f.top).members).toEqual({ ledger: 'ledger', billing: 'billing', tools: { source: 'tools', description: 'The build tools' } });
     expect(configOf(tools).id).toBe('tools');
     // Its own specs are byte-identical: attach keeps what it has (member add would scaffold).
     expect(Object.fromEntries(Object.entries(waiState(tools)).filter(([k]) => k.includes('/specs/')))).toEqual(specsBefore);

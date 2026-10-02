@@ -451,6 +451,14 @@ export type ProjectProfileSelection = z.infer<typeof ProjectProfileSelectionSche
 export const ExternalSourceSchema = z.object({
   path: z.string().optional(),
   hosted: z.string().optional(),
+  /** A git repository URL holding the producer (stage 8). */
+  git: z.string().optional(),
+  /** git only: the branch or tag a pin or an update follows; never read by a verdict. */
+  ref: z.string().optional(),
+  /** git members only: the full commit the member is pinned at (an external's commit is its pin's). */
+  commit: z.string().optional(),
+  /** git only: the producer's root inside the repository. */
+  dir: z.string().optional(),
 });
 export type ExternalSource = z.infer<typeof ExternalSourceSchema>;
 
@@ -483,20 +491,47 @@ export type ExternalDeclaration = z.infer<typeof ExternalDeclarationSchema>;
 
 /**
  * member_declaration — one `members` entry of project.yaml in its long form:
- * the value under an alias key. The shorthand `billing: services/billing` is
- * read as `{ path: services/billing }`. A member is a project this one
- * contains: it has no spec in this project's tree and is named only by its
- * alias. Plain strings: a malformed path is REPORTED, never unreadable.
+ * the value under an alias key. The usual form is the string shorthand, which
+ * is the member's `source` alone: `scheduler: services/scheduler` (contained),
+ * `admin: ../admin` (a sibling checkout), `payments:
+ * git@host:acme/payments.git#<commit>` (git at a commit), `marketplace:
+ * hosted:marketplace` (a hosted record). The long form `{ source, as?, ref?,
+ * dir?, use?, description? }` is only for what the shorthand cannot say. WHAT
+ * a member is follows from its content (stage 8): an id, an L0 or a lock make
+ * it a project, anything else a part; `as` only asserts it. The pre-stage-8
+ * long-form `path` is read for one release as `source` (DEPRECATED_MOUNT_FORM).
+ * Plain strings throughout: a malformed source is REPORTED, never unreadable.
  */
 export const MemberDeclarationSchema = z.object({
-  /** The member's root directory, relative to the declaring project's root. */
-  path: z.string(),
+  /** DEPRECATED (stage 8): the pre-stage-8 key for a contained member's root; read as `source`. */
+  path: z.string().optional(),
+  /** Where the member lives, in the one location grammar. */
+  source: z.string().optional(),
+  /** part | project — only an assertion of what the content makes it. */
+  as: z.string().optional(),
+  /** git only: the branch or tag `member update` follows. */
+  ref: z.string().optional(),
+  /** git only: the member's root inside the repository. */
+  dir: z.string().optional(),
   /** What the member is to this project, in the declaring project's words. */
   description: z.string().optional(),
-  /** The member's public names this project imports, exactly as an external's `use`. */
+  /** The member's public names this project imports, exactly as an external's `use` (project members only). */
   use: z.array(z.string()).optional(),
 });
 export type MemberDeclaration = z.infer<typeof MemberDeclarationSchema>;
+
+/**
+ * part_of — what a NON-CONTAINED part's own .wai/project.yaml says about it
+ * (stage 8): the project it is a part of, and where that project's root is
+ * when it sits on disk beside it. The only thing such a configuration declares.
+ */
+export const PartOfSchema = z.object({
+  /** The parent project's id, as its project.yaml declares it. */
+  project: z.string(),
+  /** The parent's root relative to this part's root, when known. Read only by `externals pin` at the part. */
+  path: z.string().optional(),
+});
+export type PartOf = z.infer<typeof PartOfSchema>;
 
 /** A value read as a plain string: absent is empty, anything else its text. */
 const plainString = z.preprocess((v) => (v === undefined || v === null ? '' : String(v)), z.string());
@@ -573,15 +608,27 @@ export const ProjectConfigSchema = z.object({
   externals: z.record(ExternalDeclarationSchema).optional(),
 
   /**
-   * The projects this project contains, keyed by alias: `billing:
-   * services/billing` (shorthand, the path relative to this root) or `ledger:
-   * { path: services/ledger, description: ... }` (long form). A member is not a
-   * subsystem of this project: it carries no content here, and this project
-   * reaches it only as `alias::name`, through the member's own L0 export table.
-   * Together with `externals` it is this project's alias table. The legacy L1
-   * `projectPath` mount still loads for one release (DEPRECATED_MOUNT_FORM).
+   * What this project is made of beyond its own specs folder, keyed by alias,
+   * each value one `source` in one grammar — `scheduler: services/scheduler`
+   * (contained), `admin: ../admin` (sibling), `payments:
+   * git@host:acme/payments.git#<commit>` (git), `marketplace:
+   * hosted:marketplace` (hosted) — or the long form (MemberDeclaration). What
+   * a member IS follows from its content (stage 8): one whose tree declares an
+   * id, holds an L0 or carries a lock is a PROJECT, reached only as
+   * `alias::name` through its L0 exports; anything else is a PART, whose
+   * subsystems are this project's own. Together with `externals` it is this
+   * project's alias table. The legacy L1 `projectPath` mount and the long-form
+   * `path` key still load for one release (DEPRECATED_MOUNT_FORM).
    */
   members: z.record(z.union([z.string(), MemberDeclarationSchema])).optional(),
+
+  /**
+   * Set only in a NON-CONTAINED part's configuration (stage 8: a sibling
+   * checkout or a git repository): the project it is a part of, so the part
+   * opened alone can say what it belongs to. A configuration that sets it
+   * declares nothing else a project declares; absent in every project's.
+   */
+  partOf: PartOfSchema.optional(),
 
   /**
    * What this project requires of the projects it contains when they are
@@ -1039,20 +1086,26 @@ export interface DeclaredExternal {
   sourcePath?: string;
   /** The declaration's `source.hosted`, as written: the producer's hosted record id (stage 7). */
   sourceHosted?: string;
+  /** The declaration's `source.git`, as written: the producer's repository URL (stage 8). */
+  sourceGit?: string;
+  /** The declaration's `source.ref`, as written: the branch or tag a pin follows. */
+  sourceRef?: string;
+  /** The declaration's `source.dir`, as written: the producer's root inside the repository. */
+  sourceDir?: string;
   /** Why the declaration cannot be used as written. */
   problem?: string;
   /** The declaration's `use` as written, deduplicated in first-seen order; empty when it imports nothing. */
   use: string[];
 }
 
-/** A source that names both or neither of `path` and `hosted` — exactly one of the two says where the producer is. */
+/** A source that names more or fewer than one of `path`, `hosted` and `git`, or an external's commit. */
 function sourceProblem(source: ExternalSource | undefined): string | undefined {
   if (source === undefined) return undefined;
-  const named = (source.path !== undefined ? 1 : 0) + (source.hosted !== undefined ? 1 : 0);
-  if (named === 1) return undefined;
-  return named === 0
-    ? 'its `source` names neither `path` nor `hosted` — give exactly one'
-    : 'its `source` names both `path` and `hosted` — give exactly one';
+  const named = [source.path, source.hosted, source.git].filter((v) => v !== undefined).length;
+  if (named === 0) return 'its `source` names none of `path`, `hosted` and `git` — give exactly one';
+  if (named > 1) return 'its `source` names more than one of `path`, `hosted` and `git` — give exactly one';
+  if (source.commit !== undefined) return "its `source` names a `commit` — an external's commit is its pin's, recorded in .wai/externals.lock.yaml";
+  return undefined;
 }
 
 /** One `use` entry: `*`, or a public name of [a-z0-9-_]+. */
@@ -1092,6 +1145,9 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Par
       project,
       ...(declaration?.source?.path !== undefined ? { sourcePath: declaration.source.path } : {}),
       ...(declaration?.source?.hosted !== undefined ? { sourceHosted: declaration.source.hosted } : {}),
+      ...(declaration?.source?.git !== undefined ? { sourceGit: declaration.source.git } : {}),
+      ...(declaration?.source?.ref !== undefined ? { sourceRef: declaration.source.ref } : {}),
+      ...(declaration?.source?.dir !== undefined ? { sourceDir: declaration.source.dir } : {}),
       ...(problem ? { problem } : {}),
       use: imports.use,
     };
@@ -1100,62 +1156,189 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Par
 
 // ── project_config members ──────────────────────────────────────────────────
 
+/** contained | path | git | hosted: where a member's files live (stage 8). */
+export type MemberStorage = 'contained' | 'path' | 'git' | 'hosted';
+
+/** A full git commit: 40 (sha1) or 64 (sha256) hex digits. */
+export const FULL_COMMIT_RE = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+/** A git URL: a scheme git speaks, or the scp form user@host:path. */
+const GIT_URL_RE = /^(?:(?:https?|ssh|git|file):\/\/|[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:)/;
+
+/** One source string read: its object form and storage, or why it cannot be read. */
+export interface ParsedMemberSource {
+  source: ExternalSource;
+  storage: MemberStorage;
+  problem?: string;
+}
+
+/** An absolute path on any platform this configuration may be read on. */
+function isAbsolutePath(p: string): boolean {
+  return /^([/\\]|[A-Za-z]:)/.test(p);
+}
+
+/** A relative path's segments, either separator. */
+function segmentsOf(p: string): string[] {
+  return p.split(/[/\\]/).filter((s) => s !== '' && s !== '.');
+}
+
+/**
+ * member_declaration.source parsed — the one location grammar (stage 8): a
+ * `hosted:<id>` record; a git URL with `#<full commit>`; a path beginning with
+ * `../` is a SIBLING checkout (leaving the root is only ever this explicit
+ * `..`); any other relative path is CONTAINED. Refused: an empty source, an
+ * absolute path, an inner `..`, and a git source without its commit — each
+ * answered as the problem, never thrown.
+ */
+export function parseMemberSource(written: string): ParsedMemberSource {
+  const text = written.trim();
+  if (text === '') return { source: { path: '' }, storage: 'contained', problem: 'its source is empty' };
+  if (text.startsWith('hosted:')) {
+    const id = text.slice('hosted:'.length).trim();
+    return { source: { hosted: id }, storage: 'hosted', ...(id === '' ? { problem: `its source "${text}" names no hosted record` } : {}) };
+  }
+  if (GIT_URL_RE.test(text)) {
+    const hash = text.lastIndexOf('#');
+    const url = hash >= 0 ? text.slice(0, hash) : text;
+    const commit = hash >= 0 ? text.slice(hash + 1).trim() : undefined;
+    const source: ExternalSource = { git: url, ...(commit ? { commit } : {}) };
+    if (!commit) {
+      return { source, storage: 'git', problem: `its git source "${url}" names no commit — write it as "${url}#<full commit>" (\`wairon member add\` and \`member update\` write it)` };
+    }
+    if (!FULL_COMMIT_RE.test(commit)) {
+      return { source, storage: 'git', problem: `its git source pins "${commit}", which is not a full commit — a member is pinned at a full commit, never a branch` };
+    }
+    return { source, storage: 'git' };
+  }
+  if (isAbsolutePath(text)) {
+    return { source: { path: text }, storage: 'contained', problem: `its source is the absolute path "${text}" — a member's location is relative to the project declaring it` };
+  }
+  const segments = segmentsOf(text);
+  let leading = 0;
+  while (segments[leading] === '..') leading++;
+  if (segments.slice(leading).includes('..')) {
+    return { source: { path: text }, storage: leading > 0 ? 'path' : 'contained', problem: `its source "${text}" has an inner \`..\` — leaving the root is only ever a leading \`../\`` };
+  }
+  if (leading > 0 && leading === segments.length) {
+    return { source: { path: text }, storage: 'path', problem: `its source "${text}" names a directory above the project but no member in it` };
+  }
+  return { source: { path: text }, storage: leading > 0 ? 'path' : 'contained' };
+}
+
 /**
  * declared_member — one member as the configuration declares it, normalized
- * from either form: the alias, the path as written, the description when the
- * long form gives one, and what is wrong with the declaration on its own
- * (before the loader looks for the directory).
+ * from the shorthand or the long form: the alias, its source parsed into its
+ * object form with the storage that implies, the `as` it asserts (if any), the
+ * description, and what is wrong with the declaration on its own (before the
+ * loader looks for the directory). What the member IS follows from its
+ * content, so it is the scan's to decide, never this value's.
  */
 export interface DeclaredMember {
   alias: string;
-  /** The member's root directory as written, relative to the declaring root. */
-  path: string;
+  /** A contained member's root as written, relative to the declaring root; absent for any other storage. */
+  path?: string;
   /** The long form's description, when given. */
   description?: string;
   /** Why the declaration cannot be used as written. */
   problem?: string;
   /** The long form's `use` as written, deduplicated in first-seen order; empty for the shorthand and when it imports nothing. */
   use: string[];
+  /** part | project when the declaration asserts one. */
+  as?: string;
+  /** The source string parsed: { path } for a contained or sibling path, { git, commit, ref?, dir? }, or { hosted }. */
+  source: ExternalSource;
+  /** contained | path | git | hosted. */
+  storage: MemberStorage;
+  /** Whether the entry used the deprecated long-form `path` key. */
+  deprecatedPath: boolean;
 }
 
-/** A `members` value read the way both forms mean it. */
+/** A `members` value read the way both forms mean it: the shorthand is the source alone. */
 export function memberDeclarationOf(value: string | MemberDeclaration): MemberDeclaration {
-  return typeof value === 'string' ? { path: value } : value;
+  return typeof value === 'string' ? { source: value } : value;
+}
+
+/** The one location a `members` value names — its `source`, else the deprecated `path` — as written. */
+export function memberLocationOf(value: string | MemberDeclaration): string | undefined {
+  const declaration = memberDeclarationOf(value);
+  return declaration.source ?? declaration.path;
+}
+
+/**
+ * The contained path a `members` value names, relative to the declaring root,
+ * or undefined when it names any other storage (or nothing readable): what the
+ * pre-stage-8 writers and readers that follow a member into a directory under
+ * the declaring root still read.
+ */
+export function containedPathOf(value: string | MemberDeclaration): string | undefined {
+  const location = memberLocationOf(value);
+  if (location === undefined) return undefined;
+  const parsed = parseMemberSource(location);
+  return parsed.storage === 'contained' && !parsed.problem ? location : undefined;
 }
 
 /**
  * project_config.declaredMembers — the configuration's `members`, one
- * DeclaredMember per alias in declaration order, the shorthand read as
- * `{ path }`. A malformed alias, an empty or absolute path, or an alias
- * `externals` also declares is recorded as the entry's problem, never dropped.
+ * DeclaredMember per alias in declaration order: the source string (the
+ * shorthand, the long form's `source`, or for one release the deprecated
+ * `path`, flagged) parsed into its object form and storage, the asserted `as`,
+ * the description and `use` copied as written. A malformed alias, a missing or
+ * unparseable source, a git source without its commit, a bad `as`, a hosted
+ * source asserted to be a part, an alias `externals` also declares, or a
+ * malformed `use` entry is recorded as the entry's problem, never dropped.
  */
 export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 'externals'>>): DeclaredMember[] {
   return Object.entries(config.members ?? {}).map(([alias, value]) => {
-    const declaration = memberDeclarationOf(value);
-    const written = typeof declaration?.path === 'string' ? declaration.path : '';
-    const imports = readUse(alias, declaration?.use);
+    const declaration = memberDeclarationOf(value) ?? {};
+    const source = typeof declaration.source === 'string' ? declaration.source : undefined;
+    const deprecated = typeof declaration.path === 'string' ? declaration.path : undefined;
+    const parsed = parseMemberSource(source ?? deprecated ?? '');
+    // The git-only long-form fields join the parsed source.
+    if (parsed.storage === 'git') {
+      if (declaration.ref !== undefined) parsed.source.ref = declaration.ref;
+      if (declaration.dir !== undefined) parsed.source.dir = declaration.dir;
+    }
+    const imports = readUse(alias, declaration.use);
+    const as = declaration.as;
     const problem = !EXTERNAL_ALIAS_RE.test(alias)
       ? `the member alias "${alias}" breaks [a-z0-9-_]+`
-      : written.trim() === ''
-        ? `the member "${alias}" declares an empty path`
-        : isAbsolutePath(written)
-          ? `the member "${alias}" declares the absolute path "${written}" — a member path is relative to the project declaring it`
-          : config.externals?.[alias] !== undefined
-            ? `the alias "${alias}" is also declared under \`externals\` — one alias names one project`
-            : imports.problem;
+      : source !== undefined && deprecated !== undefined
+        ? `the member "${alias}" names both \`source\` and the deprecated \`path\` — keep \`source\``
+        : source === undefined && deprecated === undefined
+          ? `the member "${alias}" declares no source`
+          : parsed.problem
+            ? `the member "${alias}": ${parsed.problem}`
+            : as !== undefined && as !== 'part' && as !== 'project'
+              ? `the member "${alias}" asserts \`as: ${as}\` — a member is a part or a project`
+              : parsed.storage === 'hosted' && as === 'part'
+                ? `the member "${alias}" is a hosted record asserted \`as: part\` — a part is part of its parent's record, so a hosted source is a project`
+                : (declaration.ref !== undefined || declaration.dir !== undefined) && parsed.storage !== 'git'
+                  ? `the member "${alias}" names \`${declaration.ref !== undefined ? 'ref' : 'dir'}\`, which only a git source carries`
+                  : config.externals?.[alias] !== undefined
+                    ? `the alias "${alias}" is also declared under \`externals\` — one alias names one project`
+                    : imports.problem;
+    const location = source ?? deprecated ?? '';
     return {
       alias,
-      path: written,
-      ...(declaration?.description !== undefined ? { description: declaration.description } : {}),
+      ...(parsed.storage === 'contained' ? { path: location } : {}),
+      ...(declaration.description !== undefined ? { description: declaration.description } : {}),
       ...(problem ? { problem } : {}),
       use: imports.use,
+      ...(as !== undefined ? { as } : {}),
+      source: parsed.source,
+      storage: parsed.storage,
+      deprecatedPath: deprecated !== undefined,
     };
   });
 }
 
-/** An absolute path on any platform this configuration may be read on. */
-function isAbsolutePath(p: string): boolean {
-  return /^([/\\]|[A-Za-z]:)/.test(p);
+/**
+ * project_config.isPart — whether this is a non-contained part's
+ * configuration: `partOf` is set. The test every reader that treats such a
+ * root differently from a project's asks, so they cannot disagree about it.
+ */
+export function isPart(config: Pick<ProjectConfig, 'partOf'> | null | undefined): boolean {
+  return config?.partOf !== undefined;
 }
 
 /** internalize_destination — where a member's own metadata goes when `member internalize` folds it into its parent (stage 6). */

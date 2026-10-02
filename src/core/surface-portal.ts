@@ -17,6 +17,7 @@ import type {
   ExternalPin,
   ExternalStatus,
   PinnedExternal,
+  PinnedParent,
   SurfaceOrigin,
   SurfaceSnapshot,
 } from '../models/index.js';
@@ -69,4 +70,9 @@ export function renamePin(alias: string, newAlias: string, project: string): boo
 /** isurface_portal.unpin — remove the bound project's pin of one alias. */
 export function unpin(alias: string): boolean {
   return pinWrites.unpin(alias);
+}
+
+/** isurface_portal.pinnedParent — a part's pinned parent, from its own .wai/externals files only (stage 8); null at a project. */
+export function pinnedParent(): PinnedParent | null {
+  return surfaceOrchestrator.pinnedParent();
 }

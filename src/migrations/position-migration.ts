@@ -112,6 +112,12 @@ export interface PositionMigrationPlan {
   findings: ChainingMigrationFinding[];
   /** Stage 4's positional imports, one per (consumer, alias, public name). */
   imports: PlannedImport[];
+  /**
+   * Stage 8's one doctor step: every member declared with the deprecated
+   * long-form `path`, as `<declaring project key>/<alias>`, whose entry is
+   * rewritten to the one location key — meaning unchanged; projects in walk order.
+   */
+  locations: string[];
 }
 
 /** position_migration_result — what writing the stage-3 share wrote. */
@@ -136,22 +142,37 @@ function localIn(namespace: string, id: string): string {
  * to rewrite and the findings, from the family's graph. Writes nothing.
  */
 export function plan(family: ProjectFamily): PositionMigrationPlan {
-  const out: PositionMigrationPlan = { members: [], rewrites: [], findings: [], imports: [] };
+  const out: PositionMigrationPlan = { members: [], rewrites: [], findings: [], imports: [], locations: [] };
   // Steps 1-9: each legacy mount, parents in walk order.
   for (const node of family.nodes) {
     if (node.mountForm === 'mount' && node.legacyMount && node.parent !== undefined) planMount(family, node, out);
   }
-  // Step 10: an absent member blocks.
+  // Step 10 (stage 8): every member declared with the deprecated long-form `path`.
+  for (const node of family.nodes) planLocations(node, out);
+  // Step 11: an absent member blocks.
   reportAbsentMembers(family, out);
-  // Steps 11-12: each deprecated reference.
+  // Steps 12-13: each deprecated reference.
   const seen = new Set<string>();
   for (const ref of family.authoredReferences) planRewrite(family, ref, seen, out);
-  // Steps 13-16: stage 4's positional step.
+  // Steps 14-17: stage 4's positional step.
   planPositional(family, out);
-  // Step 17: a spec the re-save would refuse keeps its rewrites back.
+  // Step 18: a spec the re-save would refuse keeps its rewrites back.
   holdBack(family, out);
-  // Step 18.
+  // Step 19.
   return out;
+}
+
+/**
+ * Step 10 at one project: each member it declares with the deprecated
+ * long-form `path` key, rewritten to the one location key — the shorthand when
+ * the entry holds nothing else, else the long form's `source`. What a member
+ * is follows from its content, so no kind is ever written.
+ */
+function planLocations(node: ProjectNode, out: PositionMigrationPlan): void {
+  const config = runWithProjectRoot(node.directory, () => core.loadProjectConfig());
+  for (const member of config ? declaredMembers(config) : []) {
+    if (member.deprecatedPath && !member.problem) out.locations.push(`${node.namespace}/${member.alias}`);
+  }
 }
 
 /** Steps 2-9 for one legacy mount. */
@@ -516,17 +537,26 @@ export function write(plan: ChainingMigrationPlan, rehearsal: Rehearsal): Positi
   for (const p of plan.projects) {
     for (const member of p.members) runWithProjectRoot(at(p.directory), () => moveMount(p, member, log));
   }
-  // Steps 3-5: the positional imports, under each consumer's rehearsal binding —
+  // Steps 3-4 (stage 8): the location rewrites, once every member is declared under `members`.
+  for (const p of plan.projects) {
+    for (const alias of p.locations) runWithProjectRoot(at(p.directory), () => relocate(p, alias, log));
+  }
+  // Steps 5-7: the positional imports, under each consumer's rehearsal binding —
   // after the moves, so an import on a legacy mount's alias finds it under `members`.
   for (const p of plan.projects.filter((q) => q.imports.length > 0)) runWithProjectRoot(at(p.directory), () => importAll(p, log));
-  // Steps 6-8: the rewrites, from the rehearsal's top root.
+  // Steps 8-10: the rewrites, from the rehearsal's top root.
   runWithProjectRoot(at(plan.familyRoot), () => rewriteAll(plan, log));
-  // Steps 9-10: the superseded family pins, under each member's rehearsal binding.
+  // Steps 11-12: the superseded family pins, under each member's rehearsal binding.
   for (const p of plan.projects) {
     for (const key of p.supersededPins) runWithProjectRoot(at(p.directory), () => unpin(p, key, log));
   }
-  // Steps 11-12.
+  // Steps 13-14.
   return { written: log.written, relock: log.relock };
+}
+
+/** Step 4: one entry's deprecated `path` rewritten to `source` (or the shorthand); an entry already in the one key writes nothing. */
+function relocate(p: ProjectMigration, alias: string, log: WriteLog): void {
+  if (core.updateMember(alias, {})) log.wrote(path.join(p.directory, '.wai', 'project.yaml'), p.directory);
 }
 
 /** Steps 4-5: each alias's planned names added to its `use`, in the order the plan gives; names imported already write nothing. */

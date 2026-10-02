@@ -41,7 +41,7 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import { admits, declaredMembers, DesignDepthSchema, effectiveProjectId, memberDeclarationOf, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { admits, declaredMembers, DesignDepthSchema, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 // extension_orchestrator: the installed packs a member's required packs are pinned from.
 import { listInstalledPacks, loadProjectExtensions } from './extensions.js';
 // The built-in subsystem profiles, so internalize stamps only a profile a subsystem can hold.
@@ -211,7 +211,7 @@ function memberDeclarationsAt(dir: string): MemberAt[] {
   const seen = new Set<string>();
   for (const member of config ? declaredMembers(config) : []) {
     seen.add(member.alias);
-    if (!member.problem) out.push({ alias: member.alias, path: member.path, form: 'members' });
+    if (!member.problem && member.path !== undefined) out.push({ alias: member.alias, path: member.path, form: 'members' });
   }
   const specsDir = aiPathsAt(dir).specsDir();
   if (!fs.existsSync(specsDir)) return out;
@@ -430,6 +430,34 @@ export function createMember(alias: string, path: string, description?: string):
 }
 
 /**
+ * core_orchestrator.updateMember — change an existing member's declaration
+ * through the project config Repository (stage 8): the write behind `doctor
+ * --fix` rewriting a deprecated long-form `path` to the one location key, and
+ * `member update` moving a git member's `#<commit>`. A contained source in the
+ * changes is held to the containment guard. Never writes a kind: what a
+ * member is follows from its content. Returns whether it wrote.
+ */
+export function updateMember(alias: string, changes: MemberDeclaration): boolean {
+  // Step 1: the containment guard, on a contained path the changes carry.
+  const location = memberLocationOf(changes);
+  const contained = location !== undefined && parseMemberSource(location).storage === 'contained';
+  if (contained) {
+    const root = getProjectRoot();
+    const resolved = path.resolve(root, location);
+    let escapes = false;
+    try {
+      escapes = path.resolve(assertContainedProjectPath(root, toPosixPath(location))) === path.resolve(root);
+    } catch {
+      escapes = true;
+    }
+    // Step 4: a contained path outside the project root.
+    if (escapes) throw new WaironError(`PROJECTPATH_ESCAPE: the member "${alias}" source "${location}" resolves to ${resolved}, outside the project root`);
+  }
+  // Steps 2-3: the write, through the Repository.
+  return projectConfigRepository.updateMember(alias, changes);
+}
+
+/**
  * core_orchestrator.declareMember — declare an EXISTING project as a member of
  * the bound project: the write behind `member attach` and `member adopt`,
  * which scaffold nothing (createMember scaffolds). The containment guard comes
@@ -439,15 +467,20 @@ export function createMember(alias: string, path: string, description?: string):
  * different member; the same one again writes nothing. Returns whether it wrote.
  */
 export function declareMember(alias: string, declaration: MemberDeclaration): boolean {
-  // Steps 1-2: the containment guard.
-  const relPath = toPosixPath(declaration.path);
+  // Steps 1-2: the containment guard, for a contained source — a leading `../`
+  // is the explicit way out, and a git or hosted source names no directory here.
+  const location = memberLocationOf(declaration) ?? '';
+  if (parseMemberSource(location).storage !== 'contained') {
+    return projectConfigRepository.declareMember(alias, { ...declaration, path: undefined, source: location });
+  }
+  const relPath = toPosixPath(location);
   const root = getProjectRoot();
   const memberDir = assertContainedProjectPath(root, relPath);
   if (path.resolve(memberDir) === path.resolve(root)) {
     throw new WaironError(`Refusing to declare the member "${alias}": its path "${relPath}" is the project root itself — a member path must resolve within the project root.`);
   }
   // Step 3.
-  return projectConfigRepository.declareMember(alias, { ...declaration, path: relPath });
+  return projectConfigRepository.declareMember(alias, { ...declaration, path: undefined, source: relPath });
 }
 
 /**
@@ -943,8 +976,9 @@ function aliasConflicts(scan: InternalizeScan, bound: ProjectConfig): string[] {
   for (const m of declaredMembers(scan.config ?? ({} as ProjectConfig))) {
     if (m.alias === scan.alias) continue;
     const here = bound.members?.[m.alias] ?? bound.externals?.[m.alias];
-    const dir = path.resolve(scan.memberDir, m.path);
-    const same = bound.members?.[m.alias] !== undefined && path.resolve(getProjectRoot(), memberDeclarationOf(bound.members[m.alias]).path) === dir;
+    const dir = path.resolve(scan.memberDir, m.source.path ?? '');
+    const boundPath = bound.members?.[m.alias] !== undefined ? memberLocationOf(bound.members[m.alias]) : undefined;
+    const same = boundPath !== undefined && path.resolve(getProjectRoot(), boundPath) === dir;
     if (here !== undefined && !same) out.push(`its member "${m.alias}" is an alias this project already declares for another project`);
   }
   for (const [a, decl] of Object.entries(scan.config?.externals ?? {})) {
@@ -952,7 +986,7 @@ function aliasConflicts(scan: InternalizeScan, bound: ProjectConfig): string[] {
     const producer = decl.project ?? a;
     const member = bound.members?.[a];
     const external = bound.externals?.[a];
-    if (member !== undefined && a !== scan.alias && memberIdAt(memberDeclarationOf(member).path) !== producer) {
+    if (member !== undefined && a !== scan.alias && memberIdAt(memberLocationOf(member) ?? '') !== producer) {
       out.push(`its external "${a}" is a member alias this project declares for another project`);
     }
     if (external !== undefined && (external.project ?? a) !== producer) out.push(`its external "${a}" names "${producer}", which this project declares as "${external.project ?? a}"`);
@@ -1125,7 +1159,7 @@ function reExportsOf(e: ExportEntry, memberEntries: ExportEntry[]): ExportEntry[
 function carryDeclarations(scan: InternalizeScan, result: InternalizeResult): void {
   const root = getProjectRoot();
   for (const m of declaredMembers(scan.config ?? ({} as ProjectConfig))) {
-    if (m.problem) continue;
+    if (m.problem || m.path === undefined) continue;
     const relPath = toPosixPath(path.relative(root, path.resolve(scan.memberDir, m.path)));
     projectConfigRepository.declareMember(m.alias, {
       path: relPath,

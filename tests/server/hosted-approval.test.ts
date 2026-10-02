@@ -146,8 +146,8 @@ describe('hosted lock — format 2', () => {
     expect(record.children).toBeUndefined();
     expect(record.lockedBy).toEqual(APPROVER);
     expect(record.members).toEqual({
-      mid: { project: 'mid', subject: pin(mid), state: 'approved' },
-      sib: { project: 'sib', state: 'never' },
+      mid: { as: 'project', project: 'mid', subject: pin(mid), state: 'approved' },
+      sib: { as: 'project', project: 'sib', state: 'never' },
     });
     expect(record.code).toBeDefined();
     expect(record.code!.analyzer.doctrineDigest).toMatch(/^[0-9a-f]{64}$/);
@@ -223,7 +223,7 @@ describe('hosted lock — composition.requireApprovedMembers', () => {
 
   it('without the flag the hosted lock proceeds and records each member\'s state', () => {
     const record = executeApprovedLock(cfg, 'top', APPROVER);
-    expect(record.members).toEqual({ mid: { project: 'mid', state: 'never' }, sib: { project: 'sib', state: 'never' } });
+    expect(record.members).toEqual({ mid: { as: 'project', project: 'mid', state: 'never' }, sib: { as: 'project', project: 'sib', state: 'never' } });
   });
 });
 

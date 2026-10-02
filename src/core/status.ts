@@ -360,13 +360,14 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   renderProject('', '');
   // Step 9: members the graph declares but no project stands behind, and the
   // root's own state to close the report.
-  for (const absent of (options.approvals ?? []).filter((a) => a.key !== '' && !family.nodes.some((n) => n.namespace === a.key))) {
+  // A part is no project of its own (stage 8): its state is this project's.
+  for (const absent of (options.approvals ?? []).filter((a) => a.key !== '' && a.as !== 'part' && !family.nodes.some((n) => n.namespace === a.key))) {
     output += `${mark.structure('    ')}${mark.missing(`[Project] ${absent.alias ?? absent.key} (no project on disk)`)}${approvalTag(absent)}\n`;
   }
   // Silent for a lone project never approved: absence of an approval is the
   // normal state of a tree still being designed, not news (the verdict agrees).
   const own = options.approvals?.find((a) => a.key === '');
-  const hasMembers = (options.approvals ?? []).some((a) => a.key !== '');
+  const hasMembers = (options.approvals ?? []).some((a) => a.key !== '' && a.as !== 'part');
   if (own && (own.state !== 'never' || hasMembers)) output += `${mark.layer('system', 'Approval:')} this project is ${own.state}${own.upgraded ? ' (locked under the pre-stage-5 gate identity — re-lock once)' : ''}\n`;
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP

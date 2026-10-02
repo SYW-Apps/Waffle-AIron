@@ -7,6 +7,8 @@ import {
   declaredExternals,
   declaredMembers,
   effectiveProjectId,
+  type MemberStorage,
+  type PartOf,
   type ProjectConfig,
   type PackSelection,
   type ProjectProfileSelection,
@@ -19,6 +21,10 @@ import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { listSpecFiles, readSpecFile, removeSpecFile, writeSpecFile } from './spec-files.js';
+// git_source_adapter: a git part is read from the content-addressed fetch cache at its pinned commit (stage 8).
+import * as gitSource from './adapters/git-source.js';
+import * as crypto from 'crypto';
+import { WaironError } from '../utils/errors.js';
 // TYPE-ONLY, and it has to be: the report NAMES the tests a write invalidated,
 // while the search that finds them belongs to the validator. A runtime import
 // here would be the store reaching into the rule engine that already reads it
@@ -77,6 +83,7 @@ import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf }
 import { resolveProjectTable, resolveSubsystemTables } from './exports.js';
 import type { ExportUsage, ResolvedExport, ResolvedExportTable } from '../models/exports.js';
 import {
+  approvalKeyIn,
   keyIn,
   landReference,
   type AuthoredReference,
@@ -174,6 +181,51 @@ export interface ScannedProjectRoot {
   authoredReferences: AuthoredReference[];
   /** The family problems the scan met at this root: its identity, its members, its duplicate keys. */
   problems: ProjectFamilyProblem[];
+  /** The parts this root declares (stage 8), in declaration order: its own subsystems stored elsewhere. */
+  parts: ScannedPart[];
+}
+
+/**
+ * scanned_part — one part of a project as the scan read it (stage 8): where
+ * its files came from and which of the declaring project's specs they hold. A
+ * part is not a project root — no key, no alias table, no L0, no export table
+ * — so it is recorded on the root that declares it, and every spec it holds is
+ * keyed under that root exactly as if the files lay in the root's own specs
+ * folder (part-is-the-parents-subsystem).
+ */
+export interface ScannedPart {
+  /** The `members` key the declaring project gives it. */
+  alias: string;
+  /** contained | path | git: where its files live (a part is never a hosted record). */
+  storage: MemberStorage;
+  /** The directory its specs were read from, absolute; absent when it could not be read. */
+  directory?: string;
+  /** git: the pinned commit; contained or path: the head of the work tree holding it, when in one. Provenance only. */
+  commit?: string;
+  /** What a non-contained part's own configuration says it belongs to; null for a contained part and for one that declares none. */
+  partOf: PartOf | null;
+  /** The keys of the subsystems its files declare. */
+  subsystems: string[];
+  /** The keys of every spec its files declare, under the declaring root's key. */
+  specIds: string[];
+  /** sha256:… over its spec documents in canonical form, keyed by their path inside the part (storage-independent). */
+  contentDigest?: string;
+  /** live | cache | unavailable. */
+  availability: 'live' | 'cache' | 'unavailable';
+  /** Why it is unavailable. */
+  reason?: string;
+}
+
+/**
+ * Thrown when a write would land in a part fetched from git (stage 8): its
+ * files are the fetch cache's, read-only — it is edited in its own repository
+ * and taken in by `wairon member update`.
+ */
+export class PartReadOnly extends WaironError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PartReadOnly';
+  }
 }
 
 /**
@@ -454,9 +506,21 @@ export interface ChainingParentRef {
 /** One member a project declares, in either form, as read before its directory is looked at. */
 interface MemberDeclarationRead {
   alias: string;
-  /** The path as written, relative to the declaring root. */
+  /** The location as written, relative to the declaring root (a git source's URL for git). */
   path: string;
   form: 'members' | 'mount';
+  /** contained | path | git | hosted (stage 8); a legacy mount is contained. */
+  storage: MemberStorage;
+  /** The source parsed (members form). */
+  source?: ExternalSource;
+  /** The `as` the declaration asserts. */
+  as?: string;
+  /** The declaration's `use`. */
+  use: string[];
+  /** Whether the entry used the deprecated long-form `path` key. */
+  deprecatedPath?: boolean;
+  /** part | project, decided from the member's content by the scan (stage 8). */
+  kind?: 'part' | 'project';
   description?: string;
   /** The legacy L1 mount subsystem as written, for the mount form (and a mount a `members` entry shadows). */
   legacyMount?: SubsystemSpec;
@@ -473,6 +537,68 @@ function configAt(dir: string): ProjectConfig | null {
   } catch {
     return null;
   }
+}
+
+/** A root's .wai/project.yaml exactly as YAML produced it, or null when there is none or it cannot be read. */
+function rawConfigAt(dir: string): Record<string, unknown> | null {
+  try {
+    const document = readYamlFile(aiPathsAt(dir).projectConfig());
+    return document && typeof document === 'object' && !Array.isArray(document) ? document as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a member's root holds PROJECT content (stage 8): its configuration
+ * declares an id, its specs hold an L0, or it carries a lock. Anything else is
+ * a part. What a member is follows from this, never from a declaration.
+ */
+function projectContentAt(dir: string): boolean {
+  const paths = aiPathsAt(dir);
+  if (pathExists(paths.specsSystem())) return true;
+  if (pathExists(path.join(paths.root(), 'lock.json'))) return true;
+  return rawConfigAt(dir)?.id !== undefined;
+}
+
+/** The fields a part's configuration must not declare: they are a project's (stage 8). */
+const PART_FORBIDDEN_FIELDS = ['members', 'externals', 'rules', 'extensions', 'composition', 'targets'];
+
+/** Where a part's configuration is edited: the file on disk, or — for a git part — in which repository. */
+function whereToEdit(decl: { storage: MemberStorage; source?: ExternalSource }, dir: string): string {
+  if (decl.storage === 'git') {
+    const inside = decl.source?.dir ? `${decl.source.dir.replace(/\\/g, '/')}/.wai/project.yaml` : '.wai/project.yaml';
+    return `in ${inside} of the repository ${decl.source?.git} (commit there, then move this project's pin with \`wairon member update\`)`;
+  }
+  return `in ${path.join(dir, '.wai', 'project.yaml')}`;
+}
+
+/**
+ * The finding for a non-contained part whose configuration names no parent:
+ * exactly which line to add, and in which file or repository.
+ */
+function missingPartOfDetail(decl: { alias: string; storage: MemberStorage; source?: ExternalSource }, dir: string, parentId: string | undefined): string {
+  const project = parentId ?? '<this project\'s id>';
+  return `the part "${decl.alias}" is stored outside this project and does not say what it is a part of — add the line \`partOf: { project: ${project} }\` ${whereToEdit(decl, dir)}, so it can say what it belongs to when it is opened alone`;
+}
+
+/**
+ * A part's content digest: sha256 over its spec documents in canonical form,
+ * keyed by their path inside the part — so it does not move when the part's
+ * storage does (storage-is-orthogonal).
+ */
+function contentDigestOf(dir: string, files: string[]): string {
+  const documents: Record<string, unknown> = {};
+  for (const file of files) {
+    let document: unknown = null;
+    try {
+      document = readSpecFile(file);
+    } catch {
+      document = null;
+    }
+    documents[path.relative(dir, file).split(path.sep).join('/')] = document;
+  }
+  return `sha256:${crypto.createHash('sha256').update(canonicalize(documents)).digest('hex')}`;
 }
 
 /** Every legacy L1 mount a root's spec files declare (a subsystem carrying projectPath), with its file. */
@@ -510,8 +636,13 @@ function memberDeclarationsOf(config: ProjectConfig | null, mounts: { spec: Subs
     const shadowed = byAlias.get(member.alias);
     out.push({
       alias: member.alias,
-      path: member.path,
+      path: member.path ?? member.source.path ?? member.source.git ?? member.source.hosted ?? '',
       form: 'members',
+      storage: member.storage,
+      source: member.source,
+      ...(member.as !== undefined ? { as: member.as } : {}),
+      use: member.use,
+      deprecatedPath: member.deprecatedPath,
       ...(member.description !== undefined ? { description: member.description } : {}),
       ...(shadowed ? { legacyMount: shadowed.spec, legacyFile: shadowed.file } : {}),
       ...(member.problem ? { problem: member.problem } : {}),
@@ -527,6 +658,9 @@ function memberDeclarationsOf(config: ProjectConfig | null, mounts: { spec: Subs
       alias: mount.spec.id,
       path: mount.spec.projectPath!,
       form: 'mount',
+      storage: 'contained',
+      use: [],
+      kind: 'project',
       ...(mount.spec.description ? { description: mount.spec.description } : {}),
       legacyMount: mount.spec,
       legacyFile: mount.file,
@@ -566,7 +700,7 @@ export function findChainingParent(childRoot: string, ceiling?: string): Chainin
     if (bound && !isWithin(bound, dir)) break;
     if (pathExists(aiPathsAt(dir).specsDir()) || pathExists(aiPathsAt(dir).projectConfig())) {
       for (const member of memberDeclarationsAt(dir)) {
-        if (member.problem || member.path.trim() === '') continue;
+        if (member.problem || member.storage !== 'contained' || member.path.trim() === '') continue;
         try {
           const memberDir = path.resolve(dir, member.path);
           if (chainDirKey(memberDir) === chainDirKey(childResolved) && !projectPathEscapesRoot(dir, member.path, memberDir)) {
@@ -615,6 +749,8 @@ export function inspectChainedRoots(rootDir: string = getProjectRoot()): Chained
   const walk = (projectDir: string, prefix: string, ancestors: ReadonlySet<string>, depth: number): void => {
     for (const member of memberDeclarationsAt(projectDir)) {
       const key = prefix ? `${prefix}::${member.alias}` : member.alias;
+      // A referenced member (a `../`, git or hosted source) is no chained root (stage 8).
+      if (member.storage !== 'contained') continue;
       let childDir: string;
       try {
         childDir = path.resolve(projectDir, member.path);
@@ -631,6 +767,8 @@ export function inspectChainedRoots(rootDir: string = getProjectRoot()): Chained
         inspection.skipped.push({ mount: key, alias: member.alias, form: member.form, projectPath: member.path, reason });
         continue;
       }
+      // A part is its declaring project's own subsystems, not a root of its own (stage 8).
+      if (member.form === 'members' && !projectContentAt(childDir)) continue;
       const dirKey = chainDirKey(childDir);
       if (listed.has(dirKey)) continue;
       listed.add(dirKey);
@@ -999,6 +1137,23 @@ function childRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string,
   };
 }
 
+/**
+ * An implementation's file paths — sourcePath, each method's sourcePath,
+ * simPath — re-expressed from the root that holds the part in memory to the
+ * part's own root (stage 8), where its file reads them: the inverse of the
+ * scan's normalization, inside the part or not.
+ */
+function partRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string, partRoot: string): ImplementationSpec {
+  const reexpress = (p: string): string =>
+    (path.isAbsolute(p) ? p : (path.relative(partRoot, path.resolve(authoringRoot, p)) || '.').split(path.sep).join('/'));
+  return {
+    ...spec,
+    ...(spec.sourcePath ? { sourcePath: reexpress(spec.sourcePath) } : {}),
+    ...(spec.simPath ? { simPath: reexpress(spec.simPath) } : {}),
+    methods: spec.methods.map((m) => (m.sourcePath ? { ...m, sourcePath: reexpress(m.sourcePath) } : m)),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // The scan without position: its per-root working state and the pure steps of
 // its three phases (tables, then binding). The workspace owns the I/O half.
@@ -1161,6 +1316,18 @@ function bindAuthored(
   authored: string,
 ): { value: string; reference?: Omit<AuthoredReference, 'specId' | 'position'> } {
   const key = raw.record.namespace;
+  // A PART's alias names no namespace (stage 8): its specs are this root's own.
+  const first = authored.split('::')[0];
+  if (raw.members.some((m) => m.kind === 'part' && m.alias === first)) {
+    const local = authored.slice(first.length + 2);
+    return {
+      value: authored,
+      reference: {
+        authored, form: 'alias', binding: 'unresolved', resolved: authored,
+        hint: `"${first}" is a part of this project, so its specs are this project's own: write the local id "${local}"`,
+      },
+    };
+  }
   const landing = landReference(readables, authored, key);
   if (landing.kind === 'outside' || landing.kind === 'unresolved') {
     return { value: authored, reference: { authored, form: landing.form, binding: landing.kind, resolved: authored } };
@@ -1223,7 +1390,9 @@ function importSuppliers(raw: RawRoot, raws: RawRoot[]): ImportSupplier[] {
     alias, section, producer: producerOf(alias), star: use.includes('*'), names: new Set(use.filter((u) => u !== '*').map(nameKey)),
   });
   return [
-    ...declaredMembers(config).filter((m) => !m.problem).map((m) => supplier(m.alias, 'members', m.use)),
+    // A part supplies nothing: its names are the root's own (stage 8).
+    ...declaredMembers(config).filter((m) => !m.problem && !raw.members.some((d) => d.kind === 'part' && d.alias === m.alias))
+      .map((m) => supplier(m.alias, 'members', m.use)),
     ...declaredExternals(config).filter((e) => !e.problem).map((e) => supplier(e.alias, 'externals', e.use)),
   ];
 }
@@ -2493,6 +2662,7 @@ export class SpecWorkspace {
       specIds: [],
       authoredReferences: [],
       problems: [],
+      parts: [],
     };
     const raw: RawRoot = {
       record, aliasPath, dir: path.resolve(dir), index: emptyIndex(), mounts: [], members: [],
@@ -2503,9 +2673,15 @@ export class SpecWorkspace {
     this.readRootSpecs(raw);
     // Step 3: the member declarations — `members`, then legacy mounts.
     raw.members = memberDeclarationsOf(config, raw.mounts);
+    // Steps 6-11 (stage 8): what each member is, from its content; each part
+    // read into THIS root before anything is keyed or bound — its specs are
+    // the root's own, at every depth bound.
+    for (const decl of raw.members) this.readMemberKind(raw, decl);
     if (depth >= maxDepth) return;
-    // Steps 7-8: follow each member.
+    // Steps 13-14: follow each contained project member (a part is the root's
+    // own; a referenced project member is judged against its pin).
     for (const decl of raw.members) {
+      if (decl.kind === 'part' || decl.storage !== 'contained') continue;
       const childDir = this.followableMember(raw, decl, ancestors);
       if (!childDir) continue;
       const before = raws.length;
@@ -2566,12 +2742,6 @@ export class SpecWorkspace {
   /** Read every spec document of one root as written; a legacy mount is a declaration, never a subsystem. */
   private readRootSpecs(raw: RawRoot): void {
     const projectPaths = aiPathsAt(raw.dir);
-    const key = raw.record.namespace;
-    const specsDir = projectPaths.specsDir();
-    // Track every visited specs dir (even absent ones, so their later creation
-    // is picked up) for the freshness signature.
-    this.scanVisitedSpecDirs.push(specsDir);
-    if (!pathExists(specsDir)) return;
     const systemYaml = path.normalize(projectPaths.specsSystem());
     if (pathExists(systemYaml)) {
       try {
@@ -2580,6 +2750,185 @@ export class SpecWorkspace {
         raw.rawSystem = null; // the bound root's L0 is reported by the loader's own read
       }
     }
+    this.readSpecDocuments(raw, projectPaths.specsDir(), systemYaml, raw.dir);
+  }
+
+  // -------------------------------------------------------------------------
+  // Stage 8: what a member is, and reading a part into its parent
+  // -------------------------------------------------------------------------
+
+  /** A family problem the scan met at this root about one of its members. */
+  private memberProblem(raw: RawRoot, kind: 'part-unavailable' | 'kind-mismatch', alias: string, detail: string): void {
+    raw.record.problems.push({ kind, id: alias, projects: [raw.record.namespace], detail });
+  }
+
+  /**
+   * Step 6 at one member: decide what it is FROM ITS CONTENT — its root
+   * declaring an id, holding an L0 or carrying a lock makes it a project,
+   * anything else a part; a hosted source is a project — and read each part
+   * into the root (steps 7-11). An asserted `as` the content contradicts is a
+   * kind-mismatch, and the content still decides. A contained member whose
+   * directory is absent, escapes or loops is left undecided: following it
+   * reports why, exactly as before stage 8.
+   */
+  private readMemberKind(raw: RawRoot, decl: MemberDeclarationRead): void {
+    if (decl.form === 'mount') return;
+    const asserted = decl.as;
+    if (decl.problem) {
+      this.reportDeclarationProblem(raw, decl);
+      return;
+    }
+    if (decl.storage === 'hosted') {
+      decl.kind = 'project';
+      return;
+    }
+    const located = this.memberRoot(raw, decl);
+    if (located === null) return;
+    if ('unavailable' in located) {
+      if (asserted === 'project') {
+        decl.kind = 'project';
+        return;
+      }
+      decl.kind = 'part';
+      this.memberProblem(raw, 'part-unavailable', decl.alias, located.unavailable);
+      raw.record.parts.push({ alias: decl.alias, storage: decl.storage, partOf: null, subsystems: [], specIds: [], availability: 'unavailable', reason: located.unavailable });
+      return;
+    }
+    const kind = projectContentAt(located.dir) ? 'project' : 'part';
+    decl.kind = kind;
+    if (asserted !== undefined && asserted !== kind) {
+      this.memberProblem(raw, 'kind-mismatch', decl.alias, `the member "${decl.alias}" is asserted \`as: ${asserted}\`, but its content makes it a ${kind}: ${kind === 'project'
+        ? 'its tree declares an id, holds an L0 or carries a lock — drop the `as`, or remove that content with `wairon member demote`'
+        : 'its tree declares no id, holds no L0 and carries no lock — drop the `as`, or create the project content with `wairon member promote`'}`);
+    }
+    if (kind === 'part') this.readPart(raw, decl, located.dir, located.commit);
+  }
+
+  /**
+   * Where a member's root is on disk: the contained directory (undecided —
+   * null — when it escapes or is absent, so following it reports why), the
+   * `../` sibling directory, or a git member's pinned commit materialized in
+   * the fetch cache — or why it cannot be read.
+   */
+  private memberRoot(raw: RawRoot, decl: MemberDeclarationRead): { dir: string; commit?: string } | { unavailable: string } | null {
+    if (decl.storage === 'git') {
+      const url = decl.source?.git ?? '';
+      const commit = decl.source?.commit;
+      if (!commit) return { unavailable: `the git part "${decl.alias}" (${url}) has no pinned commit` };
+      try {
+        // Step 9: the pinned commit in the fetch cache — a cached commit needs no network.
+        return { dir: gitSource.fetch(url, commit, decl.source?.dir), commit };
+      } catch (e) {
+        return { unavailable: `the git part "${decl.alias}" (${url} at ${commit}) cannot be read: ${e instanceof Error ? e.message : String(e)}` };
+      }
+    }
+    const dir = path.resolve(raw.dir, decl.path);
+    if (decl.storage === 'path') {
+      return fs.existsSync(dir) ? { dir } : { unavailable: `the part "${decl.alias}" declared at "${decl.path}" has no directory there (${dir})` };
+    }
+    // Contained: the containment guard, lexically and through links.
+    if (projectPathEscapesRoot(raw.dir, decl.path, dir)) return null;
+    if (!fs.existsSync(dir)) {
+      return decl.as === 'part' ? { unavailable: `the part "${decl.alias}" declared at "${decl.path}" has no directory there` } : null;
+    }
+    return { dir };
+  }
+
+  /**
+   * A member declaration the location grammar rejects or that contradicts
+   * itself: an inner `..` is refused as an escape; a hosted part or a bad
+   * `as` is a kind-mismatch; a declaration nothing can read is a part that is
+   * unavailable, unless it asserts a project — never silently passed over. An
+   * alias conflict and an absolute path are reported when it is followed.
+   */
+  private reportDeclarationProblem(raw: RawRoot, decl: MemberDeclarationRead): void {
+    const problem = decl.problem!;
+    const memberKey = keyIn(raw.record.namespace, decl.alias);
+    if (problem.includes('inner `..`')) {
+      this.loaderIssues.push({
+        severity: 'error',
+        code: 'PROJECTPATH_ESCAPE',
+        message: `Member "${memberKey}": ${problem.replace(/^the member "[^"]*": /, '')}; skipping it.`,
+        specId: memberKey,
+      });
+      return;
+    }
+    if (/asserts `as: |hosted record asserted/.test(problem)) {
+      this.memberProblem(raw, 'kind-mismatch', decl.alias, problem);
+      return;
+    }
+    if (problem.includes('`externals`') || problem.includes('`use`') || problem.includes('breaks [a-z0-9-_]+') || decl.as === 'project') return;
+    if (decl.storage === 'contained' && problem.includes('absolute path')) return; // refused as an escape when followed
+    decl.kind = 'part';
+    this.memberProblem(raw, 'part-unavailable', decl.alias, problem);
+    raw.record.parts.push({ alias: decl.alias, storage: decl.storage === 'hosted' ? 'contained' : decl.storage, partOf: null, subsystems: [], specIds: [], availability: 'unavailable', reason: problem });
+  }
+
+  /**
+   * Steps 10-11 for one part: judge what its configuration says (a contained
+   * part needs none; a non-contained one must name this root as its partOf;
+   * neither may declare project fields), refuse a `use` on it, read every spec
+   * document it holds into THIS root's index — keyed exactly as the root's
+   * own, a key the root or another part already declares a duplicate-spec —
+   * and record the ScannedPart with its content digest.
+   */
+  private readPart(raw: RawRoot, decl: MemberDeclarationRead, dir: string, commit: string | undefined): void {
+    const paths = aiPathsAt(dir);
+    this.scanVisitedConfigFiles.push(paths.projectConfig());
+    const config = configAt(dir);
+    const partOf = config?.partOf ?? null;
+    this.judgePartConfiguration(raw, decl, dir, partOf, rawConfigAt(dir));
+    if (decl.use.length > 0) {
+      this.memberProblem(raw, 'kind-mismatch', decl.alias, `the member "${decl.alias}" is a part, and its \`use\` imports nothing: a part's names are already this project's own — drop the \`use\``);
+    }
+    const files = this.readSpecDocuments(raw, paths.specsDir(), null, dir);
+    const provenance = commit ?? gitSource.head(dir);
+    raw.record.parts.push({
+      alias: decl.alias,
+      storage: decl.storage,
+      directory: dir,
+      ...(provenance ? { commit: provenance } : {}),
+      partOf,
+      subsystems: [],
+      specIds: [],
+      contentDigest: contentDigestOf(dir, files),
+      availability: decl.storage === 'git' ? 'cache' : 'live',
+    });
+  }
+
+  /** Whether a part's configuration says what the part is and nothing a project says. */
+  private judgePartConfiguration(raw: RawRoot, decl: MemberDeclarationRead, dir: string, partOf: PartOf | null, document: Record<string, unknown> | null): void {
+    const fields = document ? PART_FORBIDDEN_FIELDS.filter((f) => document[f] !== undefined) : [];
+    if (fields.length > 0) {
+      this.memberProblem(raw, 'kind-mismatch', decl.alias, `the part "${decl.alias}" declares ${fields.map((f) => `\`${f}\``).join(', ')} without the id that would make it a project ${whereToEdit(decl, dir)} — add the id (\`wairon member promote ${decl.alias}\`), or move those fields to this project's configuration: a part is governed by its parent's`);
+    }
+    const ownId = idOf(raw);
+    if (decl.storage === 'contained') {
+      if (partOf !== null) {
+        this.memberProblem(raw, 'kind-mismatch', decl.alias, `the contained part "${decl.alias}" declares \`partOf\` ${whereToEdit(decl, dir)}, which only a part stored outside its parent needs — delete that configuration: its parent finds it`);
+      }
+      return;
+    }
+    if (partOf === null) {
+      this.memberProblem(raw, 'kind-mismatch', decl.alias, missingPartOfDetail(decl, dir, ownId));
+    } else if (ownId !== undefined && partOf.project !== ownId) {
+      this.memberProblem(raw, 'kind-mismatch', decl.alias, `the part "${decl.alias}" says it is a part of "${partOf.project}", but "${ownId}" declares it — correct \`partOf.project\` to "${ownId}" ${whereToEdit(decl, dir)}`);
+    }
+  }
+
+  /**
+   * Read every spec document under a specs directory into a root's index, as
+   * written: the root's own (`systemYaml` is its L0, skipped here) or a part's
+   * (stage 8). Each implementation's file paths are re-expressed from
+   * `baseDir` — the folder holding them — against the root. Answers the files
+   * read, for a part's content digest.
+   */
+  private readSpecDocuments(raw: RawRoot, specsDir: string, systemYaml: string | null, baseDir: string): string[] {
+    const key = raw.record.namespace;
+    // Track every visited specs dir (even absent ones, so their later creation
+    // is picked up) for the freshness signature.
+    this.scanVisitedSpecDirs.push(specsDir);
+    if (!pathExists(specsDir)) return [];
     const index = raw.index;
     // The first declaration of a key in one root stays; a second is a duplicate.
     const keep = <T extends { id: string }>(kind: keyof SpecIndex['paths'], list: T[], spec: T, file: string): void => {
@@ -2596,8 +2945,10 @@ export class SpecWorkspace {
       list.push(spec);
       index.paths[kind][spec.id] = file;
     };
+    const files: string[] = [];
     for (const file of listSpecFiles(specsDir)) {
-      if (path.normalize(file) === systemYaml) continue;
+      if (systemYaml !== null && path.normalize(file) === systemYaml) continue;
+      files.push(file);
       let detectedType = 'spec';
       // The refused spec's own id, once the file got far enough to have one.
       let rawId: string | undefined;
@@ -2631,11 +2982,13 @@ export class SpecWorkspace {
           // Every source file the implementation names, its own and each
           // method's, is normalized against the root of the project holding it.
           const normalizeSourcePath = (p: string): string =>
-            path.relative(raw.dir, path.resolve(raw.dir, p)).replace(/\\/g, '/');
+            path.relative(raw.dir, path.resolve(baseDir, p)).replace(/\\/g, '/');
           if (parsed.sourcePath) parsed.sourcePath = normalizeSourcePath(parsed.sourcePath);
           for (const method of parsed.methods) {
             if (method.sourcePath) method.sourcePath = normalizeSourcePath(method.sourcePath);
           }
+          // A part's simulation harness is named from the part's root too.
+          if (baseDir !== raw.dir && parsed.simPath) parsed.simPath = normalizeSourcePath(parsed.simPath);
           keep('implementation', index.implementations, parsed, file);
         } else if ('kind' in doc) {
           if ((doc as { kind?: unknown }).kind === 'group') {
@@ -2663,6 +3016,7 @@ export class SpecWorkspace {
         });
       }
     }
+    return files;
   }
 
   /**
@@ -2746,6 +3100,15 @@ export class SpecWorkspace {
     ].map((s) => s.id);
     raw.record.problems.forEach((p) => { if (p.kind === 'duplicate-spec' && p.id && !p.id.includes('::') && key) p.id = keyIn(key, p.id); });
     raw.record.system = keyedSystem(raw.rawSystem, key, raw.localSubsystems);
+    // Step 11: each part's spec keys — the root's own keys whose files the part holds.
+    for (const part of raw.record.parts) {
+      if (part.directory === undefined) continue;
+      const dir = part.directory;
+      const held = (kind: keyof SpecIndex['paths']): string[] =>
+        Object.entries(index.paths[kind]).filter(([, file]) => isWithin(dir, file)).map(([id]) => id);
+      part.subsystems = held('subsystem');
+      part.specIds = (Object.keys(index.paths) as (keyof SpecIndex['paths'])[]).flatMap(held);
+    }
   }
 
   /**
@@ -2784,6 +3147,60 @@ export class SpecWorkspace {
   listProjectRoots(): ScannedProjectRoot[] {
     this.scanAll();
     return this.cachedRoots;
+  }
+
+  // -------------------------------------------------------------------------
+  // Stage 8: a spec's home
+  // -------------------------------------------------------------------------
+
+  /** The part whose folder holds a file (stage 8), with the declaration it was read under; null when none does. */
+  partHolding(file: string): { part: ScannedPart; source?: ExternalSource } | null {
+    this.scanAll();
+    for (const raw of this.cachedRawRoots) {
+      for (const part of raw.record.parts) {
+        if (part.directory === undefined || !isWithin(part.directory, file)) continue;
+        return { part, source: raw.members.find((m) => m.alias === part.alias)?.source };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * spec_registry.save step 2-4 (stage 8): the home a typed writer resolved is
+   * refused before anything is written when it lies in a part fetched from
+   * git — its files are the fetch cache's, read-only.
+   */
+  private assertHomeWritable(file: string): void {
+    const held = this.partHolding(file);
+    if (held?.part.storage !== 'git') return;
+    throw new PartReadOnly(
+      `The spec file ${file} belongs to the part "${held.part.alias}", fetched from git (${held.source?.git ?? 'its repository'} at ${held.part.commit ?? 'its pinned commit'}): `
+      + 'a git part is read-only here. Edit it in its own repository, commit it there, and take it in with `wairon member update '
+      + `${held.part.alias}\`. Nothing was written.`,
+    );
+  }
+
+  /**
+   * The key one spec file is approved under (stage 8): its path from the bound
+   * root, POSIX — or, for a part's file, `members/<alias>/<path inside the
+   * part>`, so moving a part's storage changes no key.
+   */
+  approvalKeyOf(file: string): string {
+    this.scanAll();
+    return approvalKeyIn(file, this.rootDir, this.cachedRoots[0]?.parts ?? []);
+  }
+
+  /** The file store's write, at a home the writer resolved — a part's folder included, a git part's refused. */
+  private writeHome(file: string, document: unknown): void {
+    this.assertHomeWritable(file);
+    writeSpecFile(file, document);
+  }
+
+  /** The file store's delete, pruning up to the specs folder the file lives in (its part's, for a part's file). */
+  private removeHome(file: string): boolean {
+    this.assertHomeWritable(file);
+    const part = this.partHolding(file)?.part;
+    return removeSpecFile(file, part?.directory ? aiPathsAt(part.directory).specsDir() : this.paths.specsDir());
   }
 
   // -------------------------------------------------------------------------
@@ -3253,7 +3670,10 @@ export class SpecWorkspace {
     // paths are read against the member root.
     const member = this.getSubprojectPrefix(spec.id);
     const memberRoot = member ? this.resolveSubprojectForNamespace(member) : null;
-    return memberRoot ? childRelativeFilePaths(relative, this.rootDir, memberRoot) : relative;
+    if (memberRoot) return childRelativeFilePaths(relative, this.rootDir, memberRoot);
+    // A part's implementation (stage 8) names its files from the part's root.
+    const partDir = this.partHolding(this.getImplementationPath(spec.id, spec.contract))?.part.directory;
+    return partDir ? partRelativeFilePaths(relative, this.rootDir, partDir) : relative;
   }
 
   prepareTypeForWrite(spec: TypeSpec): TypeSpec {
@@ -3324,6 +3744,7 @@ export class SpecWorkspace {
    */
   private writeSubsystemSpec(spec: SubsystemSpec, opts?: SaveSpecOptions): void {
     const p = this.getSubsystemPath(spec.id);
+    this.assertHomeWritable(p);
     ensureDir(path.dirname(p));
 
     const { prefix } = splitNamespace(spec.id);
@@ -3367,13 +3788,13 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeSpecFile(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id));
+    this.writeHome(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id));
     invalidateSpecCache();
   }
 
   deleteSubsystemSpec(id: string): boolean {
     const p = this.getSubsystemPath(id);
-    if (!removeSpecFile(p, this.paths.specsDir())) return false;
+    if (!this.removeHome(p)) return false;
     invalidateSpecCache();
     return true;
   }
@@ -3411,6 +3832,7 @@ export class SpecWorkspace {
   saveComponentSpec(spec: ComponentSpec, opts?: SaveSpecOptions): string[] {
     const notices: string[] = [];
     const p = this.getComponentPath(spec.id, spec.subsystem);
+    this.assertHomeWritable(p);
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareComponentForWrite(spec);
@@ -3449,7 +3871,7 @@ export class SpecWorkspace {
       );
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeSpecFile(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id));
+    this.writeHome(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id));
     invalidateSpecCache();
     // Keep the physical layout in sync with ownership: nest owned members under
     // their pattern, and move anything an `owns` change has displaced.
@@ -3459,7 +3881,7 @@ export class SpecWorkspace {
 
   deleteComponentSpec(id: string): boolean {
     const p = this.getComponentPath(id);
-    if (!removeSpecFile(p, this.paths.specsDir())) return false;
+    if (!this.removeHome(p)) return false;
     invalidateSpecCache();
     return true;
   }
@@ -3470,6 +3892,8 @@ export class SpecWorkspace {
     // Only the nested-tree layout is normalized (skip the legacy flat components/ dir).
     if (!currentPath || !currentPath.endsWith('.index.yaml')) return null;
     if (comp.id.includes('::')) return null;
+    // A git part's layout is its repository's: its files are never moved here.
+    if (this.partHolding(currentPath)?.part.storage === 'git') return null;
 
     const owner = findOwner(comp.id, index.components);
     if (owner) {
@@ -3572,6 +3996,7 @@ export class SpecWorkspace {
     const notices: string[] = [];
     const p = this.getInterfacePath(spec.id, spec.component);
     this.assertPathHoldsNoOtherSpec(p, spec.id, 'interface', `component "${spec.component}"`);
+    this.assertHomeWritable(p);
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareInterfaceForWrite(spec);
@@ -3599,14 +4024,14 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeSpecFile(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id));
+    this.writeHome(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id));
     invalidateSpecCache();
     return notices;
   }
 
   deleteInterfaceSpec(id: string): boolean {
     const p = this.getInterfacePath(id);
-    if (!removeSpecFile(p, this.paths.specsDir())) return false;
+    if (!this.removeHome(p)) return false;
     invalidateSpecCache();
     return true;
   }
@@ -3645,6 +4070,7 @@ export class SpecWorkspace {
     const notices: string[] = [];
     const p = this.getImplementationPath(spec.id, spec.contract);
     this.assertPathHoldsNoOtherSpec(p, spec.id, 'implementation', `contract "${spec.contract}"`);
+    this.assertHomeWritable(p);
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareImplementationForWrite(spec);
@@ -3664,14 +4090,14 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeSpecFile(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id));
+    this.writeHome(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id));
     invalidateSpecCache();
     return notices;
   }
 
   deleteImplementationSpec(id: string): boolean {
     const p = this.getImplementationPath(id);
-    if (!removeSpecFile(p, this.paths.specsDir())) return false;
+    if (!this.removeHome(p)) return false;
     invalidateSpecCache();
     return true;
   }
@@ -3700,6 +4126,7 @@ export class SpecWorkspace {
     const existing = this.loadTypeSpec(spec.id);
     const group = spec.group || (existing ? existing.group : undefined);
     const p = this.getTypePath(spec.id, spec.subsystem, group);
+    this.assertHomeWritable(p);
     ensureDir(path.dirname(p));
 
     const subsystemChanged = existing
@@ -3729,7 +4156,7 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeSpecFile(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id));
+    this.writeHome(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id));
     invalidateSpecCache();
     return notices;
   }
@@ -3737,7 +4164,7 @@ export class SpecWorkspace {
   deleteTypeSpec(id: string): boolean {
     const spec = this.loadTypeSpec(id);
     const p = this.getTypePath(id, spec?.subsystem, spec?.group);
-    if (!removeSpecFile(p, this.paths.specsDir())) return false;
+    if (!this.removeHome(p)) return false;
     invalidateSpecCache();
     return true;
   }
@@ -3756,6 +4183,7 @@ export class SpecWorkspace {
 
   saveGroupSpec(spec: GroupSpec, opts?: SaveSpecOptions): void {
     const p = this.getGroupPath(spec.id);
+    this.assertHomeWritable(p);
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareGroupForWrite(spec);
@@ -3765,13 +4193,13 @@ export class SpecWorkspace {
       specToWrite.createdAt = existing.createdAt;
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    writeSpecFile(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id));
+    this.writeHome(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id));
     invalidateSpecCache();
   }
 
   deleteGroupSpec(id: string): boolean {
     const p = this.getGroupPath(id);
-    if (!removeSpecFile(p, this.paths.specsDir())) return false;
+    if (!this.removeHome(p)) return false;
     invalidateSpecCache();
     return true;
   }
@@ -3973,7 +4401,7 @@ export class SpecWorkspace {
       );
     }
     if (JSON.stringify(document) === JSON.stringify(stored)) return false;
-    writeSpecFile(file, document);
+    this.writeHome(file, document);
     invalidateSpecCache();
     return true;
   }

@@ -34,7 +34,9 @@ import {
   type ExternalStatus,
   type ExternalUseStatus,
   type ExternalsLock,
+  type PinnedParent,
   type ResolvedExternal,
+  isPart,
 } from '../models/index.js';
 // surfaces_core_adapter: every name this subsystem takes from sdd_core lands on
 // the adapter's own module, which re-exports it from the core portals.
@@ -47,6 +49,7 @@ import {
   resolveProjectExports,
   loadProjectConfig,
   resolveExternals,
+  excerptParent,
 } from './adapters/surfaces-core.js';
 // The pinned-externals aggregate (externals_repository): the lock and the
 // snapshots it names, apart from the legacy .wai/surfaces snapshots.
@@ -693,15 +696,17 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
  * for aliases no longer declared are removed.
  */
 export function pinExternals(aliases?: string[]): ExternalPin[] {
-  // Step 1: the declared externals, each bound to its producer.
+  // Steps 1-4 (stage 8): a part declares no externals — what it pins is its parent.
+  if (isPart(loadProjectConfig())) return pinParent(aliases);
+  // Step 5: the declared externals, each bound to its producer.
   const bindings = resolveExternals();
-  // Steps 2-4: the aliases asked for — an undeclared one refused before any write.
+  // Steps 6-8: the aliases asked for — an undeclared one refused before any write.
   const declared = bindings.map((b) => b.external.alias);
   const named = aliases && aliases.length > 0 ? aliases : undefined;
   const unknown = (named ?? []).filter((a) => !declared.includes(a));
   if (unknown.length) throw new UnknownExternalAliasError(unknown, declared);
   const kept = named ? bindings.filter((b) => named.includes(b.external.alias)) : bindings;
-  // Step 5: the current lock (none yet reads as empty).
+  // Step 9: the current lock (none yet reads as empty).
   const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
   const pins: ExternalPin[] = [];
   let lockChanged = false;
@@ -716,19 +721,97 @@ export function pinExternals(aliases?: string[]): ExternalPin[] {
     pins.push(pin);
     lockChanged ||= changed;
   }
-  // Steps 18-20: with no aliases named, prune the aliases no longer declared.
-  if (!named) {
-    for (const alias of Object.keys(lock.externals)) {
-      if (declared.includes(alias)) continue;
-      delete lock.externals[alias];
-      externalsRepository.removeSnapshot(alias);
-      lockChanged = true;
-    }
-  }
-  // Steps 21-22: the lock, written only when an entry was added, changed or pruned.
+  // Step 22: with no aliases named, prune the aliases no longer declared.
+  if (!named) lockChanged = prune(lock, declared) || lockChanged;
+  // Steps 23-24: the lock, written only when an entry was added, changed or pruned.
   if (lockChanged) externalsRepository.saveLock(lock);
-  // Step 23: one outcome per external handled, in declaration order.
+  // Step 25: one outcome per external handled, in declaration order.
   return pins;
+}
+
+/**
+ * isurface_orchestrator.prune — drop every lock entry whose alias the
+ * project no longer declares, with its snapshot; answers whether the lock
+ * changed. The prune half of a pin with no aliases named.
+ */
+export function prune(lock: ExternalsLock, declared: string[]): boolean {
+  // Step 1: the entries no longer declared.
+  const dropped = Object.keys(lock.externals).filter((alias) => !declared.includes(alias));
+  for (const alias of dropped) delete lock.externals[alias];
+  // Steps 2-3: each one's snapshot goes with it.
+  for (const alias of dropped) externalsRepository.removeSnapshot(alias);
+  // Step 4.
+  return dropped.length > 0;
+}
+
+/**
+ * isurface_orchestrator.pinnedParent — the owner's gate read of a PART's
+ * pinned parent (stage 8): its lock's `parent` entry and the excerpt it
+ * names, from the bound root's own .wai/externals files — never the parent's
+ * live tree. Null when the bound root is not a part.
+ */
+export function pinnedParent(): PinnedParent | null {
+  // Step 1: the bound root's configuration; nothing is bound or climbed.
+  const config = loadProjectConfig();
+  // Steps 2 and 6: not a part, nothing to answer.
+  if (!isPart(config)) return null;
+  const project = config!.partOf!.project;
+  // Step 3: the part's lock and its parent entry.
+  const entry = externalsRepository.readLock()?.parent;
+  // Step 4: the excerpt the entry names.
+  const excerpt = entry ? externalsRepository.readExcerpt(entry.project) : null;
+  // Step 5: the parent with its entry and excerpt — or the problem.
+  const problem = !entry
+    ? `part of "${project}"; validate from the parent — it has never been pinned here`
+    : !excerpt
+      ? `the pinned excerpt of "${entry.project}" (${entry.snapshot}) is missing or unreadable — re-pin with \`wairon externals pin\``
+      : excerpt.project !== project
+        ? `the pinned excerpt is of "${excerpt.project}", but this part's partOf names "${project}" — re-pin with \`wairon externals pin\``
+        : undefined;
+  return {
+    project,
+    ...(entry ? { entry } : {}),
+    ...(excerpt && !problem ? { excerpt } : {}),
+    ...(problem ? { problem } : {}),
+  };
+}
+
+/**
+ * isurface_orchestrator.pinParent — `wairon externals pin` at a PART (stage
+ * 8): take the excerpt of the parent the part's files reference — read with
+ * the parent on disk at PartOf.path — and pin it as the part's
+ * .wai/externals/<parent id>.yaml and its lock's `parent` entry. A named alias
+ * is refused before anything is written; a parent the core cannot read, or
+ * one that does not claim the part, is answered unreachable with the reason,
+ * and the previous pin stays. Never locks.
+ */
+export function pinParent(aliases?: string[]): ExternalPin[] {
+  const project = loadProjectConfig()?.partOf?.project ?? '';
+  // Steps 1-2: a part has no alias to name.
+  if (aliases && aliases.length > 0) throw new UnknownExternalAliasError(aliases, []);
+  // Step 3: the excerpt, read with the parent on disk.
+  let excerpt;
+  try {
+    excerpt = excerptParent();
+  } catch (e) {
+    return [{ alias: project, outcome: 'unreachable', project, usedNames: 0, unexported: [], detail: e instanceof Error ? e.message : String(e) }];
+  }
+  // Step 4: the part's lock (none yet reads as empty).
+  const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
+  const snapshot = `.wai/externals/${excerpt.project}.yaml`;
+  const unchanged = lock.parent?.digest === excerpt.digest && lock.parent.project === excerpt.project
+    && externalsRepository.readExcerpt(excerpt.project) !== null;
+  // Step 5: the excerpt, written when its digest moved.
+  if (!unchanged) externalsRepository.saveExcerpt(excerpt);
+  // Step 6: the lock's parent entry, recorded when it changed.
+  const entry: ExternalLockEntry = { project: excerpt.project, snapshot, digest: excerpt.digest, used: {}, role: 'parent', ...(excerpt.commit ? { commit: excerpt.commit } : {}) };
+  const entryMoved = canonicalize(lock.parent ?? null) !== canonicalize(entry);
+  if (entryMoved) externalsRepository.saveLock({ ...lock, parent: entry });
+  // Step 7: one outcome, the parent's.
+  return [{
+    alias: excerpt.project, outcome: unchanged && !entryMoved ? 'unchanged' : 'pinned', project: excerpt.project,
+    snapshot, digest: excerpt.digest, usedNames: 0, unexported: [],
+  }];
 }
 
 /** Compare every used member — the lock's, and the one the references use now — with the live snapshot. */

@@ -75,9 +75,12 @@ function makeNodes(roots: ScannedProjectRoot[]): ProjectNode[] {
       aliases: root.aliases,
       externals: [],
       imports: root.config ? [
-        ...declaredMembers(root.config).filter((m) => !m.problem).map((m) => ({ alias: m.alias, section: 'members' as const, use: m.use })),
+        ...declaredMembers(root.config).filter((m) => !m.problem && !root.parts.some((p) => p.alias === m.alias))
+          .map((m) => ({ alias: m.alias, section: 'members' as const, use: m.use })),
         ...declaredExternals(root.config).filter((e) => !e.problem).map((e) => ({ alias: e.alias, section: 'externals' as const, use: e.use })),
       ] : [],
+      // Stage 8: the root's parts as the scan recorded them — not nodes.
+      parts: root.parts,
     };
   });
 }
