@@ -277,24 +277,36 @@ methods:
     params: []
   - name: addMember
     description: >-
-      The sdd_add_member workflow: create a member of the bound project — scaffold its project
-      (configuration with the alias as its project id, L0), each part only when absent, and declare
-      it in project.yaml `members` with the path and description. A newly created configuration
-      carries the bound project's required packs, once; the answer states the packs it applied and
-      the requirements nothing installed satisfies, and shows no impact report (an unattended
+      The sdd_add_member workflow: create a member of the bound project — a PART by default (stage
+      8: its specs directory and a configuration naming its parent; its subsystems are the project's
+      own), or a PROJECT with `as: project` (configuration with the alias as its project id, L0, the
+      bound project's required packs once) — each piece only when absent, at a contained path or a
+      source (a sibling path, or a git repository pinned at its ref's head), and declare it in
+      project.yaml `members`. The answer states what was created and, for a project, the packs it
+      applied and the requirements nothing installed satisfies; no impact report (an unattended
       write).
-    signature: 'addMember(alias: string, path: string, description?: string): MemberCreation'
+    signature: >-
+      addMember(alias: string, path: string | null, description?: string, as?: string, source?:
+      ExternalSource): MemberCreation
     returns: MemberCreation
     params:
       - name: alias
         type: string
-        description: The member's alias and new project id
+        description: The member's alias (a project's new id)
       - name: path
-        type: string
-        description: The member's root, relative to the bound project root
+        type: string | null
+        description: A contained member's root, relative to the bound project root; null when source is given
       - name: description
         type: string
         description: What the member is to this project
+        optional: true
+      - name: as
+        type: string
+        description: part (default) or project
+        optional: true
+      - name: source
+        type: ExternalSource
+        description: A sibling path or git source
         optional: true
   - name: packImpact
     description: >-
@@ -318,4 +330,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-30T20:40:09.268Z'
+updatedAt: '2026-10-02T20:34:05.023Z'

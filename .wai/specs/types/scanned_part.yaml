@@ -1,0 +1,77 @@
+kind: value-object
+id: scanned_part
+name: ScannedPart
+description: >-
+  One part of a project as the scan read it (stage 8): where its files came from and which of the
+  declaring project's specs they hold. A part is not a project root — it has no key, no alias table,
+  no L0 and no export table of its own — so it is recorded on the root that declares it, and every
+  spec it holds is keyed under that root exactly as if the files lay in the root's own specs folder
+  (part-is-the-parents-subsystem). The canvas draws its subsystems as the parent's, with a storage
+  badge; the gate identity hashes its specs as the parent's own; the problems met reading it become
+  member-kinds findings.
+subsystem: sdd_core
+fields:
+  - name: alias
+    type: string
+    description: The `members` key the declaring project gives it.
+    optional: false
+    key: primary
+  - name: kindSource
+    type: string
+    description: 'declared | default: `as: part` written, or `as` absent and the root not project-shaped.'
+    optional: false
+  - name: storage
+    type: string
+    description: 'contained | path | git: where its files live (a part is never a hosted record).'
+    optional: false
+  - name: directory
+    type: string
+    description: >-
+      The directory its specs were read from, absolute: the contained or sibling root, or the git
+      cache directory of the pinned commit. Absent when it could not be read.
+    optional: true
+  - name: commit
+    type: string
+    description: >-
+      git: the pinned commit it was loaded at. path or contained: the commit of the work tree that
+      holds it, when it is in one (git_source_adapter.head) — recorded by the parent's lock as
+      provenance, never compared by a verdict.
+    optional: true
+  - name: partOf
+    type: PartOf | null
+    description: What the part's own configuration says it belongs to; null when it has no configuration.
+    optional: false
+  - name: subsystems
+    type: string[]
+    description: >-
+      The keys of the subsystems its files declare — the declaring project's subsystems that live in
+      this part.
+    optional: false
+  - name: specIds
+    type: string[]
+    description: The keys of every spec its files declare, under the declaring root's key.
+    optional: false
+  - name: contentDigest
+    type: string
+    description: >-
+      sha256:… over its spec documents in canonical form, keyed by their path inside the part
+      (storage-independent). What the parent's lock records for it beside the commit.
+    optional: true
+  - name: availability
+    type: string
+    description: >-
+      live | cache | unavailable: read from a directory on disk, read from the git cache at the
+      pinned commit, or not read at all.
+    optional: false
+  - name: reason
+    type: string
+    description: >-
+      Why it is unavailable: the contained or sibling directory is absent; the git commit is not
+      cached and could not be fetched (offline, refused, unknown commit); the git source has no
+      pinned commit. Reported PART_UNAVAILABLE by the declaring project's own gate — its own
+      subsystems are missing, so its verdict cannot be a pass.
+    optional: true
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-10-02T20:17:18.690Z'
+updatedAt: '2026-10-02T20:17:18.692Z'

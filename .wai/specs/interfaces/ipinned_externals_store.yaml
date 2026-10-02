@@ -47,6 +47,24 @@ methods:
       - name: alias
         type: string
     effect: write
+  - name: readExcerpt
+    description: A part's pinned parent excerpt, or null.
+    signature: 'readExcerpt(project: string): ParentExcerpt | null'
+    returns: ParentExcerpt | null
+    params:
+      - name: project
+        type: string
+        description: The parent's project id
+    effect: read
+  - name: writeExcerpt
+    description: Replace a part's pinned parent excerpt.
+    signature: 'writeExcerpt(excerpt: ParentExcerpt): void'
+    returns: void
+    params:
+      - name: excerpt
+        type: ParentExcerpt
+        description: The excerpt
+    effect: write
 status: complete
 createdAt: '2026-09-26T17:47:50.203Z'
-updatedAt: '2026-09-26T18:43:59.941Z'
+updatedAt: '2026-10-02T20:23:26.981Z'

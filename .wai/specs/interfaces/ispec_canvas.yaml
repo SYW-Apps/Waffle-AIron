@@ -9,11 +9,14 @@ methods:
   - name: build
     description: >-
       Project the current project's spec tree into the canvas model: the nodes, their containment,
-      the edges between them, and any findings to surface on them. Each member of the bound project
-      gets a project node, its specs contained in it and reached through its exports; a subsystem
-      whose key repeats its member's alias (`billing::billing`) keeps its honest id and is labelled
-      by its local name only. Findings are passed in rather than computed here — the canvas draws a
-      judgement, it does not make one.
+      the edges between them, and any findings to surface on them. The overview follows composition,
+      not storage (stage 8): each PROJECT member of the bound project — contained, or referenced by
+      `source` — gets a project node, its specs contained in it and reached through its exports,
+      with consumption edges between projects; each PART's subsystems are drawn as the bound
+      project's own subsystems with a storage badge (contained, sibling, git and its commit). A
+      subsystem whose key repeats its member's alias (`billing::billing`) keeps its honest id and is
+      labelled by its local name only. Findings are passed in rather than computed here — the canvas
+      draws a judgement, it does not make one.
     signature: 'build(issues?: ValidationIssue[]): CanvasModel'
     returns: CanvasModel
     params:
@@ -38,4 +41,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T16:38:05.210Z'
-updatedAt: '2026-09-27T10:47:29.119Z'
+updatedAt: '2026-10-02T20:36:29.593Z'

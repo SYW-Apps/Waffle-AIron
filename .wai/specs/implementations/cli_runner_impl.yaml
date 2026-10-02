@@ -394,31 +394,32 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
       - stepNumber: 2
-        description: Require the member's path
+        description: 'Require exactly one location: a contained path, or --source (a sibling path, or a git URL)'
         type: branch
         condition: no path was given
         onFalseStep: 4
       - stepNumber: 3
-        description: 'Reject: a member needs a path (`wairon member add <alias> <path>`)'
+        description: >-
+          Reject: a member needs a path or a --source (`wairon member add <alias> <path>` or
+          `--source <path|git-url>`), not both
         type: throw
-        error: 'a path is required: wairon member add <alias> <path>'
+        error: 'a location is required: wairon member add <alias> <path> | --source <path|git-url>'
       - stepNumber: 4
         description: >-
-          Scaffold the member project (configuration declaring the alias as its id, L0), each part
-          only when absent, and declare it in this project's `members` with --description when given
-          — idempotent, so a re-run changes nothing and a different member under the alias is
-          refused
+          Create the member through the core adapter — a part by default, a project with --project —
+          each piece only when absent, and declare it in this project's `members` with --description
+          when given; idempotent, so a re-run completes a partial scaffold
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createMember
       - stepNumber: 5
         description: >-
-          Print confirmation (the alias and the member's path); when the member's configuration was
-          created, state the required packs it applied (name and pinned version) and the projectType
-          it set, and name each requirement nothing installed satisfies with the `wairon pack
-          install` / `pack use` that adopts it — scaffolding is an unattended pack write, so it
-          shows no impact report. Then next steps: design the member from its own root, export what
-          others consume from its L0
+          Print confirmation: the alias, part or project, where it lives (and a git member's pinned
+          commit); for a project whose configuration was created, the required packs it applied
+          (name and pinned version), the projectType it set, and each requirement nothing installed
+          satisfies. For a part, one line on the growth path: its subsystems are this project's own;
+          `wairon member promote` makes it a project when it needs its own team, release, approval
+          or public surface
         type: local
   - name: runInit
     sourcePath: src/commands/init.ts
@@ -3117,6 +3118,63 @@ methods:
         type: return
         outcome: reported
     detail: full
+  - name: runMemberPromote
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the promote request, with --id
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberDemote
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the demote request, its destination from --home and the pack choice
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberUpdate
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Move the member's pin through the core adapter — a dry run with --report
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: advanceMember
+      - stepNumber: 3
+        description: >-
+          Print the commits (from → to, the ref resolved), the spec files added, changed and
+          removed, and, when it wrote and content moved, that this project's lock reads stale until
+          `wairon lock`
+        type: local
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -3132,4 +3190,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-01T23:46:46.729Z'
+updatedAt: '2026-10-02T20:35:05.749Z'

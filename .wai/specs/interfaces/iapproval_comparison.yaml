@@ -9,7 +9,12 @@ description: >-
 component: approval_comparison
 methods:
   - name: captureApprovedSpecs
-    description: Build the per-spec digest map to write into an approval record, for the tree as it stands.
+    description: >-
+      Build the per-spec digest map to write into an approval record, for the tree as it stands: the
+      project's own spec files by their path from its root, and — since stage 8 — each part's spec
+      files under `members/<alias>/<path inside the part>`, so a part's specs are approved by its
+      parent's lock spec by spec and moving a part's storage changes no key. A part fetched from git
+      is digested from the cache at its pinned commit.
     signature: 'captureApprovedSpecs(root?: string): Record<string, string>'
     returns: Record<string, string>
     params:
@@ -81,4 +86,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T15:19:05.602Z'
-updatedAt: '2026-09-30T05:49:18.068Z'
+updatedAt: '2026-10-02T20:26:53.130Z'

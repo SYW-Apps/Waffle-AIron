@@ -2,10 +2,12 @@ kind: value-object
 id: declared_member
 name: DeclaredMember
 description: >-
-  One member as the configuration declares it, normalized from either form: the alias, the path as
-  written, the description when the long form gives one, and what is wrong with the declaration on
-  its own (before the loader looks for the directory). The answer of
-  project_config.declaredMembers().
+  One member as the configuration declares it, normalized from either form: the alias, what it is as
+  written (`as`), where it lives (a contained path, or a source normalized from either the object or
+  the string shorthand) and the storage that implies, the description, and what is wrong with the
+  declaration on its own (before the loader looks for the directory). Whether an absent `as` reads
+  as part or project needs the member's files, so it is the scan's to decide (ScannedPart /
+  ProjectNode.kindSource), never this value's. The answer of project_config.declaredMembers().
 subsystem: sdd_core
 fields:
   - name: alias
@@ -17,8 +19,10 @@ fields:
     key: primary
   - name: path
     type: string
-    description: The member's root directory as written, relative to the declaring project's root.
-    optional: false
+    description: >-
+      A contained member's root directory as written, relative to the declaring project's root;
+      absent for a member declared by `source`.
+    optional: true
   - name: description
     type: string
     description: The long form's description, when given.
@@ -26,9 +30,13 @@ fields:
   - name: problem
     type: string
     description: >-
-      Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+, an empty
-      path, an absolute path, an alias this configuration also declares under `externals` (one alias
-      names one project), or a `use` entry that is neither `*` nor a public name of [a-z0-9-_]+.
+      Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+, both or
+      neither of `path` and `source`, an empty or absolute `path`, a source naming more or fewer
+      than one of path, git and hosted, a git source with no commit, an `as` other than part or
+      project, a part with a hosted source (a part lives in its parent's record), a `use` on a part
+      (its names are already the project's own), an alias this configuration also declares under
+      `externals` (one alias names one project), or a `use` entry that is neither `*` nor a public
+      name of [a-z0-9-_]+.
     optional: true
   - name: use
     type: string[]
@@ -36,7 +44,25 @@ fields:
       The long form's `use` as written, deduplicated in first-seen order; empty for the shorthand
       and when it imports nothing.
     optional: false
+  - name: as
+    type: string
+    description: >-
+      part | project as written; absent when the declaration does not say (the scan then decides:
+      part, or project by inference).
+    optional: true
+  - name: source
+    type: ExternalSource
+    description: >-
+      The `source` normalized to its object form (a string read as git or path); absent for a
+      contained member.
+    optional: true
+  - name: storage
+    type: string
+    description: >-
+      contained | path | git | hosted: where the member's files live, from `path` or the source's
+      one set field. Shown on the canvas as the part's storage badge.
+    optional: false
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:33.853Z'
-updatedAt: '2026-09-28T16:05:28.674Z'
+updatedAt: '2026-10-02T20:16:39.172Z'

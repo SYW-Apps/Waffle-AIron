@@ -9,15 +9,19 @@ methods:
     description: >-
       The completeness report for the tree, or for one subsystem when the options name it, marked up
       however the caller asked — and whether it could be produced at all. The bound project's
-      subsystems print as subsystems and each member it reaches prints as a project holding its own
-      subsystems, never as a subsystem of its parent; when the options carry the pin tree
-      (options.approvals), each member's line carries its approval state (approved | drifted |
-      never) and how its parent pinned it (matches | moved | unpinned), and the report ends with the
-      root's own state. A parse failure is reported rather than thrown, because a tree that will not
-      load is exactly when somebody is asking after its status; it comes back as text with `failed`
-      set, so a caller decides what to do from the fact rather than by recognising a sentence. There
-      is ONE renderer: the terminal and the MCP status tool read the same text, differing only in
-      what they do with the roles and the fact it hands back.
+      subsystems print as subsystems — a part's subsystems among them (stage 8), each marked with
+      the part's alias and storage (and a git part's short commit), and a part that could not be
+      read printed as unavailable with its reason — and each PROJECT member it reaches prints as a
+      project holding its own subsystems, never as a subsystem of its parent; when the options carry
+      the pin tree (options.approvals), each project member's line carries its approval state
+      (approved | drifted | never) and how its parent pinned it (matches | moved | unpinned), and
+      the report ends with the root's own state. At a part's root it prints one line — "part of
+      <parent>" with its pin state — above the part's own subsystems. A parse failure is reported
+      rather than thrown, because a tree that will not load is exactly when somebody is asking after
+      its status; it comes back as text with `failed` set, so a caller decides what to do from the
+      fact rather than by recognising a sentence. There is ONE renderer: the terminal and the MCP
+      status tool read the same text, differing only in what they do with the roles and the fact it
+      hands back.
     signature: 'report(options: StatusOptions, decor?: StatusDecor): StatusReport'
     returns: StatusReport
     params:
@@ -31,4 +35,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-23T11:46:44.909Z'
-updatedAt: '2026-09-30T05:56:11.875Z'
+updatedAt: '2026-10-02T20:36:33.734Z'

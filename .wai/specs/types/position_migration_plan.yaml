@@ -29,7 +29,13 @@ fields:
       reference it resolves and whether the producer needs the export and the consumer the external
       — which the chaining migration plans with its own entries and declarations
     optional: false
+  - name: kinds
+    type: PlannedMemberKind[]
+    description: >-
+      Stage 8's member-kind repairs: `as: project` on every member read as a project by inference,
+      PartOf on every part lacking one; projects in walk order.
+    optional: false
 methods: []
 sourcePath: src/migrations/position-migration.ts
 createdAt: '2026-09-27T10:44:31.358Z'
-updatedAt: '2026-09-30T21:05:11.591Z'
+updatedAt: '2026-10-02T20:38:06.795Z'

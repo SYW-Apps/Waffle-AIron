@@ -1,0 +1,20 @@
+id: part_context
+name: Part Context
+description: >-
+  What a part needs to know about the project it is a part of, read with the parent on disk (stage
+  8): the excerpt of the parent's specs the part's files reference, closed over what judging them
+  needs, with the governing configuration the parent judges its parts under. It reads and never
+  writes: pinning the excerpt is the surface plane's (`wairon externals pin` at a part), and judging
+  against it is the owner's gate's. A read Orchestrator, not an Index, because it reads two roots
+  (the part's and its parent's) under two bindings and composes one answer from them.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_loader
+  - project_config_repository
+  - git_source_adapter
+dependencyClass: read
+status: design
+createdAt: '2026-10-02T20:23:40.695Z'
+updatedAt: '2026-10-02T20:23:40.708Z'

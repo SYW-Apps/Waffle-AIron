@@ -329,6 +329,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadTypeSpecs
+  - name: advanceMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: advanceMember
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:51:15.137Z'
+updatedAt: '2026-10-02T20:34:43.181Z'

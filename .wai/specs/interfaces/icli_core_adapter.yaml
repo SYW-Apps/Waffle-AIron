@@ -498,21 +498,32 @@ methods:
       - idempotent
   - name: createMember
     description: >-
-      Forward to spec_maintenance_portal.createMember: scaffold a member project (with the bound
-      project's required packs, once, when its configuration is created) and declare it in the bound
-      project's `members`; answers what was scaffolded.
-    signature: 'createMember(alias: string, path: string, description?: string): MemberCreation'
+      Forward to spec_maintenance_portal.createMember: create a member — a part by default, a
+      project with `as: project` (stage 8; a project with the bound project's required packs, once)
+      — at a contained path or a source, declare it in the bound project's `members`; answers what
+      was created.
+    signature: >-
+      createMember(alias: string, path: string | null, description?: string, as?: string, source?:
+      ExternalSource): MemberCreation
     returns: MemberCreation
     params:
       - name: alias
         type: string
-        description: The member's alias and new project id
+        description: The member's alias
       - name: path
-        type: string
-        description: The member's root, relative to the bound project root
+        type: string | null
+        description: A contained member's root; null when source is given
       - name: description
         type: string
         description: What the member is to this project
+        optional: true
+      - name: as
+        type: string
+        description: part (default) or project
+        optional: true
+      - name: source
+        type: ExternalSource
+        description: A sibling path or git source
         optional: true
   - name: loadTypeSpecs
     description: >-
@@ -521,6 +532,28 @@ methods:
     signature: 'loadTypeSpecs(): TypeSpec[]'
     returns: TypeSpec[]
     params: []
+  - name: advanceMember
+    description: >-
+      Forward to spec_maintenance_portal.advanceMember: move a git member's pinned commit (`wairon
+      member update`).
+    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: boolean): MemberAdvance'
+    returns: MemberAdvance
+    params:
+      - name: alias
+        type: string
+        description: A git member's alias
+      - name: ref
+        type: string
+        description: The ref to follow
+        optional: true
+      - name: commit
+        type: string
+        description: An exact commit
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Report and write nothing
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-01T23:45:17.647Z'
+updatedAt: '2026-10-02T20:34:41.850Z'

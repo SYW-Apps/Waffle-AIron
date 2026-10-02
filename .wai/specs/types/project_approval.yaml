@@ -54,7 +54,23 @@ fields:
       recorded another subject, so the parent's own lock is stale until it re-locks), unpinned (the
       parent has no lock, or its lock names no pin for this alias). Absent on the root's own entry.
     optional: true
+  - name: as
+    type: string
+    description: >-
+      part | project (stage 8). A part's state is its declaring project's, and it has no subject of
+      its own.
+    optional: true
+  - name: contentDigest
+    type: string
+    description: A part's content digest (ScannedPart.contentDigest), recorded by the lock as its MemberPin.
+    optional: true
+  - name: commit
+    type: string
+    description: >-
+      The commit a part or a referenced project member was read at, when known — provenance the lock
+      records.
+    optional: true
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-09-30T06:12:20.974Z'
+updatedAt: '2026-10-02T20:27:12.874Z'

@@ -81,11 +81,16 @@ methods:
     returns: Promise<void>
   - name: runMemberAdd
     description: >-
-      `wairon member add <alias> <path> [--description]`: create a member of the current project —
-      scaffold an isolated wairon project at the path (its project.yaml declaring the alias as its
-      id, its L0) and declare it in this project's project.yaml `members`. Replaces `wairon
-      subsystem add --project-path`, which wrote the L1 mount form.
-    signature: 'runMemberAdd(alias: string, path: string, options: { description?: string }): Promise<void>'
+      `wairon member add <alias> [<path>] [--source <path|git-url>] [--project] [--description]`:
+      create a member of the current project — a PART by default (stage 8: a piece of this project
+      stored in another folder or repository, its subsystems this project's own), or with --project
+      an isolated wairon project (its project.yaml declaring the alias as its id, its L0) — at a
+      contained path or a --source (a sibling path, or a git URL pinned at its default branch's
+      head), and declare it in this project's project.yaml `members`. Replaces `wairon subsystem add
+      --project-path`, which wrote the L1 mount form.
+    signature: >-
+      runMemberAdd(alias: string, path: string | undefined, options: { description?: string,
+      project?: boolean, source?: string }): Promise<void>
     returns: Promise<void>
   - name: runMemberMove
     description: >-
@@ -649,6 +654,35 @@ methods:
       - name: options
         type: MigrationCommandOptions
         description: '--report, --yes'
+  - name: runMemberPromote
+    description: >-
+      `wairon member promote <alias> [--id <id>] [--report] [--yes]` (stage 8): a part becomes an
+      independent project in place — its id, an export table for exactly what the rest of the
+      project uses, references respelled `alias::name`, pins on both sides, its own lock to take.
+      Plan first, confirmed, all-or-nothing, never locks. Through runMigration.
+    signature: >-
+      runMemberPromote(alias: string, options: MigrationCommandOptions & { id?: string }):
+      Promise<void>
+    returns: Promise<void>
+  - name: runMemberDemote
+    description: >-
+      `wairon member demote <alias> [--home <subsystem>] [--adopt-packs|--drop-packs] [--report]
+      [--yes]` (stage 8): a project member becomes a part of the current project in place —
+      promote's inverse; refused while another family project consumes it. Plan first, confirmed,
+      all-or-nothing, never locks. Through runMigration.
+    signature: 'runMemberDemote(alias: string, options: MigrationCommandOptions): Promise<void>'
+    returns: Promise<void>
+  - name: runMemberUpdate
+    description: >-
+      `wairon member update <alias> [--ref <ref> | --commit <sha>] [--report]` (stage 8): move a git
+      member's pinned commit to its ref's head (or the given ref or commit), first printing the
+      commits and the member's spec files added, changed and removed; --report prints and writes
+      nothing. The only way a git member's content changes. Never locks: the parent's lock reads
+      stale when the content moved.
+    signature: >-
+      runMemberUpdate(alias: string, options: { ref?: string, commit?: string, report?: boolean }):
+      Promise<void>
+    returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-01T23:45:49.036Z'
+updatedAt: '2026-10-02T20:34:54.092Z'

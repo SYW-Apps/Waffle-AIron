@@ -1,0 +1,32 @@
+kind: value-object
+id: part_of
+name: PartOf
+description: >-
+  What a part's own .wai/project.yaml says about it (stage 8): the project it is a part of, and
+  where that project's root is when it sits on disk beside it. It is the ONLY thing a part's
+  configuration declares: a part is governed by its parent's configuration (rules, packs, targets,
+  externals, members), so a part whose configuration declares any project field is
+  PART_HAS_PROJECT_CONTENT. It exists so a part opened alone (its own repository's CI) knows what it
+  belongs to: with a pinned parent excerpt it is judged against that pin, without one it says "part
+  of <parent>; validate from the parent". The parent's `members` entry (`as: part`) stays the
+  authority; the two disagreeing is MEMBER_KIND_MISMATCH. Written by `member add`, `member
+  promote`/`demote`, `subsystem externalize` and `doctor --fix`, never by hand.
+subsystem: sdd_core
+fields:
+  - name: project
+    type: string
+    description: The parent project's id, as its project.yaml declares it.
+    optional: false
+  - name: path
+    type: string
+    description: >-
+      The parent's root relative to this part's root, when the part was created or last pinned with
+      the parent on disk (`..` style for a contained part, `../platform` for a sibling checkout).
+      Read only by `wairon externals pin` at the part, to refresh the parent excerpt; never by a
+      validate, which reads the pin alone. Absent for a part fetched from git whose parent was never
+      beside it.
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-10-02T20:16:49.296Z'
+updatedAt: '2026-10-02T20:16:49.298Z'

@@ -182,24 +182,211 @@ methods:
       - stepNumber: 10
         description: Internalize written
         type: jump
-        toStep: 13
+        toStep: 21
       - stepNumber: 11
+        description: Externalize, or a composition verb?
+        type: branch
+        condition: plan.request.verb is externalize
+        onFalseStep: 15
+      - stepNumber: 12
         label: externalize
         description: >-
-          Bind the bound project's rehearsal root and externalize the subsystem; a core refusal
-          propagates
+          Bind the bound project's rehearsal root and externalize the subsystem — into a part, or
+          with `as: project` into a member project; a core refusal propagates
         type: call
         targetComponent: migration_core_adapter
         targetMethod: externalizeSubsystem
-      - stepNumber: 12
-        description: Bind the new member's rehearsal root and pin its external for the bound project
+      - stepNumber: 13
+        description: >-
+          For an externalize as project, bind the new member's rehearsal root and pin its external
+          for the bound project, then the bound project's pin of the new member; a part needs no pin
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
-      - stepNumber: 13
+      - stepNumber: 14
+        description: Externalize written
+        type: jump
+        toStep: 21
+      - stepNumber: 15
+        label: promote-or-demote
+        description: Promote or demote?
+        type: branch
+        condition: plan.request.verb is promote
+        onFalseStep: 19
+      - stepNumber: 16
+        description: >-
+          Bind the bound project's rehearsal root and promote the part in place; a core refusal
+          propagates
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: promoteMember
+      - stepNumber: 17
+        description: >-
+          Pin LAST, on both sides: the new project's external for the bound project under its
+          binding, and the bound project's pin of the new member under its own
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: pinExternals
+      - stepNumber: 18
+        description: Promote written
+        type: jump
+        toStep: 21
+      - stepNumber: 19
+        label: demote
+        description: >-
+          Bind the bound project's rehearsal root and demote the member in place with the plan's
+          destination; a core refusal propagates
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: demoteMember
+      - stepNumber: 20
+        description: >-
+          Remove the bound project's pin of the member: a part is not pinned, its specs are the
+          project's own
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: unpin
+      - stepNumber: 21
         label: restore
         description: Restore the caller's binding
         type: local
+  - name: planPromote
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Find the part under the alias in the bound node (none is not-a-part); refuse a part whose
+          storage is git (read-only: promote it in a checkout of its repository)
+        type: local
+      - stepNumber: 2
+        description: Read the bound project's resolved export table, for what other family projects use of it
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 3
+        description: >-
+          From the graph, collect what crosses the would-be boundary: each reference between the
+          part's specs and the rest of the bound project, with the component's subsystem export (one
+          not published is externalize-refused), and each trustedLink joining a part subsystem and
+          another (trusted-link-crosses); the new id against every family project's id and the bound
+          project's aliases (id-collision, alias-taken); every other family project's used names
+          realized in the part, which must stay exported through the re-pointed re-exports
+          (externalize-updates-siblings)
+        type: local
+      - stepNumber: 4
+        description: Can it be promoted?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 6
+        description: >-
+          Plan the core's promote with the id, then the pins on both sides; the bound project to
+          re-lock and the new project to lock for the first time
+        type: local
+      - stepNumber: 7
+        description: Answer the plan
+        type: return
+        outcome: the promote plan
+    detail: full
+  - name: planDemote
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Find the project member under the alias in the bound node (none is not-a-member; a part is
+          already one); refuse a member whose storage is git (read-only)
+        type: local
+      - stepNumber: 2
+        description: >-
+          From the graph's cross-project references, collect every family project OTHER than the
+          bound one that consumes the member, each with the public names it uses: any is
+          consumed-elsewhere (a part has no exports), listed
+        type: local
+      - stepNumber: 3
+        description: >-
+          With the member bound, read its configuration for the externals, members and packs the
+          destination must place; restore the binding
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: Can it be demoted?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 6
+        description: >-
+          Plan the core's demote with the destination and the removal of the bound project's pin of
+          the member; the bound project to re-lock, the member's lock listed as ended
+        type: local
+      - stepNumber: 7
+        description: Answer the plan
+        type: return
+        outcome: the demote plan
+    detail: full
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Route by verb
+        type: switch
+        'on': request.verb
+        cases:
+          - value: internalize
+            step: 2
+          - value: externalize
+            step: 4
+          - value: promote
+            step: 6
+          - value: demote
+            step: 8
+      - stepNumber: 2
+        label: internalize
+        description: Plan the internalize
+        type: call
+        targetComponent: boundary_migration
+        targetMethod: planInternalize
+      - stepNumber: 3
+        description: Planned
+        type: jump
+        toStep: 9
+      - stepNumber: 4
+        label: externalize
+        description: Plan the externalize
+        type: call
+        targetComponent: boundary_migration
+        targetMethod: planExternalize
+      - stepNumber: 5
+        description: Planned
+        type: jump
+        toStep: 9
+      - stepNumber: 6
+        label: promote
+        description: Plan the promote
+        type: call
+        targetComponent: boundary_migration
+        targetMethod: planPromote
+      - stepNumber: 7
+        description: Planned
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        label: demote
+        description: Plan the demote
+        type: call
+        targetComponent: boundary_migration
+        targetMethod: planDemote
+      - stepNumber: 9
+        label: planned
+        description: Answer the verb's plan
+        type: return
+        outcome: MigrationPlan
+    detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-10-01T05:54:04.499Z'
+updatedAt: '2026-10-02T20:38:22.408Z'

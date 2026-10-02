@@ -15,20 +15,26 @@ component: spec_validator
 methods:
   - name: validateProject
     description: >-
-      The owner's gate (stage 4): judge the bound project from its own files alone — its specs, its
-      configuration and doctrine, its code, its lock, its externals lock and pinned snapshots, and
-      the export tables of the members it contains — and nothing else. It never walks up to a
-      parent, never reads a sibling's live tree and discovers nothing, so a project's verdict is the
-      same from every root and with or without its family on disk. A reference into another project
-      is judged before any severity (the rule context's resolveCrossProject): into a contained
-      member, against that member's live L0 table; into a declared external, against the pinned
+      The owner's gate (stage 4): judge the bound project from its own files alone — its specs and
+      its PARTS' specs (stage 8: a part's subsystems are the project's own, whether contained, in a
+      sibling checkout or fetched from git at the pinned commit; a part that cannot be read is
+      PART_UNAVAILABLE, never a pass), its configuration and doctrine, its code, its lock, its
+      externals lock and pinned snapshots, and the export tables of the project members it contains
+      — and nothing else. It never walks up to a parent, never reads a sibling's live tree and
+      discovers nothing, so a project's verdict is the same from every root and with or without its
+      family on disk. A reference into another project is judged before any severity (the rule
+      context's resolveCrossProject): into a contained project member, against that member's live L0
+      table; into a declared external or a project member declared by `source`, against the pinned
       snapshot only — the public name exists, its audience covers the project, the used member
       exists — and what cannot be compared is EXTERNAL_CHECK_UNAVAILABLE, never a pass. Every
-      finding about such a reference carries its ReferenceResolution. A contained member's own specs
-      are never judged here: its gate judges them under its own configuration. A --subsystem scope
-      that names no loaded subsystem fails fast with SUBSYSTEM_NOT_FOUND. When the project declares
-      externals the result carries a one-line hint that `validate --family` composes them against
-      their live producers.
+      finding about such a reference carries its ReferenceResolution. A project member's own specs
+      are never judged here: its gate judges them under its own configuration. Opened at a PART
+      (stage 8), the gate judges the part's specs alone against its pinned parent excerpt under the
+      excerpt's governing configuration, skipping and naming the whole-system rules
+      (PART_JUDGED_ALONE, notice), or — with no pin — judges nothing and says "part of <parent>;
+      validate from the parent" (PART_UNPINNED, warning). A --subsystem scope that names no loaded
+      subsystem fails fast with SUBSYSTEM_NOT_FOUND. When the project declares externals the result
+      carries a one-line hint that `validate --family` composes them against their live producers.
     signature: 'validateProject(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
     params:
@@ -44,6 +50,17 @@ methods:
           The project type whose doctrine applies, when it is not carried on the options; defaults
           to backend
         optional: true
+    findings:
+      - code: PART_UNPINNED
+        severity: warning
+        summary: >-
+          A part opened alone has no pinned parent excerpt: part of <parent>; validate from the
+          parent.
+      - code: PART_JUDGED_ALONE
+        severity: notice
+        summary: >-
+          A part was judged alone against its pinned parent excerpt; the named whole-system rules
+          were skipped and the full verdict is the parent's.
   - name: validateRegistry
     description: Validates legacy/resolved Agent registry constraints
     signature: 'validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult'
@@ -155,4 +172,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T05:51:10.004Z'
+updatedAt: '2026-10-02T20:25:55.163Z'

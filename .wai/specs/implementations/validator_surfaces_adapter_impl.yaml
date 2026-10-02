@@ -28,6 +28,13 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: getExternalsStatus
+  - name: pinnedParent
+    narrative:
+      - stepNumber: 1
+        description: Call pinnedParent on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: pinnedParent
 status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-09-28T17:16:59.162Z'
+updatedAt: '2026-10-02T20:25:14.619Z'

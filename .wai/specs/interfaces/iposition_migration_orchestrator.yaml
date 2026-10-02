@@ -18,14 +18,17 @@ methods:
       public name the member binds to another target; a component the member does not hold; a
       non-empty trustedLinks or a lifecycle, profile, targetLanguage, designDepth or ext the member
       must hold itself); (b) each member the family declares whose directory is absent, as a
-      blocking finding; (c) each reference written with a leading `::`, `super::` or a member path,
-      raw positions included, rewritten to the scan's canonical text, or a finding when it has none
-      — and the other rewrites of a spec holding a bound reference with none are held back with it,
-      since the re-save refuses that spec whole; (d) stage 4's positional step, from
-      position_reader's match: each bare reference that resolved only by position becomes a `use`
-      import on its consumer (with whether the producer needs an export and the consumer an
-      external, which the chaining migration plans), each self-prefixed reference a rewrite to its
-      bare local id, and each ambiguous match or import collision a finding. Writes nothing.
+      blocking finding; (b2) stage 8's member kinds — `as: project` on every member read as a
+      project by inference, and PartOf on every part lacking one, each listed, so every existing
+      member stays exactly what it was (existing-members-unchanged); (c) each reference written with
+      a leading `::`, `super::` or a member path, raw positions included, rewritten to the scan's
+      canonical text, or a finding when it has none — and the other rewrites of a spec holding a
+      bound reference with none are held back with it, since the re-save refuses that spec whole;
+      (d) stage 4's positional step, from position_reader's match: each bare reference that resolved
+      only by position becomes a `use` import on its consumer (with whether the producer needs an
+      export and the consumer an external, which the chaining migration plans), each self-prefixed
+      reference a rewrite to its bare local id, and each ambiguous match or import collision a
+      finding. Writes nothing.
     signature: 'plan(family: ProjectFamily): PositionMigrationPlan'
     returns: PositionMigrationPlan
     params:
@@ -39,12 +42,13 @@ methods:
       Write the position share of a confirmed chaining migration plan into the rehearsal's roots,
       after its ids, exports (the carried and positional entries included) and externals are written
       and BEFORE its pins: move each planned mount into its parent's `members` under the parent's
-      binding, add each positional import to its consumer's `use`, rewrite each planned reference
-      from the rehearsal's top root (where the deprecated forms still bind; self-prefixed ones to
-      their bare local id), and delete each project's superseded stage-1 family pins under its
-      binding. Every write is idempotent: a mount already moved, a name already imported, a spec
-      already canonical and a pin already gone change nothing. Answers what it wrote and which
-      projects must be re-locked; locks nothing.
+      binding, write each planned member kind (`as: project` on an inferred member's declaration,
+      PartOf into a part lacking one), add each positional import to its consumer's `use`, rewrite
+      each planned reference from the rehearsal's top root (where the deprecated forms still bind;
+      self-prefixed ones to their bare local id), and delete each project's superseded stage-1
+      family pins under its binding. Every write is idempotent: a mount already moved, a kind
+      already stated, a name already imported, a spec already canonical and a pin already gone
+      change nothing. Answers what it wrote and which projects must be re-locked; locks nothing.
     signature: 'write(plan: ChainingMigrationPlan, rehearsal: Rehearsal): PositionMigrationResult'
     returns: PositionMigrationResult
     params:
@@ -58,4 +62,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-27T10:45:32.019Z'
-updatedAt: '2026-09-30T20:46:49.048Z'
+updatedAt: '2026-10-02T20:37:56.064Z'

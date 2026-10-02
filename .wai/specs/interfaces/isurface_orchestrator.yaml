@@ -56,20 +56,24 @@ methods:
         type: string
   - name: pinExternals
     description: >-
-      The `wairon externals pin` / sdd_pin_externals workflow. For each declared external (the named
-      aliases, else all): project the producer's resolved project export table at the consumer's
-      audience ceiling (project for a family producer, instance for a source.path or source.hosted
-      one) into .wai/externals/<alias>.yaml, and record in .wai/externals.lock.yaml the producer id,
-      the snapshot path, the snapshot's canonical content digest and the `used` map — every public
-      name the consumer's references land on, `alias::name` references and bare names bound through
-      the alias's `use` import alike (export usage), each used member with its canonical signature
-      digest; a name imported by `use` but referenced nowhere is not used. An unchanged snapshot is
-      not rewritten; with no aliases named, lock entries and snapshots for aliases no longer
-      declared are removed. An alias the project does not declare is refused before anything is
-      written; an unresolved or unreachable producer is reported and leaves its previous pin in
-      place — a source.hosted external pinned outside a hosted server is reported as "hosted-only
-      producer `<id>`: available only through the hosted server". The caller must gate on reach
-      itself: a producer the request may not read is reported unreachable, never read.
+      The `wairon externals pin` / sdd_pin_externals workflow. At a project: for each declared
+      external and each project member declared by `source` (the named aliases, else all): project
+      the producer's resolved project export table at the consumer's audience ceiling (project for a
+      family producer, instance for a source.path, git or hosted one) into
+      .wai/externals/<alias>.yaml, and record in .wai/externals.lock.yaml the producer id, the
+      snapshot path, the snapshot's canonical content digest, the role, the commit, and the `used`
+      map — every public name the consumer's references land on or spell, `alias::name` references
+      and bare names bound through the alias's `use` import alike, each used member with its
+      canonical signature digest — filled for outside producers too since stage 8; a name imported
+      by `use` but referenced nowhere is not used. A git external is pinned at its ref's head,
+      fetched; a git member at its declared commit (moving a member's commit is `wairon member
+      update`, never a pin). An unchanged snapshot is not rewritten; with no aliases named, lock
+      entries and snapshots for aliases no longer declared are removed. At a PART (stage 8): pin its
+      parent instead — the excerpt of the parent's specs the part references and the parent's
+      governing configuration, read with the parent on disk at PartOf.path, into
+      .wai/externals/<parent id>.yaml and the lock's `parent` entry; naming an alias at a part is
+      refused. An alias the project does not declare is refused before anything is written; an
+      unresolved or unreachable producer is reported and keeps its previous pin. Never locks.
     signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
     returns: ExternalPin[]
     params:
@@ -80,17 +84,19 @@ methods:
   - name: getExternalsStatus
     description: >-
       The `wairon externals status` / sdd_get_externals_status report, and the comparison a family
-      run composes from. For each declared external: how it resolves, whether it is pinned, and —
-      when the producer is reachable — each used member (as locked, and as the consumer's references
-      use it now, bare names bound through `use` imports included) compared at signature level with
-      the live producer (decision 19) by canonical digest: unchanged, changed, removed, or unlocked
-      (used now but not in the lock). Anything it cannot compare — an unreachable producer, an
-      unexported reference, a producer outside the family — is unavailable with
-      EXTERNAL_CHECK_UNAVAILABLE, never a pass; a source.hosted external read outside a hosted
-      server says why in its reason: "hosted-only producer `<id>`: available only through the hosted
-      server". A producer whose root lies outside the request's reach is marked outOfReach and never
-      read, so a caller that narrowed the reach to its selection learns which externals it did not
-      select. It only reports: it writes nothing and fails nothing.
+      run composes from. For each declared external and each project member declared by `source`:
+      how it resolves, whether it is pinned, and — when the producer is reachable — each used member
+      (as locked, and as the consumer's references use it now, bare names bound through `use`
+      imports included) compared at signature level with the live producer (decision 19) by
+      canonical digest: unchanged, changed, removed, or unlocked (used now but not in the lock).
+      Since stage 8 every producer is compared per use — a sibling checkout (source.path), a git
+      repository (an external at its ref's head, a referenced member at its pinned commit), a hosted
+      record — so a producer outside the family that breaks a used method is stale, not merely
+      drifted. Anything it cannot compare — an unreachable or unfetchable producer, an unexported
+      reference — is unavailable with EXTERNAL_CHECK_UNAVAILABLE, never a pass; a source.hosted
+      external read outside a hosted server says why in its reason: "hosted-only producer `<id>`:
+      available only through the hosted server". A producer whose root lies outside the request's
+      reach is marked outOfReach. Writes nothing.
     signature: 'getExternalsStatus(): ExternalStatus[]'
     returns: ExternalStatus[]
     params: []
@@ -161,8 +167,48 @@ methods:
         description: The alias whose pin goes
     guarantees:
       - idempotent
+  - name: pinnedParent
+    description: >-
+      The owner's gate read of a PART's pinned parent (stage 8): its lock's `parent` entry and the
+      excerpt it names, from the bound root's own .wai/externals.lock.yaml and .wai/externals/ —
+      never the parent's live tree. Null when the bound root is not a part; a part never pinned, or
+      whose excerpt is missing or malformed, is answered with its problem instead of an excerpt.
+      Writes nothing.
+    signature: 'pinnedParent(): PinnedParent | null'
+    returns: PinnedParent | null
+    params: []
+    effect: read
+  - name: pinParent
+    description: >-
+      `wairon externals pin` at a PART (stage 8): take the excerpt of the parent the part's files
+      reference — read with the parent on disk at PartOf.path — and pin it as the part's
+      .wai/externals/<parent id>.yaml and its lock's `parent` entry (role parent, the excerpt's
+      digest, the commit), rewriting the excerpt only when its digest moved. A named alias is
+      refused before anything is written; a parent the core cannot read, or one that does not claim
+      the part, is answered unreachable with the reason and the previous pin stays. Answers one
+      outcome, the parent's. Never locks.
+    signature: 'pinParent(aliases?: string[]): ExternalPin[]'
+    returns: ExternalPin[]
+    params:
+      - name: aliases
+        type: string[]
+        description: 'Must be empty: a part declares no alias to name'
+        optional: true
+  - name: prune
+    description: >-
+      Drop every lock entry whose alias is no longer declared, with its snapshot; answers whether
+      the lock changed. The prune half of a pin with no aliases named.
+    signature: 'prune(lock: ExternalsLock, declared: string[]): boolean'
+    returns: boolean
+    params:
+      - name: lock
+        type: ExternalsLock
+        description: The lock being written, edited in place
+      - name: declared
+        type: string[]
+        description: Every alias the project declares now (externals and project members by source)
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-01T17:07:59.610Z'
+updatedAt: '2026-10-02T20:38:52.521Z'

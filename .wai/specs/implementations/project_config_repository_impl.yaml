@@ -179,6 +179,20 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: removeExternal
+  - name: updateMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: updateMember
+  - name: setPartOf
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: setPartOf
 status: complete
 createdAt: '2026-09-13T11:19:36.287Z'
-updatedAt: '2026-09-30T20:20:37.848Z'
+updatedAt: '2026-10-02T20:28:15.507Z'

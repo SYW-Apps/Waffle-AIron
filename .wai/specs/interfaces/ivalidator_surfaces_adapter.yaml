@@ -25,6 +25,13 @@ methods:
     signature: 'getExternalsStatus(): ExternalStatus[]'
     returns: ExternalStatus[]
     params: []
+  - name: pinnedParent
+    description: >-
+      A part's pinned parent, via the surface portal — what the owner's gate opened at a part judges
+      it against alone (stage 8); null at a project.
+    signature: 'pinnedParent(): PinnedParent | null'
+    returns: PinnedParent | null
+    params: []
 status: complete
 createdAt: '2026-07-10T23:14:09.299Z'
-updatedAt: '2026-09-28T17:16:58.367Z'
+updatedAt: '2026-10-02T20:25:13.480Z'

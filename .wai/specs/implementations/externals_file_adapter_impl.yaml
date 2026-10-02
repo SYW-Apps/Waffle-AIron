@@ -36,6 +36,19 @@ methods:
     intent: >-
       Removes .wai/externals/<alias>.yaml, reports whether a file existed, and removes an emptied
       externals directory.
+  - name: readExcerpt
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads .wai/externals/<project>.yaml and parses it against the ParentExcerpt schema; answers
+      null when the file is absent, is not valid YAML or fails the schema, so the gate reports the
+      part's parent as unpinned rather than throwing.
+  - name: writeExcerpt
+    narrative: []
+    detail: intent
+    intent: >-
+      Serializes the excerpt to YAML in canonical key order and writes .wai/externals/<project>.yaml
+      atomically, creating the directory when missing; a write failure propagates.
 status: complete
 createdAt: '2026-09-26T18:11:39.138Z'
-updatedAt: '2026-09-26T18:44:02.189Z'
+updatedAt: '2026-10-02T20:23:24.727Z'

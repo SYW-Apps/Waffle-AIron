@@ -69,9 +69,13 @@ methods:
           - value: internalize
             step: 19
           - value: externalize
-            step: 23
+            step: 19
           - value: chaining
             step: 21
+          - value: promote
+            step: 19
+          - value: demote
+            step: 19
       - stepNumber: 9
         label: attach
         description: Plan the attach
@@ -81,7 +85,7 @@ methods:
       - stepNumber: 10
         description: Planned
         type: jump
-        toStep: 24
+        toStep: 22
       - stepNumber: 11
         label: detach
         description: Plan the detach
@@ -91,7 +95,7 @@ methods:
       - stepNumber: 12
         description: Planned
         type: jump
-        toStep: 24
+        toStep: 22
       - stepNumber: 13
         label: adopt
         description: Plan the adopt
@@ -101,7 +105,7 @@ methods:
       - stepNumber: 14
         description: Planned
         type: jump
-        toStep: 24
+        toStep: 22
       - stepNumber: 15
         label: rename
         description: Plan the project rename
@@ -111,7 +115,7 @@ methods:
       - stepNumber: 16
         description: Planned
         type: jump
-        toStep: 24
+        toStep: 22
       - stepNumber: 17
         label: rename-alias
         description: Plan the alias rename
@@ -121,17 +125,19 @@ methods:
       - stepNumber: 18
         description: Planned
         type: jump
-        toStep: 24
+        toStep: 22
       - stepNumber: 19
-        label: internalize
-        description: Plan the internalize
+        label: boundary
+        description: >-
+          Plan a boundary or storage verb — internalize, externalize, promote or demote — through
+          the boundary migration's one entry
         type: call
         targetComponent: boundary_migration
-        targetMethod: planInternalize
+        targetMethod: plan
       - stepNumber: 20
         description: Planned
         type: jump
-        toStep: 24
+        toStep: 22
       - stepNumber: 21
         label: chaining
         description: >-
@@ -141,16 +147,6 @@ methods:
         targetComponent: chaining_migration_orchestrator
         targetMethod: plan
       - stepNumber: 22
-        description: Planned
-        type: jump
-        toStep: 24
-      - stepNumber: 23
-        label: externalize
-        description: Plan the externalize
-        type: call
-        targetComponent: boundary_migration
-        targetMethod: planExternalize
-      - stepNumber: 24
         label: planned
         description: >-
           Restore the caller's binding, then rehearse the plan (an already-refused plan comes back
@@ -158,7 +154,7 @@ methods:
         type: call
         targetComponent: family_migration_orchestrator
         targetMethod: rehearse
-      - stepNumber: 25
+      - stepNumber: 23
         description: Answer the plan
         type: return
         outcome: MigrationPlan
@@ -378,4 +374,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-10-01T18:07:57.239Z'
+updatedAt: '2026-10-02T20:38:32.757Z'

@@ -271,12 +271,21 @@ methods:
       - idempotent
   - name: resolveExternals
     description: >-
-      The bound project's declared externals, each bound to its producer through its family or an
-      explicit source.path, with the project's references into each family producer. Read-only; the
-      caller's binding is restored before it answers.
+      The bound project's declared externals — and its project members declared by `source` (stage
+      8) — each bound to its producer through its family, an explicit source.path, a git source
+      materialized in the fetch cache, or the hosted lookup, with the project's references into each
+      producer by public name. Read-only; the caller's binding is restored before it answers.
     signature: 'resolveExternals(): ExternalBinding[]'
     returns: ExternalBinding[]
     params: []
+  - name: excerptParent
+    description: >-
+      With a part's root bound (stage 8): the excerpt of its parent it can be judged against alone,
+      read with the parent on disk at the part's PartOf.path. Read-only; refused, naming why, when
+      the bound root is not a part or its parent is not there or does not claim it.
+    signature: 'excerptParent(): ParentExcerpt'
+    returns: ParentExcerpt
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:50:07.978Z'
+updatedAt: '2026-10-02T20:24:08.589Z'

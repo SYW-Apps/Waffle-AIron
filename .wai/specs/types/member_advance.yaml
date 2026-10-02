@@ -1,0 +1,49 @@
+kind: value-object
+id: member_advance
+name: MemberAdvance
+description: >-
+  What `wairon member update <alias>` did or would do to a git member's pin (stage 8): the commit it
+  moves from and to, and what that changes in the member's spec files, so the person sees the
+  content move before it lands. Never locks: when the content changed, the declaring project's lock
+  (for a part) or its recorded subject (for a project) reads stale until re-locked.
+subsystem: sdd_core
+fields:
+  - name: alias
+    type: string
+    description: The member's alias.
+    optional: false
+    key: primary
+  - name: from
+    type: string
+    description: The commit pinned before.
+    optional: false
+  - name: to
+    type: string
+    description: The commit pinned after (equal to from when nothing moved).
+    optional: false
+  - name: ref
+    type: string
+    description: The ref resolved, when a commit was not given explicitly.
+    optional: true
+  - name: added
+    type: string[]
+    description: Spec files the new commit adds, by their path inside the member.
+    optional: false
+  - name: changed
+    type: string[]
+    description: Spec files whose content differs.
+    optional: false
+  - name: removed
+    type: string[]
+    description: Spec files the new commit no longer holds.
+    optional: false
+  - name: written
+    type: boolean
+    description: >-
+      Whether the new commit was written into the declaration (false for a dry run or when nothing
+      moved).
+    optional: false
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-10-02T20:28:43.201Z'
+updatedAt: '2026-10-02T20:28:43.203Z'

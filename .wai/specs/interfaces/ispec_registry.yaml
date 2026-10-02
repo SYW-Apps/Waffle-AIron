@@ -55,7 +55,14 @@ methods:
     description: >-
       Persist one spec through the typed writer of its kind, answering with that writer's placement
       notices; the stored status is kept on a draft or status-less save unless the caller states the
-      demotion.
+      demotion. Placement follows the spec's home (stage 8): a spec the scan read from a part is
+      written back to its file in that part; a NEW component, interface or implementation goes where
+      its subsystem lives; a NEW subsystem goes to the bound root's own specs folder (a subsystem
+      joins a part by `subsystem externalize --path <the part's directory>`, a storage move); a type
+      follows its owning subsystem. A part fetched from git is read-only here — its files are the
+      fetch cache's — so a write that would land in one is refused before anything is written
+      (PartReadOnly), naming the repository and the commit: it is edited in its own repository and
+      taken in by `wairon member update`.
     signature: >-
       save(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
       ImplementationSpec | TypeSpec): string[]
@@ -148,4 +155,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-09-30T22:47:28.340Z'
+updatedAt: '2026-10-02T20:21:47.388Z'

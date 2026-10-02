@@ -44,22 +44,66 @@ methods:
         description: 'Find the consumer''s node: the one whose directory is the remembered root'
         type: local
       - stepNumber: 7
-        description: For each of the node's externals
+        description: >-
+          For each of the node's externals — its declared externals, then its project members
+          declared by `source` (role member, stage 8), which are bound and judged exactly as
+          externals are
         type: loop
         loopKind: forEach
-        over: the consumer node's externals
-        endStep: 11
+        over: the consumer node's externals and referenced project members
+        endStep: 17
       - stepNumber: 8
         description: Is the producer in the family?
         type: branch
         condition: the external's sourceKind is family
-        onFalseStep: 10
+        onFalseStep: 11
       - stepNumber: 9
         description: Map the consumer's references into the producer onto the producer's public names
         type: call
         targetComponent: spec_loader
         targetMethod: exportUsage
       - stepNumber: 10
+        description: A family producer is bound
+        type: jump
+        toStep: 17
+      - stepNumber: 11
+        label: outside
+        description: >-
+          Count the consumer's references through the alias by the public name they spell, since the
+          scan did not read this producer — so its pin's `used` map is filled and its status
+          compares per use, closing the gap where an outside producer was reported unavailable per
+          use
+        type: call
+        targetComponent: spec_loader
+        targetMethod: pinnedUsage
+      - stepNumber: 12
+        description: Is the producer in a git repository?
+        type: branch
+        condition: the producer's source is git
+        onFalseStep: 16
+      - stepNumber: 13
+        description: >-
+          For an external, resolve its ref's head now: that is the live producer a status compares
+          the pin against. A referenced member keeps its declared commit instead — the family is
+          made of the pinned revision. A remote that cannot be reached leaves the binding without a
+          directory and with the problem "git producer unavailable: <reason>" — unavailable, never a
+          pass
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: resolve
+      - stepNumber: 14
+        description: >-
+          Materialize that commit (served from the cache offline when it is there) and take its
+          directory, under the source's dir, as the producer's root; record the commit on the
+          binding
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 15
+        description: A git producer is bound
+        type: jump
+        toStep: 17
+      - stepNumber: 16
         label: hosted
         description: >-
           For a source.hosted external, ask the request binding's hosted record lookup for the
@@ -69,20 +113,20 @@ methods:
           available only through the hosted server"; a record the lookup does not answer (unknown,
           or out of reach) is unresolved too — unavailable, never a pass
         type: local
-      - stepNumber: 11
+      - stepNumber: 17
         label: bound
         description: >-
           Record the binding: the external, its usage when one was mapped, and whether the family
           was read whole
         type: local
-      - stepNumber: 12
+      - stepNumber: 18
         description: Restore the caller's binding
         type: local
-      - stepNumber: 13
+      - stepNumber: 19
         description: Answer the bindings in declaration order
         type: return
         outcome: ExternalBinding[]
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-10-01T18:08:29.315Z'
+updatedAt: '2026-10-02T20:22:49.603Z'

@@ -158,27 +158,33 @@ methods:
       address: mcp tools/call sdd_get_status
   - name: sdd_externalize_subsystem
     description: >-
-      Tool: turn an internal subsystem into a member project at the path, family-wide and
-      all-or-nothing — the member provisioned, the subsystem's specs moved there and declared in
-      `members`, sibling subsystems' references respelled `alias::name`, what crosses the new
-      boundary exported and imported, the new member's external for this project pinned, and every
-      other family project's references checked to still resolve. A reference that would need a
-      component made public refuses the plan instead. dryRun answers the plan and writes nothing;
-      run it first and show the plan. Never locks: the answer names the projects to re-lock.
+      Tool: move an internal subsystem out to the path. By default (stage 8) into a PART — a storage
+      move: the subsystem's specs move to that directory (a new part, or the existing part there),
+      and nothing else changes: no reference, export, external or lock entry, the same verdict. With
+      `as: project`, into a member PROJECT instead, family-wide and all-or-nothing — the move
+      followed by a promote: what crosses the new boundary exported and imported, references
+      respelled `alias::name`, the new member's external for this project pinned, and every other
+      family project's references checked to still resolve (a reference that would need a component
+      made public refuses the plan). dryRun answers the plan and writes nothing; run it first and
+      show the plan. Never locks: the answer names the projects to re-lock.
     signature: >-
-      sdd_externalize_subsystem(subsystem: string, path: string, dryRun?: boolean):
+      sdd_externalize_subsystem(subsystem: string, path: string, as?: string, dryRun?: boolean):
       FamilyMigrationReport
     returns: FamilyMigrationReport
     params:
       - name: subsystem
         type: string
-        description: The subsystem to externalize
+        description: The subsystem to move out
       - name: path
         type: string
-        description: The new member's root, relative to the bound project
+        description: The part's root, relative to the bound project (a new directory, or an existing part's)
       - name: dryRun
         type: boolean
         description: Answer the plan and write nothing
+        optional: true
+      - name: as
+        type: string
+        description: part (default) or project
         optional: true
     endpoint:
       transport: Custom
@@ -493,25 +499,41 @@ methods:
       address: mcp tools/call sdd_get_externals_status
   - name: sdd_add_member
     description: >-
-      Tool: create a member of the bound project — scaffold the member project at the path (its
-      project.yaml declaring the alias as its project id, and its L0), each part only when absent,
-      and declare it in the bound project's project.yaml `members` with the description. A newly
-      created member configuration also selects the bound project's required packs
-      (composition.requirePolicies), once; the answer states what was applied. Nothing is written
-      into the bound project's spec tree: a member is reached only as `alias::name` through its own
-      L0 exports.
-    signature: 'sdd_add_member(alias: string, path: string, description?: string): MemberCreation'
+      Tool: create a member of the bound project — a PART by default (stage 8): a piece of this
+      project stored in another folder or repository, whose subsystems are this project's own (local
+      ids, the ordinary subsystem rules, this project's lock); its directory gets a specs folder and
+      a configuration naming this project as its parent, nothing else. With `as: project` an
+      independent PROJECT instead: its project.yaml declaring the alias as its id, its L0, and the
+      bound project's required packs (composition.requirePolicies) once; reached only as
+      `alias::name` through its L0 exports. Either lives at a contained `path` or a `source` (a
+      sibling path, or a git repository — not scaffolded, pinned at its ref's head). Boundaries are
+      earned: create a part unless the piece needs its own team, release, approval or public
+      surface; `sdd_promote_member` makes one later. The answer states what was created and applied.
+    signature: >-
+      sdd_add_member(alias: string, path?: string, description?: string, as?: string, source?:
+      ExternalSource): MemberCreation
     returns: MemberCreation
     params:
       - name: alias
         type: string
-        description: The member's alias and new project id ([a-z0-9-_]+)
+        description: The member's alias ([a-z0-9-_]+); a project's new id
       - name: path
         type: string
-        description: The member's root, relative to the bound project
+        description: A contained member's root, relative to the bound project
+        optional: true
       - name: description
         type: string
         description: What the member is to this project
+        optional: true
+      - name: as
+        type: string
+        description: part (default) or project
+        optional: true
+      - name: source
+        type: ExternalSource
+        description: >-
+          Where a member stored outside the project lives: { path } for a sibling checkout, { git,
+          ref? } for a repository
         optional: true
     endpoint:
       transport: Custom
@@ -714,6 +736,62 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_adopt_member
+  - name: sdd_promote_member
+    description: >-
+      Tool: promote a part of the bound project to an independent project in place (stage 8) — its
+      files stay where they are; it gets an id, an L0 exporting exactly what the rest of the project
+      uses of it, its references across the new boundary respelled `alias::name`, the parent
+      declared as its external, and pins on both sides. Refused (each reason listed) for a part
+      fetched from git, a trusted link that would cross the new boundary, a used component its
+      subsystem does not publish, or an id already taken. All-or-nothing; dryRun answers the plan
+      and writes nothing — run it first and show the plan. Never locks: the answer names the project
+      to re-lock and the new one to lock.
+    signature: 'sdd_promote_member(alias: string, id?: string, dryRun?: boolean): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The part's alias
+      - name: id
+        type: string
+        description: 'The new project''s id (default: the alias)'
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_promote_member
+  - name: sdd_demote_member
+    description: >-
+      Tool: demote a project member of the bound project to a part in place (stage 8) —
+      sdd_promote_member's inverse: its files stay where they are; its own metadata goes to the
+      homes the destination names (as sdd_internalize_member sends it), its L0, lock and pins end,
+      its references across the old boundary become local ids, and its configuration is reduced to
+      naming its parent. Refused while another family project consumes it (a part has no exports —
+      each consumer listed), for a member fetched from git, or for internalize's reasons.
+      All-or-nothing; dryRun answers the plan and writes nothing — run it first and show the plan.
+      Never locks.
+    signature: >-
+      sdd_demote_member(alias: string, destination?: InternalizeDestination, dryRun?: boolean):
+      FamilyMigrationReport
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The project member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where its own metadata goes (its home subsystem, packs to adopt or drop)
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_demote_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-01T18:07:25.469Z'
+updatedAt: '2026-10-02T20:34:20.822Z'

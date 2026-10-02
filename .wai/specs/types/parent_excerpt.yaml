@@ -1,0 +1,61 @@
+kind: value-object
+id: parent_excerpt
+name: ParentExcerpt
+description: >-
+  The pinned slice of a parent that a part opened alone is judged against (stage 8): the parent's
+  specs the part's files reference, verbatim and canonical, closed over what judging them needs,
+  plus the governing configuration the parent judges its parts under. Taken by `wairon externals
+  pin` at a part's root while the parent is on disk (PartOf.path); stored in the part's
+  .wai/externals/<parent id>.yaml and named by the part's externals lock (ExternalsLock.parent). An
+  excerpt rather than an export snapshot because a part has no boundary with its parent: it reaches
+  the parent's subsystems by local id under the ordinary subsystem rules, so what it is judged
+  against must be the specs themselves, not a public surface.
+subsystem: sdd_core
+fields:
+  - name: project
+    type: string
+    description: The parent's project id at pin time; must equal the part's PartOf.project.
+    optional: false
+  - name: commit
+    type: string
+    description: >-
+      The commit of the work tree holding the parent at pin time, when it is in one — provenance
+      only.
+    optional: true
+  - name: projectType
+    type: string
+    description: The parent's governing projectType, so the part alone is judged under the same doctrine.
+    optional: true
+  - name: rules
+    type: RulesConfig
+    description: >-
+      The parent's rule configuration (designDepth, severities, naming, complexity, documentation,
+      conformance).
+    optional: false
+  - name: packs
+    type: object[]
+    description: >-
+      The parent's pack selections as its configuration records them (name, exact version, digest);
+      the part alone loads exactly these and reports a pack it cannot load as unavailable, never by
+      a version the machine happens to hold.
+    optional: false
+  - name: specs
+    type: object[]
+    description: >-
+      The parent's spec documents the part references and the closure judging them needs: each
+      component a part spec depends on or calls, with its contract, its subsystem's L1
+      (publicInterfaces, trustedLinks, consumers) and the types its methods and the part's specs
+      name, transitively through type fields; and the parent's L0 for its targetLanguage and
+      databases. Never the part's own specs, and never a spec of another part beyond what is
+      referenced.
+    optional: false
+  - name: digest
+    type: string
+    description: >-
+      sha256:… over the canonical excerpt without provenance (commit): what the part's externals
+      lock records, and what tells a re-pin whether anything moved.
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-02T20:17:30.275Z'
+updatedAt: '2026-10-02T20:17:30.276Z'

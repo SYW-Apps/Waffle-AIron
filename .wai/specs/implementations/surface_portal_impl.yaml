@@ -90,6 +90,13 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: unpin
+  - name: pinnedParent
+    narrative:
+      - stepNumber: 1
+        description: Forward pinnedParent to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinnedParent
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-09-30T20:23:35.993Z'
+updatedAt: '2026-10-02T20:25:11.976Z'

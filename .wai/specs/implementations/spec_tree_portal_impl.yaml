@@ -236,6 +236,13 @@ methods:
         type: call
         targetComponent: external_producers
         targetMethod: resolveDeclared
+  - name: excerptParent
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the part-context read
+        type: call
+        targetComponent: part_context
+        targetMethod: excerpt
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-26T17:44:14.784Z'
+updatedAt: '2026-10-02T20:24:09.972Z'

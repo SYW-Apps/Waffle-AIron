@@ -12,17 +12,19 @@ component: member_registration
 methods:
   - name: plan
     description: >-
-      Plan the stage-7 upgrade: every member the hosted families declare on disk (members of members
-      included) with the record it gets, the no-widening proof (every subject x capability, today's
-      reach over the family root vs the member's own record through its new chain — equal by
-      construction), and every API key whose member-qualified entries are rewritten to record ids.
-      Writes no grant and no placement. Refuses the whole plan — listing every reason, writing
-      nothing — on a member id another record holds, a member declared twice, an unreadable member
-      (named by its qualifier and its path, with why: the declaration's own problem, a path escaping
-      its parent, a missing directory, a project.yaml that cannot be read or fails its schema, or no
-      valid project id), a setting already scoped at a member's id, or any unequal reach row. An
-      unblocked plan holds a rehearsal of the host stores with the record and key writes made in it,
-      and its file changes. A completed upgrade re-plans empty.
+      Plan the stage-7 upgrade: every PROJECT member the hosted families contain on disk (members of
+      members included; since stage 8 parts are never registered — a part is part of its parent's
+      record — and an unmigrated member is read by stage 8's inference, so every existing member is
+      a project here exactly as before) with the record it gets, the no-widening proof (every
+      subject x capability, today's reach over the family root vs the member's own record through
+      its new chain — equal by construction), and every API key whose member-qualified entries are
+      rewritten to record ids. Writes no grant and no placement. Refuses the whole plan — listing
+      every reason, writing nothing — on a member id another record holds, a member declared twice,
+      an unreadable member (named by its qualifier and its path, with why: the declaration's own
+      problem, a path escaping its parent, a missing directory, a project.yaml that cannot be read
+      or fails its schema, or no valid project id), a setting already scoped at a member's id, or
+      any unequal reach row. An unblocked plan holds a rehearsal of the host stores with the record
+      and key writes made in it, and its file changes. A completed upgrade re-plans empty.
     signature: 'plan(): MemberUpgradePlan'
     returns: MemberUpgradePlan
     params: []
@@ -85,13 +87,20 @@ methods:
   - name: screen
     description: >-
       Before the data plane dispatches a membership-changing tool it does not serve itself
-      (sdd_attach_member, sdd_rename_project): for attach, list the principals whose reach the
-      change alters — the member is added under the bound project, so everyone the bound project's
-      chain grants gains access to it (a dry run's result carries the listing; reconcile audits the
-      applied change); for sdd_rename_project whose renamed project is a FAMILY ROOT (bound at a
-      family root and naming no member path), refuse with "renaming a hosted family root's id is not
-      supported; a member can be renamed, or the root recreated" (a member rename — bound at the
-      member, or naming its alias path — is allowed and re-keyed by reconcile).
+      (sdd_attach_member, sdd_rename_project, and stage 8's sdd_promote_member / sdd_demote_member):
+      for attach and promote, list the principals whose reach the change alters — the new project
+      member is added under the bound project, so everyone the bound project's chain grants gains
+      access to it (unchanged in practice: they already reached it as a part); for demote, list
+      every principal a member-own setting denied or narrowed who now reaches the part through the
+      bound project's record, and every token narrowed to the member's record alone that loses its
+      reach (a dry run's result carries the listing; reconcile audits the applied change); for
+      sdd_rename_project whose renamed project is a FAMILY ROOT (bound at a family root and naming
+      no member path), refuse with "renaming a hosted family root's id is not supported; a member
+      can be renamed, or the root recreated" (a member rename — bound at the member, or naming its
+      alias path — is allowed and re-keyed by reconcile). A member declared with a source.path or
+      source.git is refused on a hosted instance before dispatch: hosted roots are isolated, so a
+      hosted project reaches another root only by source.hosted (git sources on hosted are a later,
+      operator-enabled capability).
     signature: 'screen(binding: ProjectBinding, tool: string, alias: string, path: string): MembershipScreen'
     returns: MembershipScreen
     params:
@@ -109,21 +118,23 @@ methods:
         optional: true
   - name: reconcile
     description: >-
-      After a hosted family-shape tool (sdd_add_member, sdd_move_member, and the stage-6 family
-      migrations) succeeded at a project, make the family's records agree with the family on disk:
-      register each newly declared member (no grant, no placement — it inherits through its parent),
-      re-enable a member the family declares again after its record was disabled as departed (it
-      goes back to active with the own-scope settings it kept, and regains exactly that reach),
-      relocate a member whose parent or path changed, re-key a member a project rename gave a new id
-      (the settings on its OWN scope — assignments, role bindings anchored there — and the key
-      entries naming it move to the new id; nothing inherited moves, because nothing inherited is
-      stored on it), disable a record whose member the family no longer declares (never delete it).
-      List every principal whose reach changed through those membership changes, and audit every
-      touched project as its own event naming it — member.registered, member.returned,
-      member.relocated, member.renamed, member.departed, or family.changed for a project the tool
-      wrote whose membership did not change — with the initiating project as composition and its
-      reach changes. When the family is git-backed, publish ONE commit whose pathspecs are every
-      touched project's own .wai/.
+      After a hosted family-shape tool (sdd_add_member, sdd_move_member, the stage-6 family
+      migrations, and stage 8's sdd_promote_member / sdd_demote_member and an externalize as
+      project) succeeded at a project, make the family's records agree with the family on disk:
+      register each newly declared PROJECT member — a part promoted to a project included (no grant,
+      no placement — it inherits through its parent); re-enable a member the family declares again
+      after its record was disabled — departed, or retired as a part — which goes back to active
+      with the own-scope settings it kept and regains exactly that reach, so
+      promote-then-demote-then-promote leaves the record as it was; relocate a member whose parent
+      or path changed; re-key a member a project rename gave a new id; RETIRE the record of a member
+      that is now declared as a part (stage 8: a part is part of its parent's record — its specs are
+      served, permissioned and committed through the parent's record): the record is disabled with
+      reason "part of <parent>", never deleted, its own-scope settings kept for a later promote;
+      disable a record whose member the family no longer declares (never delete it). A part never
+      gets a record. List every principal whose reach changed through those membership changes — a
+      retirement included: a member-own `no` stops applying once its specs are reached through the
+      parent, so whoever it denied gains access, and a token narrowed to the retired record alone
+      loses its reach — and audit each, naming the member and the initiating tool. Writes no grant.
     signature: 'reconcile(principal: Principal, projectId: string, touched: string[]): MemberReconciliation'
     returns: MemberReconciliation
     params:
@@ -233,4 +244,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-01T19:51:20.678Z'
+updatedAt: '2026-10-02T20:36:08.399Z'

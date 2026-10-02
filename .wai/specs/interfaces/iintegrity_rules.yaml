@@ -388,12 +388,29 @@ methods:
           and the alias read alike
   - name: memberDeclarations
     description: >-
-      Rule member-declarations. A project declares its members in project.yaml `members`; a member
-      is not a subsystem and carries no content in its parent. The L1 form — a subsystem carrying
-      projectPath — still loads for one release and is reported (DEPRECATED_MOUNT_FORM), naming the
-      mount, its path, the `members` entry that replaces it, and every field it carries that `doctor
-      --fix` will move into the member (or stop on); a mount whose alias `members` also declares is
-      reported as ignored. It reads the project graph's nodes and their legacy mounts.
+      Rule member-declarations. A project declares its members in project.yaml `members`. The L1
+      form — a subsystem carrying projectPath — still loads for one release and is reported
+      (DEPRECATED_MOUNT_FORM), naming the mount, its path, the `members` entry that replaces it, and
+      every field it carries that `doctor --fix` will move into the member (or stop on); a mount
+      whose alias `members` also declares is reported as ignored. Since stage 8 it also judges what
+      each member of the bound project IS and whether its files say the same, from the scan's part
+      and kind problems at the bound root (a member's own parts are that member's gate's). A member
+      with no `as` whose root is project-shaped (it declares an id, holds an L0 or carries a lock)
+      is read as a project and reported MEMBER_KIND_INFERRED (notice), naming `doctor --fix`, which
+      writes `as: project` — so no existing member ever changes meaning silently. The declaration
+      and the member's root disagreeing is MEMBER_KIND_MISMATCH (error): a part whose PartOf names
+      another project, or a project member whose configuration declares PartOf; the fix is `member
+      promote` / `demote` or correcting the PartOf, never a guess. A part whose folder holds an L0
+      or whose configuration declares a project field (id, members, externals, composition, rules,
+      extensions, targets) is PART_HAS_PROJECT_CONTENT (error): a part is governed by its parent, so
+      that content would be ignored; move it to the parent or promote the part. A part whose files
+      could not be read — its directory absent, its git commit unpinned or not fetchable (offline,
+      refused, unknown) — is PART_UNAVAILABLE (error): the project's own subsystems are missing, so
+      its verdict cannot be a pass. A part whose root carries no PartOf is PART_PARENT_UNDECLARED
+      (notice): it is fully judged here, but opened alone it cannot say what it belongs to; `doctor
+      --fix` writes it. The findings about kinds and parts name no spec: members live in
+      configuration. It reads the project graph's nodes, their legacy mounts and the bound root's
+      problems.
     signature: 'memberDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -406,6 +423,31 @@ methods:
         summary: >-
           A member declared as an L1 subsystem carrying projectPath instead of a project.yaml
           `members` entry
+      - code: MEMBER_KIND_INFERRED
+        severity: notice
+        summary: >-
+          A member with no `as` is read as a project because its root is project-shaped; doctor
+          --fix writes `as: project`.
+      - code: MEMBER_KIND_MISMATCH
+        severity: error
+        summary: >-
+          The declaring project's `as` and the member's own root disagree about whether it is a
+          part.
+      - code: PART_HAS_PROJECT_CONTENT
+        severity: error
+        summary: >-
+          A part holds an L0 or project configuration, which a part never has: move it to the parent
+          or promote the part.
+      - code: PART_UNAVAILABLE
+        severity: error
+        summary: >-
+          A part's files could not be read (absent directory, unpinned or unfetchable git commit):
+          the project's own subsystems are missing.
+      - code: PART_PARENT_UNDECLARED
+        severity: notice
+        summary: >-
+          A part's root carries no PartOf, so opened alone it cannot say what it belongs to; doctor
+          --fix writes it.
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-30T20:19:49.060Z'
+updatedAt: '2026-10-02T20:27:46.671Z'

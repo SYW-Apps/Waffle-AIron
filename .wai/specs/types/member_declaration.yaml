@@ -3,20 +3,24 @@ id: member_declaration
 name: MemberDeclaration
 description: >-
   One `members` entry of project.yaml in its long form: the value under an alias key. The shorthand
-  `billing: services/billing` is read as `{ path: services/billing }`; the long form leaves room for
-  later fields. A member is a project this one contains: it has no spec in this project's tree,
-  carries no content here, and is named only by its alias, which defaults to nothing but the key
-  (the member's own id is whatever its project.yaml declares).
+  `scheduler: services/scheduler` is read as `{ path: services/scheduler }`. Stage 8 separates the
+  two axes a member used to weld together: WHAT it is (`as`: a part of this project, the default, or
+  an independent project) and WHERE its files live (a contained `path`, or a `source` elsewhere — a
+  sibling checkout, a git repository, a hosted record). A part's subsystems are this project's own
+  subsystems, keyed under this project and judged by the ordinary subsystem rules; a project is
+  reached only through its L0 exports as `alias::name`. The alias is the key; a project member's own
+  id is whatever its project.yaml declares, and a part has none.
 subsystem: sdd_core
 fields:
   - name: path
     type: string
     description: >-
-      The member's root directory, relative to the declaring project's root. Containment is decided
-      against the declaring project: an absolute path, a ../-escaping path or one that leaves
-      through a link is refused (PROJECTPATH_ESCAPE) and not followed, identically from every
-      loading root.
-    optional: false
+      A contained member's root directory, relative to the declaring project's root. Containment is
+      decided against the declaring project: an absolute path, a ../-escaping path or one that
+      leaves through a link is refused (PROJECTPATH_ESCAPE) and not followed, identically from every
+      loading root — a member stored outside the project is declared with `source` instead. Exactly
+      one of `path` and `source` is set.
+    optional: true
   - name: description
     type: string
     description: >-
@@ -27,13 +31,34 @@ fields:
   - name: use
     type: string[]
     description: >-
-      The member's public names this project imports, exactly as an external's `use`: `['*']`
-      imports everything the member exports, a list only those names. A member is a dependency like
-      any other, so its names are no more in scope than an external's: without `use` the parent
-      names them `alias::name`. The shorthand `alias: path` imports nothing; importing needs the
-      long form.
+      Project members only: the member's public names this project imports, exactly as an external's
+      `use`: `['*']` imports everything the member exports, a list only those names. Without `use`
+      the parent names them `alias::name`. A part's names are already this project's own, so `use`
+      on a part is a declaration problem. The shorthand imports nothing; importing needs the long
+      form.
+    optional: true
+  - name: source
+    type: ExternalSource | string
+    description: >-
+      Where a member stored OUTSIDE this project lives: a sibling path (`source: ../admin`), a git
+      repository pinned at a commit (`source: { git: git@host:acme/payments.git, ref: main, commit:
+      … }`), or — for a project only — a hosted record (`source: { hosted: marketplace }`). Storage
+      never changes what a member is: moving it between a contained path and any source changes no
+      verdict when the pins match (storage-is-orthogonal). A part cannot be a hosted record (a part
+      is part of its parent's record), and a git source needs its commit. Exactly one of `path` and
+      `source` is set.
+    optional: true
+  - name: as
+    type: string
+    description: >-
+      part | project. Absent means part — boundaries are earned — EXCEPT for a member whose root is
+      project-shaped (it declares an id, holds an L0 or carries a lock): that one is read as project
+      and reported (MEMBER_KIND_INFERRED, notice) until `doctor --fix` writes `as: project`, so no
+      existing member ever changes meaning silently. A part is never project-shaped
+      (PART_HAS_PROJECT_CONTENT), so the inference can never misread one. Changing it is `member
+      promote` / `member demote`, never an edit the scan reconciles.
     optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:30.244Z'
-updatedAt: '2026-09-28T16:05:24.932Z'
+updatedAt: '2026-10-02T20:16:32.997Z'

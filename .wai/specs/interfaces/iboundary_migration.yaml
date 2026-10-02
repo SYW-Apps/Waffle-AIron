@@ -1,27 +1,33 @@
 id: iboundary_migration
 name: Boundary Migration Interface
 description: >-
-  Plan an internalize or externalize from a family graph (writing nothing), and write a confirmed
-  plan into the roots a rehearsal maps. The core's own refusals surface when the plan is rehearsed
-  and become the plan's refusals.
+  Plan a boundary or storage change from a family graph (writing nothing), and write a confirmed
+  plan into the roots a rehearsal maps. Stage 8 splits the two axes: externalize and internalize
+  move a subsystem's files between the project's own specs and a part (storage), promote and demote
+  turn a part into a project and back in place (composition); externalize as project and internalize
+  of a project compose the two. The core's own refusals surface when the plan is rehearsed and
+  become the plan's refusals.
 component: boundary_migration
 methods:
   - name: planInternalize
     description: >-
-      Plan folding the member under request.alias into the bound project with request.destination.
-      Refusals: no such member (not-a-member) or its directory absent (member-absent); a family
-      consumer of the member out of reach (family-partial); a public name of the member that a
-      consumer uses colliding with one the bound project exports for another target
-      (name-collision). Edits: the core's internalize with the destination — its `exports` completed
-      with every public name of the member another family project uses, so each consumer keeps
-      resolving; for every other family project consuming the member (its own members included,
-      which become the bound project's): when it already declares an alias for the bound project,
-      each `member::name` reference respelled to that alias at its position, the member alias's
-      `use` merged into it, the member external and its pin removed; otherwise its external
-      repointed at the bound project's id (source path re-expressed when it had one) and re-pinned,
-      since the producer changed (the plan notes the pin will read drifted); the member's externals
-      the bound project now declares, pinned in the bound project. Re-lock: the bound project and
-      every consumer written; the member's lock ends with it (listed as deleted).
+      Plan folding the member under request.alias into the bound project's own specs folder. A PART
+      (stage 8): a storage move only — the core's internalize moves its subsystems in and removes
+      the member entry and the part's .wai; no reference changes and no other family project is
+      touched; refusals: no such member (not-a-member), its directory absent (member-absent), a part
+      fetched from git (read-only). A PROJECT: planDemote's edits followed by the storage move, in
+      one plan — refusals: as planDemote's, and a family consumer of the member out of reach
+      (family-partial), a public name of the member that a consumer uses colliding with one the
+      bound project exports for another target (name-collision); edits: the core's internalize with
+      the destination — its `exports` completed with every public name of the member another family
+      project uses, so each consumer keeps resolving; for every other family project consuming the
+      member: when it already declares an alias for the bound project, each `member::name` reference
+      respelled to that alias at its position, the member alias's `use` merged into it, the member
+      external and its pin removed; otherwise its external repointed at the bound project's id
+      (source path re-expressed when it had one) and re-pinned (the plan notes the pin will read
+      drifted); the member's externals the bound project now declares, pinned in the bound project.
+      Re-lock: the bound project and every consumer written; a project member's lock ends with it
+      (listed as deleted).
     signature: >-
       planInternalize(family: ProjectFamily, bound: string, request: MigrationRequest):
       MigrationPlan
@@ -35,24 +41,26 @@ methods:
         description: The bound project's key in that graph
       - name: request
         type: MigrationRequest
-        description: verb internalize, alias, destination
+        description: verb internalize, alias, destination (a project member only)
     guarantees:
       - idempotent
   - name: planExternalize
     description: >-
-      Plan turning the bound project's subsystem request.subsystem into a member at request.path.
-      Refusals: no such subsystem, or it is already a member (externalize-refused); the path not
-      strictly within the bound project, or already holding a project (not-contained); the subsystem
-      id already an alias or a family project's id (alias-taken, id-collision); a reference from the
-      moved subtree back into the bound project at a component its subsystem does not publish
-      (externalize-refused: publishing it is a design decision to make first, never a move's side
-      effect). Edits: the core's externalize (the move, the member declared, the sibling subsystems'
-      references respelled `alias::name`, the crossing exports and imports declared, the bound
-      project's L0 re-exports re-pointed at the member); the new member's external for the bound
-      project pinned in the member. Every other family project consuming the bound project is
-      checked, not written: each name it uses stays a public name of the bound project through the
-      re-pointed re-exports (externalize-updates-siblings); one that would not is
-      externalize-refused. Re-lock: the bound project; the new member has no lock.
+      Plan moving the bound project's subsystem request.subsystem out to request.path. As a PART
+      (request.as absent or part — the default since stage 8): a storage move — the core's
+      externalize moves the subtree into a new part there (or into the existing part at that
+      directory) and declares it `as: part`; no reference, export, external or pin changes, no other
+      family project is touched, and the bound project's verdict is the same
+      (part-is-the-parents-subsystem); refusals: no such subsystem, or it is already in a part or a
+      member (externalize-refused); the path not strictly within the bound project, or holding a
+      project (not-contained); an alias taken by another member (alias-taken). As a PROJECT
+      (request.as project): the pre-stage-8 externalize, planned as the move followed by
+      planPromote's edits and refusals in one plan — the subsystem id already a family project's id
+      (id-collision); a reference from the moved subtree back into the bound project at a component
+      its subsystem does not publish (externalize-refused: publishing it is a design decision); each
+      family project consuming the bound project checked to keep every name it uses
+      (externalize-updates-siblings). Re-lock: the bound project (its own specs moved under a new
+      key path, for a part; its boundary changed, for a project); a new project has no lock.
     signature: >-
       planExternalize(family: ProjectFamily, bound: string, request: MigrationRequest):
       MigrationPlan
@@ -71,12 +79,16 @@ methods:
       - idempotent
   - name: write
     description: >-
-      Write a confirmed internalize or externalize plan into the roots the rehearsal maps, restoring
-      the caller's binding on every path. Internalize: consumers' reference edits first from the
-      rehearsal's top root (while the member's keys exist), then the core's internalize under the
-      bound project's binding, then the consumers' alias tables, then the pins. Externalize: the
-      core's externalize under the bound project's binding, then the new member's pin under its
-      binding. A core refusal propagates to the caller, which reports it as the plan's refusal.
+      Write a confirmed internalize, externalize, promote or demote plan into the roots the
+      rehearsal maps, restoring the caller's binding on every path. Internalize of a project:
+      consumers' reference edits first from the rehearsal's top root (while the member's keys
+      exist), then the core's internalize under the bound project's binding, then the consumers'
+      alias tables, then the pins; of a part, the core's internalize alone. Externalize: the core's
+      externalize under the bound project's binding (as part or as project), then — for a project —
+      the new member's pin under its binding and the bound project's pin of it. Promote: the core's
+      promote under the bound project's binding, then the pins on both sides. Demote: the core's
+      demote under the bound project's binding, then the bound project's pin of the member removed.
+      A core refusal propagates to the caller, which reports it as the plan's refusal.
     signature: 'write(plan: MigrationPlan, rehearsal: Rehearsal): void'
     returns: void
     params:
@@ -88,6 +100,89 @@ methods:
         description: Where to write it
     guarantees:
       - idempotent
+  - name: planPromote
+    description: >-
+      Plan `member promote <alias>` (stage 8): the part under request.alias becomes an independent
+      project IN PLACE — nothing moves on disk. Refusals: no such part (not-a-part); a part fetched
+      from git (read-only: promote it in a checkout of its repository — a cross-repository migration
+      is not planned as one change); a trustedLink between its subsystems and the rest
+      (trusted-link-crosses: it would cross a project boundary; remove or replace it first); a
+      component either side uses that its subsystem does not publish (externalize-refused:
+      publishing it is a design decision); the id already a family project's or an alias
+      (id-collision, alias-taken); a family project consuming the bound project that uses a name
+      realized in the part and would lose it (externalize-updates-siblings). Edits: the core's
+      promote — the part's configuration made a project's (PartOf removed, id declared), a minimal
+      L0 exporting exactly what the rest of the bound project uses of it, references across the new
+      boundary re-saved (`alias::name` one way, `<parent id>::name` the other, bare type names
+      imported by `use`), the bound project exporting what the new project uses of it and declared
+      as the new project's external, the bound project's L0 re-exports re-pointed at the member, the
+      member entry `as: project`; then the new project's external for the bound project pinned in
+      it, and the bound project's pin of the new member (a referenced one) taken. Re-lock: the bound
+      project; the new project has no lock to re-take and is listed as "to lock".
+      promote-then-demote-is-identity: demoting the result plans the exact inverse.
+    signature: 'planPromote(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The graph of the highest root in reach
+      - name: bound
+        type: string
+        description: The bound project's key in that graph
+      - name: request
+        type: MigrationRequest
+        description: verb promote, alias, newId (default the alias)
+    guarantees:
+      - idempotent
+  - name: planDemote
+    description: >-
+      Plan `member demote <alias>` (stage 8): the project member under request.alias becomes a part
+      of the bound project IN PLACE — nothing moves on disk; planPromote's inverse. Refusals: no
+      such project member (not-a-member); a member fetched from git (read-only); a family project
+      OTHER than the bound project that consumes the member (consumed-elsewhere: a part has no
+      exports, so another project could no longer reach what it uses — the plan lists each consumer
+      and the names it uses; repoint them at the bound project's exports first, or keep the
+      boundary); the core's internalize refusals (a carried alias declared differently, a pack
+      differing with no adopt or drop, conformance debt or severity overrides the parent does not
+      share, an unrecognised file in its .wai). Edits: the core's demote with request.destination —
+      its metadata sent to its homes, its L0, lock, pins and derived outputs deleted (each listed),
+      its configuration reduced to PartOf, references across the old boundary re-saved as local ids,
+      the exports and the parent external that existed only for the boundary dropped, the member
+      entry `as: part`; the bound project's pin of the member removed. Re-lock: the bound project;
+      the member's own lock ends with it (listed as deleted).
+    signature: 'planDemote(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The graph of the highest root in reach
+      - name: bound
+        type: string
+        description: The bound project's key in that graph
+      - name: request
+        type: MigrationRequest
+        description: verb demote, alias, destination
+    guarantees:
+      - idempotent
+  - name: plan
+    description: >-
+      The one entry for the four boundary and storage verbs (stage 8: internalize, externalize,
+      promote, demote), routed to that verb's planner — so the family migration routes one boundary
+      case, not four. Writes nothing.
+    signature: 'plan(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
+    returns: MigrationPlan
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The graph of the highest root in reach
+      - name: bound
+        type: string
+        description: The bound project's key in that graph
+      - name: request
+        type: MigrationRequest
+        description: verb internalize, externalize, promote or demote, with that verb's arguments
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-30T20:35:03.086Z'
-updatedAt: '2026-09-30T22:58:31.051Z'
+updatedAt: '2026-10-02T20:38:17.958Z'

@@ -14,12 +14,22 @@ fields:
   - name: kind
     type: string
     description: >-
-      id-collision | no-id | defaulted | member-absent | alias-conflict | duplicate-spec. A
-      defaulted problem is a member that declares no id: it answers to its name slug, and the id it
-      should declare is its alias. A member-absent problem is a `members` entry or legacy mount
-      whose directory does not exist. An alias-conflict is an alias a project declares both as a
-      member and as an external. A duplicate-spec problem is one key declared by two spec files of
-      one project (the first stays in the index).
+      id-collision | no-id | defaulted | member-absent | alias-conflict | duplicate-spec |
+      part-unavailable | part-project-content | kind-mismatch | kind-inferred |
+      part-parent-undeclared. A defaulted problem is a member that declares no id: it answers to its
+      name slug, and the id it should declare is its alias. A member-absent problem is a contained
+      project member's `members` entry or legacy mount whose directory does not exist. An
+      alias-conflict is an alias a project declares both as a member and as an external. A
+      duplicate-spec problem is one key declared by two spec files of one project (the first stays
+      in the index) — a part's file and its parent's included, since a part shares its parent's
+      namespace. Stage 8: part-unavailable — a part whose files could not be read (its directory
+      absent, its git commit not cached and not fetchable, or no commit pinned);
+      part-project-content — a part whose root holds an L0 or whose configuration declares a project
+      field (only `partOf` is a part's); kind-mismatch — the declaring project's `as` and the
+      member's own root disagree (a part whose PartOf names another project, or a project member
+      whose configuration declares partOf); kind-inferred — a member with no `as` read as a project
+      because its root is project-shaped; part-parent-undeclared — a part whose root carries no
+      PartOf, so opened alone it cannot say what it belongs to.
     optional: false
   - name: id
     type: string
@@ -40,4 +50,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:43.662Z'
-updatedAt: '2026-09-28T18:13:33.466Z'
+updatedAt: '2026-10-02T20:17:49.850Z'

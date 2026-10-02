@@ -25,6 +25,7 @@ owns: []
 dependsOn:
   - spec_file_store
   - export_resolver
+  - git_source_adapter
 status: complete
 createdAt: '2026-07-18T22:57:53.159Z'
-updatedAt: '2026-09-27T10:34:46.399Z'
+updatedAt: '2026-10-02T20:19:41.516Z'
