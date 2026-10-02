@@ -63,19 +63,19 @@ methods:
   - name: declaredMembers
     description: >-
       The PROJECT members the family rooted at a record declares ON DISK and CONTAINS, members of
-      members included: from the record's root, each project.yaml `members` entry read as a project
-      (`as: project`, or `as` absent with a project-shaped root — stage 8's inference, so an
-      unmigrated family registers exactly as before) and, for one release, each legacy L1 mount,
-      followed through the containment guard, with the member's own project id read from its
-      project.yaml. Each is answered as the record it should hold (id, parentProjectId = the
-      declaring project's id, memberPath as declared), with the pre-stage-7 qualifier that bound it
-      and the action against the stored records (register, relocate, rename, return — a record
-      disabled as departed whose member is declared again, retire — a record whose member is now
-      declared as a PART). Not answered (stage 8): a PART, which is part of its declaring project's
-      record and never a record of its own; and a project member declared by `source.hosted`, which
-      is its own top-level record, related to the declarer but not contained by it, so it gets no
-      parentProjectId and inherits no access through it. Records only, read from disk; nothing
-      written.
+      members included: from the record's root, each project.yaml `members` entry with a contained
+      source whose content makes it a project (stage 8: its tree declares an id, holds an L0 or
+      carries a lock — every pre-stage-8 member is project-shaped, so an existing family registers
+      exactly as before) and, for one release, each legacy L1 mount, followed through the
+      containment guard, with the member's own project id read from its project.yaml. Each is
+      answered as the record it should hold (id, parentProjectId = the declaring project's id,
+      memberPath as declared), with the pre-stage-7 qualifier that bound it and the action against
+      the stored records (register, relocate, rename, return — a record disabled as departed or
+      retired whose project member is declared again, retire — a record whose member's content is
+      now a part). Not answered (stage 8): a PART, which is part of its declaring project's record
+      and never a record of its own; and a `hosted:` project member, which is its own top-level
+      record, related to the declarer but not contained by it, so it gets no parentProjectId and
+      inherits no access through it. Records only, read from disk; nothing written.
     signature: 'declaredMembers(id: string): PlannedMemberRecord[]'
     returns: PlannedMemberRecord[]
     params:
@@ -94,4 +94,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-10-02T20:35:46.489Z'
+updatedAt: '2026-10-02T20:50:47.323Z'

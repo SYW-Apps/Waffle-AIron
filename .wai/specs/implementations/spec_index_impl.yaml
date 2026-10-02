@@ -249,12 +249,12 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          Read the root's member declarations: project_config.declaredMembers() — each with what it
-          is as written (`as`) and where it lives (a contained `path`, or a `source`: sibling path,
-          git at a commit, hosted record) — and, for one release, every top-level L1 subsystem of
-          the root carrying projectPath — a legacy mount, recorded with every field as written on
-          the member it declares and never loaded as a subsystem, since a mount carries no content
-          (a legacy mount is a contained project member). A `members` entry and a legacy mount under
+          Read the root's member declarations: project_config.declaredMembers() — each with its one
+          source parsed (contained path, `../` sibling path, git at a commit, hosted record), the
+          `as` it asserts if any, and whether it used the deprecated long-form `path` — and, for one
+          release, every top-level L1 subsystem of the root carrying projectPath — a legacy mount,
+          recorded with every field as written on the member it declares and never loaded as a
+          subsystem, since a mount carries no content. A `members` entry and a legacy mount under
           one alias are one member, the `members` entry winning; an alias declared both as a member
           and as an external is an alias-conflict problem; a declaration with a problem is recorded
           and not followed
@@ -280,11 +280,12 @@ methods:
       - stepNumber: 6
         label: kinds
         description: >-
-          Decide what each followable member is (stage 8): its `as` when written; otherwise read its
-          root's shape — a configuration declaring an id, an L0, or a lock (.wai/lock.json) makes it
-          project-shaped, read as a project (kindSource inferred, a kind-inferred problem, never a
-          silent change of meaning); anything else is a part (kindSource default). A git member's
-          root is read for its shape once it is fetched below
+          Decide what each followable member is FROM ITS CONTENT (stage 8): its root — the contained
+          or sibling directory, or a git member's fetched commit below — declaring an id, holding an
+          L0 or carrying a lock (.wai/lock.json) makes it a project; anything else is a part. A
+          hosted source is a project. An asserted `as` the content contradicts is a kind-mismatch
+          problem, and the content still decides. Nothing is inferred and nothing needs writing: an
+          existing member is project-shaped, so it reads as the project it always was
         type: local
       - stepNumber: 7
         label: parts
@@ -314,14 +315,14 @@ methods:
         label: read-part
         description: >-
           Walk the part's specs folder: a contained part's path resolved under the containment guard
-          against this root; a sibling `source.path` resolved against this root without it
-          (declaring a source is the explicit statement that it lives outside), or the fetched cache
-          directory. A directory that is absent is a part-unavailable problem and the part is
-          skipped. Read its configuration through its own binding for its PartOf: a PartOf naming
-          another project id is kind-mismatch, none is part-parent-undeclared (a notice; the
-          declaration here is the authority). A part whose configuration declares any project field,
-          or whose folder holds an L0, is part-project-content, and its L0 and configuration are
-          never loaded — a part is governed by this root's
+          against this root; a `../` sibling path resolved against this root (the explicit `..` is
+          the one way out of the root), or the fetched cache directory. A directory that is absent
+          is a part-unavailable problem and the part is skipped. A contained part has no
+          configuration and needs none — one declaring PartOf is kind-mismatch. A non-contained
+          part's configuration must hold its PartOf naming this root's id: none, or another id, is
+          kind-mismatch. A part's configuration declaring project fields (members, externals, rules,
+          extensions, composition, targets) without the id that would make it a project is
+          kind-mismatch, and those fields are never loaded — a part is governed by this root's
         type: call
         targetComponent: spec_file_store
         targetMethod: listTree
@@ -333,10 +334,11 @@ methods:
           part's subsystems are this project's subsystems, so the next step binds their local
           references as the root's own and the ordinary subsystem rules judge them
           (part-is-the-parents-subsystem). A key the root or another part already declares is
-          duplicate-spec naming both files. Record the ScannedPart: alias, kind source, storage, the
-          directory read, the commit (the pinned one for git, else the head of the work tree holding
-          it through git_source_adapter.head), its PartOf, its subsystem keys and spec keys, and the
-          content digest over its documents keyed by their path inside the part
+          duplicate-spec naming both files. Record the ScannedPart: alias, storage, the directory
+          read, the commit (the pinned one for git, else the head of the work tree holding it
+          through git_source_adapter.head), its PartOf (null for a contained part), its subsystem
+          keys and spec keys, and the content digest over its documents keyed by their path inside
+          the part
         type: local
       - stepNumber: 12
         description: >-
@@ -352,11 +354,11 @@ methods:
       - stepNumber: 13
         label: members
         description: >-
-          Follow each followable CONTAINED PROJECT member the root declares (a project member
-          declared by `source` is not followed: its alias stays in the root's alias table bound to
-          nothing the scan read, so its references bind as outside and the declaring project's own
-          gate judges them against its pin, as an external's; the family run opens its root
-          explicitly)
+          Follow each followable CONTAINED PROJECT member the root declares (a referenced project
+          member — a `../`, git or hosted source — is not followed: its alias stays in the root's
+          alias table bound to nothing the scan read, so its references bind as outside and the
+          declaring project's own gate judges them against its pin, as an external's; the family run
+          opens its root explicitly)
         type: loop
         loopKind: forEach
         over: the root's contained project members without a problem, in declaration order
@@ -373,8 +375,7 @@ methods:
           retires SUBPROJECT_NOT_FOUND), and the declaring project's own gate reports its references
           into the member as unavailable. A project member whose configuration declares PartOf is a
           kind-mismatch problem. Each is skipped. Otherwise, below the depth bound, walk the member
-          the same way from step 2, as a member of this root declared under its alias, recording how
-          its kind was decided
+          the same way from step 2, as a member of this root declared under its alias
         type: local
       - stepNumber: 15
         label: tables
@@ -414,9 +415,9 @@ methods:
           among the public names of the named producer's resolved L0 table: found, it binds to that
           entry's canonical target (exported); not found, to the producer's spec of that local id
           (unexported, lenient until stage 4); an alias whose producer the scan did not read — an
-          external outside the family, or a project member declared by `source` — keeps the text as
-          written (outside). leading `::a::rest` and path `a::rest` (a first segment the root does
-          not declare) are read the stage-2 way, as a member path from the bound root, one alias per
+          external outside the family, or a referenced project member — keeps the text as written
+          (outside). leading `::a::rest` and path `a::rest` (a first segment the root does not
+          declare) are read the stage-2 way, as a member path from the bound root, one alias per
           segment, the last segment a local id; a path whose first segment walks no member path from
           the bound root but names exactly one project of the family by its id — the bound root
           included, as a path written from a root above it reads — walks on from that project, one
@@ -449,9 +450,10 @@ methods:
         type: local
       - stepNumber: 21
         description: >-
-          Record per root its key, parent, alias, form and kind source, the description its parent's
-          declaration gives it, legacy mount, L0, configuration, alias table, tables, spec keys, its
-          parts, and authored references, and the family problems met (its parts' included)
+          Record per root its key, parent, alias and form, the description its parent's declaration
+          gives it, legacy mount, L0, configuration, alias table, tables, spec keys, its parts, and
+          authored references, and the family problems met (its members' part-unavailable and
+          kind-mismatch problems included)
         type: local
       - stepNumber: 22
         description: Answer the recorded roots, bound root first
@@ -460,4 +462,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-02T20:21:28.375Z'
+updatedAt: '2026-10-02T20:47:18.958Z'

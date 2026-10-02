@@ -45,9 +45,9 @@ methods:
         type: local
       - stepNumber: 7
         description: >-
-          For each of the node's externals — its declared externals, then its project members
-          declared by `source` (role member, stage 8), which are bound and judged exactly as
-          externals are
+          For each of the node's externals — its declared externals, then its referenced project
+          members (a `../`, git or hosted source; role member, stage 8), which are bound and judged
+          exactly as externals are
         type: loop
         loopKind: forEach
         over: the consumer node's externals and referenced project members
@@ -129,4 +129,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-10-02T20:22:49.603Z'
+updatedAt: '2026-10-02T20:47:01.920Z'

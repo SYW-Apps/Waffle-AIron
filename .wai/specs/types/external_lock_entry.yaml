@@ -6,8 +6,8 @@ description: >-
   producer it pinned, where the snapshot is, the snapshot's content digest, the digest of every
   member the consumer's references use (so a later status says stale only when something used
   changed), and since stage 8 the producer's commit and the role it was pinned in — an external, a
-  project member stored by `source` (a referenced project, pinned exactly as an external), or, in a
-  part's lock, the part's parent (whose snapshot is a ParentExcerpt).
+  referenced project member (pinned exactly as an external), or, in a non-contained part's lock, the
+  part's parent (whose snapshot is a ParentExcerpt).
 subsystem: sdd_surfaces
 fields:
   - name: project
@@ -50,4 +50,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:46:57.120Z'
-updatedAt: '2026-10-02T20:18:14.823Z'
+updatedAt: '2026-10-02T20:48:05.065Z'

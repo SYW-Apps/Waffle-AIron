@@ -193,13 +193,6 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: updateMember
-  - name: setPartOf
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: setPartOf
 status: complete
 createdAt: '2026-09-30T20:31:36.988Z'
-updatedAt: '2026-10-02T20:32:40.400Z'
+updatedAt: '2026-10-02T20:50:34.752Z'

@@ -318,13 +318,13 @@ methods:
       - idempotent
   - name: updateMember
     description: >-
-      Change what an existing member is or where it is stored (stage 8): set `as`, its `source` (a
-      git source's commit included) or its description, keeping every other part of the entry.
-      Refuses an alias `members` does not declare, and a change that would leave the entry with both
-      or neither of `path` and `source`. The shorthand becomes the long form only when a field the
-      shorthand cannot carry is set. The same values write nothing. The write behind `doctor --fix`
-      writing `as: project`, `member promote` / `demote`, and `member update` moving a git member's
-      commit. Returns whether it wrote.
+      Change an existing member's declaration (stage 8): set its `source` (a git `#<commit>`
+      included), `ref`, `dir` or description, or drop an asserted `as` or a `use`, keeping every
+      other part of the entry. Rewriting a deprecated long-form `path` to `source` is the same write
+      (`doctor --fix`). Refuses an alias `members` does not declare, and a result with no source or
+      an unparseable one. The entry is written as the shorthand when only its source remains, the
+      long form otherwise. The same values write nothing. The write behind `member update`, `member
+      promote` / `demote`, and `doctor --fix`. Returns whether it wrote.
     signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
     returns: boolean
     params:
@@ -338,12 +338,13 @@ methods:
       - idempotent
   - name: setPartOf
     description: >-
-      Write (or, with null, remove) the bound configuration's `partOf` — the one thing a part's
-      configuration declares (stage 8). Refuses to write partOf into a configuration that declares
-      any project field (an id, members, externals, composition, rules, extensions, targets): a
-      project is never quietly turned into a part — that is `member demote`, which moves those
-      fields first. Creates the configuration when the directory has none (a fresh part). The same
-      value writes nothing. Returns whether it wrote.
+      Write (or, with null, remove) the bound configuration's `partOf` — the one thing a
+      NON-CONTAINED part's configuration declares (stage 8; a contained part has no configuration).
+      Refuses to write partOf into a configuration that declares any project field (an id, members,
+      externals, composition, rules, extensions, targets): a project is never quietly turned into a
+      part — that is `member demote`, which moves those fields first. Creates the configuration when
+      the directory has none (a fresh sibling part). The same value writes nothing. Returns whether
+      it wrote.
     signature: 'setPartOf(partOf: PartOf | null): boolean'
     returns: boolean
     params:
@@ -354,4 +355,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-10-02T20:28:07.623Z'
+updatedAt: '2026-10-02T20:50:43.540Z'

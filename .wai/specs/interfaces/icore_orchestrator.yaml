@@ -64,43 +64,40 @@ methods:
     returns: string
   - name: createMember
     description: >-
-      Create a member of the bound project, a PART unless `as` says project (stage 8: boundaries are
-      earned). FULLY yet NON-DESTRUCTIVELY initialize it at its location, each piece only when
-      absent, so an already- or partially-scaffolded one is completed without overwriting anything:
-      a PART gets a specs directory and a configuration holding only its PartOf (the bound project's
-      id, and the bound root relative to the part) — no L0, no id, no packs, since its parent
-      governs it; a PROJECT gets its specs directory, a project.yaml declaring the alias as its
-      project id, and an L0, so it is runnable standalone, plus the bound project's required packs
+      Create a member of the bound project — a PART unless `as` is project (stage 8: boundaries are
+      earned) — FULLY yet NON-DESTRUCTIVELY, each piece only when absent, so an already- or
+      partially-scaffolded one is completed without overwriting anything. What it creates IS what
+      the member becomes, since kind follows from content: a PART gets only a specs directory —
+      plus, when it is not contained, a configuration holding its PartOf (the bound project's id and
+      the bound root relative to it), so it can say what it belongs to opened alone; a PROJECT gets
+      the project content — a project.yaml declaring the alias as its id, an L0 and its specs
+      directory, so it is runnable standalone — plus the bound project's required packs
       (composition.requirePolicies) written into its extensions.packs once, each pinned to the
       highest installed version its range admits, and a required profile as the projectType when
       exactly one requirement names one (a requirement nothing installed satisfies is returned as
       unadopted, never written; afterwards the selections are the member's own). Then declare it in
-      the bound project's project.yaml `members` under the alias — the shorthand for a contained
-      part, the long form otherwise. Location: a contained `path` resolved strictly within the
-      owning project root (absolute, ../-escaping and link-escaping paths are rejected — a member
-      stored elsewhere is declared by `source`), or a `source`: a sibling path is scaffolded there
-      like a contained one; a git source is NOT scaffolded — the repository must already hold the
-      member — and is pinned at its ref's head (resolved and fetched through the git source
-      adapter), its commit written into the declaration. Scaffolding is an unattended pack write, so
-      it shows no impact report; the answer states what was created and applied. Writes no L1 spec:
-      a part's subsystems are added to it afterwards, a project carries no content in its parent.
-      Throws for an alias outside [a-z0-9-_]+, both or neither of path and source, an escaping path,
-      a hosted source, a git source that cannot be resolved or fetched, a directory that already
-      holds a project when a part was asked for (that is `member attach`), or an alias already
-      declaring a different member.
-    signature: >-
-      createMember(alias: string, path: string | null, description?: string, as?: string, source?:
-      ExternalSource): MemberCreation
+      the bound project's `members` under the alias as the shorthand `alias: <source>` (the long
+      form only for a description). A contained source must resolve strictly within the owning
+      project root (absolute, inner-`..` and link-escaping paths are rejected — leaving the root is
+      only ever a leading `../`). A git source is NOT scaffolded — the repository must already hold
+      the member, whose content decides what it is — and is pinned at the given commit or its
+      default branch's head (resolved and fetched through the git source adapter), the commit
+      written as `#<commit>`. Writes no L1 spec. Throws for an alias outside [a-z0-9-_]+, a source
+      none of the grammar's forms parses, an escaping path, a hosted source, a git source that
+      cannot be resolved or fetched, `as: part` on a directory that already holds a project (that is
+      `member attach`), or an alias already declaring a different member.
+    signature: 'createMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
     returns: MemberCreation
     params:
       - name: alias
         type: string
         description: The member's alias (and, for a project, its new project id)
-      - name: path
-        type: string | null
+      - name: source
+        type: string
         description: >-
-          A contained member's root, relative to the bound project root; null when `source` says
-          where it lives
+          Where it lives, in the members grammar: a contained path, a `../` sibling path, or a git
+          URL (its `#<commit>` optional here: without one the remote's default branch head is
+          resolved and pinned). A `hosted:` source is refused; hosted project creation makes records
       - name: description
         type: string
         description: >-
@@ -109,13 +106,7 @@ methods:
         optional: true
       - name: as
         type: string
-        description: part (the default) or project (`--project`)
-        optional: true
-      - name: source
-        type: ExternalSource
-        description: >-
-          Where a member stored outside the project lives: a sibling path or a git repository (a
-          hosted record is created by hosted project creation instead)
+        description: project (`--project`) to create the project content; omitted creates a part
         optional: true
   - name: moveMember
     description: >-
@@ -140,19 +131,19 @@ methods:
   - name: externalizeSubsystem
     description: >-
       Move an internal subsystem's spec subtree (L1-L4 + its types) OUT of the bound project's own
-      specs folder into a part at the path (stage 8 — a storage move, the default): a new part is
-      provisioned there (its specs directory and its PartOf) and declared in `members` under the
-      subsystem id with `as: part`, or the subsystem joins the existing part at that directory. Each
-      moved implementation's file paths (sourcePath, each method's sourcePath, simPath) are
-      re-expressed relative to the part's root — the same files. Nothing else changes: the subsystem
-      keeps its key, every reference keeps its spelling, no export or external is written, and the
-      verdict is the same as before (part-is-the-parents-subsystem). With `as: project` it then
-      promotes the new part (promoteMember with the subsystem id), which is the pre-stage-8
-      externalize: the moved subsystem becomes a member project with what crosses the boundary
-      declared on both sides. Throws if the subsystem is missing or is already in a part or member,
-      if the path does not resolve strictly within the owning project root (absolute, ../-escaping
-      and link-escaping paths are rejected), or if it holds a project, before anything moves. Source
-      code is not moved.
+      specs folder into a part at the path (stage 8 — a storage move, the default): a new contained
+      part is a specs directory there declared in `members` under the subsystem id by the shorthand,
+      or the subsystem joins the existing part at that directory. Each moved implementation's file
+      paths (sourcePath, each method's sourcePath, simPath) are re-expressed relative to the part's
+      root — the same files. Nothing else changes: the subsystem keeps its key, every reference
+      keeps its spelling, no export or external is written, and the verdict is the same as before
+      (part-is-the-parents-subsystem). With `as: project` it then promotes the new part
+      (promoteMember with the subsystem id), which is the pre-stage-8 externalize: the moved
+      subsystem becomes a member project with what crosses the boundary declared on both sides.
+      Throws if the subsystem is missing or is already in a part or member, if the path does not
+      resolve strictly within the owning project root (absolute, ../-escaping and link-escaping
+      paths are rejected), or if it holds a project, before anything moves. Source code is not
+      moved.
     signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): void'
     returns: void
     params:
@@ -922,11 +913,11 @@ methods:
     description: >-
       Declare an EXISTING project or part as a member of the bound project through the project
       config Repository — the write behind `member attach` and `member adopt`, which scaffold
-      nothing (createMember scaffolds). Refused for a malformed alias, a contained path that does
-      not resolve strictly within the bound root (the containment guard createMember applies; a
-      `source` is not guarded, since declaring one is the statement that it lives elsewhere), an
-      alias `externals` holds, or an alias already holding a different member; a no-op when it holds
-      the same one. Returns whether it wrote.
+      nothing (createMember scaffolds). Written as the shorthand when the declaration carries only
+      its source. Refused for a malformed alias, a contained source that does not resolve strictly
+      within the bound root (the containment guard createMember applies; a leading `../` is the
+      explicit way out), an alias `externals` holds, or an alias already holding a different member;
+      a no-op when it holds the same one. Returns whether it wrote.
     signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
     returns: boolean
     params:
@@ -935,7 +926,7 @@ methods:
         description: The member's alias
       - name: declaration
         type: MemberDeclaration
-        description: Its contained path or its source, `as`, and its description and `use` when it has them
+        description: Its source, and its `as`, description and `use` when it has them
     guarantees:
       - idempotent
   - name: removeMember
@@ -974,10 +965,11 @@ methods:
       - idempotent
   - name: updateMember
     description: >-
-      Change an existing member's `as`, source or description through the project config Repository
-      (stage 8) — the write `doctor --fix` uses to record `as: project`, and promote / demote to
-      flip `as`. A contained path in the changes is held to the containment guard. Returns whether
-      it wrote.
+      Change an existing member's declaration through the project config Repository (stage 8) — the
+      write behind `member update` moving a git member's `#<commit>`, and `doctor --fix` rewriting a
+      deprecated long-form `path` to the one location key. A contained source in the changes is held
+      to the containment guard. Never writes a kind: what a member is follows from its content.
+      Returns whether it wrote.
     signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
     returns: boolean
     params:
@@ -986,23 +978,13 @@ methods:
         description: The member's alias
       - name: changes
         type: MemberDeclaration
-        description: The fields to set (`as`, source, description)
-  - name: setPartOf
-    description: >-
-      Write or remove the bound configuration's PartOf through the project config Repository (stage
-      8) — with a part's root bound. Refused on a configuration that declares project fields.
-      Returns whether it wrote.
-    signature: 'setPartOf(partOf: PartOf | null): boolean'
-    returns: boolean
-    params:
-      - name: partOf
-        type: PartOf | null
-        description: The parent, or null to remove it
+        description: The fields to set (source, ref, dir, description)
   - name: promoteMember
     description: >-
       Promote a part of the bound project to an independent project IN PLACE (stage 8, `member
-      promote`): its files stay where they are; what changes is the boundary. The part's
-      configuration becomes a project's (PartOf removed, `id` declared); it gets a minimal L0
+      promote`): its files stay where they are, and promote CREATES the project content — which is
+      what makes it a project, since kind follows from content. The part gets a project.yaml
+      declaring its id (replacing a non-contained part's PartOf configuration) and a minimal L0
       (vision: the member's description) whose export table holds exactly what the rest of the bound
       project uses of it — each used component its subsystem already publishes, through that
       subsystem's export (one it does not publish refuses: making a component public is a design
@@ -1013,7 +995,8 @@ methods:
       and the new project declares the parent as an external; a bare type name the other side no
       longer owns is imported by name (`use`) rather than respelled, so the text stays as written.
       The bound project's L0 entries that re-exported the part's subsystems re-export the member by
-      alias. The member entry gets `as: project`. This is exactly the boundary half of the
+      alias. An asserted `as: part` on the declaration is dropped (it would now contradict the
+      content); nothing else in the declaration changes. This is exactly the boundary half of the
       pre-stage-8 externalize, which now composes it after the storage move. Locks nothing: both
       projects are to re-lock (the new one has never been approved). Throws, before anything is
       written, when the alias names no part, the part is fetched from git (its files are the
@@ -1033,23 +1016,25 @@ methods:
   - name: demoteMember
     description: >-
       Demote a project member of the bound project to a part IN PLACE (stage 8, `member demote`) —
-      promoteMember's inverse: its files stay where they are; the boundary goes. Each piece of the
-      member's own metadata goes to a home exactly as internalizeMember sends it (its L0 vision,
-      boundaries, globalRequirements and databases to the bound project's L0; its targetLanguage,
-      projectType and designDepth stamped on its subsystems where they differ; its own members and
-      its externals other than the parent declared by the bound project; its packs adopted or
-      dropped as the destination says); then its L0 and its own lock, pins and derived outputs are
-      deleted, its configuration is replaced by PartOf alone, every reference is re-saved from where
+      promoteMember's inverse: its files stay where they are, and demote REMOVES the project
+      content, which is what makes it a part. Each piece of the member's own metadata goes to a home
+      exactly as internalizeMember sends it (its L0 vision, boundaries, globalRequirements and
+      databases to the bound project's L0; its targetLanguage, projectType and designDepth stamped
+      on its subsystems where they differ; its own members and its externals other than the parent
+      declared by the bound project; its packs adopted or dropped as the destination says); then its
+      L0, its project.yaml, its own lock, pins and derived outputs are deleted — a non-contained
+      member keeps a configuration holding only its PartOf — every reference is re-saved from where
       it now lives (the bound project's `alias::name` references and the member's `<parent
       id>::name` references become local ids, and the parent's exports that existed only for the
       member, and the member's external for the parent, are removed), the bound project's L0
-      re-exports from the member become re-exports of its subsystems, and the member entry gets `as:
-      part`. Locks nothing: the bound project is to re-lock. Throws, before anything is written, for
-      the same reasons internalizeMember does (no such project member, a subsystem, type or spec
-      file landing on an existing one, a carried alias declared differently, a pack differing with
-      no adopt or drop, conformance debt or severity overrides the parent does not share, a
-      destination export colliding, an unrecognised file in the member's .wai) and when the member
-      is fetched from git (demote it from a checkout of its repository).
+      re-exports from the member become re-exports of its subsystems, and an asserted `as: project`
+      or a `use` on the declaration is dropped. Locks nothing: the bound project is to re-lock.
+      Throws, before anything is written, for the same reasons internalizeMember does (no such
+      project member, a subsystem, type or spec file landing on an existing one, a carried alias
+      declared differently, a pack differing with no adopt or drop, conformance debt or severity
+      overrides the parent does not share, a destination export colliding, an unrecognised file in
+      the member's .wai) and when the member is fetched from git (demote it from a checkout of its
+      repository).
     signature: 'demoteMember(alias: string, destination: InternalizeDestination): InternalizeResult'
     returns: InternalizeResult
     params:
@@ -1091,4 +1076,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:29:23.929Z'
+updatedAt: '2026-10-02T20:50:37.458Z'

@@ -134,10 +134,10 @@ methods:
       - stepNumber: 5
         label: externals
         description: >-
-          Resolve the bound project's declared externals and its project members declared by
-          `source` through the core: each bound to its producer (family, source.path, git at its
-          ref's head or a member's pinned commit, hosted), with the consumer's references into each
-          by public name
+          Resolve the bound project's declared externals and its referenced project members (a
+          `../`, git or hosted source) through the core: each bound to its producer (family,
+          source.path, git at its ref's head or a member's pinned commit, hosted), with the
+          consumer's references into each by public name
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
@@ -212,11 +212,11 @@ methods:
         label: used
         description: >-
           Compute the lock entry: the producer id, the snapshot path, the content digest, the role
-          (external, or member for a project member declared by `source`), the commit (the fetched
-          commit of a git producer, else the head of the work tree holding the producer when it is
-          in one), and `used` — each public name of the binding's usage mapped to each of its
-          members' SurfaceSnapshot.memberDigest (an empty map for a name only depended on; a member
-          the snapshot does not carry is reported missing and not pinned). Usage exists for every
+          (external, or member for a referenced project member), the commit (the fetched commit of a
+          git producer, else the head of the work tree holding the producer when it is in one), and
+          `used` — each public name of the binding's usage mapped to each of its members'
+          SurfaceSnapshot.memberDigest (an empty map for a name only depended on; a member the
+          snapshot does not carry is reported missing and not pinned). Usage exists for every
           producer since stage 8, so an outside producer's `used` is filled too
         type: local
       - stepNumber: 19
@@ -262,9 +262,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the bound project's declared externals and its project members declared by
-          `source` through the core, with the consumer's references as they are now — counted by
-          public name for every producer, the outside ones included
+          Resolve the bound project's declared externals and its referenced project members (a
+          `../`, git or hosted source) through the core, with the consumer's references as they are
+          now — counted by public name for every producer, the outside ones included
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
@@ -609,4 +609,4 @@ lint:
         replaced listExternalInterfaces, whose entry for it was retired with it.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-02T20:39:09.199Z'
+updatedAt: '2026-10-02T20:47:24.041Z'

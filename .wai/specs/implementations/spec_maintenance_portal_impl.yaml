@@ -147,13 +147,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: updateMember
-  - name: setPartOf
-    narrative:
-      - stepNumber: 1
-        description: Route the write through the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: setPartOf
   - name: advanceMember
     narrative:
       - stepNumber: 1
@@ -163,4 +156,4 @@ methods:
         targetMethod: advanceMember
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-10-02T20:34:46.888Z'
+updatedAt: '2026-10-02T20:50:36.605Z'

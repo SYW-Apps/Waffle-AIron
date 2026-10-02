@@ -87,16 +87,13 @@ methods:
           is dropped silently
         type: local
       - stepNumber: 10
-        label: kinds
+        label: locations
         description: >-
-          Plan the member kinds (stage 8), the other member-declaration repair: for every member the
-          graph read as a project by inference (a kind-inferred problem: no `as`, a project-shaped
-          root), `as: project` on its declaration in the project that declares it; for every part
-          whose root carries no PartOf (part-parent-undeclared), its PartOf — the declaring
-          project's id, the declaring root relative to the part. Each is listed. Nothing changes
-          meaning: an inferred member already validates as a project, so every existing family
-          validates identically afterwards (existing-members-unchanged); a member that states `as`
-          is never touched
+          Plan stage 8's one doctor step, the other member-declaration repair: every member declared
+          with the deprecated long-form `path` key is rewritten to the one location key — the
+          shorthand `alias: <path>` when the entry holds nothing else, else the long form's `source`
+          — its meaning unchanged, each listed. What a member is follows from its content, so no
+          kind is ever written
         type: local
       - stepNumber: 11
         description: >-
@@ -175,7 +172,7 @@ methods:
           with it, named in its rewrite-unavailable finding
         type: local
       - stepNumber: 19
-        description: 'Answer the plan: members, member kinds, rewrites, imports and findings'
+        description: 'Answer the plan: members, location rewrites, rewrites, imports and findings'
         type: return
         outcome: PositionMigrationPlan
   - name: write
@@ -197,30 +194,21 @@ methods:
         targetComponent: migration_core_adapter
         targetMethod: moveMountToMembers
       - stepNumber: 3
-        label: kinds
-        description: Then the member kinds, once every member is declared under `members`
+        label: locations
+        description: Then the location rewrites, once every member is declared under `members`
         type: loop
         loopKind: forEach
-        over: the plan's member kinds, top root first
-        endStep: 5
+        over: the plan's location rewrites, top root first
+        endStep: 4
       - stepNumber: 4
+        label: relocate
         description: >-
-          For an inferred member: under the declaring project's rehearsal root, write `as: project`
-          on its declaration — the same value again writes nothing, a differing `as` is never
-          overwritten
+          Under the declaring project's rehearsal root, rewrite the entry's deprecated `path` to
+          `source` (or the shorthand) — an entry already written in the one key writes nothing
         type: call
         targetComponent: migration_core_adapter
         targetMethod: updateMember
       - stepNumber: 5
-        label: part-of
-        description: >-
-          For a part without one: under the part's rehearsal root, write its missing PartOf —
-          refused (and reported) when the part's configuration declares project fields, which the
-          migration never moves silently
-        type: call
-        targetComponent: migration_core_adapter
-        targetMethod: setPartOf
-      - stepNumber: 6
         label: imports
         description: >-
           Then the positional imports — after the moves, so an import on a legacy mount's alias
@@ -229,11 +217,11 @@ methods:
         type: loop
         loopKind: forEach
         over: each project's planned imports, grouped per alias
-        endStep: 8
-      - stepNumber: 7
+        endStep: 7
+      - stepNumber: 6
         description: Bind the consumer's rehearsal root
         type: local
-      - stepNumber: 8
+      - stepNumber: 7
         label: import
         description: >-
           Add the alias's planned names to its `use` in the consumer's project.yaml — names already
@@ -241,20 +229,20 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: importNames
-      - stepNumber: 9
+      - stepNumber: 8
         description: >-
           Bind the rehearsal's top root: the deprecated forms bind from there, so every rewrite is
           read and written where its target is still found. A spec is addressed by the key it
           answers to now — its project's planned id where the plan declared one
         type: local
-      - stepNumber: 10
+      - stepNumber: 9
         label: rewrites
         description: Rewrite the planned references, one spec at a time
         type: loop
         loopKind: forEach
         over: the plan's rewrites grouped by spec
-        endStep: 11
-      - stepNumber: 11
+        endStep: 10
+      - stepNumber: 10
         label: normalize
         description: >-
           Re-save the spec with every reference in its canonical form, raw positions included; a
@@ -262,7 +250,7 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: normalizeReferences
-      - stepNumber: 12
+      - stepNumber: 11
         label: pins
         description: >-
           Delete the superseded stage-1 family pins last in this migration, once the externals that
@@ -271,8 +259,8 @@ methods:
         type: loop
         loopKind: forEach
         over: each project's superseded pins
-        endStep: 13
-      - stepNumber: 13
+        endStep: 12
+      - stepNumber: 12
         label: unpin
         description: >-
           Under the project's rehearsal binding, remove the pin's snapshot; one already gone writes
@@ -280,17 +268,17 @@ methods:
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: removeSnapshot
-      - stepNumber: 14
+      - stepNumber: 13
         description: >-
           Restore the caller's binding. Collect every write in write order and every project whose
           approval the writes staled: a parent whose `members` changed and L1 mount went, a project
           whose spec files were rewritten, a member whose pins went (gate inputs)
         type: local
-      - stepNumber: 15
+      - stepNumber: 14
         description: Answer the writes and the projects to re-lock
         type: return
         outcome: PositionMigrationResult
 detail: full
 status: complete
 createdAt: '2026-09-27T10:45:51.006Z'
-updatedAt: '2026-10-02T20:37:46.673Z'
+updatedAt: '2026-10-02T20:45:34.609Z'

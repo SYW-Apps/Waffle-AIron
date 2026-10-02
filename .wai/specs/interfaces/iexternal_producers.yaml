@@ -8,16 +8,17 @@ component: external_producers
 methods:
   - name: resolveDeclared
     description: >-
-      Every declared external of the bound project — and, since stage 8, every project member it
-      declares by `source` (role member) — bound to its producer: through the family graph, an
-      explicit source.path, a source.git materialized in the fetch cache (an external at its ref's
-      head, a member at its pinned commit), or the hosted record lookup within the request's reach;
-      each with the project's usage of it by public name — mapped onto the live table for a family
-      producer, counted by spelled name for any other — and whether the family was read whole. An
-      unreachable producer is bound with its problem, never dropped: unavailable, never a pass.
+      Every declared external of the bound project — and, since stage 8, every referenced project
+      member it declares (a `../`, git or hosted source; role member) — bound to its producer:
+      through the family graph, an explicit source.path, a source.git materialized in the fetch
+      cache (an external at its ref's head, a member at its pinned commit), or the hosted record
+      lookup within the request's reach; each with the project's usage of it by public name — mapped
+      onto the live table for a family producer, counted by spelled name for any other — and whether
+      the family was read whole. An unreachable producer is bound with its problem, never dropped:
+      unavailable, never a pass.
     signature: 'resolveDeclared(): ExternalBinding[]'
     returns: ExternalBinding[]
     params: []
 status: complete
 createdAt: '2026-09-26T17:43:52.033Z'
-updatedAt: '2026-10-02T20:22:52.338Z'
+updatedAt: '2026-10-02T20:47:34.706Z'

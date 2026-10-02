@@ -2,15 +2,16 @@ kind: value-object
 id: external_source
 name: ExternalSource
 description: >-
-  Where a producer is found when the family does not hold it — for an external, and for a member
-  declared by reference (stage 8: a part or a project stored outside the declaring project). Exactly
-  one of `path`, `hosted` and `git` is set. Written as an object, or as a string shorthand: a string
-  that is a git URL (a scheme of https://, ssh:// or git://, or the scp form user@host:path, or one
-  ending in .git) reads as `{ git }`, any other string as `{ path }`. A consumer's own gate never
-  needs an external producer's files: it judges against its pinned snapshot (stage 4), so a hosted
-  or git source is only read live (status, re-pin) — a hosted one only through the hosting server's
-  record lookup within the request's readable reach, a git one only through a fetch at a commit; out
-  of reach, offline or outside a hosted server it is unavailable, never a pass.
+  Where a producer is found when the family does not hold it — for an external, and (normalized) for
+  a member's `source` (stage 8). Written as the one string grammar members use — `../ledger` (a
+  path; for an external any relative path), `git@host:acme/ledger.git` (git; a member's carries
+  `#<commit>`, an external's commit is its pin's), `hosted:ledger` (a hosted record) — or as this
+  object, which is also the normalized form every reader holds. Exactly one of `path`, `hosted` and
+  `git` is set. A consumer's own gate never needs an external producer's files: it judges against
+  its pinned snapshot (stage 4), so a hosted or git source is only read live (status, re-pin) — a
+  hosted one only through the hosting server's record lookup within the request's readable reach, a
+  git one only through a fetch at a commit; out of reach, offline or outside a hosted server it is
+  unavailable, never a pass.
 subsystem: sdd_core
 fields:
   - name: path
@@ -48,12 +49,11 @@ fields:
   - name: commit
     type: string
     description: >-
-      git members only: the full commit the member is pinned at, written by `member add` and `wairon
-      member update`, never by a plain save. The scan loads a git part from the cache at exactly
-      this commit, and the family run opens a git project there, so a verdict is the same on every
-      machine that can fetch it. An external records its commit in the externals lock instead
-      (ExternalLockEntry.commit), since its pinned snapshot, not its tree, is what is judged; a
-      commit on an external's source is a declaration problem.
+      git members only: the full commit the member is pinned at — the `#<commit>` of the member's
+      source string, written by `member add` and `member update`, never by a plain save. The scan
+      loads a git part from the cache at exactly this commit, and the family run opens a git project
+      there. An external's commit is recorded in the externals lock instead
+      (ExternalLockEntry.commit); a commit on an external's source is a declaration problem.
     optional: true
   - name: dir
     type: string
@@ -64,4 +64,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-26T17:39:12.278Z'
-updatedAt: '2026-10-02T20:16:23.603Z'
+updatedAt: '2026-10-02T20:44:47.344Z'

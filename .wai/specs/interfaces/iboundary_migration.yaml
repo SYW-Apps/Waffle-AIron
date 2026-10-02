@@ -103,23 +103,24 @@ methods:
   - name: planPromote
     description: >-
       Plan `member promote <alias>` (stage 8): the part under request.alias becomes an independent
-      project IN PLACE — nothing moves on disk. Refusals: no such part (not-a-part); a part fetched
-      from git (read-only: promote it in a checkout of its repository — a cross-repository migration
-      is not planned as one change); a trustedLink between its subsystems and the rest
-      (trusted-link-crosses: it would cross a project boundary; remove or replace it first); a
-      component either side uses that its subsystem does not publish (externalize-refused:
-      publishing it is a design decision); the id already a family project's or an alias
-      (id-collision, alias-taken); a family project consuming the bound project that uses a name
-      realized in the part and would lose it (externalize-updates-siblings). Edits: the core's
-      promote — the part's configuration made a project's (PartOf removed, id declared), a minimal
-      L0 exporting exactly what the rest of the bound project uses of it, references across the new
-      boundary re-saved (`alias::name` one way, `<parent id>::name` the other, bare type names
-      imported by `use`), the bound project exporting what the new project uses of it and declared
-      as the new project's external, the bound project's L0 re-exports re-pointed at the member, the
-      member entry `as: project`; then the new project's external for the bound project pinned in
-      it, and the bound project's pin of the new member (a referenced one) taken. Re-lock: the bound
-      project; the new project has no lock to re-take and is listed as "to lock".
-      promote-then-demote-is-identity: demoting the result plans the exact inverse.
+      project IN PLACE — nothing moves on disk; what changes is its content, which is what makes it
+      a project. Refusals: no such part (not-a-part); a part fetched from git (read-only: promote it
+      in a checkout of its repository — a cross-repository migration is not planned as one change);
+      a trustedLink between its subsystems and the rest (trusted-link-crosses: it would cross a
+      project boundary; remove or replace it first); a component either side uses that its subsystem
+      does not publish (externalize-refused: publishing it is a design decision); the id already a
+      family project's or an alias (id-collision, alias-taken); a family project consuming the bound
+      project that uses a name realized in the part and would lose it
+      (externalize-updates-siblings). Edits: the core's promote — the project content created (a
+      project.yaml declaring its id, replacing a non-contained part's PartOf; a minimal L0 exporting
+      exactly what the rest of the bound project uses of it), references across the new boundary
+      re-saved (`alias::name` one way, `<parent id>::name` the other, bare type names imported by
+      `use`), the bound project exporting what the new project uses of it and declared as the new
+      project's external, the bound project's L0 re-exports re-pointed at the member, an asserted
+      `as: part` dropped from the declaration; then the new project's external for the bound project
+      pinned in it, and — when it is not contained — the bound project's pin of the new member
+      taken. Re-lock: the bound project; the new project has no lock to re-take and is listed as "to
+      lock". promote-then-demote-is-identity: demoting the result plans the exact inverse.
     signature: 'planPromote(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -137,19 +138,21 @@ methods:
   - name: planDemote
     description: >-
       Plan `member demote <alias>` (stage 8): the project member under request.alias becomes a part
-      of the bound project IN PLACE — nothing moves on disk; planPromote's inverse. Refusals: no
-      such project member (not-a-member); a member fetched from git (read-only); a family project
-      OTHER than the bound project that consumes the member (consumed-elsewhere: a part has no
-      exports, so another project could no longer reach what it uses — the plan lists each consumer
-      and the names it uses; repoint them at the bound project's exports first, or keep the
-      boundary); the core's internalize refusals (a carried alias declared differently, a pack
-      differing with no adopt or drop, conformance debt or severity overrides the parent does not
-      share, an unrecognised file in its .wai). Edits: the core's demote with request.destination —
-      its metadata sent to its homes, its L0, lock, pins and derived outputs deleted (each listed),
-      its configuration reduced to PartOf, references across the old boundary re-saved as local ids,
-      the exports and the parent external that existed only for the boundary dropped, the member
-      entry `as: part`; the bound project's pin of the member removed. Re-lock: the bound project;
-      the member's own lock ends with it (listed as deleted).
+      of the bound project IN PLACE — nothing moves on disk; its project content is removed, which
+      is what makes it a part; planPromote's inverse. Refusals: no such project member
+      (not-a-member); a member fetched from git (read-only); a family project OTHER than the bound
+      project that consumes the member (consumed-elsewhere: a part has no exports, so another
+      project could no longer reach what it uses — the plan lists each consumer and the names it
+      uses; repoint them at the bound project's exports first, or keep the boundary); the core's
+      internalize refusals (a carried alias declared differently, a pack differing with no adopt or
+      drop, conformance debt or severity overrides the parent does not share, an unrecognised file
+      in its .wai). Edits: the core's demote with request.destination — its metadata sent to its
+      homes, its L0, project.yaml, lock, pins and derived outputs deleted (each listed; a
+      non-contained member keeps only its PartOf), references across the old boundary re-saved as
+      local ids, the exports and the parent external that existed only for the boundary dropped, an
+      asserted `as: project` and any `use` dropped from the declaration; the bound project's pin of
+      the member removed when it had one. Re-lock: the bound project; the member's own lock ends
+      with it (listed as deleted).
     signature: 'planDemote(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -185,4 +188,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:35:03.086Z'
-updatedAt: '2026-10-02T20:38:17.958Z'
+updatedAt: '2026-10-02T20:52:25.493Z'

@@ -13,12 +13,13 @@ fields:
     description: >-
       attach | rename | rename-alias | detach | adopt | internalize | externalize | promote | demote
       | chaining. chaining is the stage 2–4 chaining migration (`doctor --fix`, `doctor --report
-      chaining`), which takes no other argument; since stage 8 it also writes `as: project` onto
-      every member read as project by inference and PartOf into every part that lacks it. Stage 8's
-      two composition verbs leave storage alone: promote (a part becomes a project) and demote (a
-      project becomes a part). externalize and internalize are storage verbs again: they move a
-      subsystem out to a part's directory or a part's subsystems back in, and with `as: project`
-      (externalize) or on a project member (internalize) they compose with promote / demote.
+      chaining`), which takes no other argument; since stage 8 it also rewrites each deprecated
+      long-form member `path` to the one location key. Stage 8's two composition verbs leave storage
+      alone: promote (a part becomes a project: its project content is created) and demote (a
+      project becomes a part: its project content is removed). externalize and internalize are
+      storage verbs again: they move a subsystem out to a part's directory or a part's subsystems
+      back in, and with `as: project` (externalize) or on a project member (internalize) they
+      compose with promote / demote.
     optional: false
   - name: alias
     type: string
@@ -95,4 +96,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:03.011Z'
-updatedAt: '2026-10-02T20:18:28.609Z'
+updatedAt: '2026-10-02T20:45:48.335Z'

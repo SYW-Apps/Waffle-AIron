@@ -201,31 +201,25 @@ methods:
       - idempotent
   - name: createMember
     description: >-
-      Published write: create a member of the bound project — a part by default, a project with `as:
-      project` (stage 8) — at a contained path or a source (sibling path, git), and declare it in
-      `members`. Routed through the core orchestrator.
-    signature: >-
-      createMember(alias: string, path: string | null, description?: string, as?: string, source?:
-      ExternalSource): MemberCreation
+      Published write: create a member of the bound project at a source in the members grammar — a
+      part by default, a project with `as: project` (stage 8: creating the project content is what
+      makes it one) — and declare it in `members`. Routed through the core orchestrator.
+    signature: 'createMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
     returns: MemberCreation
     params:
       - name: alias
         type: string
         description: The member's alias
-      - name: path
-        type: string | null
-        description: A contained member's root, or null when source is given
+      - name: source
+        type: string
+        description: A contained path, a `../` sibling path, or a git URL (optionally `#<commit>`)
       - name: description
         type: string
         description: What the member is to this project
         optional: true
       - name: as
         type: string
-        description: part (default) or project
-        optional: true
-      - name: source
-        type: ExternalSource
-        description: A sibling path or git source
+        description: project to create the project content; omitted creates a part
         optional: true
   - name: rewriteReferences
     description: >-
@@ -286,16 +280,6 @@ methods:
       - name: changes
         type: MemberDeclaration
         description: The fields to set
-  - name: setPartOf
-    description: >-
-      Published write: write or remove the bound configuration's PartOf (stage 8). Routed through
-      the core orchestrator.
-    signature: 'setPartOf(partOf: PartOf | null): boolean'
-    returns: boolean
-    params:
-      - name: partOf
-        type: PartOf | null
-        description: The parent, or null
   - name: advanceMember
     description: >-
       Published write: move a git member's pinned commit — `wairon member update` (stage 8). Routed
@@ -320,4 +304,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-02T20:34:45.581Z'
+updatedAt: '2026-10-02T20:50:35.728Z'

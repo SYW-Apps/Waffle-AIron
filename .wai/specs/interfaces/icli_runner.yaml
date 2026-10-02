@@ -81,16 +81,17 @@ methods:
     returns: Promise<void>
   - name: runMemberAdd
     description: >-
-      `wairon member add <alias> [<path>] [--source <path|git-url>] [--project] [--description]`:
-      create a member of the current project — a PART by default (stage 8: a piece of this project
-      stored in another folder or repository, its subsystems this project's own), or with --project
-      an isolated wairon project (its project.yaml declaring the alias as its id, its L0) — at a
-      contained path or a --source (a sibling path, or a git URL pinned at its default branch's
-      head), and declare it in this project's project.yaml `members`. Replaces `wairon subsystem add
-      --project-path`, which wrote the L1 mount form.
+      `wairon member add <alias> <source> [--project] [--description]`: create a member of the
+      current project at a source in the one members grammar — `services/scheduler` (contained),
+      `../admin` (a sibling checkout), `git@host:acme/payments.git[#<commit>]` (git, pinned at its
+      default branch head unless a commit is given) — a PART by default (stage 8: its subsystems are
+      this project's own), or with --project an isolated wairon project (its project content:
+      project.yaml declaring the alias as its id, its L0) — and declare it in this project's
+      project.yaml `members` by the shorthand. Replaces `wairon subsystem add --project-path`, which
+      wrote the L1 mount form.
     signature: >-
-      runMemberAdd(alias: string, path: string | undefined, options: { description?: string,
-      project?: boolean, source?: string }): Promise<void>
+      runMemberAdd(alias: string, source: string, options: { description?: string, project?: boolean
+      }): Promise<void>
     returns: Promise<void>
   - name: runMemberMove
     description: >-
@@ -685,4 +686,4 @@ methods:
     returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T20:34:54.092Z'
+updatedAt: '2026-10-02T20:50:11.375Z'

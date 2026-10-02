@@ -499,41 +499,38 @@ methods:
       address: mcp tools/call sdd_get_externals_status
   - name: sdd_add_member
     description: >-
-      Tool: create a member of the bound project — a PART by default (stage 8): a piece of this
-      project stored in another folder or repository, whose subsystems are this project's own (local
-      ids, the ordinary subsystem rules, this project's lock); its directory gets a specs folder and
-      a configuration naming this project as its parent, nothing else. With `as: project` an
-      independent PROJECT instead: its project.yaml declaring the alias as its id, its L0, and the
-      bound project's required packs (composition.requirePolicies) once; reached only as
-      `alias::name` through its L0 exports. Either lives at a contained `path` or a `source` (a
-      sibling path, or a git repository — not scaffolded, pinned at its ref's head). Boundaries are
-      earned: create a part unless the piece needs its own team, release, approval or public
-      surface; `sdd_promote_member` makes one later. The answer states what was created and applied.
+      Tool: create a member of the bound project at `source`, in the one members grammar:
+      `services/scheduler` (contained), `../admin` (a sibling checkout),
+      `git@host:acme/payments.git` (a git repository, pinned at its default branch head unless
+      `#<commit>` is given). By default a PART (stage 8): a piece of this project stored in another
+      folder or repository, whose subsystems are this project's own (local ids, the ordinary
+      subsystem rules, this project's lock); it gets only a specs folder, plus a configuration
+      naming this project when it is not contained. With `as: project` an independent PROJECT
+      instead: its project content is created — a project.yaml declaring the alias as its id, its
+      L0, and the bound project's required packs (composition.requirePolicies) once — and it is
+      reached only as `alias::name` through its L0 exports. What a member is follows from that
+      content. A git member is not scaffolded; the repository's content decides what it is.
+      Boundaries are earned: create a part unless the piece needs its own team, release, approval or
+      public surface; `sdd_promote_member` makes one later. The answer states what was created and
+      applied.
     signature: >-
-      sdd_add_member(alias: string, path?: string, description?: string, as?: string, source?:
-      ExternalSource): MemberCreation
+      sdd_add_member(alias: string, source: string, description?: string, as?: string):
+      MemberCreation
     returns: MemberCreation
     params:
       - name: alias
         type: string
         description: The member's alias ([a-z0-9-_]+); a project's new id
-      - name: path
+      - name: source
         type: string
-        description: A contained member's root, relative to the bound project
-        optional: true
+        description: A contained path, a `../` sibling path, or a git URL (optionally `#<commit>`)
       - name: description
         type: string
         description: What the member is to this project
         optional: true
       - name: as
         type: string
-        description: part (default) or project
-        optional: true
-      - name: source
-        type: ExternalSource
-        description: >-
-          Where a member stored outside the project lives: { path } for a sibling checkout, { git,
-          ref? } for a repository
+        description: project to create the project content; omitted creates a part
         optional: true
     endpoint:
       transport: Custom
@@ -794,4 +791,4 @@ methods:
       address: mcp tools/call sdd_demote_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:34:20.822Z'
+updatedAt: '2026-10-02T20:50:08.735Z'

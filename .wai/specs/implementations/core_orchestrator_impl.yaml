@@ -132,8 +132,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Guard the alias and the location: an alias of [a-z0-9-_]+, and exactly one of a contained
-          path and a source (a hosted source refused — hosted project creation makes records)
+          Guard the alias and the source: an alias of [a-z0-9-_]+, and a source string one of the
+          grammar's forms parses (a hosted source refused — hosted project creation makes records)
         type: branch
         condition: the alias is outside [a-z0-9-_]+ or the path is empty
         onFalseStep: 3
@@ -143,15 +143,14 @@ methods:
         error: an alias and a path are required to create a member
       - stepNumber: 3
         description: >-
-          Resolve the member directory: the bound project root joined with the contained path, or
-          with a sibling source path
+          Resolve the member directory: the bound project root joined with a contained or `../`
+          sibling path
         type: local
       - stepNumber: 4
         description: >-
-          Containment guard, for a contained path only: reject a path that escapes the declaring
-          project. The member directory must resolve strictly within the bound project root,
-          lexically and through links (a declared source is the statement that it lives elsewhere,
-          and is not guarded)
+          Containment guard, for a contained path: reject one that escapes the declaring project —
+          absolute, with an inner `..`, or through a link. Leaving the root is only ever a leading
+          `../`, which is not guarded
         type: branch
         condition: >-
           the resolved child project directory is not contained within the bound project root (an
@@ -168,16 +167,17 @@ methods:
         onFalseStep: 10
       - stepNumber: 7
         description: >-
-          Resolve the source's ref (else the remote's default branch) to its commit now; unreachable
-          refuses, writing nothing
+          Resolve the commit: the source's `#<commit>` when given, else the remote's default branch
+          head now; unreachable refuses, writing nothing
         type: call
         targetComponent: git_source_adapter
         targetMethod: resolve
       - stepNumber: 8
         description: >-
-          Fetch that commit and check the repository already holds the member at `dir`: a part whose
-          PartOf names the bound project, or a project whose id is the alias. Nothing is scaffolded
-          in a repository wairon does not own; the commit goes into the declaration
+          Fetch that commit and check the repository already holds the member at `dir`; nothing is
+          scaffolded in a repository wairon does not own — its content decides what the member is (a
+          part there must carry its PartOf naming the bound project, else MEMBER_KIND_MISMATCH) —
+          and the commit goes into the declaration as `#<commit>`
         type: call
         targetComponent: git_source_adapter
         targetMethod: fetch
@@ -187,7 +187,7 @@ methods:
         toStep: 23
       - stepNumber: 10
         label: kind
-        description: A part (the default) or a project?
+        description: A part (the default) or a project? A project is created by creating its content
         type: branch
         condition: 'a project is asked for (as: project)'
         onFalseStep: 22
@@ -264,21 +264,21 @@ methods:
       - stepNumber: 22
         label: part
         description: >-
-          With the project root scoped to the member directory, scaffold a part: its specs directory
-          and a configuration holding only its PartOf (the bound project's id, the bound root
-          relative to it) — no L0, no id, no packs; a directory that already holds a project refuses
-          (adopting an existing project is `member attach`); then restore the declaring project's
-          scope
+          Scaffold a part: its specs directory and, when it is NOT contained, with the project root
+          scoped to it, a configuration holding only its PartOf (the bound project's id, the bound
+          root relative to it) — a contained part needs no configuration, its parent finds it; a
+          directory that already holds a project refuses (adopting an existing project is `member
+          attach`); then restore the declaring project's scope
         type: call
         targetComponent: project_config_repository
         targetMethod: setPartOf
       - stepNumber: 23
         label: declare
         description: >-
-          Declare the member in the declaring project's `members` — the shorthand for a contained
-          part, the long form with `as`, the source (a git commit included) and the description
-          otherwise — through the project config Repository; an equal declaration writes nothing and
-          a different one under the alias is refused
+          Declare the member in the declaring project's `members` — the shorthand `alias: <source>`
+          (a git source with its `#<commit>`), the long form only to carry a description — through
+          the project config Repository; an equal declaration writes nothing and a different one
+          under the alias is refused
         type: call
         targetComponent: project_config_repository
         targetMethod: declareMember
@@ -380,13 +380,10 @@ methods:
         error: 'cannot externalize: the subsystem is missing, already in a part, or a member'
       - stepNumber: 4
         description: >-
-          With the project root scoped to the part's directory at the path (under the containment
-          guard; a directory holding a project refuses), write its PartOf — the bound project's id
-          and the bound root relative to it — unless it already is this project's part, which the
-          subsystem joins
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: setPartOf
+          Create the part's specs directory at the path (under the containment guard; a directory
+          holding a project refuses) — a contained part needs no configuration — unless it already
+          is this project's part, which the subsystem joins
+        type: local
       - stepNumber: 5
         description: >-
           Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
@@ -397,8 +394,8 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
-          Back in the parent's scope, declare the part in `members` under the subsystem id with the
-          path and `as: part` — unless the path is an existing part's, already declared
+          Back in the parent's scope, declare the part in `members` under the subsystem id by the
+          shorthand `alias: <path>` — unless the path is an existing part's, already declared
         type: call
         targetComponent: project_config_repository
         targetMethod: declareMember
@@ -1986,16 +1983,6 @@ methods:
         description: Reject a contained path that resolves outside the project root
         type: throw
         error: PROJECTPATH_ESCAPE
-  - name: setPartOf
-    sourcePath: src/core/provision.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Write through the project config Repository, which refuses a configuration that declares
-          project fields
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: setPartOf
   - name: promoteMember
     sourcePath: src/core/provision.ts
     narrative:
@@ -2024,7 +2011,9 @@ methods:
         type: throw
         error: promote refused
       - stepNumber: 5
-        description: With the project root scoped to the part's directory, remove its PartOf
+        description: >-
+          With the project root scoped to the part's directory, remove a non-contained part's PartOf
+          configuration (a contained part has none)
         type: call
         targetComponent: project_config_repository
         targetMethod: setPartOf
@@ -2041,7 +2030,10 @@ methods:
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
       - stepNumber: 8
-        description: 'Back in the parent''s scope, set the member''s `as: project`'
+        description: >-
+          Back in the parent's scope, drop an asserted `as: part` from the member's declaration,
+          when it has one — the content now makes it a project; nothing else in the declaration
+          changes
         type: call
         targetComponent: project_config_repository
         targetMethod: updateMember
@@ -2168,13 +2160,16 @@ methods:
         type: local
       - stepNumber: 12
         description: >-
-          With the root scoped to the member, replace its configuration by its PartOf alone (the
-          configuration's project fields were carried above and are now removed)
+          With the root scoped to the member: a non-contained member's configuration is replaced by
+          its PartOf alone; a contained member's configuration is deleted (the project fields were
+          carried above)
         type: call
         targetComponent: project_config_repository
         targetMethod: setPartOf
       - stepNumber: 13
-        description: 'Back in the parent''s scope, set the member''s `as: part`'
+        description: >-
+          Back in the parent's scope, drop an asserted `as: project` and any `use` from the member's
+          declaration — the content now makes it a part
         type: call
         targetComponent: project_config_repository
         targetMethod: updateMember
@@ -2248,4 +2243,4 @@ methods:
         outcome: MemberAdvance
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:31:30.872Z'
+updatedAt: '2026-10-02T20:50:38.154Z'

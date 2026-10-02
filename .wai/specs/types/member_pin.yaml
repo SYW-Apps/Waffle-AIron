@@ -39,8 +39,8 @@ fields:
   - name: as
     type: string
     description: >-
-      part | project, as the parent read the member when it locked (an inferred project is project).
-      Absent in a record written before stage 8, which pinned projects only.
+      part | project, as the member's content made it when the parent locked. Absent in a record
+      written before stage 8, which pinned projects only.
     optional: true
   - name: commit
     type: string
@@ -60,4 +60,4 @@ fields:
 methods: []
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-09-30T05:47:05.631Z'
-updatedAt: '2026-10-02T20:18:08.374Z'
+updatedAt: '2026-10-02T20:48:18.188Z'

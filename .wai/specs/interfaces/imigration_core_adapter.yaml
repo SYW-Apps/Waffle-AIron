@@ -174,7 +174,7 @@ methods:
   - name: externalizeSubsystem
     description: >-
       Forward to spec_maintenance_portal.externalizeSubsystem: move an internal subsystem of the
-      bound project out into a part, or with `as: project` into a member project.
+      bound project out into a contained part, or with `as: project` into a member project.
     signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): void'
     returns: void
     params:
@@ -299,8 +299,9 @@ methods:
         description: Where its metadata goes
   - name: updateMember
     description: >-
-      Forward to spec_maintenance_portal.updateMember: change a member's `as`, source or description
-      — the chaining migration's write of `as: project`.
+      Forward to spec_maintenance_portal.updateMember: change a member's declaration — the chaining
+      migration's rewrite of a deprecated long-form `path` to the one location key, and promote /
+      demote dropping a contradicted `as`.
     signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
     returns: boolean
     params:
@@ -310,16 +311,6 @@ methods:
       - name: changes
         type: MemberDeclaration
         description: The fields to set
-  - name: setPartOf
-    description: >-
-      Forward to spec_maintenance_portal.setPartOf: write a part's PartOf — the chaining migration's
-      repair of a part that lacks one.
-    signature: 'setPartOf(partOf: PartOf | null): boolean'
-    returns: boolean
-    params:
-      - name: partOf
-        type: PartOf | null
-        description: The parent, or null
 status: complete
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-10-02T20:32:37.635Z'
+updatedAt: '2026-10-02T20:50:33.859Z'

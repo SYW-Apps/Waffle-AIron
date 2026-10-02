@@ -18,11 +18,11 @@ methods:
           Read the bound root's project graph through the core adapter: the root, the project
           members it contains (depth-bounded by a numeric `recursive`), their keys and directories,
           the cross-project references and the identity and membership problems — and, since stage
-          8, each project member declared by `source` (role member), whose root is opened where it
-          is stored: the sibling checkout, the fetch cache at its pinned commit, or the hosted
-          record within reach. Parts are no selection entries: they are their declaring project's
-          own subsystems, judged by its gate. This is the selection; a referenced member whose root
-          cannot be opened is left out and counted
+          8, each referenced project member (a `../`, git or hosted source; role member), whose root
+          is opened where it is stored: the sibling checkout, the fetch cache at its pinned commit,
+          or the hosted record within reach. Parts are no selection entries: they are their
+          declaring project's own subsystems, judged by its gate. This is the selection; a
+          referenced member whose root cannot be opened is left out and counted
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
@@ -457,8 +457,9 @@ methods:
       - stepNumber: 1
         description: >-
           Read the bound root's project graph: its project members at every level, with their
-          directories and parents, and its project members declared by `source` with the root each
-          is opened at (the sibling checkout, or the fetch cache at the pinned commit)
+          directories and parents, and its referenced project members (a `../`, git or hosted
+          source) with the root each is opened at (the sibling checkout, or the fetch cache at the
+          pinned commit)
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
@@ -519,4 +520,4 @@ methods:
     symbol: projectApprovals
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-02T20:26:39.799Z'
+updatedAt: '2026-10-02T20:47:07.556Z'

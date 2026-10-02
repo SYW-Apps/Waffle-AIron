@@ -251,7 +251,7 @@ methods:
       - stepNumber: 6
         description: >-
           Read the project graph for the PROJECT members the bound root declares DIRECTLY —
-          contained `members` entries, project members declared by `source` (opened at their sibling
+          contained ones, referenced ones (a `../`, git or hosted source; opened at their sibling
           checkout or the fetch cache at the pinned commit) and, for one release, legacy mounts —
           each with its alias and directory. Parts are not read here: their content is already in
           the own identity. Deeper members are not read: they reach this identity through each
@@ -350,7 +350,9 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 4
-        description: Is the bound root a part opened alone?
+        description: >-
+          Is the bound root a non-contained part opened alone? (A contained part has no
+          configuration; opening its directory resolves to the parent's root)
         type: branch
         condition: the configuration is a part's (ProjectConfig.isPart)
         onFalseStep: 11
@@ -375,12 +377,11 @@ methods:
           the parent's to judge); the governing configuration is the excerpt's projectType, rules
           and pack selections, each pack loaded at its pinned version and digest (one that cannot be
           is EXTERNAL_CHECK_UNAVAILABLE, never judged by whatever version the machine holds). The
-          rules run exactly as below, except the whole-system ones whose verdict needs specs the
-          excerpt does not carry — reachability and unused detection, topic pairing, cycles across
-          subsystems, hydration — which are skipped and named; a reference into the parent the
-          excerpt does not carry is EXTERNAL_CHECK_UNAVAILABLE (used since the pin: re-pin), never a
-          pass. Add PART_JUDGED_ALONE (notice) naming the parent, the pin's digest and the skipped
-          rules: the full verdict is always the parent's
+          rules run exactly as below, except those flagged needsWholeTree (SddRule.needsWholeTree:
+          their verdict needs specs the excerpt does not carry), which are skipped and named; a
+          reference into the parent the excerpt does not carry is EXTERNAL_CHECK_UNAVAILABLE (used
+          since the pin: re-pin), never a pass. Add PART_JUDGED_ALONE (notice) naming the parent,
+          the pin's digest and the skipped rules: the full verdict is always the parent's
         type: local
       - stepNumber: 8
         description: Return the part's verdict — the same with or without its parent on disk
@@ -674,4 +675,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T20:26:55.629Z'
+updatedAt: '2026-10-02T20:52:03.758Z'

@@ -31,18 +31,18 @@ methods:
           and pre-loaded packs, passed to every project's own gate
   - name: compose
     description: >-
-      With one project's root bound: compare each of its externals — and each of its project members
-      declared by `source` (stage 8) — as its lock records it with the producer's live export table
-      (decision 19, signature-level superset, canonical digests). The uses compared are every public
-      name the project's references land on or spell — `alias::name` references and bare names bound
-      through its `use` imports alike, for family and outside producers alike since stage 8 (a
-      sibling checkout, a git repository, a hosted record) — so a type used only bare is covered,
-      and a producer outside the family that breaks a used method is EXTERNAL_INCOMPATIBLE, not only
-      drifted. A used method or type that changed or vanished is EXTERNAL_INCOMPATIBLE (error); a
-      producer whose canonical contract changed while nothing used changed is EXTERNAL_DRIFTED
-      (notice; prose never drifts); a use that cannot be compared — unpinned, used but not in the
-      lock, an unreachable or unfetchable producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never
-      a pass.
+      With one project's root bound: compare each of its externals — and each of its referenced
+      project members (a `../`, git or hosted source; stage 8) — as its lock records it with the
+      producer's live export table (decision 19, signature-level superset, canonical digests). The
+      uses compared are every public name the project's references land on or spell — `alias::name`
+      references and bare names bound through its `use` imports alike, for family and outside
+      producers alike since stage 8 (a sibling checkout, a git repository, a hosted record) — so a
+      type used only bare is covered, and a producer outside the family that breaks a used method is
+      EXTERNAL_INCOMPATIBLE, not only drifted. A used method or type that changed or vanished is
+      EXTERNAL_INCOMPATIBLE (error); a producer whose canonical contract changed while nothing used
+      changed is EXTERNAL_DRIFTED (notice; prose never drifts); a use that cannot be compared —
+      unpinned, used but not in the lock, an unreachable or unfetchable producer — is
+      EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass.
     signature: 'compose(project: string): ExternalComposition'
     returns: ExternalComposition
     params:
@@ -210,17 +210,18 @@ methods:
     description: >-
       The bound project's pin tree: the approval state of the bound root and of each PROJECT member
       within `depth` levels of its project graph (all levels when omitted) — contained ones and,
-      since stage 8, those declared by `source`, opened at their sibling checkout or the fetch cache
-      at the pinned commit — each computed at that project's OWN root — its lock record against its
-      own gate identity recomputed there — so the answer about a project is the same whichever root
-      asked (status-agrees). Per member also: its composition subject (its record's stateId),
-      whether its staleness is only the stage-5 identity upgrade, and how its parent's lock pinned
-      it (matches | moved | unpinned, read from the parent's record `members`, or its legacy
-      `children` for one release). Each PART of a selected project is answered too (stage 8), as a
-      part: approved exactly when its declaring project is (its approval is that project's), with
-      its content digest and the commit it was read at — what a lock records as the part's
-      MemberPin. A declared member with no project on disk is `never`. Reads each project's own tree
-      once and writes nothing; the caller must gate on reach itself before it asks about a family.
+      since stage 8, referenced ones (a `../`, git or hosted source), opened at their sibling
+      checkout or the fetch cache at the pinned commit — each computed at that project's OWN root —
+      its lock record against its own gate identity recomputed there — so the answer about a project
+      is the same whichever root asked (status-agrees). Per member also: its composition subject
+      (its record's stateId), whether its staleness is only the stage-5 identity upgrade, and how
+      its parent's lock pinned it (matches | moved | unpinned, read from the parent's record
+      `members`, or its legacy `children` for one release). Each PART of a selected project is
+      answered too (stage 8), as a part: approved exactly when its declaring project is (its
+      approval is that project's), with its content digest and the commit it was read at — what a
+      lock records as the part's MemberPin. A declared member with no project on disk is `never`.
+      Reads each project's own tree once and writes nothing; the caller must gate on reach itself
+      before it asks about a family.
     signature: 'approvals(depth?: number): ProjectApproval[]'
     returns: ProjectApproval[]
     params:
@@ -234,4 +235,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-02T20:27:10.985Z'
+updatedAt: '2026-10-02T20:47:40.417Z'

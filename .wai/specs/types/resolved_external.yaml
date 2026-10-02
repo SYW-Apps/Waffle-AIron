@@ -2,13 +2,13 @@ kind: value-object
 id: resolved_external
 name: ResolvedExternal
 description: >-
-  One declared external of a project — or one of its project members declared by `source` (stage 8:
-  role member) — bound to its producer: found in the family by id (or by the directory its
-  source.path names), or — for a source.path outside the family — only by that directory, or — for a
-  source.git — by the git cache directory of a fetched commit, or — for a source.hosted record id —
-  by the root the hosting server's record lookup answers within the request's readable reach. The
-  audience a producer shows it follows from where it was found: the family sees `project`, any other
-  source sees `instance`.
+  One declared external of a project — or one of its referenced project members (a `../`, git or
+  hosted source; stage 8: role member) — bound to its producer: found in the family by id (or by the
+  directory its source.path names), or — for a source.path outside the family — only by that
+  directory, or — for a source.git — by the git cache directory of a fetched commit, or — for a
+  source.hosted record id — by the root the hosting server's record lookup answers within the
+  request's readable reach. The audience a producer shows it follows from where it was found: the
+  family sees `project`, any other source sees `instance`.
 subsystem: sdd_core
 fields:
   - name: alias
@@ -67,11 +67,11 @@ fields:
   - name: role
     type: string
     description: >-
-      external | member: declared under `externals`, or a project member declared under `members`
-      with a `source` (a referenced project). Both are judged by the owner's gate against their pins
-      and composed by the family run per use; a member is also part of the family's composition (its
-      own gate runs in the family run, its approval is recorded by the parent's lock), an external
-      only consumed.
+      external | member: declared under `externals`, or a referenced project member (declared under
+      `members` with a `../`, git or hosted source, its content a project's). Both are judged by the
+      owner's gate against their pins and composed by the family run per use; a member is also part
+      of the family's composition (its own gate runs in the family run, its approval is recorded by
+      the parent's lock), an external only consumed.
     optional: false
   - name: commit
     type: string
@@ -83,4 +83,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:40.205Z'
-updatedAt: '2026-10-02T20:17:55.540Z'
+updatedAt: '2026-10-02T20:48:17.047Z'

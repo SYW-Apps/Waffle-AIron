@@ -279,11 +279,12 @@ methods:
     narrative: []
     intent: >-
       Reads the configuration through the store, refusing when the project has none or `members`
-      does not declare the alias. Merges the named fields into the entry, refusing a result with
-      both or neither of path and source, an `as` other than part or project, or a git source
-      without a commit, each before writing. When the merged entry equals the stored one, returns
-      false and writes nothing; otherwise writes it back in the shorthand when only a path remains
-      and the long form otherwise, through the store, which keeps every comment, returning true.
+      does not declare the alias. Merges the named fields into the entry (a deprecated `path`
+      becomes `source`), refusing a result with no source, an unparseable source, a git source
+      without its `#<commit>`, or an `as` other than part or project, each before writing. When the
+      merged entry equals the stored one, returns false and writes nothing; otherwise writes it back
+      as the shorthand when only its source remains and the long form otherwise, through the store,
+      which keeps every comment, returning true.
     calls:
       - project_config_store.read
       - project_config_store.write
@@ -301,4 +302,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-10-02T20:28:11.547Z'
+updatedAt: '2026-10-02T20:50:26.474Z'

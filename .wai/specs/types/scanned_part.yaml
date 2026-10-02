@@ -16,10 +16,6 @@ fields:
     description: The `members` key the declaring project gives it.
     optional: false
     key: primary
-  - name: kindSource
-    type: string
-    description: 'declared | default: `as: part` written, or `as` absent and the root not project-shaped.'
-    optional: false
   - name: storage
     type: string
     description: 'contained | path | git: where its files live (a part is never a hosted record).'
@@ -39,7 +35,10 @@ fields:
     optional: true
   - name: partOf
     type: PartOf | null
-    description: What the part's own configuration says it belongs to; null when it has no configuration.
+    description: >-
+      What a non-contained part's own configuration says it belongs to; null for a contained part
+      (which has no configuration) and for a non-contained one that declares none
+      (MEMBER_KIND_MISMATCH).
     optional: false
   - name: subsystems
     type: string[]
@@ -74,4 +73,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-10-02T20:17:18.690Z'
-updatedAt: '2026-10-02T20:17:18.692Z'
+updatedAt: '2026-10-02T20:45:11.740Z'

@@ -280,8 +280,8 @@ methods:
   - name: pinnedUsage
     description: >-
       Forward 1:1 to the Export Index: one consumer's references into a producer the scan did not
-      read (an outside external or a project member declared by `source`), counted by the public
-      name they spell.
+      read (an outside external, or a referenced project member — a `../`, git or hosted source),
+      counted by the public name they spell.
     signature: 'pinnedUsage(consumer: string, alias: string): ExportUsage'
     returns: ExportUsage
     params:
@@ -295,4 +295,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T20:22:22.482Z'
+updatedAt: '2026-10-02T20:47:47.208Z'

@@ -107,18 +107,18 @@ methods:
   - name: listProjectRoots
     description: >-
       The project roots the current scan read, bound root first, then each contained project member
-      in walk order: its key, where it sits among its family's members, in which form it is declared
-      and how its kind was decided (with the legacy L1 mount as written, for the migration), its own
-      L0, its configuration (read through that root's binding), its parts (stage 8: each part's
-      specs keyed under the declaring root as its own, with where they came from — a contained or
-      sibling directory, or the git cache at the pinned commit), its alias table, its resolved L0
-      and L1 export tables, the keys of the specs its files and its parts' files declared, and every
-      reference with `::` they wrote, with the form it was read in, what it bound to and its
-      rewrite. A project member declared by `source` is no root here: the declaring project judges
-      it against its pin. Served from the same cached scan as every other read, so it is never stale
-      with it; the scan's freshness signature also covers each root's .wai/project.yaml and each
-      part's directory (a git part by its pinned commit), so an edit to a root's members, externals
-      or parts re-scans.
+      in walk order: its key, where it sits among its family's members and in which form it is
+      declared (with the legacy L1 mount as written, for the migration), its own L0, its
+      configuration (read through that root's binding), its parts (stage 8: what a member is follows
+      from its content; each part's specs keyed under the declaring root as its own, with where they
+      came from — a contained or `../` sibling directory, or the git cache at the pinned commit),
+      its alias table, its resolved L0 and L1 export tables, the keys of the specs its files and its
+      parts' files declared, and every reference with `::` they wrote, with the form it was read in,
+      what it bound to and its rewrite. A referenced project member (a `../`, git or hosted source)
+      is no root here: the declaring project judges it against its pin. Served from the same cached
+      scan as every other read, so it is never stale with it; the scan's freshness signature also
+      covers each root's .wai/project.yaml and each part's directory (a git part by its pinned
+      commit), so an edit to a root's members, externals or parts re-scans.
     signature: 'listProjectRoots(): ScannedProjectRoot[]'
     returns: ScannedProjectRoot[]
     params: []
@@ -127,4 +127,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-02T20:21:38.286Z'
+updatedAt: '2026-10-02T20:47:45.919Z'

@@ -48,10 +48,10 @@ methods:
       - idempotent
   - name: resolveExternals
     description: >-
-      Forward to the core portal: the bound project's declared externals and its project members
-      declared by `source`, each bound to its producer (family, source.path, git, hosted), with the
-      project's references into each by public name. The surfaces plane never walks the family
-      itself.
+      Forward to the core portal: the bound project's declared externals and its referenced project
+      members (a `../`, git or hosted source), each bound to its producer (family, source.path, git,
+      hosted), with the project's references into each by public name. The surfaces plane never
+      walks the family itself.
     signature: 'resolveExternals(): ExternalBinding[]'
     returns: ExternalBinding[]
     params: []
@@ -64,4 +64,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-02T20:24:12.522Z'
+updatedAt: '2026-10-02T20:48:02.060Z'

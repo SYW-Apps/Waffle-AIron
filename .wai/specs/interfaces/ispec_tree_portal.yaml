@@ -271,10 +271,11 @@ methods:
       - idempotent
   - name: resolveExternals
     description: >-
-      The bound project's declared externals — and its project members declared by `source` (stage
-      8) — each bound to its producer through its family, an explicit source.path, a git source
-      materialized in the fetch cache, or the hosted lookup, with the project's references into each
-      producer by public name. Read-only; the caller's binding is restored before it answers.
+      The bound project's declared externals — and its referenced project members (a `../`, git or
+      hosted source; stage 8) — each bound to its producer through its family, an explicit
+      source.path, a git source materialized in the fetch cache, or the hosted lookup, with the
+      project's references into each producer by public name. Read-only; the caller's binding is
+      restored before it answers.
     signature: 'resolveExternals(): ExternalBinding[]'
     returns: ExternalBinding[]
     params: []
@@ -288,4 +289,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:24:08.589Z'
+updatedAt: '2026-10-02T20:47:48.808Z'

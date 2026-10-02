@@ -1085,22 +1085,23 @@ methods:
         type: local
       - stepNumber: 6
         label: kinds
-        description: Then each part or kind problem the scan recorded at the bound root
+        description: Then each stage-8 member problem at the bound root
         type: loop
         loopKind: forEach
         over: >-
-          the bound root's part and kind problems (stage 8; a member's own parts are that member's
-          gate's)
+          the bound root's declared members using the deprecated long-form `path`, then its
+          part-unavailable and kind-mismatch problems (stage 8; a member's own members are that
+          member's gate's)
         endStep: 7
       - stepNumber: 7
         label: kind-report
         description: >-
-          Report it under its code — kind-inferred MEMBER_KIND_INFERRED (notice), kind-mismatch
-          MEMBER_KIND_MISMATCH (error), part-project-content PART_HAS_PROJECT_CONTENT (error),
-          part-unavailable PART_UNAVAILABLE (error), part-parent-undeclared PART_PARENT_UNDECLARED
-          (notice) — naming the alias, the storage and the directory or source, the reason, and the
-          fix (doctor --fix, member promote or demote, moving the content to the parent, pinning or
-          fetching the commit)
+          Report it: a long-form `path` as DEPRECATED_MOUNT_FORM (notice) naming the `source` (or
+          shorthand) doctor --fix writes; a kind-mismatch as MEMBER_KIND_MISMATCH (error) naming the
+          alias, what the content makes it and what contradicts it, and the fix (drop or correct the
+          `as`, member promote / demote, add the id or move the fields to the parent, write or
+          correct the PartOf, drop the `use`); a part-unavailable as PART_UNAVAILABLE (error) naming
+          the storage, the directory or source and why
         type: local
       - stepNumber: 8
         description: Every member declaration is judged
@@ -1111,4 +1112,4 @@ methods:
     exportedVia: memberDeclarationsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-02T20:27:49.692Z'
+updatedAt: '2026-10-02T20:48:30.975Z'

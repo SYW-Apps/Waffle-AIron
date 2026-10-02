@@ -394,21 +394,20 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
       - stepNumber: 2
-        description: 'Require exactly one location: a contained path, or --source (a sibling path, or a git URL)'
+        description: Require the member's source (`wairon member add <alias> <source>`)
         type: branch
         condition: no path was given
         onFalseStep: 4
       - stepNumber: 3
-        description: >-
-          Reject: a member needs a path or a --source (`wairon member add <alias> <path>` or
-          `--source <path|git-url>`), not both
+        description: 'Reject: a member needs a source — a contained path, a `../` sibling path, or a git URL'
         type: throw
-        error: 'a location is required: wairon member add <alias> <path> | --source <path|git-url>'
+        error: 'a source is required: wairon member add <alias> <path | ../path | git-url[#commit]>'
       - stepNumber: 4
         description: >-
-          Create the member through the core adapter — a part by default, a project with --project —
-          each piece only when absent, and declare it in this project's `members` with --description
-          when given; idempotent, so a re-run completes a partial scaffold
+          Create the member through the core adapter at the source — a part by default, a project
+          with --project (its project content created) — each piece only when absent, and declare it
+          in this project's `members` by the shorthand, with --description when given; idempotent,
+          so a re-run completes a partial scaffold
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createMember
@@ -3190,4 +3189,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T20:35:05.749Z'
+updatedAt: '2026-10-02T20:50:21.400Z'

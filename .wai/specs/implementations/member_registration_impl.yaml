@@ -26,8 +26,10 @@ methods:
         endStep: 3
       - stepNumber: 3
         description: >-
-          Read the members it declares on disk, nested included, each as the record it should hold
-          with its pre-stage-7 qualifier and its action
+          Read the PROJECT members it contains on disk, nested included, each as the record it
+          should hold with its pre-stage-7 qualifier and its action — parts never (stage 8: a part
+          is part of its parent's record), and every pre-stage-8 member is project-shaped, so it is
+          answered exactly as before
         type: call
         targetComponent: project_repository
         targetMethod: declaredMembers
@@ -292,7 +294,10 @@ methods:
         targetComponent: project_repository
         targetMethod: family
       - stepNumber: 2
-        description: Read the members the family root declares on disk now
+        description: >-
+          Read the PROJECT members the family root contains on disk now (a part is part of its
+          parent's record and never one of its own; a member whose content is now a part is answered
+          `retire`)
         type: call
         targetComponent: project_repository
         targetMethod: declaredMembers
@@ -308,8 +313,9 @@ methods:
         targetMethod: list
       - stepNumber: 5
         description: >-
-          For every declared member whose action is register, relocate, rename or return (family
-          roots first, so a parent record exists before its members)
+          For every declared project member whose action is register, relocate, rename or return
+          (family roots first, so a parent record exists before its members) — a part promoted to a
+          project is a register, or a return when its record was retired before
         type: loop
         loopKind: forEach
         over: declared members to register, relocate, rename or return
@@ -365,9 +371,10 @@ methods:
       - stepNumber: 13
         label: return
         description: >-
-          When the member returns — the family declares it again after its record was disabled as
-          departed — set the record active again (its own-scope settings were kept, so it regains
-          exactly its inherited reach and those)
+          When the member returns — the family declares it again as a project after its record was
+          disabled, as departed or retired as a part — set the record active again (its own-scope
+          settings were kept, so it regains exactly its inherited reach and those;
+          promote-then-demote-then-promote leaves the record as it was)
         type: call
         targetComponent: project_repository
         targetMethod: setStatus
@@ -380,13 +387,18 @@ methods:
         targetComponent: project_repository
         targetMethod: registerMember
       - stepNumber: 15
-        description: For every stored member record of the family the family no longer declares
+        description: >-
+          For every stored member record of the family the family no longer declares as a project
+          member — departed, or retired because its member's content is now a part (stage 8: demote)
         type: loop
         loopKind: forEach
         over: departed member records
         endStep: 16
       - stepNumber: 16
-        description: 'Disable it — never delete: its own-scope settings and audit trail stay for an operator'
+        description: >-
+          Disable it — never delete: its own-scope settings and audit trail stay for an operator and
+          for a later promote; a retired record's reason says "part of <parent>", and the part's
+          specs are reached, permissioned and committed through the parent's record from now on
         type: call
         targetComponent: project_repository
         targetMethod: setStatus
@@ -406,8 +418,10 @@ methods:
       - stepNumber: 19
         description: >-
           Compare its reach before and after (a registration or a return widens it from none, a
-          departure narrows it to none, a reparenting moves it; a re-key is equal by construction)
-          and keep the rows that differ
+          departure narrows it to none, a reparenting moves it, a re-key is equal by construction; a
+          retirement moves the part's specs under the parent's chain alone: a member-own `no` stops
+          applying, so whoever it denied gains access, and a token narrowed to the retired record
+          alone loses its reach) and keep the rows that differ
         type: call
         targetComponent: member_reach_rules
         targetMethod: compare
@@ -422,10 +436,10 @@ methods:
       - stepNumber: 21
         description: >-
           Audit the change as its own event — member.registered, member.returned, member.relocated,
-          member.renamed (with the settings and key entries moved, or the refused re-key) or
-          member.departed; or family.changed for a project the tool wrote whose membership did not
-          change — with projectId = the touched project, composition = the project the tool ran at,
-          actor = the principal, and the principals whose reach it changed
+          member.renamed (with the settings and key entries moved, or the refused re-key),
+          member.retired (stage 8, naming the parent the part now belongs to) or member.departed; or
+          family.changed for a project the tool wrote whose membership did not change — with
+          projectId = the touched project, naming the member and the initiating tool
         type: call
         targetComponent: audit_repository
         targetMethod: append
@@ -489,15 +503,18 @@ methods:
         targetMethod: list
       - stepNumber: 7
         description: >-
-          Build the after-world: a parent link from the incoming member (its alias/path standing in
-          for the id it has no record under yet) to the bound project
+          Build the after-world: for attach and promote, a parent link from the incoming project
+          member (its alias/path standing in for the id it has no record under yet) to the bound
+          project; for demote (stage 8), the member's record retired — its parent link and its
+          member-own settings gone, its specs reached through the bound project's chain alone
         type: call
         targetComponent: member_reach_rules
         targetMethod: relink
       - stepNumber: 8
         description: >-
-          Compare every subject x capability before (no record) and after (the incoming member
-          through its new chain), keeping the rows that differ — who gains access
+          Compare every subject x capability before and after, keeping the rows that differ — who
+          gains access (attach, promote, and a demote's lifted member-own `no`) and who loses it (a
+          demote's tokens narrowed to the member alone)
         type: call
         targetComponent: member_reach_rules
         targetMethod: compare
@@ -861,4 +878,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-01T19:55:29.901Z'
+updatedAt: '2026-10-02T20:51:51.222Z'
