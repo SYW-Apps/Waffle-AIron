@@ -1385,12 +1385,20 @@ methods:
         description: >-
           Merge the delta onto the stored spec: references qualify against the spec's namespace
           first, identity-keyed arrays upsert element by element and honour their delete markers at
-          every depth, narrative steps insert and delete in ascending order with every jump field
-          relocating around them, a step whose type changes is rebuilt for its new type keeping its
-          description and label, and `unset` removes the fields it names at the level it sits in
-          while `[]` clears the list it names. A step delete is refused outright when it addresses
-          no step, when a jump still targets it, when a restated label or description does not match
-          it, or when it is a region header whose body would be left standing
+          every depth, narrative steps insert and delete in ascending order, and `unset` removes the
+          fields it names at the level it sits in while `[]` clears the list it names. Every STORED
+          jump field relocates around each insert and delete; a jump the delta itself writes — on an
+          inserted, appended or edited step — names its target in the numbering the whole delta
+          leaves behind, after all of its inserts and deletes, so no later step of the same delta
+          moves it. A step whose type changes is rebuilt for its new type keeping its description
+          and label. A new element takes the shape every stored one has: an implementation method
+          the delta adds without a narrative is an intent-level method with none ([]), one whose
+          narrative is not a list is refused naming the field, and a defaulted list an `unset`
+          removed is back at its default — the write path reads those lists before the schema does,
+          and must never die on one with a raw TypeError. A step delete is refused outright when it
+          addresses no step, when a stored jump still targets it, when a restated label or
+          description does not match it, or when it is a region header whose body would be left
+          standing
         type: local
       - stepNumber: 9
         description: >-
@@ -1938,4 +1946,4 @@ methods:
         targetMethod: rewriteReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-01T05:54:21.856Z'
+updatedAt: '2026-10-01T23:46:56.376Z'
