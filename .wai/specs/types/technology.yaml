@@ -1,0 +1,41 @@
+kind: value-object
+id: technology
+name: Technology
+description: >-
+  One technology an implementation binds to (an entry of its `technologies`). Written either as a
+  bare name (`mysql`), whose name is also the token the technology-boundaries rule matches, or as `{
+  name, matches }` when the name is no usable marker of the technology — a package named after the
+  file format it reads would report every mention of the format as leaked vendor text. `matches`
+  then lists the tokens that DO mark the technology (a package phrase, one of its API names), and
+  only those are policed; the name stays the binding's label.
+fields:
+  - name: name
+    type: string
+    description: >-
+      The technology's name — the binding's label in every finding, and the key two declarations of
+      the same technology share. A bare-string entry is this name alone.
+    optional: false
+  - name: matches
+    type: string[]
+    description: >-
+      The tokens the leakage and contract checks match INSTEAD of the name, at least one. Each is
+      matched like a name: identifier-aware, 3+ significant characters, a multi-word token matching
+      consecutive words. Absent (and for a bare-string entry), the name is the one token.
+    optional: true
+methods:
+  - name: label
+    signature: 'label(): string'
+    returns: string
+    description: The technology's name, whichever form the entry is written in.
+    symbol: technologyName
+  - name: tokens
+    signature: 'tokens(): string[]'
+    returns: string[]
+    description: >-
+      The tokens the technology-boundaries rule matches for this entry: its `matches` when it
+      declares them, else its name alone.
+    symbol: technologyTokens
+sourcePath: src/models/specs.ts
+symbol: Technology
+createdAt: '2026-10-01T23:44:47.520Z'
+updatedAt: '2026-10-01T23:59:38.823Z'

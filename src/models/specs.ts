@@ -1091,6 +1091,34 @@ export function parseDeclaredCall(ref: string): DeclaredCall | null {
   return { compId: ref.slice(0, at), methodName: ref.slice(at + 1) };
 }
 
+/**
+ * technology — one entry of an implementation's `technologies`: a bare name
+ * (`mysql`), which is also the token the technology-boundaries rule matches,
+ * or `{ name, matches }` when the name is no usable marker of the technology.
+ * The `yaml` package is named after the file format the whole tree talks
+ * about, so its bare name reported every mention of the format as leaked
+ * vendor text; `matches` names the tokens that DO mark it (a package phrase,
+ * an API name), and only those are policed. The name stays the label.
+ */
+export const TechnologySchema = z.union([
+  z.string().min(1),
+  z.object({
+    name: z.string().min(1),
+    matches: z.array(z.string().min(1)).min(1),
+  }).strict(),
+]);
+export type Technology = z.infer<typeof TechnologySchema>;
+
+/** technology.label — the technology's name, whichever form the entry is written in. */
+export function technologyName(tech: Technology): string {
+  return typeof tech === 'string' ? tech : tech.name;
+}
+
+/** technology.tokens — what the technology-boundaries rule matches: the declared `matches`, else the name. */
+export function technologyTokens(tech: Technology): string[] {
+  return typeof tech === 'string' ? [tech] : [...tech.matches];
+}
+
 export const ImplementationSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -1113,9 +1141,10 @@ export const ImplementationSpecSchema = z.object({
    * component's ownership tree the technology's home: references anywhere
    * outside it are flagged (TECH_LEAKAGE), contract identifiers must stay
    * intent-language (VENDOR_NAME_IN_CONTRACT), and only data-layer
-   * stereotypes should bind tech directly (TECH_ON_LOGIC_COMPONENT).
+   * stereotypes should bind tech directly (TECH_ON_LOGIC_COMPONENT). An entry
+   * is a bare name or `{ name, matches }` (see TechnologySchema).
    */
-  technologies: z.array(z.string()).optional(),
+  technologies: z.array(TechnologySchema).optional(),
   /**
    * The parameter names THIS realization takes BEFORE the ones its contract
    * declares — a config object, a data root, the transport handles a portal is

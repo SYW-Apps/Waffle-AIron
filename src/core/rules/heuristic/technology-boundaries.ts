@@ -1,5 +1,8 @@
 import { SddRule } from '../types.js';
-import { implementationSourceFiles, isDraftSubsystem, type ComponentSpec, type ImplementationSpec, type MethodSignature } from '../../../models/index.js';
+import {
+  implementationSourceFiles, isDraftSubsystem, technologyName, technologyTokens,
+  type ComponentSpec, type ImplementationSpec, type MethodSignature,
+} from '../../../models/index.js';
 
 /**
  * Technology-boundary rules: an L4 that declares `technologies` (e.g.
@@ -9,6 +12,12 @@ import { implementationSourceFiles, isDraftSubsystem, type ComponentSpec, type I
  * without contract change. No hardcoded vendor lists: only declared tokens
  * are policed, so the rule never fires on a tree that doesn't opt in. WHICH
  * stereotype may bind one at all is technology-binding's question.
+ *
+ * A technology is matched by its name, unless it declares `matches`: a
+ * package named after an ordinary word of the tree (the `yaml` package and
+ * the YAML format every spec names) would otherwise report every mention of
+ * that word as leaked vendor text. Its declared tokens are then the only ones
+ * policed, and the name is only the label findings carry.
  */
 
 /**
@@ -38,6 +47,18 @@ function makeMatcher(tech: string): ((text: string | undefined | null) => boolea
   };
 }
 
+/** An empty home for one technology: it matches a text when any matcher added to it later does. */
+function newHome(label: string): TechHome {
+  const home: TechHome = {
+    label,
+    matchers: [],
+    match: (text) => home.matchers.some((m) => m(text)),
+    ownerComponents: new Set<string>(),
+    scope: new Set<string>(),
+  };
+  return home;
+}
+
 /** The identifier surfaces of a contract method (prose descriptions excluded). */
 function contractIdentifiers(m: MethodSignature): string {
   const parts: string[] = [m.name, m.signature, m.returns];
@@ -46,15 +67,17 @@ function contractIdentifiers(m: MethodSignature): string {
   return parts.join(' ');
 }
 
-/** One technology token an implementation declares, with the component that declares it. */
+/** One technology an implementation declares — its name and the tokens it is matched by — with the declaring component. */
 interface TechDeclaration {
   comp: ComponentSpec;
-  tech: string;
+  name: string;
+  tokens: string[];
 }
 
-/** The scope one technology token is at home in, and who declared it. */
+/** The scope one technology is at home in, the matchers of its tokens, and who declared it. */
 interface TechHome {
   label: string;
+  matchers: ((text: string | undefined | null) => boolean)[];
   match: (text: string | undefined | null) => boolean;
   ownerComponents: Set<string>;
   scope: Set<string>;
@@ -64,7 +87,7 @@ export const technologyRule: SddRule = {
   name: 'technology-boundaries',
   judges: 'design',
   description:
-    'Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component\'s ownership tree the technology\'s home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component\'s own interface.',
+    'Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component\'s ownership tree the technology\'s home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component\'s own interface. A technology is matched by its name, or — when it declares `matches` because its name is also an ordinary word of the tree (a package named after the file format it reads) — by those tokens alone.',
   codes: [
     { code: 'TECH_LEAKAGE', defaultSeverity: 'warning', summary: 'Technology referenced outside its owning boundary' },
     { code: 'VENDOR_NAME_IN_CONTRACT', defaultSeverity: 'warning', summary: 'Technology name in L3 contract identifiers' },
@@ -101,8 +124,8 @@ export const technologyRule: SddRule = {
       return out;
     };
 
-    // -- collect declarations → per-token owning scopes ------------------------
-    // Every declared token, paired with the component that declares it: a
+    // -- collect declarations → per-technology owning scopes -------------------
+    // Every declared technology, paired with the component that declares it: a
     // dangling contract declares nothing (the hierarchy rule reports it).
     const declarations: TechDeclaration[] = [];
     for (const impl of ctx.implementations) {
@@ -110,7 +133,9 @@ export const technologyRule: SddRule = {
       const intf = ctx.interfaceMap.get(impl.contract);
       const comp = intf ? ctx.componentMap.get(intf.component) : undefined;
       if (!comp) continue;
-      for (const tech of impl.technologies) declarations.push({ comp, tech });
+      for (const tech of impl.technologies) {
+        declarations.push({ comp, name: technologyName(tech), tokens: technologyTokens(tech) });
+      }
     }
 
     // The owning scope of a declaring component: the whole ownership tree
@@ -139,12 +164,16 @@ export const technologyRule: SddRule = {
       return scope;
     };
 
+    // Keyed by the technology's NAME, so two declarations of one technology
+    // share a home whichever tokens each declares; a home matches a text when
+    // any of its tokens does.
     const homes = new Map<string, TechHome>();
-    for (const { comp, tech } of declarations) {
-      const match = makeMatcher(tech);
-      if (!match) continue; // unpoliceable without drowning in noise
-      const key = tech.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('');
-      const home = homes.get(key) ?? { label: tech, match, ownerComponents: new Set<string>(), scope: new Set<string>() };
+    for (const { comp, name, tokens } of declarations) {
+      const matchers = tokens.map(makeMatcher).filter((m): m is NonNullable<typeof m> => m !== null);
+      if (!matchers.length) continue; // unpoliceable without drowning in noise
+      const key = name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('');
+      const home = homes.get(key) ?? newHome(name);
+      home.matchers.push(...matchers);
       home.ownerComponents.add(comp.id);
       for (const id of scopeOf(comp)) home.scope.add(id);
       homes.set(key, home);

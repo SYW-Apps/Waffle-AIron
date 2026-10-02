@@ -1,4 +1,5 @@
 import { SddRule } from '../types.js';
+import { technologyName } from '../../../models/index.js';
 
 /**
  * Who may bind a technology at all. An L4 that declares `technologies` (e.g.
@@ -29,7 +30,7 @@ export const technologyBindingRule: SddRule = {
       ctx.addIssue(
         'warning',
         'TECH_ON_LOGIC_COMPONENT',
-        `Implementation "${impl.id}" binds technology (${impl.technologies.join(', ')}) on component "${comp.id}" (${comp.componentType}). Technology belongs behind a data-layer seam — extract an Adapter (or Store/Registry/Index) behind an intent interface and let this component depend on that.`,
+        `Implementation "${impl.id}" binds technology (${impl.technologies.map(technologyName).join(', ')}) on component "${comp.id}" (${comp.componentType}). Technology belongs behind a data-layer seam — extract an Adapter (or Store/Registry/Index) behind an intent interface and let this component depend on that.`,
         impl.id,
         ctx.isImplementationDraft(impl),
       );
