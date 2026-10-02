@@ -52,6 +52,6 @@ methods:
       - name: directory
         type: string
         description: An absolute directory
-status: design
+status: complete
 createdAt: '2026-10-02T20:19:32.127Z'
-updatedAt: '2026-10-02T20:19:32.138Z'
+updatedAt: '2026-10-02T21:40:54.562Z'

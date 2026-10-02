@@ -19,6 +19,6 @@ methods:
     params: []
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-10-02T20:23:45.173Z'
-updatedAt: '2026-10-02T20:23:45.183Z'
+updatedAt: '2026-10-02T21:40:56.808Z'

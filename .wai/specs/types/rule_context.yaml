@@ -178,6 +178,14 @@ fields:
       outside the scan is judged against. Never the live producer, never anything above the bound
       root. Empty on a candidate run.
     optional: false
+  - name: declaredMembers
+    type: DeclaredMember[]
+    description: >-
+      The bound root's declared members (project_config.declaredMembers), read by the validator from
+      its configuration (stage 8), so the member-declarations rule names a member declared with the
+      deprecated long-form `path` without I/O. Absent when the root has no readable configuration,
+      and on a candidate run.
+    optional: true
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -366,4 +374,4 @@ methods:
       INVALID_DEPENDENCY_REFERENCE, INVALID_TARGET_COMPONENT_REFERENCE) append it to their message.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-09-28T16:06:31.239Z'
+updatedAt: '2026-10-02T21:40:48.955Z'

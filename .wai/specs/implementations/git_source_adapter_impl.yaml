@@ -36,6 +36,6 @@ methods:
       uncommitted changes do not matter here, because the answer is provenance and the content
       digest is what a verdict compares.
 detail: intent
-status: design
+status: complete
 createdAt: '2026-10-02T20:19:38.761Z'
-updatedAt: '2026-10-02T20:35:39.653Z'
+updatedAt: '2026-10-02T21:40:55.816Z'
