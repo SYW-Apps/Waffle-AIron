@@ -102,13 +102,15 @@ methods:
     returns: Promise<void>
   - name: runSubsystemExternalize
     description: >-
-      `wairon subsystem externalize <id> --path <dir> [--report] [--yes]`: turn an internal
-      subsystem into a member project at the path, family-wide and all-or-nothing — its specs move
-      there, it is declared in `members`, sibling subsystems' references are respelled
-      `alias::name`, what crosses the new boundary is exported and imported, and the new member's
-      external for this project is pinned; a reference that would need a component made public
-      refuses the plan instead. It keeps its name because it acts on a subsystem. Source code is
-      moved by the user. Through runMigration.
+      `wairon subsystem externalize <id> --path <dir> [--as part|project] [--report] [--yes]`: move
+      an internal subsystem's specs out to a folder. By default (stage 8) into a PART — a storage
+      move: a new part at the path (or the existing part there, which it joins), declared in
+      `members`, and nothing else changes (no reference, export, external or pin; the same verdict).
+      With `--as project` into a member PROJECT instead, family-wide and all-or-nothing: the move
+      followed by a promote — what crosses the new boundary exported and imported, references
+      respelled `alias::name`, the new member's external for this project pinned; a reference that
+      would need a component made public refuses the plan. It keeps its name because it acts on a
+      subsystem. Source code is moved by the user. Through runMigration.
     signature: 'runSubsystemExternalize(id: string, options: MigrationCommandOptions): Promise<void>'
     returns: Promise<void>
     params:
@@ -686,4 +688,4 @@ methods:
     returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T20:50:11.375Z'
+updatedAt: '2026-10-02T22:47:15.488Z'

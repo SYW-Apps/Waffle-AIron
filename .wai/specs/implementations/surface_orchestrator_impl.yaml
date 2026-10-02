@@ -287,7 +287,10 @@ methods:
       - stepNumber: 5
         description: Can the live producer be read?
         type: branch
-        condition: the producer is resolved, its root is in the request's reach and holds a project
+        condition: >-
+          the producer is resolved, its root is in the request's reach (a git producer — a fetched
+          commit — and a referenced member — a root its declarer names explicitly — are never a root
+          above the family, so no ceiling applies to them) and holds a project
         onFalseStep: 10
       - stepNumber: 6
         description: >-
@@ -609,4 +612,4 @@ lint:
         replaced listExternalInterfaces, whose entry for it was retired with it.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-02T20:47:24.041Z'
+updatedAt: '2026-10-02T22:32:25.179Z'

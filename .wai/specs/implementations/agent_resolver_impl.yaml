@@ -79,9 +79,14 @@ methods:
           and ONE delegating owner per member project this project declares (in `members`, or for
           one release a legacy L1 mount) that routes work into the member without enumerating its
           internals and lists the member's agents by reference (delegatesTo); component implementers
-          only when generateComponentImplementers is enabled. Each owner's and implementer's
-          ownedPaths fence holds the source files its implementations and their methods name, and
-          each carries the rendered variantGuidance for its variant-tagged components.
+          only when generateComponentImplementers is enabled. A PART (stage 8) is no member project
+          here: its subsystems are this layer's local subsystems, so each gets an ordinary owner
+          whose fence holds the part's spec files where the part stores them, and whose description
+          names the part — a part fetched from git is read, never owned (its files are the fetch
+          cache's; it is changed in its own repository and taken in with `member update`). Each
+          owner's and implementer's ownedPaths fence holds the source files its implementations and
+          their methods name, and each carries the rendered variantGuidance for its variant-tagged
+          components.
         type: local
   - name: composeAgentBrief
     narrative:
@@ -182,4 +187,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T05:56:43.841Z'
+updatedAt: '2026-10-02T23:19:04.855Z'

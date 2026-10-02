@@ -11,7 +11,11 @@ methods:
       - stepNumber: 1
         description: >-
           Find the member under the alias in the bound node: none is not-a-member, its directory
-          absent is member-absent
+          absent is member-absent. A PART (stage 8) is planned as a storage move alone and answered
+          here: a part fetched from git is read-only, one that cannot be read member-absent, one
+          stored outside the family root not-contained; otherwise the core's internalize (its
+          subsystems moved in, the member entry and what remains of its .wai removed) and nothing
+          else
         type: local
       - stepNumber: 2
         description: Is there a member to fold in?
@@ -82,10 +86,13 @@ methods:
         targetMethod: holdsProject
       - stepNumber: 3
         description: >-
-          Judge the request against the bound node: no such subsystem, or one already a member, is
-          externalize-refused; a path not strictly within the bound project or already holding a
-          project is not-contained; the subsystem id already an alias is alias-taken, or a family
-          project's id id-collision
+          Judge the request against the bound node: no such subsystem, one already in a part or a
+          member, or an `as` other than part or project is externalize-refused; a path not strictly
+          within the bound project or already holding a project is not-contained; the subsystem id
+          already an alias is alias-taken (unless the path is an existing part's, which the
+          subsystem joins); as a project, the id already a family project's is id-collision. As a
+          PART (the default) a storage move needs nothing more: plan the core's externalize alone
+          and answer it
         type: local
       - stepNumber: 4
         description: Is the externalize possible so far?
@@ -389,4 +396,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-10-02T20:38:22.408Z'
+updatedAt: '2026-10-02T23:25:34.471Z'

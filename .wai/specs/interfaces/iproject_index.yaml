@@ -92,6 +92,17 @@ methods:
     params:
       - name: id
         type: string
+  - name: isRetiredPart
+    description: >-
+      Whether a member record was retired as a part (stage 8): disabled, and its folder holding no
+      project content any more (no id, no L0, no lock) — so its specs are reached, permissioned and
+      written through its parent's record. Reads the record's folder; writes nothing.
+    signature: 'isRetiredPart(record: HostedProjectRecord): boolean'
+    returns: boolean
+    params:
+      - name: record
+        type: HostedProjectRecord
+        description: A record of the family
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-10-02T20:50:47.323Z'
+updatedAt: '2026-10-02T23:19:59.595Z'

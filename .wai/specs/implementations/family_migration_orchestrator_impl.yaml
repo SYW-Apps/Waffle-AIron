@@ -180,7 +180,9 @@ methods:
       - stepNumber: 4
         label: copy
         description: >-
-          Copy every family project's .wai tree, the project the verb brings in (attach, adopt), and
+          Copy every family project's .wai tree, each project's parts stored inside the family root
+          (stage 8: the project's own subsystems in another folder, which a promote, demote,
+          internalize or externalize writes), the project the verb brings in (attach, adopt), and
           every project a family project names as an external by a path inside the family root, into
           a private rehearsal — so a pin taken on the copy reads the same producer the live pin
           would. A request carrying a relocation (hosted detach and adopt) is rehearsed with the
@@ -374,4 +376,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-10-02T20:38:32.757Z'
+updatedAt: '2026-10-02T23:25:42.814Z'

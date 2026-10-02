@@ -392,15 +392,24 @@ methods:
         targetMethod: reach
       - stepNumber: 11
         description: >-
+          Ask of each family record whether it was retired as a part (stage 8): its folder holds no
+          project any more and is written under its parent's record's reach
+        type: call
+        targetComponent: project_repository
+        targetMethod: isRetiredPart
+      - stepNumber: 12
+        description: >-
           Bind the request-scoped project root together with the request's reach: the family root's
           root and the readable and writable family roots. The reach never changes any project's own
           verdict — validation's owner gate reads only the bound project's own files and pins (stage
           4) — it bounds what a family run may compose, what a reach-gated read (externals status,
           pinning) may open, and which members a family migration may write: a migration that would
-          have to write a project outside the writable set refuses family-partial, naming it. The
-          caller must gate on reach itself.
+          have to write a project outside the writable set refuses family-partial, naming it. A
+          member record retired as a part (stage 8: disabled, its folder holding no project content)
+          is no project of its own any more: its folder is written under its parent's record's
+          reach. The caller must gate on reach itself.
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         label: recover-migrations
         description: >-
           Family upkeep before the tool: roll back any family migration a crash left unfinished
@@ -410,7 +419,7 @@ methods:
         type: call
         targetComponent: member_registration
         targetMethod: recover
-      - stepNumber: 13
+      - stepNumber: 14
         label: dispatch
         description: >-
           Offer the call to the project-lifecycle, landscape and project-ops dispatch, which serves
@@ -418,16 +427,16 @@ methods:
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: dispatchProjectLifecycleTool
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           A tool the dispatch serves answers with a response envelope: continue to the shared
           audit-event step, skipping the ordinary permission gate and scoped MCP server dispatch. A
           tool it does not serve answers with nothing and falls through to both.
         type: branch
         condition: the dispatch answered with a response envelope
-        onTrueStep: 34
-        onFalseStep: 15
-      - stepNumber: 15
+        onTrueStep: 35
+        onFalseStep: 16
+      - stepNumber: 16
         description: >-
           Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_
           (sdd_get_externals_status among them), or when it is one of the explicitly listed read
@@ -443,22 +452,22 @@ methods:
           sdd_pin_externals, sdd_get_externals_status and the family-migration tools act on the
           bound (possibly narrowed) tree
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           Resolve the caller's required capability (project:read or project:write) over the bound
           project through the authorization component
         type: call
         targetComponent: authorization
         targetMethod: authorize
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           If the effective value is not yes, reject with a clear MCP error that the required
           data-plane permission is missing for the bound project
         type: branch
         condition: the effective value is not yes
-        onTrueStep: 18
-        onFalseStep: 19
-      - stepNumber: 18
+        onTrueStep: 19
+        onFalseStep: 20
+      - stepNumber: 19
         description: >-
           Reject with a clear MCP error that the required data-plane permission is missing for the
           bound project
@@ -466,7 +475,7 @@ methods:
         error: >-
           Forbidden — the caller lacks the required data-plane permission (project:read or
           project:write) for this project
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           Is the call membership-changing — sdd_attach_member, sdd_adopt_member, sdd_detach_member,
           sdd_rename_project, or stage 8's sdd_promote_member and sdd_demote_member (and
@@ -477,13 +486,13 @@ methods:
         condition: >-
           the called tool is sdd_attach_member, sdd_adopt_member, sdd_detach_member,
           sdd_rename_project, sdd_promote_member, sdd_demote_member, or sdd_add_member with a source
-        onFalseStep: 30
-      - stepNumber: 20
+        onFalseStep: 31
+      - stepNumber: 21
         description: Is it a detach?
         type: branch
         condition: the called tool is sdd_detach_member
-        onFalseStep: 23
-      - stepNumber: 21
+        onFalseStep: 24
+      - stepNumber: 22
         description: >-
           Serve the hosted detach whole through member registration — it relocates the member into
           an isolated root of its own in one transaction with the family edits and host stores, and
@@ -492,16 +501,16 @@ methods:
         type: call
         targetComponent: member_registration
         targetMethod: detach
-      - stepNumber: 22
+      - stepNumber: 23
         description: Continue to the shared audit step
         type: jump
-        toStep: 34
-      - stepNumber: 23
+        toStep: 35
+      - stepNumber: 24
         description: Is it an adopt?
         type: branch
         condition: the called tool is sdd_adopt_member
-        onFalseStep: 26
-      - stepNumber: 24
+        onFalseStep: 27
+      - stepNumber: 25
         description: >-
           Serve the hosted adopt whole through member registration — detach's inverse: it relocates
           the source.hosted project back into the bound project's tree at the member path in one
@@ -510,11 +519,11 @@ methods:
         type: call
         targetComponent: member_registration
         targetMethod: adopt
-      - stepNumber: 25
+      - stepNumber: 26
         description: Continue to the shared audit step
         type: jump
-        toStep: 34
-      - stepNumber: 26
+        toStep: 35
+      - stepNumber: 27
         label: screen
         description: >-
           Screen it: for attach and promote, list every principal who gains access through the new
@@ -526,35 +535,35 @@ methods:
         type: call
         targetComponent: member_registration
         targetMethod: screen
-      - stepNumber: 27
+      - stepNumber: 28
         description: Does the hosted model refuse it?
         type: branch
         condition: the screen carries a refusal
-        onFalseStep: 30
-      - stepNumber: 28
+        onFalseStep: 31
+      - stepNumber: 29
         description: >-
           Answer an isError tool result (HTTP still 200) with the refusal — "renaming a hosted
           family root's id is not supported; a member can be renamed, or the root recreated";
           nothing is dispatched
         type: local
-      - stepNumber: 29
+      - stepNumber: 30
         description: Continue to the shared audit step
         type: jump
-        toStep: 34
-      - stepNumber: 30
+        toStep: 35
+      - stepNumber: 31
         label: serve
         description: Instantiate the scoped sdd_* MCP server
         type: call
         targetComponent: host_mcp_adapter
         targetMethod: createScopedServer
-      - stepNumber: 31
+      - stepNumber: 32
         description: >-
           Connect the scoped server to the request transport and process the JSON-RPC message; a
           screened DRY-RUN result carries the screen's reach changes beside the plan (who gains or
           loses access), so a human approves the membership change with its access consequences in
           view
         type: local
-      - stepNumber: 32
+      - stepNumber: 33
         description: >-
           Did an APPLIED family-shape tool succeed — sdd_add_member, sdd_move_member, or a stage-6
           family migration the scoped server ran (attach, adopt, rename project, rename alias,
@@ -563,8 +572,8 @@ methods:
           records must follow
         type: branch
         condition: the call was an applied family-shape tool and its outcome is success
-        onFalseStep: 34
-      - stepNumber: 33
+        onFalseStep: 35
+      - stepNumber: 34
         description: >-
           Reconcile the family's member records with the family on disk — register new members
           (placed like their family root, no grants), relocate moved ones, disable departed ones —
@@ -575,13 +584,13 @@ methods:
         type: call
         targetComponent: member_registration
         targetMethod: reconcile
-      - stepNumber: 34
+      - stepNumber: 35
         label: audit
         description: Audit the handled data-plane tool call on the shared best-effort path
         type: call
         targetComponent: host_request_orchestrator
         targetMethod: auditToolCall
-      - stepNumber: 35
+      - stepNumber: 36
         description: Return the MCP response
         type: return
         outcome: MCP response
@@ -602,4 +611,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-02T20:36:20.970Z'
+updatedAt: '2026-10-02T23:20:26.393Z'

@@ -94,6 +94,13 @@ methods:
         type: string
       - name: status
         type: string
+  - name: isRetiredPart
+    description: Whether a member record was retired as a part (stage 8). Pure 1:1 forward to the index.
+    signature: 'isRetiredPart(record: HostedProjectRecord): boolean'
+    returns: boolean
+    params:
+      - name: record
+        type: HostedProjectRecord
 status: complete
 createdAt: '2026-07-04T12:49:59.044Z'
-updatedAt: '2026-10-01T16:29:14.265Z'
+updatedAt: '2026-10-02T23:20:01.032Z'

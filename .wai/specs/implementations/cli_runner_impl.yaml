@@ -615,7 +615,9 @@ methods:
         error: '--path (the member''s destination) is required'
       - stepNumber: 4
         label: request
-        description: Build the externalize request
+        description: >-
+          Build the externalize request, with --as (part, the default — a storage move into a part;
+          project — the move composed with a promote)
         type: local
       - stepNumber: 5
         description: Run it through the shared migration flow; remind that source code is moved by the user
@@ -3189,4 +3191,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T20:50:21.400Z'
+updatedAt: '2026-10-02T22:47:10.980Z'

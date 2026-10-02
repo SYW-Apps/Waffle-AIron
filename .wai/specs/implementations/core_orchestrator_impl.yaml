@@ -297,7 +297,7 @@ methods:
       - stepNumber: 1
         description: >-
           Read the project graph of the bound root: the member the alias declares, with its
-          declaration form and path
+          declaration form and path — a contained project member, or (stage 8) a contained part
         type: call
         targetComponent: spec_loader
         targetMethod: graph
@@ -381,8 +381,10 @@ methods:
       - stepNumber: 4
         description: >-
           Create the part's specs directory at the path (under the containment guard; a directory
-          holding a project refuses) — a contained part needs no configuration — unless it already
-          is this project's part, which the subsystem joins
+          holding a project, or a new one already holding a configuration, refuses — creating one
+          never overwrites it) — a contained part needs no configuration — unless it already is this
+          project's part, which the subsystem joins. As a project, every promote refusal is found
+          here, before anything moves
         type: local
       - stepNumber: 5
         description: >-
@@ -772,7 +774,10 @@ methods:
           Read the project's member declarations at that root: its project.yaml `members`
           (project_config.declaredMembers(), read through that root's binding, as the scan reads a
           root's configuration) and, for one release, the subsystem specs of its own tree carrying a
-          projectPath; a `members` entry wins over a legacy mount under the same alias
+          projectPath; a `members` entry wins over a legacy mount under the same alias. A PART
+          (stage 8: a contained member whose folder holds no id, no L0 and no lock) is no chained
+          project — its subsystems are this root's own, generated, briefed and backfilled with it —
+          so it is not listed
         type: local
       - stepNumber: 2
         description: Walk the member declarations
@@ -2018,7 +2023,9 @@ methods:
         targetComponent: project_config_repository
         targetMethod: setPartOf
       - stepNumber: 6
-        description: Declare its id — the one given, else the alias
+        description: >-
+          Declare its id — the one given, else the alias — creating its configuration (named after
+          its one subsystem, else the id) when the part has none, as a contained part never does
         type: call
         targetComponent: project_config_repository
         targetMethod: setId
@@ -2243,4 +2250,4 @@ methods:
         outcome: MemberAdvance
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:50:38.154Z'
+updatedAt: '2026-10-02T23:25:52.900Z'

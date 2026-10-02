@@ -123,8 +123,10 @@ methods:
       - idempotent
   - name: listPinnedExternals
     description: >-
-      The owner's gate read of the bound project's pins: each declared external's alias with its
-      lock entry and the snapshot that entry names, read from the bound root's own
+      The owner's gate read of the bound project's pins: each declared external's alias — and, since
+      stage 8, each member declared with a `../`, git or hosted source, which a referenced project
+      is judged against exactly as an external (the gate drops the ones the scan found to be parts)
+      — with its lock entry and the snapshot that entry names, read from the bound root's own
       .wai/externals.lock.yaml and .wai/externals/ through the externals Repository. It never
       resolves a producer, never reads another root and never climbs: an alias that was never
       pinned, or whose snapshot file is missing or malformed, is answered with its problem instead
@@ -211,4 +213,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-02T20:48:00.670Z'
+updatedAt: '2026-10-02T22:32:17.197Z'
