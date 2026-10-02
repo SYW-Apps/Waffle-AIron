@@ -323,59 +323,101 @@ narrative flowcharts with call drill-down, and an Export menu
 
 ## Members
 
-A project may contain other wairon projects as **members**, declared in its
-`.wai/project.yaml`:
+A project's **members** are declared in its `.wai/project.yaml`, each by one
+location key:
 
 ```yaml
 members:
-  billing: services/billing                                  # shorthand: alias = key
-  ledger: { path: services/ledger, description: The books }  # long form
+  scheduler: services/scheduler                          # contained
+  admin: ../admin                                        # a sibling checkout
+  payments: git@host:acme/payments.git#<full commit>     # a git repository at a commit
+  ledger: { source: services/ledger, description: The books, as: project }  # long form
 ```
 
-A member is never a subsystem of its parent: it has its own `.wai/` tree
-(its `project.yaml` declares its id — the alias, when wairon scaffolds it) and
-is designed from its own root. Every cross-project reference is
-`alias::name`: the alias is one of the referring project's members or declared
-`externals`, the name a public name in that project's L0 export table. An id
-without `::` is local.
+A member is a **part** or a **project**, and what it is follows from its
+content — `as:` only asserts it (a contradiction is `MEMBER_KIND_MISMATCH`):
+
+- A **part** (the default) is a piece of this project stored in another folder
+  or repository. Its subsystems are this project's own: written by local id,
+  judged by the ordinary subsystem rules, covered by this project's lock, and
+  generated and briefed with this project's agents. It holds only a specs folder
+  — plus, when it is not contained, a `project.yaml` holding just
+  `partOf: { project: <parent id>, path: <parent root> }`.
+- A **project** is an independent boundary: its tree declares an id, holds an L0
+  or carries a lock. It is reached only as `alias::name` through its L0 exports,
+  judged by its own gate and locked at its own root. A project stored outside
+  this project (`../x`, git, `hosted:`) is a **referenced** project: this
+  project's gate judges it against its pin (`wairon externals pin`), and the
+  family run opens it where it is stored and composes it per use.
+
+Boundaries are earned: grow a system from subsystems, to parts when a piece
+needs its own folder or repository, to projects only when it needs its own team,
+release, approval or public surface.
+
+A git member is pinned at a full commit; it is read from the fetch cache
+(`WAIRON_CACHE_DIR`, else the OS user cache directory), immutable and offline
+once fetched. A git part is read-only here — change it in its own repository,
+then move the pin with `wairon member update`. An uncached git part offline is
+`PART_UNAVAILABLE`; an uncached git project falls back to its pin and is
+`EXTERNAL_CHECK_UNAVAILABLE` — never a pass. Every cross-project reference is
+`alias::name`: the alias is one of the referring project's project members or
+declared `externals`, the name a public name in that project's L0 export table.
+An id without `::` is local — a part's subsystems included.
 
 | Command | Description |
 |---------|-------------|
-| `wairon member add <alias> <path> [--description <text>]` | Scaffold a member project at `<path>` (its id = `<alias>`, its L0) — each part only when absent — and declare it in `members`. Nothing is written into this project's spec tree |
-| `wairon member move <alias> <path>` | Move a member's directory and point its `members` entry there (a legacy L1 mount is moved into `members` first) |
+| `wairon member add <alias> <source> [--project] [--description <text>]` | Create a member at `<source>` (`path`, `../path` or `git-url[#commit]`) and declare it by the shorthand. A **part** by default: a specs folder (and, outside this project, its `partOf`). With `--project` a project: its `project.yaml` declaring `<alias>` as its id and its L0, each only when absent. A git member is never scaffolded: it is pinned at the commit given, else the default branch head, and its content decides what it is |
+| `wairon member promote <alias> [--id <id>]` | Make a part an independent project **in place**: its id, an L0 exporting exactly what this project uses of it, references across the new boundary respelled `alias::name` (`<parent id>::name` the other way), the parent declared as its external, pins on both sides. Refused for a part fetched from git, a trustedLink that would cross the boundary, a component used across it that its subsystem does not publish, or an id already taken |
+| `wairon member demote <alias> [--home <subsystem>] [--packs adopt\|drop]` | Make a project member a part **in place** — promote's inverse: its own metadata goes home (as `internalize` sends it), its L0, lock and pins end, references across the old boundary become local ids. Refused while another family project consumes it, or for a member fetched from git |
+| `wairon member update <alias> [--ref <ref> \| --commit <sha>] [--report]` | Move a git member's pinned commit to its ref's head (or the ref or commit given), printing the spec files it adds, changes and removes; `--report` writes nothing. The only way a git member's content changes; this project's lock reads stale until re-locked when the content moved |
+| `wairon member move <alias> <path>` | Move a contained member's directory and point its `members` entry there (a legacy L1 mount is moved into `members` first) |
 | `wairon member attach <alias> <path> [--description <text>]` | Make the **existing** project at `<path>` a member, keeping its L0, subsystems, packs and lock; its id is declared when it only defaulted one (the id its lock approved, else its effective id). Refused when its id collides with a family project's |
 | `wairon member detach <alias> [--widen]` | Take a member out of the family: this project and every family consumer reach it as an external by `source.path`, this project's pinned. Refused (`audience-too-narrow`, each export named with its users) while a family project uses a name the member exports only to the family; `--widen` instead widens exactly those used exports to `instance` in the member's L0, each shown in the plan |
 | `wairon member adopt <alias>` | Make this project's external found by a path inside it a member again — detach's inverse |
-
-On a hosted instance a member is a project record of its own and inherits access
-from its parent; `sdd_detach_member` there also **moves** the member to an
-isolated root of its own (writing `source: { hosted: <id> }` for its consumers,
-since no path crosses isolated roots) and `sdd_adopt_member` with `path` moves it
-back. A `source.hosted` external outside a hosted server is reported as
-"hosted-only producer `<id>`: available only through the hosted server".
 | `wairon member rename-alias <old> <new>` | Rename one alias of this project (a member or an external) and respell this project's references through it; no member or sibling changes |
-| `wairon member internalize <alias> [--into <subsystem>] [--packs adopt\|drop] [--export <name>…]` | Fold a member — every subsystem of it — into this project. Its own metadata goes to a home: its L0 vision onto the `--into` subsystem, its boundaries, requirements and databases into this L0, its language, profile and depth onto the moved subsystems, its members and externals into this configuration, its packs adopted or dropped; what has no home (its lock, pins, derived outputs) is deleted and listed. Every family project that consumed it is re-pointed here |
+| `wairon member internalize <alias> [--into <subsystem>] [--packs adopt\|drop] [--export <name>…]` | Fold a member into this project's own specs folder. A **part** is a storage move: its subsystems move in and nothing else changes. A **project** is demoted first — its own metadata goes to a home (its L0 vision onto the `--into` subsystem, its boundaries, requirements and databases into this L0, its language, profile and depth onto the moved subsystems, its members and externals into this configuration, its packs adopted or dropped), what has no home (its lock, pins, derived outputs) is deleted and listed, and every family project that consumed it is re-pointed here |
 | `wairon project rename <new-id> [--project <alias path>]` | Move a project's id — this project's, or a member's named by its alias path — and every reference to the old id family-wide; the old id is kept in `previousIds`. Lists every project it writes to re-lock |
-| `wairon subsystem externalize <id> --path <dir>` | Turn an internal subsystem into a member at `<dir>`: its specs move there, it is declared in `members` under the subsystem id, references across the new boundary become `alias::name`, and what crosses it is exported and imported. Every other family project's names are checked to keep resolving. You move the source code |
+| `wairon subsystem externalize <id> --path <dir> [--as part\|project]` | Move an internal subsystem's specs into a **part** at `<dir>` (a new one, declared under the subsystem id, or the existing part there) — a storage move: no reference, export or pin changes, the same verdict. With `--as project` the move is followed by a promote, family-wide: references across the new boundary become `alias::name`, what crosses it is exported and imported, and every other family project's names are checked to keep resolving. You move the source code |
 
-**Family migrations.** `attach`, `detach`, `adopt`, `rename-alias`,
-`internalize`, `project rename` and `subsystem externalize` all run one flow:
-plan, print the plan (each project's edits, every refusal, the notes, the file
-changes, the projects to re-lock), then apply it all or nothing. `--report`
-prints the plan and writes nothing; otherwise the command asks — `--yes` answers,
-and a shell with no terminal and no `--yes` writes nothing. A refused plan exits
-non-zero and writes nothing. The plan is computed by running the verb's writes on
-a private copy of the family's `.wai` trees; applying it stages every change with a
-backup under each project's `.wai/transactions/<id>/` (never committed) and swaps
-them in, restoring every backup on any failure. A crash mid-swap leaves a journal:
-`wairon status` and `wairon validate` show it as a notice, and `wairon doctor --fix`
-rolls it back. No verb ever locks — each names the projects to re-lock.
+On a hosted instance a project member is a project record of its own and
+inherits access from its parent, while a **part is part of its parent's record**:
+it gets no record, and a demote retires the member's record (disabled as "part of
+`<parent>`", audited `member.retired`, its own-scope settings kept) and a promote
+re-enables it. Hosted roots are isolated, so a member with a `../` or git source
+is refused there; a `hosted:` project member is its own top-level record.
+`sdd_detach_member` also **moves** the member to an isolated root of its own
+(writing `source: { hosted: <id> }` for its consumers) and `sdd_adopt_member`
+with `path` moves it back. A `source.hosted` producer outside a hosted server is
+reported as "hosted-only producer `<id>`: available only through the hosted
+server".
+
+**A part on its own.** A part stored outside its parent can be validated in its
+own repository's CI: run `wairon externals pin` at the part (with the parent on
+disk at `partOf.path`) to pin the excerpt of the parent it uses; `wairon validate`
+there then judges the part against that pin (`PART_JUDGED_ALONE`). Unpinned, it
+says "part of `<parent>`; validate from the parent" (`PART_UNPINNED`).
+
+**Family migrations.** `attach`, `detach`, `adopt`, `promote`, `demote`,
+`rename-alias`, `internalize`, `project rename` and `subsystem externalize` all run
+one flow: plan, print the plan (each project's edits, every refusal, the notes,
+the file changes, the projects to re-lock), then apply it all or nothing.
+`--report` prints the plan and writes nothing; otherwise the command asks —
+`--yes` answers, and a shell with no terminal and no `--yes` writes nothing. A
+refused plan exits non-zero and writes nothing. The plan is computed by running
+the verb's writes on a private copy of the family's `.wai` trees (its parts'
+included); applying it stages every change with a backup under each project's
+`.wai/transactions/<id>/` (never committed) and swaps them in, restoring every
+backup on any failure. A crash mid-swap leaves a journal: `wairon status` and
+`wairon validate` show it as a notice, and `wairon doctor --fix` rolls it back.
+No verb ever locks — each names the projects to re-lock. A member stored outside
+the family root (a `../` sibling) cannot be written in one transaction, so a verb
+that would have to write one refuses `not-contained`.
 
 **Required packs.** A project may require packs of the members below it with
 `composition.requirePolicies` (see
 [Extending wairon](extending-wairon.md#governance--what-a-pack-changes-and-what-a-parent-requires)).
-`wairon member add` — and `wairon init` run in a subdirectory, which creates a
-member the same way — writes those packs into the new member's selection once,
+`wairon member add --project` — and `wairon init` run in a subdirectory, which
+creates a project member the same way — writes those packs into the new member's selection once,
 each pinned to the highest installed version its range admits, sets the
 `projectType` a requirement names, and prints what it applied and each
 requirement nothing installed satisfies. Scaffolding is an unattended pack write,
@@ -385,8 +427,9 @@ root to see one.
 **Deprecated forms.** For one release wairon still reads, and reports: a leading
 `::` (`::shared::money`), `super::` (`super::sibling`), a member path
 (`billing::invoice::invoice_portal`) and an L1 subsystem carrying
-`projectPath` (`DEPRECATED_MOUNT_FORM`). `wairon doctor --fix` rewrites them to
-`members` and `alias::name`.
+`projectPath` (`DEPRECATED_MOUNT_FORM`), and a member's long-form `path` key
+(`{ path: services/x }`, stage 8: one location key, `source`). `wairon doctor
+--fix` rewrites them to `members`, the one location key and `alias::name`.
 
 ---
 

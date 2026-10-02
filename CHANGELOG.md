@@ -45,7 +45,11 @@ metadata (and takes `--into`/`--packs`), `subsystem externalize` asks before it 
 (`--yes` in a script), and a rename always asks for a re-lock. Stage 7 makes every hosted
 member a project record of its own, inheriting access through its parent: hosted operators run
 `wairon host doctor --fix` once, a qualified token is mapped to the member's record id, and a
-hosted detach or adopt moves the member's directory. Nothing here is purely
+hosted detach or adopt moves the member's directory. Stage 8 makes a new member a **part**
+by default (`--project` for a project) and `subsystem externalize` a storage move into a part
+(`--as project` for the old behaviour), renames `sdd_add_member`'s `path` to `source`, deprecates
+the long-form member `path` key, refuses `../` and git members on hosted, and compares path
+externals per use (re-pin once). Nothing here is purely
 additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
@@ -944,6 +948,91 @@ its own.
 - **`source.path` is optional** in `externals` now that `source.hosted` exists; a source
   naming both or neither is reported as the declaration's problem.
 - **Library callers:** `mintToken` answers `{ token, mapped }` instead of the bare token.
+
+### Parts and projects: boundaries are earned
+
+Stage 8 of the chained-subsystems work. Stages 1–7 made every member an independent
+project — the right model for a boundary, and the wrong one for a piece of a system that
+merely lives in another folder or repository. Stage 8 separates what a system is made of
+from where its files live.
+
+- **Parts.** A member is a **part** or a **project**, and its content decides which: a tree
+  that declares an id, holds an L0 or carries a lock is a project; anything else is a part
+  — a piece of its parent stored elsewhere, whose subsystems are the parent's own (local
+  ids, the ordinary subsystem rules, the parent's lock, the parent's agents). `as:` only
+  asserts it; a contradiction is `MEMBER_KIND_MISMATCH`.
+- **One location key.** A member is declared by one key, shorthand first:
+  `scheduler: services/scheduler` (contained), `admin: ../admin` (a sibling checkout),
+  `payments: git@host:acme/payments.git#<full commit>` (a git repository at a commit),
+  `hosted:<id>` (a hosted record, projects only); the long form is
+  `{ source, as, ref, dir, description, use }`. Leaving the root is only ever a leading
+  `../`.
+- **Storage is orthogonal.** A part reads the same — and approves the same — contained, in a
+  sibling checkout or in a git repository. A git member is fetched at its pinned commit into
+  a content-addressed, immutable cache (`WAIRON_CACHE_DIR`, else the OS user cache
+  directory) that works offline once filled; a git part is read-only here.
+- **The growth verbs.** `member add` creates a **part** by default (`--project` for a
+  project). `member promote <alias>` makes a part an independent project in place — its id,
+  an L0 exporting exactly what the parent uses of it, references respelled `alias::name`,
+  pins on both sides — and `member demote` is its exact inverse
+  (promote-then-demote is the identity: the part's files byte for byte). Both run on stage
+  6's all-or-nothing transaction, plan first, and refuse a member fetched from git.
+  `subsystem externalize` now moves a subsystem into a part (a storage move: no reference,
+  export or pin changes, the same verdict); `--as project` composes it with a promote.
+  `member internalize` of a part is a storage move too. `member update <alias>` moves a git
+  member's pinned commit and shows the spec files it adds, changes and removes first
+  (`--report` writes nothing). MCP: `sdd_promote_member`, `sdd_demote_member`;
+  `sdd_add_member` takes `source` and `as`; `sdd_externalize_subsystem` takes `as`.
+- **Referenced projects, compared per use.** A project member stored outside its parent (a
+  `../`, git or hosted source) is judged by its parent's gate against its pin, exactly as an
+  external; the family run opens it where it is stored — the fetch cache at its pinned
+  commit — runs its own gate, and composes it. Every producer is now compared **per use**:
+  a sibling checkout, a git repository or a path external that breaks a used method is
+  `EXTERNAL_INCOMPATIBLE` in the family run, not only drifted. A git external's live
+  producer is its ref's head; a git member's is its pinned commit. One that cannot be
+  fetched is `EXTERNAL_CHECK_UNAVAILABLE` — never a pass. Pins record the producer's commit
+  and their role (`external`, `member`).
+- **A part on its own.** A part stored outside its parent pins the excerpt of the parent it
+  uses (`wairon externals pin` at the part), so its own repository's CI can validate it
+  alone (`PART_JUDGED_ALONE`); unpinned, it says "validate from the parent".
+- **Overview follows composition.** The canvas draws a part's subsystems as the parent's own
+  with a storage badge (`part <alias> · contained | ../x | git <commit>`) and a referenced
+  project as a project node with its consumption edges; the web app lists parts and badges
+  members; `wairon status` prints a part's subsystems under their parent, and at a part's
+  root one line naming its parent and its pin.
+- **Hosted.** A part is part of its parent's record. Demoting a member retires its record
+  (disabled as "part of `<parent>`", audited `member.retired`, its own-scope settings kept,
+  the reach change listed — a member-own "no" stops applying); promoting it back re-enables
+  it (`member.returned`). A `hosted:` project member is its own top-level record. Hosted
+  roots are isolated: a member with a `../` or git source is refused there.
+- **Guidance.** The `sdd-architect` skill, the agent guide and the MCP server instructions
+  teach the growth path — subsystems, then parts, then projects — the member grammar, and
+  promote/demote.
+
+**Upgrading.**
+
+- **Existing members are unchanged.** Every member wairon created before stage 8 holds an
+  id and an L0, so it reads as the project it always was; nothing is migrated.
+- **New members are parts.** `wairon member add <alias> <path>` (and `sdd_add_member`) now
+  creates a part; pass `--project` (`as: project`) for what it used to create.
+  `sdd_add_member`'s `path` argument is now `source`.
+- **`externalize` makes a part.** `wairon subsystem externalize` and
+  `sdd_externalize_subsystem` move the subsystem into a part; `--as project`
+  (`as: project`) is the old behaviour.
+- **The long-form `path` key is deprecated** (`DEPRECATED_MOUNT_FORM`): `wairon doctor
+  --fix` rewrites `{ path: x }` to the one location key. It is read for one release.
+- **Git members** need git on the machine that validates them; the fetch cache lives in
+  `WAIRON_CACHE_DIR` (set it in CI to cache it between runs). Move a git member forward
+  with `wairon member update`; a verdict never moves because a remote did.
+- **Part-alone CI:** in the part's repository run `wairon externals pin` once with the parent
+  checked out at `partOf.path`, commit the pin, and `wairon validate --ci` there judges the
+  part against it.
+- **Path externals are compared per use now.** A family run that reported a path or hosted
+  external as "unavailable — outside the family" now compares each use; re-pin
+  (`wairon externals pin`) to record the used members, and expect `EXTERNAL_INCOMPATIBLE`
+  where a producer broke one.
+- **Hosted:** a member with a `../` or git source is refused; promote/demote change records
+  through reconcile, as every family-shape tool does.
 
 ### Fixed: technology tokens, context sync, global writes and two delta merges
 

@@ -108,6 +108,17 @@ whether a design is legal.
 4. Edit granularly with \`sdd_update_spec\` (it renumbers narrative steps and
    relocates jump targets for you).
 
+## Growing a system: subsystems → parts → projects
+
+Boundaries are earned. Start with subsystems in one folder. When a piece needs its
+own folder or repository but stays the same system, make it a **part**
+(\`sdd_add_member\` creates one by default; \`sdd_externalize_subsystem\` moves a
+subsystem into one): its subsystems stay this project's own — local ids, this
+project's lock. Make it a **project** only when it needs its own team, release,
+approval or public surface: \`sdd_promote_member\` (\`sdd_demote_member\` is the
+inverse) — run it with \`dryRun\` first. A member's location is one key:
+\`services/x\`, \`../x\` or \`git-url#<commit>\`.
+
 ## The tool schemas are the field reference
 
 Every \`sdd_*\` tool's input schema is self-describing and authoritative — read the
