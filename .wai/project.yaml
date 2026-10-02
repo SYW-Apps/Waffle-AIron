@@ -230,22 +230,6 @@ rules:
     # modelling decision nobody has taken, unreadable is a shape the analysis
     # cannot follow and there is nothing in the tree to fix for it.
     carried:
-      # 1 finding(s), 1 unit(s).
-      - kind: drift
-        why: >-
-          A narrative names a call target whose code lives in another file than the target's own.
-          The largest shape here - the thin client adapters realized by the file that CONSUMES the
-          provider's API - was measured and paid: each adapter now has a module of its own that
-          re-exports the provider's portal, and its call steps resolve to it (the spike showed a
-          bare import-path change does not). cli_host_adapter's steps were paid by the in-process
-          local admin portal. What remains is one CLI step whose call lands in the command's own
-          file rather than the adapter's.
-        findings:
-          - code: CALL_STEP_UNREALIZED
-            spec: cli_runner_impl
-            at: 'runDoctor'
-            covers:
-              - '26:cli_mcp_adapter.installMcpServer'
       # 62 finding(s), 82 unit(s).
       - kind: drift
         why: >-

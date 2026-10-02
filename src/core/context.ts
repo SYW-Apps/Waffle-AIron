@@ -21,8 +21,9 @@ import { projectConfigRepository } from '../config/project-config.js';
 //   domains.md        ← auto-generated: domain list from registry
 //   wairon-guide.md   ← auto-generated: importable reference for AI tools
 //
-// The generated files are rebuilt by syncContextFiles() which is called by
-// `wairon generate` and `wairon init`.
+// The generated files are rebuilt by syncContextFiles(), which `wairon init`
+// and `wairon doctor --fix` call unconditionally and `wairon generate` calls
+// whenever the directory exists (hasContext).
 //
 // The two human-edited documents are READ here and never written. There is
 // deliberately no write path for them and none is wanted: overwriting what
@@ -49,8 +50,16 @@ export const CONTEXT_PATHS = {
 // Presence checks
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether this project keeps a context directory at all — the condition under
+ * which the derived documents are owed. Gated on the directory, not on the
+ * human-written project.md: a project nobody described still carries a
+ * derived guide, and `generate` left it stale while `doctor --fix` (which
+ * syncs unconditionally) kept it current, so the two disagreed about when a
+ * derived document was owed.
+ */
 export function hasContext(): boolean {
-  return pathExists(CONTEXT_PATHS.projectMd());
+  return pathExists(CONTEXT_PATHS.dir());
 }
 
 // ---------------------------------------------------------------------------

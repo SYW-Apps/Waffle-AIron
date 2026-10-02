@@ -90,7 +90,9 @@ methods:
       `technologies` (e.g. [mysql]) makes its component's ownership tree the technology's home.
       References outside that tree are leakage, and L3 contract identifiers must stay
       intent-language — the contract is the swap seam, so the vendor name is wrong even on the
-      owning component's own interface.
+      owning component's own interface. A technology is matched by its name, or — when it declares
+      `matches` because its name is also an ordinary word of the tree (a package named after the
+      file format it reads) — by those tokens alone.
     signature: 'technologyBoundaries(ctx: RuleContext): void'
     returns: void
     params:
@@ -238,4 +240,4 @@ methods:
           component
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-09-24T21:02:22.349Z'
+updatedAt: '2026-10-01T23:59:37.718Z'

@@ -19,7 +19,7 @@ import {
 } from './adapters/core.js';
 import { exportSddSkills } from './adapters/skills.js';
 import { WAIRON_MANAGED_MARKER } from '../exporters/base.js';
-import { getProjectRoot, runWithProjectRoot, pathExists } from '../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot, pathExists, isOutsideRoot, backupBeside } from '../utils/fs.js';
 import { activeTargetTypes } from '../models/project.js';
 import type { AgentRecord } from '../models/agent.js';
 import type { ProjectConfig } from '../models/project.js';
@@ -42,10 +42,14 @@ const WAIRON_AGENT_FILE = /-(owner|implementer|architect)\.md$/;
  * expected set is EMPTY (materializeAgentFiles off: the desired state is zero
  * files, so the dirs cannot be derived from the expected paths).
  */
-export function pruneStaleAgents(expectedPaths: Set<string>, scanDirs?: Iterable<string>): number {
+export function pruneStaleAgents(expectedPaths: Set<string>, scanDirs?: Iterable<string>, reach?: { root: string; global: boolean }): number {
   const dirs = new Set(scanDirs ?? [...expectedPaths].map((p) => path.dirname(p)));
   let pruned = 0;
   for (const dir of dirs) {
+    // A directory outside the project is reconciled only under --global, and
+    // then every file deleted there is kept beside itself first.
+    const outside = reach !== undefined && isOutsideRoot(reach.root, dir);
+    if (outside && !reach!.global) continue;
     let entries: string[];
     try {
       entries = fs.readdirSync(dir);
@@ -65,6 +69,7 @@ export function pruneStaleAgents(expectedPaths: Set<string>, scanDirs?: Iterable
         }
       }
       if (!owned) continue; // hand-authored — leave it alone
+      if (outside) logger.info(`Backed up ${full} to ${backupBeside(full)} before pruning it (outside the project root).`);
       fs.unlinkSync(full);
       pruned++;
       logger.verbose(`Pruned stale: ${full}`);
@@ -107,6 +112,47 @@ interface GenerateOptions {
   /** Reconcile managed output dirs — prune wairon-owned agent files no longer in
    *  the topology (default true). Set false for --no-prune (write-only). */
   prune?: boolean;
+  /** --global: also write and prune a target whose output directory resolves
+   *  OUTSIDE the project root, backing up each file replaced or pruned there.
+   *  Without it such a target is named and skipped. */
+  global?: boolean;
+}
+
+/** Where this run may write and prune agent files: inside the root, and outside it only under --global. */
+interface WriteReach {
+  root: string;
+  global: boolean;
+}
+
+/** The configured target types whose agent-file directory resolves outside the project root, with that directory. */
+function targetsOutsideRoot(projectConfig: ProjectConfig, root: string): { type: string; dir: string }[] {
+  const out: { type: string; dir: string }[] = [];
+  for (const target of projectConfig.targets) {
+    if (typeof target === 'string' || !('outputDir' in target) || !target.outputDir) continue;
+    if ('enabled' in target && target.enabled === false) continue;
+    const dir = path.resolve(root, target.outputDir);
+    if (isOutsideRoot(root, dir)) out.push({ type: target.type, dir });
+  }
+  return out;
+}
+
+/**
+ * Step 4 of runGenerate: name every target whose agent files would land
+ * outside the project root. Without --global each is skipped — left out of the
+ * write and the prune — and the run says so; nothing outside the project is
+ * touched unless asked. Answers the target types to leave out.
+ */
+function announceOutsideTargets(projectConfig: ProjectConfig, reach: WriteReach): string[] {
+  const outside = targetsOutsideRoot(projectConfig, reach.root);
+  if (!outside.length) return [];
+  if (reach.global) {
+    for (const t of outside) logger.info(`Target "${t.type}" writes agent files outside the project root, to ${t.dir} (--global): each file replaced or pruned there is backed up beside itself first.`);
+    return [];
+  }
+  for (const t of outside) {
+    logger.warn(`Skipped target "${t.type}": its agent files would land outside the project root, in ${t.dir}. Nothing was written or pruned there — re-run with --global to write there (each replaced file is backed up beside itself).`);
+  }
+  return outside.map((t) => t.type);
 }
 
 export async function runGenerate(options: GenerateOptions = {}): Promise<void> {
@@ -153,8 +199,12 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
     return;
   }
 
+  // Nothing outside the project root is written or pruned unless --global asks.
+  const reach: WriteReach = { root: getProjectRoot(), global: options.global === true };
+  const skippedTargets = announceOutsideTargets(projectConfig, reach);
+
   if (projectConfig.rules.materializeAgentFiles) {
-    materializeAgentLayer(agents, projectConfig, options);
+    materializeAgentLayer(agents, projectConfig, options, reach, skippedTargets);
   } else if (options.dryRun) {
     logger.info('Dry run — rules.materializeAgentFiles is off: no agent files are written; leftover managed files would be removed.');
   } else if (options.prune !== false) {
@@ -164,7 +214,7 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
     // .wai/agents/ guidance are never touched.
     const candidateDirs = [...resolveExpectedOutputPaths(agents, projectConfig)]
       .map((p) => path.dirname(p));
-    const removed = pruneStaleAgents(new Set(), candidateDirs);
+    const removed = pruneStaleAgents(new Set(), candidateDirs, reach);
     if (removed > 0) {
       logger.info(`Removed ${removed} previously materialized agent file(s) — agents are served as live briefs (sdd_get_agent_brief); opt back in with rules.materializeAgentFiles: true.`);
     }
@@ -206,6 +256,21 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
   }
 }
 
+/**
+ * Under --global, copy every existing agent file this topology owns OUTSIDE
+ * the project root beside itself before the run can replace it. Answers each
+ * file's backup, by resolved path; without --global nothing outside is written,
+ * so nothing is backed up.
+ */
+function backUpOutsideFiles(agents: AgentRecord[], projectConfig: ProjectConfig, reach: WriteReach): Map<string, string> {
+  const backups = new Map<string, string>();
+  if (!reach.global) return backups;
+  for (const file of resolveExpectedOutputPaths(agents, projectConfig)) {
+    if (isOutsideRoot(reach.root, file) && pathExists(file)) backups.set(path.resolve(file), backupBeside(file));
+  }
+  return backups;
+}
+
 /** Materialize the per-subsystem agent FILES (rules.materializeAgentFiles:
  *  true): write owner/architect files — their body is the live brief
  *  composition — then prune stale managed files against the FULL topology. */
@@ -213,8 +278,14 @@ function materializeAgentLayer(
   agents: AgentRecord[],
   projectConfig: ProjectConfig,
   options: GenerateOptions,
+  reach: WriteReach,
+  skippedTargets: string[],
 ): void {
-  const filterTargets = options.target ? [options.target] : undefined;
+  // A target outside the project root is left out unless --global (step 4).
+  const configured = activeTargetTypes(projectConfig);
+  const filterTargets = options.target
+    ? [options.target].filter((t) => !skippedTargets.includes(t))
+    : skippedTargets.length ? configured.filter((t) => !skippedTargets.includes(t)) : undefined;
 
   let filterDomainIds: string[] | undefined;
   if (options.root) {
@@ -239,6 +310,10 @@ function materializeAgentLayer(
   logger.info(`Generating ${agentPool.length} agent(s)...`);
   logger.blank();
 
+  // Under --global, every existing file outside the root this run may replace
+  // is copied beside itself first; the copy is kept only where the file changed.
+  const backups = options.dryRun ? new Map<string, string>() : backUpOutsideFiles(agents, projectConfig, reach);
+
   const summaries = generateAll(agents, projectConfig, {
     filterTargets,
     filterDomainIds,
@@ -259,10 +334,17 @@ function materializeAgentLayer(
         } else {
           logger.success(`Written:   ${result.outputPath}`);
           written++;
+          const backup = backups.get(path.resolve(result.outputPath));
+          if (backup) {
+            logger.info(`Backed up the replaced ${result.outputPath} to ${backup}.`);
+            backups.delete(path.resolve(result.outputPath));
+          }
         }
       }
     }
   }
+  // A backup of a file this run did not replace records nothing: drop it.
+  for (const backup of backups.values()) fs.rmSync(backup, { force: true });
 
   // Reconcile: prune wairon-owned agent files no longer in the topology (removed
   // components, or the old flat pile after the switch to layered). ALWAYS runs,
@@ -272,7 +354,7 @@ function materializeAgentLayer(
   // other layer's current files stay recognized and untouched.
   let prunedCount = 0;
   if (!options.dryRun && options.prune !== false) {
-    prunedCount = pruneStaleAgents(resolveExpectedOutputPaths(agents, projectConfig));
+    prunedCount = pruneStaleAgents(resolveExpectedOutputPaths(agents, projectConfig), undefined, reach);
   }
 
   logger.blank();

@@ -18,9 +18,19 @@ fields:
     optional: true
   - name: 'yes'
     type: boolean
-    description: Answer the chaining migration's confirmation for a non-interactive run.
+    description: >-
+      Answer the chaining migration's confirmation for a non-interactive run. It does NOT answer a
+      write outside the project root — that takes --global as well.
+    optional: true
+  - name: global
+    type: boolean
+    description: >-
+      Consent to the --fix writes outside the project root (a machine-wide MCP configuration, the
+      legacy global plugin). Together with --yes it answers their confirmation for a non-interactive
+      run; without it such a run skips them and says so. Each replaced file is backed up beside
+      itself either way.
     optional: true
 methods: []
 sourcePath: src/commands/doctor.ts
 createdAt: '2026-09-26T21:12:12.389Z'
-updatedAt: '2026-09-26T21:57:07.183Z'
+updatedAt: '2026-10-01T23:45:53.149Z'

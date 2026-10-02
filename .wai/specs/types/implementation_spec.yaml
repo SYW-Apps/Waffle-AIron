@@ -66,10 +66,11 @@ fields:
       each direct dependency's
     optional: true
   - name: technologies
-    type: string[]
+    type: Technology[]
     description: >-
-      External technologies this implementation binds to (e.g. mysql); its component's ownership
-      tree becomes each technology's home, which the technology-boundaries rule enforces
+      External technologies this implementation binds to (e.g. mysql), each a bare name or `{ name,
+      matches }` (see technology); its component's ownership tree becomes each technology's home,
+      which the technology-boundaries rule enforces by matching each technology's tokens
     optional: true
   - name: lint
     type: LintConfig
@@ -114,4 +115,4 @@ methods:
     symbol: implementationSourceFiles
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-23T20:35:21.605Z'
+updatedAt: '2026-10-01T23:44:50.382Z'

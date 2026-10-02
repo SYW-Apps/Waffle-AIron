@@ -876,8 +876,8 @@ methods:
         label: report_binding
         description: >-
           Report TECH_ON_LOGIC_COMPONENT (warning; draft context ctx.isImplementationDraft(impl))
-          naming impl.id, impl.technologies, comp.id and comp.componentType, and pointing at the
-          data-layer seam to extract.
+          naming impl.id, the name of each technology in impl.technologies (technology.label),
+          comp.id and comp.componentType, and pointing at the data-layer seam to extract.
         type: local
       - stepNumber: 5
         label: impl_done
@@ -902,8 +902,9 @@ methods:
         description: >-
           Gather the declarations: for every implementation that declares at least one technology
           and whose contract's component resolves (a dangling contract declares nothing - the
-          hierarchy rule reports it), one entry per declared token, carrying that component and the
-          token.
+          hierarchy rule reports it), one entry per declared technology, carrying that component,
+          the technology's name (technology.label) and the tokens it is matched by
+          (technology.tokens: its declared `matches`, else its name).
         type: local
       - stepNumber: 3
         label: scope_of
@@ -929,10 +930,16 @@ methods:
       - stepNumber: 6
         label: record_home
         description: >-
-          match = makeMatcher(tech); when match is non-null (the token normalizes to 3+ significant
-          characters and is policeable), key = its normalized fused form; fetch or create
-          homes.get(key) as {label: tech, match, ownerComponents: [], scope: []}, add comp.id to its
-          ownerComponents and merge scopeOf(comp) into its scope, and homes.set(key, home).
+          matchers = makeMatcher(token) for each of the declaration's tokens, keeping the non-null
+          ones (a token that normalizes to 3+ significant characters is policeable); when any
+          remain, key = the normalized fused form of the technology's NAME, so two declarations of
+          one technology share a home whichever tokens they declare; fetch or create homes.get(key)
+          as {label: name, match: a text matches when any of the home's matchers does,
+          ownerComponents: [], scope: []}, add this declaration's matchers to the home, add comp.id
+          to its ownerComponents and merge scopeOf(comp) into its scope, and homes.set(key, home). A
+          technology whose name is also a word the tree uses for something else (a package named
+          after the file format it reads) declares `matches`, and its name is then never matched at
+          all.
         type: local
       - stepNumber: 7
         label: homes_empty_guard
@@ -1061,4 +1068,4 @@ methods:
     exportedVia: technologyRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-09-24T21:02:29.352Z'
+updatedAt: '2026-10-01T23:59:38.260Z'

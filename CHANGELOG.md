@@ -945,6 +945,43 @@ its own.
   naming both or neither is reported as the declaration's problem.
 - **Library callers:** `mintToken` answers `{ token, mapped }` instead of the bare token.
 
+### Fixed: technology tokens, context sync, global writes and two delta merges
+
+- **A technology can declare the tokens it is matched by.** An entry of
+  `technologies` is a bare name or `{ name, matches }`; with `matches`, the
+  technology-boundaries rule polices those tokens instead of the name. A package
+  named after its file format (`yaml`) no longer floods TECH_LEAKAGE with every
+  mention of the format (100 warnings on this tree), and wairon's own
+  project-config adapter now binds it as `{ name: yaml, matches: [yaml package,
+  parseDocument] }` instead of naming it in prose. (F83)
+- **`wairon generate` keeps the derived context documents current whenever the
+  project keeps a `.wai/context/` directory**, not only when a person wrote
+  `project.md` — the same documents `doctor --fix` keeps current. (F84)
+- **Nothing outside the project root is written without its own consent.**
+  `doctor --fix` plans the MCP registration first: a write that stays in the
+  project runs as before, while a machine-wide one (Antigravity's global
+  `mcp_config.json` for an `agy` target) and the legacy global plugin's cleanup
+  are listed in their own plan — file, old and new value, credentials redacted —
+  and need their own confirmation: `--yes` covers them only with the new
+  `--global`, a terminal asks, and a run with neither skips them and says so. A
+  replaced global file is kept beside itself as `<file>.wairon-backup-<timestamp>`
+  (also by `wairon mcp install --global`), and the plugin is moved aside, never
+  deleted. `generate` names and skips a target whose output directory resolves
+  outside the project unless `--global` is given, and then backs up each file it
+  replaces or prunes there. The chaining migration's plan marks a project above
+  this one's root. (F85)
+- **`sdd_update_spec` no longer crashes on a new element without its list.** A
+  method the delta adds with no `narrative` is an intent-level method with none
+  (the schema's own default); a `narrative` that is not a list is refused naming
+  the field; and an `unset` of a defaulted list (`methods`, `publicInterfaces`)
+  resets it instead of throwing a raw TypeError on save. (F86)
+- **A jump a delta writes stays where the delta put it.** Jumps written by a
+  delta (on an inserted, appended or edited step) are read in the numbering the
+  whole delta leaves behind; only stored jumps relocate around the delta's
+  inserts and deletes. A branch inserted together with a later step no longer
+  comes out pointing one step too far, and a delete is no longer refused because
+  a jump the delta wrote names that number in the final numbering. (F87)
+
 ### The analysis stops blaming the wrong code, and renames keep the debt they move
 
 - **Tests to revisit are matched by the module a test imports from.** A test

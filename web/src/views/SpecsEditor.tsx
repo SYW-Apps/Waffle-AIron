@@ -1185,7 +1185,7 @@ function SpecForm(props: {
             <Field label="Conformance (default)"><EnumSelect value={draft.conformance} onChange={(v) => set('conformance', v)} options={CONFORMANCE} allowNone noneLabel="(stereotype default)" /></Field>
           </div>
           <Field label="Technologies" hint="External technologies this implementation binds to.">
-            <TagInput values={draft.technologies ?? []} onChange={(v) => set('technologies', v)} placeholder="e.g. mysql, sendgrid…" />
+            <TagInput values={(draft.technologies ?? []).map(technologyLabel)} onChange={(v) => set('technologies', v.map((label) => (draft.technologies ?? []).find((t: unknown) => technologyLabel(t) === label) ?? label))} placeholder="e.g. mysql, sendgrid…" />
           </Field>
           {(draft.methods ?? []).length > 0 && (
             <div className="stack-lg">
@@ -1778,4 +1778,9 @@ export function SpecsTab({
       </AsyncView>
     </div>
   );
+}
+
+/** A technology entry's name: a bare string, or the `name` of a `{ name, matches }` entry (whose tokens the tag input keeps untouched). */
+function technologyLabel(tech: unknown): string {
+  return typeof tech === 'string' ? tech : String((tech as { name?: unknown })?.name ?? '');
 }

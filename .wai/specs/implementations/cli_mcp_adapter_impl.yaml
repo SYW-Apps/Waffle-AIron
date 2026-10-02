@@ -134,7 +134,10 @@ methods:
       - stepNumber: 11
         description: >-
           Write the entry under mcpServers.wairon — REWRITING a stale one rather than skipping,
-          because a stale command path is exactly how an agent silently loses its wairon tools.
+          because a stale command path is exactly how an agent silently loses its wairon tools. When
+          the file lies OUTSIDE the project root and already exists, first copy it beside itself as
+          <file>.wairon-backup-<timestamp> and say where, so a machine-wide configuration is never
+          replaced without its previous value kept.
         type: local
       - stepNumber: 12
         description: >-
@@ -166,7 +169,31 @@ methods:
       observable rather than mysterious. Then start the MCP server on the stdio transport and run
       until the transport closes.
     symbol: runMcpServe
+  - name: planInstall
+    narrative: []
+    intent: >-
+      Resolve the backends and, for each, the file it loads server definitions from and the entry an
+      install would write — the same resolution installMcpServer performs (steps 1-9 of its
+      narrative), read off one shared helper so the two can never disagree — and answer one write
+      per backend: the file, whether it lies outside the bound project root, the wairon entry it
+      holds now (null when none, or when the file is absent or unparseable), the entry it would get,
+      and whether the two are equal. Writes nothing; a hosted install with no credential refuses
+      exactly as the install would.
+    symbol: planMcpInstall
+  - name: findLegacyPlugin
+    narrative: []
+    intent: >-
+      Answer `<gemini home>/config/plugins/wairon` when that directory exists, else null. The gemini
+      home is GEMINI_CONFIG_DIR when set, else ~/.gemini — the same home the global install writes
+      into.
+  - name: retireLegacyPlugin
+    narrative: []
+    intent: >-
+      When the legacy plugin directory exists, rename it to `<gemini
+      home>/config/wairon-plugin.wairon-backup-<timestamp>` — out of the plugins directory, so it no
+      longer loads and no longer collides with the MCP server — and answer that path; null when
+      there is none, and a warning (never a throw) when the move fails. Nothing is deleted.
 detail: intent
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-09-25T17:33:34.901Z'
+updatedAt: '2026-10-01T23:46:17.286Z'

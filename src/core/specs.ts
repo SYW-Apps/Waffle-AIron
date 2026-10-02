@@ -659,14 +659,21 @@ type ReferenceKind = 'subsystem' | 'component' | 'interface' | 'implementation' 
 /** Rewrites one reference at one position. */
 type ReferenceMapper = (position: string, value: string) => string;
 
-/** A spec with every bound reference passed through `map` (the spec's own id untouched). */
+/**
+ * A spec with every bound reference passed through `map` (the spec's own id untouched).
+ *
+ * The write path calls this BEFORE the schema fills its defaults, so a list the
+ * schema defaults to [] may be absent here — a delta's new element that left
+ * it out, or an `unset` that removed it. Absent reads as empty, as the schema
+ * will read it; it is never a reason to throw.
+ */
 function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper): T {
   switch (kind) {
     case 'subsystem': {
       const s = spec as unknown as SubsystemSpec;
       return {
         ...s,
-        publicInterfaces: s.publicInterfaces.map((p) => ({
+        publicInterfaces: (s.publicInterfaces ?? []).map((p) => ({
           ...p,
           ...(p.component !== undefined ? { component: map('publicInterfaces', p.component) } : {}),
           ...(p.interface !== undefined ? { interface: map('publicInterfaces', p.interface) } : {}),
@@ -682,8 +689,8 @@ function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper
       return {
         ...c,
         subsystem: map('subsystem', c.subsystem),
-        owns: c.owns.map((o) => map('owns', o)),
-        dependsOn: c.dependsOn.map((d) => map('dependsOn', d)),
+        owns: (c.owns ?? []).map((o) => map('owns', o)),
+        dependsOn: (c.dependsOn ?? []).map((d) => map('dependsOn', d)),
         ...(c.dispatch ? { dispatch: c.dispatch.map((b) => ({ ...b, component: map('dispatch', b.component) })) } : {}),
         ...(c.mounts ? { mounts: c.mounts.map((m) => ({ ...m, portal: map('mounts', m.portal) })) } : {}),
       } as unknown as T;
@@ -697,9 +704,9 @@ function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper
       return {
         ...impl,
         contract: map('contract', impl.contract),
-        methods: impl.methods.map((m) => ({
+        methods: (impl.methods ?? []).map((m) => ({
           ...m,
-          narrative: m.narrative.map((step) => (step.targetComponent !== undefined
+          narrative: (m.narrative ?? []).map((step) => (step.targetComponent !== undefined
             ? { ...step, targetComponent: map('narrative', step.targetComponent) }
             : step)),
         })),
@@ -4188,7 +4195,10 @@ export class SpecWorkspace {
    *     second delete written as 7 addresses what used to be step 8. That is why
    *     a delete may restate the step's `label` or `description` as a guard, and
    *     why labels are the reliable way to name a jump target. Inserts and
-   *     deletes relocate every jump field in the same narrative around them; a
+   *     deletes relocate every STORED jump field in the same narrative around
+   *     them; a jump the delta itself writes is already in the numbering the
+   *     whole delta leaves behind, so none of its later steps moves it. A new
+   *     implementation method with no narrative is intent-level ([]); a
    *     step whose `type` changes is REBUILT for its new type, keeping its
    *     description and label.
    *  5. UNSET the fields the delta names, at the level each `unset` sits in.
@@ -4279,32 +4289,82 @@ export class SpecWorkspace {
     // region TAIL (last step of a loop/try body), not an entry: capturing it
     // would shrink the region and evict its original last step, so it always
     // relocates with the body.
+    //
+    // Only STORED jumps relocate. A jump the delta itself writes — on an
+    // inserted step, an appended one, or an in-place edit — names its target in
+    // the numbering the WHOLE delta leaves behind, after all of its inserts and
+    // deletes, which is the numbering its step addresses already use (they
+    // apply in ascending order, each against what the earlier ones left). It is
+    // pinned when it is merged, and no later insert or delete of the same delta
+    // moves it: relocating it was how a branch inserted together with a later
+    // step came out pointing one step too far.
+    const isPinned = (step: any, field: string): boolean =>
+      step?.[DELTA_JUMP_PINS] instanceof Set && step[DELTA_JUMP_PINS].has(field);
+    const isPinnedEntry = (entry: any): boolean => entry?.[DELTA_JUMP_PINS] === true;
+
     const relocateJumps = (step: any, shiftFrom: number, deltaN: number, captureInsertTarget = false): any => {
       const hit = (v: number, isRegionTail = false) =>
         (deltaN > 0 ? ((captureInsertTarget && !isRegionTail) ? v > shiftFrom : v >= shiftFrom) : v > shiftFrom);
       const out = { ...step };
       for (const f of JUMP_FIELDS) {
+        if (isPinned(step, f)) continue;
         if (typeof out[f] === 'number' && hit(out[f], f === 'endStep')) out[f] = out[f] + deltaN;
       }
       for (const lf of JUMP_LIST_FIELDS) {
         if (Array.isArray(out[lf])) {
           out[lf] = out[lf].map((c: any) =>
-            typeof c?.step === 'number' && hit(c.step) ? { ...c, step: c.step + deltaN } : c,
+            !isPinnedEntry(c) && typeof c?.step === 'number' && hit(c.step) ? { ...c, step: c.step + deltaN } : c,
           );
         }
       }
       return out;
     };
 
+    /** The STORED jump fields of a step naming `target` — a pinned jump names a final-numbering step, not this one. */
     const jumpRefsTo = (step: any, target: number): string[] => {
       const refs: string[] = [];
-      for (const f of JUMP_FIELDS) if (step[f] === target) refs.push(f);
+      for (const f of JUMP_FIELDS) if (step[f] === target && !isPinned(step, f)) refs.push(f);
       for (const lf of JUMP_LIST_FIELDS) {
         (Array.isArray(step[lf]) ? step[lf] : []).forEach((c: any, i: number) => {
-          if (c?.step === target) refs.push(`${lf}[${i}].step`);
+          if (c?.step === target && !isPinnedEntry(c)) refs.push(`${lf}[${i}].step`);
         });
       }
       return refs;
+    };
+
+    /**
+     * A step delta with every numeric jump it states pinned (see above): the
+     * step-level fields by name, each cases/catches/branches entry on itself,
+     * so the pin survives the identity merge that spreads an entry over its
+     * stored counterpart.
+     */
+    const pinDeltaJumps = (deltaStep: any, carried?: Set<string>): any => {
+      const pins = new Set<string>(carried ?? []);
+      for (const f of JUMP_FIELDS) if (typeof deltaStep[f] === 'number') pins.add(f);
+      const out: any = { ...deltaStep };
+      for (const lf of JUMP_LIST_FIELDS) {
+        if (!Array.isArray(out[lf])) continue;
+        out[lf] = out[lf].map((c: any) =>
+          (c && typeof c === 'object' && typeof c.step === 'number' ? { ...c, [DELTA_JUMP_PINS]: true } : c));
+      }
+      out[DELTA_JUMP_PINS] = pins;
+      return out;
+    };
+
+    /** The step as it is stored: no pin left on it or on its entries. */
+    const unpinned = (step: any): any => {
+      const out: any = { ...step };
+      delete out[DELTA_JUMP_PINS];
+      for (const lf of JUMP_LIST_FIELDS) {
+        if (!Array.isArray(out[lf])) continue;
+        out[lf] = out[lf].map((c: any) => {
+          if (!c || typeof c !== 'object' || !(DELTA_JUMP_PINS in c)) return c;
+          const entry = { ...c };
+          delete entry[DELTA_JUMP_PINS];
+          return entry;
+        });
+      }
+      return out;
     };
 
     // -----------------------------------------------------------------------
@@ -4650,21 +4710,25 @@ export class SpecWorkspace {
             capture,
           ));
           const { action, remove, captureJumps, ...cleanStep } = deltaStep;
-          steps.push(withUnset(cleanStep, deltaStep));
+          steps.push(withUnset(pinDeltaJumps(cleanStep), deltaStep));
         } else {
           const idx = steps.findIndex(s => s.stepNumber === stepNum);
           if (idx !== -1) {
-            const { action, remove, ...cleanStep } = deltaStep;
+            const { action, remove, ...rawStep } = deltaStep;
             const stored = steps[idx];
+            const cleanStep = pinDeltaJumps(rawStep, stored[DELTA_JUMP_PINS]);
             const merged = withUnset(retargetByLabel(mergeElement(stored, cleanStep), cleanStep), deltaStep);
-            steps[idx] = rebuildOnRetype(stored, cleanStep, merged, methodName);
+            // A rebuild copies only the fields the new type carries, so the pins ride over explicitly.
+            const rebuilt = rebuildOnRetype(stored, rawStep, merged, methodName);
+            rebuilt[DELTA_JUMP_PINS] = cleanStep[DELTA_JUMP_PINS];
+            steps[idx] = rebuilt;
           } else {
             const { action, remove, ...cleanStep } = deltaStep;
-            steps.push(withUnset(cleanStep, deltaStep));
+            steps.push(withUnset(pinDeltaJumps(cleanStep), deltaStep));
           }
         }
       }
-      return steps.sort((a, b) => a.stepNumber - b.stepNumber);
+      return steps.map(unpinned).sort((a, b) => a.stepNumber - b.stepNumber);
     };
 
     /**
@@ -4699,6 +4763,12 @@ export class SpecWorkspace {
           } else {
             const existingMethod = merged[idx];
             let narrative = existingMethod.narrative ? [...existingMethod.narrative] : [];
+            if (deltaMethod.narrative !== undefined && deltaMethod.narrative !== null && !Array.isArray(deltaMethod.narrative)) {
+              throw new Error(
+                `Refusing to update implementation method "${String(deltaMethod.name)}": its "narrative" must be a list `
+                + `of step deltas, got ${JSON.stringify(deltaMethod.narrative)}.`,
+              );
+            }
             if (Array.isArray(deltaMethod.narrative)) {
               // `[]` clears the list it names, at this level too: fed to the
               // step merge it means "upsert no steps", which left the narrative
@@ -4716,10 +4786,34 @@ export class SpecWorkspace {
           }
         } else {
           assertUnmatchedIsAnAddition(deltaMethod, deltaMethod.name, merged.map(m => m.name), 'method');
-          merged.push(withUnset(deltaMethod, deltaMethod));
+          merged.push(withUnset(newMethodOf(deltaMethod), deltaMethod));
         }
       }
       return merged;
+    };
+
+    /**
+     * A method the delta ADDS, in the shape every stored method has.
+     *
+     * A stored implementation method always carries `narrative` (the schema
+     * defaults it to []), and the write path reads it as a list before the
+     * schema ever sees the spec. A new method the delta gave no narrative
+     * reached that read as `undefined` and the write died with a raw TypeError.
+     * Absent means what the schema already says it means — no steps, an
+     * intent-level method — so it is filled in as []. A narrative that is
+     * present but not a list is a mistake, not an omission, and is refused by
+     * name.
+     */
+    const newMethodOf = (deltaMethod: any): any => {
+      if (kind !== 'implementation') return deltaMethod;
+      if (deltaMethod.narrative === undefined || deltaMethod.narrative === null) return { ...deltaMethod, narrative: [] };
+      if (!Array.isArray(deltaMethod.narrative)) {
+        throw new Error(
+          `Refusing to add implementation method "${String(deltaMethod.name)}": its "narrative" must be a list of steps, `
+          + `got ${JSON.stringify(deltaMethod.narrative)}. Leave it out (or pass []) for an intent-level method.`,
+        );
+      }
+      return deltaMethod;
     };
 
     const mergeNamedArray = (existing: any[], delta: any[]): any[] => {
@@ -4967,6 +5061,17 @@ export class SpecWorkspace {
     const qualifiedDelta = qualifyDeltaRefs(mergeableDelta);
     const mergedResult = mergeDelta(result, qualifiedDelta);
     for (const field of unsetFields) delete mergedResult[field];
+    // A field the delta removed that the schema DEFAULTS (every top-level list
+    // is one) is back at its default, which is what unsetting it means. Left
+    // absent, the save path — which reads these lists before the schema runs —
+    // threw a raw TypeError on it. Only absent keys are filled; nothing the
+    // merge produced is replaced or stripped here.
+    const withDefaults = deltaSchema.safeParse(mergedResult);
+    if (withDefaults.success) {
+      for (const [key, value] of Object.entries(withDefaults.data as Record<string, unknown>)) {
+        if (!(key in mergedResult)) mergedResult[key] = value;
+      }
+    }
 
     // Symbolic step-label references resolve AFTER the merge, so a delta can
     // reference labels anchored on pre-existing steps. Unresolved references
@@ -5662,6 +5767,14 @@ interface MethodMovePlan {
 }
 
 /** A spec copied so the plan can rewrite it without touching what the cache holds. */
+/**
+ * Marks, during one delta's narrative merge, the jump fields that delta wrote
+ * itself — named in the delta's final numbering, so never relocated by its own
+ * later inserts and deletes. A symbol, so it can never collide with a spec
+ * field, and stripped before the merged narrative leaves the merge.
+ */
+const DELTA_JUMP_PINS = Symbol('jumps written by this delta');
+
 function cloneSpec<T>(spec: T): T {
   return JSON.parse(JSON.stringify(spec)) as T;
 }

@@ -24,7 +24,10 @@ methods:
       Register (or self-heal) the wairon MCP server entry for the selected AI backends: a LOCAL
       stdio entry pinned to this project by default, or a HOSTED http entry naming an instance,
       project and bearer when those are supplied. Only the `wairon` entry is written; every other
-      server and key in the file is preserved.
+      server and key in the file is preserved. A file it replaces OUTSIDE the project root (a user
+      or machine-wide configuration) is first copied beside itself as
+      <file>.wairon-backup-<timestamp>, and the backup's path is printed, so the previous value can
+      always be restored.
     signature: 'installMcpServer(options: McpInstallOptions): void'
     returns: void
     params:
@@ -46,6 +49,39 @@ methods:
       until the transport closes.
     signature: 'serveMcpStdio(): Promise<void>'
     returns: Promise<void>
+  - name: planInstall
+    description: >-
+      What installMcpServer would write for these options, computed exactly as it computes it and
+      writing nothing: per resolved backend, the file, whether it lies outside the project root, the
+      wairon entry it holds now and the one it would get, and whether it is already up to date. The
+      plan a caller prints and confirms before it lets an install touch a machine-wide file.
+    signature: 'planInstall(options: McpInstallOptions): McpConfigWrite[]'
+    returns: McpConfigWrite[]
+    params:
+      - name: options
+        type: mcp_install_options
+        description: The same options installMcpServer would be given
+    guarantees:
+      - idempotent
+  - name: findLegacyPlugin
+    description: >-
+      Where the legacy global Antigravity plugin sits (`<gemini home>/config/plugins/wairon`), or
+      null when there is none. A plugin named "wairon" collides with the wairon MCP server, so a
+      repair retires it. Pure read.
+    signature: 'findLegacyPlugin(): string | null'
+    returns: string | null
+    params: []
+    guarantees:
+      - idempotent
+  - name: retireLegacyPlugin
+    description: >-
+      Move the legacy global Antigravity plugin out of the plugins directory — to `<gemini
+      home>/config/wairon-plugin.wairon-backup-<timestamp>`, where it no longer loads — instead of
+      deleting it, and answer where it went; null when there was none. Never deletes: the directory
+      is the user's, and a backup is what lets a mistaken repair be undone.
+    signature: 'retireLegacyPlugin(): string | null'
+    returns: string | null
+    params: []
 status: complete
 createdAt: '2026-08-12T18:42:15.287Z'
-updatedAt: '2026-08-12T19:21:57.427Z'
+updatedAt: '2026-10-01T23:46:08.170Z'

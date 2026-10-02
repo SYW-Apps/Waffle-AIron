@@ -35,11 +35,13 @@ methods:
     returns: SyncResult
     params: []
     effect: write
-  - name: hasNotes
+  - name: isPresent
     description: >-
-      Whether this project has the human-written project document. Its absence is a normal state,
+      Whether this project keeps a context directory at all — the condition under which the derived
+      documents are owed. It is the directory, not the human-written project document, so a project
+      that never wrote one still has its derived guide kept current. Its absence is a normal state,
       not a fault.
-    signature: 'hasNotes(): boolean'
+    signature: 'isPresent(): boolean'
     returns: boolean
     params: []
     guarantees:
@@ -53,4 +55,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-23T11:11:10.943Z'
-updatedAt: '2026-09-23T11:12:09.999Z'
+updatedAt: '2026-10-01T23:45:11.745Z'

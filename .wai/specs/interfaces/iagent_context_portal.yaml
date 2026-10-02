@@ -228,8 +228,8 @@ methods:
     effect: write
   - name: hasContext
     description: >-
-      Published read: whether this project has the human-written project document. Forwarded to the
-      context composer.
+      Published read: whether this project keeps a context directory, so the derived context
+      documents are owed. Forwarded to the context composer.
     signature: 'hasContext(): boolean'
     returns: boolean
     params: []
@@ -246,4 +246,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:13.399Z'
-updatedAt: '2026-09-25T17:33:37.865Z'
+updatedAt: '2026-10-01T23:45:12.889Z'

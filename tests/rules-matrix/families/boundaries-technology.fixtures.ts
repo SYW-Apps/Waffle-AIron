@@ -18,6 +18,12 @@
  * Only declared tokens are policed (no hardcoded vendor lists), so each tree
  * opts in by declaring `technologies: [postgresql]` on the stock ledger
  * store's implementation.
+ *
+ * A technology whose name is also an ordinary word of the tree declares the
+ * tokens it is matched by instead (`{ name, matches }`): the `yaml` package is
+ * named after the format every config spec talks about, so its bare name
+ * would report the format as leaked vendor text. The last pair pins both
+ * halves: the format word is no longer policed, a declared token still is.
  */
 import { defineRuleFixture, type FixtureSpecInput } from '../harness.js';
 
@@ -49,6 +55,30 @@ const STOCK_LEDGER_INTERFACE = {
   id: 'istock_ledger',
   component: 'stock-ledger-store',
   methods: [{ name: 'recordMovement', description: 'Append one stock movement to the ledger.' }],
+};
+
+/**
+ * A config-file adapter binding the `yaml` package. Its name is also the file
+ * format, so it declares the tokens that mark the package instead.
+ */
+const SUPPLY_CONFIG_ADAPTER: FixtureSpecInput = {
+  id: 'supply-config-adapter',
+  componentType: 'Adapter',
+  subsystem: 'inventory',
+  description: 'Reads and writes the YAML supply export, keeping its comments.',
+};
+
+const SUPPLY_CONFIG_INTERFACE = {
+  id: 'isupply_config',
+  component: 'supply-config-adapter',
+  methods: [{ name: 'readThresholds', description: 'The reorder thresholds the supply export holds.' }],
+};
+
+const SUPPLY_CONFIG_IMPL = {
+  id: 'supply_config_impl',
+  contract: 'isupply_config',
+  technologies: [{ name: 'yaml', matches: ['yaml package', 'parseDocument'] }],
+  methods: [{ name: 'readThresholds', narrative: [{ stepNumber: 1, type: 'local', description: 'Parse the YAML export with parseDocument from the yaml package.' }] }],
 };
 
 const REPLENISH_ORCH = (description: string): FixtureSpecInput => ({
@@ -420,6 +450,78 @@ export default [
             {
               name: 'planReorders',
               narrative: [{ stepNumber: 1, type: 'local', description: 'Fetch current stock levels from the stock ledger.' }],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // TECH_LEAKAGE — a technology matched by its declared tokens, not its name
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'TECH_LEAKAGE',
+    severity: 'warning',
+    anchoredTo: 'replenishment_impl',
+    expectFire: true,
+    scenario:
+      'The supply-config adapter binds the yaml package by its API marker parseDocument, and the replenishment implementation\'s narrative re-parses the export with parseDocument itself instead of asking the adapter.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [INVENTORY_SUB],
+      components: [REPLENISH_ORCH('Plans nightly reorders from the YAML supply export.'), SUPPLY_CONFIG_ADAPTER],
+      interfaces: [
+        SUPPLY_CONFIG_INTERFACE,
+        {
+          id: 'ireplenishment',
+          component: 'replenishment-orchestrator',
+          methods: [{ name: 'planReorders', description: 'Plan the nightly reorder batch from the YAML supply export.' }],
+        },
+      ],
+      implementations: [
+        SUPPLY_CONFIG_IMPL,
+        {
+          id: 'replenishment_impl',
+          contract: 'ireplenishment',
+          methods: [
+            {
+              name: 'planReorders',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Re-parse the supply export with parseDocument to read its thresholds.' }],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'TECH_LEAKAGE',
+    expectFire: false,
+    reason:
+      'The technology declares the tokens it is matched by, so the format word its name shares (YAML) is no longer policed: the replenishment specs naming the YAML export reference the format, not the package.',
+    scenario:
+      'The supply-config adapter binds the yaml package by its API marker parseDocument, while the replenishment orchestrator, its contract and its narrative talk about the YAML supply export through the adapter.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [INVENTORY_SUB],
+      components: [REPLENISH_ORCH('Plans nightly reorders from the YAML supply export.'), SUPPLY_CONFIG_ADAPTER],
+      interfaces: [
+        SUPPLY_CONFIG_INTERFACE,
+        {
+          id: 'ireplenishment',
+          component: 'replenishment-orchestrator',
+          methods: [{ name: 'planReorders', description: 'Plan the nightly reorder batch from the YAML supply export.' }],
+        },
+      ],
+      implementations: [
+        SUPPLY_CONFIG_IMPL,
+        {
+          id: 'replenishment_impl',
+          contract: 'ireplenishment',
+          methods: [
+            {
+              name: 'planReorders',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Read the thresholds the YAML supply export holds, through the supply-config adapter.' }],
             },
           ],
         },
