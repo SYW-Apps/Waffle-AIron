@@ -195,8 +195,8 @@ describe('derivedDocPaths names the generated pair and nothing a person wrote', 
   });
 });
 
-describe('whether the project has been described is a question, never a fault', () => {
-  it('answers false for a project nobody has written notes for, and true once they have', () => {
+describe('whether the project keeps context is a question, never a fault (F84)', () => {
+  it('answers false for a project with no context directory, and true once it has one', () => {
     const dir = tempProject();
 
     expect(adapter.hasContext()).toBe(false);
@@ -208,12 +208,15 @@ describe('whether the project has been described is a question, never a fault', 
     expect(portal.hasContext()).toBe(true);
   });
 
-  it('does not confuse the architecture document with the project one', () => {
+  it('answers true for a directory holding only derived documents — no project.md is needed', () => {
     const dir = tempProject();
     fs.mkdirSync(contextDirIn(dir), { recursive: true });
-    fs.writeFileSync(docIn(dir, 'architecture.md'), '# Design\n', 'utf8');
+    fs.writeFileSync(docIn(dir, 'wairon-guide.md'), '# an old guide\n', 'utf8');
 
-    expect(adapter.hasContext()).toBe(false);
+    // The gate is the directory: a project nobody described still owes its
+    // derived guide, exactly as doctor --fix (which syncs unconditionally) says.
+    expect(adapter.hasContext()).toBe(true);
+    expect(portal.hasContext()).toBe(true);
   });
 });
 

@@ -145,7 +145,7 @@ methods:
         description: Forward 1:1 to the context composer
         type: call
         targetComponent: context_composer
-        targetMethod: hasNotes
+        targetMethod: isPresent
   - name: derivedDocPaths
     narrative:
       - stepNumber: 1

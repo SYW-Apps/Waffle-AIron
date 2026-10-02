@@ -6,11 +6,12 @@ description: >-
   human-authored documents: nothing in wairon should be able to overwrite them.
 component: context_store
 methods:
-  - name: hasNotes
+  - name: isPresent
     description: >-
-      Whether this project has the human-written project document at all. Its absence is a normal
-      state — a project that has not been described yet — not a fault.
-    signature: 'hasNotes(): boolean'
+      Whether this project keeps a context directory at all — any context document, the two a person
+      writes or the two derived ones. Its absence is a normal state, not a fault: a project
+      initialised before the directory existed has none until a repair writes it.
+    signature: 'isPresent(): boolean'
     returns: boolean
     params: []
     guarantees:
@@ -64,4 +65,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-23T11:10:36.887Z'
-updatedAt: '2026-09-23T11:12:07.461Z'
+updatedAt: '2026-10-01T23:45:09.958Z'

@@ -109,13 +109,13 @@ methods:
         type: return
         outcome: synced
     symbol: syncContextFiles
-  - name: hasNotes
+  - name: isPresent
     narrative:
       - stepNumber: 1
         description: Forward to the store
         type: call
         targetComponent: context_store
-        targetMethod: hasNotes
+        targetMethod: isPresent
     symbol: hasContext
   - name: derivedPaths
     narrative:
@@ -127,4 +127,4 @@ methods:
     symbol: derivedDocPaths
 status: complete
 createdAt: '2026-09-23T11:11:29.644Z'
-updatedAt: '2026-09-23T11:12:10.687Z'
+updatedAt: '2026-10-01T23:45:06.508Z'

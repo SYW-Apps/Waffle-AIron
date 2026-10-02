@@ -385,8 +385,8 @@ methods:
     effect: write
   - name: hasContext
     description: >-
-      Whether the project has a human-written project document, for `wairon generate`. Forwarded to
-      the core portal.
+      Whether the project keeps a context directory, so `wairon generate` owes it the derived
+      context documents. Forwarded to the core portal.
     signature: 'hasContext(): boolean'
     returns: boolean
     params: []
@@ -523,4 +523,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:51:11.809Z'
+updatedAt: '2026-10-01T23:45:17.647Z'

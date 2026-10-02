@@ -8,12 +8,13 @@ description: >-
 contract: icontext_store
 sourcePath: src/core/context.ts
 methods:
-  - name: hasNotes
+  - name: isPresent
     narrative:
       - stepNumber: 1
         description: >-
-          Answer whether the human-written project document is on disk. Absence is a normal state —
-          a project nobody has described yet — so this is a question, never a check that fails
+          Answer whether the context directory is on disk — any context document lives in it, the
+          human-written ones and the derived ones alike. Absence is a normal state, so this is a
+          question, never a check that fails
         type: return
         outcome: present or not
     symbol: hasContext
@@ -62,4 +63,4 @@ methods:
     symbol: derivedDocPaths
 status: complete
 createdAt: '2026-09-23T11:10:50.049Z'
-updatedAt: '2026-09-23T11:12:08.349Z'
+updatedAt: '2026-10-01T23:45:14.889Z'
