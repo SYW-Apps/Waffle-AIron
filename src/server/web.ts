@@ -66,6 +66,7 @@ import type {
   OrganizationUnitRecord,
   PackDescriptor,
   PermissionAssignment,
+  EffectivePermission,
   PolicyEvaluationResult,
   PrincipalSubject,
   ProjectConfigView,
@@ -3130,6 +3131,19 @@ function adminListAssignments(
   return webadmin.listAssignments(cfg, sessionId, scopeKind, scopeId, subjectKind, subjectId);
 }
 
+/** Explain one user's effective permission for a capability at a unit, project or
+ *  subsystem scope ("why can or can't they"); forwards to web_admin_orchestrator.explainPermission. */
+function adminExplainPermission(
+  cfg: HostConfig,
+  sessionId: string,
+  userId: string,
+  capability: string,
+  scopeKind: ScopeKind,
+  scopeId?: string,
+): EffectivePermission {
+  return webadmin.explainPermission(cfg, sessionId, userId, capability, scopeKind, scopeId ?? '');
+}
+
 /** Upsert a permission assignment; forwards to web_admin_orchestrator.setAssignment. */
 function adminSetAssignment(cfg: HostConfig, sessionId: string, assignment: PermissionAssignment): PermissionAssignment {
   return webadmin.setAssignment(cfg, sessionId, assignment);
@@ -3884,6 +3898,12 @@ export async function handleWebRequest(
             q('subjectId'),
           ),
         });
+      }
+      // GET /web/admin/permissions/explain?userId=&capability=&scopeKind=&scopeId= —
+      // one user's effective permission with the rung that decided it.
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'permissions' && parts[3] === 'explain') {
+        const q = (name: string): string => url.searchParams.get(name) ?? '';
+        return sendJson(res, 200, adminExplainPermission(cfg, sessionId, q('userId'), q('capability'), (q('scopeKind') || 'instance') as ScopeKind, q('scopeId') || undefined));
       }
       // POST /web/admin/permissions { ...PermissionAssignment } — upsert one assignment.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'permissions') {

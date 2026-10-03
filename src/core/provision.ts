@@ -37,6 +37,7 @@ import {
   rewriteSpecRefs,
   type RefPosition,
   type SpecRefKind,
+  assertSpecsInReach,
 } from './specs.js';
 import { aiPathsAt } from '../config/paths.js';
 // git_source_adapter (stage 8): a git member's commit resolved and fetched.
@@ -2010,6 +2011,7 @@ function rewriteRefFields(
   specsDir: string,
   remap: (ref: string, position: RefPosition, owner?: string) => string,
   excludeDir?: string,
+  dryRun = false,
 ): RewrittenSpec[] {
   const rewritten: RewrittenSpec[] = [];
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
@@ -2023,7 +2025,7 @@ function rewriteRefFields(
     if (!raw || typeof raw !== 'object') continue;
     const kind = specKind(raw);
     if (!rewriteSpecRefs(raw, remap) || !kind) continue;
-    writeYamlFile(file, raw);
+    if (!dryRun) writeYamlFile(file, raw);
     rewritten.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
   }
   return rewritten;
@@ -2038,7 +2040,7 @@ function rewriteRefFields(
  * follows too. Where the allow LIVES is the file walk's business: a spec the
  * rename moves carries its allows with it.
  */
-function rekeyLintAllows(specsDir: string, rename: IdentityRename): RewrittenSpec[] {
+function rekeyLintAllows(specsDir: string, rename: IdentityRename, dryRun = false): RewrittenSpec[] {
   const rewritten: RewrittenSpec[] = [];
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
     let raw: any;
@@ -2063,7 +2065,7 @@ function rekeyLintAllows(specsDir: string, rename: IdentityRename): RewrittenSpe
       if (next.covers && JSON.stringify(next.covers) !== JSON.stringify(allow.covers)) { allow.covers = next.covers; changed = true; }
     }
     if (!changed) continue;
-    writeYamlFile(file, raw);
+    if (!dryRun) writeYamlFile(file, raw);
     rewritten.push({ kind, id: specId });
   }
   return rewritten;
@@ -2212,22 +2214,32 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
   // Step 15: refuse before the first write when the register cannot be
   // rewritten precisely: a rename that half-lands with its debt left behind reads as
   // debt paid and debt new.
-  projectConfigRepository.rekeyCarried(rename, true);
+  const registerEdits = projectConfigRepository.rekeyCarried(rename, true);
 
   // Step 16: every reference to a renamed id across the bound tree, the moved
   // specs' own files included, before anything is saved: placement then finds a
   // renamed member's owner through its rewritten owns. The moved specs report as
   // renamed, not as rewritten.
-  const rewrittenRefs = rewriteRefFields(aiPathsAt(getProjectRoot()).specsDir(), (ref, position) => {
+  const remap = (ref: string, position: RefPosition): string => {
     if (position === 'component' || position === 'entity-class' || position === 'auth-source') {
       return ref === componentId ? newId : ref;
     }
     if (position === 'interface' && ref === movingInterface?.id) return interfaceId;
     return ref;
-  });
+  };
+  // Inside a hosted request, every spec the rename would write — the moved
+  // specs and every spec whose references it rewrites — is judged against the
+  // request's write reach before the first write; nothing is written on a refusal.
+  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  assertSpecsInReach(
+    [...renamed.map(({ kind, from }) => ({ kind, id: from })), ...rewriteRefFields(specsDir, remap, undefined, true), ...rekeyLintAllows(specsDir, rename, true)],
+    `renaming component "${componentId}"`,
+    Array.isArray(registerEdits) && registerEdits.length > 0,
+  );
+  const rewrittenRefs = rewriteRefFields(specsDir, remap);
   // Step 17: the lint allows naming it — a site on an edge, a covered unit —
   // follow as the register does.
-  const allowsRekeyed = rekeyLintAllows(aiPathsAt(getProjectRoot()).specsDir(), rename);
+  const allowsRekeyed = rekeyLintAllows(specsDir, rename);
   const rewritten = [...new Set([...rewrittenRefs, ...allowsRekeyed]
     .filter((spec) => !renamed.some((moved) => moved.kind === spec.kind && moved.from === spec.id))
     .map((spec) => spec.id))];
@@ -2438,7 +2450,24 @@ export function renameMethod(componentId: string, methodName: string, newName: s
       ],
     }],
   };
-  projectConfigRepository.rekeyCarried(rename, true);
+  const registerEdits = projectConfigRepository.rekeyCarried(rename, true);
+
+  // Inside a hosted request, every spec the rename would write — the contracts
+  // and implementations it moves the method in, and every spec whose
+  // references it retargets — is judged against the request's write reach
+  // before the first write; nothing is written on a refusal.
+  const methodRemap = (ref: string, position: RefPosition, owner?: string): string =>
+    (position === 'method' && owner === componentId && ref === methodName ? newName : ref);
+  const reachDir = aiPathsAt(getProjectRoot()).specsDir();
+  assertSpecsInReach(
+    [
+      ...(rename.methods?.[0]?.specs ?? []).map((id) => ({ kind: moving.some((i) => i.id === id) ? 'interface' : 'implementation', id })),
+      ...rewriteRefFields(reachDir, methodRemap, undefined, true),
+      ...rekeyLintAllows(reachDir, rename, true),
+    ],
+    `renaming method "${componentId}.${methodName}"`,
+    Array.isArray(registerEdits) && registerEdits.length > 0,
+  );
 
   // Steps 15–16: the method moves on each of those contracts — its name, and
   // the name inside its signature. Params, returns, description, guarantees,
@@ -2481,8 +2510,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   // it is named: a narrative call, register or dispatch step, a dispatch-table
   // binding, and a lifecycle entrypoint. The rewriter persists what it changes.
   const specsDir = aiPathsAt(getProjectRoot()).specsDir();
-  const retargeted = rewriteRefFields(specsDir, (ref, position, owner) =>
-    (position === 'method' && owner === componentId && ref === methodName ? newName : ref));
+  const retargeted = rewriteRefFields(specsDir, methodRemap);
   // Still step 22: the lint allows naming it — a site on a spec it moved in, a
   // covered unit — follow as the register does.
   const allowsRekeyed = rekeyLintAllows(specsDir, rename);

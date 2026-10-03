@@ -12,6 +12,7 @@ import { listSecretKeys, setSecret as storeSecret } from '../utils/secrets.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
+  EffectivePermission,
   HostConfig,
   HostedUserRecord,
   IdentityProviderConfig,
@@ -497,4 +498,18 @@ export function unbindRole(
   scopeId?: string,
 ): HostedUserRecord {
   return permissionadmin.unbindRole(cfg, sessionId, userId, roleId, scopeKind, scopeId);
+}
+
+/** Forward to permission_admin_orchestrator.explain with the session as the credential
+ *  (project:admin over the scope upstream): one user's effective permission at a unit,
+ *  project or subsystem scope, with the rung that decided it. */
+export function explainPermission(
+  cfg: HostConfig,
+  sessionId: string,
+  userId: string,
+  capability: string,
+  scopeKind: ScopeKind,
+  scopeId: string,
+): EffectivePermission {
+  return permissionadmin.explain(cfg, sessionId, userId, capability, scopeKind, scopeId);
 }

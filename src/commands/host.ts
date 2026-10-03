@@ -505,8 +505,16 @@ function printMemberUpgrade(upgrade: ReturnType<typeof localAdmin.upgradeMemberR
 const CAPABILITIES: Capability[] = ['project:read', 'project:create', 'project:write', 'project:admin', 'approval:decide', 'share:create'];
 const PERMISSION_VALUES: PermissionValue[] = ['yes', 'approval', 'no', 'inherit'];
 
-/** The assignment scope from the mutually exclusive --project/--unit/--instance flags. */
+/**
+ * The assignment scope from the mutually exclusive --project/--unit/--instance
+ * flags; --project with --subsystem is the subsystem scope
+ * `<project>/<subsystem>`, and --subsystem without --project is refused.
+ */
 function resolveScopeOptions(options: HostOptions): { kind: ScopeKind; id?: string } {
+  if (options.subsystem) {
+    if (!options.project) throw new WaironError('`--subsystem <id>` needs `--project <id>`: a subsystem scope is `<project>/<subsystem>`.');
+    return { kind: 'subsystem', id: `${options.project}/${options.subsystem}` };
+  }
   if (options.project) return { kind: 'project', id: options.project };
   if (options.unit) return { kind: 'unit', id: options.unit };
   return { kind: 'instance' };
@@ -547,7 +555,7 @@ export async function runHostPermission(action: string, options: HostOptions = {
         const list = localAdmin.listAssignments(
           cfg,
           cred,
-          options.project || options.unit || options.instance ? scope.kind : undefined,
+          options.project || options.unit || options.instance || options.subsystem ? scope.kind : undefined,
           scope.id,
           options.user ? 'user' : undefined,
           options.user,
@@ -557,7 +565,7 @@ export async function runHostPermission(action: string, options: HostOptions = {
         } else {
           for (const a of list) {
             const subject = a.subjectKind === 'everyone' ? 'everyone' : a.subjectId;
-            logger.info(`  ${a.id}  ${String(subject).padEnd(20)} ${a.capability.padEnd(16)} ${a.value.padEnd(9)} ${a.scopeKind}${a.scopeId ? ` ${a.scopeId}` : ''}`);
+            logger.info(`  ${a.id}  ${String(subject).padEnd(20)} ${a.capability.padEnd(16)} ${a.value.padEnd(9)} ${a.scopeKind}${a.scopeId ? ` ${a.scopeId}` : ''}${a.scopeNote ? `  (${a.scopeNote})` : ''}`);
           }
         }
         break;

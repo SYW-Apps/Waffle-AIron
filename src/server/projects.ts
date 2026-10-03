@@ -3,7 +3,7 @@ import * as path from 'path';
 import { aiPathsAt } from '../config/paths.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { listFilesRecursive, runWithProjectRoot } from '../utils/fs.js';
-import { resolveContainedProjectPath, loadProjectConfig } from './adapters/core.js';
+import { resolveContainedProjectPath, loadProjectConfig, loadSubsystemSpecs } from './adapters/core.js';
 import { declaredMembers, effectiveProjectId } from '../models/project.js';
 import * as projectStore from './project-store.js';
 import type {
@@ -116,6 +116,23 @@ export function existingProjectRoot(dataDir: string, id: string): string | null 
   const records = load(dataDir);
   const rec = records.find((r) => r.id === id);
   return rec ? derivedRoot(records, rec) : null;
+}
+
+/**
+ * project_index.declaredSubsystems — the subsystem ids a record's spec tree
+ * declares now, each its local id (a part's subsystems included: they are the
+ * record's own; a member's are its own record's, so they are left out), read at
+ * the record's root; null for an id with no root on disk.
+ */
+export function declaredSubsystemIds(dataDir: string, id: string): string[] | null {
+  if (!isValidProjectId(id)) return null;
+  const records = load(dataDir);
+  const rec = records.find((r) => r.id === id);
+  const root = rec ? derivedRoot(records, rec) : null;
+  if (!root || !fs.existsSync(root)) return null;
+  return runWithProjectRoot(root, () => loadSubsystemSpecs())
+    .map((s) => s.id)
+    .filter((key) => !key.includes('::'));
 }
 
 /** Allocate an isolated root, create its directory, and persist the record. */

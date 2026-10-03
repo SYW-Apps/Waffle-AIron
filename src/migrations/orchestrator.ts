@@ -5,7 +5,7 @@ import * as membership from './membership.js';
 import * as identity from './identity.js';
 import * as boundary from './boundary.js';
 import * as transaction from './transaction.js';
-import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithHostedLookup, runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, getWriteReach, runWithHostedLookup, runWithProjectBinding, runWithProjectRoot, writeReachDenials } from '../utils/fs.js';
 import type { ChainingMigrationPlan } from './chaining-migration.js';
 import type { ProjectFamily } from '../models/project-family.js';
 import {
@@ -181,14 +181,20 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
   }
   // Step 15: the copy's difference from the live family.
   const changes = transaction.diff(rehearsal);
-  // A hosted request may write only the family records it may write: a plan
-  // that must write any other refuses family-partial, naming it.
-  const outside = unwritableOwners(changes);
-  if (outside.length > 0) {
+  // Steps 16-18: a hosted request may write only the family records it may
+  // write, and a family migration reshapes its projects whole: a plan that must
+  // write any other refuses family-partial, and one that must change a project
+  // holding a subsystem the request may not change refuses subsystem-denied —
+  // each named, the subsystem with the rung that decided it.
+  const refused = [
+    ...unwritableOwners(changes).map((o) => ({ code: 'family-partial', project: o, detail: `the plan must write ${o}, which this request may not write` })),
+    ...deniedSubsystems(changes),
+  ];
+  if (refused.length > 0) {
     transaction.discard(rehearsal);
-    return { ...plan, refusals: [...plan.refusals, ...outside.map((o) => ({ code: 'family-partial', project: o, detail: `the plan must write ${o}, which this request may not write` }))] };
+    return { ...plan, refusals: [...plan.refusals, ...refused] };
   }
-  // Steps 16-17.
+  // Steps 19-20.
   return { ...plan, rehearsal, changes, relock: relockOf(plan, changes) };
 }
 
@@ -249,6 +255,18 @@ function unwritableOwners(changes: FileChange[]): string[] {
   if (denied.length === 0) return [];
   const owners = [...new Set(changes.map((c) => path.resolve(c.project)))];
   return owners.filter((o) => denied.includes(o));
+}
+
+/** Step 16: each subsystem of a changed owner the hosted request may not change (none outside a hosted request). */
+function deniedSubsystems(changes: FileChange[]): MigrationPlan['refusals'] {
+  const reach = getWriteReach();
+  if (!reach) return [];
+  const owners = [...new Set(changes.map((c) => path.resolve(c.project)))];
+  return owners.flatMap((o) => writeReachDenials(reach, o).map((s) => ({
+    code: 'subsystem-denied',
+    project: o,
+    detail: `the plan must change ${o}, which holds subsystem "${s.subsystemId}" this request may not change (decided by ${s.decidedBy}); a family migration reshapes its projects whole, so it needs write on every subsystem of every project it changes`,
+  })));
 }
 
 /** Step 4: the producers family projects name by a path inside the family root — a pin taken on the copy reads them there. */

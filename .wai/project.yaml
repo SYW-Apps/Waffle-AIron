@@ -1125,7 +1125,7 @@ rules:
             at: 'WebSession'
             covers:
               - 'projects'
-      # 174 finding(s), 197 unit(s).
+      # 159 finding(s), 180 unit(s).
       - kind: undecided
         why: >-
           The first measured yield of param-conformance on the signatures the contracts describe in
@@ -1628,83 +1628,6 @@ rules:
             at: 'removeProjectPack'
             covers:
               - 'name'
-          - code: PARAM_NAME_MISMATCH
-            spec: permission_admin_orchestrator_impl
-            at: 'bindRole'
-            covers:
-              - 'roleId'
-              - 'scopeKind'
-          - code: PARAM_OPTIONALITY
-            spec: permission_admin_orchestrator_impl
-            at: 'bindRole'
-            covers:
-              - 'scopeKind'
-          - code: UNDECLARED_PARAM
-            spec: permission_admin_orchestrator_impl
-            at: 'bindRole'
-            covers:
-              - 'scopeId'
-          - code: UNDECLARED_PARAM
-            spec: permission_admin_orchestrator_impl
-            at: 'createRole'
-            covers:
-              - 'role'
-          - code: UNDECLARED_PARAM
-            spec: permission_admin_orchestrator_impl
-            at: 'deleteRole'
-            covers:
-              - 'roleId'
-          - code: PARAM_NAME_MISMATCH
-            spec: permission_admin_orchestrator_impl
-            at: 'listAssignments'
-            covers:
-              - 'subjectKind'
-          - code: PARAM_OPTIONALITY
-            spec: permission_admin_orchestrator_impl
-            at: 'listAssignments'
-            covers:
-              - 'scopeKind'
-          - code: UNDECLARED_PARAM
-            spec: permission_admin_orchestrator_impl
-            at: 'listAssignments'
-            covers:
-              - 'subjectId'
-          - code: UNDECLARED_PARAM
-            spec: permission_admin_orchestrator_impl
-            at: 'listRoles'
-            covers:
-              - 'credential'
-          - code: UNDECLARED_PARAM
-            spec: permission_admin_orchestrator_impl
-            at: 'removeAssignment'
-            covers:
-              - 'assignmentId'
-          - code: UNDECLARED_PARAM
-            spec: permission_admin_orchestrator_impl
-            at: 'setAssignment'
-            covers:
-              - 'assignment'
-          - code: PARAM_NAME_MISMATCH
-            spec: permission_admin_orchestrator_impl
-            at: 'unbindRole'
-            covers:
-              - 'roleId'
-              - 'scopeKind'
-          - code: PARAM_OPTIONALITY
-            spec: permission_admin_orchestrator_impl
-            at: 'unbindRole'
-            covers:
-              - 'scopeKind'
-          - code: UNDECLARED_PARAM
-            spec: permission_admin_orchestrator_impl
-            at: 'unbindRole'
-            covers:
-              - 'scopeId'
-          - code: UNDECLARED_PARAM
-            spec: permission_admin_orchestrator_impl
-            at: 'updateRole'
-            covers:
-              - 'role'
           - code: PARAM_NAME_MISMATCH
             spec: project_ops_orchestrator_impl
             at: 'setExposurePolicy'

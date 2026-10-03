@@ -145,6 +145,59 @@ interface RequestScope {
    * hosted source is unavailable.
    */
   hostedLookup?: HostedRecordLookup;
+  /**
+   * Hosted: what the request may change — the family roots it may not write at
+   * the project rung, and the subsystems decided at their own rung. The spec
+   * writers judge every spec against it; absent outside a hosted request.
+   */
+  writeReach?: WriteReach;
+}
+
+/**
+ * One subsystem of a bound project root whose write permission was decided at
+ * its own rung (write_reach / subsystem_write_rule): every subsystem not listed
+ * is writable exactly when its root is.
+ */
+export interface SubsystemWriteRule {
+  /** The project root (a hosted record's root) the subsystem belongs to. */
+  root: string;
+  /** The subsystem's local id in that root's tree, a part's subsystems included. */
+  subsystemId: string;
+  writable: boolean;
+  /** The rung that decided it, in words a refusal can quote. */
+  decidedBy: string;
+}
+
+/** What a hosted request may change, as its binding carries it to every writer of the bound tree and its family. */
+export interface WriteReach {
+  /** Roots of family records whose project rung does not give the request project:write. */
+  unwritableRoots: string[];
+  /** The subsystems decided at their own rung, writable or not. */
+  subsystems: SubsystemWriteRule[];
+}
+
+const sameRoot = (a: string, b: string): boolean => path.resolve(a) === path.resolve(b);
+
+/**
+ * write_reach.permits — whether a spec owned by this subsystem of this root
+ * (null for a spec of no subsystem: the L0, a system-level type, project
+ * configuration) may be changed: a subsystem decided at its own rung answers
+ * with its own writable; anything else is writable exactly when its root is.
+ */
+export function writeReachPermits(reach: WriteReach, root: string, subsystemId: string | null): boolean {
+  const own = subsystemId === null ? undefined : reach.subsystems.find((s) => s.subsystemId === subsystemId && sameRoot(s.root, root));
+  if (own) return own.writable;
+  return !reach.unwritableRoots.some((r) => sameRoot(r, root));
+}
+
+/** write_reach.denials — the subsystems of this root the request may not change. */
+export function writeReachDenials(reach: WriteReach, root: string): SubsystemWriteRule[] {
+  return reach.subsystems.filter((s) => !s.writable && sameRoot(s.root, root));
+}
+
+/** The write reach of the current hosted request, or null outside one. */
+export function getWriteReach(): WriteReach | null {
+  return requestRootStore.getStore()?.writeReach ?? null;
 }
 
 /** A hosted record id to the root of a record the request may read; null for any other id. */
@@ -174,7 +227,7 @@ export function runWithProjectRoot<T>(dir: string, fn: () => T): T {
 /** Bind a hosted request's root together with its reach (see RequestScope). */
 export function runWithProjectBinding<T>(
   dir: string,
-  reach: { topRoot: string; parentReach: boolean; narrowed?: boolean; unwritableRoots?: string[]; hostedLookup?: HostedRecordLookup },
+  reach: { topRoot: string; parentReach: boolean; narrowed?: boolean; unwritableRoots?: string[]; hostedLookup?: HostedRecordLookup; writeReach?: WriteReach },
   fn: () => T,
 ): T {
   return requestRootStore.run(
@@ -183,6 +236,7 @@ export function runWithProjectBinding<T>(
       ...(reach.narrowed ? { narrowed: true } : {}),
       ...(reach.unwritableRoots ? { unwritableRoots: reach.unwritableRoots.map((r) => path.resolve(r)) } : {}),
       ...(reach.hostedLookup ? { hostedLookup: reach.hostedLookup } : {}),
+      ...(reach.writeReach ? { writeReach: reach.writeReach } : {}),
     },
     fn,
   );

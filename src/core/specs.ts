@@ -15,7 +15,7 @@ import {
   type ExternalDeclaration,
   type ExternalSource,
 } from '../models/project.js';
-import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup } from '../utils/fs.js';
+import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, type WriteReach } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, type LockRecord } from './lockfile.js';
@@ -233,6 +233,61 @@ export class PartReadOnly extends WaironError {
     super(message);
     this.name = 'PartReadOnly';
   }
+}
+
+/** The kinds of spec document the store writes. */
+type SpecDocumentKind = 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' | 'group';
+
+/**
+ * Thrown inside a hosted request when a write would change a spec of a
+ * subsystem the request may not change (a hosted subsystem rule), or a spec of
+ * no subsystem when the request may not write the project — before anything is
+ * written, naming every subsystem the write would have touched and the rung
+ * that decided each.
+ */
+export class SubsystemWriteDenied extends WaironError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SubsystemWriteDenied';
+  }
+}
+
+/** One owner a spec write lands in: a project root and the subsystem owning the spec (null: none). */
+export interface SpecWriteOwner {
+  root: string;
+  /** The project's id, for the refusal's wording. */
+  project: string;
+  subsystemId: string | null;
+}
+
+/** The owners the write reach refuses, in words; empty when every owner is permitted. */
+function deniedOwners(reach: WriteReach, owners: SpecWriteOwner[]): string[] {
+  const seen = new Set<string>();
+  const denied: string[] = [];
+  for (const o of owners) {
+    const key = `${path.resolve(o.root)}|${o.subsystemId ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (writeReachPermits(reach, o.root, o.subsystemId)) continue;
+    const rule = o.subsystemId === null ? undefined
+      : reach.subsystems.find((s) => s.subsystemId === o.subsystemId && path.resolve(s.root) === path.resolve(o.root));
+    denied.push(o.subsystemId === null
+      ? `project "${o.project}" itself (a spec of no subsystem, decided at the project rung)`
+      : `subsystem "${o.subsystemId}" of project "${o.project}" (decided by ${rule?.decidedBy ?? 'the project rung'})`);
+  }
+  return denied;
+}
+
+/** Refuse, writing nothing, when the current hosted request may not change every owner named. Outside a hosted request nothing is judged. */
+export function assertSpecWritesPermitted(owners: SpecWriteOwner[], what: string): void {
+  const reach = getWriteReach();
+  if (!reach) return;
+  const denied = deniedOwners(reach, owners);
+  if (denied.length === 0) return;
+  throw new SubsystemWriteDenied(
+    `SubsystemWriteDenied: ${what} would change ${denied.length === 1 ? 'a spec' : 'specs'} this request may not change — `
+    + `${denied.join('; ')}. Nothing was written.`,
+  );
 }
 
 /**
@@ -3255,6 +3310,98 @@ export class SpecWorkspace {
   }
 
   /**
+   * spec_registry.save step 5 / delete step 2: inside a hosted request, may the
+   * request change this spec? Judged against the request's write reach with the
+   * home's project root and the spec's owning subsystem — the document written
+   * and, when a stored document is replaced or removed, the one stored (a
+   * component moved out of a subsystem changes that subsystem too). Outside a
+   * hosted request nothing is judged.
+   */
+  private assertHomeInReach(file: string, kind: SpecDocumentKind, document: unknown): void {
+    if (!getWriteReach()) return;
+    const raw = this.homeRootOf(file);
+    const owners: SpecWriteOwner[] = [];
+    if (document !== null) owners.push(this.documentOwner(raw, kind, document));
+    if (pathExists(file)) {
+      try {
+        owners.push(this.documentOwner(raw, kind, readSpecFile(file)));
+      } catch {
+        // An unreadable stored document names no owner beyond the one written.
+      }
+    }
+    assertSpecWritesPermitted(owners, `writing ${kind} spec ${path.basename(path.dirname(file))}/${path.basename(file)}`);
+  }
+
+  /** The project root a spec file is homed under: the root whose specs folder, or one of whose parts' folders, holds it (deepest wins). */
+  private homeRootOf(file: string): { dir: string; namespace: string; project: string } {
+    this.scanAll();
+    let best: RawRoot | undefined;
+    let depth = -1;
+    for (const raw of this.cachedRawRoots) {
+      const homes = [aiPathsAt(raw.dir).specsDir(), ...raw.record.parts.map((p) => p.directory).filter((d): d is string => d !== undefined)];
+      for (const home of homes) {
+        if (isWithin(home, file) && path.resolve(home).length > depth) {
+          best = raw;
+          depth = path.resolve(home).length;
+        }
+      }
+    }
+    if (!best) return { dir: this.rootDir, namespace: '', project: path.basename(this.rootDir) };
+    return { dir: best.dir, namespace: best.record.namespace, project: idOf(best) ?? (best.record.namespace || path.basename(best.dir)) };
+  }
+
+  /**
+   * The owner of one spec DOCUMENT as stored in its root (its references local
+   * to that root): a subsystem is its own, a component or type names its
+   * subsystem, an interface or implementation follows its component; the L0, a
+   * system-level type and a type group belong to no subsystem.
+   */
+  private documentOwner(root: { dir: string; namespace: string; project: string }, kind: SpecDocumentKind, document: unknown): SpecWriteOwner {
+    const doc = (document ?? {}) as Record<string, unknown>;
+    const local = (v: unknown): string | null => (typeof v === 'string' && v ? splitNamespace(v).localId : null);
+    const key = (v: unknown): string | null => (typeof v === 'string' && v ? keyIn(root.namespace, splitNamespace(v).localId) : null);
+    let subsystemId: string | null = null;
+    if (kind === 'subsystem') subsystemId = local(doc.id);
+    else if (kind === 'component' || kind === 'type') subsystemId = local(doc.subsystem);
+    else if (kind === 'interface') subsystemId = this.componentSubsystem(key(doc.component));
+    else if (kind === 'implementation') {
+      const contract = key(doc.contract);
+      subsystemId = this.componentSubsystem(contract ? this.loadInterfaceSpec(contract)?.component ?? null : null);
+    }
+    return { root: root.dir, project: root.project, subsystemId };
+  }
+
+  /** The local id of a component's subsystem, by the component's key; null when no such component is stored. */
+  private componentSubsystem(componentKey: string | null): string | null {
+    if (!componentKey) return null;
+    const subsystem = this.loadComponentSpec(componentKey)?.subsystem;
+    return subsystem ? splitNamespace(subsystem).localId : null;
+  }
+
+  /**
+   * The owner of one IN-MEMORY spec (its references keys, as the loader binds
+   * them) — what a multi-spec write (a rename, a method move) judges before its
+   * first write. `staged` answers a spec the write itself creates.
+   */
+  specOwner(kind: string, spec: { id?: string; subsystem?: string; component?: string; contract?: string } | null, staged?: (kind: string, id: string) => { component?: string } | undefined): SpecWriteOwner {
+    this.scanAll();
+    const id = kind === 'system' ? '' : String(spec?.id ?? '');
+    const namespace = (kind === 'system' ? '' : this.ownerKeyOf(id)) ?? '';
+    const raw = this.cachedRawRoots.find((r) => r.record.namespace === namespace);
+    const root = raw ? { dir: raw.dir, project: idOf(raw) ?? (namespace || path.basename(raw.dir)) } : { dir: this.rootDir, project: path.basename(this.rootDir) };
+    const localOfKey = (v: string | undefined | null): string | null => (v ? splitNamespace(v).localId : null);
+    let subsystemId: string | null = null;
+    if (kind === 'subsystem') subsystemId = localOfKey(id);
+    else if (kind === 'component' || kind === 'type') subsystemId = localOfKey(spec?.subsystem);
+    else if (kind === 'interface') subsystemId = this.componentSubsystem(spec?.component ?? null);
+    else if (kind === 'implementation' && spec?.contract) {
+      const component = this.loadInterfaceSpec(spec.contract)?.component ?? staged?.('interface', spec.contract)?.component ?? null;
+      subsystemId = this.componentSubsystem(component);
+    }
+    return { root: root.dir, project: root.project, subsystemId };
+  }
+
+  /**
    * The key one spec file is approved under (stage 8): its path from the bound
    * root, POSIX — or, for a part's file, `members/<alias>/<path inside the
    * part>`, so moving a part's storage changes no key.
@@ -3265,14 +3412,16 @@ export class SpecWorkspace {
   }
 
   /** The file store's write, at a home the writer resolved — a part's folder included, a git part's refused. */
-  private writeHome(file: string, document: unknown): void {
+  private writeHome(file: string, document: unknown, kind: SpecDocumentKind): void {
     this.assertHomeWritable(file);
+    this.assertHomeInReach(file, kind, document);
     writeSpecFile(file, document);
   }
 
   /** The file store's delete, pruning up to the specs folder the file lives in (its part's, for a part's file). */
-  private removeHome(file: string): boolean {
+  private removeHome(file: string, kind: SpecDocumentKind): boolean {
     this.assertHomeWritable(file);
+    this.assertHomeInReach(file, kind, null);
     const part = this.partHolding(file)?.part;
     return removeSpecFile(file, part?.directory ? aiPathsAt(part.directory).specsDir() : this.paths.specsDir());
   }
@@ -3676,6 +3825,8 @@ export class SpecWorkspace {
 
   saveSystemSpec(spec: SystemSpec): void {
     const p = this.paths.specsSystem();
+    // The L0 belongs to no subsystem: inside a hosted request it is judged at the project rung.
+    this.assertHomeInReach(p, 'system', spec);
     ensureDir(path.dirname(p));
     writeSpecFile(p, parseOrThrow(SystemSpecSchema, spec, 'system', spec.name));
     invalidateSpecCache();
@@ -3862,13 +4013,13 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    this.writeHome(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id));
+    this.writeHome(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id), 'subsystem');
     invalidateSpecCache();
   }
 
   deleteSubsystemSpec(id: string): boolean {
     const p = this.getSubsystemPath(id);
-    if (!this.removeHome(p)) return false;
+    if (!this.removeHome(p, 'subsystem')) return false;
     invalidateSpecCache();
     return true;
   }
@@ -3945,7 +4096,7 @@ export class SpecWorkspace {
       );
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    this.writeHome(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id));
+    this.writeHome(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id), 'component');
     invalidateSpecCache();
     // Keep the physical layout in sync with ownership: nest owned members under
     // their pattern, and move anything an `owns` change has displaced.
@@ -3955,7 +4106,7 @@ export class SpecWorkspace {
 
   deleteComponentSpec(id: string): boolean {
     const p = this.getComponentPath(id);
-    if (!this.removeHome(p)) return false;
+    if (!this.removeHome(p, 'component')) return false;
     invalidateSpecCache();
     return true;
   }
@@ -4098,14 +4249,14 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    this.writeHome(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id));
+    this.writeHome(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id), 'interface');
     invalidateSpecCache();
     return notices;
   }
 
   deleteInterfaceSpec(id: string): boolean {
     const p = this.getInterfacePath(id);
-    if (!this.removeHome(p)) return false;
+    if (!this.removeHome(p, 'interface')) return false;
     invalidateSpecCache();
     return true;
   }
@@ -4164,14 +4315,14 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    this.writeHome(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id));
+    this.writeHome(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id), 'implementation');
     invalidateSpecCache();
     return notices;
   }
 
   deleteImplementationSpec(id: string): boolean {
     const p = this.getImplementationPath(id);
-    if (!this.removeHome(p)) return false;
+    if (!this.removeHome(p, 'implementation')) return false;
     invalidateSpecCache();
     return true;
   }
@@ -4230,7 +4381,7 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    this.writeHome(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id));
+    this.writeHome(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id), 'type');
     invalidateSpecCache();
     return notices;
   }
@@ -4238,7 +4389,7 @@ export class SpecWorkspace {
   deleteTypeSpec(id: string): boolean {
     const spec = this.loadTypeSpec(id);
     const p = this.getTypePath(id, spec?.subsystem, spec?.group);
-    if (!this.removeHome(p)) return false;
+    if (!this.removeHome(p, 'type')) return false;
     invalidateSpecCache();
     return true;
   }
@@ -4267,13 +4418,13 @@ export class SpecWorkspace {
       specToWrite.createdAt = existing.createdAt;
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    this.writeHome(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id));
+    this.writeHome(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id), 'group');
     invalidateSpecCache();
   }
 
   deleteGroupSpec(id: string): boolean {
     const p = this.getGroupPath(id);
-    if (!this.removeHome(p)) return false;
+    if (!this.removeHome(p, 'group')) return false;
     invalidateSpecCache();
     return true;
   }
@@ -4475,7 +4626,7 @@ export class SpecWorkspace {
       );
     }
     if (JSON.stringify(document) === JSON.stringify(stored)) return false;
-    this.writeHome(file, document);
+    this.writeHome(file, document, kind as SpecDocumentKind);
     invalidateSpecCache();
     return true;
   }
@@ -5788,6 +5939,12 @@ export class SpecWorkspace {
     // editable without disturbing its formatting, before anything is written.
     const carried = projectConfigRepository.rekeyCarried(rename, true);
 
+    // Inside a hosted request, every spec the move would write — the source,
+    // the target, what it creates and every referrer it retargets — is judged
+    // against the write reach together, before the first write; the debt
+    // register is project configuration, judged at the project rung.
+    this.assertMoveInReach(from, to, plan, carried.length > 0);
+
     // Step 15: the caller wanted the write.
     if (dryRun) {
       // Step 16: the edits it would have made, and not one byte moved.
@@ -5817,6 +5974,15 @@ export class SpecWorkspace {
         + `${mentions.length ? `, ${mentions.length} still naming the old home in prose or on the wire` : ''}.`,
       dryRun: false, mentions, created: plan.created, carried,
     };
+  }
+
+  /** Refuse a method move, naming every subsystem it may not change, before anything is written. */
+  private assertMoveInReach(from: string, to: string, plan: MethodMovePlan, rekeysRegister: boolean): void {
+    if (!getWriteReach()) return;
+    const staged = (kind: string, id: string): { component?: string } | undefined => plan.edits.get(`${kind}:${id}`)?.after;
+    const owners = [...plan.edits.values()].flatMap((e) => [e.before, e.after].filter((s) => s !== null && s !== undefined).map((s) => this.specOwner(e.kind, s, staged)));
+    if (rekeysRegister) owners.push(this.specOwner('system', null));
+    assertSpecWritesPermitted(owners, `moving methods from "${from}" to "${to}"`);
   }
 
   /**
@@ -7113,6 +7279,23 @@ export function normalizeReferences(kind: string, id: string): boolean {
 /** spec_loader.rewriteReferences — forwarded 1:1 to the registry write face. */
 export function rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean {
   return current().respellReferences(kind, id, edits);
+}
+
+/**
+ * Inside a hosted request, judge every spec a multi-spec write would change —
+ * by kind and id, as the loader keys them — against the request's write reach
+ * before the first write, refusing (SubsystemWriteDenied) with every subsystem
+ * it may not change named. `projectRung` adds a write of project configuration
+ * (the debt register). Outside a hosted request nothing is judged.
+ */
+export function assertSpecsInReach(targets: { kind: string; id: string }[], what: string, projectRung = false): void {
+  if (!getWriteReach()) return;
+  const ws = current();
+  const writable = ['system', 'subsystem', 'component', 'interface', 'implementation', 'type'];
+  const owners = targets.map((t) => ws.specOwner(t.kind, t.kind === 'system' ? null
+    : (writable.includes(t.kind) ? ws.load(t.kind as WritableSpecKind, t.id) as { id: string } | null : null) ?? { id: t.id }));
+  if (projectRung) owners.push(ws.specOwner('system', null));
+  assertSpecWritesPermitted(owners, what);
 }
 
 export function moveMethods(
