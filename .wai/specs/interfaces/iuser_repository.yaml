@@ -7,73 +7,38 @@ component: user_repository
 methods:
   - name: getById
     description: Return one hosted user by Wairon user id or null when absent.
-    signature: 'getById(id: string): HostedUserRecord | null'
-    returns: HostedUserRecord | null
-    params:
-      - name: id
-        type: string
+    signatureFrom: user_index.getById
   - name: findByExternalSubject
     description: Return one hosted user by external issuer subject or null when absent.
-    signature: 'findByExternalSubject(issuer: string, externalSubject: string): HostedUserRecord | null'
-    returns: HostedUserRecord | null
-    params:
-      - name: issuer
-        type: string
-      - name: externalSubject
-        type: string
+    signatureFrom: user_index.findByExternalSubject
   - name: list
     description: >-
       List hosted users for admin UI and audit investigation workflows, optionally narrowed by
       status. There is no project filter: project membership is a permission-grid question the
       identity orchestrator answers.
-    signature: 'list(status?: string): HostedUserRecord[]'
-    returns: HostedUserRecord[]
-    params:
-      - name: status
-        type: string
-        optional: true
+    signatureFrom: user_index.list
   - name: upsert
     description: Create or update a hosted user through the repository facade.
-    signature: 'upsert(record: HostedUserRecord): HostedUserRecord'
-    returns: HostedUserRecord
-    params:
-      - name: record
-        type: HostedUserRecord
+    signatureFrom: user_registry.upsert
     guarantees:
       - atomic
   - name: setStatus
     description: Set a user's lifecycle status through the repository facade.
-    signature: 'setStatus(id: string, status: string): HostedUserRecord'
-    returns: HostedUserRecord
-    params:
-      - name: id
-        type: string
-      - name: status
-        type: string
+    signatureFrom: user_registry.setStatus
     guarantees:
       - atomic
   - name: remapUnitReferences
     description: >-
       Facade: rewrite/clear user home units and role-binding scopes for a unit rename/move/cascade
       through the registry.
-    signature: 'remapUnitReferences(remap: UnitIdRemap[], removedScopeIds: string[]): void'
-    returns: void
-    params:
-      - name: remap
-        type: UnitIdRemap[]
-      - name: removedScopeIds
-        type: string[]
+    signatureFrom: user_registry.remapUnitReferences
     guarantees:
       - atomic
   - name: findByRecordOrSubjectId
     description: >-
       Resolve one hosted user by record id OR the record's subject userId — an exact record-id match
       wins; null when absent under both.
-    signature: 'findByRecordOrSubjectId(id: string): HostedUserRecord | null'
-    returns: HostedUserRecord | null
-    params:
-      - name: id
-        type: string
+    signatureFrom: user_index.findByRecordOrSubjectId
 status: complete
 createdAt: '2026-07-08T20:16:35.931Z'
-updatedAt: '2026-10-03T20:54:10.955Z'
+updatedAt: '2026-10-03T21:11:03.245Z'

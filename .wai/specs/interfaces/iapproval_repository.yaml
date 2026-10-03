@@ -5,11 +5,7 @@ component: approval_repository
 methods:
   - name: create
     description: Persist a new pending approval request with a redacted payload summary.
-    signature: 'create(request: ApprovalRequest): ApprovalRequest'
-    returns: ApprovalRequest
-    params:
-      - name: request
-        type: ApprovalRequest
+    signatureFrom: approval_registry.create
     guarantees:
       - atomic
   - name: decide
@@ -17,80 +13,37 @@ methods:
       Record an approval or denial decision for a pending approval request. The decision's decidedBy
       MUST differ from the request's requestedBy and the decider must hold an approval-capable
       grant; any self-approval attempt is rejected.
-    signature: 'decide(decision: ApprovalDecision): ApprovalRequest'
-    returns: ApprovalRequest
-    params:
-      - name: decision
-        type: ApprovalDecision
+    signatureFrom: approval_registry.decide
     guarantees:
       - atomic
   - name: getById
     description: Return one approval request by id, or null when absent.
-    signature: 'getById(id: string): ApprovalRequest | null'
-    returns: ApprovalRequest | null
-    params:
-      - name: id
-        type: string
+    signatureFrom: approval_index.getById
   - name: list
     description: List approval requests filtered by status, project, requester, or action kind.
-    signature: >-
-      list(status?: string, projectId?: string, requestedByUserId?: string, kind?: string):
-      ApprovalRequest[]
-    returns: ApprovalRequest[]
-    params:
-      - name: status
-        type: string
-        optional: true
-      - name: projectId
-        type: string
-        optional: true
-      - name: requestedByUserId
-        type: string
-        optional: true
-      - name: kind
-        type: string
-        optional: true
+    signatureFrom: approval_index.list
   - name: markCompleted
     description: >-
       Mark an approved request completed after the privileged workflow has executed successfully,
       recording the workflow's executionSummary on it when one is given (an executed project:init
       states what it applied).
-    signature: 'markCompleted(id: string, executionSummary?: string): ApprovalRequest'
-    returns: ApprovalRequest
-    params:
-      - name: id
-        type: string
-      - name: executionSummary
-        type: string
-        description: What the executed workflow changed, recorded on the completed request
-        optional: true
+    signatureFrom: approval_registry.markCompleted
     guarantees:
       - atomic
   - name: expirePending
     description: >-
       Expire pending approval requests older than their expiresAt timestamp and return the number
       expired.
-    signature: 'expirePending(now: string): number'
-    returns: number
-    params:
-      - name: now
-        type: string
+    signatureFrom: approval_registry.expirePending
   - name: cancel
     description: >-
       Cancel an approved request whose privileged workflow refused because the request no longer
       describes what would be done (a project:lock whose pinned gate identity moved), recording the
       reason on it as its executionSummary. Only an approved request may be cancelled; a cancelled
       request is never executed.
-    signature: 'cancel(id: string, reason: string): ApprovalRequest'
-    returns: ApprovalRequest
-    params:
-      - name: id
-        type: string
-      - name: reason
-        type: string
-        description: Why the approved request can no longer execute, recorded on the cancelled request
+    signatureFrom: approval_registry.cancel
     guarantees:
       - atomic
 status: complete
 createdAt: '2026-07-09T07:19:42.563Z'
-updatedAt: '2026-10-03T20:53:53.532Z'
+updatedAt: '2026-10-03T21:09:39.106Z'

@@ -1649,6 +1649,15 @@ export const SurfaceTypeDefSchema = z.object({
     description: z.string().optional(),
     optional: z.boolean().optional(),
   })).default([]),
+  /** A signature's parameters (name, type, optional, description) in declared order; only on kind signature. */
+  params: z.array(z.object({
+    name: z.string(),
+    type: z.string(),
+    description: z.string().optional(),
+    optional: z.boolean().optional(),
+  })).optional(),
+  /** A signature's one output type; only on kind signature. */
+  returns: z.string().optional(),
 });
 export type SurfaceTypeDef = z.infer<typeof SurfaceTypeDefSchema>;
 

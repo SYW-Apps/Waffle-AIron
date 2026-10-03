@@ -5,89 +5,45 @@ component: organization_repository
 methods:
   - name: listUnits
     description: List organization units, optionally below a parent unit.
-    signature: 'listUnits(parentId?: string): OrganizationUnitRecord[]'
-    returns: OrganizationUnitRecord[]
-    params:
-      - name: parentId
-        type: string
-        optional: true
+    signatureFrom: organization_index.listUnits
   - name: placeProject
     description: Create or update a project placement inside an organization unit.
-    signature: 'placeProject(placement: ProjectPlacement): ProjectPlacement'
-    returns: ProjectPlacement
-    params:
-      - name: placement
-        type: ProjectPlacement
+    signatureFrom: organization_registry.placeProject
     guarantees:
       - atomic
   - name: listPlacements
     description: List project placements by project id or organization unit id.
-    signature: 'listPlacements(projectId?: string, unitId?: string): ProjectPlacement[]'
-    returns: ProjectPlacement[]
-    params:
-      - name: projectId
-        type: string
-        optional: true
-      - name: unitId
-        type: string
-        optional: true
+    signatureFrom: organization_index.listPlacements
   - name: getUnit
     description: Return one organization unit by id, or null when absent.
-    signature: 'getUnit(id: string): OrganizationUnitRecord | null'
-    returns: OrganizationUnitRecord | null
-    params:
-      - name: id
-        type: string
+    signatureFrom: organization_index.getUnit
   - name: createUnit
     description: >-
       Facade: create one organization unit through the registry (qualified-id computation and
       collision rejection happen there).
-    signature: 'createUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
-    returns: OrganizationUnitRecord
-    params:
-      - name: unit
-        type: OrganizationUnitRecord
+    signatureFrom: organization_registry.createUnit
     guarantees:
       - atomic
   - name: updateUnit
     description: >-
       Facade: update one organization unit's metadata through the registry (slug/parent changes are
       rejected there — use reparentUnit).
-    signature: 'updateUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord'
-    returns: OrganizationUnitRecord
-    params:
-      - name: unit
-        type: OrganizationUnitRecord
+    signatureFrom: organization_registry.updateUnit
     guarantees:
       - atomic
   - name: reparentUnit
     description: >-
       Facade: move a unit's subtree under a new parent through the registry, returning the old->new
       qualified-id remap for every moved unit.
-    signature: 'reparentUnit(unitId: string, newParentId?: string): UnitIdRemap[]'
-    returns: UnitIdRemap[]
-    params:
-      - name: unitId
-        type: string
-      - name: newParentId
-        type: string
-        optional: true
+    signatureFrom: organization_registry.reparentUnit
     guarantees:
       - atomic
   - name: deleteUnit
     description: 'Facade: delete one empty organization unit through the registry.'
-    signature: 'deleteUnit(unitId: string): void'
-    returns: void
-    params:
-      - name: unitId
-        type: string
+    signatureFrom: organization_registry.deleteUnit
   - name: deletePlacement
     description: 'Facade: remove one project placement through the registry.'
-    signature: 'deletePlacement(placementId: string): void'
-    returns: void
-    params:
-      - name: placementId
-        type: string
+    signatureFrom: organization_registry.deletePlacement
 status: complete
 createdAt: '2026-07-08T21:13:09.955Z'
-updatedAt: '2026-10-03T20:54:01.077Z'
+updatedAt: '2026-10-03T21:09:56.240Z'

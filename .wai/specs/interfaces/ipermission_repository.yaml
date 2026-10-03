@@ -7,64 +7,28 @@ component: permission_repository
 methods:
   - name: setAssignment
     description: 'Facade: upsert one assignment through the registry.'
-    signature: 'setAssignment(assignment: PermissionAssignment): PermissionAssignment'
-    returns: PermissionAssignment
-    params:
-      - name: assignment
-        type: PermissionAssignment
+    signatureFrom: permission_registry.setAssignment
     guarantees:
       - atomic
   - name: removeAssignment
     description: 'Facade: remove one assignment through the registry.'
-    signature: 'removeAssignment(assignmentId: string): void'
-    returns: void
-    params:
-      - name: assignmentId
-        type: string
+    signatureFrom: permission_registry.removeAssignment
   - name: remapScope
     description: 'Facade: remap assignment scopes through the registry after a unit rename/move.'
-    signature: 'remapScope(remap: UnitIdRemap[]): void'
-    returns: void
-    params:
-      - name: remap
-        type: UnitIdRemap[]
+    signatureFrom: permission_registry.remapScope
     guarantees:
       - atomic
   - name: listAssignments
     description: 'Facade: list assignments through the index.'
-    signature: >-
-      listAssignments(scopeIds?: string[], subjectKind?: string, subjectId?: string, capability?:
-      string): PermissionAssignment[]
-    returns: PermissionAssignment[]
-    params:
-      - name: scopeIds
-        type: string[]
-        optional: true
-      - name: subjectKind
-        type: string
-        optional: true
-      - name: subjectId
-        type: string
-        optional: true
-      - name: capability
-        type: string
-        optional: true
+    signatureFrom: permission_index.listAssignments
   - name: removeAssignmentsForScopes
     description: 'Facade: remove all assignments scoped to a cascade-deleted subtree through the registry.'
-    signature: 'removeAssignmentsForScopes(scopeIds: string[]): void'
-    returns: void
-    params:
-      - name: scopeIds
-        type: string[]
+    signatureFrom: permission_registry.removeAssignmentsForScopes
     guarantees:
       - atomic
   - name: getAssignment
     description: 'Facade: look up one assignment by id through the index.'
-    signature: 'getAssignment(assignmentId: string): PermissionAssignment | null'
-    returns: PermissionAssignment | null
-    params:
-      - name: assignmentId
-        type: string
+    signatureFrom: permission_index.getAssignment
 status: complete
 createdAt: '2026-07-15T20:28:03.138Z'
-updatedAt: '2026-10-03T20:54:03.792Z'
+updatedAt: '2026-10-03T21:10:00.099Z'

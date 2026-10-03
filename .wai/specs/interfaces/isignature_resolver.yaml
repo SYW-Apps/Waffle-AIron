@@ -44,6 +44,6 @@ methods:
           The references the scan bound as written (every root's authored references): where an
           `alias::name` type reading lands. Omitted, a qualified type reading is matched as written
         optional: true
-status: design
+status: complete
 createdAt: '2026-10-03T19:32:09.206Z'
-updatedAt: '2026-10-03T20:28:30.887Z'
+updatedAt: '2026-10-03T21:11:49.233Z'

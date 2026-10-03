@@ -11,31 +11,19 @@ component: topology_repository
 methods:
   - name: addFreeStanding
     description: Register a domain the spec tree does not imply, and persist it. Refuses a duplicate id.
-    signature: 'addFreeStanding(domain: Domain): void'
-    returns: void
-    params:
-      - name: domain
-        type: Domain
-        description: The domain to register
+    signatureFrom: domain_registry.addFreeStanding
     effect: write
   - name: removeFreeStanding
     description: Unregister a free-standing domain and persist the removal.
-    signature: 'removeFreeStanding(id: string): void'
-    returns: void
-    params:
-      - name: id
-        type: string
-        description: The domain id to unregister
+    signatureFrom: domain_registry.removeFreeStanding
     effect: write
   - name: loadConfig
     description: >-
       The topology configuration as the file holds it, for callers that want the document rather
       than the domains in it.
-    signature: 'loadConfig(): TopologyConfig'
-    returns: TopologyConfig
-    params: []
+    signatureFrom: topology_store.loadConfig
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-20T22:05:40.864Z'
-updatedAt: '2026-09-20T23:03:41.724Z'
+updatedAt: '2026-10-03T21:10:58.948Z'

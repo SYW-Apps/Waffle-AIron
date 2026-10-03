@@ -7,46 +7,30 @@ component: role_repository
 methods:
   - name: create
     description: 'Facade: create one role through the registry.'
-    signature: 'create(role: Role): Role'
-    returns: Role
-    params:
-      - name: role
-        type: Role
+    signatureFrom: role_registry.create
     guarantees:
       - atomic
   - name: update
     description: 'Facade: update one role through the registry.'
-    signature: 'update(role: Role): Role'
-    returns: Role
-    params:
-      - name: role
-        type: Role
+    signatureFrom: role_registry.update
     guarantees:
       - atomic
   - name: delete
     description: 'Facade: delete one role through the registry.'
-    signature: 'delete(roleId: string): void'
-    returns: void
-    params:
-      - name: roleId
-        type: string
+    signatureFrom: role_registry.delete
   - name: list
     description: 'Facade: list roles through the index.'
-    signature: 'list(): Role[]'
-    returns: Role[]
-    params: []
+    signatureFrom: role_index.list
   - name: effective
     description: >-
       The effective role set permission rules walk: the intrinsic built-in roles merged over the
       stored admin-defined ones (forwarded to the index). Built-ins are code constants, never stored
       rows, so a binding to one always resolves; a stored row carrying a reserved id never shadows
       the built-in definition.
-    signature: 'effective(): Role[]'
-    returns: Role[]
-    params: []
+    signatureFrom: role_index.effective
     effect: read
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-15T20:27:40.646Z'
-updatedAt: '2026-10-03T17:57:08.974Z'
+updatedAt: '2026-10-03T21:10:32.256Z'

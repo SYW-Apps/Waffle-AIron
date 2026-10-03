@@ -106,7 +106,23 @@ function typeShape(snapshot: SurfaceSnapshot, def: SurfaceTypeDef): unknown {
     kind: def.kind,
     fields: sortedBy(def.fields, (f) => f.name)
       .map((f) => ({ name: f.name, type: canonicalTypeRef(snapshot, f.type), optional: f.optional === true })),
+    // A signature's shape: its params' types and optionality in order (never their names, as a method's), and its returns.
+    ...(def.kind === 'signature'
+      ? {
+        params: (def.params ?? []).map((p) => ({ type: canonicalTypeRef(snapshot, p.type), optional: p.optional === true })),
+        returns: canonicalTypeRef(snapshot, def.returns ?? 'unknown'),
+      }
+      : {}),
   };
+}
+
+/** Every type expression a closure type names: its fields', and a signature's params' and returns. */
+function typeDefExprs(def: SurfaceTypeDef): string[] {
+  return [
+    ...def.fields.map((f) => f.type),
+    ...(def.params ?? []).map((p) => p.type),
+    ...(def.returns !== undefined ? [def.returns] : []),
+  ];
 }
 
 /**
@@ -122,7 +138,7 @@ function closureShapes(snapshot: SurfaceSnapshot, exprs: string[]): unknown[] {
     const def = byId.get(queue.shift()!);
     if (!def || seen.has(def.id)) continue;
     seen.set(def.id, def);
-    for (const field of def.fields) queue.push(...extractTypeIdentifiers(canonicalTypeRef(snapshot, field.type)));
+    for (const expr of typeDefExprs(def)) queue.push(...extractTypeIdentifiers(canonicalTypeRef(snapshot, expr)));
   }
   return [...seen.keys()].sort().map((id) => typeShape(snapshot, seen.get(id)!));
 }

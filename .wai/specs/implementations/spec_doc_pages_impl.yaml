@@ -32,21 +32,28 @@ methods:
         targetComponent: producer_core_adapter
         targetMethod: loadImplementationSpecs
       - stepNumber: 6
+        description: Load type specs, for the signature types the pages list
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
         description: Render the Mermaid component diagram
         type: call
         targetComponent: producer_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 7
-        description: >-
-          Build the root 'wairon specs' DocPage: system overview, the Mermaid code block, and the
-          optional canvas link
-        type: local
       - stepNumber: 8
         description: >-
-          Add a child DocPage per subsystem; under each, a page per component rendering its
-          interfaces and methods as tables
+          Build the root 'wairon specs' DocPage: system overview, the Mermaid code block, the
+          optional canvas link, and a section listing each signature type with its derived text
+          (type_spec.derivedSignature)
         type: local
       - stepNumber: 9
+        description: >-
+          Add a child DocPage per subsystem; under each, a page per component rendering its
+          interfaces and methods, each method with the signature text the loaded tree carries and,
+          when it names a signatureFrom, the source beside it ("from X")
+        type: local
+      - stepNumber: 10
         description: Return the DocPage tree
         type: return
         outcome: DocPage tree
@@ -75,4 +82,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T17:39:59.030Z'
-updatedAt: '2026-09-19T20:28:40.495Z'
+updatedAt: '2026-10-03T21:04:23.043Z'

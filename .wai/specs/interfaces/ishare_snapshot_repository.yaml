@@ -7,35 +7,18 @@ component: share_snapshot_repository
 methods:
   - name: put
     description: 'Facade: persist a captured snapshot through the registry.'
-    signature: 'put(snapshot: ShareSnapshot): ShareSnapshot'
-    returns: ShareSnapshot
-    params:
-      - name: snapshot
-        type: ShareSnapshot
+    signatureFrom: share_snapshot_registry.put
     guarantees:
       - atomic
   - name: get
     description: 'Facade: a captured snapshot by id through the index.'
-    signature: 'get(snapshotId: string): ShareSnapshot | null'
-    returns: ShareSnapshot | null
-    params:
-      - name: snapshotId
-        type: string
+    signatureFrom: share_snapshot_index.get
   - name: getArtifact
     description: >-
       Facade: one captured artifact of a snapshot through the index. For openapi, an optional
       portalId selects one per-portal document; with several captured specs and none selected the
       payload is an openapi_spec_index listing them, and with exactly one it is that document.
-    signature: 'getArtifact(snapshotId: string, kind: string, portalId?: string): string | null'
-    returns: string | null
-    params:
-      - name: snapshotId
-        type: string
-      - name: kind
-        type: string
-      - name: portalId
-        type: string
-        optional: true
+    signatureFrom: share_snapshot_index.getArtifact
 status: complete
 createdAt: '2026-07-17T22:29:54.324Z'
-updatedAt: '2026-07-24T09:45:19.881Z'
+updatedAt: '2026-10-03T21:10:42.581Z'

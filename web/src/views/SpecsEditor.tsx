@@ -703,11 +703,27 @@ function interfaceMethodsDelta(orig: any, draft: any): any[] {
     if (!om) continue;
     const ch: any = {};
     if (dm.description !== om.description) ch.description = dm.description;
-    if (dm.signature !== om.signature) ch.signature = dm.signature;
-    if (dm.returns !== om.returns) ch.returns = dm.returns;
+    // A method with params or a signatureFrom shows a DERIVED signature, which
+    // is never written back; only a prose method's signature is edited.
+    if (dm.signature !== om.signature && !dm.signatureFrom && !(dm.params ?? []).length) ch.signature = dm.signature;
+    if (dm.returns !== om.returns && !dm.signatureFrom) ch.returns = dm.returns;
+    if ((dm.signatureFrom ?? '') !== (om.signatureFrom ?? '')) {
+      if (dm.signatureFrom) {
+        // Adopting a source: the method states no params or returns of its own.
+        ch.signatureFrom = dm.signatureFrom;
+        if (!om.signatureFrom) ch.unset = ['params', 'returns', 'signature'];
+      } else {
+        // Dropping the source: the method keeps the signature it showed, as its own.
+        const resolved = (draft.resolvedSignatures ?? []).find((r: any) => r.method === dm.name);
+        ch.unset = ['signatureFrom'];
+        if (resolved?.params) ch.params = resolved.params;
+        ch.returns = resolved?.returns ?? dm.returns ?? 'unknown';
+        if (!resolved?.params) ch.signature = resolved?.signature ?? `${dm.name}(): ${ch.returns}`;
+      }
+    }
     if ((dm.effect ?? '') !== (om.effect ?? '') && dm.effect) ch.effect = dm.effect;
     if (!jeq(dm.guarantees ?? [], om.guarantees ?? [])) ch.guarantees = dm.guarantees ?? [];
-    if (!jeq(dm.params ?? [], om.params ?? [])) ch.params = dm.params ?? [];
+    if (!dm.signatureFrom && !om.signatureFrom && !jeq(dm.params ?? [], om.params ?? [])) ch.params = dm.params ?? [];
     if (!jeq(dm.endpoint, om.endpoint)) ch.endpoint = dm.endpoint;
     if (Object.keys(ch).length) out.push({ name: dm.name, ...ch });
   }
@@ -1140,15 +1156,20 @@ function SpecForm(props: {
                 <div key={m.name} className="sub-card">
                   <code className="subtle">{m.name}</code>
                   <Field label="Description"><TextInput value={m.description ?? ''} onChange={(v) => setArrItem('methods', i, { description: v })} /></Field>
+                  <Field label="Signature from" hint="A signature type, or a component.method this component reaches — the method then states no params or returns of its own.">
+                    <TextInput value={m.signatureFrom ?? ''} onChange={(v) => setArrItem('methods', i, { signatureFrom: v })} placeholder="e.g. billing_registry.create" />
+                  </Field>
                   <div className="row-form">
-                    <Field label="Signature"><TextInput value={m.signature ?? ''} onChange={(v) => setArrItem('methods', i, { signature: v })} /></Field>
-                    <Field label="Returns"><TextInput value={m.returns ?? ''} onChange={(v) => setArrItem('methods', i, { returns: v })} /></Field>
+                    {m.signatureFrom
+                      ? <Field label="Signature (from its source)"><TextInput value={(draft.resolvedSignatures ?? []).find((r: any) => r.method === m.name)?.signature ?? ''} onChange={() => undefined} disabled /></Field>
+                      : <Field label={(m.params ?? []).length > 0 ? 'Signature (derived from params)' : 'Signature'}><TextInput value={m.signature ?? ''} onChange={(v) => setArrItem('methods', i, { signature: v })} disabled={(m.params ?? []).length > 0} /></Field>}
+                    {!m.signatureFrom && <Field label="Returns"><TextInput value={m.returns ?? ''} onChange={(v) => setArrItem('methods', i, { returns: v })} /></Field>}
                     <Field label="Effect"><EnumSelect value={m.effect} onChange={(v) => setArrItem('methods', i, { effect: v })} options={METHOD_EFFECT} allowNone /></Field>
                   </div>
                   <Field label="Guarantees" hint="Builtin tokens plus any pack-declared ones.">
                     <TagInput values={m.guarantees ?? []} onChange={(v) => setArrItem('methods', i, { guarantees: v })} suggestions={BUILTIN_GUARANTEES} />
                   </Field>
-                  {(m.params ?? []).length > 0 && (
+                  {!m.signatureFrom && (m.params ?? []).length > 0 && (
                     <div className="stack-lg">
                       <span className="hint">Parameters</span>
                       {m.params.map((p: any, j: number) => (
@@ -1226,8 +1247,13 @@ function SpecForm(props: {
         <div className="panel stack-lg">
           <div className="row-form">
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
-            <Field label="Kind"><EnumSelect value={draft.kind} onChange={(v) => set('kind', v)} options={TYPE_KIND} /></Field>
+            <Field label="Kind"><EnumSelect value={draft.kind} onChange={(v) => set('kind', v)} options={draft.kind === 'signature' ? ['signature'] : TYPE_KIND} disabled={draft.kind === 'signature'} /></Field>
           </div>
+          {draft.kind === 'signature' && (
+            <Field label="Signature (derived from params and returns)">
+              <TextInput value={`(${(draft.params ?? []).map((p: any) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${draft.returns ?? 'unknown'}`} onChange={() => undefined} disabled />
+            </Field>
+          )}
           <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           {(draft.fields ?? []).length > 0 && (
             <div className="stack-lg">

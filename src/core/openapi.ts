@@ -107,6 +107,64 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
   return op;
 }
 
+/** The extension a signature type's component carries: its params and returns, for a wairon reader. */
+const SIGNATURE_EXTENSION = 'x-wairon-signature';
+
+/**
+ * A signature type as a component. A function type has no JSON-Schema form
+ * and no JSON value can carry a function, so the component invents no shape:
+ * no `type` constraint, a description saying what it is, and its params and
+ * returns under `x-wairon-signature`, which generic OpenAPI tools ignore.
+ */
+function signatureComponent(t: SurfaceTypeDef, closureIds: Set<string>): Record<string, unknown> {
+  const params = t.params ?? [];
+  const returns = t.returns ?? 'unknown';
+  const text = `(${params.map(p => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${returns}`;
+  return {
+    title: t.name,
+    description: `A function type ${text}. A function has no JSON form, so no JSON value of this type can be sent; its params and returns are under ${SIGNATURE_EXTENSION}.`,
+    [SIGNATURE_EXTENSION]: {
+      // Each type twice: as wairon wrote it (what a wairon reader decodes, exactly),
+      // and as a $ref or schema (what an OpenAPI reader can follow).
+      params: params.map(p => ({
+        name: p.name,
+        type: p.type,
+        schema: schemaFor(p.type, closureIds),
+        ...(p.optional ? { optional: true } : {}),
+        ...(p.description ? { description: p.description } : {}),
+      })),
+      returns: { type: returns, schema: schemaFor(returns, closureIds) },
+    },
+  };
+}
+
+/** A component carrying `x-wairon-signature` decoded back into a signature type; undefined for any other component. */
+function signatureFromComponent(id: string, schema: Record<string, unknown>): SurfaceTypeDef | undefined {
+  const raw = schema[SIGNATURE_EXTENSION];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const ext = raw as Record<string, unknown>;
+  // The wairon type text when the entry carries one; else read back from its schema
+  // (an empty schema is what any/unknown/void render as, so it decodes to unknown).
+  const typeOf = (entry: Record<string, unknown>): string => {
+    if (typeof entry.type === 'string' && entry.type.trim()) return entry.type;
+    const schema = entry.schema;
+    if (schema && typeof schema === 'object' && Object.keys(schema).length === 0) return 'unknown';
+    return typeRefFromSchema(schema as Record<string, unknown> | undefined);
+  };
+  const params = (Array.isArray(ext.params) ? ext.params : [])
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object' && typeof (p as { name?: unknown }).name === 'string')
+    .map(p => ({
+      name: p.name as string,
+      type: typeOf(p),
+      ...(p.optional === true ? { optional: true } : {}),
+      ...(typeof p.description === 'string' ? { description: p.description } : {}),
+    }));
+  const returns = ext.returns && typeof ext.returns === 'object' && !Array.isArray(ext.returns)
+    ? typeOf(ext.returns as Record<string, unknown>)
+    : 'unknown';
+  return { id, name: typeof schema.title === 'string' ? schema.title : id, kind: 'signature', fields: [], params, returns };
+}
+
 // ── Security: a Portal's auth → OpenAPI securitySchemes/security ─────────────
 
 /** Map a Portal's auth to an OpenAPI securityScheme object (null for 'none'). */
@@ -200,12 +258,14 @@ function renderDoc(
 
   const schemas: Record<string, unknown> = {};
   for (const t of snapshot.types) {
-    schemas[t.id] = {
-      type: 'object',
-      title: t.name,
-      properties: Object.fromEntries(t.fields.map(f => [f.name, schemaFor(f.type, closureIds)])),
-      required: t.fields.filter(f => !f.optional).map(f => f.name),
-    };
+    schemas[t.id] = t.kind === 'signature'
+      ? signatureComponent(t, closureIds)
+      : {
+        type: 'object',
+        title: t.name,
+        properties: Object.fromEntries(t.fields.map(f => [f.name, schemaFor(f.type, closureIds)])),
+        required: t.fields.filter(f => !f.optional).map(f => f.name),
+      };
   }
 
   const components: Record<string, unknown> = {};
@@ -400,6 +460,11 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
   const types: SurfaceTypeDef[] = [];
   const schemas = ((parsed.components as Record<string, unknown>)?.schemas ?? {}) as Record<string, Record<string, unknown>>;
   for (const [id, schema] of Object.entries(schemas)) {
+    const signature = signatureFromComponent(id, schema);
+    if (signature) {
+      types.push(signature);
+      continue;
+    }
     const props = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
     const required = new Set((schema.required as string[] | undefined) ?? []);
     types.push({

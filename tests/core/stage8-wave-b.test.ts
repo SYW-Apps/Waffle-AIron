@@ -91,7 +91,7 @@ describe('stage 8 — property: referenced-break-is-incompatible', () => {
     expect(family.valid).toBe(false);
     // The referenced member's own gate ran in the family run, under its key.
     expect((family.projects ?? []).map((p) => p.key)).toContain('ledger');
-  });
+  }, 60_000); // real git clones and a family run: slow under a full parallel suite
 
   it('a git-sourced external: its ref head is the live producer the family run compares the pin against', () => {
     const base = tempDir(cleanups, 'wairon-refgitx-');

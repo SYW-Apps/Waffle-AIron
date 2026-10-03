@@ -1320,9 +1320,11 @@ export interface HostConfig {
   /** Runtime control-plane exposure posture; the secure compatible default is
    *  resolved when omitted. */
   exposurePolicy?: HostExposurePolicy;
-  /** Advisory (observe/warn) resource quota policy; a disabled default is
-   *  resolved when omitted. Never blocks or throttles in this draft. */
-  quotaPolicy?: ResourceQuotaPolicy;
+  /** Advisory (observe/warn) resource quota policy, as overrides of the
+   *  disabled default: each field set here wins, every unset field keeps the
+   *  default (operations.ts effectiveQuotaPolicy). Set from WAIRON_QUOTA_POLICY
+   *  by the serve command. Never blocks or throttles in this draft. */
+  quotaPolicy?: Partial<ResourceQuotaPolicy>;
   /** Durable audit capture and retention policy, as overrides of the secure
    *  default: each field set here wins, every unset field keeps the default
    *  (audit.ts effectiveAuditPolicy). Set from WAIRON_AUDIT_POLICY by the serve

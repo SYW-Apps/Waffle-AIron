@@ -7,22 +7,12 @@ component: share_access_repository
 methods:
   - name: append
     description: 'Facade: append an access entry through the registry.'
-    signature: 'append(entry: ShareAccessEntry): ShareAccessEntry'
-    returns: ShareAccessEntry
-    params:
-      - name: entry
-        type: ShareAccessEntry
+    signatureFrom: share_access_registry.append
     guarantees:
       - atomic
   - name: listByLink
     description: 'Facade: list a link''s access entries through the index.'
-    signature: 'listByLink(linkId: string, limit: number): ShareAccessEntry[]'
-    returns: ShareAccessEntry[]
-    params:
-      - name: linkId
-        type: string
-      - name: limit
-        type: number
+    signatureFrom: share_access_index.listByLink
 status: complete
 createdAt: '2026-07-17T22:29:57.370Z'
-updatedAt: '2026-07-18T10:10:39.378Z'
+updatedAt: '2026-10-03T21:10:38.559Z'

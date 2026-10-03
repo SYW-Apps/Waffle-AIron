@@ -24,6 +24,7 @@ import type {
   HostConfig,
   HostExposurePolicy,
   PermissionValue,
+  ResourceQuotaPolicy,
   ScopeKind,
 } from '../server/types.js';
 import type { PackImpact } from '../models/pack-impact.js';
@@ -102,6 +103,10 @@ function resolveHostConfig(options: HostOptions): HostConfig {
   // secure default. Refused at startup when it is not one.
   const auditPolicy = process.env['WAIRON_AUDIT_POLICY'];
   if (auditPolicy !== undefined && auditPolicy.trim() !== '') cfg.auditPolicy = parseAuditPolicyEnv(auditPolicy);
+  // Advisory quota policy (optional): a JSON object of overrides laid over the
+  // disabled default. Refused at startup when it is not one.
+  const quotaPolicy = process.env['WAIRON_QUOTA_POLICY'];
+  if (quotaPolicy !== undefined && quotaPolicy.trim() !== '') cfg.quotaPolicy = parseQuotaPolicyEnv(quotaPolicy);
   return cfg;
 }
 
@@ -155,6 +160,59 @@ export function parseAuditPolicyEnv(raw: string): Partial<AuditRetentionPolicy> 
     policy[key] = value;
   }
   return policy as Partial<AuditRetentionPolicy>;
+}
+
+/** A non-negative integer limit. */
+const NON_NEGATIVE_INTEGER = {
+  expects: 'a non-negative integer',
+  accepts: (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v >= 0,
+};
+
+/** The fields WAIRON_QUOTA_POLICY may set, each with the check its value must pass. */
+const QUOTA_POLICY_FIELDS: Record<keyof ResourceQuotaPolicy, { expects: string; accepts: (v: unknown) => boolean }> = {
+  enabled: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
+  // 'block' is accepted, and evaluation still downgrades it to an observation.
+  mode: {
+    expects: 'one of "observe", "warn", "block"',
+    accepts: (v) => typeof v === 'string' && ['observe', 'warn', 'block'].includes(v),
+  },
+  maxProjectsPerUser: NON_NEGATIVE_INTEGER,
+  maxMcpRequestsPerMinute: NON_NEGATIVE_INTEGER,
+  maxProjectBytes: NON_NEGATIVE_INTEGER,
+  maxAuditEventsPerDay: NON_NEGATIVE_INTEGER,
+};
+
+/**
+ * Parse WAIRON_QUOTA_POLICY: a JSON object setting any of the quota policy's
+ * fields, each laid over the disabled default when the policy is resolved
+ * (effectiveQuotaPolicy). An unparsable value, an unknown field or a wrong
+ * type is refused with a message naming the variable, so a misspelt policy
+ * never silently runs as the default. Exported for tests.
+ */
+export function parseQuotaPolicyEnv(raw: string): Partial<ResourceQuotaPolicy> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    throw new WaironError(`WAIRON_QUOTA_POLICY is not valid JSON: ${(e as Error).message}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new WaironError('WAIRON_QUOTA_POLICY must be a JSON object of quota policy fields.');
+  }
+  const policy: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    const field = QUOTA_POLICY_FIELDS[key as keyof ResourceQuotaPolicy];
+    if (!Object.prototype.hasOwnProperty.call(QUOTA_POLICY_FIELDS, key) || !field) {
+      throw new WaironError(
+        `WAIRON_QUOTA_POLICY sets an unknown field "${key}"; the known fields are ${Object.keys(QUOTA_POLICY_FIELDS).join(', ')}.`,
+      );
+    }
+    if (!field.accepts(value)) {
+      throw new WaironError(`WAIRON_QUOTA_POLICY field "${key}" must be ${field.expects}.`);
+    }
+    policy[key] = value;
+  }
+  return policy as Partial<ResourceQuotaPolicy>;
 }
 
 function masterCredential(): string | null {
