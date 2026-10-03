@@ -280,8 +280,33 @@ methods:
       choreography reused by the identity and web planes.
     signature: 'appendAuditBestEffort(event: AuditEvent): void'
     returns: void
+  - name: auditSignIn
+    description: >-
+      Record a sign-in or sign-out event (category 'auth'), best-effort through
+      appendAuditBestEffort: the actor is the resolved subject, or none while no user is resolved
+      yet (a login start, a sign-out by session id), which records the anonymous local service
+      actor. The web plane records its browser sign-in events through it, so a sign-in event is
+      built in one place.
+    signature: >-
+      auditSignIn(actor: PrincipalSubject | null, action: string, level: string, over?: AuditEvent):
+      void
+    returns: void
+    params:
+      - name: actor
+        type: PrincipalSubject | null
+        description: The resolved subject, or null when none is resolved yet.
+      - name: action
+        type: string
+        description: The audited action, e.g. web.signin.
+      - name: level
+        type: string
+        description: The event level.
+      - name: over
+        type: AuditEvent
+        description: 'Fields laid over the event (a partial event: a target, metadata).'
+        optional: true
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-03T17:07:32.500Z'
+updatedAt: '2026-10-03T17:52:30.105Z'

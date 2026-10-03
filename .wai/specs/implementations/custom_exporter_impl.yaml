@@ -35,6 +35,7 @@ methods:
         description: Answer with where it landed and what it holds
         type: return
         outcome: written
+    exportedVia: CustomExporter
   - name: outputPath
     narrative:
       - stepNumber: 1
@@ -43,6 +44,7 @@ methods:
           agent, without writing anything
         type: return
         outcome: resolved
+    exportedVia: CustomExporter
 status: complete
 createdAt: '2026-09-20T19:46:27.069Z'
-updatedAt: '2026-09-20T19:46:27.077Z'
+updatedAt: '2026-10-03T17:52:22.238Z'

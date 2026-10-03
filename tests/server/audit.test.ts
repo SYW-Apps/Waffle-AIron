@@ -56,8 +56,13 @@ describe('audit repository (sdd_host)', () => {
 
   it('resolves the configured audit policy when the host config sets one, else the secure default', () => {
     const configured = { ...effectiveAuditPolicy(), retentionDays: 7, includeReadEvents: true };
-    expect(effectiveAuditPolicy({ auditPolicy: configured })).toBe(configured);
+    expect(effectiveAuditPolicy({ auditPolicy: configured })).toEqual(configured);
     expect(effectiveAuditPolicy({})).toEqual(effectiveAuditPolicy());
+  });
+
+  it('lays a partial configured policy over the secure default', () => {
+    const policy = effectiveAuditPolicy({ auditPolicy: { retentionDays: 30 } });
+    expect(policy).toEqual({ ...effectiveAuditPolicy(), retentionDays: 30 });
   });
 
   it('exposes the secure default audit policy', () => {

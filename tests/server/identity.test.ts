@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as identity from '../../src/server/identity.js';
-import { UnauthenticatedError, ForbiddenError } from '../../src/server/identity.js';
+import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
 import { authenticate, authenticateSession } from '../../src/server/auth.js';
 import {
   createCredential,

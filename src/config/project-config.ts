@@ -1331,7 +1331,12 @@ export function projectConfigRepositoryAt(rootDir: string): ProjectConfigReposit
   return projectConfigRepositoryOver(projectConfigFsAdapterAt(rootDir), rootDir);
 }
 
-const bound = (): ProjectConfigRepository => projectConfigRepositoryAt(getProjectRoot());
+// The ambient facade composes the same Repository as `at`, over the root
+// resolved on each call.
+const bound = (): ProjectConfigRepository => {
+  const rootDir = getProjectRoot();
+  return projectConfigRepositoryOver(projectConfigFsAdapterAt(rootDir), rootDir);
+};
 
 /**
  * The Repository bound to the ambient project root (a request's binding, else the

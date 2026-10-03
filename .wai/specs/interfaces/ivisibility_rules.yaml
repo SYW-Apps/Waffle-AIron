@@ -47,6 +47,20 @@ methods:
         type: string
     guarantees:
       - idempotent
+  - name: covers
+    description: >-
+      Whether an entry's audience ceiling covers an observer at a distance: the second half of the
+      rule audienceDistance opens. A null distance (the target is not visible through the unit
+      graph) is the farthest class, so only external entries remain visible.
+    signature: 'covers(entryAudience: string | undefined, distance: string | null): boolean'
+    returns: boolean
+    params:
+      - name: entryAudience
+        type: string | undefined
+        description: The entry's declared audience ceiling, if any.
+      - name: distance
+        type: string | null
+        description: The observer's audience distance, as audienceDistance answers it.
 status: complete
 createdAt: '2026-07-11T09:37:26.241Z'
-updatedAt: '2026-09-15T20:46:54.502Z'
+updatedAt: '2026-10-03T17:49:54.825Z'

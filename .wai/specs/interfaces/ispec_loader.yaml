@@ -293,6 +293,64 @@ methods:
         description: The alias the consumer declares the producer under
     guarantees:
       - idempotent
+  - name: subsystemPath
+    description: >-
+      The file a subsystem's spec lives in, under the bound tree: where the spec loads from and
+      saves to. Consumers that derive file ownership (agent ownedPaths) read spec locations through
+      it.
+    signature: 'subsystemPath(id: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+    effect: read
+  - name: componentPath
+    description: >-
+      The file a component's spec lives in, under the bound tree; the owning subsystem places a
+      component that is not stored yet.
+    signature: 'componentPath(id: string, subsystemId?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: subsystemId
+        type: string
+        optional: true
+    effect: read
+  - name: interfacePath
+    description: >-
+      The file an interface's spec lives in, under the bound tree; the owning component places one
+      that is not stored yet.
+    signature: 'interfacePath(id: string, componentId?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: componentId
+        type: string
+        optional: true
+    effect: read
+  - name: implementationPath
+    description: >-
+      The file an implementation's spec lives in, under the bound tree; the contract it implements
+      places one that is not stored yet.
+    signature: 'implementationPath(id: string, contractId?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: contractId
+        type: string
+        optional: true
+    effect: read
+  - name: snapshot
+    description: >-
+      The bytes of every spec file of the bound tree, keyed by path: a whole-tree read an approval
+      captures and a failed write restores.
+    signature: 'snapshot(): Map<string, string>'
+    returns: Map<string, string>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T20:47:47.208Z'
+updatedAt: '2026-10-03T17:51:20.413Z'

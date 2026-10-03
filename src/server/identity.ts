@@ -87,10 +87,8 @@ function assertNarrowingGiven(request: { projects?: unknown }): void {
   }
 }
 
-// Error classes moved to errors.ts (breaking the identity↔policy import cycle);
-// imported for local use and re-exported so existing importers keep working.
+// Error classes live in errors.ts (breaking the identity↔policy import cycle).
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-export { UnauthenticatedError, ForbiddenError };
 
 // ── authorization helpers (hierarchical permission rules) ───────────────────
 //
@@ -201,13 +199,12 @@ function buildAuditEvent(
 /** The audit actor for the unauthenticated login-start step: no user is resolved
  *  yet (the provider hasn't spoken), so the action is attributed to an anonymous
  *  local service identity — the provider it targets is carried on the event target. */
-export const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'service', issuer: 'local' };
+const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'service', issuer: 'local' };
 
 /** Build a redacted audit event for an actor SUBJECT directly (category 'auth'),
  *  for the unauthenticated SSO login pair (start/complete) which carries no
- *  Principal. Mirrors buildAuditEvent but takes the resolved subject as the actor.
- *  Exported so the web plane (web.ts) builds its web sign-in / sign-out events. */
-export function buildSsoAuditEvent(
+ *  Principal. Mirrors buildAuditEvent but takes the resolved subject as the actor. */
+function buildSsoAuditEvent(
   actor: PrincipalSubject,
   action: string,
   level: string,
@@ -223,6 +220,22 @@ export function buildSsoAuditEvent(
     actor,
     ...over,
   };
+}
+
+/**
+ * Record a sign-in or sign-out event, best-effort: the actor is the resolved
+ * subject, or null when no user is resolved yet (the login-start and sign-out
+ * steps), which records the anonymous local service actor. Category 'auth'.
+ * The web plane (web.ts) records its browser sign-in events through this.
+ */
+export function auditSignIn(
+  cfg: HostConfig,
+  actor: PrincipalSubject | null,
+  action: string,
+  level: string,
+  over: Partial<AuditEvent> = {},
+): void {
+  tryAppendAudit(cfg, buildSsoAuditEvent(actor ?? ANONYMOUS_SSO_ACTOR, action, level, over));
 }
 
 /** Append a redacted audit event, best-effort: a failure is recorded as a server

@@ -68,7 +68,7 @@ beforeEach(async () => {
   unitId = seedUnit(dataDir, 'eng').id;
   storePlacement(dataDir, { id: '', projectId: 'platform', unitId, role: 'owner', createdAt: '', createdBy: subjectOf('u-seeder') });
   fs.writeFileSync(path.join(dataDir, 'exposure-policy.json'), JSON.stringify({ webUiEnabled: true, requireTls: false }));
-  expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+  expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
   invalidateSpecCache();
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   vi.spyOn(console, 'log').mockImplementation(() => undefined);

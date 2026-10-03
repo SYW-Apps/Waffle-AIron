@@ -23,7 +23,7 @@ export const GUIDE_MARKER_END = '<!-- wairon-guide-end -->';
 // Guide content
 // ---------------------------------------------------------------------------
 
-export const GLOBAL_GUIDE_BODY = `\
+const GLOBAL_GUIDE_BODY = `\
 ## wairon — Spec-Driven Development (optional)
 
 If \`.wai/specs/\` exists, the wairon SDD workflow is active; otherwise ignore it. wairon does not orchestrate sessions — it equips yours.
@@ -93,6 +93,12 @@ export function localGuideFilePath(projectRoot: string, targetType: string): str
 // Detect / inject
 // ---------------------------------------------------------------------------
 
+/** The guide body for a scope: the global body for a user-level guide file,
+ *  the local body for a project's own. */
+export function guideBody(scope: 'global' | 'local'): string {
+  return scope === 'global' ? GLOBAL_GUIDE_BODY : LOCAL_GUIDE_BODY;
+}
+
 /**
  * Inject (or update) the wairon guide section in the given file.
  * Creates the file and any parent directories if they don't exist.
@@ -100,7 +106,7 @@ export function localGuideFilePath(projectRoot: string, targetType: string): str
 export function injectGuide(filePath: string, scope: 'global' | 'local'): void {
   // Use `wairon` literally in injected docs — never substitute a dev path. The
   // guide is documentation (the AI uses MCP tools; the human runs `wairon`).
-  const body = scope === 'global' ? GLOBAL_GUIDE_BODY : LOCAL_GUIDE_BODY;
+  const body = guideBody(scope);
   const section = `\n\n${GUIDE_MARKER_START}\n${versionStamp()}\n${body}\n${GUIDE_MARKER_END}\n`;
 
   const existing = fs.existsSync(filePath)

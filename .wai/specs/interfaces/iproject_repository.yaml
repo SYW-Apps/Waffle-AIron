@@ -128,6 +128,20 @@ methods:
         type: string
     guarantees:
       - idempotent
+  - name: admitNarrowing
+    description: >-
+      Validate one projects-narrowing entry at mint time and answer what is stored (forwarded to the
+      index): '*' and a record id as they are, a deprecated member-qualified entry mapped to the
+      member's record id. An unknown project, an alias that declares no member, an internal
+      subsystem, or a member no record holds is refused with guidance, so a broken narrowing is
+      never stored.
+    signature: 'admitNarrowing(entry: string): string'
+    returns: string
+    params:
+      - name: entry
+        type: string
+        description: One entry of a mint request's projects narrowing.
+    effect: read
 status: complete
 createdAt: '2026-07-04T12:49:59.044Z'
-updatedAt: '2026-10-03T14:20:19.287Z'
+updatedAt: '2026-10-03T17:57:30.771Z'

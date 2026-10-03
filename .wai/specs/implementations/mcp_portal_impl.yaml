@@ -1,19 +1,44 @@
 id: mcp_portal_impl
 name: MCP Portal Implementation
 description: >-
-  Dispatches sdd_* tool calls to the MCP orchestrator; server bootstrap is forwarded to the MCP
-  server supervisor. Realized today inside src/mcp/server.ts (the portal role is folded into the
-  server module pending the code-side split).
+  Dispatches sdd_* tool calls to the MCP orchestrator and mounts the portal's own surface — the
+  skill/agent resources, the prompts, and for a hosted caller the hosted-tool advertisement — on the
+  bare server the MCP server supervisor builds. Realized inside src/mcp/server.ts: createMcpServer
+  composes the supervisor's server with the portal's mount.
 contract: imcp_portal
 sourcePath: src/mcp/server.ts
 methods:
   - name: createMcpServer
     narrative:
       - stepNumber: 1
-        description: Forward createMcpServer call to the MCP server supervisor
+        description: >-
+          Build the bare server through the MCP server supervisor: instructions, build stamp, and
+          the sdd_* tools behind the freshness guard
         type: call
         targetComponent: mcp_server
         targetMethod: create
+      - stepNumber: 2
+        description: >-
+          Mount the resource endpoints on it: resources/list, and resources/read handed to the SDK
+          as its request handler
+        type: call
+        targetComponent: mcp_portal
+        targetMethod: listResources
+      - stepNumber: 3
+        description: >-
+          Register the PROMPTS capability over the same skill set the resources publish: resources
+          are pull-only, so prompts are what makes a skill discoverable to a human driving an agent,
+          mirrored from the same descriptor list so the two surfaces cannot drift
+        type: local
+      - stepNumber: 4
+        description: For a hosted caller, advertise the hosted data-plane tools
+        type: call
+        targetComponent: mcp_portal
+        targetMethod: advertiseHostedTools
+      - stepNumber: 5
+        description: Return the mounted server
+        type: return
+        outcome: McpServer
   - name: sdd_initialize_system
     narrative:
       - stepNumber: 1
@@ -95,10 +120,10 @@ methods:
         targetMethod: listResources
       - stepNumber: 2
         description: >-
-          The same registrar wires the MCP resources/read request to the resource read workflow,
+          The same registrar wires the MCP resources/read request to the portal's resource read,
           handed to the SDK as its request handler.
         type: register
-        targetComponent: mcp_orchestrator
+        targetComponent: mcp_portal
         targetMethod: readResource
     symbol: registerSkillResources
   - name: readResource
@@ -108,7 +133,7 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: readResource
-    symbol: registerSkillResources
+    symbol: serveResourceRead
   - name: sdd_get_agent_brief
     narrative:
       - stepNumber: 1
@@ -304,4 +329,4 @@ methods:
         targetMethod: run
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T16:42:35.669Z'
+updatedAt: '2026-10-03T17:55:14.389Z'

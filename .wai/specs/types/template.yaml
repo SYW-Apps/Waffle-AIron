@@ -38,7 +38,15 @@ fields:
     type: string
     description: 'Template version (default: 1.0.0)'
     optional: false
-methods: []
+methods:
+  - name: render
+    signature: 'render(vars: Record<string, string>): string'
+    returns: string
+    description: >-
+      The template's instruction body with each {{variable}} placeholder replaced by its value; a
+      placeholder with no value stays as written.
+    sourcePath: src/core/templates.ts
+    symbol: renderTemplateInstructions
 sourcePath: src/models/template.ts
 createdAt: '2026-09-20T19:47:43.160Z'
-updatedAt: '2026-10-03T17:03:35.549Z'
+updatedAt: '2026-10-03T17:53:14.672Z'

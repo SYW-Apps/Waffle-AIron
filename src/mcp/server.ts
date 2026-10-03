@@ -857,7 +857,7 @@ export function schemaFingerprint(): string {
     type: schemaShape(TypeSpecSchema),
   };
   // Step 3: a throwaway server, for the input schema every write tool registers.
-  const registered = (createMcpServer() as unknown as { _registeredTools: Record<string, { inputSchema?: unknown }> })._registeredTools;
+  const registered = (createBareMcpServer() as unknown as { _registeredTools: Record<string, { inputSchema?: unknown }> })._registeredTools;
   const tools = [...SPEC_WRITE_TOOLS].sort().map((name) => [name, schemaShape(registered[name]?.inputSchema)]);
   // Step 4: the hash, versioned.
   runningFingerprint = crypto.createHash('sha256')
@@ -1183,22 +1183,37 @@ function renderAgentBriefMarkdown(brief: AgentBrief): string {
 function registerSkillResources(server: McpServer, listChanged: boolean): void {
   server.server.registerCapabilities({ resources: listChanged ? { listChanged: true } : {} });
 
-  server.server.setRequestHandler(ListResourcesRequestSchema, () => ({
-    resources: [
-      ...listResources().map((d) => ({
-        uri: d.resourceUri,
-        name: d.name,
-        description: d.description,
-        mimeType: SKILL_RESOURCE_MIME,
-      })),
-      ...listAgentBriefResources(),
-    ],
-  }));
+  server.server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: listPublishedResources() }));
 
   server.server.setRequestHandler(ReadResourceRequestSchema, (request) => {
     const uri = request.params.uri;
-    return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: readPublishedResource(uri) }] };
+    return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: serveResourceRead(uri) }] };
   });
+}
+
+/**
+ * mcp_orchestrator.listResources — everything the server publishes as a
+ * read-only resource: the built-in SDD skills, then one live agent-brief
+ * resource per agent in the current topology.
+ */
+function listPublishedResources(): { uri: string; name: string; description: string; mimeType: string }[] {
+  return [
+    ...listResources().map((d) => ({
+      uri: d.resourceUri,
+      name: d.name,
+      description: d.description,
+      mimeType: SKILL_RESOURCE_MIME,
+    })),
+    ...listAgentBriefResources(),
+  ];
+}
+
+/**
+ * mcp_portal.readResource — the MCP resources/read request for one resource id,
+ * answered by the resource workflow. The SDK request handler above calls it.
+ */
+function serveResourceRead(resourceId: string): string {
+  return readPublishedResource(resourceId);
 }
 
 /**
@@ -1282,7 +1297,21 @@ export interface McpServerOptions {
   buildStamp?: BuildStamp | null;
 }
 
+/**
+ * mcp_portal.createMcpServer — the entry every caller uses: the bare server the
+ * MCP server supervisor builds (mcp_server.create), with the portal's own
+ * surface mounted on it (resources, prompts, and the hosted-tool advertisement).
+ */
 export function createMcpServer(options: McpServerOptions = {}): McpServer {
+  return mountMcpPortal(createBareMcpServer(options), options);
+}
+
+/**
+ * mcp_server.create — instantiate the server with its instructions and build
+ * stamp, wrap every tool in the build-freshness guard, and register the core
+ * sdd_* tools. The portal's own surface is mounted on top by mountMcpPortal.
+ */
+function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   // The protocol's own "how to use this server" channel, which clients inject
   // into the agent's system prompt. Composed BEFORE construction because it is a
   // constructor option, and composed per call so the hosted per-request scoped
@@ -2631,12 +2660,6 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  // ── Built-in SDD skills + live agent briefs as read-only MCP resources ────
-  registerSkillResources(server, !options.hostedTools);
-
-  // ── The same skills as MCP prompts (discoverable, not merely fetchable) ────
-  registerSkillPrompts(server, !options.hostedTools);
-
   // ── Chained-subproject bind-time announcement ─────────────────────────────
   // When the bound root is a chained subproject, announce it on the startup
   // log (stderr — stdout is the JSON-RPC channel): the parent project root,
@@ -2654,6 +2677,21 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
       );
     }
   } catch { /* chaining detection must never break server startup */ }
+
+  return server;
+}
+
+/**
+ * Mount the MCP portal's own surface on a server: the built-in SDD skills and
+ * live agent briefs as read-only resources, the same skills as prompts, and —
+ * for a hosted caller — the hosted data-plane tool advertisement.
+ */
+function mountMcpPortal(server: McpServer, options: McpServerOptions): McpServer {
+  // ── Built-in SDD skills + live agent briefs as read-only MCP resources ────
+  registerSkillResources(server, !options.hostedTools);
+
+  // ── The same skills as MCP prompts (discoverable, not merely fetchable) ────
+  registerSkillPrompts(server, !options.hostedTools);
 
   // ── Hosted data-plane tool ADVERTISEMENT (discovery only) ─────────────────
   advertiseHostedTools(server, options);

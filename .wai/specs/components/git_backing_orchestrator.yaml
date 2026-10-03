@@ -25,8 +25,9 @@ dependsOn:
   - organization_repository
   - project_repository
   - audit_repository
+  - secret_repository
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-16T15:38:36.519Z'
-updatedAt: '2026-10-01T16:59:37.278Z'
+updatedAt: '2026-10-03T17:50:35.401Z'

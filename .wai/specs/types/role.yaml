@@ -37,7 +37,16 @@ fields:
     type: PrincipalSubject
     description: Identity that created the role.
     optional: true
-methods: []
+methods:
+  - name: isBuiltinId
+    signature: 'isBuiltinId(roleId: string): boolean'
+    returns: boolean
+    description: >-
+      Whether a role id is one of the reserved built-in role ids: the built-in roles are code
+      constants, so no stored role may take one of their ids and role CRUD refuses to create, edit
+      or delete one.
+    sourcePath: src/server/roles.ts
+    symbol: isBuiltinRoleId
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:10.998Z'
-updatedAt: '2026-09-19T11:07:16.404Z'
+updatedAt: '2026-10-03T17:57:20.969Z'

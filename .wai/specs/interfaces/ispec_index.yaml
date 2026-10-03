@@ -125,6 +125,54 @@ methods:
     guarantees:
       - idempotent
     effect: read
+  - name: subsystemPath
+    description: The path the workspace records for a subsystem's spec.
+    signature: 'subsystemPath(id: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+  - name: componentPath
+    description: >-
+      The path the workspace records for a component's spec, or where one not stored yet is placed
+      under its subsystem.
+    signature: 'componentPath(id: string, subsystemId?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: subsystemId
+        type: string
+        optional: true
+  - name: interfacePath
+    description: >-
+      The path the workspace records for an interface's spec, or where one not stored yet is placed
+      under its component.
+    signature: 'interfacePath(id: string, componentId?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: componentId
+        type: string
+        optional: true
+  - name: implementationPath
+    description: >-
+      The path the workspace records for an implementation's spec, or where one not stored yet is
+      placed under its contract.
+    signature: 'implementationPath(id: string, contractId?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: contractId
+        type: string
+        optional: true
+  - name: snapshot
+    description: Every spec file of the workspace read through the file store, its bytes keyed by path.
+    signature: 'snapshot(): Map<string, string>'
+    returns: Map<string, string>
+    params: []
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-02T20:47:45.919Z'
+updatedAt: '2026-10-03T17:57:54.475Z'

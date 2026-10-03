@@ -33,7 +33,6 @@ import type { WebSession } from './types.js';
 // The reserved session-id prefix lives with the WebSession types so transport
 // code can brand-check a credential without importing this component's file.
 import { WEB_SESSION_PREFIX } from './types.js';
-export { WEB_SESSION_PREFIX } from './types.js';
 
 // ── file helpers ─────────────────────────────────────────────────────────────
 

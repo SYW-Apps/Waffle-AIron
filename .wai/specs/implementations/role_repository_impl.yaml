@@ -40,7 +40,15 @@ methods:
         targetComponent: role_index
         targetMethod: list
     symbol: listRoles
+  - name: effective
+    narrative:
+      - stepNumber: 1
+        description: Forward to the role index
+        type: call
+        targetComponent: role_index
+        targetMethod: effective
+    symbol: listEffectiveRoles
 detail: calls-only
 status: complete
 createdAt: '2026-07-15T20:28:47.319Z'
-updatedAt: '2026-09-23T21:20:02.185Z'
+updatedAt: '2026-10-03T17:57:07.436Z'

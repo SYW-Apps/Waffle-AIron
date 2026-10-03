@@ -93,6 +93,13 @@ methods:
         targetMethod: audienceDistance
       - stepNumber: 12
         description: >-
+          Ask the visibility rules, per summary, whether its declared audience ceiling covers the
+          observer's distance
+        type: call
+        targetComponent: visibility_rules
+        targetMethod: covers
+      - stepNumber: 13
+        description: >-
           Return only the redacted PublicInterfaceSummary entries whose declared audience ceiling
           covers the observer's distance
         type: return
@@ -139,9 +146,11 @@ methods:
         type: local
       - stepNumber: 8
         description: >-
-          Keep only the redacted summaries whose audience ceiling covers the distance and collect
-          the VisibleSurfaceEntry
-        type: local
+          Keep only the redacted summaries whose audience ceiling covers the distance, through the
+          visibility rules, and collect the VisibleSurfaceEntry
+        type: call
+        targetComponent: visibility_rules
+        targetMethod: covers
       - stepNumber: 9
         description: Return the visibility-resolved surface catalog
         type: return
@@ -330,4 +339,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-11T12:03:31.491Z'
-updatedAt: '2026-10-03T16:39:49.595Z'
+updatedAt: '2026-10-03T18:00:26.471Z'

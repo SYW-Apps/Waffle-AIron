@@ -149,12 +149,6 @@ methods:
     signature: 'loadRegistry(): Registry'
     returns: Registry
     params: []
-    invokedBy:
-      kind: external
-      caller: >-
-        A connected AI client calling the MCP server's agent-topology tools (listAgents, getAgent,
-        validateTopology). Those tools are registered by createMcpServer but not yet modelled on
-        mcp_portal, so no narrative carries this hop.
   - name: resolveDomains
     description: 'Forward to agent_context_portal.resolveDomains: the project''s domains'
     signature: 'resolveDomains(): Domain[]'
@@ -225,4 +219,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:49:57.185Z'
+updatedAt: '2026-10-03T18:03:30.038Z'

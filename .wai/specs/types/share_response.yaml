@@ -1,0 +1,36 @@
+kind: value-object
+id: share_response
+name: ShareResponse
+description: >-
+  What a public /share portal method answers: the status, the body and its content type, the link's
+  embedding allowlist, and the attachment name of a download. The share portal's transport writes it
+  with the hardening headers every /share response carries (no-referrer, noindex, frame-ancestors
+  from the allowlist, no-store) and never a session cookie.
+subsystem: sdd_host
+fields:
+  - name: status
+    type: number
+    description: >-
+      The HTTP status: 200, 404 for an unknown, disabled or expired link, 403 for a download the
+      link does not permit.
+    optional: false
+  - name: contentType
+    type: string
+    description: The body's content type.
+    optional: false
+  - name: body
+    type: string
+    description: 'The response body: the shared page, the model JSON, the viewer page or the artifact.'
+    optional: false
+  - name: frameAncestors
+    type: string[]
+    description: The link's embedding allowlist; absent or empty forbids framing entirely.
+    optional: true
+  - name: filename
+    type: string
+    description: The attachment name of a download.
+    optional: true
+methods: []
+sourcePath: src/server/sharehttp.ts
+createdAt: '2026-10-03T17:53:31.661Z'
+updatedAt: '2026-10-03T17:53:31.662Z'

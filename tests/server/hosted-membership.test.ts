@@ -85,7 +85,7 @@ beforeEach(async () => {
   unitId = seedUnit(dataDir, 'eng').id;
   storePlacement(dataDir, { id: '', projectId: 'platform', unitId, role: 'owner', createdAt: '', createdBy: subjectOf('u-seeder') });
   fs.writeFileSync(path.join(dataDir, 'exposure-policy.json'), JSON.stringify({ webUiEnabled: true, requireTls: false }));
-  expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+  expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
   invalidateSpecCache();
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -436,12 +436,12 @@ describe('reconcile: the records follow the family on disk', () => {
     // docs leaves the family: its record is disabled, never deleted.
     fs.writeFileSync(config, declared.replace('  docs: packages/docs\n', ''));
     invalidateSpecCache();
-    expect(memberRegistration.reconcile(dataDir, principal, 'platform', ['platform']).departed).toEqual(['docs']);
+    expect(memberRegistration.reconcile({ dataDir }, principal, 'platform', ['platform']).departed).toEqual(['docs']);
     expect(recordOf('docs')!.status).toBe('disabled');
     // Declared again: it returns, with exactly the reach it had.
     fs.writeFileSync(config, declared);
     invalidateSpecCache();
-    const back = memberRegistration.reconcile(dataDir, principal, 'platform', ['platform']);
+    const back = memberRegistration.reconcile({ dataDir }, principal, 'platform', ['platform']);
     expect(back.returned).toEqual(['docs']);
     expect(back.registered).toEqual([]);
     expect(recordOf('docs')!.status).toBe('active');
@@ -514,10 +514,10 @@ describe('a crashed transaction under the data directory is recovered', () => {
 
   it('by host doctor: reported on a dry run, rolled back with --fix before the upgrade applies', () => {
     const { id } = crashedUpgrade();
-    const dry = upgradeMemberRecords(dataDir, false);
+    const dry = upgradeMemberRecords({ dataDir }, false);
     expect(dry.recovered).toEqual([expect.objectContaining({ id, action: 'pending' })]);
     expect(fs.existsSync(path.join(dataDir, '.wai', 'transactions', id))).toBe(true);
-    const fixed = upgradeMemberRecords(dataDir, true);
+    const fixed = upgradeMemberRecords({ dataDir }, true);
     expect(fixed.recovered).toEqual([expect.objectContaining({ id, action: 'rolled-back' })]);
     expect(fixed.applied).toBe(true);
     expect(recordOf('docs')).toMatchObject({ parentProjectId: 'platform' });
@@ -673,7 +673,7 @@ describe('stage 8 on hosted — reconcile names what it retired', () => {
     expect(planned.refusals).toEqual([]);
     expect(migrationsPortal.apply(planned).applied).toBe(true);
     const all: Principal = { tokenId: 't', role: 'editor', projects: ['*'], authenticated: true };
-    const reconciled = memberRegistration.reconcile(dataDir, all, 'billing', ['billing']);
+    const reconciled = memberRegistration.reconcile({ dataDir }, all, 'billing', ['billing']);
     expect(reconciled).toMatchObject({ retired: ['payments'], departed: [] });
     expect(recordOf('payments')).toMatchObject({ status: 'disabled', disabledReason: 'part of billing' });
   });

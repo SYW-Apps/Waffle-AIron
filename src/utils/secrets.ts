@@ -33,14 +33,19 @@ function readStore(): Record<string, string> {
   }
 }
 
-/** Resolve a secret by key: data-dir store, then env fallbacks, else null. */
-export function resolveSecret(key: string): string | null {
-  const stored = readStore()[key];
+/** The value under a key in a read store map, else its first env fallback that is set, else null. */
+function storedOrEnvironment(store: Record<string, string>, key: string): string | null {
+  const stored = store[key];
   if (stored) return stored;
   for (const env of ENV_FALLBACK[key] ?? []) {
     if (process.env[env]) return process.env[env] as string;
   }
   return null;
+}
+
+/** Resolve a secret by key: data-dir store, then env fallbacks, else null. */
+export function resolveSecret(key: string): string | null {
+  return storedOrEnvironment(readStore(), key);
 }
 
 /**
@@ -51,11 +56,13 @@ export function resolveSecret(key: string): string | null {
  * shared token. Returns null when neither is set.
  */
 export function resolveGitToken(credentialRef?: string | null): string | null {
-  if (credentialRef) {
-    const own = resolveSecret(credentialRef);
-    if (own) return own;
-  }
-  return resolveSecret('git-token');
+  return indexResolveGitToken(credentialRef);
+}
+
+/** The index's read behind resolveGitToken: one read of the store, both keys resolved from it. */
+function indexResolveGitToken(credentialRef?: string | null): string | null {
+  const store = readStore();
+  return (credentialRef ? storedOrEnvironment(store, credentialRef) : null) ?? storedOrEnvironment(store, 'git-token');
 }
 
 /** Set a secret at runtime in the data-dir store (read live — no restart). */

@@ -7,7 +7,7 @@ import { remapUnitReferences } from './users.js';
 import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { authorize } from './authorization.js';
 import { listFamilyRecords } from './projects.js';
-import { ForbiddenError } from './identity.js';
+import { ForbiddenError } from './errors.js';
 import { listSecretKeys, setSecret as storeSecret } from '../utils/secrets.js';
 import type {
   ApiKeyRecord,

@@ -36,7 +36,7 @@ import type { GitBackingStatus, GitPublish } from '../git/index.js';
 // exports its own credential-checked setSecret, and a call written through an
 // import alias is one the call-graph conformance analysis cannot follow.
 import * as secretStore from '../utils/secrets.js';
-import { listSecretKeys, resolveSecret } from '../utils/secrets.js';
+import { listSecretKeys, resolveGitToken, resolveSecret } from '../utils/secrets.js';
 import type { ProducerConfig } from '../producers/index.js';
 import type {
   ApiKeyRecord,
@@ -60,17 +60,7 @@ import type {
 // the git-backed publish opens.
 // ---------------------------------------------------------------------------
 
-// AdminAuthError lives with the shared control-plane errors; republished here
-// as the historical import site for the admin plane's consumers.
-import { AdminAuthError } from './errors.js';
-export { AdminAuthError } from './errors.js';
-
-export class LockValidationError extends Error {
-  constructor(public readonly errors: { code: string; message: string; specId?: string }[]) {
-    super(`Cannot lock: the spec tree does not validate as-complete (${errors.length} error(s)).`);
-    this.name = 'LockValidationError';
-  }
-}
+import { AdminAuthError, LockValidationError } from './errors.js';
 
 function requireAdmin(credential: string | null): void {
   if (!authenticateMaster(credential).authenticated) throw new AdminAuthError();
@@ -518,20 +508,9 @@ export function enableGit(
   const rec = createProjectRecord(cfg.dataDir, project); // empty dir + record (no native provisioning)
   // The clone authenticates with the token the host resolves and hands in: the
   // connection's own PAT when it has one, else the shared git-token.
-  const token = gitToken(credentialRef);
+  const token = resolveGitToken(credentialRef);
   runWithProjectRoot(rec.rootPath, () => hostGit.enable(remote, branch || 'main', token, credentialRef));
   return rec;
-}
-
-/**
- * The git token for one connection, resolved from the host's own secret
- * repository: the connection's own credential ref first, when it has one, so
- * each connection can carry a distinct PAT, then the shared `git-token`. Null
- * when neither is set (a public remote clones without one).
- */
-function gitToken(credentialRef?: string): string | null {
-  const own = credentialRef ? resolveSecret(credentialRef) : null;
-  return own ?? resolveSecret('git-token');
 }
 
 /** Disable git backing for a project (clears the binding; the checkout stays). */

@@ -120,7 +120,7 @@ function exposurePolicyPath(dataDir: string): string {
  *  admin listener (matching pre-exposure-policy behavior), TLS required, and the
  *  unified web UI OFF — a NEW public surface stays opt-in, so an existing
  *  instance is entirely unaffected until an operator turns it on. */
-export const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
+const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
   adminApiMode: 'local_only',
   adminUiEnabled: true,
   identityApiEnabled: true,
@@ -131,6 +131,12 @@ export const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
   operationsApiEnabled: true,
   webUiEnabled: false,
 };
+
+/** The effective exposure posture for a partial override: each flag the
+ *  override sets wins, and every unset flag keeps the compatible default. */
+export function effectiveExposure(override?: Partial<HostExposurePolicy> | null): HostExposurePolicy {
+  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+}
 
 /**
  * Read the persisted instance exposure policy, or null when none has ever been

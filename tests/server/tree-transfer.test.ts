@@ -275,7 +275,7 @@ describe('hosted spec-tree transfer', () => {
     );
     invalidateSpecCache();
     // Stage 7: the member becomes a hosted record of its own.
-    const up = upgradeMemberRecords(dataDir, true);
+    const up = upgradeMemberRecords({ dataDir }, true);
     expect(up.applied, JSON.stringify({ m: up.plan.members, r: up.plan.refusals, o: up.outcome })).toBe(true);
 
     allow(dataDir, 'u-child', 'project:read', 'project', 'parent');

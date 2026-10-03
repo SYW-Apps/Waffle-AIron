@@ -859,10 +859,10 @@ function serveMembershipTool(
     switch (call.name) {
       case 'sdd_detach_member':
         // Steps 21–23.
-        return answer(relocationResult('detach', memberRegistration.detach(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), apply), apply));
+        return answer(relocationResult('detach', memberRegistration.detach(cfg, principal, binding, String(call.args.alias ?? ''), apply), apply));
       case 'sdd_adopt_member':
         // Steps 24–26.
-        return answer(relocationResult('adopt', memberRegistration.adopt(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), String(call.args.path ?? ''), apply), apply));
+        return answer(relocationResult('adopt', memberRegistration.adopt(cfg, principal, binding, String(call.args.alias ?? ''), String(call.args.path ?? ''), apply), apply));
       default: {
         // Steps 27–30: attach, promote, demote, an externalize as a project, a
         // member's source and a project rename are screened.
@@ -935,7 +935,7 @@ function reconcileAfter(cfg: HostConfig, principal: Principal, binding: ProjectB
   const call = toolCall(body);
   if (!call || !FAMILY_SHAPE_TOOLS.has(call.name) || call.args.dryRun === true || deriveMcpOutcome(response) !== 'success') return;
   try {
-    memberRegistration.reconcile(cfg.dataDir, principal, binding.projectId, writtenOwners(cfg, binding, response));
+    memberRegistration.reconcile(cfg, principal, binding.projectId, writtenOwners(cfg, binding, response));
     publishChange('projects');
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
@@ -1019,7 +1019,7 @@ function hostedRecordLookup(cfg: HostConfig, principal: Principal): HostedRecord
 /** Step 13: roll back a crashed family migration under the bound family before the tool runs; never fails the request. */
 function recoverBoundFamily(cfg: HostConfig, principal: Principal, binding: ProjectBinding): void {
   try {
-    recoverUnfinishedMigrations(cfg.dataDir, principal, binding);
+    recoverUnfinishedMigrations(cfg, principal, binding);
   } catch (e) {
     console.error(`[sdd_host] family upkeep failed for project ${binding.projectId}: ${e instanceof Error ? e.message : String(e)}`);
   }

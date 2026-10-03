@@ -12,21 +12,23 @@ methods:
   - name: captureApprovedSpecs
     narrative:
       - stepNumber: 1
-        description: >-
-          Walk the tree's spec files and digest each one's raw text, normalizing CRLF to LF first
-          and keying by the path relative to the project root, so the same commit digests equally on
-          any platform. The raw read goes straight to disk rather than through the spec file store —
-          digesting needs bytes, and the store's read parses; that bypass is known debt, not a
-          design
-        type: local
+        description: Read the bytes of every spec file of the tree through the spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: snapshot
       - stepNumber: 2
+        description: >-
+          Digest each file's raw text, normalizing CRLF to LF first and keying by the path relative
+          to the project root, so the same tree digests the same on every platform
+        type: local
+      - stepNumber: 3
         description: >-
           Read the record already on file, so a scoped approval carries forward the digests it is
           not re-capturing rather than dropping them
         type: call
         targetComponent: lock_store
         targetMethod: read
-      - stepNumber: 3
+      - stepNumber: 4
         description: Answer with the digest map to write into the record
         type: return
         outcome: captured
@@ -147,4 +149,4 @@ methods:
     symbol: approvalVerdict
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-09-30T05:49:32.618Z'
+updatedAt: '2026-10-03T17:59:42.330Z'

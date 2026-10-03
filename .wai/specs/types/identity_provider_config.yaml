@@ -85,7 +85,15 @@ fields:
       <displayName>" button. Defaults to the provider id when unset. Presentation only — never used
       for provider resolution.
     optional: true
-methods: []
+methods:
+  - name: admitsAsAdmin
+    signature: 'admitsAsAdmin(groups: string[]): boolean'
+    returns: boolean
+    description: >-
+      Whether a signed-in user's verified groups make them an admin through this provider: they
+      intersect its adminGroupClaims. An unset or empty adminGroupClaims admits nobody.
+    sourcePath: src/server/identity.ts
+    symbol: isInAdminGroup
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-09-19T11:07:08.930Z'
+updatedAt: '2026-10-03T17:53:16.410Z'

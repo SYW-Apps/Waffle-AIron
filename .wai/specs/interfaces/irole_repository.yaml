@@ -35,8 +35,18 @@ methods:
     signature: 'list(): Role[]'
     returns: Role[]
     params: []
+  - name: effective
+    description: >-
+      The effective role set permission rules walk: the intrinsic built-in roles merged over the
+      stored admin-defined ones (forwarded to the index). Built-ins are code constants, never stored
+      rows, so a binding to one always resolves; a stored row carrying a reserved id never shadows
+      the built-in definition.
+    signature: 'effective(): Role[]'
+    returns: Role[]
+    params: []
+    effect: read
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-15T20:27:40.646Z'
-updatedAt: '2026-09-17T20:37:33.827Z'
+updatedAt: '2026-10-03T17:57:08.974Z'

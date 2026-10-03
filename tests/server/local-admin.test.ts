@@ -62,7 +62,7 @@ const PORTAL_SOURCES: Record<string, string> = {
   getGitBinding: 'admin',
   configureGitSync: 'admin',
   registerLocalDevProject: 'admin',
-  LockValidationError: 'admin',
+  LockValidationError: 'errors',
   listGlobalPacks: 'packs',
   installGlobalPack: 'packs',
   removeGlobalPack: 'packs',

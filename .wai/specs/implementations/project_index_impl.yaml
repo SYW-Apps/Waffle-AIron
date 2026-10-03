@@ -258,6 +258,16 @@ methods:
       - host_core_adapter.resolveContainedProjectPath
       - host_core_adapter.loadSubsystemSpecs
     symbol: partSubsystemIds
+  - name: admitNarrowing
+    narrative: []
+    intent: >-
+      Answers '*' as it is; parses the entry as a project id, optionally member-qualified, refusing
+      one that is neither; maps a deprecated member-qualified entry to the member's record id by
+      walking the aliases each root declares, refusing an alias no record holds; otherwise loads the
+      persisted set and refuses a project id no record has. Answers the record id to store.
+    calls:
+      - project_store.read
+    symbol: assertMintableNarrowingEntry
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-10-03T14:25:27.293Z'
+updatedAt: '2026-10-03T17:57:37.481Z'

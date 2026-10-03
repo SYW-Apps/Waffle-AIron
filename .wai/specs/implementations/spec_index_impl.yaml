@@ -466,6 +466,45 @@ methods:
         type: return
         outcome: ScannedProjectRoot[]
     detail: full
+  - name: subsystemPath
+    narrative:
+      - stepNumber: 1
+        description: Answer the path the workspace's index records for the subsystem's spec
+        type: local
+    symbol: getSubsystemPath
+  - name: componentPath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the path the index records for the component's spec, or its placement under its
+          subsystem when it is not stored yet
+        type: local
+    symbol: getComponentPath
+  - name: interfacePath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the path the index records for the interface's spec, or its placement under its
+          component when it is not stored yet
+        type: local
+    symbol: getInterfacePath
+  - name: implementationPath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the path the index records for the implementation's spec, or its placement under
+          its contract when it is not stored yet
+        type: local
+    symbol: getImplementationPath
+  - name: snapshot
+    narrative:
+      - stepNumber: 1
+        description: List every spec file of the workspace
+        type: local
+      - stepNumber: 2
+        description: Read each file's bytes and answer them keyed by path
+        type: local
+    symbol: snapshotSpecFiles
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-02T23:58:57.405Z'
+updatedAt: '2026-10-03T17:57:58.175Z'

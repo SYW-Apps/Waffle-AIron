@@ -420,7 +420,7 @@ describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () =>
     runWithProjectRoot(childRoot, () => hostCore.provisionProject('billing'));
     invalidateSpecCache();
     // Stage 7: billing becomes a hosted record of its own.
-    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+    expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
 
     unitId = createUnit(dataDir, {
       id: '', name: 'Confine', slug: 'confine', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),

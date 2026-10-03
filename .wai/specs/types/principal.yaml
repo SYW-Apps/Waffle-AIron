@@ -50,7 +50,14 @@ fields:
       Whether the request presented a valid credential. The unauthenticated principal carries false;
       every gate checks it first.
     optional: false
-methods: []
+methods:
+  - name: isInstanceAdmin
+    signature: 'isInstanceAdmin(): boolean'
+    returns: boolean
+    description: >-
+      Whether this principal holds the permission-rules bypass: its permissionSubject marks it
+      instanceAdmin. Listings short-circuit on it to show the whole instance.
+    sourcePath: src/server/authorization.ts
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-10-03T17:04:58.880Z'
+updatedAt: '2026-10-03T17:49:06.698Z'

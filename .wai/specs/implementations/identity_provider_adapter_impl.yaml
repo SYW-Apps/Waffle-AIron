@@ -52,11 +52,23 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          Enforce the provider's redirect allowlist: when allowedRedirectUris is set and non-empty,
+          the redirectUri must equal one of its entries exactly
+        type: branch
+        condition: the provider sets a non-empty allowlist that does not contain redirectUri exactly
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse the redirect URI without echoing it back
+        type: throw
+        error: redirect_uri not allowed for identity provider
+      - stepNumber: 3
+        description: >-
           Assemble the authorization URL against endpoints.authorizationEndpoint (the browser-facing
           front-channel) with client_id (config.clientId), response_type=code, the supplied
           redirectUri, the opaque state, and the requested scopes (openid email profile)
         type: local
-      - stepNumber: 2
+      - stepNumber: 4
         description: Return the provider authorization URL
         type: return
         outcome: provider authorization URL
@@ -129,4 +141,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-10T08:19:10.907Z'
-updatedAt: '2026-07-14T11:04:16.596Z'
+updatedAt: '2026-10-03T17:52:45.032Z'

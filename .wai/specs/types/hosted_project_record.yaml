@@ -61,7 +61,17 @@ fields:
       ProjectPlacement; never persisted on the record. A project's name and description live in its
       own .wai/project.yaml, and who placed it is the owner placement's createdBy.
     optional: true
-methods: []
+methods:
+  - name: isValidId
+    signature: 'isValidId(id: unknown): boolean'
+    returns: boolean
+    description: >-
+      Whether a value is a valid record id: a path-safe id (lowercase letters, digits and hyphens,
+      starting with a letter or digit, at most 64 characters), so a crafted id can never escape the
+      projects directory. Every record write applies it, and a workflow that must refuse a bad id
+      before queuing an approval asks it first.
+    sourcePath: src/server/projects.ts
+    symbol: isValidProjectId
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-10-03T17:04:51.802Z'
+updatedAt: '2026-10-03T17:57:24.760Z'

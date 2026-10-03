@@ -444,6 +444,39 @@ methods:
         type: return
         outcome: whether the id is reserved
     detail: full
+  - name: localDevSubject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the persisted boot-reserved built-in subject UUIDs through the instance identity
+          repository
+        type: call
+        targetComponent: instance_identity_repository
+        targetMethod: get
+      - stepNumber: 2
+        description: Decide whether the instance identity was ever seeded
+        type: branch
+        condition: no instance identity is persisted
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Refuse: the lifecycle init entrypoint must run before dev sessions mint'
+        type: throw
+        error: instance identity is not seeded
+      - stepNumber: 4
+        description: >-
+          Return the local-developer subject: the persisted local-developer UUID, kind human, issuer
+          'local'
+        type: return
+        outcome: the local-developer subject
+    detail: full
+  - name: isLegacyBuiltin
+    narrative:
+      - stepNumber: 1
+        description: Answer whether the id is present and one of the legacy reserved literals
+        type: return
+        outcome: whether the id is a legacy built-in literal
+    detail: full
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-09-23T21:19:38.210Z'
+updatedAt: '2026-10-03T17:49:22.666Z'

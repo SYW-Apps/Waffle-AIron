@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { setSecret } from '../../src/utils/secrets.js';
 import * as identity from '../../src/server/identity.js';
-import { ForbiddenError } from '../../src/server/identity.js';
+import { ForbiddenError } from '../../src/server/errors.js';
 import { authenticate, signSsoState, verifySsoState } from '../../src/server/auth.js';
 import {
   upsertIdentityProviderRecord,
@@ -231,6 +231,18 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     await expect(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb')).rejects.toThrow(
       /unknown or disabled/i,
     );
+  });
+
+  // Every sign-in start path enforces the provider's redirect allowlist,
+  // including this headless one.
+  it('startSsoLogin refuses a redirectUri outside the provider allowlist', async () => {
+    upsertIdentityProviderRecord(dataDir, providerConfig({ allowedRedirectUris: ['https://app.example/cb'] }));
+    await expect(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://other.example/cb')).rejects.toThrow(
+      /redirect_uri not allowed/,
+    );
+    // An allowlisted redirectUri still starts the login.
+    const authUrl = await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb');
+    expect(new URL(authUrl).searchParams.get('redirect_uri')).toBe('https://app.example/cb');
   });
 
   // ── completeSsoLogin: first login provisions + mints ───────────────────────

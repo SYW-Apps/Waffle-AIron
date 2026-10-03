@@ -77,32 +77,39 @@ methods:
         type: throw
         error: Unknown organization unit
       - stepNumber: 8
+        description: >-
+          When the bind carries a personal access token, store it as the binding's own git secret
+          through the secret repository, so the clone authenticates with it
+        type: call
+        targetComponent: secret_repository
+        targetMethod: write
+      - stepNumber: 9
         description: Upsert the binding through the repository (one binding per scope — a re-bind replaces)
         type: call
         targetComponent: git_backing_repository
         targetMethod: upsertBinding
         assertsGuarantees:
           - atomic
-      - stepNumber: 9
+      - stepNumber: 10
         description: Append a redacted audit event without letting a failure fail the bind
         type: try
-        endStep: 11
+        endStep: 12
         catches:
           - error: audit append failure
-            step: 12
-      - stepNumber: 10
+            step: 13
+      - stepNumber: 11
         description: Append the redacted git.backing.bind audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 11
+      - stepNumber: 12
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 13
-      - stepNumber: 12
+        toStep: 14
+      - stepNumber: 13
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: Return the stored binding
         type: return
         outcome: stored binding
@@ -324,4 +331,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-16T15:40:54.973Z'
-updatedAt: '2026-09-24T13:20:12.317Z'
+updatedAt: '2026-10-03T17:50:48.674Z'

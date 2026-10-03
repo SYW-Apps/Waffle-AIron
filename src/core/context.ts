@@ -1,5 +1,5 @@
 import { aiDir, writeFileIfChanged, readFileOrNull, pathExists } from '../utils/fs.js';
-import { GLOBAL_GUIDE_BODY } from '../utils/ai-guide.js';
+import { guideBody } from '../utils/ai-guide.js';
 import { versionStamp } from './stamp.js';
 // STATIC: the lazy require this replaced was documented as breaking a circular
 // dependency, but the projector imports nothing from here — there is no cycle
@@ -229,7 +229,7 @@ export function renderWaironGuide(): string {
   }
 
   // Full wairon usage guide
-  lines.push(GLOBAL_GUIDE_BODY);
+  lines.push(guideBody('global'));
   lines.push('');
 
   return lines.join('\n');

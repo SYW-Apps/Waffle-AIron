@@ -15,6 +15,8 @@ sourcePath: src/server/request.ts
 injectedParams:
   - cfg
   - dataDir
+  - req
+  - res
 methods:
   - name: viewDiagram
     narrative:
@@ -340,7 +342,10 @@ methods:
   - name: handle
     narrative:
       - stepNumber: 1
-        description: Extract the bearer token from the request Authorization header
+        description: >-
+          Take the credential the HTTP layer resolved and passed in (a bearer token, or a
+          web-session id bridged from the browser cookie); when none was passed, extract the bearer
+          token from the request's Authorization header
         type: local
       - stepNumber: 2
         description: >-
@@ -642,4 +647,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-03T16:49:40.826Z'
+updatedAt: '2026-10-03T17:54:13.301Z'

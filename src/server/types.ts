@@ -1323,9 +1323,11 @@ export interface HostConfig {
   /** Advisory (observe/warn) resource quota policy; a disabled default is
    *  resolved when omitted. Never blocks or throttles in this draft. */
   quotaPolicy?: ResourceQuotaPolicy;
-  /** Durable audit capture and retention policy; the secure default is resolved
-   *  when omitted (audit.ts effectiveAuditPolicy). */
-  auditPolicy?: AuditRetentionPolicy;
+  /** Durable audit capture and retention policy, as overrides of the secure
+   *  default: each field set here wins, every unset field keeps the default
+   *  (audit.ts effectiveAuditPolicy). Set from WAIRON_AUDIT_POLICY by the serve
+   *  command. */
+  auditPolicy?: Partial<AuditRetentionPolicy>;
   /** True only when the server runs as the local single-project developer server
    *  (`wairon dev`): loopback-bound, auth off, the one project = the current
    *  working directory. NEVER set by the hosted `serve` command, so the dev-only

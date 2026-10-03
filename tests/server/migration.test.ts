@@ -5,7 +5,10 @@ import * as path from 'node:path';
 import { migratePermissionModel } from '../../src/server/migration.js';
 import { getInstanceIdentity, ensureInstanceIdentity } from '../../src/server/instance.js';
 import { warnIfDataDirUnmigrated } from '../../src/server/http.js';
-import { authenticate, LEGACY_SUPERADMIN_USER_ID } from '../../src/server/auth.js';
+import { authenticate } from '../../src/server/auth.js';
+
+/** The built-in super-admin's legacy literal userId. */
+const LEGACY_SUPERADMIN_USER_ID = 'builtin:superadmin';
 import { authorize } from '../../src/server/authorization.js';
 import { listAssignments } from '../../src/server/permissions.js';
 import { createUnit, getOrganizationUnit, listProjectPlacements, placeProject } from '../../src/server/organization.js';

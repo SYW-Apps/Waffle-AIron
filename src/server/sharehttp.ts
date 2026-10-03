@@ -1,15 +1,19 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { resolveSharedView, downloadArtifact } from './shareaccess.js';
+import { sendJson } from './httpio.js';
 import { swaggerUiPage } from './swagger.js';
 import { safeFilenamePart } from '../utils/filenames.js';
-import type { HostConfig, ShareLink, ShareRequestMeta } from './types.js';
+import type { HostConfig, ShareRequestMeta } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Share Portal (sdd_host): the PUBLIC, unauthenticated /share HTTP surface.
 // Every response sets the hardening headers (Referrer-Policy: no-referrer,
 // X-Robots-Tag: noindex, CSP frame-ancestors from the link's allowlist) and
-// establishes NO session cookie. Routing is done in http.ts; these are the
-// handlers.
+// establishes NO session cookie. Each portal method is a function shaped like
+// its contract (the token, the request meta, the selection) answering a
+// ShareResponse; handleShareRequest is the transport: it parses the request,
+// derives the meta and the `spec` selection, calls the method and writes the
+// response. http.ts gates the surface on the exposure policy and hands it /share.
 // ---------------------------------------------------------------------------
 
 /** The `spec` query parameter (a portalId) selecting WHICH per-portal OpenAPI
@@ -69,7 +73,6 @@ function sharedOpenApiIndexPage(index: SharedOpenApiIndex): string {
   );
 }
 
-/** Neither a portalId nor a request's artifact kind is filename-safe by
 /** The attachment name for a served artifact. A SELECTED per-portal API carries
  *  its portal id so several downloads never collide, and the multi-API index is
  *  named for what it is rather than posing as one of the documents. */
@@ -80,7 +83,7 @@ function downloadFilename(kind: string, portalId: string | undefined, payload: s
 }
 
 /** Extract the request context recorded on every access. */
-export function shareRequestMeta(req: IncomingMessage): ShareRequestMeta {
+function shareRequestMeta(req: IncomingMessage): ShareRequestMeta {
   const fwd = req.headers['x-forwarded-for'];
   const ip =
     (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0].trim() ||
@@ -94,101 +97,145 @@ export function shareRequestMeta(req: IncomingMessage): ShareRequestMeta {
   return meta;
 }
 
-/** Common hardening headers for every /share response. The embedding allowlist
- *  drives frame-ancestors: an empty allowlist forbids framing entirely. */
-function harden(res: ServerResponse, link: ShareLink | undefined, contentType: string): void {
-  const frameAncestors = link && link.frameAncestors.length ? link.frameAncestors.join(' ') : "'none'";
-  res.setHeader('content-type', contentType);
-  res.setHeader('referrer-policy', 'no-referrer');
-  res.setHeader('x-robots-tag', 'noindex, nofollow');
-  res.setHeader('content-security-policy', `frame-ancestors ${frameAncestors}`);
-  res.setHeader('cache-control', 'no-store');
+/**
+ * What a /share method answers: the status, the body and its content type, the
+ * link's embedding allowlist (frame-ancestors; absent forbids framing), and the
+ * attachment name of a download. The transport writes it with the hardening
+ * headers every /share response carries.
+ */
+export interface ShareResponse {
+  status: number;
+  contentType: string;
+  body: string;
+  frameAncestors?: string[];
+  filename?: string;
 }
 
-function notFoundPage(res: ServerResponse): void {
-  harden(res, undefined, 'text/html; charset=utf-8');
-  res.statusCode = 404;
-  res.end(
-    '<!doctype html><meta charset="utf-8"><title>Share unavailable</title>' +
-      '<body style="font:15px/1.5 system-ui;margin:0;display:grid;place-items:center;height:100vh;background:#0b1120;color:#e8e8f0">' +
-      '<div style="text-align:center"><h1 style="font-size:20px">This share link is unavailable</h1>' +
-      '<p style="color:#9a9aab">It may have been disabled, expired, or never existed.</p></div></body>',
-  );
+const NOT_FOUND_PAGE =
+  '<!doctype html><meta charset="utf-8"><title>Share unavailable</title>' +
+  '<body style="font:15px/1.5 system-ui;margin:0;display:grid;place-items:center;height:100vh;background:#0b1120;color:#e8e8f0">' +
+  '<div style="text-align:center"><h1 style="font-size:20px">This share link is unavailable</h1>' +
+  '<p style="color:#9a9aab">It may have been disabled, expired, or never existed.</p></div></body>';
+
+function notFoundPage(): ShareResponse {
+  return { status: 404, contentType: 'text/html; charset=utf-8', body: NOT_FOUND_PAGE };
 }
 
 /** GET /share/:token — the read-only shared-view page (the captured self-contained
  *  canvas HTML). */
-export function serveSharedView(cfg: HostConfig, token: string, req: IncomingMessage, res: ServerResponse): void {
-  const result = resolveSharedView(cfg, token, shareRequestMeta(req));
-  if (!result.found || !result.link || result.html === undefined) return notFoundPage(res);
-  harden(res, result.link, 'text/html; charset=utf-8');
-  res.statusCode = 200;
-  res.end(result.html);
+export function getSharedView(cfg: HostConfig, token: string, meta: ShareRequestMeta): ShareResponse {
+  const result = resolveSharedView(cfg, token, meta);
+  if (!result.found || !result.link || result.html === undefined) return notFoundPage();
+  return { status: 200, contentType: 'text/html; charset=utf-8', body: result.html, frameAncestors: result.link.frameAncestors };
 }
 
 /** GET /share/:token/model — the snapshot canvas model JSON + download flags. */
-export function serveSharedModel(cfg: HostConfig, token: string, req: IncomingMessage, res: ServerResponse): void {
-  const result = resolveSharedView(cfg, token, shareRequestMeta(req));
+export function getSharedModel(cfg: HostConfig, token: string, meta: ShareRequestMeta): ShareResponse {
+  const result = resolveSharedView(cfg, token, meta);
   if (!result.found || !result.link) {
-    harden(res, undefined, 'application/json');
-    res.statusCode = 404;
-    res.end(JSON.stringify({ error: 'not found', outcome: result.outcome }));
-    return;
+    return { status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not found', outcome: result.outcome }) };
   }
-  harden(res, result.link, 'application/json');
-  res.statusCode = 200;
-  res.end(
-    JSON.stringify({
+  return {
+    status: 200,
+    contentType: 'application/json',
+    frameAncestors: result.link.frameAncestors,
+    body: JSON.stringify({
       model: result.model ? JSON.parse(result.model) : null,
       allowDownloadHtml: result.allowDownloadHtml,
       allowDownloadOpenapi: result.allowDownloadOpenapi,
     }),
-  );
+  };
 }
 
 /** GET /share/:token/openapi[?spec=<portalId>] — a self-contained viewer page for
- *  a captured OpenAPI document. `spec` selects WHICH per-portal API to view; with
- *  several captured and no `spec` the orchestrator hands back the index, which is
- *  rendered as a link list rather than merged into one viewer; with exactly one
- *  that API opens directly. An unknown `spec` is refused (404), not substituted. */
-export function serveSharedOpenApi(cfg: HostConfig, token: string, req: IncomingMessage, res: ServerResponse): void {
-  const result = downloadArtifact(cfg, token, 'openapi', shareRequestMeta(req), specParam(req));
-  if (!result.found || result.content === undefined) return notFoundPage(res);
+ *  a captured OpenAPI document. `portalId` selects WHICH per-portal API to view;
+ *  with several captured and none selected the orchestrator hands back the index,
+ *  which is rendered as a link list rather than merged into one viewer; with
+ *  exactly one that API opens directly. An unknown selection is refused (404),
+ *  not substituted. */
+export function getSharedOpenApi(
+  cfg: HostConfig,
+  token: string,
+  meta: ShareRequestMeta,
+  portalId?: string,
+): ShareResponse {
+  const result = downloadArtifact(cfg, token, 'openapi', meta, portalId);
+  if (!result.found || result.content === undefined) return notFoundPage();
   const index = asOpenApiIndex(result.content);
   // Swagger UI inlines its own scripts + styles, so the frame-ancestors-only CSP
   // (no script-src) leaves them free to run.
-  harden(res, undefined, 'text/html; charset=utf-8');
-  res.statusCode = 200;
-  res.end(index ? sharedOpenApiIndexPage(index) : swaggerUiPage(result.content, 'Shared API'));
+  return {
+    status: 200,
+    contentType: 'text/html; charset=utf-8',
+    body: index ? sharedOpenApiIndexPage(index) : swaggerUiPage(result.content, 'Shared API'),
+  };
 }
 
 /** GET /share/:token/download/:kind[?spec=<portalId>] — a permitted artifact
- *  download. For openapi, `spec` selects one per-portal document (its id lands in
- *  the filename so several downloads never collide); omitted with several
+ *  download. For openapi, `portalId` selects one per-portal document (its id lands
+ *  in the filename so several downloads never collide); omitted with several
  *  captured specs downloads the index listing them. */
-export function serveSharedDownload(
+export function downloadSharedArtifact(
   cfg: HostConfig,
   token: string,
   kind: string,
-  req: IncomingMessage,
-  res: ServerResponse,
-): void {
-  const portalId = specParam(req);
-  const result = downloadArtifact(cfg, token, kind, shareRequestMeta(req), portalId);
+  meta: ShareRequestMeta,
+  portalId?: string,
+): ShareResponse {
+  const result = downloadArtifact(cfg, token, kind, meta, portalId);
   if (!result.found || result.content === undefined) {
     if (result.outcome === 'denied-download') {
-      harden(res, undefined, 'text/plain');
-      res.statusCode = 403;
-      res.end('download not permitted');
-      return;
+      return { status: 403, contentType: 'text/plain', body: 'download not permitted' };
     }
-    return notFoundPage(res);
+    return notFoundPage();
   }
-  harden(res, undefined, result.contentType ?? 'application/octet-stream');
-  res.setHeader(
-    'content-disposition',
-    `attachment; filename="${downloadFilename(kind, portalId, result.content)}"`,
-  );
-  res.statusCode = 200;
-  res.end(result.content);
+  return {
+    status: 200,
+    contentType: result.contentType ?? 'application/octet-stream',
+    body: result.content,
+    filename: downloadFilename(kind, portalId, result.content),
+  };
+}
+
+/** Write a share response with the hardening headers every /share response
+ *  carries. The embedding allowlist drives frame-ancestors: an empty or absent
+ *  allowlist forbids framing entirely. No session cookie is ever set. */
+function writeShareResponse(res: ServerResponse, response: ShareResponse): void {
+  const frameAncestors = response.frameAncestors?.length ? response.frameAncestors.join(' ') : "'none'";
+  res.setHeader('content-type', response.contentType);
+  res.setHeader('referrer-policy', 'no-referrer');
+  res.setHeader('x-robots-tag', 'noindex, nofollow');
+  res.setHeader('content-security-policy', `frame-ancestors ${frameAncestors}`);
+  res.setHeader('cache-control', 'no-store');
+  if (response.filename) res.setHeader('content-disposition', `attachment; filename="${response.filename}"`);
+  res.statusCode = response.status;
+  res.end(response.body);
+}
+
+/**
+ * The /share router entry: GET /share/:token[/model|/openapi|/download/:kind].
+ * Parses the path, derives the request meta and the `spec` selection, calls the
+ * portal method the path names and writes its response. An unrecognised path
+ * under /share answers a JSON 404.
+ */
+export function handleShareRequest(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
+  const pathname = new URL(req.url ?? '/', 'http://share.invalid').pathname;
+  const parts = pathname.split('/').filter(Boolean); // ['share', token, sub?, kind?]
+  const token = decodeURIComponent(parts[1] ?? '');
+  if (!token) return sendJson(res, 404, { error: 'not found' });
+  const meta = shareRequestMeta(req);
+  if (req.method === 'GET' && parts.length === 2) {
+    return writeShareResponse(res, getSharedView(cfg, token, meta));
+  }
+  if (req.method === 'GET' && parts[2] === 'model') {
+    return writeShareResponse(res, getSharedModel(cfg, token, meta));
+  }
+  if (req.method === 'GET' && parts[2] === 'openapi') {
+    return writeShareResponse(res, getSharedOpenApi(cfg, token, meta, specParam(req)));
+  }
+  if (req.method === 'GET' && parts[2] === 'download') {
+    if (!parts[3]) return sendJson(res, 404, { error: 'not found' });
+    return writeShareResponse(res, downloadSharedArtifact(cfg, token, decodeURIComponent(parts[3]), meta, specParam(req)));
+  }
+  sendJson(res, 404, { error: 'not found' });
 }

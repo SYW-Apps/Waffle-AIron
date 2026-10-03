@@ -15,7 +15,7 @@ import { createProjectRecord } from '../../src/server/projects.js';
 import { createLink } from '../../src/server/sharelinks.js';
 import { captureSnapshot, putSnapshot } from '../../src/server/sharesnapshots.js';
 import { downloadArtifact } from '../../src/server/shareaccess.js';
-import { serveSharedOpenApi, serveSharedDownload } from '../../src/server/sharehttp.js';
+import { handleShareRequest } from '../../src/server/sharehttp.js';
 import { exportProjectSurface } from '../../src/server/landscape.js';
 import { hashToken } from '../../src/server/credentials.js';
 import { mintUserToken, allow, subjectOf } from './helpers.js';
@@ -101,7 +101,7 @@ function buildTwoPortals(root: string): void {
 /** A minimal request carrying only what the share portal reads: the query
  *  string (the `spec` selector) and the access-log meta headers. */
 function mockReq(url: string): IncomingMessage {
-  return { headers: { 'user-agent': 'probe/1.0' }, socket: { remoteAddress: '203.0.113.9' }, url } as unknown as IncomingMessage;
+  return { method: 'GET', headers: { 'user-agent': 'probe/1.0' }, socket: { remoteAddress: '203.0.113.9' }, url } as unknown as IncomingMessage;
 }
 
 function mockRes(): { res: ServerResponse; out: { headers: Record<string, string>; statusCode: number; body: string } } {
@@ -292,7 +292,7 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
   it('the viewer indexes several shared APIs, each linking to its own viewer', () => {
     seedLink('SECRET-TOKEN', { openapiSet: TWO_SPECS });
     const { res, out } = mockRes();
-    serveSharedOpenApi(cfg, 'SECRET-TOKEN', mockReq('/share/SECRET-TOKEN/openapi'), res);
+    handleShareRequest(cfg, mockReq('/share/SECRET-TOKEN/openapi'), res);
 
     expect(out.statusCode).toBe(200);
     expect(out.body).toContain('?spec=public-portal');
@@ -309,21 +309,21 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
     seedLink('SECRET-TOKEN', { openapiSet: TWO_SPECS });
 
     const picked = mockRes();
-    serveSharedOpenApi(cfg, 'SECRET-TOKEN', mockReq('/share/SECRET-TOKEN/openapi?spec=internal-portal'), picked.res);
+    handleShareRequest(cfg, mockReq('/share/SECRET-TOKEN/openapi?spec=internal-portal'), picked.res);
     expect(picked.out.statusCode).toBe(200);
     expect(picked.out.body).toContain('SwaggerUIBundle');
     expect(picked.out.body).toContain('/sync');
     expect(picked.out.body).not.toContain('/things');
 
     const ghost = mockRes();
-    serveSharedOpenApi(cfg, 'SECRET-TOKEN', mockReq('/share/SECRET-TOKEN/openapi?spec=ghost-portal'), ghost.res);
+    handleShareRequest(cfg, mockReq('/share/SECRET-TOKEN/openapi?spec=ghost-portal'), ghost.res);
     expect(ghost.out.statusCode).toBe(404);
   });
 
   it('a single-spec share opens directly in Swagger UI, exactly as before', () => {
     seedLink('OLD-TOKEN', { openapi: '{"openapi":"3.1.0","info":{"title":"Legacy"}}' });
     const { res, out } = mockRes();
-    serveSharedOpenApi(cfg, 'OLD-TOKEN', mockReq('/share/OLD-TOKEN/openapi'), res);
+    handleShareRequest(cfg, mockReq('/share/OLD-TOKEN/openapi'), res);
 
     expect(out.statusCode).toBe(200);
     expect(out.body).toContain('SwaggerUIBundle');
@@ -334,7 +334,7 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
     seedLink('SECRET-TOKEN', { openapiSet: TWO_SPECS });
 
     const picked = mockRes();
-    serveSharedDownload(cfg, 'SECRET-TOKEN', 'openapi', mockReq('/share/SECRET-TOKEN/download/openapi?spec=public-portal'), picked.res);
+    handleShareRequest(cfg, mockReq('/share/SECRET-TOKEN/download/openapi?spec=public-portal'), picked.res);
     expect(picked.out.statusCode).toBe(200);
     expect(picked.out.headers['content-disposition']).toBe('attachment; filename="shared-canvas.public-portal.openapi.json"');
     expect(picked.out.body).toBe(TWO_SPECS[0].document);
@@ -342,7 +342,7 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
     // With no selection the download is the INDEX, named for what it is rather
     // than posing as one of the documents.
     const plain = mockRes();
-    serveSharedDownload(cfg, 'SECRET-TOKEN', 'openapi', mockReq('/share/SECRET-TOKEN/download/openapi'), plain.res);
+    handleShareRequest(cfg, mockReq('/share/SECRET-TOKEN/download/openapi'), plain.res);
     expect(plain.out.headers['content-disposition']).toBe('attachment; filename="shared-canvas.openapi.index.json"');
     expect(JSON.parse(plain.out.body).openapiIndex).toBe(true);
   });
@@ -350,7 +350,7 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
   it('a single-document download keeps its original attachment name', () => {
     seedLink('OLD-TOKEN', { openapi: '{"openapi":"3.1.0","info":{"title":"Legacy"}}' });
     const { res, out } = mockRes();
-    serveSharedDownload(cfg, 'OLD-TOKEN', 'openapi', mockReq('/share/OLD-TOKEN/download/openapi'), res);
+    handleShareRequest(cfg, mockReq('/share/OLD-TOKEN/download/openapi'), res);
     expect(out.headers['content-disposition']).toBe('attachment; filename="shared-canvas.openapi.json"');
     expect(JSON.parse(out.body).info.title).toBe('Legacy');
   });

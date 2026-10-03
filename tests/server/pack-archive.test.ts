@@ -8,7 +8,7 @@ import { buildPack } from '@wairon/sdk';
 import { zipSync } from 'fflate';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import * as packs from '../../src/server/packs.js';
-import { AdminAuthError } from '../../src/server/admin.js';
+import { AdminAuthError } from '../../src/server/errors.js';
 import { UnauthenticatedError } from '../../src/server/errors.js';
 import { createPlacedProject, mintUserToken } from './helpers.js';
 import { loadProjectConfig } from '../../src/core/index.js';

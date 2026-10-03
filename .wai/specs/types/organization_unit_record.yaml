@@ -65,7 +65,17 @@ fields:
       human-chosen leaf name at this level (e.g. "it", "team_a"), reused freely across different
       parents: company_a.it and company_b.it coexist.
     optional: false
-methods: []
+methods:
+  - name: fitsUnder
+    signature: 'fitsUnder(parentKind: string | null): void'
+    returns: void
+    description: >-
+      Refuse a unit kind that may not sit under a parent kind: a root unit (no parent) must be a
+      business_entity, and otherwise the kind must be allowed directly under the parent's kind, both
+      canonical kinds. Enforced by the orchestrators on new and moved units only, so units stored
+      before the rule are never invalidated retroactively.
+    sourcePath: src/server/organization.ts
+    symbol: validateUnitHierarchy
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:11.067Z'
-updatedAt: '2026-10-03T17:03:38.684Z'
+updatedAt: '2026-10-03T17:53:21.305Z'

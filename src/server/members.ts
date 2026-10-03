@@ -50,6 +50,7 @@ import type {
   ProjectParentLink,
   ReachComparison,
   RepositoryScope,
+  HostConfig,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -230,7 +231,7 @@ function settingRefusals(
 // ── apply / discard ─────────────────────────────────────────────────────────
 
 /** imember_registration.apply — commit a confirmed, unblocked plan all or nothing, and audit it. */
-export function apply(dataDir: string, plan: MemberUpgradePlan): MemberUpgradeReport {
+export function apply(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, plan: MemberUpgradePlan): MemberUpgradeReport {
   const planned = plan;
   // Steps 1-2.
   if (planned.refusals.length > 0 || !planned.rehearsal) {
@@ -242,7 +243,7 @@ export function apply(dataDir: string, plan: MemberUpgradePlan): MemberUpgradeRe
   // Step 4.
   if (!outcome.committed) {
     // Steps 10-11.
-    audit(dataDir, {
+    audit(cfg, {
       action: 'member.upgrade', outcome: 'failed', level: 'warning',
       metadata: JSON.stringify({ failure: outcome.failure, restored: outcome.restored, unrestored: outcome.unrestored }),
     });
@@ -251,7 +252,7 @@ export function apply(dataDir: string, plan: MemberUpgradePlan): MemberUpgradeRe
   // Steps 5-6.
   for (const m of planned.members.filter(isWrite)) {
     const rows = planned.reach.filter((r) => r.memberId === m.record.id);
-    audit(dataDir, {
+    audit(cfg, {
       action: 'member.registered', outcome: 'success', level: 'info',
       projectId: m.record.id, composition: m.familyRootId, target: m.record.id,
       metadata: JSON.stringify({ parent: m.record.parentProjectId, memberPath: m.record.memberPath, action: m.action, reachRows: rows.length, allEqual: rows.every((r) => r.equal) }),
@@ -259,7 +260,7 @@ export function apply(dataDir: string, plan: MemberUpgradePlan): MemberUpgradeRe
   }
   // Steps 7-8.
   for (const n of planned.narrowings) {
-    audit(dataDir, {
+    audit(cfg, {
       action: 'token.narrowed', outcome: 'success', level: 'security', target: n.keyId,
       metadata: JSON.stringify({ before: n.before, after: n.after, widening: n.widening }),
     });
@@ -274,11 +275,11 @@ export function discard(plan: MemberUpgradePlan): void {
   if (plan.rehearsal) hostMigrations.drop(plan.rehearsal);
 }
 
-/** One best-effort upgrade audit event by the operator. */
-function audit(dataDir: string, fields: Partial<AuditEvent> & { action: string; outcome: string; level: string }): void {
+/** One best-effort upgrade audit event by the operator, under the configured audit policy. */
+function audit(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, fields: Partial<AuditEvent> & { action: string; outcome: string; level: string }): void {
   const event: AuditEvent = { id: '', timestamp: '', category: 'project', actor: OPERATOR, ...fields };
   try {
-    appendAuditEvent(dataDir, event, effectiveAuditPolicy());
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (e) {
     console.error(`[sdd_host] audit append failed for ${event.action}: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -303,8 +304,8 @@ export function pending(dataDir: string): number {
  * different, the bound project's), and audit each as migration.recovered. A
  * failure is logged and never fails the request.
  */
-export function recoverUnfinishedMigrations(dataDir: string, principal: Principal, binding: ProjectBinding): RecoveredTransaction[] {
-  const familyRoot = listProjectRecords(dataDir).find((r) => r.id === binding.familyRootId);
+export function recoverUnfinishedMigrations(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, principal: Principal, binding: ProjectBinding): RecoveredTransaction[] {
+  const familyRoot = listProjectRecords(cfg.dataDir).find((r) => r.id === binding.familyRootId);
   const roots: { root: string; projectId: string }[] = [];
   if (familyRoot?.rootPath) roots.push({ root: familyRoot.rootPath, projectId: familyRoot.id });
   if (!roots.some((r) => path.resolve(r.root) === path.resolve(binding.rootPath))) roots.push({ root: binding.rootPath, projectId: binding.projectId });
@@ -319,7 +320,7 @@ export function recoverUnfinishedMigrations(dataDir: string, principal: Principa
       continue;
     }
     // Steps 3-4.
-    for (const t of here) auditRecovery(dataDir, principal, projectId, t);
+    for (const t of here) auditRecovery(cfg, principal, projectId, t);
     found.push(...here);
   }
   // Step 5.
@@ -327,7 +328,7 @@ export function recoverUnfinishedMigrations(dataDir: string, principal: Principa
 }
 
 /** Step 4: one migration.recovered audit event and server log line per transaction. */
-function auditRecovery(dataDir: string, principal: Principal, projectId: string, t: RecoveredTransaction): void {
+function auditRecovery(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, principal: Principal, projectId: string, t: RecoveredTransaction): void {
   console.error(`[sdd_host] project ${projectId}: unfinished family migration ${t.id} (${t.verb}, coordinator phase ${t.phase}) — ${t.action}`);
   const actor: PrincipalSubject = principal.subject ?? { userId: `token:${principal.tokenId}`, kind: 'service', issuer: 'local' };
   const event: AuditEvent = {
@@ -344,7 +345,7 @@ function auditRecovery(dataDir: string, principal: Principal, projectId: string,
     metadata: JSON.stringify({ verb: t.verb, phase: t.phase, action: t.action }),
   };
   try {
-    appendAuditEvent(dataDir, event, effectiveAuditPolicy());
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (e) {
     console.error(`[sdd_host] audit append failed for migration.recovered (target=${t.id}): ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -359,11 +360,11 @@ function auditRecovery(dataDir: string, principal: Principal, projectId: string,
  * without it. A failure is logged and answers nothing; it never prevents the
  * server from starting.
  */
-export function recoverData(dataDir: string, fix: boolean): RecoveredTransaction[] {
+export function recoverData(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, fix: boolean): RecoveredTransaction[] {
   // Step 1.
   let found: RecoveredTransaction[];
   try {
-    found = hostMigrations.recover(path.resolve(dataDir), fix);
+    found = hostMigrations.recover(path.resolve(cfg.dataDir), fix);
   } catch (e) {
     console.error(`[sdd_host] recovery under the data directory failed: ${e instanceof Error ? e.message : String(e)}`);
     return [];
@@ -372,7 +373,7 @@ export function recoverData(dataDir: string, fix: boolean): RecoveredTransaction
   if (fix) {
     for (const t of found) {
       console.error(`[sdd_host] data directory: unfinished ${t.verb} transaction ${t.id} (coordinator phase ${t.phase}) — ${t.action}`);
-      audit(dataDir, {
+      audit(cfg, {
         action: 'migration.recovered', outcome: t.action === 'refused' ? 'failed' : 'success', level: t.action === 'refused' ? 'warning' : 'info',
         target: t.id, metadata: JSON.stringify({ verb: t.verb, phase: t.phase, action: t.action, owners: t.owners.length }),
       });
@@ -467,7 +468,8 @@ interface MembershipChange {
  * re-key (a member rename) or disable records, list and audit the reach those
  * changes altered, and publish ONE commit covering every touched project.
  */
-export function reconcile(dataDir: string, principal: Principal, projectId: string, touched: string[]): MemberReconciliation {
+export function reconcile(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, principal: Principal, projectId: string, touched: string[]): MemberReconciliation {
+  const dataDir = cfg.dataDir;
   // Steps 1-2.
   const family = listFamilyRecords(dataDir, projectId);
   const familyRoot = family[0];
@@ -504,7 +506,7 @@ export function reconcile(dataDir: string, principal: Principal, projectId: stri
   const reachChanges = [...reachOf(users, world, changes, listAssignments(dataDir)), ...carried];
   // Steps 20-22: every touched project audited as its own event, and its repository scope.
   const ids = [...new Set([...touched, ...changes.map((c) => c.id)])];
-  for (const id of ids) auditTouched(dataDir, principal, projectId, id, changes.find((c) => c.id === id), reachChanges);
+  for (const id of ids) auditTouched(cfg, principal, projectId, id, changes.find((c) => c.id === id), reachChanges);
   // Step 23: one commit over every touched project's own .wai/.
   const commit = publishFamily(dataDir, ids, `wairon: reconcile the family of ${projectId} (${ids.join(', ')})`);
   // Step 24.
@@ -655,9 +657,9 @@ function listChangedLinks(changes: MembershipChange[]): ProjectParentLink[] {
 }
 
 /** Step 21: one event per touched project, naming it, with the initiating project as composition. */
-function auditTouched(dataDir: string, principal: Principal, projectId: string, id: string, change: MembershipChange | undefined, reach: ReachComparison[]): void {
+function auditTouched(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, principal: Principal, projectId: string, id: string, change: MembershipChange | undefined, reach: ReachComparison[]): void {
   const rows = reach.filter((r) => r.memberId === id);
-  audit(dataDir, {
+  audit(cfg, {
     action: change ? `member.${change.kind}` : 'family.changed', outcome: 'success', level: 'info',
     actor: actorOf(principal), tokenId: principal.tokenId, projectId: id, composition: projectId, target: id,
     metadata: JSON.stringify({ ...(change ? { ...change.detail, ...(change.previousId ? { previousId: change.previousId } : {}) } : {}), reach: reachSummary(rows) }),
@@ -706,7 +708,8 @@ const RELOCATION_AREAS = ['projects.json', 'organization.json'];
  * top-level, placed in its former family root's units); the plan lists who
  * loses access.
  */
-export function detach(dataDir: string, principal: Principal, binding: ProjectBinding, alias: string, apply: boolean): MemberDetachment {
+export function detach(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, principal: Principal, binding: ProjectBinding, alias: string, apply: boolean): MemberDetachment {
+  const dataDir = cfg.dataDir;
   // Steps 1-2.
   const family = listFamilyRecords(dataDir, binding.projectId);
   const declared = family[0] ? planMemberRecords(dataDir, family[0].id) : [];
@@ -745,7 +748,7 @@ export function detach(dataDir: string, principal: Principal, binding: ProjectBi
   // Step 17.
   if (!outcome.committed) {
     // Steps 22-23.
-    audit(dataDir, {
+    audit(cfg, {
       action: 'member.detach', outcome: 'failed', level: 'warning', actor: actorOf(principal), tokenId: principal.tokenId,
       projectId: memberId, composition: binding.projectId, target: memberId,
       metadata: JSON.stringify({ failure: outcome.failure, restored: outcome.restored, unrestored: outcome.unrestored }),
@@ -753,7 +756,7 @@ export function detach(dataDir: string, principal: Principal, binding: ProjectBi
     return { memberId, plan: { ...planned, rehearsal: undefined }, newRoot, reachLost, applied: false, outcome };
   }
   // Step 18.
-  audit(dataDir, {
+  audit(cfg, {
     action: 'member.detached', outcome: 'success', level: 'info', actor: actorOf(principal), tokenId: principal.tokenId,
     projectId: memberId, composition: binding.projectId, target: memberId,
     metadata: JSON.stringify({ newRoot, reachLost: reachSummary(reachLost), gitBinding: NO_GIT_BINDING }),
@@ -855,7 +858,8 @@ function touchedScopes(dataDir: string, family: HostedProjectRecord[], changes: 
  * member and its own placements removed, in one transaction; the plan lists
  * every reach change.
  */
-export function adopt(dataDir: string, principal: Principal, binding: ProjectBinding, alias: string, path: string, apply: boolean): MemberAdoption {
+export function adopt(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, principal: Principal, binding: ProjectBinding, alias: string, path: string, apply: boolean): MemberAdoption {
+  const dataDir = cfg.dataDir;
   const memberPath = path;
   // Step 1: the planner resolves the hosted producer's root through the request's record lookup.
   const relocation = { to: memberTarget(binding, memberPath), coordinator: hostedRoot(dataDir), areas: RELOCATION_AREAS };
@@ -886,7 +890,7 @@ export function adopt(dataDir: string, principal: Principal, binding: ProjectBin
   const outcome = hostMigrations.commit(plan.rehearsal, changes, 'adopt');
   if (!outcome.committed) {
     // Steps 22-23.
-    audit(dataDir, {
+    audit(cfg, {
       action: 'member.adopt', outcome: 'failed', level: 'warning', actor: actorOf(principal), tokenId: principal.tokenId,
       projectId: adoptedId, composition: binding.projectId, target: adoptedId,
       metadata: JSON.stringify({ failure: outcome.failure, restored: outcome.restored, unrestored: outcome.unrestored }),
@@ -895,7 +899,7 @@ export function adopt(dataDir: string, principal: Principal, binding: ProjectBin
   }
   // Step 18.
   const removed = world.placements.filter((p) => p.projectId === adoptedId).map((p) => p.unitId);
-  audit(dataDir, {
+  audit(cfg, {
     action: 'member.adopted', outcome: 'success', level: 'info', actor: actorOf(principal), tokenId: principal.tokenId,
     projectId: adoptedId, composition: binding.projectId, target: adoptedId,
     metadata: JSON.stringify({ memberPath, placementsRemoved: removed, reach: reachSummary(reachChanges) }),

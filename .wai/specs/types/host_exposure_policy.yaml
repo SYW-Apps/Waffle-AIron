@@ -59,7 +59,16 @@ fields:
     type: boolean
     description: 'Whether the browser web UI (canvas, specs, admin) is served. Opt-in: default false.'
     optional: false
-methods: []
+methods:
+  - name: effective
+    signature: 'effective(override?: HostExposurePolicy | null): HostExposurePolicy'
+    returns: HostExposurePolicy
+    description: >-
+      The effective exposure posture for a partial override: each flag the override sets wins, and
+      every unset flag keeps the compatible default (the admin API local-only, the admin UI and
+      control-plane APIs on, TLS required, the web UI off).
+    sourcePath: src/server/policy.ts
+    symbol: effectiveExposure
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:28.871Z'
-updatedAt: '2026-10-03T17:04:41.102Z'
+updatedAt: '2026-10-03T17:53:23.196Z'

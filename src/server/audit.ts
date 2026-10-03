@@ -58,12 +58,13 @@ const DEFAULT_AUDIT_POLICY: AuditRetentionPolicy = {
 
 /**
  * host_config.effectiveAuditPolicy — the audit retention policy in force: the
- * configured `auditPolicy`, else the secure default. The one place the policy is
- * resolved; every audit append passes what it answers. A tool running without a
- * host config (an offline migration) gets the secure default.
+ * secure default with each field the configured `auditPolicy` sets laid over it.
+ * The one place the policy is resolved; every audit append passes what it
+ * answers. A tool running without a host config (an offline migration) gets the
+ * secure default.
  */
 export function effectiveAuditPolicy(cfg?: Pick<HostConfig, 'auditPolicy'>): AuditRetentionPolicy {
-  return cfg?.auditPolicy ?? DEFAULT_AUDIT_POLICY;
+  return cfg?.auditPolicy ? { ...DEFAULT_AUDIT_POLICY, ...cfg.auditPolicy } : DEFAULT_AUDIT_POLICY;
 }
 
 // ── file helpers ───────────────────────────────────────────────────────────

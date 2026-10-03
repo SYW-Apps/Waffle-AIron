@@ -31,7 +31,7 @@ import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { upsertProjectRelation } from '../../src/server/relations.js';
 import { getPublicSurfaceSnapshot } from '../../src/server/surfaces.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
-import { ForbiddenError } from '../../src/server/identity.js';
+import { ForbiddenError } from '../../src/server/errors.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type {
   ApiKeyRecord,

@@ -10,7 +10,15 @@ methods:
     calls:
       - role_store.load
     symbol: listRoles
+  - name: effective
+    narrative: []
+    intent: >-
+      Return every stored role whose id is not a reserved built-in id, followed by the built-in role
+      definitions, so a stray stored row can never shadow a built-in.
+    calls:
+      - role_store.load
+    symbol: indexListEffectiveRoles
 detail: intent
 status: complete
 createdAt: '2026-07-15T20:28:42.876Z'
-updatedAt: '2026-09-19T21:26:58.240Z'
+updatedAt: '2026-10-03T18:03:27.077Z'

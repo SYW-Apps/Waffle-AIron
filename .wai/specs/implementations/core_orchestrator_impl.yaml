@@ -774,6 +774,13 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          Bind the project config repository to that root, so the member declarations are read from
+          its own project.yaml rather than the ambient root's
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: at
+      - stepNumber: 2
+        description: >-
           Read the project's member declarations at that root: its project.yaml `members`
           (project_config.declaredMembers(), read through that root's binding, as the scan reads a
           root's configuration) and, for one release, the subsystem specs of its own tree carrying a
@@ -782,19 +789,19 @@ methods:
           project — its subsystems are this root's own, generated, briefed and backfilled with it —
           so it is not listed
         type: local
-      - stepNumber: 2
+      - stepNumber: 3
         description: Walk the member declarations
         type: loop
         loopKind: forEach
         over: the project's member declarations, members entries first
-        endStep: 4
-      - stepNumber: 3
+        endStep: 5
+      - stepNumber: 4
         description: Resolve the path inside the project root; an absolute or escaping path is skipped
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Record the member's directory with its alias and declaration form
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return the direct members
         type: return
         outcome: ChainedSubprojectDir[]
@@ -2264,4 +2271,4 @@ methods:
     conformance: 'off'
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T17:10:08.723Z'
+updatedAt: '2026-10-03T18:00:27.938Z'

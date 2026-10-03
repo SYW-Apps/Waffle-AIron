@@ -1,6 +1,6 @@
 import { listOrganizationUnits, listProjectPlacements } from './organization.js';
 import { listAssignments } from './permissions.js';
-import { listRoles, BUILTIN_ROLES, isBuiltinRoleId } from './roles.js';
+import { listEffectiveRoles } from './roles.js';
 import { resolvePermission, resolveSubsystemReach, resolveVisibleScopes } from './permission-rules.js';
 import { listProjectRecords } from './projects.js';
 import type {
@@ -11,7 +11,6 @@ import type {
   PermissionWorld,
   Principal,
   ProjectParentLink,
-  Role,
   VisibleScope,
 } from './types.js';
 
@@ -29,17 +28,6 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * The role set permission rules walk: the intrinsic BUILT-IN roles merged over the
- * stored admin-defined ones. Built-ins are code constants, never stored rows, so
- * a binding to one ALWAYS resolves — there is no seeding step to forget and no
- * silent admin lockout. A stray stored row carrying a reserved id can never
- * shadow the built-in definition.
- */
-function mergeRoles(stored: Role[]): Role[] {
-  return [...stored.filter((r) => !isBuiltinRoleId(r.id)), ...BUILTIN_ROLES];
-}
-
-/**
  * Gather the read-only world the pure permission rules walk: the organization tree,
  * project placements, the member records' parent links, the assignment grid, and
  * the role definitions. This is the only I/O in the authorization path.
@@ -53,10 +41,10 @@ function gatherWorld(dataDir: string): PermissionWorld {
   const parents = parentLinksOf(listProjectRecords(dataDir));
   // Step 4: gather the relevant permission assignments.
   const assignments = listAssignments(dataDir);
-  // Step 5: gather the role definitions the subject's bindings reference.
-  const roles = listRoles(dataDir);
-  // Step 6: assemble the world, merging the intrinsic built-in roles.
-  return { assignments, roles: mergeRoles(roles), units, placements, parents };
+  // Step 5: gather the effective role set — the built-in roles merged over the stored ones.
+  const roles = listEffectiveRoles(dataDir);
+  // Step 6: assemble the world.
+  return { assignments, roles, units, placements, parents };
 }
 
 /** Each member record's link to its parent — the project rungs of a member's chain. */

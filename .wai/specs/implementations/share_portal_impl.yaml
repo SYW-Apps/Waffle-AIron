@@ -1,10 +1,14 @@
 id: share_portal_impl
 name: Share Portal Implementation
 description: >-
-  Public /share HTTP surface: sets no-referrer / noindex / frame-ancestors, no session cookie, and
-  routes to the share access orchestrator.
+  Public /share HTTP surface: each portal method is a function shaped like its contract, answering a
+  ShareResponse; handleShareRequest is the transport the host listener mounts — it parses the path,
+  derives the request meta and the `spec` selection, calls the method and writes the response with
+  no-referrer / noindex / frame-ancestors and no session cookie.
 contract: ishare_portal
 sourcePath: src/server/sharehttp.ts
+injectedParams:
+  - cfg
 methods:
   - name: getSharedView
     narrative:
@@ -15,7 +19,6 @@ methods:
         type: call
         targetComponent: share_access_orchestrator
         targetMethod: resolveSharedView
-    symbol: serveSharedView
   - name: getSharedModel
     narrative:
       - stepNumber: 1
@@ -23,7 +26,6 @@ methods:
         type: call
         targetComponent: share_access_orchestrator
         targetMethod: resolveSharedView
-    symbol: serveSharedModel
   - name: getSharedOpenApi
     narrative:
       - stepNumber: 1
@@ -36,7 +38,6 @@ methods:
         type: call
         targetComponent: share_access_orchestrator
         targetMethod: downloadArtifact
-    symbol: serveSharedOpenApi
   - name: downloadSharedArtifact
     narrative:
       - stepNumber: 1
@@ -48,8 +49,7 @@ methods:
         type: call
         targetComponent: share_access_orchestrator
         targetMethod: downloadArtifact
-    symbol: serveSharedDownload
 conformance: declared
 status: complete
 createdAt: '2026-07-18T09:31:51.087Z'
-updatedAt: '2026-07-24T09:47:29.557Z'
+updatedAt: '2026-10-03T17:53:42.925Z'

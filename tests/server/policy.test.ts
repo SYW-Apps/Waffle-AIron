@@ -25,7 +25,7 @@ import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.j
 import { adoptProjectPack, executeApprovedEnsureProfileInstalled, listProjectPacks } from '../../src/server/packs.js';
 import { loadProjectConfig } from '../../src/core/index.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
-import { ForbiddenError } from '../../src/server/identity.js';
+import { ForbiddenError } from '../../src/server/errors.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { existingProjectRoot } from '../../src/server/projects.js';
 import { queryAuditEvents } from '../../src/server/audit.js';

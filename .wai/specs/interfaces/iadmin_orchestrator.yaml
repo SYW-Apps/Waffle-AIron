@@ -392,6 +392,19 @@ methods:
         type: string
     guarantees:
       - idempotent
+  - name: approverFor
+    description: >-
+      The approver identity a hosted lock records for the subject the instance resolved the
+      credential to (source 'hosted'): its user id and display name. No subject means the bootstrap
+      master credential, recorded as the instance master credential. The hosted counterpart of the
+      approval portal's localApprover.
+    signature: 'approverFor(subject?: PrincipalSubject): ApproverIdentity'
+    returns: ApproverIdentity
+    params:
+      - name: subject
+        type: PrincipalSubject
+        description: The resolved subject of the approving credential; absent for the master credential.
+        optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-10-03T17:10:40.721Z'
+updatedAt: '2026-10-03T17:51:28.770Z'

@@ -133,6 +133,18 @@ methods:
         description: The part's alias
     guarantees:
       - idempotent
+  - name: admitNarrowing
+    description: >-
+      Validate one projects-narrowing entry at mint time and answer what is stored: '*' and a record
+      id as they are, a deprecated member-qualified entry mapped to the member's record id by
+      walking the aliases each root declares. An unknown project, an alias that declares no member,
+      an internal subsystem, or a member no record holds is refused with guidance.
+    signature: 'admitNarrowing(entry: string): string'
+    returns: string
+    params:
+      - name: entry
+        type: string
+        description: One entry of a mint request's projects narrowing.
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-10-03T14:20:17.678Z'
+updatedAt: '2026-10-03T17:57:32.620Z'

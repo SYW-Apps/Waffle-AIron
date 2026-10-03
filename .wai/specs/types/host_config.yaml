@@ -28,8 +28,10 @@ fields:
   - name: auditPolicy
     type: AuditRetentionPolicy
     description: >-
-      Instance-level durable audit capture and retention policy. If omitted, the server uses the
-      secure default policy (see effectiveAuditPolicy).
+      Instance-level durable audit capture and retention policy, as overrides of the secure default:
+      each field set here wins and every unset field keeps the default (see effectiveAuditPolicy).
+      The serve command sets it from WAIRON_AUDIT_POLICY, a JSON object of these fields, refusing an
+      unknown field or a wrong type at startup.
     optional: true
   - name: exposurePolicy
     type: HostExposurePolicy
@@ -75,11 +77,12 @@ methods:
     signature: 'effectiveAuditPolicy(): AuditRetentionPolicy'
     returns: AuditRetentionPolicy
     description: >-
-      The audit retention policy in force: the configured auditPolicy, else the secure default
-      (capture info and above, keep 90 days and security events a year, skip reads, redacted
-      metadata). The one place the policy is resolved; every audit append passes what it answers. A
-      tool running without a host config (an offline migration) gets the secure default.
+      The audit retention policy in force: the secure default (capture info and above, keep 90 days
+      and security events a year, skip reads, redacted metadata) with each field the configured
+      auditPolicy sets laid over it. The one place the policy is resolved; every audit append passes
+      what it answers. A tool running without a host config (an offline migration) gets the secure
+      default.
     sourcePath: src/server/audit.ts
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:58:10.758Z'
-updatedAt: '2026-10-03T17:07:50.497Z'
+updatedAt: '2026-10-03T17:53:25.405Z'

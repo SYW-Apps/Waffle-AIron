@@ -11,8 +11,16 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          When the workdir holds no repository, git clone the remote at the branch into it;
-          otherwise fetch and checkout the branch. Return the workdir path.
+          Resolve the token the clone authenticates with: the binding's own secret, else the shared
+          git-token
+        type: call
+        targetComponent: secret_repository
+        targetMethod: resolveGit
+      - stepNumber: 2
+        description: >-
+          When the workdir holds no repository, git clone the remote (authenticated with that token
+          when it is an https remote) at the branch into it; otherwise fetch and checkout the
+          branch. Return the workdir path.
         type: local
   - name: mirrorTree
     narrative:
@@ -29,14 +37,7 @@ methods:
           push the branch (WAIRON_GIT_TOKEN); return false without committing when clean
         type: local
 lint:
-  allow:
-    - code: UNDECLARED_DEPENDENCY
-      at: src/server/gitbacking.ts -> src/utils/secrets.ts
-      reason: >-
-        Uses the shared secrets utility (src/utils/secrets.ts), which is spec-homed under sdd_host's
-        secret_repository — placement debt: a shared-infrastructure candidate, not a sanctioned
-        cross-subsystem reach. The hosted git backing reads the same bot token, exactly as the
-        per-project git_adapter does.
+  allow: []
 status: complete
 createdAt: '2026-07-16T15:40:11.338Z'
-updatedAt: '2026-09-19T20:28:41.183Z'
+updatedAt: '2026-10-03T17:50:37.799Z'

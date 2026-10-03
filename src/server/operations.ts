@@ -5,7 +5,7 @@ import { listProjectRecords } from './projects.js';
 import { sendJson } from './httpio.js';
 import { authorize, visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
 import {
-  COMPATIBLE_DEFAULT_EXPOSURE,
+  effectiveExposure,
   getExposurePolicyRecord,
   setExposurePolicyRecord,
 } from './policy.js';
@@ -502,7 +502,7 @@ function requireInstanceExposureAdmin(cfg: HostConfig, credential: string | null
  */
 export function getExposurePolicy(cfg: HostConfig, credential: string | null): HostExposurePolicy {
   requireInstanceExposureAdmin(cfg, credential);
-  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(getExposurePolicyRecord(cfg.dataDir) ?? {}) };
+  return effectiveExposure(getExposurePolicyRecord(cfg.dataDir));
 }
 
 /**
@@ -517,10 +517,7 @@ export function setExposurePolicy(
   policy: HostExposurePolicy,
 ): HostExposurePolicy {
   const principal = requireInstanceExposureAdmin(cfg, credential);
-  const stored = setExposurePolicyRecord(cfg.dataDir, {
-    ...COMPATIBLE_DEFAULT_EXPOSURE,
-    ...policy,
-  });
+  const stored = setExposurePolicyRecord(cfg.dataDir, effectiveExposure(policy));
   const event: AuditEvent = {
     id: '',
     timestamp: '',

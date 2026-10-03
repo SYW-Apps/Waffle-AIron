@@ -91,6 +91,17 @@ methods:
         type: string[]
         description: The target type keys of the AI tools to refresh
     effect: write
+  - name: body
+    description: >-
+      The wairon guide body for a scope: the global body for a user-level guide file, the local body
+      for a project's own. The same body inject writes between the guide markers, so a renderer that
+      embeds the guide shows exactly what an injected file holds.
+    signature: 'body(scope: ''global'' | ''local''): string'
+    returns: string
+    params:
+      - name: scope
+        type: string
+        description: '''global'' or ''local''.'
 status: complete
 createdAt: '2026-09-23T00:11:03.274Z'
-updatedAt: '2026-10-03T16:45:59.344Z'
+updatedAt: '2026-10-03T17:50:03.100Z'
