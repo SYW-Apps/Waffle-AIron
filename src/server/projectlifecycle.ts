@@ -16,7 +16,8 @@ import type { LockRecord } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { impactHeadline } from '../models/pack-impact.js';
 import { isValidProjectId, listProjectRecords, existingProjectRoot, resolveProjectBinding } from './projects.js';
-import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds } from './authorization.js';
+import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds, resolveFamilyReach } from './authorization.js';
+import { describeDecision } from './types.js';
 import type {
   ApprovalRequest,
   ApprovalDecision,
@@ -420,6 +421,10 @@ function lifecycleAction(
   // subtree it is placed in, or an instance-level default — so a unit admin is
   // first-class over their subtree and nobody reaches across tenants.
   const effective = authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId);
+  // Steps 3-5: a lock signs the whole tree, so it is a whole-tree write — the
+  // project rung decides it (a subsystem's yes never authorizes one), and
+  // nobody signs a subsystem they may not change.
+  if (effective.value !== 'no') refuseDeniedSubsystems(cfg, principal, projectId);
   switch (effective.value) {
     case 'yes': {
       // The pre-authorized entries validate existence themselves (Unknown project).
@@ -454,6 +459,21 @@ function lifecycleAction(
       return createPendingOutcome(cfg, principal, pending, opts.action);
     }
   }
+}
+
+/**
+ * Refuse a whole-tree write (a lock) when a subsystem rule denies the caller
+ * write on any subsystem of the project, naming each subsystem and the rung
+ * that decided it. With no subsystem settings nothing is refused.
+ */
+function refuseDeniedSubsystems(cfg: HostConfig, principal: Principal, projectId: string): void {
+  const denied = resolveFamilyReach(cfg.dataDir, principal, [projectId]).subsystems
+    .filter((s) => s.projectId === projectId && s.permission.value === 'no');
+  if (denied.length === 0) return;
+  throw new ForbiddenError(
+    'a lock signs the whole tree, and the caller may not change these subsystems: '
+    + denied.map((s) => `${s.subsystemId} (decided by ${describeDecision(s.permission)})`).join(', '),
+  );
 }
 
 /**

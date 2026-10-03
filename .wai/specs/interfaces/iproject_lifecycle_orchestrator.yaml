@@ -32,10 +32,14 @@ methods:
       permission over the project's OWN record: yes -> lock directly via the admin plane's
       pre-authorized executeApprovedLock and return a completed ProjectActionOutcome carrying the
       lock record; approval -> create a pending project:lock ApprovalRequest and return a
-      pending-approval outcome; no -> Forbidden. Since stage 7 a member is a record of its own, so
-      locking a member is locking its record — the subproject qualifier parameter is retired. A
-      pending request recorded with a member qualifier before the upgrade executes, for one release,
-      on the member record the qualifier maps to, never wider.
+      pending-approval outcome; no -> Forbidden. A lock signs the whole tree, so it is a whole-tree
+      write: it is decided at the project rung (a subsystem's yes never authorizes one), and it is
+      refused — naming each subsystem and the rung that decided it — when a subsystem rule denies
+      the caller write on any subsystem of the project. With no subsystem settings it is decided
+      exactly as before. Deciding an approval stays approval:decide over the project. Since stage 7
+      a member is a record of its own, so locking a member is locking its record — the subproject
+      qualifier parameter is retired. A pending request recorded with a member qualifier before the
+      upgrade executes, for one release, on the member record the qualifier maps to, never wider.
     signature: 'lockProject(credential: string, projectId: string): ProjectActionOutcome'
     returns: ProjectActionOutcome
     params:
@@ -133,4 +137,4 @@ methods:
         type: number
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-10-01T16:53:13.015Z'
+updatedAt: '2026-10-03T13:39:32.871Z'

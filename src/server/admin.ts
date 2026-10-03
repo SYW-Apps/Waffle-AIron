@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { runWithProjectRoot } from '../utils/fs.js';
+import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
 import type { LockRecord, MemberPin } from '../core/lockfile.js';
@@ -29,7 +29,7 @@ import {
 import * as hostCore from './adapters/core.js';
 import * as hostGit from './adapters/git.js';
 import * as hostProducer from './adapters/producer.js';
-import { validateAsComplete, computeGateStateId, familyApprovals } from './adapters/validator.js';
+import { validateAsComplete, computeGateStateId, familyApprovals, familyRelations } from './adapters/validator.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 // The secret store's write is reached through its module namespace: this module
@@ -785,7 +785,23 @@ export function generateDiagram(cfg: HostConfig, credential: string | null, proj
   requireAdmin(credential);
   const root = existingProjectRoot(cfg.dataDir, project);
   if (!root) throw new Error(`Unknown project "${project}".`);
-  return runWithProjectRoot(root, () => hostCore.renderDiagram(format));
+  // Steps 5-6: only the canvas draws relation health; the master credential's
+  // reach is the whole instance, so the whole family and every hosted producer
+  // its externals name are in reach.
+  const relations = format === 'canvas' ? instanceRelations(cfg, project, root) : undefined;
+  // Step 7.
+  return runWithProjectRoot(root, () => hostCore.renderDiagram(format, relations));
+}
+
+/** The family's relation health over a bound root, read with the whole instance in reach (the master credential's). */
+function instanceRelations(cfg: HostConfig, project: string, root: string): ReturnType<typeof familyRelations> {
+  const familyRoot = listFamilyRecords(cfg.dataDir, project)[0];
+  const reach = {
+    topRoot: familyRoot?.rootPath || root,
+    parentReach: true,
+    hostedLookup: (id: string): string | null => existingProjectRoot(cfg.dataDir, id),
+  };
+  return runWithProjectBinding(root, reach, () => familyRelations());
 }
 
 /** Same as generateDiagram; the HTTP layer sets a download disposition. */

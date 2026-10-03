@@ -88,21 +88,28 @@ methods:
   - name: screen
     description: >-
       Before the data plane dispatches a membership-changing tool it does not serve itself
-      (sdd_attach_member, sdd_rename_project, and stage 8's sdd_promote_member / sdd_demote_member):
-      for attach and promote, list the principals whose reach the change alters — the new project
-      member is added under the bound project, so everyone the bound project's chain grants gains
-      access to it (unchanged in practice: they already reached it as a part); for demote, list
-      every principal a member-own setting denied or narrowed who now reaches the part through the
-      bound project's record, and every token narrowed to the member's record alone that loses its
-      reach (a dry run's result carries the listing; reconcile audits the applied change); for
-      sdd_rename_project whose renamed project is a FAMILY ROOT (bound at a family root and naming
-      no member path), refuse with "renaming a hosted family root's id is not supported; a member
-      can be renamed, or the root recreated" (a member rename — bound at the member, or naming its
-      alias path — is allowed and re-keyed by reconcile). A member whose source is a `../` sibling
-      path or a git URL is refused on a hosted instance before dispatch: hosted roots are isolated,
-      so a hosted project reaches another root only by a `hosted:` source (git sources on hosted are
-      a later, operator-enabled capability).
-    signature: 'screen(binding: ProjectBinding, tool: string, alias: string, path: string): MembershipScreen'
+      (sdd_attach_member, sdd_rename_project, stage 8's sdd_promote_member / sdd_demote_member, and
+      sdd_externalize_subsystem as a project): for attach, promote and an externalize as a project,
+      list the principals whose reach the change alters — the new project member is added under the
+      bound project, so everyone the bound project's chain grants gains access to it (unchanged in
+      practice: they already reached it as a part); for promote and an externalize as a project,
+      also list every subsystem setting of the bound project the move carries onto the new project,
+      before anything is written — from `<project>/<subsystem>` to the new project's scope per
+      subject and value, a collapse of several subsystems with the resulting value (most restrictive
+      wins), and each role binding at a moved subsystem as not carried (can only narrow); for
+      demote, list every principal a member-own setting denied or narrowed who now reaches the part
+      through the bound project's record, and every token narrowed to the member's record alone that
+      loses its reach (a dry run's result carries the listing; reconcile audits the applied change);
+      for sdd_rename_project whose renamed project is a FAMILY ROOT (bound at a family root and
+      naming no member path), refuse with "renaming a hosted family root's id is not supported; a
+      member can be renamed, or the root recreated" (a member rename — bound at the member, or
+      naming its alias path — is allowed and re-keyed by reconcile). A member whose source is a
+      `../` sibling path or a git URL is refused on a hosted instance before dispatch: hosted roots
+      are isolated, so a hosted project reaches another root only by a `hosted:` source (git sources
+      on hosted are a later, operator-enabled capability).
+    signature: >-
+      screen(binding: ProjectBinding, tool: string, alias: string, path: string, newId?: string):
+      MembershipScreen
     returns: MembershipScreen
     params:
       - name: binding
@@ -117,6 +124,12 @@ methods:
         type: string
         description: The member path the call names (attach, adopt)
         optional: true
+      - name: newId
+        type: string
+        description: >-
+          The new project's id a promote or an externalize gives the moved subsystems (promote's id,
+          else the alias; an externalize's subsystem)
+        optional: true
   - name: reconcile
     description: >-
       After a hosted family-shape tool (sdd_add_member, sdd_move_member, the stage-6 family
@@ -127,15 +140,22 @@ methods:
       after its record was disabled — departed, or retired as a part — which goes back to active
       with the own-scope settings it kept and regains exactly that reach, so
       promote-then-demote-then-promote leaves the record as it was; relocate a member whose parent
-      or path changed; re-key a member a project rename gave a new id; RETIRE the record of a member
-      that is now declared as a part (stage 8: a part is part of its parent's record — its specs are
-      served, permissioned and committed through the parent's record): the record is disabled with
-      reason "part of <parent>", never deleted, its own-scope settings kept for a later promote;
-      disable a record whose member the family no longer declares (never delete it). A part never
-      gets a record. List every principal whose reach changed through those membership changes — a
-      retirement included: a member-own `no` stops applying once its specs are reached through the
-      parent, so whoever it denied gains access, and a token narrowed to the retired record alone
-      loses its reach — and audit each, naming the member and the initiating tool. Writes no grant.
+      or path changed; re-key a member a project rename gave a new id — its own-scope settings, its
+      subsystem rules (`<old>/<subsystem>` to `<new>/<subsystem>`, assignments and role bindings
+      alike) and its key entries move to the new id, so nothing it denied stops applying; RETIRE the
+      record of a member that is now declared as a part (stage 8: a part is part of its parent's
+      record — its specs are served, permissioned and committed through the parent's record): the
+      record is disabled with reason "part of <parent>", never deleted, its own-scope settings kept
+      for a later promote; disable a record whose member the family no longer declares (never delete
+      it). A part never gets a record. A promote or an externalize must not widen access: each
+      subsystem rule of the parent (`<parent>/<subsystem>`) whose subsystem moved into a registered
+      or returned member is carried onto the member's own project scope (project:write, the same
+      subject and value; per subject the most restrictive wins) and the subsystem rule is kept. List
+      every principal whose reach changed through those membership changes — a retirement included:
+      a member-own `no` stops applying once its specs are reached through the parent, so whoever it
+      denied gains access, and a token narrowed to the retired record alone loses its reach — and
+      every carried rule, and audit each, naming the member and the initiating tool. Writes no grant
+      beyond the carried subsystem rules.
     signature: 'reconcile(principal: Principal, projectId: string, touched: string[]): MemberReconciliation'
     returns: MemberReconciliation
     params:
@@ -243,6 +263,22 @@ methods:
         description: Resolve (true) or only report (false)
     guarantees:
       - idempotent
+  - name: carrySubsystemRules
+    description: >-
+      Keep a promote or an externalize from widening access: for each given member and its parent,
+      every subsystem rule of the parent (an assignment at `<parent>/<subsystem>`) whose subsystem
+      the member's tree declares and the parent's tree no longer does — those specs moved into the
+      member, and the rules governed them — is set on the member's own project scope (project:write,
+      the same subject and value; per subject the most restrictive value wins, inherit carries
+      nothing, and a subject already holding a setting there keeps it). The subsystem rule itself is
+      kept. Answers one reach row per carried rule: before at the subsystem scope, after at the
+      member's project scope.
+    signature: 'carrySubsystemRules(members: ProjectParentLink[]): ReachComparison[]'
+    returns: ReachComparison[]
+    params:
+      - name: members
+        type: ProjectParentLink[]
+        description: The members registered or returned, each with its parent record
 status: complete
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-02T20:50:54.072Z'
+updatedAt: '2026-10-03T14:20:56.741Z'

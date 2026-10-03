@@ -1,0 +1,41 @@
+kind: value-object
+id: carried_subsystem_rule
+name: CarriedSubsystemRule
+description: >-
+  One subsystem setting a promote or an externalize moves out of its parent, as the plan lists it
+  before anything is written and reconcile carries it: the subsystem scopes it came from, the new
+  project's scope it lands on, the subject, and what happens to it — carried with its value,
+  collapsed with others onto one project rule (the most restrictive wins), or, for a role binding,
+  not carried because a role can only grant and leaving it out can only narrow.
+subsystem: sdd_host
+fields:
+  - name: from
+    type: string[]
+    description: >-
+      The subsystem scopes (`<parent>/<subsystem>`) the setting came from; several when a collapse
+      folds them onto one rule
+    optional: false
+  - name: to
+    type: string
+    description: 'The new project''s id: the project scope the rule lands on'
+    optional: false
+  - name: subject
+    type: string
+    description: The user id, or everyone for an everyone-default
+    optional: false
+  - name: kind
+    type: string
+    description: assignment | role (a role binding anchored at the subsystem)
+    optional: false
+  - name: value
+    type: string
+    description: The project:write value carried (yes | no), or the role id for a role binding
+    optional: false
+  - name: note
+    type: string
+    description: carried | most restrictive wins | not carried (can only narrow)
+    optional: false
+methods: []
+sourcePath: src/server/types.ts
+createdAt: '2026-10-03T14:20:03.847Z'
+updatedAt: '2026-10-03T14:20:03.850Z'

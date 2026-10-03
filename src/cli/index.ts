@@ -1089,6 +1089,7 @@ hostCmd
   .option('--capability <capability>', 'project:read | project:create | project:write | project:admin | approval:decide')
   .option('--value <value>', 'yes | approval | no | inherit', 'yes')
   .option('--project <id>', 'anchor the assignment at a project scope')
+  .option('--subsystem <id>', 'with --project: anchor at a subsystem of that project (project:write only, yes | no | inherit)')
   .option('--unit <unitId>', 'anchor the assignment at an organization-unit scope')
   .option('--instance', 'anchor the assignment at the instance scope (the default)')
   .option('--id <assignmentId>', 'assignment id (for remove)')
@@ -1099,6 +1100,7 @@ hostCmd
       capability: opts.capability,
       value: opts.value,
       project: opts.project,
+      subsystem: opts.subsystem,
       unit: opts.unit,
       instance: opts.instance,
       id: opts.id,

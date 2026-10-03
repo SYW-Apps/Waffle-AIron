@@ -327,27 +327,34 @@ methods:
         onFalseStep: 13
       - stepNumber: 7
         description: >-
-          Refuse the re-key when the new id already has a setting at its own scope (moving the old
-          ones would merge two subjects' access), or when the old or new id is also an organization
-          unit id (the scope remaps are kind-blind and would rewrite the unit's settings too). A
-          refused re-key is recorded for the audit below and goes straight on to registering the new
-          id: the old record stays (disabled with the departed), the new one is registered with only
-          its inheritance, and an operator moves the own-scope settings by hand
+          Refuse the re-key when the new id already has a setting at its own scope or at one of its
+          subsystem scopes (moving the old ones would merge two subjects' access), or when the old
+          or new id is also an organization unit id (the scope remaps are kind-blind and would
+          rewrite the unit's settings too). A refused re-key is recorded for the audit below and
+          goes straight on to registering the new id: the old record stays (disabled with the
+          departed), the new one is registered with only its inheritance, and an operator moves the
+          own-scope settings by hand
         type: branch
-        condition: the new id holds settings, or the old or new id is also a unit id
+        condition: >-
+          the new id holds settings at its own or a subsystem scope, or the old or new id is also a
+          unit id
         onTrueStep: 13
         onFalseStep: 8
       - stepNumber: 8
         label: rekey
         description: >-
           Move every assignment scoped at the old member's own project scope to the new id (explicit
-          member-level yes and no alike) — nothing inherited is stored on the member, so nothing
-          else moves
+          member-level yes and no alike), and every assignment at one of its subsystem scopes from
+          `<old>/<subsystem>` to `<new>/<subsystem>` — a subsystem rule that stayed behind would
+          name no subsystem and stop applying, so whoever it denied would regain write; nothing
+          inherited is stored on the member, so nothing else moves
         type: call
         targetComponent: permission_repository
         targetMethod: remapScope
       - stepNumber: 9
-        description: Move every role binding anchored at the old member's own scope to the new id
+        description: >-
+          Move every role binding anchored at the old member's own scope, or at one of its subsystem
+          scopes, to the new id
         type: call
         targetComponent: user_repository
         targetMethod: remapUnitReferences
@@ -403,47 +410,58 @@ methods:
         targetComponent: project_repository
         targetMethod: setStatus
       - stepNumber: 17
+        label: carry
+        description: >-
+          Carry the subsystem rules that governed the specs of every member registered or returned —
+          a promoted part or an externalized subsystem among them — onto the member's own scope, so
+          the change never widens access; answers one row per carried rule
+        type: call
+        targetComponent: member_registration
+        targetMethod: carrySubsystemRules
+      - stepNumber: 18
         description: >-
           Build the after-world: parent links added for registered, relocated, returned and renamed
-          members, removed for departed ones
+          members, removed for departed ones, holding the rules just carried
         type: call
         targetComponent: member_reach_rules
         targetMethod: relink
-      - stepNumber: 18
+      - stepNumber: 19
         description: For every member whose membership changed
         type: loop
         loopKind: forEach
         over: registered, returned, reparented, renamed and departed members
-        endStep: 19
-      - stepNumber: 19
+        endStep: 20
+      - stepNumber: 20
         description: >-
           Compare its reach before and after (a registration or a return widens it from none, a
           departure narrows it to none, a reparenting moves it, a re-key is equal by construction; a
           retirement moves the part's specs under the parent's chain alone: a member-own `no` stops
           applying, so whoever it denied gains access, and a token narrowed to the retired record
-          alone loses its reach) and keep the rows that differ
+          alone loses its reach) over the after-world holding the carried rules, and keep the rows
+          that differ; every carried rule is listed besides, as its own row
         type: call
         targetComponent: member_reach_rules
         targetMethod: compare
-      - stepNumber: 20
+      - stepNumber: 21
         description: >-
           For every touched project (the tool's written owners plus every record registered,
           returned, relocated, renamed or disabled)
         type: loop
         loopKind: forEach
         over: touched record ids
-        endStep: 22
-      - stepNumber: 21
+        endStep: 23
+      - stepNumber: 22
         description: >-
           Audit the change as its own event — member.registered, member.returned, member.relocated,
           member.renamed (with the settings and key entries moved, or the refused re-key),
           member.retired (stage 8, naming the parent the part now belongs to) or member.departed; or
           family.changed for a project the tool wrote whose membership did not change — with
-          projectId = the touched project, naming the member and the initiating tool
+          projectId = the touched project, naming the member, the initiating tool and each subsystem
+          rule carried onto it
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 22
+      - stepNumber: 23
         label: scope
         description: >-
           Collect its repository scope: the family's one repository root and the project's own .wai/
@@ -451,7 +469,7 @@ methods:
         type: call
         targetComponent: project_repository
         targetMethod: repositoryScope
-      - stepNumber: 23
+      - stepNumber: 24
         description: >-
           Publish ONE commit at the family's repository root whose pathspecs are exactly the touched
           projects' own .wai/ — never another member's tree and never source code; a family that is
@@ -459,7 +477,7 @@ methods:
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-      - stepNumber: 24
+      - stepNumber: 25
         description: >-
           Return what was registered, returned, relocated, renamed, disabled, the reach changes, and
           the commit
@@ -503,10 +521,11 @@ methods:
         targetMethod: list
       - stepNumber: 7
         description: >-
-          Build the after-world: for attach and promote, a parent link from the incoming project
-          member (its alias/path standing in for the id it has no record under yet) to the bound
-          project; for demote (stage 8), the member's record retired — its parent link and its
-          member-own settings gone, its specs reached through the bound project's chain alone
+          Build the after-world: for attach, promote and an externalize as a project, a parent link
+          from the incoming project member (its alias/path standing in for the id it has no record
+          under yet) to the bound project; for demote (stage 8), the member's record retired — its
+          parent link and its member-own settings gone, its specs reached through the bound
+          project's chain alone
         type: call
         targetComponent: member_reach_rules
         targetMethod: relink
@@ -519,7 +538,29 @@ methods:
         targetComponent: member_reach_rules
         targetMethod: compare
       - stepNumber: 9
-        description: Return the reach changes, with no refusal
+        description: >-
+          Does the call move subsystems into a new project — a promote, or an externalize as a
+          project?
+        type: branch
+        condition: the tool is sdd_promote_member or sdd_externalize_subsystem
+        onFalseStep: 12
+      - stepNumber: 10
+        description: >-
+          Which subsystems move: a promoted part's, read in its folder (an externalize names its one
+          subsystem)
+        type: call
+        targetComponent: project_repository
+        targetMethod: partSubsystems
+      - stepNumber: 11
+        description: >-
+          Plan the carry before anything is written: each subsystem setting of the bound project the
+          move carries onto the new project, per subject and value — a collapse with the most
+          restrictive value, a role binding as not carried (can only narrow)
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: carryPlan
+      - stepNumber: 12
+        description: Return the reach changes and the carried settings, with no refusal
         type: return
         outcome: MembershipScreen (attach/adopt)
     detail: full
@@ -876,6 +917,55 @@ methods:
         type: return
         outcome: RecoveredTransaction[]
     detail: full
+  - name: carrySubsystemRules
+    narrative:
+      - stepNumber: 1
+        description: For each member and its parent
+        type: loop
+        loopKind: forEach
+        over: members
+        endStep: 7
+      - stepNumber: 2
+        description: >-
+          Read the subsystems the member's tree and its parent's tree declare now: those the member
+          declares and the parent no longer does moved into the member
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredSubsystems
+      - stepNumber: 3
+        description: Gather the permission world as it stands
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 4
+        description: List every user record (whose subsystem role bindings the plan lists as not carried)
+        type: call
+        targetComponent: user_repository
+        targetMethod: list
+      - stepNumber: 5
+        description: >-
+          Plan the carry over the moved subsystems: per subject one rule on the member's own scope,
+          the most restrictive when several subsystems name the subject; role bindings not carried
+        type: call
+        targetComponent: member_reach_rules
+        targetMethod: carryPlan
+      - stepNumber: 6
+        description: >-
+          Set each rule the plan carries on the member's own project scope as project:write with its
+          value; the subsystem rules themselves are kept
+        type: call
+        targetComponent: permission_repository
+        targetMethod: setAssignment
+      - stepNumber: 7
+        description: >-
+          Record one reach row per carried rule: before at the subsystem scope, after at the
+          member's project scope
+        type: local
+      - stepNumber: 8
+        description: Return the carried rows
+        type: return
+        outcome: ReachComparison[]
+    detail: full
 status: complete
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-02T20:51:51.222Z'
+updatedAt: '2026-10-03T14:21:00.582Z'

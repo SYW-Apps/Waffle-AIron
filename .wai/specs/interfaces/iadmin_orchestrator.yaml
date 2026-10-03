@@ -67,11 +67,16 @@ methods:
     signature: 'lockProject(credential: string, project: string): LockRecord'
     returns: LockRecord
   - name: generateDiagram
-    description: Authenticate, bind the project scope, and return the rendered diagram artifact for the format.
+    description: >-
+      Authenticate, bind the project scope, and return the rendered diagram artifact for the format;
+      a canvas carries the family's relation health, read with the master credential's
+      whole-instance reach.
     signature: 'generateDiagram(credential: string, project: string, format: string): string'
     returns: string
   - name: downloadDiagram
-    description: Authenticate and return the diagram artifact for download (attachment).
+    description: >-
+      Authenticate and return the diagram artifact for download (attachment); a canvas carries the
+      family's relation health, read with the master credential's whole-instance reach.
     signature: 'downloadDiagram(credential: string, project: string, format: string): string'
     returns: string
   - name: diagramViewLink
@@ -381,4 +386,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-10-01T16:53:07.981Z'
+updatedAt: '2026-10-03T13:39:17.266Z'

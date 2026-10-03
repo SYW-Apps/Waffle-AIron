@@ -37,8 +37,35 @@ export type PermissionValue = 'yes' | 'approval' | 'no' | 'inherit';
 /** The value an effective resolution can settle on — `inherit` is consumed by the walk. */
 export type EffectiveValue = Extract<PermissionValue, 'yes' | 'approval' | 'no'>;
 
-/** The scope tiers permissions may be anchored at. */
-export type ScopeKind = 'instance' | 'unit' | 'project';
+/** The scope tiers permissions may be anchored at. A subsystem scope
+ *  (`<projectId>/<subsystemId>`) sits below its project and carries only
+ *  project:write, as yes or no. */
+export type ScopeKind = 'instance' | 'unit' | 'project' | 'subsystem';
+
+/** The separator of a subsystem scope id: `<projectId>/<subsystemId>`. A record id never carries it. */
+export const SUBSYSTEM_SCOPE_SEPARATOR = '/';
+
+/** The label a listing and an explanation give a subsystem rule its project's tree no longer declares. */
+export const SUBSYSTEM_NOT_FOUND = 'subsystem not found';
+
+/** A subsystem scope id's project and subsystem, or null for an id without the separator. */
+export function parseSubsystemScope(scopeId: string): { projectId: string; subsystemId: string } | null {
+  const at = scopeId.indexOf(SUBSYSTEM_SCOPE_SEPARATOR);
+  if (at <= 0 || at === scopeId.length - 1) return null;
+  return { projectId: scopeId.slice(0, at), subsystemId: scopeId.slice(at + 1) };
+}
+
+/** The rung that decided an effective permission, in words a refusal or an explanation can quote. */
+export function describeDecision(p: EffectivePermission): string {
+  const setting = { 'instance-admin': 'the instance-admin bypass', user: 'a user setting', role: 'a role', 'everyone-default': 'the everyone-default', 'instance-default': 'the instance default' }[p.source];
+  if (p.source === 'instance-admin' || p.source === 'instance-default') return setting;
+  if (p.decidedScopeKind === 'subsystem' && p.decidedScopeId) {
+    const parsed = parseSubsystemScope(p.decidedScopeId);
+    return `${setting} at subsystem ${parsed?.subsystemId ?? p.decidedScopeId} of project ${parsed?.projectId ?? ''}`.trim();
+  }
+  if (p.decidedScopeKind && p.decidedScopeKind !== 'instance') return `${setting} at ${p.decidedScopeKind} ${p.decidedScopeId ?? ''}`.trim();
+  return `${setting} at the instance`;
+}
 
 /** One capability→value default a role confers. */
 export interface RolePermission {
@@ -79,12 +106,14 @@ export interface PermissionAssignment {
   /** The user id; absent when subjectKind is 'everyone'. */
   subjectId?: string;
   scopeKind: ScopeKind;
-  /** Qualified unit id or project id; absent when scopeKind is 'instance'. */
+  /** Qualified unit id, project id, or `<projectId>/<subsystemId>`; absent when scopeKind is 'instance'. */
   scopeId?: string;
   capability: Capability;
   value: PermissionValue;
   createdAt: string;
   createdBy?: PrincipalSubject;
+  /** Set on a listing, never stored: "subsystem not found" for a subsystem rule its project no longer declares. */
+  scopeNote?: string;
 }
 
 /** Binds a role to a user within a scope. An unscoped binding applies
@@ -142,8 +171,19 @@ export interface ProjectParentLink {
 export interface FamilyReach {
   /** Family record ids with project:read yes. */
   readable: string[];
-  /** Family record ids with project:write yes. */
+  /** Family record ids with project:write yes (at the project rung). */
   writable: string[];
+  /** The subsystem rungs the principal meets in those records; empty without subsystem settings. */
+  subsystems: SubsystemReach[];
+}
+
+/** One subsystem rung a principal meets in a hosted project, with project:write resolved at it. */
+export interface SubsystemReach {
+  /** The hosted record that owns the subsystem (the parent record for a part's subsystem). */
+  projectId: string;
+  /** The subsystem's local id in that record's tree. */
+  subsystemId: string;
+  permission: EffectivePermission;
 }
 
 /** One row of a reach comparison: one project, subject and capability, before
@@ -178,6 +218,28 @@ export interface PlannedMemberRecord {
 export interface MembershipScreen {
   refusal?: string;
   reachChanges: ReachComparison[];
+  /** Promote and an externalize as a project: every subsystem setting the move carries onto the new project. */
+  carried?: CarriedSubsystemRule[];
+}
+
+/**
+ * One subsystem setting a promote or an externalize moves out of its parent, as
+ * the plan lists it and reconcile carries it: carried with its value, collapsed
+ * with others onto one project rule (the most restrictive wins), or — a role
+ * binding — not carried, because a role only grants and leaving it out can only
+ * narrow.
+ */
+export interface CarriedSubsystemRule {
+  /** The subsystem scopes (`<parent>/<subsystem>`) it came from. */
+  from: string[];
+  /** The new project's id: the project scope it lands on. */
+  to: string;
+  /** The user id, or `everyone` for an everyone-default. */
+  subject: string;
+  kind: 'assignment' | 'role';
+  /** The project:write value carried (yes | no), or the role id for a role binding. */
+  value: string;
+  note: 'carried' | 'most restrictive wins' | 'not carried (can only narrow)';
 }
 
 /** What reconciling a hosted family's member records with the family on disk did. */
@@ -248,12 +310,15 @@ export interface EffectivePermission {
   source: 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default';
   decidedScopeKind?: ScopeKind;
   decidedScopeId?: string;
+  /** Set by the permission explanation only: "subsystem not found" for a subsystem its project does not declare. */
+  scopeNote?: string;
 }
 
 /** One scope in a subject's visibility view: actionable, or an ancestor shown
  *  only as a navigation breadcrumb. Never an ancestor's other children. */
 export interface VisibleScope {
-  scopeKind: 'unit' | 'project';
+  /** A subsystem appears only in a project:write view, and only when it carries a setting of its own. */
+  scopeKind: 'unit' | 'project' | 'subsystem';
   scopeId: string;
   value: EffectiveValue;
   /** True when shown only as an ancestor breadcrumb (not directly actionable). */

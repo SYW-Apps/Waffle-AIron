@@ -201,7 +201,7 @@ methods:
         endStep: 14
         catches:
           - error: a core writer's refusal
-            step: 18
+            step: 21
       - stepNumber: 6
         description: Which writer?
         type: switch
@@ -272,6 +272,32 @@ methods:
         targetComponent: family_transaction
         targetMethod: diff
       - stepNumber: 16
+        label: reach
+        description: >-
+          Judge the changes against the request's write reach: may the request write every project
+          the plan changes, whole? A family migration reshapes its projects whole, so a changed
+          owner needs project-rung write (write_reach.permits with no subsystem) and write on every
+          subsystem of it (write_reach.denials lists none). Outside a hosted request every root the
+          request opens is writable and nothing refuses
+        type: branch
+        condition: >-
+          a changed owner is unwritable at the project rung, or the write reach denies a subsystem
+          of a changed owner
+        onFalseStep: 19
+      - stepNumber: 17
+        description: Drop the rehearsal
+        type: call
+        targetComponent: family_transaction
+        targetMethod: discard
+      - stepNumber: 18
+        description: >-
+          Answer the plan refused: family-partial for each owner it may not write, and
+          subsystem-denied for each denied subsystem of an owner it changes, naming the subsystem
+          and the rung that decided it
+        type: return
+        outcome: refused plan
+      - stepNumber: 19
+        label: relock
         description: >-
           Read each changed owner's lock record; an owner that carries one is a project to re-lock.
           A rename lists every owner it writes, lock or none, the renamed project first: the id is
@@ -279,17 +305,17 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 17
+      - stepNumber: 20
         description: Answer the plan with its rehearsal, file changes and re-lock list
         type: return
         outcome: rehearsed plan
-      - stepNumber: 18
+      - stepNumber: 21
         label: refused-on-copy
         description: Drop the rehearsal
         type: call
         targetComponent: family_transaction
         targetMethod: discard
-      - stepNumber: 19
+      - stepNumber: 22
         description: >-
           Answer the plan with the writer's refusal (internalize-refused, externalize-refused) and
           its message
@@ -378,4 +404,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-10-02T23:59:38.988Z'
+updatedAt: '2026-10-03T13:40:40.368Z'

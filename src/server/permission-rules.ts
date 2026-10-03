@@ -8,8 +8,10 @@ import type {
   PermissionWorld,
   Role,
   ScopeKind,
+  SubsystemReach,
   VisibleScope,
 } from './types.js';
+import { SUBSYSTEM_SCOPE_SEPARATOR, parseSubsystemScope } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Permission Rules (sdd_host) — the PURE hierarchical resolution core.
@@ -28,7 +30,16 @@ import type {
 // never re-collected at every step of the walk. Re-pulling them per step would
 // let a broadly-bound granting role defeat a nearer per-scope deny — a privilege
 // escalation. See the "role anchoring" tests.
+//
+// Below a project sits one more rung, its subsystems (`<projectId>/<subsystemId>`):
+// a subsystem carries only project:write, as yes or no. The rung is visited
+// only for a subsystem target and only for project:write, so every unit and
+// project resolution is exactly what it is without it (no widening by
+// construction), and a subsystem with no setting resolves as its project.
 // ---------------------------------------------------------------------------
+
+/** The one capability a subsystem rung carries: changing that subsystem's specs. */
+const SUBSYSTEM_CAPABILITY = 'project:write';
 
 /** One rung of the ancestor chain the walk climbs. */
 interface Scope {
@@ -95,12 +106,21 @@ function familyRootUnits(projectId: string, world: PermissionWorld): Scope[] {
 
 /**
  * Build the target's ancestor chain leaf->root, ending at the instance root.
- * A project's chain is its own project scope, then each parent project scope up
- * to its family root, then the FAMILY ROOT's placement unit and that unit's
- * ancestors (a placement of a member itself is not a rung) — so a project-scoped
- * setting outranks its parent's, and a parent's outranks the owning unit's.
+ * A subsystem's chain is its own subsystem rung for project:write (none for any
+ * other capability), then its project's chain; an id without the separator
+ * names no scope and is the instance root alone. A project's chain is its own
+ * project scope, then each parent project scope up to its family root, then the
+ * FAMILY ROOT's placement unit and that unit's ancestors (a placement of a
+ * member itself is not a rung) — so a project-scoped setting outranks its
+ * parent's, and a parent's outranks the owning unit's.
  */
-function ancestorChain(targetScopeKind: string, targetScopeId: string, world: PermissionWorld): Scope[] {
+function ancestorChain(capability: string, targetScopeKind: string, targetScopeId: string, world: PermissionWorld): Scope[] {
+  if (targetScopeKind === 'subsystem') {
+    const parsed = parseSubsystemScope(targetScopeId);
+    if (!parsed) return [INSTANCE_ROOT];
+    const own: Scope[] = capability === SUBSYSTEM_CAPABILITY ? [{ kind: 'subsystem', id: targetScopeId }] : [];
+    return [...own, ...ancestorChain(capability, 'project', parsed.projectId, world)];
+  }
   if (targetScopeKind === 'project') {
     const projects = projectChain(targetScopeId, world).map((id) => ({ kind: 'project' as const, id }));
     return [...projects, ...familyRootUnits(targetScopeId, world), INSTANCE_ROOT];
@@ -192,7 +212,10 @@ interface ScopeDecision {
  * role never denies, so 'no'/'inherit' is non-deciding); else the
  * everyone-default; else defer upward.
  */
-function decideScope(settings: ScopeSettings): ScopeDecision | null {
+function decideScope(settings: ScopeSettings, kind: ScopeKind): ScopeDecision | null {
+  // A subsystem is a yes/no setting: only yes and no decide there, so a role's
+  // approval (or an approval value anywhere) defers to the project.
+  if (kind === 'subsystem') return decideSubsystemScope(settings);
   if (isDefinitive(settings.user)) return { value: settings.user, source: 'user' };
 
   const best = settings.roleValues.reduce<PermissionValue | undefined>(
@@ -203,6 +226,15 @@ function decideScope(settings: ScopeSettings): ScopeDecision | null {
 
   if (isDefinitive(settings.everyone)) return { value: settings.everyone, source: 'everyone-default' };
 
+  return null;
+}
+
+/** A subsystem rung's decision: a user yes/no, else a role's yes, else an everyone yes/no; else defer. */
+function decideSubsystemScope(settings: ScopeSettings): ScopeDecision | null {
+  const yesOrNo = (v: PermissionValue | undefined): v is 'yes' | 'no' => v === 'yes' || v === 'no';
+  if (yesOrNo(settings.user)) return { value: settings.user, source: 'user' };
+  if (settings.roleValues.includes('yes')) return { value: 'yes', source: 'role' };
+  if (yesOrNo(settings.everyone)) return { value: settings.everyone, source: 'everyone-default' };
   return null;
 }
 
@@ -225,7 +257,7 @@ export function resolvePermission(
   }
 
   // Step 3: build the target's ancestor chain leaf->root, ending at the instance root.
-  const chain = ancestorChain(targetScopeKind, targetScopeId, world);
+  const chain = ancestorChain(capability, targetScopeKind, targetScopeId, world);
 
   // Step 4: walk the chain, stopping at the nearest scope with a definitive value.
   for (const scope of chain) {
@@ -233,7 +265,7 @@ export function resolvePermission(
     const settings = settingsAtScope(subject, capability, scope, world);
 
     // Step 6: resolve this scope's value by precedence.
-    const decision = decideScope(settings);
+    const decision = decideScope(settings, scope.kind);
 
     // Step 7-8: a definitive value here decides the walk.
     if (decision) {
@@ -261,8 +293,37 @@ function allScopes(world: PermissionWorld): { kind: 'unit' | 'project'; id: stri
   ];
 }
 
+/** A scope a visibility view judges. */
+type JudgedScope = { kind: 'unit' | 'project' | 'subsystem'; id: string };
+
+/**
+ * The subsystem scopes a setting in the world names for this subject: a
+ * project:write assignment at a subsystem scope, or one of the subject's role
+ * bindings anchored at one — each once.
+ */
+function namedSubsystemScopes(subject: PermissionSubject, world: PermissionWorld): string[] {
+  const ids = [
+    ...world.assignments
+      .filter((a) => a.scopeKind === 'subsystem' && a.capability === SUBSYSTEM_CAPABILITY && a.scopeId)
+      .map((a) => a.scopeId as string),
+    ...subject.roleBindings.filter((b) => b.scopeKind === 'subsystem' && b.scopeId).map((b) => b.scopeId as string),
+  ];
+  return [...new Set(ids)].filter((id) => parseSubsystemScope(id) !== null);
+}
+
+/** The scopes a view judges for a capability: every unit and project, and for project:write the named subsystems. */
+function judgedScopes(subject: PermissionSubject, capability: string, world: PermissionWorld): JudgedScope[] {
+  const subsystems = capability === SUBSYSTEM_CAPABILITY
+    ? namedSubsystemScopes(subject, world).map((id) => ({ kind: 'subsystem' as const, id }))
+    : [];
+  return [...allScopes(world), ...subsystems];
+}
+
 /** The ancestor UNITS of a scope (excluding the scope itself), nearest first — a member's are its family root's. */
-function ancestorUnitsOf(scope: { kind: 'unit' | 'project'; id: string }, world: PermissionWorld): string[] {
+function ancestorUnitsOf(scope: JudgedScope, world: PermissionWorld): string[] {
+  if (scope.kind === 'subsystem') {
+    return familyRootUnits(parseSubsystemScope(scope.id)?.projectId ?? '', world).map((s) => s.id as string);
+  }
   if (scope.kind === 'project') return familyRootUnits(scope.id, world).map((s) => s.id as string);
   return unitChain(scope.id, world)
     .map((s) => s.id as string)
@@ -294,8 +355,9 @@ export function resolveVisibleScopes(
   const actionable = new Map<string, VisibleScope>();
   const context = new Map<string, VisibleScope>();
 
-  // Step 4: determine the subject's view of every scope.
-  for (const scope of allScopes(world)) {
+  // Step 4: determine the subject's view of every scope (for project:write, the
+  // subsystem scopes a setting names too).
+  for (const scope of judgedScopes(subject, capability, world)) {
     // Step 5: resolve this scope's effective permission for the given capability.
     const effective = resolvePermission(subject, capability, scope.kind, scope.id, world);
 
@@ -308,6 +370,16 @@ export function resolveVisibleScopes(
         value: effective.value,
         context: false,
       });
+      // A subsystem's breadcrumb starts at its project.
+      const project = scope.kind === 'subsystem' ? parseSubsystemScope(scope.id)?.projectId : undefined;
+      if (project !== undefined && !context.has(scopeKey('project', project))) {
+        context.set(scopeKey('project', project), {
+          scopeKind: 'project',
+          scopeId: project,
+          value: resolvePermission(subject, capability, 'project', project, world).value,
+          context: true,
+        });
+      }
       for (const unitId of ancestorUnitsOf(scope, world)) {
         const key = scopeKey('unit', unitId);
         if (context.has(key)) continue;
@@ -328,6 +400,48 @@ export function resolveVisibleScopes(
     .filter(([key]) => !actionable.has(key))
     .map(([, scope]) => scope);
   return [...actionable.values(), ...contextOnly];
+}
+
+/**
+ * The subsystem rungs the subject meets in one project: every subsystem scope
+ * of the project carrying a setting that applies to the subject (a direct-user
+ * assignment keyed by its id or an alias, an everyone-default, or one of its
+ * role bindings anchored there), each with project:write resolved at it through
+ * resolvePermission's walk. Every subsystem not listed resolves exactly as the
+ * project. An instance-admin meets none: the bypass decides every scope.
+ */
+export function resolveSubsystemReach(
+  subject: PermissionSubject,
+  projectId: string,
+  world: PermissionWorld,
+): SubsystemReach[] {
+  // Steps 1-2: the bypass decides every scope.
+  if (subject.instanceAdmin) return [];
+  // Step 3: the project's subsystem scopes whose settings apply to the subject, each once.
+  const prefix = `${projectId}${SUBSYSTEM_SCOPE_SEPARATOR}`;
+  const applies = (a: PermissionAssignment): boolean =>
+    a.subjectKind === 'everyone' || (a.subjectKind === 'user' && subjectIdMatches(subject, a.subjectId));
+  const scopeIds = [
+    ...world.assignments
+      .filter((a) => a.scopeKind === 'subsystem' && a.scopeId?.startsWith(prefix) && applies(a))
+      .map((a) => a.scopeId as string),
+    ...subject.roleBindings
+      .filter((b) => b.scopeKind === 'subsystem' && b.scopeId?.startsWith(prefix))
+      .map((b) => b.scopeId as string),
+  ];
+  const reach: SubsystemReach[] = [];
+  // Steps 4-6: each judged through the same walk resolvePermission takes.
+  for (const scopeId of new Set(scopeIds)) {
+    const parsed = parseSubsystemScope(scopeId);
+    if (!parsed || parsed.projectId !== projectId) continue;
+    reach.push({
+      projectId,
+      subsystemId: parsed.subsystemId,
+      permission: resolvePermission(subject, SUBSYSTEM_CAPABILITY, 'subsystem', scopeId, world),
+    });
+  }
+  // Step 7: every subsystem not listed resolves exactly as the project.
+  return reach;
 }
 
 /** Capability re-export so consumers share one canonical list. */

@@ -2,6 +2,7 @@ import { resolvePermission } from './permission-rules.js';
 import type {
   ApiKeyRecord,
   Capability,
+  CarriedSubsystemRule,
   EffectivePermission,
   HostedUserRecord,
   PermissionSubject,
@@ -119,6 +120,62 @@ export function compare(
   }
   // Step 6.
   return rows;
+}
+
+/** Who a setting is for: `everyone`, or the user id. */
+const subjectOfSetting = (subjectKind: string, subjectId?: string): string => (subjectKind === 'everyone' ? EVERYONE_ELSE : subjectId ?? '');
+
+/**
+ * imember_reach_rules.carryPlan — the subsystem settings a promote or an
+ * externalize moves from the parent into the new project: per subject, the
+ * parent's project:write yes/no assignments at the moved subsystems fold into
+ * one rule on the new project's scope (the most restrictive when several
+ * subsystems name the subject); a subject already holding a project:write
+ * setting there keeps it; each role binding at a moved subsystem is listed as
+ * not carried (a role only grants, so leaving it out can only narrow).
+ */
+export function carryPlan(
+  users: HostedUserRecord[],
+  world: PermissionWorld,
+  parentId: string,
+  memberId: string,
+  moved: string[],
+): CarriedSubsystemRule[] {
+  const scopes = new Set(moved.map((s) => `${parentId}/${s}`));
+  // Step 1: the parent's rules over the moved subsystems, by subject.
+  const bySubject = new Map<string, { scopes: string[]; values: string[] }>();
+  for (const a of world.assignments) {
+    if (a.scopeKind !== 'subsystem' || !scopes.has(a.scopeId ?? '') || a.capability !== 'project:write') continue;
+    if (a.value !== 'yes' && a.value !== 'no') continue;
+    const subject = subjectOfSetting(a.subjectKind, a.subjectId);
+    const held = bySubject.get(subject) ?? { scopes: [], values: [] };
+    held.scopes.push(a.scopeId as string);
+    held.values.push(a.value);
+    bySubject.set(subject, held);
+  }
+  // Step 2: a subject's own setting on the new project is kept.
+  const own = new Set(world.assignments
+    .filter((a) => a.scopeKind === 'project' && a.scopeId === memberId && a.capability === 'project:write')
+    .map((a) => subjectOfSetting(a.subjectKind, a.subjectId)));
+  // Step 3: one rule per subject.
+  const rules: CarriedSubsystemRule[] = [];
+  for (const [subject, held] of bySubject) {
+    if (own.has(subject)) continue;
+    rules.push({
+      from: [...held.scopes].sort(), to: memberId, subject, kind: 'assignment',
+      value: held.values.includes('no') ? 'no' : 'yes',
+      note: held.scopes.length > 1 ? 'most restrictive wins' : 'carried',
+    });
+  }
+  // Step 4: role bindings at a moved subsystem are not carried.
+  for (const user of users) {
+    for (const b of user.roleBindings ?? []) {
+      if (b.scopeKind !== 'subsystem' || !scopes.has(b.scopeId ?? '')) continue;
+      rules.push({ from: [b.scopeId as string], to: memberId, subject: user.subject.userId || user.id, kind: 'role', value: b.roleId, note: 'not carried (can only narrow)' });
+    }
+  }
+  // Step 5.
+  return rules;
 }
 
 /**

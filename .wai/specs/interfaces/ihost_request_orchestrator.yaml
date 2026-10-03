@@ -19,20 +19,27 @@ methods:
       member's root is read for a narrowed credential. Under a member-qualified binding only tools
       declared tree-scoped are served — every scoped spec tool, and lock and tree transfer acting on
       the bound member; record-scoped tools (project record, repository, landscape discovery) and
-      any tool with no declared scope are refused, so confinement fails closed. Permission
-      capabilities keep resolving over the TOP project (a qualifier narrows reach, never refines
-      grants). For an ordinary scoped tool the tool is classified as a read
-      (sdd_get_*/sdd_validate_*, plus the explicitly listed reads listAgents, getAgent, listDomains,
-      validateTopology and getProjectConfig) or a write (every other name — the explicit write
-      prefixes AND any unrecognized or newly added name, failing closed) and the caller's resolved
-      permission for the matching capability (project:read for reads, project:write for writes) over
-      the bound project MUST be yes, resolved through the authorization component; a missing
-      permission is rejected with a clear MCP error before dispatch. The execute-primary
-      project-lifecycle MCP tools and the hosted landscape discovery MCP tools are dispatched to
-      their orchestrators (already gated) instead of the scoped MCP tool surface and bypass this
-      data-plane permission gate. Appends a redacted audit event for every handled data-plane tool
-      call — stamped with the TOP project id for provenance plus the bound member qualifier when one
-      applied; append failures are recorded as server diagnostics and never fail the request.
+      any tool with no declared scope are refused, so confinement fails closed. For an ordinary
+      scoped tool the tool is classified as a read (sdd_get_*/sdd_validate_*, plus the explicitly
+      listed reads listAgents, getAgent, listDomains, validateTopology and getProjectConfig) or a
+      write (every other name — the explicit write prefixes AND any unrecognized or newly added
+      name, failing closed) and the caller's resolved permission for the matching capability
+      (project:read for reads, project:write for writes) over the bound project MUST be yes,
+      resolved through the authorization component; a missing permission is rejected with a clear
+      MCP error, naming the rung that decided it, before dispatch. Writes are judged per subsystem
+      as well: the request binds its write reach (the subsystem rungs the principal meets, each
+      writable or not), a subsystem-scoped write (one whose every change is a spec written through
+      the core's spec writers) is admitted with write on any subsystem of the bound project even
+      without project-wide write, and the spec writers then refuse any spec of a subsystem the
+      principal may not change — a multi-subsystem write needs write on every subsystem it touches,
+      and its refusal names each one denied; a spec that belongs to no subsystem follows the project
+      rung. Reading stays whole-project. With no subsystem settings every call is admitted or
+      refused exactly as before. The execute-primary project-lifecycle MCP tools and the hosted
+      landscape discovery MCP tools are dispatched to their orchestrators (already gated) instead of
+      the scoped MCP tool surface and bypass this data-plane permission gate. Appends a redacted
+      audit event for every handled data-plane tool call — stamped with the TOP project id for
+      provenance plus the bound member qualifier when one applied; append failures are recorded as
+      server diagnostics and never fail the request.
     signature: 'handle(request: HttpRequest): HttpResponse'
     returns: HttpResponse
     params:
@@ -41,7 +48,9 @@ methods:
   - name: viewDiagram
     description: >-
       Verify the signed view token, bind the granted project's scope, render the canvas, and return
-      it as HTML.
+      it as HTML. The canvas carries no relation health and says so: the token is a bearer
+      capability for one record with no principal behind it, so every member and producer beyond
+      that record is out of its reach and could only be reported unavailable.
     signature: 'viewDiagram(request: HttpRequest): HttpResponse'
     returns: HttpResponse
   - name: dispatchProjectLifecycleTool
@@ -107,4 +116,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-10-01T16:34:00.391Z'
+updatedAt: '2026-10-03T13:41:30.766Z'

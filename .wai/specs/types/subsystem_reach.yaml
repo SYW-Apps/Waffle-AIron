@@ -1,0 +1,29 @@
+kind: value-object
+id: subsystem_reach
+name: SubsystemReach
+description: >-
+  One subsystem rung a principal meets in a hosted project: a subsystem of the project (a part's
+  subsystems are the project's own, keyed the same way) that carries a setting applying to the
+  principal — a direct user assignment, an everyone-default, or one of the principal's role bindings
+  anchored there — with the effective permission resolved at it. Only subsystems carrying such a
+  setting appear; every other subsystem resolves exactly as its project does, so an empty list means
+  the project rung decides every write.
+subsystem: sdd_host
+fields:
+  - name: projectId
+    type: string
+    description: The hosted record that owns the subsystem (the parent record for a part's subsystem)
+    optional: false
+  - name: subsystemId
+    type: string
+    description: The subsystem's local id in that record's tree
+    optional: false
+  - name: permission
+    type: EffectivePermission
+    description: >-
+      The effective permission resolved at the subsystem scope, with the rung that decided it — the
+      subsystem's own setting, or the project chain when the subsystem's settings do not decide
+    optional: false
+methods: []
+createdAt: '2026-10-03T13:35:29.281Z'
+updatedAt: '2026-10-03T13:35:29.288Z'

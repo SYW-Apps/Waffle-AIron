@@ -505,11 +505,14 @@ methods:
   - name: runHostPermission
     description: >-
       Permission assignments against the hosting control plane (set | list | remove), reading the
-      master credential from the environment.
+      master credential from the environment. The scope comes from --project, --unit or --instance;
+      --project with --subsystem names a subsystem scope (`<project>/<subsystem>`), where only
+      project:write is accepted, as yes, no or inherit — a subsystem rule is set and cleared like
+      any other assignment.
     signature: >-
       runHostPermission(action: string, options: { user?: string; capability?: string; value?:
-      string; project?: string; unit?: string; instance?: boolean; id?: string; dataDir?: string }):
-      Promise<void>
+      string; project?: string; subsystem?: string; unit?: string; instance?: boolean; id?: string;
+      dataDir?: string }): Promise<void>
     returns: Promise<void>
   - name: runHostProducer
     description: Producer targets of a hosted project (configure | produce | remove | list).
@@ -691,4 +694,4 @@ methods:
     returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T12:16:27.424Z'
+updatedAt: '2026-10-03T13:37:57.601Z'

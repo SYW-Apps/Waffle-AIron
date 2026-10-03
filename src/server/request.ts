@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { runWithProjectRoot, runWithProjectBinding, type HostedRecordLookup } from '../utils/fs.js';
+import { runWithProjectRoot, runWithProjectBinding, type HostedRecordLookup, type WriteReach } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
 import { authorize, resolveFamilyReach } from './authorization.js';
-import { WEB_SESSION_PREFIX } from './types.js';
+import { WEB_SESSION_PREFIX, describeDecision } from './types.js';
 import {
   resolveProjectBinding,
   existingProjectRoot,
@@ -34,6 +34,7 @@ import {
 } from './landscape.js';
 import type {
   AuditEvent,
+  FamilyReach,
   HostConfig,
   Principal,
   PrincipalSubject,
@@ -287,6 +288,33 @@ const WRITE_TOOL_PREFIXES = [
   'sdd_demote_',
 ];
 
+/**
+ * The SUBSYSTEM-SCOPED writes, listed one by one: every file each changes is a
+ * spec written through the core's spec writers, which judge each spec against
+ * the request's write reach. Such a write is admitted with write on some
+ * subsystem of the bound project even without project-wide write; every other
+ * write needs the project rung (fail closed).
+ */
+const SUBSYSTEM_SCOPED_WRITE_TOOLS = new Set<string>([
+  'sdd_add_subsystem',
+  'sdd_add_component',
+  'sdd_add_type',
+  'sdd_define_interface',
+  'sdd_write_narrative',
+  'sdd_set_endpoints',
+  'sdd_set_public_interfaces',
+  'sdd_update_spec',
+  'sdd_delete_spec',
+  'sdd_rename_component',
+  'sdd_rename_method',
+  'sdd_move_methods',
+]);
+
+/** Whether a write tool is subsystem-scoped (see SUBSYSTEM_SCOPED_WRITE_TOOLS). */
+function isSubsystemScopedWrite(toolName: string): boolean {
+  return SUBSYSTEM_SCOPED_WRITE_TOOLS.has(toolName);
+}
+
 /** Read tools only inspect the tree; their names carry one of these prefixes
  *  (sdd_get_status is a read). */
 const READ_TOOL_PREFIXES = ['sdd_get_', 'sdd_validate_'];
@@ -405,20 +433,31 @@ function dataPlanePermissionError(
   principal: Principal,
   projectId: string,
   body: unknown,
+  reach: FamilyReach,
 ): { jsonrpc: '2.0'; id: unknown; result: McpToolResult } | undefined {
   const msg = jsonRpcRequest(body);
   if (!msg || msg.method !== 'tools/call') return undefined;
   const name = msg.params?.name;
   if (typeof name !== 'string' || name.length === 0) return undefined;
 
+  // Step 17: the project rung.
   const needed = requiredDataPlaneCapability(name);
-  if (authorize(cfg.dataDir, principal, needed, 'project', projectId).value === 'yes') return undefined;
+  const decided = authorize(cfg.dataDir, principal, needed, 'project', projectId);
+  // Step 18: the project rung's yes admits; a subsystem-scoped write is also
+  // admitted when the principal may write some subsystem of the bound record —
+  // where its specs land is then judged spec by spec by the core's writers.
+  if (decided.value === 'yes') return undefined;
+  if (needed === 'project:write' && isSubsystemScopedWrite(name)
+    && reach.subsystems.some((s) => s.projectId === projectId && s.permission.value === 'yes')) {
+    return undefined;
+  }
 
+  // Step 19.
   return {
     jsonrpc: '2.0',
     id: msg.id ?? null,
     result: {
-      content: [{ type: 'text', text: `Forbidden — permission ${needed} required for ${name}` }],
+      content: [{ type: 'text', text: `Forbidden — permission ${needed} required for ${name}, decided at ${describeDecision(decided)}` }],
       isError: true,
     },
   };
@@ -702,7 +741,7 @@ export async function handleMcpRequest(
     // env-anchored instance-admin subjects bypass the walk. A refusal is an
     // isError tool result (HTTP still 200) and the tool is never dispatched; it
     // still flows through the SAME best-effort audit path.
-    const permissionError = dataPlanePermissionError(cfg, principal, projectId, body);
+    const permissionError = dataPlanePermissionError(cfg, principal, projectId, body, reach.family);
     if (permissionError !== undefined) {
       sendJson(res, 200, permissionError);
       auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(permissionError));
@@ -765,7 +804,13 @@ export async function handleMcpRequest(
 // ── Membership changes on hosted (steps 19–33 of handleRequest) ─────────────
 
 /** The membership-changing tools: on hosted, membership decides reach. */
-const MEMBERSHIP_TOOLS = new Set(['sdd_attach_member', 'sdd_adopt_member', 'sdd_detach_member', 'sdd_rename_project', 'sdd_promote_member', 'sdd_demote_member', 'sdd_add_member']);
+const MEMBERSHIP_TOOLS = new Set(['sdd_attach_member', 'sdd_adopt_member', 'sdd_detach_member', 'sdd_rename_project', 'sdd_promote_member', 'sdd_demote_member', 'sdd_add_member', 'sdd_externalize_subsystem']);
+
+/** Whether a call is membership-changing: an externalize only when it makes a project (as a part it stays in this record). */
+function isMembershipCall(call: { name: string; args: Record<string, unknown> }): boolean {
+  if (call.name === 'sdd_externalize_subsystem') return call.args.as === 'project';
+  return MEMBERSHIP_TOOLS.has(call.name);
+}
 
 /** The family-shape tools the scoped server runs whose applied success the hosted records must follow. */
 const FAMILY_SHAPE_TOOLS = new Set([
@@ -807,7 +852,7 @@ function serveMembershipTool(
 ): { response?: { jsonrpc: '2.0'; id: unknown; result: McpToolResult }; screen?: MembershipScreen } {
   const call = toolCall(body);
   // Step 20.
-  if (!call || !MEMBERSHIP_TOOLS.has(call.name)) return {};
+  if (!call || !isMembershipCall(call)) return {};
   const apply = call.args.dryRun !== true;
   const answer = (result: McpToolResult): { response: { jsonrpc: '2.0'; id: unknown; result: McpToolResult } } => ({ response: { jsonrpc: '2.0', id: call.id, result } });
   try {
@@ -819,10 +864,13 @@ function serveMembershipTool(
         // Steps 24–26.
         return answer(relocationResult('adopt', memberRegistration.adopt(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), String(call.args.path ?? ''), apply), apply));
       default: {
-        // Steps 27–30: attach, promote, demote, a member's source and a project rename are screened.
-        const named = call.name === 'sdd_rename_project' ? String(call.args.project ?? '') : String(call.args.alias ?? '');
+        // Steps 27–30: attach, promote, demote, an externalize as a project, a
+        // member's source and a project rename are screened.
+        const named = call.name === 'sdd_rename_project' ? String(call.args.project ?? '')
+          : call.name === 'sdd_externalize_subsystem' ? String(call.args.subsystem ?? '') : String(call.args.alias ?? '');
         const located = typeof call.args.source === 'string' ? call.args.source : typeof call.args.path === 'string' ? call.args.path : undefined;
-        const screened = memberRegistration.screen(cfg.dataDir, binding, call.name, named, located);
+        const newId = call.name === 'sdd_promote_member' && typeof call.args.id === 'string' && call.args.id ? call.args.id : undefined;
+        const screened = memberRegistration.screen(cfg.dataDir, binding, call.name, named, located, newId);
         if (screened.refusal !== undefined) return answer({ content: [{ type: 'text', text: screened.refusal }], isError: true });
         return { screen: screened };
       }
@@ -871,6 +919,10 @@ function withReachListing(result: unknown, screened: MembershipScreen | undefine
   if (r.isError || !Array.isArray(r.content)) return;
   const lines = reachLines(screened.reachChanges);
   r.content.push({ type: 'text', text: lines.length > 0 ? `Reach changes — who gains access through the new parent:\n${lines.join('\n')}` : 'Reach changes: none — nobody gains or loses access.' });
+  if (!screened.carried) return;
+  const carried = screened.carried.map((c) => `${c.from.join(', ')} -> project ${c.to}: ${c.subject} `
+    + (c.kind === 'role' ? `role ${c.value} — ${c.note}` : `project:write ${c.value} (${c.note})`));
+  r.content.push({ type: 'text', text: carried.length > 0 ? `Subsystem rules carried onto the new project:\n${carried.join('\n')}` : 'Subsystem rules carried onto the new project: none.' });
 }
 
 /**
@@ -920,7 +972,7 @@ function familyReachOf(
   cfg: HostConfig,
   principal: Principal,
   binding: ProjectBinding,
-): { topRoot: string; parentReach: boolean; unwritableRoots: string[]; hostedLookup: HostedRecordLookup } {
+): { topRoot: string; parentReach: boolean; unwritableRoots: string[]; hostedLookup: HostedRecordLookup; writeReach: WriteReach; family: FamilyReach } {
   // Step 9: the bound project's hosted family, family root first.
   const family = listFamilyRecords(cfg.dataDir, binding.projectId);
   // Step 10: which family records the principal may read and write.
@@ -935,7 +987,18 @@ function familyReachOf(
   const unwritableRoots = family
     .filter((r) => r.rootPath && !isRetiredPart(r) && !(reach.writable.includes(r.id) && covered(r.id)))
     .map((r) => r.rootPath);
-  return { topRoot, parentReach, unwritableRoots, hostedLookup: hostedRecordLookup(cfg, principal) };
+  // Step 12: the WRITE REACH — those roots, and each subsystem rung met in a
+  // family record as its root, subsystem, writable or not, and the rung that
+  // decided it. A retired part's subsystems are its parent's, under the
+  // parent's rules, so its own record contributes none.
+  const roots = new Map(family.filter((r) => r.rootPath && !isRetiredPart(r)).map((r) => [r.id, r.rootPath]));
+  const subsystems = reach.subsystems.flatMap((s) => {
+    const root = roots.get(s.projectId);
+    if (!root) return [];
+    return [{ root, subsystemId: s.subsystemId, writable: s.permission.value === 'yes' && covered(s.projectId), decidedBy: describeDecision(s.permission) }];
+  });
+  const writeReach: WriteReach = { unwritableRoots, subsystems };
+  return { topRoot, parentReach, unwritableRoots, hostedLookup: hostedRecordLookup(cfg, principal), writeReach, family: reach };
 }
 
 /**

@@ -1088,6 +1088,80 @@ from where its files live.
 - **The SPA's member-links strip above the canvas is retired**: the nodes open
   themselves.
 
+### Hosted access rules per subsystem, and why someone can or cannot act
+
+- **A subsystem is one more rung below its project.** A hosted permission chain is
+  now subsystem → project → parent projects → units → instance. A subsystem scope
+  (`<projectId>/<subsystemId>`, a part's subsystems included — they are the
+  project's own) carries one capability, `project:write`, as yes or no (or
+  inherit): a team can be denied one subsystem of a project it may edit, or allowed
+  to edit one subsystem without project-wide write. Reading stays whole-project, and
+  every other capability resolves at a subsystem exactly as at its project. The rung
+  is visited only for a subsystem target and only for `project:write`, so with no
+  subsystem settings every resolution is what it was before; a property test over a
+  generated permission matrix (subjects, roles anchored at the instance, units,
+  projects and subsystems, everyone-defaults, every capability, member chains)
+  holds the old resolver and the new one to the same answer on every unit and
+  project target.
+- **Spec writes are judged spec by spec.** On the hosted data plane the listed
+  spec-writing tools are admitted when the caller may write some subsystem of the
+  bound project; the core's spec writers then refuse a spec of a subsystem the
+  request may not change (`SubsystemWriteDenied`, naming the subsystem and the rung
+  that decided it) before anything is written. A subsystem owns itself, a component
+  or type names its subsystem, an interface or implementation follows its
+  component, and the L0 and system-level types fall under the project rung. A
+  component rename, a method rename and a method move judge every spec they would
+  write first and name every subsystem they may not change. Every other write tool
+  still needs project-wide write, and a refusal at the door now says which rung
+  decided it.
+- **Whole-tree writes stay whole.** A lock is decided at the project rung (a
+  subsystem's yes never authorizes one) and is refused when a subsystem rule denies
+  the caller any subsystem of the project, naming each. A family migration that
+  would reshape a project holding a subsystem the request may not change refuses
+  `subsystem-denied`, one per subsystem.
+- **Behaviour change — teams must know.** Inside a hosted request, a spec write
+  into a family member the caller may not write at the project rung is now
+  refused. Before, nothing stopped it: the door checked only the bound project, so
+  a caller with write on a parent could change a member that explicitly denied
+  them. It is a fix, but a workflow that relied on it now fails with
+  `SubsystemWriteDenied`.
+- **A type group belongs to no subsystem**, so creating one needs project-wide
+  write; a caller who may write only some subsystems cannot.
+- **A promote or an externalize never widens access.** When a member project is
+  registered from a parent's subsystem, each of the parent's rules on that
+  subsystem is carried onto the new project's own scope, audited, and the
+  subsystem rule itself is kept. The plan lists every carried rule before anything
+  is written — a hosted externalize as a project is now screened like a promote,
+  so its dry run carries the listing too: from `<project>/<subsystem>` to the new
+  project, per subject and value; several subsystems naming one subject collapse
+  onto one rule with the resulting value ("most restrictive wins"); a role binding
+  at a moved subsystem is listed as "not carried (can only narrow)".
+- **A member rename keeps its subsystem rules.** The hosted re-key moves every
+  subsystem rule and role binding at `<old>/<subsystem>` to `<new>/<subsystem>`
+  with the member's own settings, audited, so nothing a rule denied comes back
+  after the rename. Detach and adopt keep the record's id and need no re-key.
+- **Administering a subsystem's rules is administering its project.** The grid,
+  `setAssignment` and `bindRole` take a subsystem scope and refuse any capability
+  other than `project:write`, and an approval value, there. A rule naming a subsystem
+  its project no longer declares is kept — it applies again if the subsystem comes
+  back — and the grid, the permission list and the explanation label it
+  "subsystem not found". The CLI sets and lists one with
+  `wairon host permission set|list --project <p> --subsystem <s>`.
+- **The explanation.** `GET /web/admin/permissions/explain` (project:admin over the
+  scope) answers one user's effective permission for a capability at a unit, project
+  or subsystem scope, with the source and the rung that decided it; `/admin/permissions`
+  shows it as a Check beside the grant form, and offers a project's subsystems in its
+  scope picker.
+
+### Relation health on the HTML canvas and the admin diagrams
+
+- The web UI's HTML canvas (`GET /web/canvas`) now carries relation health on its
+  consumption edges, read within the caller's reach exactly as the canvas model and
+  the Relations tab read it — anything beyond is unavailable, never ok.
+- The admin plane's canvas diagram and its download carry it too, read with the
+  master credential's whole-instance reach. Other formats are unchanged, and the
+  signed view link still renders with health "not checked".
+
 ### Fixed: a delta's absent fields, and two tests that failed under load
 
 - **A field a delta element leaves out keeps its stored value, at every depth.**

@@ -52,10 +52,14 @@ methods:
   - name: reach
     description: >-
       Gather the permission world once and answer which of the given hosted records the principal
-      may read (project:read yes) and write (project:write yes), each resolved through its OWN chain
-      — its own scope, its parents', its family root's units — so a parent's grant reaches its
-      members and an explicit no on a member removes it. The data plane asks it for the bound
-      project's family, so a family run composes and a family migration writes only within it.
+      may read (project:read yes) and write (project:write yes at the project rung), each resolved
+      through its OWN chain — its own scope, its parents', its family root's units — so a parent's
+      grant reaches its members and an explicit no on a member removes it; and, per record, the
+      subsystem rungs the principal meets there (each subsystem carrying a setting that applies to
+      the principal, with project:write resolved at it). The data plane asks it for the bound
+      project's family, so a family run composes, a family migration writes only within it, and a
+      spec write lands only in a subsystem the principal may change. With no subsystem settings the
+      subsystems list is empty and the answer is exactly what it was before subsystem rules existed.
     signature: 'reach(principal: Principal, projectIds: string[]): FamilyReach'
     returns: FamilyReach
     params:
@@ -64,6 +68,30 @@ methods:
       - name: projectIds
         type: string[]
         description: The record ids to judge, typically the bound project's family
+  - name: explain
+    description: >-
+      Gather the permission world and resolve a GIVEN subject's effective permission for a
+      capability at a target scope (unit, project or subsystem) through the permission rules — the
+      same walk authorize takes for a principal — answering the value, its source and the rung that
+      decided it. For the permission administration's explanation of why someone can or cannot act;
+      it authenticates and authorizes nobody, so its caller must already have authorized the asker
+      over the scope.
+    signature: >-
+      explain(subject: PermissionSubject, capability: string, scopeKind: string, scopeId: string):
+      EffectivePermission
+    returns: EffectivePermission
+    params:
+      - name: subject
+        type: PermissionSubject
+        description: The subject explained, as its user record resolves it
+      - name: capability
+        type: string
+      - name: scopeKind
+        type: string
+      - name: scopeId
+        type: string
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-15T21:31:59.946Z'
-updatedAt: '2026-10-01T16:55:58.022Z'
+updatedAt: '2026-10-03T13:36:45.854Z'

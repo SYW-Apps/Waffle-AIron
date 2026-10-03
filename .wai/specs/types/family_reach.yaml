@@ -5,9 +5,12 @@ description: >-
   A request's reach into the hosted family of its bound project, resolved per record through each
   record's own chain (its own scope, then its parents', then the family root's units): the family
   projects the principal may read (what a family run may compose and a reach-gated read may open)
-  and those it may write (what a family migration may write; it refuses family-partial beyond them).
-  A parent grant reaches its members by inheritance; an explicit no on a member's own record removes
-  that member.
+  and those it may write at the project rung (what a family migration may write; it refuses
+  family-partial beyond them), and the subsystem rungs the principal meets in those records (a
+  subsystem decided at its own rung, writable or not). A parent grant reaches its members by
+  inheritance; an explicit no on a member's own record removes that member. With no subsystem
+  settings the subsystems list is empty and the reach is exactly what it was before subsystem rules
+  existed.
 subsystem: sdd_host
 fields:
   - name: readable
@@ -18,6 +21,12 @@ fields:
     type: string[]
     description: Family record ids with project:write yes
     optional: false
+  - name: subsystems
+    type: SubsystemReach[]
+    description: >-
+      Every subsystem of a family record that carries a setting applying to the principal, with
+      project:write resolved at it (yes, or not); empty when no such setting exists
+    optional: false
 methods: []
 createdAt: '2026-10-01T16:27:35.796Z'
-updatedAt: '2026-10-01T16:55:32.863Z'
+updatedAt: '2026-10-03T13:35:42.131Z'

@@ -39,9 +39,12 @@ methods:
       layout, edge routing, type-ERD and database views, search, and the resizable details sidebar)
       for ONE authorized project as a self-contained HTML string. Resolve the session to a
       Principal, resolve and bind the requested project's isolated root within the principal's
-      authorized set (cross-project access is Forbidden), and render the canvas over the bound spec
-      tree via the host core adapter. This is how the web UI reuses the SAME canvas engine as the
-      static `wairon diagram --format canvas` export instead of a second renderer.
+      authorized set (cross-project access is Forbidden), read the family's relation health within
+      the caller's reach (the projects it may read, write or administer — anything beyond is
+      unavailable, never ok), and render the canvas over the bound spec tree via the host core
+      adapter with that health on its consumption edges, as the canvas model carries it. This is how
+      the web UI reuses the SAME canvas engine as the static `wairon diagram --format canvas` export
+      instead of a second renderer.
     signature: 'getProjectCanvas(sessionId: string, projectId: string): string'
     returns: string
     params:
@@ -118,4 +121,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-10-03T12:26:29.911Z'
+updatedAt: '2026-10-03T13:38:57.223Z'

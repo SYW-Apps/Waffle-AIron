@@ -128,16 +128,39 @@ methods:
         targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
+        description: >-
+          Read the subsystem rungs the caller meets in the project through the authorization seam: a
+          lock signs the whole tree, so it is a whole-tree write
+        type: call
+        targetComponent: authorization
+        targetMethod: reach
+      - stepNumber: 4
+        description: >-
+          Does a subsystem rule deny the caller write on any subsystem of the project? A subsystem
+          yes never authorizes a lock — the project rung decides it — but nobody signs a subsystem
+          they may not change
+        type: branch
+        condition: the project resolves yes or approval and a subsystem rung in it denies the caller write
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Refuse the lock, naming every subsystem denied and the rung that decided each; nothing is
+          requested
+        type: throw
+        error: >-
+          Forbidden — a lock signs the whole tree, and the caller may not change these subsystems:
+          <each, decided at its rung>
+      - stepNumber: 6
         description: 'Branch on the resolved value: yes executes, no forbids, approval requests'
         type: switch
         'on': the resolved effective permission value
         cases:
           - value: 'yes'
-            step: 4
-          - value: 'no'
             step: 7
-        defaultStep: 8
-      - stepNumber: 4
+          - value: 'no'
+            step: 10
+        defaultStep: 11
+      - stepNumber: 7
         description: >-
           Authorized: lock directly via the admin plane's pre-authorized entry, forwarding the
           project id — a member's own record id when a member is locked; no qualifier exists any
@@ -145,18 +168,18 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
-      - stepNumber: 5
+      - stepNumber: 8
         description: Build a completed ProjectActionOutcome (action project:lock) carrying the lock record
         type: local
-      - stepNumber: 6
+      - stepNumber: 9
         description: Executed — continue to auditing
         type: jump
-        toStep: 12
-      - stepNumber: 7
+        toStep: 15
+      - stepNumber: 10
         description: Reject the lock
         type: throw
         error: Forbidden — caller may not lock this project
-      - stepNumber: 8
+      - stepNumber: 11
         description: >-
           Approval required: capture the gate identity of the project's tree (a member's own tree
           when the project is a member) through the admin plane, so the approved execution can
@@ -164,41 +187,41 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: gateIdentity
-      - stepNumber: 9
+      - stepNumber: 12
         description: >-
           Build the pending project:lock ApprovalRequest: kind, the project's own record id (a
           member's when a member is locked), the requester's subject and token id, expiry, a
           redacted human summary naming the project, and gateStateId = the identity just captured.
           No qualifier is recorded: the record id alone confines the approved action
         type: local
-      - stepNumber: 10
+      - stepNumber: 13
         description: Create the pending approval request
         type: call
         targetComponent: approval_repository
         targetMethod: create
-      - stepNumber: 11
+      - stepNumber: 14
         description: Build a pending-approval ProjectActionOutcome carrying the created request
         type: local
-      - stepNumber: 12
+      - stepNumber: 15
         description: Append a redacted audit event without letting a failure fail the action
         type: try
-        endStep: 14
+        endStep: 17
         catches:
           - error: audit append failure
-            step: 15
-      - stepNumber: 13
+            step: 18
+      - stepNumber: 16
         description: Append the redacted project-lifecycle audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 14
+      - stepNumber: 17
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 16
-      - stepNumber: 15
+        toStep: 19
+      - stepNumber: 18
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 16
+      - stepNumber: 19
         description: Return the project action outcome
         type: return
         outcome: the project action outcome
@@ -651,4 +674,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-01T18:11:24.624Z'
+updatedAt: '2026-10-03T13:39:29.644Z'

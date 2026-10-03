@@ -1,12 +1,13 @@
 import { listOrganizationUnits, listProjectPlacements } from './organization.js';
 import { listAssignments } from './permissions.js';
 import { listRoles, BUILTIN_ROLES, isBuiltinRoleId } from './roles.js';
-import { resolvePermission, resolveVisibleScopes } from './permission-rules.js';
+import { resolvePermission, resolveSubsystemReach, resolveVisibleScopes } from './permission-rules.js';
 import { listProjectRecords } from './projects.js';
 import type {
   EffectivePermission,
   FamilyReach,
   HostedProjectRecord,
+  PermissionSubject,
   PermissionWorld,
   Principal,
   ProjectParentLink,
@@ -80,7 +81,7 @@ export function gatherPermissionWorld(dataDir: string): PermissionWorld {
  * units) over one gathered world. An unauthenticated principal reaches nothing.
  */
 export function resolveFamilyReach(dataDir: string, principal: Principal, projectIds: string[]): FamilyReach {
-  const reach: FamilyReach = { readable: [], writable: [] };
+  const reach: FamilyReach = { readable: [], writable: [], subsystems: [] };
   if (!principal.authenticated || !principal.permissionSubject) return reach;
   // Step 1: gather the permission world once.
   const world = gatherPermissionWorld(dataDir);
@@ -88,9 +89,30 @@ export function resolveFamilyReach(dataDir: string, principal: Principal, projec
   for (const id of projectIds) {
     if (resolvePermission(principal.permissionSubject, 'project:read', 'project', id, world).value === 'yes') reach.readable.push(id);
     if (resolvePermission(principal.permissionSubject, 'project:write', 'project', id, world).value === 'yes') reach.writable.push(id);
+    // Step 5: the subsystem rungs the principal meets in the record.
+    reach.subsystems.push(...resolveSubsystemReach(principal.permissionSubject, id, world));
   }
-  // Step 5.
+  // Step 6.
   return reach;
+}
+
+/**
+ * Resolve a GIVEN subject's effective permission for a capability at a target
+ * scope (unit, project or subsystem) through the same walk authorize takes —
+ * the value, its source and the rung that decided it. It authenticates and
+ * authorizes nobody: its caller must already have authorized the asker.
+ */
+export function explain(
+  dataDir: string,
+  subject: PermissionSubject,
+  capability: string,
+  scopeKind: string,
+  scopeId: string,
+): EffectivePermission {
+  // Step 1: gather the permission world once, as world does.
+  const world = gatherPermissionWorld(dataDir);
+  // Steps 2-3.
+  return resolvePermission(subject, capability, scopeKind, scopeId, world);
 }
 
 /**

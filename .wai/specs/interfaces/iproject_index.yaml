@@ -103,6 +103,36 @@ methods:
       - name: record
         type: HostedProjectRecord
         description: A record of the family
+  - name: declaredSubsystems
+    description: >-
+      The subsystem ids a record's spec tree declares now, each as its local id — a part's
+      subsystems included, since they are the record's own — read at the record's root through the
+      host core adapter; null for an id with no root on disk. Read from disk; nothing written.
+    signature: 'declaredSubsystems(id: string): string[] | null'
+    returns: string[] | null
+    params:
+      - name: id
+        type: string
+        description: A hosted record id
+    guarantees:
+      - idempotent
+  - name: partSubsystems
+    description: >-
+      The subsystem ids a record's part (declared under the alias in the record's project.yaml
+      members) holds now, each its local id, read in the part's folder through the host core
+      adapter; null when the record has no root or declares no contained member under the alias.
+      Read from disk; nothing written.
+    signature: 'partSubsystems(id: string, alias: string): string[] | null'
+    returns: string[] | null
+    params:
+      - name: id
+        type: string
+        description: The hosted record declaring the part
+      - name: alias
+        type: string
+        description: The part's alias
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-10-02T23:19:59.595Z'
+updatedAt: '2026-10-03T14:20:17.678Z'

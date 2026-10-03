@@ -78,6 +78,36 @@ methods:
         type: PlannedMemberRecord[]
     guarantees:
       - idempotent
+  - name: carryPlan
+    description: >-
+      Pure: the subsystem settings a promote or an externalize moves from the parent into the new
+      project. For each subject, the parent's project:write assignments (yes or no) at
+      `<parentId>/<subsystem>` for every moved subsystem fold into one rule on the new project's
+      scope — carried when one subsystem names the subject, the most restrictive value (no over yes)
+      when several do; inherit carries nothing; a subject already holding a project:write setting on
+      the new project keeps it and nothing is carried for it. Every role binding of a user anchored
+      at a moved subsystem is listed as not carried: a role only grants, so leaving it out can only
+      narrow.
+    signature: >-
+      carryPlan(users: HostedUserRecord[], world: PermissionWorld, parentId: string, memberId:
+      string, moved: string[]): CarriedSubsystemRule[]
+    returns: CarriedSubsystemRule[]
+    params:
+      - name: users
+        type: HostedUserRecord[]
+      - name: world
+        type: PermissionWorld
+      - name: parentId
+        type: string
+        description: The record the subsystems leave
+      - name: memberId
+        type: string
+        description: The new project's id
+      - name: moved
+        type: string[]
+        description: The subsystem ids that move into the new project
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-10-01T16:56:27.256Z'
-updatedAt: '2026-10-01T17:39:40.299Z'
+updatedAt: '2026-10-03T14:20:12.193Z'

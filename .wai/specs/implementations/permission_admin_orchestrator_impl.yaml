@@ -9,6 +9,8 @@ description: >-
   instance-admin assignment — the bypass is env-anchored to the built-in admin).
 contract: ipermission_admin_orchestrator
 sourcePath: src/server/permissionadmin.ts
+injectedParams:
+  - cfg
 methods:
   - name: listRoles
     narrative:
@@ -63,21 +65,39 @@ methods:
           Forbidden — the instance-admin marker ('*'@instance) is reserved to the built-in admin
           account
       - stepNumber: 4
+        label: subsystem-shape
+        description: >-
+          A subsystem scope carries one capability as a yes/no setting: is this a subsystem-scope
+          assignment that is not project:write with yes, no or inherit, or whose scope id is not
+          `<projectId>/<subsystemId>`?
+        type: branch
+        condition: >-
+          the assignment's scope kind is subsystem and its capability, value or scope id does not
+          fit a subsystem
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Refuse it before any authorization, naming what a subsystem carries: only project:write,
+          as yes or no (reading stays whole-project; there is no approval flow for a single spec
+          write)
+        type: throw
+        error: a subsystem scope carries only project:write, yes or no, at <projectId>/<subsystemId>
+      - stepNumber: 6
         description: Resolve the caller's project:admin permission over the assignment's scope
         type: call
         targetComponent: authorization
         targetMethod: authorize
-      - stepNumber: 5
+      - stepNumber: 7
         description: If the effective value is not yes, deny
         type: branch
         condition: the effective project:admin value is not yes
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
         description: Reject the assignment
         type: throw
         error: Forbidden — setting an assignment requires project:admin over its scope
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           Canonicalize a user-kind subjectId onto the subject's userId (the id every live principal
           carries — a record id passed from the Users list resolves through the user record; an id
@@ -86,26 +106,26 @@ methods:
         type: call
         targetComponent: permission_repository
         targetMethod: setAssignment
-      - stepNumber: 8
+      - stepNumber: 10
         description: Append a redacted audit event without letting a failure fail the write
         type: try
-        endStep: 10
+        endStep: 12
         catches:
           - error: audit append failure
-            step: 11
-      - stepNumber: 9
+            step: 13
+      - stepNumber: 11
         description: Append the redacted permission.set audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 10
+      - stepNumber: 12
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 12
-      - stepNumber: 11
+        toStep: 14
+      - stepNumber: 13
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: Return the stored assignment
         type: return
         outcome: the stored assignment
@@ -207,6 +227,26 @@ methods:
         targetComponent: permission_repository
         targetMethod: listAssignments
       - stepNumber: 6
+        label: label
+        description: For each subsystem-scope assignment listed (one project read per project)
+        type: loop
+        loopKind: forEach
+        over: the subsystem-scope assignments listed
+        endStep: 8
+      - stepNumber: 7
+        description: >-
+          Read the subsystems the tree of the project the scope id names declares now (null when it
+          has no root)
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredSubsystems
+      - stepNumber: 8
+        description: >-
+          Label the assignment "subsystem not found" when the project has no root or its tree
+          declares no such subsystem — the rule is kept, never dropped, so it applies again if the
+          subsystem is re-created
+        type: local
+      - stepNumber: 9
         description: Return the assignments
         type: return
         outcome: the assignments
@@ -218,65 +258,76 @@ methods:
         targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
+        description: Is this a subsystem-scope binding whose scope id is not `<projectId>/<subsystemId>`?
+        type: branch
+        condition: >-
+          the binding's scope kind is subsystem and its scope id does not name a project and a
+          subsystem
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse it before any authorization
+        type: throw
+        error: a subsystem scope id is <projectId>/<subsystemId>
+      - stepNumber: 4
         description: Resolve the caller's project:admin permission over the binding's scope
         type: call
         targetComponent: authorization
         targetMethod: authorize
-      - stepNumber: 3
+      - stepNumber: 5
         description: If the effective value is not yes, deny
         type: branch
         condition: the effective project:admin value is not yes
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
         description: Reject the role binding
         type: throw
         error: Forbidden — binding a role requires project:admin over the scope
-      - stepNumber: 5
+      - stepNumber: 7
         description: Look up the target user by id
         type: call
         targetComponent: user_repository
         targetMethod: getById
-      - stepNumber: 6
+      - stepNumber: 8
         description: If no user matches, reject as not found
         type: branch
         condition: no user matches userId
-        onTrueStep: 7
-        onFalseStep: 8
-      - stepNumber: 7
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
         description: Reject as not found
         type: throw
         error: not found
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
           Add the {roleId, scopeKind, scopeId} binding to the user's roleBindings (idempotent — no
           duplicate)
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         description: Persist the updated user record through the user repository
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 10
+      - stepNumber: 12
         description: Append a redacted audit event without letting a failure fail the binding
         type: try
-        endStep: 12
+        endStep: 14
         catches:
           - error: audit append failure
-            step: 13
-      - stepNumber: 11
+            step: 15
+      - stepNumber: 13
         description: Append the redacted role.bind audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 12
+      - stepNumber: 14
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 14
-      - stepNumber: 13
+        toStep: 16
+      - stepNumber: 15
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         description: Return the updated user record
         type: return
         outcome: the updated user record
@@ -530,7 +581,81 @@ methods:
         description: Return once the role has been deleted
         type: return
         outcome: role deleted
+  - name: explain
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:admin permission over the target scope (a subsystem's
+          resolves at its project)
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 3
+        description: Only an administrator of the scope may ask why someone can or cannot act there
+        type: branch
+        condition: the effective project:admin value is not yes
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the question
+        type: throw
+        error: Forbidden — explaining a permission requires project:admin over its scope
+      - stepNumber: 5
+        label: user
+        description: Read the user by record id or subject id
+        type: call
+        targetComponent: user_repository
+        targetMethod: findByRecordOrSubjectId
+      - stepNumber: 6
+        description: No such user?
+        type: branch
+        condition: no user matches
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 8
+        label: subject
+        description: >-
+          Build the user's permission subject as authentication resolves it: the subject's userId,
+          the record id as an alias when the two diverged, and the record's role bindings (a user
+          record is never the instance admin)
+        type: local
+      - stepNumber: 9
+        description: Resolve that subject's effective permission at the scope through the authorization seam
+        type: call
+        targetComponent: authorization
+        targetMethod: explain
+      - stepNumber: 10
+        description: >-
+          Is the scope a subsystem? Only a subsystem scope can name something its project does not
+          declare
+        type: branch
+        condition: the scope kind is subsystem
+        onFalseStep: 13
+      - stepNumber: 11
+        description: >-
+          Read the subsystems the tree of the project the scope id names declares now (null when it
+          has no root)
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredSubsystems
+      - stepNumber: 12
+        description: >-
+          Label the explanation "subsystem not found" when the project has no root or its tree
+          declares no such subsystem — the rules stored there are kept and shown, never silent
+        type: local
+      - stepNumber: 13
+        description: Return the value, its source and the rung that decided it
+        type: return
+        outcome: EffectivePermission
+    detail: full
 detail: full
 status: complete
 createdAt: '2026-07-15T22:01:26.906Z'
-updatedAt: '2026-09-15T20:47:18.126Z'
+updatedAt: '2026-10-03T14:12:12.332Z'

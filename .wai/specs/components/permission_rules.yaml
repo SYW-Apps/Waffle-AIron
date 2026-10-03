@@ -6,13 +6,18 @@ description: >-
   for a capability at a target scope via the nearest-ancestor walk (direct-user > role
   most-permissive > everyone-default > inherit; an instance-admin bypasses to yes), and the
   subject's visible-scope set (actionable scopes plus their ancestor breadcrumb, never an ancestor's
-  other children). Projects nest like units: a member project's chain is its own project scope, then
-  its parent project's, up to its family root, then the family root's placement units, then the
-  instance — so access to a project reaches every member transitively, and the most specific setting
-  wins (an explicit no on a member's own record beats an inherited yes). Performs no I/O and never
-  authenticates — the calling orchestrator gathers the world and has already authenticated the
-  principal. Follow-up, deliberately out of scope here: finer-grained rules below a project (e.g.
-  denying a subject one subsystem) are a separate feature with a scope kind of their own.
+  other children). The chain is subsystem -> project -> parent projects -> units -> instance, and
+  the nearest definitive setting wins. Projects nest like units: a member project's chain is its own
+  project scope, then its parent project's, up to its family root, then the family root's placement
+  units, then the instance — so access to a project reaches every member transitively, and the most
+  specific setting wins (an explicit no on a member's own record beats an inherited yes). Below a
+  project sits one more rung, its subsystems (a part's subsystems are its project's own, keyed the
+  same way): a subsystem carries only project:write — changing that subsystem's specs — as yes or
+  no, so a subject can be denied one subsystem of a project they can edit, or allowed to edit one
+  subsystem without project-wide write. Reading stays whole-project, and every other capability
+  resolves at a subsystem exactly as at its project. With no subsystem settings every resolution is
+  identical to the chain without the rung. Performs no I/O and never authenticates — the calling
+  orchestrator gathers the world and has already authenticated the principal.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -21,4 +26,4 @@ dependencyClass: pure
 variant: arbiter
 status: complete
 createdAt: '2026-07-15T20:27:07.813Z'
-updatedAt: '2026-10-01T16:55:39.436Z'
+updatedAt: '2026-10-03T13:36:10.836Z'

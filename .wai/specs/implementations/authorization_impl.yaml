@@ -145,7 +145,7 @@ methods:
         type: loop
         loopKind: forEach
         over: projectIds
-        endStep: 4
+        endStep: 5
       - stepNumber: 3
         description: Resolve the principal's project:read over the record's OWN project scope
         type: call
@@ -157,12 +157,36 @@ methods:
         targetComponent: permission_rules
         targetMethod: resolvePermission
       - stepNumber: 5
-        description: Return the readable and writable record ids
+        description: >-
+          Resolve the subsystem rungs the principal meets in the record — every subsystem carrying a
+          setting that applies to the principal, with project:write resolved at it
+        type: call
+        targetComponent: permission_rules
+        targetMethod: resolveSubsystemReach
+      - stepNumber: 6
+        description: Return the readable and writable record ids and the subsystem rungs met in them
         type: return
         outcome: FamilyReach
     detail: full
     symbol: resolveFamilyReach
+  - name: explain
+    narrative:
+      - stepNumber: 1
+        description: Gather the permission world once, as world does
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 2
+        description: Resolve the given subject's effective permission for the capability at the target scope
+        type: call
+        targetComponent: permission_rules
+        targetMethod: resolvePermission
+      - stepNumber: 3
+        description: Return it with its source and deciding rung
+        type: return
+        outcome: EffectivePermission
+    detail: full
 detail: full
 status: complete
 createdAt: '2026-07-15T21:32:08.971Z'
-updatedAt: '2026-10-01T16:55:54.750Z'
+updatedAt: '2026-10-03T13:36:56.140Z'

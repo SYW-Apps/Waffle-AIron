@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  declaredSubsystemIds,
+  partSubsystemIds,
   listFamilyRecords,
   listProjectRecords,
   planMemberRecords,
@@ -14,10 +16,13 @@ import {
 import { gatherPermissionWorld, resolveFamilyReach } from './authorization.js';
 import { listUsers, remapUnitReferences } from './users.js';
 import { listCredentials, renarrowCredential } from './credentials.js';
-import { remapScope } from './permissions.js';
+import { remapScope, listAssignments, setAssignment } from './permissions.js';
 import { deletePlacement, listProjectPlacements, placeProject } from './organization.js';
 import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import { relink, compare, narrowing } from './member-reach.js';
+import { relink, compare, narrowing, carryPlan } from './member-reach.js';
+
+/** The subject a carry plan names for everyone without settings of their own. */
+const EVERYONE = 'everyone';
 import * as hostMigrations from './adapters/migrations.js';
 import * as hostGit from './adapters/git.js';
 import { runWithProjectRoot } from '../utils/fs.js';
@@ -28,11 +33,15 @@ import type { GitPublish } from '../git/types.js';
 import type { FileChange, MigrationPlan, MigrationRequest, RecoveredTransaction, Rehearsal, TransactionOutcome } from '../migrations/types.js';
 import type {
   AuditEvent,
+  CarriedSubsystemRule,
+  EffectivePermission,
   HostedProjectRecord,
   MemberAdoption,
   MemberDetachment,
   MemberReconciliation,
   MembershipScreen,
+  PermissionAssignment,
+  PermissionValue,
   PermissionWorld,
   PlannedMemberRecord,
   PlannedNarrowing,
@@ -384,7 +393,7 @@ export const ROOT_RENAME_REFUSED = "renaming a hosted family root's id is not su
  * inherits the bound project's chain), or the refusal of renaming a family
  * root. A member rename is let through; reconcile re-keys it.
  */
-export function screen(dataDir: string, binding: ProjectBinding, tool: string, alias: string, path?: string): MembershipScreen {
+export function screen(dataDir: string, binding: ProjectBinding, tool: string, alias: string, path?: string, newId?: string): MembershipScreen {
   // Stage 8: a hosted root reaches another only by a `hosted:` source — a `../` or git source is refused before dispatch.
   if (path !== undefined && (tool === 'sdd_add_member' || tool === 'sdd_attach_member')) {
     const storage = parseMemberSource(path).storage;
@@ -411,8 +420,14 @@ export function screen(dataDir: string, binding: ProjectBinding, tool: string, a
   // Step 7: the incoming member holds no record yet — its qualified alias stands in for its id.
   const incoming = standIn(binding.projectId, alias, path);
   const after = relink(world, [{ projectId: incoming, parentProjectId: binding.projectId }], [], [], []);
-  // Steps 8-9: who gains access.
-  return { reachChanges: compare(users, world, null, after, incoming).filter((r) => !r.equal) };
+  // Step 8: who gains access.
+  const reachChanges = compare(users, world, null, after, incoming).filter((r) => !r.equal);
+  // Steps 9-11: a promote or an externalize as a project moves subsystems into a
+  // new project — the plan lists every setting it carries before anything is written.
+  if (tool !== 'sdd_promote_member' && tool !== 'sdd_externalize_subsystem') return { reachChanges };
+  const moved = tool === 'sdd_externalize_subsystem' ? [alias] : partSubsystemIds(dataDir, binding.projectId, alias) ?? [];
+  // Step 12.
+  return { reachChanges, carried: carryPlan(users, world, binding.projectId, newId || alias, moved) };
 }
 
 /**
@@ -480,8 +495,13 @@ export function reconcile(dataDir: string, principal: Principal, projectId: stri
     setProjectRecordStatus(dataDir, r.id, 'disabled');
     changes.push({ kind: 'departed', id: r.id, detail: { parent: r.parentProjectId, memberPath: r.memberPath } });
   }
-  // Steps 17-19: the reach the membership changes altered.
-  const reachChanges = reachOf(users, world, changes);
+  // Step 17: a promote or an externalize never widens access — the subsystem
+  // rules that governed a registered or returned member's specs are carried
+  // onto the member's own scope, each listed and audited.
+  const carried = carrySubsystemRules(dataDir, listChangedLinks(changes.filter((c) => c.kind === 'registered' || c.kind === 'returned')));
+  // Steps 18-20: the reach the membership changes altered, over an after-world
+  // holding the carried rules; every carried rule listed besides.
+  const reachChanges = [...reachOf(users, world, changes, listAssignments(dataDir)), ...carried];
   // Steps 20-22: every touched project audited as its own event, and its repository scope.
   const ids = [...new Set([...touched, ...changes.map((c) => c.id)])];
   for (const id of ids) auditTouched(dataDir, principal, projectId, id, changes.find((c) => c.id === id), reachChanges);
@@ -518,10 +538,17 @@ function rekey(dataDir: string, world: PermissionWorld, users: HostedUserRecordL
     // Step 7: refused, it goes straight on to registering the new id.
     return { kind: 'registered', id: newId, detail: { parent: m.record.parentProjectId, memberPath: m.record.memberPath, rekeyRefused: oldId } };
   }
-  // Steps 8-9: the own-scope assignments and role bindings.
-  const moved = { assignments: world.assignments.filter((a) => a.scopeKind === 'project' && a.scopeId === oldId).length };
-  remapScope(dataDir, [{ oldId, newId }]);
-  remapUnitReferences(dataDir, [{ oldId, newId }], []);
+  // Steps 8-9: the own-scope assignments and role bindings, and the subsystem
+  // rules (`<old>/<subsystem>` -> `<new>/<subsystem>`) with them: one left
+  // behind would name no subsystem and stop applying — a widening.
+  const subsystemRemap = subsystemScopesOf(world, users, oldId)
+    .map((scopeId) => ({ oldId: scopeId, newId: `${newId}${scopeId.slice(oldId.length)}` }));
+  const moved = {
+    assignments: world.assignments.filter((a) => a.scopeKind === 'project' && a.scopeId === oldId).length,
+    subsystemRules: subsystemRemap.map((r) => `${r.oldId} -> ${r.newId}`),
+  };
+  remapScope(dataDir, [{ oldId, newId }, ...subsystemRemap]);
+  remapUnitReferences(dataDir, [{ oldId, newId }, ...subsystemRemap], []);
   // Steps 10-11: the key entries naming the old id.
   const keys = listCredentials(dataDir, oldId).filter((k) => k.projects.includes(oldId) && !k.revokedAt);
   for (const k of keys) renarrowCredential(dataDir, k.id, [...new Set(k.projects.map((e) => (e === oldId ? newId : e)))]);
@@ -533,10 +560,21 @@ function rekey(dataDir: string, world: PermissionWorld, users: HostedUserRecordL
 /** The subjects' role bindings as reconcile reads them. */
 type HostedUserRecordLike = { roleBindings?: { scopeKind?: string; scopeId?: string }[] };
 
-/** Whether an id already holds a setting on its own project scope: an assignment or a role binding anchored there. */
+/** Every subsystem scope of a record a setting names: an assignment or a role binding at `<id>/<subsystem>`. */
+function subsystemScopesOf(world: PermissionWorld, users: HostedUserRecordLike[], id: string): string[] {
+  const prefix = `${id}/`;
+  const ids = [
+    ...world.assignments.filter((a) => a.scopeKind === 'subsystem' && a.scopeId?.startsWith(prefix)).map((a) => a.scopeId as string),
+    ...users.flatMap((u) => (u.roleBindings ?? []).filter((b) => b.scopeKind === 'subsystem' && b.scopeId?.startsWith(prefix)).map((b) => b.scopeId as string)),
+  ];
+  return [...new Set(ids)];
+}
+
+/** Whether an id already holds a setting on its own project scope or one of its subsystem scopes: an assignment or a role binding anchored there. */
 function hasOwnSettings(world: PermissionWorld, users: HostedUserRecordLike[], id: string): boolean {
   return world.assignments.some((a) => a.scopeKind === 'project' && a.scopeId === id)
-    || users.some((u) => (u.roleBindings ?? []).some((b) => b.scopeKind === 'project' && b.scopeId === id));
+    || users.some((u) => (u.roleBindings ?? []).some((b) => b.scopeKind === 'project' && b.scopeId === id))
+    || subsystemScopesOf(world, users, id).length > 0;
 }
 
 /** Step 15: the family's member records the family no longer declares (an unreadable declaration keeps the record it names). */
@@ -548,17 +586,65 @@ function departedRecords(family: HostedProjectRecord[], declared: PlannedMemberR
     && !held.includes(`${r.parentProjectId}/${r.memberPath}`));
 }
 
-/** Steps 17-19: the rows whose effective permission a membership change altered (a re-key is equal by construction). */
-function reachOf(users: Parameters<typeof compare>[0], world: PermissionWorld, changes: MembershipChange[]): ReachComparison[] {
+/** Steps 18-20: the rows whose effective permission a membership change altered (a re-key is equal by construction). */
+function reachOf(users: Parameters<typeof compare>[0], world: PermissionWorld, changes: MembershipChange[], assignmentsAfter: PermissionAssignment[]): ReachComparison[] {
   const links: ProjectParentLink[] = listChangedLinks(changes);
   const departed = changes.filter((c) => c.kind === 'departed' || c.kind === 'retired').map((c) => c.id);
-  const after = relink(world, links, departed, [], []);
+  const after = { ...relink(world, links, departed, [], []), assignments: assignmentsAfter };
   return changes.filter((c) => c.kind !== 'renamed').flatMap((c) => {
     const before = c.kind === 'registered' || c.kind === 'returned' ? null : c.id;
     // A retired record's specs are reached through its parent's record from now on (stage 8).
     const now = c.kind === 'departed' ? null : c.kind === 'retired' ? String(c.detail.parent ?? '') || null : c.id;
     return compare(users, world, before, after, now).filter((r) => !r.equal).map((r) => ({ ...r, memberId: c.id }));
   });
+}
+
+/**
+ * imember_registration.carrySubsystemRules — keep a promote or an externalize
+ * from widening access: for each member and its parent, every subsystem rule of
+ * the parent (`<parent>/<subsystem>`, project:write yes or no) whose subsystem
+ * the member's tree declares and the parent's no longer does is set on the
+ * member's own project scope — per subject the most restrictive value, unless
+ * the subject already holds a project:write setting there. The subsystem rule
+ * itself is kept. Answers one reach row per carried rule.
+ */
+export function carrySubsystemRules(dataDir: string, members: ProjectParentLink[]): ReachComparison[] {
+  const rows: ReachComparison[] = [];
+  // Step 1.
+  for (const { projectId: memberId, parentProjectId: parentId } of members) {
+    // Step 2: the subsystems that moved from the parent into the member.
+    const parentHolds = declaredSubsystemIds(dataDir, parentId) ?? [];
+    const moved = (declaredSubsystemIds(dataDir, memberId) ?? []).filter((s) => !parentHolds.includes(s));
+    if (moved.length === 0) continue;
+    // Steps 3-5: the plan — one rule per subject, the most restrictive when several subsystems name it.
+    const plan = carryPlan(listUsers(dataDir), gatherPermissionWorld(dataDir), parentId, memberId, moved);
+    for (const rule of plan.filter((r) => r.kind === 'assignment')) {
+      // Step 6.
+      const everyone = rule.subject === EVERYONE;
+      setAssignment(dataDir, {
+        id: '', subjectKind: everyone ? 'everyone' : 'user', ...(everyone ? {} : { subjectId: rule.subject }),
+        scopeKind: 'project', scopeId: memberId, capability: 'project:write', value: rule.value as PermissionValue, createdAt: '',
+      });
+      // Step 7.
+      rows.push(carriedRow(rule));
+    }
+  }
+  // Step 8.
+  return rows;
+}
+
+/** The reach row of one carried rule: before at the subsystem scope(s), after at the member's project scope. */
+function carriedRow(rule: CarriedSubsystemRule): ReachComparison {
+  const source: EffectivePermission['source'] = rule.subject === EVERYONE ? 'everyone-default' : 'user';
+  const value = rule.value as EffectivePermission['value'];
+  return {
+    memberId: rule.to,
+    subjectId: rule.subject,
+    capability: 'project:write',
+    before: { value, source, decidedScopeKind: 'subsystem', decidedScopeId: rule.from.join(', ') },
+    after: { value, source, decidedScopeKind: 'project', decidedScopeId: rule.to },
+    equal: true,
+  };
 }
 
 /** The parent links the registered and relocated members hold now. */

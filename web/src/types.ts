@@ -11,7 +11,8 @@ export type Capability =
   | 'approval:decide'
   | 'share:create';
 export type PermissionValue = 'yes' | 'approval' | 'no' | 'inherit';
-export type ScopeKind = 'instance' | 'unit' | 'project';
+/** A subsystem scope (`<projectId>/<subsystemId>`) carries only project:write, as yes or no (or inherit). */
+export type ScopeKind = 'instance' | 'unit' | 'project' | 'subsystem';
 
 export const CAPABILITIES: Capability[] = [
   'project:read',
@@ -62,6 +63,17 @@ export interface PermissionAssignment {
   capability: Capability;
   value: PermissionValue;
   createdAt: string;
+  /** Set on a listing only: "subsystem not found" for a subsystem rule its project no longer declares. */
+  scopeNote?: string;
+}
+
+/** One user's effective permission at a scope, with the rung that decided it (GET /web/admin/permissions/explain). */
+export interface EffectivePermission {
+  value: 'yes' | 'approval' | 'no';
+  source: 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default';
+  decidedScopeKind?: ScopeKind;
+  decidedScopeId?: string;
+  scopeNote?: string;
 }
 
 export interface HostedUserRecord {

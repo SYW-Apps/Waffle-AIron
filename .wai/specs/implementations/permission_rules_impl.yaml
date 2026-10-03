@@ -19,10 +19,13 @@ methods:
         outcome: yes (instance-admin)
       - stepNumber: 3
         description: >-
-          Build the target's ancestor chain leaf->root: for a project, its own scope, then —
-          following the world's parent links, each visited once — every parent project scope up to
-          its family root, then the family root's placement unit and that unit's ancestors; for a
-          unit, the unit and its ancestors; ending at the instance root
+          Build the target's ancestor chain leaf->root: for a subsystem
+          (`<projectId>/<subsystemId>`), its own subsystem rung when the capability is project:write
+          (none for any other capability), then its project's chain; for a project, its own scope,
+          then — following the world's parent links, each visited once — every parent project scope
+          up to its family root, then the family root's placement unit and that unit's ancestors;
+          for a unit, the unit and its ancestors; ending at the instance root. A subsystem id
+          without the separator names no scope: its chain is the instance root alone
         type: local
       - stepNumber: 4
         description: Walk the ancestor chain, stopping at the nearest scope with a definitive value
@@ -45,7 +48,9 @@ methods:
           Resolve this scope's value by precedence: a definitive direct-user value wins; else the
           most-permissive GRANTING role value among roles anchored here (yes > approval; a role
           never denies — a role 'no'/'inherit' is non-deciding); else the everyone-default; else
-          'inherit' (continue upward).
+          'inherit' (continue upward). At a subsystem rung only yes and no decide — a subsystem is a
+          yes/no setting, so a role's approval there is non-deciding and an approval value anywhere
+          there defers to the project.
         type: local
       - stepNumber: 7
         description: If this scope produced a definitive value, it decides
@@ -84,7 +89,8 @@ methods:
         loopKind: forEach
         over: >-
           each unit, each placed project and each member project (from the parent links) in the
-          world
+          world, and — for project:write — each subsystem scope a setting in the world names (a
+          subsystem assignment, or one of the subject's subsystem role bindings)
         endStep: 8
       - stepNumber: 5
         description: >-
@@ -98,9 +104,9 @@ methods:
         onFalseStep: 8
       - stepNumber: 7
         description: >-
-          Record the scope as actionable; add its ancestor units (a member's: its family root's
-          units) to the context set only when they are not themselves actionable (actionable always
-          wins over context).
+          Record the scope as actionable; add its ancestors to the context set only when they are
+          not themselves actionable (actionable always wins over context): a subsystem's project and
+          that project's units, a member's family root's units, a unit's ancestor units.
         type: local
       - stepNumber: 8
         description: Advance to the next scope
@@ -110,7 +116,49 @@ methods:
         type: return
         outcome: actionable scopes plus their context-only ancestor breadcrumb
     detail: full
+  - name: resolveSubsystemReach
+    narrative:
+      - stepNumber: 1
+        description: 'An instance-admin meets no subsystem rung: the bypass decides every scope'
+        type: branch
+        condition: the subject is an instance admin
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Nothing differs from the project
+        type: return
+        outcome: no subsystem rungs
+      - stepNumber: 3
+        label: collect
+        description: >-
+          Collect the subsystem scopes of the project that carry a setting applying to the subject:
+          a direct-user assignment at `<projectId>/<subsystemId>` keyed by the subject's id or one
+          of its aliases, an everyone-default there, or one of the subject's role bindings anchored
+          there — each subsystem once
+        type: local
+      - stepNumber: 4
+        description: Judge each collected subsystem
+        type: loop
+        loopKind: forEach
+        over: each collected subsystem scope
+        endStep: 6
+      - stepNumber: 5
+        description: >-
+          Resolve project:write at the subsystem scope through the same walk resolvePermission takes
+          (its own rung, then the project's chain), so a subsystem whose settings do not decide
+          reports the project chain's decision
+        type: call
+        targetComponent: permission_rules
+        targetMethod: resolvePermission
+      - stepNumber: 6
+        label: next
+        description: Record the subsystem with its effective permission and the rung that decided it
+        type: local
+      - stepNumber: 7
+        description: Return the subsystem rungs; every subsystem not listed resolves exactly as the project
+        type: return
+        outcome: SubsystemReach[]
+    detail: full
 detail: full
 status: complete
 createdAt: '2026-07-15T20:30:34.619Z'
-updatedAt: '2026-10-01T16:55:48.409Z'
+updatedAt: '2026-10-03T13:36:34.545Z'
