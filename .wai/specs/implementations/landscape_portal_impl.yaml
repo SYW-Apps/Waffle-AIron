@@ -5,6 +5,8 @@ description: >-
   public-surface, relation, and graph operation to the landscape orchestrator.
 contract: ilandscape_portal
 sourcePath: src/server/landscape.ts
+injectedParams:
+  - cfg
 methods:
   - name: upsertUnit
     narrative:
@@ -74,4 +76,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T22:08:59.746Z'
-updatedAt: '2026-07-23T22:35:43.512Z'
+updatedAt: '2026-10-03T16:39:45.532Z'

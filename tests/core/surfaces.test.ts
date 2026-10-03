@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { setProjectRoot } from '../../src/utils/fs.js';
+import { runWithProjectRoot, setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
   saveSpec,
@@ -594,7 +594,7 @@ describe('cross-tree references are matched by the provider they name', () => {
       }],
       status: 'complete', createdAt: now, updatedAt: now,
     } as ImplementationSpec);
-    for (const snapshot of pins) saveSnapshot(snapshot, kidDir);
+    runWithProjectRoot(kidDir, () => { for (const snapshot of pins) saveSnapshot(snapshot); });
     invalidateSpecCache();
     return { root, kidDir };
   }
@@ -707,9 +707,11 @@ describe('stage-1 family pins + computeStateIdAt', () => {
     const snap = (projectName: string, origin: 'generated' | 'authored') => SurfaceSnapshotSchema.parse({
       projectName, origin, stateId: 'sha256:pinned', generatedAt: now, types: [], interfaces: [],
     });
-    saveSnapshot(snap('root-system', 'generated'), childDir);
-    saveSnapshot(snap('root-system::core-sub', 'generated'), childDir);
-    saveSnapshot(snap('stripe', 'authored'), childDir);
+    runWithProjectRoot(childDir, () => {
+      saveSnapshot(snap('root-system', 'generated'));
+      saveSnapshot(snap('root-system::core-sub', 'generated'));
+      saveSnapshot(snap('stripe', 'authored'));
+    });
     invalidateSpecCache();
     return childDir;
   }

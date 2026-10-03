@@ -9,12 +9,18 @@ methods:
     description: >-
       Resolve one template by name through project → user-home → packaged built-in tiers and return
       its raw {{variable}} instruction body.
-    signature: 'loadTemplate(templateName: string): AgentTemplate'
+    signature: 'loadTemplate(templateName: string, globalTemplatesDir?: string): AgentTemplate'
     returns: AgentTemplate
     params:
       - name: templateName
         type: string
         description: Template identifier (architect, domain-owner, implementer, …).
+      - name: globalTemplatesDir
+        type: string
+        description: >-
+          The project's configured global templates directory (globalTemplatesDir), searched before
+          the built-in tier
+        optional: true
   - name: loadAgentOverride
     description: >-
       Read the optional per-agent project guidance file (.wai/agents/<agentId>.md) and return its
@@ -29,4 +35,4 @@ methods:
         description: The resolved agent id whose guidance file to read.
 status: complete
 createdAt: '2026-08-08T11:11:55.834Z'
-updatedAt: '2026-08-08T12:39:57.345Z'
+updatedAt: '2026-10-03T16:47:03.525Z'

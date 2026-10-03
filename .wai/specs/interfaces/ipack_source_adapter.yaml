@@ -36,11 +36,16 @@ methods:
       pack file, or require a JS pack module and use its export (programmatic rules included).
       Propagates a read/require/parse failure to the caller, which records it as an
       EXTENSION_LOAD_ERROR.
-    signature: 'readManifest(target: string): ExtensionPack'
+    signature: 'readManifest(target: string, resolveFrom: string): ExtensionPack'
     returns: ExtensionPack
     params:
       - name: target
         type: string
+      - name: resolveFrom
+        type: string
+        description: >-
+          The directory a module (non-YAML) pack target is required from: the project root, or the
+          directory of the bundle entry being loaded
 status: complete
 createdAt: '2026-07-14T18:59:04.313Z'
-updatedAt: '2026-07-14T20:23:49.239Z'
+updatedAt: '2026-10-03T16:47:19.307Z'

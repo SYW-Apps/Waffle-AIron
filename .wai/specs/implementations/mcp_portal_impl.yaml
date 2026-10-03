@@ -93,6 +93,13 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: listResources
+      - stepNumber: 2
+        description: >-
+          The same registrar wires the MCP resources/read request to the resource read workflow,
+          handed to the SDK as its request handler.
+        type: register
+        targetComponent: mcp_orchestrator
+        targetMethod: readResource
     symbol: registerSkillResources
   - name: readResource
     narrative:
@@ -297,4 +304,4 @@ methods:
         targetMethod: run
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:34:22.635Z'
+updatedAt: '2026-10-03T16:42:35.669Z'

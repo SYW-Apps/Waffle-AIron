@@ -7,21 +7,22 @@ component: share_snapshots
 methods:
   - name: capture
     description: >-
-      For the caller's session and the target project + view, build exactly the requested artifact
-      payloads (canvas model via the host core adapter; openapi / standalone html via the host
-      surfaces adapter / renderer) and return an immutable snapshot ready to persist. The scoped
-      canvas build applies the session's own read authority, so a snapshot can never capture more
-      than its creator may see. The canvas (model and html alike) carries the family's relation
+      For the authenticated caller and the target project + view, build exactly the requested
+      artifact payloads (canvas model via the host core adapter; openapi / standalone html via the
+      host surfaces adapter / renderer) and return an immutable snapshot ready to persist. The
+      scoped canvas build applies the caller's own read authority, so a snapshot can never capture
+      more than its creator may see. The canvas (model and html alike) carries the family's relation
       health as it was at capture — each relation with its compared-at time, read within the
       creator's reach, what was out of it unavailable — and no member record ids, so a shared page
       links to nothing its viewer may not open.
     signature: >-
-      capture(sessionId: string, projectId: string, view: string, artifacts: string[]):
+      capture(principal: Principal, projectId: string, view: string, artifacts: string[]):
       ShareSnapshot
     returns: ShareSnapshot
     params:
-      - name: sessionId
-        type: string
+      - name: principal
+        type: Principal
+        description: The already-authenticated caller whose read reach bounds what the snapshot may hold
       - name: projectId
         type: string
       - name: view
@@ -32,4 +33,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-17T22:30:09.552Z'
-updatedAt: '2026-10-03T12:17:00.954Z'
+updatedAt: '2026-10-03T16:50:11.801Z'

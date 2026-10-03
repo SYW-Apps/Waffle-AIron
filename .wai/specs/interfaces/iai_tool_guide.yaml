@@ -10,27 +10,27 @@ methods:
     description: >-
       Where a tool keeps its machine-wide configuration, honouring the environment override that
       account aliases set, or nothing when the tool is not one we inject into.
-    signature: 'globalPath(target: string): string | null'
+    signature: 'globalPath(targetType: string): string | null'
     returns: string | null
     params:
-      - name: target
+      - name: targetType
         type: string
-        description: 'The AI tool: `claude` or `gemini`'
+        description: 'The AI tool''s target type key: `claude` or `gemini`'
     guarantees:
       - idempotent
   - name: localPath
     description: >-
       Where a tool keeps its per-project configuration inside this repository, or nothing when the
       tool is not one we inject into.
-    signature: 'localPath(projectRoot: string, target: string): string | null'
+    signature: 'localPath(projectRoot: string, targetType: string): string | null'
     returns: string | null
     params:
       - name: projectRoot
         type: string
         description: The project root
-      - name: target
+      - name: targetType
         type: string
-        description: 'The AI tool: `claude`, `gemini` or `agy`'
+        description: 'The AI tool''s target type key: `claude`, `gemini` or `agy`'
     guarantees:
       - idempotent
   - name: inject
@@ -64,15 +64,15 @@ methods:
     description: >-
       Write the repository-root file that points a tool at the real guide inside the project, so the
       root stays a one-line pointer rather than a second copy to keep in step.
-    signature: 'writeDelegator(projectRoot: string, target: string): void'
+    signature: 'writeDelegator(projectRoot: string, targetType: string): void'
     returns: void
     params:
       - name: projectRoot
         type: string
         description: The project root
-      - name: target
+      - name: targetType
         type: string
-        description: The AI tool to write a pointer for
+        description: The target type key of the AI tool to write a pointer for
     effect: write
   - name: refreshLocal
     description: >-
@@ -81,16 +81,16 @@ methods:
       guide should say — a wairon upgrade, a regenerate — so a stale guide is never left claiming to
       describe the current tree. It INSTALLS as well as refreshes: a known target gets a guide
       whether or not it had one, and an unrecognized target name is ignored rather than refused.
-    signature: 'refreshLocal(projectRoot: string, targets: string[]): string[]'
+    signature: 'refreshLocal(projectRoot: string, targetTypes: string[]): string[]'
     returns: string[]
     params:
       - name: projectRoot
         type: string
         description: The project root
-      - name: targets
+      - name: targetTypes
         type: string[]
-        description: The AI tools to refresh
+        description: The target type keys of the AI tools to refresh
     effect: write
 status: complete
 createdAt: '2026-09-23T00:11:03.274Z'
-updatedAt: '2026-09-23T00:14:14.595Z'
+updatedAt: '2026-10-03T16:45:59.344Z'

@@ -10,11 +10,13 @@ methods:
       Seed-or-load the boot-reserved built-in subject UUIDs: first boot generates and persists them;
       every later boot returns the existing record unchanged. Called once from the sdd_host
       lifecycle init entrypoint before the listeners bind.
-    signature: 'ensureSeeded(now: string): InstanceIdentity'
+    signature: 'ensureSeeded(now?: string): InstanceIdentity'
     returns: InstanceIdentity
     params:
       - name: now
         type: string
+        description: The ISO timestamp recorded on a first seed; defaults to the current time
+        optional: true
     guarantees:
       - idempotent
       - atomic
@@ -27,4 +29,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-16T00:24:17.189Z'
-updatedAt: '2026-09-15T20:46:59.879Z'
+updatedAt: '2026-10-03T16:42:41.992Z'

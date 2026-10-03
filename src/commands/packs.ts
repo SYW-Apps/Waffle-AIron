@@ -45,6 +45,31 @@ import {
   packManifest,
 } from '../core/index.js';
 
+/** The flags of the `wairon pack` / `wairon packs` subcommands, as the CLI
+ *  hands them to the runner; each subcommand reads only the ones it takes. */
+export interface PackCommandOptions {
+  /** Act on the global pack store instead of the project's. */
+  global?: boolean;
+  /** init: declarative (default) or code. */
+  kind?: string;
+  /** init: the directory to scaffold into. */
+  dir?: string;
+  /** init: scaffold a skill too. */
+  skill?: boolean;
+  /** build: where to write the archive. */
+  out?: string;
+  /** use: where to take the pack from. */
+  source?: string;
+  /** use: vendor the pack into the project bundle. */
+  bundle?: boolean;
+  /** use: pin the resolved version. */
+  pin?: boolean;
+  /** bundle: every selection the project declares. */
+  all?: boolean;
+  /** Apply without showing the impact report first. */
+  yes?: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // pack command family — author, install, inspect, and remove extension packs.
 //

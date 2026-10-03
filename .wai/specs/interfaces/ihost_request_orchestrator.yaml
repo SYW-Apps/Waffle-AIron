@@ -72,19 +72,21 @@ methods:
       member only; it never reaches its parent's. A tool that throws answers in the same envelope
       with isError set, never as a transport failure.
     signature: >-
-      dispatchProjectLifecycleTool(request: HttpRequest, credential: string, binding:
-      ProjectBinding): McpToolResponse | undefined
+      dispatchProjectLifecycleTool(credential: string | null, projectId: string, body: unknown):
+      McpToolResponse | undefined
     returns: McpToolResponse | undefined
     params:
-      - name: request
-        type: HttpRequest
-        description: The data-plane request whose JSON-RPC body carries the tool call
       - name: credential
+        type: string | null
+        description: >-
+          The caller's credential (null when none was presented), forwarded so each orchestrator
+          resolves its own permission
+      - name: projectId
         type: string
-        description: The caller's credential, forwarded so each orchestrator resolves its own permission
-      - name: binding
-        type: ProjectBinding
-        description: 'The resolved binding: the bound record every served tool is scoped to'
+        description: The id of the already-bound record every served tool is scoped to
+      - name: body
+        type: unknown
+        description: The decoded JSON-RPC body carrying the tool call
   - name: auditToolCall
     description: >-
       Append the redacted mcp.tool.call audit event for one handled data-plane tool call,
@@ -96,19 +98,19 @@ methods:
       permission refusal, a tool the data plane served itself, and a tool the scoped MCP server
       served.
     signature: >-
-      auditToolCall(request: HttpRequest, principal: Principal, binding: ProjectBinding, outcome:
-      string): void
+      auditToolCall(principal: Principal, binding: ProjectBinding, body: unknown, outcome: string):
+      void
     returns: void
     params:
-      - name: request
-        type: HttpRequest
-        description: The handled request, whose body names the tool the event targets
       - name: principal
         type: Principal
         description: The authenticated caller — actor and tokenId of the event
       - name: binding
         type: ProjectBinding
         description: The bound record the event names, and the deprecated qualifier recorded as composition
+      - name: body
+        type: unknown
+        description: The decoded JSON-RPC message of the handled call, which names the tool the event targets
       - name: outcome
         type: string
         description: The outcome derived from the response the call produced
@@ -116,4 +118,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-10-03T13:41:30.766Z'
+updatedAt: '2026-10-03T16:41:41.721Z'

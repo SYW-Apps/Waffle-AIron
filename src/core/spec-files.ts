@@ -30,19 +30,19 @@ import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 const SPEC_FILE_EXTENSION = '.yaml';
 
 /**
- * Read and parse the spec document at `filePath`.
+ * Read and parse the spec document at `specPath`.
  * Returns null when the file is absent; throws on malformed content.
  */
-export function readSpecFile(filePath: string): unknown {
-  return readYamlFile(filePath);
+export function readSpecFile(specPath: string): unknown {
+  return readYamlFile(specPath);
 }
 
 /**
- * Serialize `document` in the spec storage format and write it to `filePath`,
+ * Serialize `document` in the spec storage format and write it to `specPath`,
  * creating parent directories as needed.
  */
-export function writeSpecFile(filePath: string, document: unknown): void {
-  writeYamlFile(filePath, document);
+export function writeSpecFile(specPath: string, document: unknown): void {
+  writeYamlFile(specPath, document);
 }
 
 /**
@@ -54,7 +54,7 @@ export function listSpecFiles(specsDir: string): string[] {
 }
 
 /**
- * Delete the spec document at `filePath` and prune the parent directories the
+ * Delete the spec document at `specPath` and prune the parent directories the
  * deletion emptied, stopping at `specsRoot` so the root itself survives an
  * emptied tree. Answers false when there was no document there, so a caller can
  * tell "deleted" from "was never there" without a second existence check.
@@ -64,10 +64,10 @@ export function listSpecFiles(specsDir: string): string[] {
  * (`paths.specsDir`), so the boundary cannot be derived from the path and the
  * store is the one component that must never read project.yaml to find it.
  */
-export function removeSpecFile(filePath: string, specsRoot: string): boolean {
-  if (!fs.existsSync(filePath)) return false;
-  fs.unlinkSync(filePath);
-  pruneEmptyDirs(path.dirname(filePath), path.resolve(specsRoot));
+export function removeSpecFile(specPath: string, specsRoot: string): boolean {
+  if (!fs.existsSync(specPath)) return false;
+  fs.unlinkSync(specPath);
+  pruneEmptyDirs(path.dirname(specPath), path.resolve(specsRoot));
   return true;
 }
 

@@ -42,7 +42,7 @@ methods:
       the bound project alone: a member's own findings are its own lock's, never its parent's (stage
       4, confirmed); the parent's gate identity still hashes member content until stage 5 (see
       computeGateStateId).
-    signature: 'validateAsComplete(options?: ValidationOptions, projectType?: string): ValidationResult'
+    signature: 'validateAsComplete(options?: ValidationOptions): ValidationResult'
     returns: ValidationResult
     params:
       - name: options
@@ -50,10 +50,6 @@ methods:
         description: >-
           What this run may vary; `treatAllAsComplete` is set by this method and not the caller's to
           unset
-        optional: true
-      - name: projectType
-        type: string
-        description: The project type whose doctrine applies; defaults to backend
         optional: true
   - name: listRules
     description: >-
@@ -197,4 +193,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T12:15:21.922Z'
+updatedAt: '2026-10-03T16:47:00.326Z'

@@ -79,7 +79,7 @@ methods:
       Authenticate the credential; compute the caller's project:read visible scopes and deny when
       empty. List cross-project relations whose source or target project is an actionable project in
       the visible set (an instance-admin sees all). Reads are not audited.
-    signature: 'listRelations(credential: string, projectId: string): ProjectRelationRecord[]'
+    signature: 'listRelations(credential: string, projectId?: string): ProjectRelationRecord[]'
     returns: ProjectRelationRecord[]
     params:
       - name: credential
@@ -95,7 +95,7 @@ methods:
       to the caller's in-scope projects/units — keeping ancestor-breadcrumb units for navigation,
       marked non-actionable (context) — and return a landscape graph built only from hosted metadata
       and redacted snapshots (an instance-admin sees the whole instance). Reads are not audited.
-    signature: 'generate(credential: string, scope: string): LandscapeGraphModel'
+    signature: 'generate(credential: string, scope?: string): LandscapeGraphModel'
     returns: LandscapeGraphModel
     params:
       - name: credential
@@ -119,4 +119,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-10-01T17:05:49.106Z'
+updatedAt: '2026-10-03T16:46:46.586Z'

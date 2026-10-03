@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
+import { setProjectRoot, runWithProjectBinding, runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { saveSnapshot } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
@@ -348,9 +348,9 @@ describe('stage 2c — the chaining migration', () => {
   it('converts a member\'s stage-1 family pin to an external and deletes every family pin once the external is pinned', () => {
     const f = family();
     // The pins `surface pin` once wrote (stage 3 retired the writer): the parent's family surface and two siblings'.
-    const pin = (projectName: string): string => saveSnapshot(SurfaceSnapshotSchema.parse({
+    const pin = (projectName: string): string => runWithProjectRoot(f.billing, () => saveSnapshot(SurfaceSnapshotSchema.parse({
       projectName, origin: 'generated', stateId: 'sha256:pinned', generatedAt: TS, interfaces: [], types: [],
-    }), f.billing);
+    })));
     const pinned = ['FleetWorks', 'FleetWorks::dispatch', 'FleetWorks::operations'].map(pin);
     const planned = at(f.root, () => plan());
     const billing = planned.projects.find((p) => p.project === 'billing-service')!;

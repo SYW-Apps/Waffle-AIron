@@ -59,7 +59,7 @@ methods:
       path: /landscape/relations/{id}
   - name: listRelations
     description: List cross-project relations visible to the caller.
-    signature: 'listRelations(credential: string, projectId: string): ProjectRelationRecord[]'
+    signature: 'listRelations(credential: string, projectId?: string): ProjectRelationRecord[]'
     returns: ProjectRelationRecord[]
     params:
       - name: credential
@@ -75,7 +75,7 @@ methods:
     description: >-
       Return a hosted-instance landscape graph built from organization records, projects,
       public-surface snapshots, and cross-project relations.
-    signature: 'generateLandscape(credential: string, scope: string): LandscapeGraphModel'
+    signature: 'generateLandscape(credential: string, scope?: string): LandscapeGraphModel'
     returns: LandscapeGraphModel
     params:
       - name: credential
@@ -144,4 +144,4 @@ methods:
       path: /landscape/projects/{id}/surface
 status: complete
 createdAt: '2026-07-08T21:13:58.131Z'
-updatedAt: '2026-07-23T22:15:46.971Z'
+updatedAt: '2026-10-03T16:46:47.886Z'

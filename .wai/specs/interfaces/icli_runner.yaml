@@ -153,11 +153,19 @@ methods:
     description: >-
       Deprecated alias of `wairon pack` for the add | list | remove subset — forwards to the packs
       adapter. Kept for back-compat; new usage should prefer `wairon pack`.
-    signature: 'runPacks(action: string): void'
+    signature: 'runPacks(action: string, arg?: string, options?: PackCommandOptions): void'
     returns: void
     params:
       - name: action
         type: string
+      - name: arg
+        type: string
+        description: The pack name or source the action works on
+        optional: true
+      - name: options
+        type: PackCommandOptions
+        description: The subcommand's flags; runPacks reads only `global`
+        optional: true
   - name: runRules
     description: Handle `wairon rules list`, printing the active conformance rule set.
     signature: 'runRules(): void'
@@ -182,11 +190,19 @@ methods:
       `--yes` passes through to the commands that select or update a pack, which otherwise show its
       impact and ask before writing. The primary pack UX; `wairon packs` remains as a deprecated
       alias (runPacks) for add | list | remove.
-    signature: 'runPack(action: string): void'
+    signature: 'runPack(action: string, arg?: string, options?: PackCommandOptions): void'
     returns: void
     params:
       - name: action
         type: string
+      - name: arg
+        type: string
+        description: The pack name, name@version or source the subcommand works on
+        optional: true
+      - name: options
+        type: PackCommandOptions
+        description: The subcommand's flags; each subcommand reads only the ones it takes
+        optional: true
   - name: runLock
     description: >-
       The local `wairon lock` workflow: capture the gate identity BEFORE validating, gate on the
@@ -232,7 +248,7 @@ methods:
       Resolves the instance, project and credential from flags, the environment, the recorded
       binding, or the agent's own MCP configuration, then routes to the remote orchestrator and
       reports exactly what happened — including any backup a replaced tree can be undone from.
-    signature: 'runRemote(action: string, options: RemoteCommandOptions): Promise<void>'
+    signature: 'runRemote(action: string, options?: RemoteCommandOptions): Promise<void>'
     returns: Promise<void>
     params:
       - name: action
@@ -240,6 +256,7 @@ methods:
         description: push | pull | attach | detach | status
       - name: options
         type: remote_command_options
+        optional: true
   - name: runLogin
     description: >-
       `wairon login <url>` — store a bearer credential for a hosted instance in the USER's
@@ -247,26 +264,29 @@ methods:
       Takes the token from --token or a prompt, verifies it against the instance before storing (a
       credential that does not work is a worse outcome than no credential), and never echoes it
       back.
-    signature: 'runLogin(url: string, options: { token?: string; project?: string }): Promise<void>'
+    signature: 'runLogin(url: string, options?: { token?: string; project?: string }): Promise<void>'
     returns: Promise<void>
     params:
       - name: url
         type: string
       - name: options
         type: remote_command_options
+        optional: true
   - name: runLogout
     description: >-
       `wairon logout [url]` — forget the stored credential for an instance (or list what is stored
       when no URL is given). Local only: it does NOT revoke the token on the instance, which the
       output states plainly so nobody believes a leaked credential has been killed — revocation
       lives in the hosted UI under Tokens.
-    signature: 'runLogout(url: string, options: RemoteCommandOptions): Promise<void>'
+    signature: 'runLogout(url?: string): Promise<void>'
     returns: Promise<void>
     params:
       - name: url
         type: string
-      - name: options
-        type: remote_command_options
+        description: >-
+          The instance whose stored credential to forget; omitted lists the instances this machine
+          holds a credential for
+        optional: true
   - name: runMcpServe
     description: >-
       `wairon mcp serve` — run the wairon MCP server on stdio for an AI tool that spawned it,
@@ -379,12 +399,13 @@ methods:
       consumption edge by its relation's health — the family's relations compared with their live
       producers, as of the time it was written — unless `--no-health` is given, when those edges are
       drawn as not checked.
-    signature: 'runDiagram(options: DiagramOptions): Promise<void>'
+    signature: 'runDiagram(options?: DiagramOptions): Promise<void>'
     returns: Promise<void>
     params:
       - name: options
         type: DiagramOptions
         description: The requested format and where to write the artifact
+        optional: true
   - name: runDomainsList
     description: >-
       `wairon domains list`: show every domain this project has, derived and registered alike,
@@ -460,12 +481,13 @@ methods:
       pin tree, computed by the validator at each project's own root so it agrees with the member's
       own status), and the lock's verdict underneath. It renders nothing itself — the tree is drawn
       once, in core, and this supplies only what colour each role should take.
-    signature: 'localStatus(options: StatusOptions): Promise<void>'
+    signature: 'localStatus(options?: StatusOptions): Promise<void>'
     returns: Promise<void>
     params:
       - name: options
         type: StatusOptions
         description: How much of the tree to cover
+        optional: true
   - name: runSkillsList
     description: Handle `wairon skills list`, printing the built-in SDD skills.
     signature: 'runSkillsList(): void'
@@ -694,4 +716,4 @@ methods:
     returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T13:37:57.601Z'
+updatedAt: '2026-10-03T16:49:21.773Z'

@@ -7,18 +7,23 @@ component: surface_transfer_adapter
 methods:
   - name: writeSnapshotTo
     description: >-
-      Write a snapshot (or rendered document) into a target directory or output path (e.g. a chained
-      child's .wai/surfaces/), returning the written path.
-    signature: 'writeSnapshotTo(targetPath: string, snapshot: SurfaceSnapshot, rendered?: string): string'
-    returns: string
+      Write a snapshot, or its rendered per-portal documents, to a target output path, returning
+      every path written: the snapshot YAML when nothing was rendered, the single document when one
+      portal remains, else one file per portal beside the target.
+    signature: >-
+      writeSnapshotTo(targetPath: string, snapshot: SurfaceSnapshot, renderedSet?:
+      NamedOpenApiSpec[]): string[]
+    returns: string[]
     params:
       - name: targetPath
         type: string
       - name: snapshot
         type: SurfaceSnapshot
-      - name: rendered
-        type: string
-        description: Pre-rendered document body (e.g. OpenAPI) to write instead of native YAML
+      - name: renderedSet
+        type: NamedOpenApiSpec[]
+        description: >-
+          The rendered per-portal documents (e.g. OpenAPI) to write instead of native YAML; one file
+          per portal when there are several
         optional: true
   - name: readDocument
     description: Read a foreign surface document (native snapshot YAML or OpenAPI JSON/YAML) from a path.
@@ -29,4 +34,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-10T23:14:07.216Z'
-updatedAt: '2026-07-11T09:04:02.751Z'
+updatedAt: '2026-10-03T16:40:54.520Z'

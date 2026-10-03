@@ -69,8 +69,8 @@ export function getDisabledAliases(): string[] {
   return loadUserConfig().disabledAliases ?? [];
 }
 
-export function setDisabledAliases(disabled: string[]): void {
+export function setDisabledAliases(names: string[]): void {
   const config = loadUserConfig();
-  config.disabledAliases = disabled;
+  config.disabledAliases = names;
   saveUserConfig(config);
 }

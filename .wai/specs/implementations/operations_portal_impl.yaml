@@ -5,6 +5,8 @@ description: >-
   quota request to the operations orchestrator.
 contract: ioperations_portal
 sourcePath: src/server/operations.ts
+injectedParams:
+  - cfg
 methods:
   - name: getHealthReport
     narrative:
@@ -30,4 +32,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-10T11:27:04.719Z'
-updatedAt: '2026-07-10T11:27:34.167Z'
+updatedAt: '2026-10-03T16:39:47.436Z'

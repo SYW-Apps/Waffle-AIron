@@ -514,12 +514,12 @@ export function getExposurePolicy(cfg: HostConfig, credential: string | null): H
 export function setExposurePolicy(
   cfg: HostConfig,
   credential: string | null,
-  exposure: HostExposurePolicy,
+  policy: HostExposurePolicy,
 ): HostExposurePolicy {
   const principal = requireInstanceExposureAdmin(cfg, credential);
   const stored = setExposurePolicyRecord(cfg.dataDir, {
     ...COMPATIBLE_DEFAULT_EXPOSURE,
-    ...exposure,
+    ...policy,
   });
   const event: AuditEvent = {
     id: '',

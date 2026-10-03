@@ -12,6 +12,9 @@ description: >-
   reconciled.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
+injectedParams:
+  - cfg
+  - dataDir
 methods:
   - name: viewDiagram
     narrative:
@@ -47,7 +50,7 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Read the single JSON-RPC message from the request body, together with the called tool
+          Read the single JSON-RPC message from the decoded body, together with the called tool
           name, its decoded arguments, and the request id the response must echo
         type: local
       - stepNumber: 2
@@ -639,4 +642,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-03T14:21:07.753Z'
+updatedAt: '2026-10-03T16:49:40.826Z'

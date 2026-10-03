@@ -9,7 +9,7 @@ methods:
     description: >-
       Ensure a working copy of the backing repo exists under the binding's scratch dir (clone on
       first use, fetch+checkout the branch afterwards) and return its path.
-    signature: 'cloneOrOpen(remote: string, branch: string, workdir: string): string'
+    signature: 'cloneOrOpen(remote: string, branch: string, workdir: string, credentialRef?: string): string'
     returns: string
     params:
       - name: remote
@@ -18,6 +18,13 @@ methods:
         type: string
       - name: workdir
         type: string
+      - name: credentialRef
+        type: string
+        description: >-
+          Names this connection's own stored personal access token, which authenticates the clone
+          and fetch; omitted, the shared git token does. A reference to the secret, never the secret
+          itself
+        optional: true
   - name: mirrorTree
     description: >-
       Mirror-export one source directory into a target directory inside the working copy (replace
@@ -42,4 +49,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-16T15:39:15.327Z'
-updatedAt: '2026-07-16T15:48:48.920Z'
+updatedAt: '2026-10-03T16:46:37.412Z'

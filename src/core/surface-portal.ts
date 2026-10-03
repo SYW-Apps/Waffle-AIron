@@ -30,16 +30,16 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
   return surfaceOrchestrator.importSurface(sourcePath, origin);
 }
 
-export function listSnapshots(rootDir?: string): SurfaceSnapshot[] {
-  return surfaceOrchestrator.listSnapshots(rootDir);
+export function listSnapshots(): SurfaceSnapshot[] {
+  return surfaceOrchestrator.listSnapshots();
 }
 
-export function getSnapshot(projectName: string, rootDir?: string): SurfaceSnapshot | null {
-  return surfaceOrchestrator.getSnapshot(projectName, rootDir);
+export function getSnapshot(projectName: string): SurfaceSnapshot | null {
+  return surfaceOrchestrator.getSnapshot(projectName);
 }
 
-export function removeSnapshot(projectName: string, rootDir?: string): boolean {
-  return surfaceOrchestrator.removeSnapshot(projectName, rootDir);
+export function removeSnapshot(projectName: string): boolean {
+  return surfaceOrchestrator.removeSnapshot(projectName);
 }
 
 export function listFamilyPins(): FamilyPin[] {

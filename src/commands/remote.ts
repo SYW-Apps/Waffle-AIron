@@ -76,7 +76,7 @@ export interface RemoteTransferOutcome {
 /** Migrate the LOCAL spec tree into a hosted project. */
 export async function pushTree(
   target: RemoteTarget,
-  options: RemoteTransferOptions = {},
+  options: RemoteTransferOptions,
 ): Promise<RemoteTransferOutcome> {
   // Step 1: export the local tree FIRST — nothing is created or changed on the
   // instance until there is something complete to send.
@@ -111,7 +111,7 @@ export async function pushTree(
 /** Migrate a hosted project's spec tree into the local root. */
 export async function pullTree(
   target: RemoteTarget,
-  options: RemoteTransferOptions = {},
+  options: RemoteTransferOptions,
 ): Promise<RemoteTransferOutcome> {
   // Step 1: export the hosted tree FIRST — the local root is not touched until
   // a complete archive is in hand.
@@ -153,7 +153,7 @@ export async function pullTree(
  * Returns null when nothing resolves: an unattached checkout is a normal state,
  * and the caller decides whether that is an error.
  */
-export function resolveTarget(root: string, overrides: RemoteCommandOptions = {}): RemoteTarget | null {
+export function resolveTarget(root: string, overrides: RemoteCommandOptions): RemoteTarget | null {
   const flagUrl = (overrides.url ?? process.env['WAIRON_REMOTE_URL'] ?? '').trim();
   const flagProject = (overrides.project ?? process.env['WAIRON_REMOTE_PROJECT'] ?? '').trim();
   const flagToken = (overrides.token ?? process.env['WAIRON_REMOTE_TOKEN'] ?? '').trim();
@@ -384,7 +384,7 @@ export async function runLogin(url: string, options: RemoteCommandOptions = {}):
 }
 
 /** `wairon logout [url]` — forget a stored credential, or list what is stored. */
-export async function runLogout(url: string | undefined, _options: RemoteCommandOptions = {}): Promise<void> {
+export async function runLogout(url?: string): Promise<void> {
   // Step 1: was an instance named?
   if (url && url.trim()) {
     const instance = url.trim().replace(/\/+$/, '');

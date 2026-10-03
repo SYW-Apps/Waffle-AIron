@@ -194,7 +194,9 @@ methods:
       createProject but WITHOUT credential authentication — the caller
       (project_lifecycle_orchestrator) has already enforced permission-based authorization. Creates
       the project and places it in the REQUIRED owner unit. Never exposed on any portal.
-    signature: 'executeApprovedCreate(id: string, unitId: string): HostedProjectRecord'
+    signature: >-
+      executeApprovedCreate(id: string, unitId: string, placedBy?: PrincipalSubject):
+      HostedProjectRecord
     returns: HostedProjectRecord
     params:
       - name: id
@@ -204,6 +206,12 @@ methods:
         description: >-
           REQUIRED owner organization unit the new project is placed in (from
           ProjectInitRequest.ownerUnitId).
+      - name: placedBy
+        type: PrincipalSubject
+        description: >-
+          The subject recorded as having placed the project (the acting principal of the approval);
+          omitted records the system
+        optional: true
   - name: executeApprovedLock
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
@@ -386,4 +394,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-10-03T13:39:17.266Z'
+updatedAt: '2026-10-03T16:45:44.291Z'

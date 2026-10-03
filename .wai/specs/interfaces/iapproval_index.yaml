@@ -15,7 +15,7 @@ methods:
       List approval requests filtered by any populated combination of status, project, requester,
       and action kind.
     signature: >-
-      list(status: string, projectId: string, requestedByUserId: string, kind: string):
+      list(status?: string, projectId?: string, requestedByUserId?: string, kind?: string):
       ApprovalRequest[]
     returns: ApprovalRequest[]
     params:
@@ -31,8 +31,6 @@ methods:
       - name: kind
         type: string
         optional: true
-      - name: requestedBy
-        type: string
 status: complete
 createdAt: '2026-07-09T19:30:42.416Z'
-updatedAt: '2026-07-09T19:36:51.082Z'
+updatedAt: '2026-10-03T16:46:02.283Z'

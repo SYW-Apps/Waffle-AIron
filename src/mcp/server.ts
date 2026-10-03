@@ -1197,23 +1197,31 @@ function registerSkillResources(server: McpServer, listChanged: boolean): void {
 
   server.server.setRequestHandler(ReadResourceRequestSchema, (request) => {
     const uri = request.params.uri;
-    if (uri.startsWith(AGENT_BRIEF_SCHEME)) {
-      try {
-        const brief = composeAgentBrief(uri.slice(AGENT_BRIEF_SCHEME.length));
-        return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: renderAgentBriefMarkdown(brief) }] };
-      } catch (e) {
-        // UnknownAgentError names the known ids — surface that message as-is.
-        throw new McpError(ErrorCode.InvalidParams, e instanceof Error ? e.message : String(e));
-      }
-    }
-    try {
-      const content = readResource(skillIdFromResourceUri(uri));
-      return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: content }] };
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      throw new McpError(ErrorCode.InvalidParams, message);
-    }
+    return { contents: [{ uri, mimeType: SKILL_RESOURCE_MIME, text: readPublishedResource(uri) }] };
   });
+}
+
+/**
+ * Read one published resource by its URI, routing on the scheme: a
+ * wairon-agent:// id composes that agent's live brief as markdown; anything
+ * else is a skill resource. Either failure surfaces as an MCP InvalidParams
+ * error carrying the underlying message (an unknown agent names the known ids).
+ */
+function readPublishedResource(resourceId: string): string {
+  if (resourceId.startsWith(AGENT_BRIEF_SCHEME)) {
+    try {
+      return renderAgentBriefMarkdown(composeAgentBrief(resourceId.slice(AGENT_BRIEF_SCHEME.length)));
+    } catch (e) {
+      // UnknownAgentError names the known ids — surface that message as-is.
+      throw new McpError(ErrorCode.InvalidParams, e instanceof Error ? e.message : String(e));
+    }
+  }
+  try {
+    return readResource(skillIdFromResourceUri(resourceId));
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    throw new McpError(ErrorCode.InvalidParams, message);
+  }
 }
 
 /**

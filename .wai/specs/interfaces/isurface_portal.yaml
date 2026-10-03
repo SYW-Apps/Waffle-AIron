@@ -12,7 +12,9 @@ methods:
       write it to an output path. OpenAPI rendering produces one document per backing public portal
       (renderedSet); a project with a single gateway portal yields a single document (also surfaced
       as `rendered`).
-    signature: 'exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceSnapshot'
+    signature: >-
+      exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string):
+      SurfaceSnapshot
     returns: SurfaceSnapshot
     params:
       - name: maxAudience
@@ -23,6 +25,12 @@ methods:
         description: native | openapi
       - name: outPath
         type: string
+        optional: true
+      - name: portalId
+        type: string
+        description: >-
+          For an openapi export, narrow it to this one portal's document; a portalId naming no
+          portal is rejected
         optional: true
   - name: importSurface
     description: >-
@@ -137,4 +145,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-02T20:25:10.637Z'
+updatedAt: '2026-10-03T16:47:01.980Z'

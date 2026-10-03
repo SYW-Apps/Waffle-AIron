@@ -8,12 +8,12 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      Writes the snapshot to the target location: given a directory (e.g. a chained child's project
-      root), writes <dir>/.wai/surfaces/<producingProject>.yaml; given a file path, writes exactly
-      there; when a pre-rendered document body is supplied (e.g. OpenAPI), writes that body instead
-      of native YAML. Creates missing directories, overwrites atomically, and returns the written
-      path. Refuses path traversal outside the workspace family.
-    symbol: exportSurface
+      Writes the export to the target path, creating missing directories: with no rendered documents
+      it writes the snapshot as native YAML; with exactly one it writes that document at the target;
+      with several it writes one file per portal beside the target (<stem>.<portalId><ext>, the
+      portal id sanitized so it cannot escape the output directory), never only the first. Returns
+      every path written.
+    symbol: writeSurfaceFile
   - name: readDocument
     narrative: []
     detail: intent
@@ -21,7 +21,7 @@ methods:
       Reads the foreign surface document at the source path as UTF-8 text without interpreting it
       (decoding is the codec's or orchestrator's concern); fails with a clear not-found error naming
       the path.
-    symbol: importSurface
+    symbol: readSurfaceDocument
 status: complete
 createdAt: '2026-07-10T23:15:58.334Z'
-updatedAt: '2026-07-11T19:14:23.211Z'
+updatedAt: '2026-10-03T16:40:58.244Z'

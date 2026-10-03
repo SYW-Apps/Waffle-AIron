@@ -31,7 +31,7 @@ import { runDiagram } from '../commands/diagram.js';
 import { listRules } from '../commands/rules.js';
 import { listPatterns } from '../commands/patterns.js';
 import { listVariants } from '../commands/adapters/variants.js';
-import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack, syncPacks, impactPack } from '../commands/packs.js';
+import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack, syncPacks, impactPack, type PackCommandOptions } from '../commands/packs.js';
 import {
   runServe,
   runDev,
@@ -329,10 +329,10 @@ async function statusCommand(opts: { subsystem?: string; recursive?: boolean }):
 // ---------------------------------------------------------------------------
 
 /** cli_runner.runLockCheck — print the approval verdict and exit on it. */
-async function lockCheckCommand(opts: LockCheckOptions): Promise<void> {
+async function lockCheckCommand(options: LockCheckOptions): Promise<void> {
   // No assertProjectInitialized(): a repository with no .wai/ at all must be
   // told exactly that, not met with an error about an uninitialized project.
-  const verdict = checkApproval(opts.strict === true);
+  const verdict = checkApproval(options.strict === true);
 
   // Print BEFORE deciding — the log carries the verdict whichever way it goes.
   if (!verdict.approved) logger.error(verdict.message);
@@ -422,29 +422,29 @@ async function runPatterns(): Promise<void> {
 async function runVariants(): Promise<void> {
   await listVariants();
 }
-async function runPacks(action: string, arg?: string, opts: { global?: boolean } = {}): Promise<void> {
-  if (action === 'add') await addPack(arg!, opts.global);
+async function runPacks(action: string, arg?: string, options: PackCommandOptions = {}): Promise<void> {
+  if (action === 'add') await addPack(arg!, options.global);
   else if (action === 'list') await listPacks();
-  else if (action === 'remove') await removePack(arg!, opts.global);
+  else if (action === 'remove') await removePack(arg!, options.global);
 }
 async function runPack(
   action: string,
   arg?: string,
-  opts: { global?: boolean; kind?: string; dir?: string; skill?: boolean; out?: string; source?: string; bundle?: boolean; pin?: boolean; all?: boolean; yes?: boolean } = {},
+  options: PackCommandOptions = {},
 ): Promise<void> {
   // --yes passes through to the commands that select, update or remove a
   // project's pack; without it they show the pack's impact and ask first.
-  if (action === 'init') await initPack(arg!, { kind: opts.kind === 'code' ? 'code' : 'declarative', dir: opts.dir, skill: opts.skill });
-  else if (action === 'build') await buildPack(arg ?? '.', { out: opts.out });
-  else if (action === 'add') await addPack(arg!, opts.global, opts.yes);
+  if (action === 'init') await initPack(arg!, { kind: options.kind === 'code' ? 'code' : 'declarative', dir: options.dir, skill: options.skill });
+  else if (action === 'build') await buildPack(arg ?? '.', { out: options.out });
+  else if (action === 'add') await addPack(arg!, options.global, options.yes);
   else if (action === 'list') await listPacks();
-  else if (action === 'remove') await removePack(arg!, opts.global, opts.yes);
-  else if (action === 'install') await installPack(arg!, opts.yes);
+  else if (action === 'remove') await removePack(arg!, options.global, options.yes);
+  else if (action === 'install') await installPack(arg!, options.yes);
   else if (action === 'uninstall') await uninstallStorePack(arg!);
   else if (action === 'which') await whichPack(arg!);
-  else if (action === 'use') await usePack(arg!, { source: opts.source, bundle: opts.bundle, pin: opts.pin, yes: opts.yes });
-  else if (action === 'unuse') await unusePack(arg!, opts.yes);
-  else if (action === 'bundle') await bundlePack(arg, { all: opts.all });
+  else if (action === 'use') await usePack(arg!, { source: options.source, bundle: options.bundle, pin: options.pin, yes: options.yes });
+  else if (action === 'unuse') await unusePack(arg!, options.yes);
+  else if (action === 'bundle') await bundlePack(arg, { all: options.all });
   else if (action === 'sync') await syncPacks();
   else if (action === 'impact') await impactPack(arg!);
   else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | impact | bundle | sync | add | list | remove)');
@@ -963,7 +963,7 @@ program
   .command('logout [url]')
   .description('forget a stored credential for a hosted instance (local only — does NOT revoke it), or list what is stored')
   .action(async (url: string | undefined) => {
-    await runLogout(url, {});
+    await runLogout(url);
   });
 
 program

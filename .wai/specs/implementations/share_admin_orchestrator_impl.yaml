@@ -5,6 +5,8 @@ description: >-
   once and never stored.
 contract: ishare_admin_orchestrator
 sourcePath: src/server/shareadmin.ts
+injectedParams:
+  - cfg
 methods:
   - name: createShareLink
     narrative:
@@ -255,4 +257,4 @@ methods:
         outcome: list
 status: complete
 createdAt: '2026-07-18T09:31:20.840Z'
-updatedAt: '2026-07-18T10:10:40.459Z'
+updatedAt: '2026-10-03T16:39:49.031Z'

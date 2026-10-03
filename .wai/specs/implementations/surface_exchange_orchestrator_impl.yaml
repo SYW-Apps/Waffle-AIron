@@ -7,6 +7,8 @@ description: >-
   is a responsibility split, not a file split.
 contract: isurface_exchange_orchestrator
 sourcePath: src/server/landscape.ts
+injectedParams:
+  - cfg
 methods:
   - name: listReachableProjectsForMcp
     narrative:
@@ -328,4 +330,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-11T12:03:31.491Z'
-updatedAt: '2026-09-19T00:03:41.754Z'
+updatedAt: '2026-10-03T16:39:49.595Z'

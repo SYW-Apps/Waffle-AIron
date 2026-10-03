@@ -157,7 +157,7 @@ methods:
         type: call
         targetComponent: mcp_skills_adapter
         targetMethod: readResource
-    symbol: registerSkillResources
+    symbol: readPublishedResource
   - name: getAgentBrief
     narrative:
       - stepNumber: 1
@@ -609,4 +609,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-30T20:40:10.227Z'
+updatedAt: '2026-10-03T16:41:20.565Z'

@@ -31,18 +31,18 @@ function builtinTemplatesDir(): string {
  * Throws TemplateNotFoundError if not found in any tier — never silently
  * falls past the built-in tier.
  *
- * @param globalOverride - optional path from project config (globalTemplatesDir field)
+ * @param globalTemplatesDir - optional path from project config (globalTemplatesDir field)
  */
-export function loadTemplate(id: string, globalOverride?: string): Template & AgentTemplate {
-  const dirs = templateSearchDirs(globalOverride);
+export function loadTemplate(templateName: string, globalTemplatesDir?: string): Template & AgentTemplate {
+  const dirs = templateSearchDirs(globalTemplatesDir);
   for (const dir of dirs) {
-    const filePath = path.join(dir, `${id}.yaml`);
+    const filePath = path.join(dir, `${templateName}.yaml`);
     if (pathExists(filePath)) {
       const raw = readYamlFile(filePath);
-      return { ...TemplateSchema.parse(raw), templateName: id };
+      return { ...TemplateSchema.parse(raw), templateName };
     }
   }
-  throw new TemplateNotFoundError(id);
+  throw new TemplateNotFoundError(templateName);
 }
 
 /**
