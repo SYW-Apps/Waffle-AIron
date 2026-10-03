@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { setProjectRoot } from '../../src/utils/fs.js';
+import { runWithProjectBinding, setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { familyRelations } from '../../src/core/validation.js';
+import { familyRelations, validateFamily } from '../../src/core/validation.js';
 import { pinExternals } from '../../src/core/surfaces.js';
 import { advanceMember } from '../../src/core/index.js';
 import { buildCanvasModel, type CanvasModel } from '../../src/core/canvas.js';
@@ -213,5 +213,40 @@ describe('wairon diagram', () => {
     expect(edge).toBeDefined();
     expect(edge!.relation).toBeUndefined();
     expect(fs.readFileSync(without, 'utf8')).toContain('health not checked');
+  });
+});
+
+describe('hosted: a `source.hosted` producer resolves through the caller record lookup', () => {
+  /** A hosted request's binding at the shop: its own root the reach, and a record lookup that answers only `readable`. */
+  function hosted<T>(shop: string, ledger: string, readable: boolean, fn: () => T): T {
+    invalidateSpecCache();
+    return runWithProjectBinding(shop, { topRoot: shop, parentReach: true, hostedLookup: (id) => (readable && id === 'ledger-rec' ? ledger : null) }, fn);
+  }
+
+  it('the family run and familyRelations compare it within reach (ok, then incompatible), and out of reach it stays unavailable', () => {
+    const base = tempDir(cleanups, 'wairon-rh-hosted-');
+    const ledger = path.join(base, 'ledger');
+    writeLedger(ledger);
+    const shop = path.join(base, 'shop');
+    writeShop(shop, { externals: { ledger: { source: { hosted: 'ledger-rec' } } } });
+    expect(hosted(shop, ledger, true, () => pinExternals())[0]).toMatchObject({ alias: 'ledger', outcome: 'pinned' });
+    const externalCodes = (r: ReturnType<typeof validateFamily>): string[] => r.issues.filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => i.code);
+
+    // Within reach: read and compared — no finding, nothing left out.
+    const ok = hosted(shop, ledger, true, () => validateFamily({ family: true }));
+    expect(externalCodes(ok)).toEqual([]);
+    expect(ok.hint).toBeUndefined();
+    expect(hosted(shop, ledger, true, () => familyRelations())[0].externals.map(relationHealth)).toEqual(['ok']);
+
+    // The producer breaks a used method: the family run sees it, so it really read the producer.
+    renameLedgerMethod(ledger, 'record');
+    expect(externalCodes(hosted(shop, ledger, true, () => validateFamily({ family: true })))).toContain('EXTERNAL_INCOMPATIBLE');
+    expect(hosted(shop, ledger, true, () => familyRelations())[0].externals.map(relationHealth)).toEqual(['incompatible']);
+
+    // Out of the caller's reach: never read, never ok.
+    const out = hosted(shop, ledger, false, () => validateFamily({ family: true }));
+    expect(externalCodes(out)).not.toContain('EXTERNAL_INCOMPATIBLE');
+    expect(out.hint).toMatch(/outside this run's reach/);
+    expect(hosted(shop, ledger, false, () => familyRelations())[0].externals.map(relationHealth)).toEqual(['unavailable']);
   });
 });

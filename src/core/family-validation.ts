@@ -131,10 +131,16 @@ function reachCeiling(root: string, family: boolean | undefined): Ceiling {
   return { topRoot: root, narrowed: true };
 }
 
-/** Step 4: bind a project's root within the ceiling; the caller's binding is restored afterwards. */
+/**
+ * Step 4: bind a project's root within the ceiling; the caller's binding is
+ * restored afterwards. A hosted request's record lookup rides into the new
+ * scope, so a `source.hosted` producer resolves within the caller's reach (and
+ * one out of it stays unavailable) instead of being lost with the binding.
+ */
 function within<T>(dir: string, ceiling: Ceiling, fn: () => T): T {
   if (ceiling === null) return runWithProjectRoot(dir, fn);
-  return runWithProjectBinding(dir, { topRoot: ceiling.topRoot, parentReach: true, narrowed: ceiling.narrowed }, fn);
+  const lookup = getHostedLookup();
+  return runWithProjectBinding(dir, { topRoot: ceiling.topRoot, parentReach: true, narrowed: ceiling.narrowed, ...(lookup ? { hostedLookup: lookup } : {}) }, fn);
 }
 
 // ---- selection -------------------------------------------------------------
@@ -218,7 +224,8 @@ function referencedOf(nodes: ProjectNode[]): Referenced[] {
 
 /** A referenced member's root bound read-only, its own root its ceiling: nothing above it is read. */
 function atReferenced<T>(ref: Referenced, fn: () => T): T {
-  return runWithProjectBinding(ref.directory!, { topRoot: ref.directory!, parentReach: true, narrowed: true }, fn);
+  const lookup = getHostedLookup();
+  return runWithProjectBinding(ref.directory!, { topRoot: ref.directory!, parentReach: true, narrowed: true, ...(lookup ? { hostedLookup: lookup } : {}) }, fn);
 }
 
 /** The graph narrowed to the selection: its nodes, the references between them, and their problems. */
