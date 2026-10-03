@@ -37,7 +37,9 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadTypeSpecs
       - stepNumber: 7
-        description: Build the architecture, type ERD and database canvas model from the loaded specs
+        description: >-
+          Build the architecture, type ERD and database canvas model from the loaded specs, with the
+          relation health passed in (none when omitted)
         type: call
         targetComponent: spec_canvas
         targetMethod: build
@@ -156,8 +158,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Build the canvas model from the loaded specs and the tree's current findings — the same
-          model the canvas render embeds
+          Build the canvas model from the loaded specs, the tree's current findings and the relation
+          health passed in (none when omitted) — the same model the canvas render embeds
         type: local
       - stepNumber: 2
         description: Return it as data
@@ -179,4 +181,4 @@ lint:
         above, in the same refactor.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-09-25T21:06:31.745Z'
+updatedAt: '2026-10-03T12:16:05.700Z'

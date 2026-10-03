@@ -40,7 +40,17 @@ fields:
     type: string
     description: Where to write the artifact.
     optional: true
+  - name: health
+    type: boolean
+    description: >-
+      Compare each consumption relation of the family with its live producer and colour the canvas's
+      edges by it. On unless `--no-health` sets it false: the comparison reads each producer's
+      export table from disk (git producers through the fetch cache; an external's ref asks the
+      remote once), which is small next to the gate the canvas already runs for its issue overlay.
+      Off draws every consumption edge neutral, labelled not checked. Only the canvas carries
+      health; Mermaid, draw.io and Excalidraw ignore it.
+    optional: true
 methods: []
 sourcePath: src/commands/diagram.ts
 createdAt: '2026-09-20T16:42:26.894Z'
-updatedAt: '2026-09-20T16:42:26.906Z'
+updatedAt: '2026-10-03T12:14:32.486Z'

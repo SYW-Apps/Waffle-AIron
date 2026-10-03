@@ -51,6 +51,18 @@ methods:
           one holding errors or warnings
         type: local
       - stepNumber: 6
+        description: >-
+          Draw the passed-in relation health, without judging it: when relations were passed, turn
+          each consumer-to-producer pair the consumption edges connect into one CanvasRelation — the
+          consumer's status for the producer's alias, its health from ExternalStatus.health(), the
+          uses that are not unchanged with their state and reason, how many compared unchanged, the
+          pin's digest and commit, and the time it was compared — and have each consumption edge
+          name it; a pair the relations do not answer (the consumer's statuses could not be read, or
+          name no such alias) becomes an unavailable relation with the reason, never ok. When none
+          were passed, emit no relations at all, so the page says health was not checked rather than
+          drawing anything as good
+        type: local
+      - stepNumber: 7
         description: Answer with the model
         type: return
         outcome: built
@@ -64,7 +76,10 @@ methods:
         description: >-
           Embed the styles, the markup skeleton and the interaction engine alongside it, so the page
           needs no server and no network to open — the same text scripts/gen-canvas-engine.mjs
-          extracts for the React app
+          extracts for the React app. The engine draws relation health by glyph and line as well as
+          colour, folds edges at a collapsed level to their worst health, shows a relation on hover
+          and in the details panel, adds the one legend row when a consumption edge exists, and
+          offers a member's own page only through a host's open-project hook
         type: local
       - stepNumber: 3
         description: >-
@@ -81,4 +96,4 @@ methods:
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-10-02T20:47:11.995Z'
+updatedAt: '2026-10-03T12:15:58.480Z'

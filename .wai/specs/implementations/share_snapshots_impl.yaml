@@ -10,26 +10,36 @@ methods:
         description: Start an empty snapshot payload set stamped with the project id, view, and capture time.
         type: local
       - stepNumber: 2
-        description: Build the bound project's canvas model as data — the payload the shared engine renders.
+        description: >-
+          Read the family's relation health as it is now, within the creator's reach, through the
+          host validator adapter — frozen into the snapshot with its compared-at time, never
+          refreshed behind the link
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyRelations
+      - stepNumber: 3
+        description: >-
+          Build the bound project's canvas model as data — the payload the shared engine renders —
+          with those relations on its consumption edges
         type: call
         targetComponent: host_core_adapter
         targetMethod: buildCanvasDataModel
-      - stepNumber: 3
+      - stepNumber: 4
         description: An HTML export was requested for this link.
         type: branch
         condition: artifacts includes 'html'
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Render the standalone self-contained HTML export payload.
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Render the standalone self-contained HTML export payload, with the same relations
         type: call
         targetComponent: host_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 5
+      - stepNumber: 6
         description: An OpenAPI document was requested for this link.
         type: branch
         condition: artifacts includes 'openapi'
-        onFalseStep: 7
-      - stepNumber: 6
+        onFalseStep: 8
+      - stepNumber: 7
         description: >-
           Project EVERY per-portal OpenAPI document at the shared audience ceiling (the project
           ceiling — all published portals, so the captured APIs match the shared canvas) and store
@@ -38,11 +48,11 @@ methods:
         type: call
         targetComponent: host_surfaces_adapter
         targetMethod: exportSurface
-      - stepNumber: 7
+      - stepNumber: 8
         description: The immutable snapshot payload set, ready to persist.
         type: return
         outcome: snapshot
     symbol: captureSnapshot
 status: complete
 createdAt: '2026-07-18T09:30:49.067Z'
-updatedAt: '2026-09-25T21:35:27.759Z'
+updatedAt: '2026-10-03T12:17:03.359Z'

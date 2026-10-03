@@ -25,10 +25,14 @@ fields:
       Each subsystem's id, name and description — and, for a project with members, each PROJECT
       member as a project node (stage 3), a referenced one (a `../`, git or hosted source; stage 8)
       drawn from outside with its storage; on a hosted instance a member node carries its hosted
-      record id (recordId) only when the caller may read that record, so the app links it to the
-      member's own page. A part's subsystems are the project's own subsystems, each carrying the
-      part's storage badge (`storage`: `part <alias> · contained`, `… · ../admin`, `… · git <short
-      commit>`) — composition decides what is drawn, storage only how it is labelled.
+      record id (recordId) only when the caller may read that record, and the engine makes exactly
+      those nodes open the member's own project page through the host's open-project hook — a node
+      without one is drawn without a link. A contained project member opens by drilling into it, as
+      a subsystem does (its specs are in the model); a referenced one has no specs in the model, so
+      locally it opens its details panel: its storage, and the relations that land on it. A part's
+      subsystems are the project's own subsystems, each carrying the part's storage badge
+      (`storage`: `part <alias> · contained`, `… · ../admin`, `… · git <short commit>`) and opening
+      as any subsystem does — composition decides what is drawn, storage only how it is labelled.
     optional: false
   - name: components
     type: object[]
@@ -39,9 +43,24 @@ fields:
     description: >-
       Dependency and ownership edges between the nodes, each flagged when it crosses a subsystem
       boundary; a dependency on a referenced project's public name lands on that project's node (a
-      consumption edge, stage 8).
+      consumption edge, stage 8). A consumption edge — one whose source and target lie in different
+      projects of the family — names the relation it belongs to (`relation`: a CanvasRelation id,
+      `<consumer>→<producer>`) when the model carries relations, and takes that relation's health;
+      an edge between two projects with relations computed but no entry for its pair names an
+      unavailable relation, never none.
     optional: false
+  - name: relations
+    type: CanvasRelation[]
+    description: >-
+      Relation health, one entry per consumer-project-to-producer-project pair the canvas draws an
+      edge between, with the per-use detail and the time it was compared. PRESENT only when health
+      was computed for this model (an empty list when nothing is consumed); ABSENT when it was not
+      (`wairon diagram --no-health`, a model built before this field) — then every consumption edge
+      is drawn neutral and the legend says relation health was not checked, so a canvas never shows
+      green for something no one compared. A snapshot or exported page carries the relations as they
+      were when it was built, each with its comparedAt.
+    optional: true
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-10-02T23:18:47.578Z'
+updatedAt: '2026-10-03T12:14:29.970Z'

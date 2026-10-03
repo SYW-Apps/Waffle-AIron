@@ -104,6 +104,13 @@ methods:
         type: call
         targetComponent: family_validator
         targetMethod: approvals
+  - name: familyRelations
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator's relation health
+        type: call
+        targetComponent: family_validator
+        targetMethod: relations
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:52:28.677Z'
+updatedAt: '2026-10-03T12:15:30.109Z'

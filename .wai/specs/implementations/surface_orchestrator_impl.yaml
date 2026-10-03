@@ -282,7 +282,9 @@ methods:
         over: the bindings
         endStep: 11
       - stepNumber: 4
-        description: Read its pinned snapshot, if any
+        description: >-
+          Read its pinned snapshot, if any — and carry the lock entry's digest and commit on the
+          status (pinnedDigest, pinnedCommit) as provenance for a reader; neither is compared here
         type: call
         targetComponent: externals_repository
         targetMethod: readSnapshot
@@ -614,4 +616,4 @@ lint:
         replaced listExternalInterfaces, whose entry for it was retired with it.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-02T23:58:51.731Z'
+updatedAt: '2026-10-03T12:17:14.450Z'

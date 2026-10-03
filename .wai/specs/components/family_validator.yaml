@@ -23,12 +23,15 @@ description: >-
   parent's requirement, because only this run reads it. Reach is granted before any read: a plain
   run at a parent narrows the reach to the family root, so nothing above it is read; `--family`
   makes the walk up explicit, and a hosted request keeps its credential's reach, which the run never
-  widens. Cross-mount CODE imports judged by the importer are deferred to a later stage and not
-  modelled here: the source model is containment-checked to each project's own root, so an import
-  into another project resolves to nothing today. Why a component of its own: the owner's gate
-  (spec_validator) must stay a pure function of one project's files, and a workflow that loops over
-  projects calling that gate cannot live inside it without making the gate call itself across roots
-  — the very shape resolve-through-parent had. It holds no state; each verdict is computed per call.
+  widens. It also answers the family's relation health for the canvas (relations): each project's
+  externals status at its own root, the very comparison compose judges, so an edge's colour and a
+  family run's verdict cannot disagree. Cross-mount CODE imports judged by the importer are deferred
+  to a later stage and not modelled here: the source model is containment-checked to each project's
+  own root, so an import into another project resolves to nothing today. Why a component of its own:
+  the owner's gate (spec_validator) must stay a pure function of one project's files, and a workflow
+  that loops over projects calling that gate cannot live inside it without making the gate call
+  itself across roots — the very shape resolve-through-parent had. It holds no state; each verdict
+  is computed per call.
 subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
@@ -38,4 +41,4 @@ dependsOn:
   - validator_surfaces_adapter
 status: complete
 createdAt: '2026-09-28T06:05:49.633Z'
-updatedAt: '2026-09-29T16:09:04.498Z'
+updatedAt: '2026-10-03T12:17:43.705Z'

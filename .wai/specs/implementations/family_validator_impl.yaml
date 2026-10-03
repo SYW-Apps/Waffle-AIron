@@ -518,6 +518,67 @@ methods:
         type: return
         outcome: ProjectApproval[]
     symbol: projectApprovals
+  - name: relations
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph: its project members at every level with their
+          directories, and its referenced project members with the root each is opened at (the
+          sibling checkout, or the fetch cache at the pinned commit)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: >-
+          Select the projects to answer for: the graph's root, then every project member in walk
+          order, contained and referenced alike. Parts are not selected — their consumption is their
+          declaring project's
+        type: local
+      - stepNumber: 3
+        description: For each selected project
+        type: loop
+        loopKind: forEach
+        over: the selected projects, root first
+        endStep: 9
+      - stepNumber: 4
+        description: Can its root be opened within the request's reach?
+        type: branch
+        condition: >-
+          the project loaded and its root is on disk (or in the fetch cache) and within the reach
+          the caller granted
+        onFalseStep: 8
+      - stepNumber: 5
+        description: >-
+          Bind the project's own root for the next call, restoring the caller's binding afterwards —
+          a relation is always read where its consumer's lock is
+        type: local
+      - stepNumber: 6
+        description: >-
+          Read its externals status there through the surfaces adapter — every external and
+          referenced project member it consumes, per use, a producer out of reach marked outOfReach
+          and unread — and record it with the time it was read
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 7
+        description: Next project
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        label: unopened
+        description: >-
+          Record the project with no statuses and the reason (not on disk, not fetched, or outside
+          the request's reach), so every edge from it is drawn unavailable — never a pass
+        type: local
+      - stepNumber: 9
+        label: next
+        description: On to the next project
+        type: local
+      - stepNumber: 10
+        description: Return the entries, root first
+        type: return
+        outcome: ProjectRelations[]
+    symbol: familyRelations
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-02T20:47:07.556Z'
+updatedAt: '2026-10-03T12:15:12.160Z'

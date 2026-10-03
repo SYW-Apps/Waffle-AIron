@@ -42,9 +42,17 @@ methods:
   - name: renderDiagram
     description: >-
       Render the current project's spec tree into the requested diagram format and return the
-      artifact string.
-    signature: 'renderDiagram(format: string): string'
+      artifact string; the canvas draws the relation health passed in.
+    signature: 'renderDiagram(format: string, relations?: ProjectRelations[]): string'
     returns: string
+    params:
+      - name: format
+        type: string
+        description: canvas | mermaid | drawio | excalidraw
+      - name: relations
+        type: ProjectRelations[]
+        description: The family's relation health for the canvas; omitted, the canvas says it was not checked
+        optional: true
   - name: loadTypeSpecs
     description: Loads type specs
     signature: 'loadTypeSpecs(): TypeSpec[]'
@@ -213,9 +221,13 @@ methods:
     description: >-
       Published read: the canvas model renderDiagram('canvas') draws, returned as data for a client
       that mounts the shared renderer itself.
-    signature: 'buildCanvasDataModel(): CanvasModel'
+    signature: 'buildCanvasDataModel(relations?: ProjectRelations[]): CanvasModel'
     returns: CanvasModel
-    params: []
+    params:
+      - name: relations
+        type: ProjectRelations[]
+        description: The family's relation health to carry on the model; omitted, it carries none
+        optional: true
   - name: resolveSubsystemExports
     description: >-
       One subsystem's resolved export table, with the problems met resolving it as facts — a
@@ -289,4 +301,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:47:48.808Z'
+updatedAt: '2026-10-03T12:16:10.403Z'

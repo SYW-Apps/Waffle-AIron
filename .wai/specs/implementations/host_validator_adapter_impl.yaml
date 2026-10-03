@@ -64,6 +64,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: familyApprovals
+  - name: familyRelations
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal's relation health
+        type: call
+        targetComponent: validator_portal
+        targetMethod: familyRelations
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-09-30T05:53:12.308Z'
+updatedAt: '2026-10-03T12:15:32.493Z'

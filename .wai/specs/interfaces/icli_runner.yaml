@@ -375,7 +375,10 @@ methods:
       `wairon diagram`: render the project's spec tree into a diagram artifact and write it out. The
       canvas is a self-contained page that opens from disk; draw.io and Excalidraw are exchange
       formats for tools the reader already has. Which format is asked for decides only the encoder —
-      every format draws the same arrangement of the same tree.
+      every format draws the same arrangement of the same tree. The canvas also colours each
+      consumption edge by its relation's health — the family's relations compared with their live
+      producers, as of the time it was written — unless `--no-health` is given, when those edges are
+      drawn as not checked.
     signature: 'runDiagram(options: DiagramOptions): Promise<void>'
     returns: Promise<void>
     params:
@@ -688,4 +691,4 @@ methods:
     returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T22:47:15.488Z'
+updatedAt: '2026-10-03T12:16:27.424Z'

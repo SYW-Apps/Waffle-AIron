@@ -28,9 +28,19 @@ methods:
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
   - name: renderDiagram
-    description: Render the bound project's spec tree into a diagram artifact string.
-    signature: 'renderDiagram(format: string): string'
+    description: >-
+      Render the bound project's spec tree into a diagram artifact string; the canvas draws the
+      relation health passed in.
+    signature: 'renderDiagram(format: string, relations?: ProjectRelations[]): string'
     returns: string
+    params:
+      - name: format
+        type: string
+        description: canvas | mermaid | drawio | excalidraw
+      - name: relations
+        type: ProjectRelations[]
+        description: The family's relation health for the canvas; omitted, none
+        optional: true
   - name: loadSystemSpec
     description: >-
       Read the bound project's L0 system spec, or null when absent. Forwarded to the core portal;
@@ -214,10 +224,14 @@ methods:
   - name: buildCanvasDataModel
     description: >-
       The bound project's canvas model as data, forwarded to the spec tree portal — what the web
-      app's canvas and a share snapshot mount.
-    signature: 'buildCanvasDataModel(): CanvasModel'
+      app's canvas and a share snapshot mount — carrying the relation health passed in.
+    signature: 'buildCanvasDataModel(relations?: ProjectRelations[]): CanvasModel'
     returns: CanvasModel
-    params: []
+    params:
+      - name: relations
+        type: ProjectRelations[]
+        description: The family's relation health to carry; omitted, none
+        optional: true
   - name: packEntryRef
     description: >-
       The loadable ref for one configured pack entry, or null when a selection does not resolve,
@@ -281,4 +295,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-09-30T05:57:17.374Z'
+updatedAt: '2026-10-03T12:16:16.746Z'

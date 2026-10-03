@@ -180,12 +180,18 @@ methods:
       the artifact as a string. The CLI reaches diagram rendering through here rather than importing
       the canvas and exporter modules directly — those live in another subsystem, and an adapter is
       what a subsystem boundary is crossed with.
-    signature: 'renderDiagram(format: string): string'
+    signature: 'renderDiagram(format: string, relations?: ProjectRelations[]): string'
     returns: string
     params:
       - name: format
         type: string
         description: canvas, mermaid, drawio or excalidraw
+      - name: relations
+        type: ProjectRelations[]
+        description: >-
+          The family's relation health for the canvas; omitted (`--no-health`), the canvas says it
+          was not checked
+        optional: true
   - name: generateAll
     description: >-
       Calls generateAll on core portal: write every agent's file for every configured target. The
@@ -550,4 +556,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:50:03.489Z'
+updatedAt: '2026-10-03T12:16:13.793Z'

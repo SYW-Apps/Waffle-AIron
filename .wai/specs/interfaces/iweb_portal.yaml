@@ -1438,10 +1438,10 @@ methods:
       mounts directly. Forwards to the web graph orchestrator's getProjectCanvasModel;
       session-cookie authenticated, so cross-project access is Forbidden. For a project with members
       it is the family canvas: each member is a project node, carrying the member's record id only
-      when the caller may read that record. The SPA shows those members in a strip of links above
-      the canvas, each opening the member's own project page; a member the caller may not read is
-      named there unlinked. The canvas nodes themselves are not clickable and its edges are not
-      coloured by relation health — both wait for a future engine hook.
+      when the caller may read that record, and the app hands the engine an open-project hook so
+      exactly those nodes open the member's own project page (a member the caller may not read is
+      drawn unlinked). Each consumption edge carries its relation's health, read within the caller's
+      reach; unavailable is never shown as ok.
     signature: 'serveProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
     returns: CanvasModel
     params:
@@ -1529,8 +1529,8 @@ methods:
       — the web project orchestrator's scoped list, which holds every project the caller may read,
       write or administer, not only read: the family above the project is read when the family root
       is in that list, and a source.hosted producer when its record is. The SPA renders it on the
-      project page's Relations tab, one row per external with its state and reason; it does not
-      colour the canvas's edges (a future engine hook).
+      project page's Relations tab, one row per external with its health and reason — the same word
+      the canvas's edges carry.
     signature: 'projectExternalsStatus(sessionId: string, projectId: string): ExternalStatus[]'
     returns: ExternalStatus[]
     params:
@@ -1544,4 +1544,4 @@ methods:
       path: /web/projects/externals
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-01T19:50:02.571Z'
+updatedAt: '2026-10-03T12:16:50.301Z'

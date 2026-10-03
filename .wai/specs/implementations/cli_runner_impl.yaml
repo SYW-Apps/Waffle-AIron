@@ -1891,13 +1891,29 @@ methods:
     sourcePath: src/commands/diagram.ts
     narrative:
       - stepNumber: 1
+        description: Should the canvas carry relation health?
+        type: branch
+        condition: the canvas is drawn (alone or in --all) and --no-health was not given
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Compare the family's relations with their live producers through the validator adapter:
+          each project's externals status at its own root, a plain run's reach (the family root),
+          what cannot be compared unavailable. Producers on disk cost one export-table projection
+          each; a git external asks its remote for its ref's head once, and an unreachable remote is
+          unavailable, never a pass
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: familyRelations
+      - stepNumber: 3
+        label: render
         description: >-
           Render the requested format through the core client adapter, which crosses into sdd_core
-          the way every other command does
+          the way every other command does, handing it the relations when they were read
         type: call
         targetComponent: cli_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 2
+      - stepNumber: 4
         description: Write the artifact to the requested path and report where it landed
         type: return
         outcome: written
@@ -3191,4 +3207,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T22:47:10.980Z'
+updatedAt: '2026-10-03T12:16:22.870Z'

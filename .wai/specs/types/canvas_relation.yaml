@@ -1,0 +1,61 @@
+kind: value-object
+id: canvas_relation
+name: CanvasRelation
+description: >-
+  One consumer-project-to-producer-project relation as the canvas draws it: the health every
+  consumption edge between the two takes, and the detail a reader sees on hover or in the details
+  panel. Built by the canvas from a ProjectRelations entry; the canvas draws this judgement, it does
+  not make it.
+fields:
+  - name: id
+    type: string
+    description: '`<consumer>→<producer>`: the key a consumption edge names in its `relation` field.'
+    optional: false
+    key: primary
+  - name: consumer
+    type: string
+    description: The consuming project's key ('' for the bound root).
+    optional: false
+  - name: producer
+    type: string
+    description: >-
+      The alias the consumer reaches the producer under — for a referenced member, the id of its
+      project node.
+    optional: false
+  - name: health
+    type: string
+    description: >-
+      ok | drifted | incompatible | unavailable — ExternalStatus.health(), or unavailable when the
+      consumer's statuses could not be read or name no such alias. Never ok for anything that was
+      not compared.
+    optional: false
+  - name: uses
+    type: object[]
+    description: >-
+      The uses that are NOT unchanged — each {name: `publicName` or `publicName.member`, state:
+      changed | removed | unlocked | unavailable, detail?} — so the tooltip says exactly which uses
+      changed or were removed and why one could not be compared.
+    optional: false
+  - name: unchanged
+    type: number
+    description: How many uses compared unchanged (listed as a count, not by name, to keep the page small).
+    optional: false
+  - name: pinnedCommit
+    type: string
+    description: The producer's commit as pinned, when it lives in another repository.
+    optional: true
+  - name: pinnedDigest
+    type: string
+    description: The pinned content digest; absent when the relation is not pinned.
+    optional: true
+  - name: comparedAt
+    type: string
+    description: When the comparison ran (the ProjectRelations entry's comparedAt).
+    optional: false
+  - name: detail
+    type: string
+    description: Why the relation is unavailable, when it is.
+    optional: true
+methods: []
+createdAt: '2026-10-03T12:14:20.817Z'
+updatedAt: '2026-10-03T12:14:20.818Z'

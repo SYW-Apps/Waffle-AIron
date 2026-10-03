@@ -15,14 +15,26 @@ methods:
       through its exports, with consumption edges between projects; each PART's subsystems are drawn
       as the bound project's own subsystems with a storage badge (contained, sibling, git and its
       commit). A subsystem whose key repeats its member's alias (`billing::billing`) keeps its
-      honest id and is labelled by its local name only. Findings are passed in rather than computed
-      here — the canvas draws a judgement, it does not make one.
-    signature: 'build(issues?: ValidationIssue[]): CanvasModel'
+      honest id and is labelled by its local name only. Findings and relation health are passed in
+      rather than computed here — the canvas draws a judgement, it does not make one: given the
+      family's relations, each consumer-to-producer pair the edges connect becomes a CanvasRelation
+      (its health from ExternalStatus.health(), the uses that changed, were removed or could not be
+      compared, the pin and when it was compared) and each consumption edge names it; a pair the
+      relations do not answer is unavailable, never ok. Without relations the model carries none,
+      and the canvas says health was not checked.
+    signature: 'build(issues?: ValidationIssue[], relations?: ProjectRelations[]): CanvasModel'
     returns: CanvasModel
     params:
       - name: issues
         type: ValidationIssue[]
         description: Findings to mark on the nodes they name; none when omitted
+        optional: true
+      - name: relations
+        type: ProjectRelations[]
+        description: >-
+          The family's relation health (family_validator.relations) to colour consumption edges by;
+          when omitted the model carries no relations and every consumption edge is drawn as not
+          checked
         optional: true
     guarantees:
       - idempotent
@@ -30,7 +42,21 @@ methods:
     description: >-
       Draw a canvas model as a single self-contained HTML page: markup, styles and the interaction
       engine all embedded, so the file opens from disk with no server and no network. That embedding
-      is why this component's file is mostly text.
+      is why this component's file is mostly text. The engine draws each consumption edge by its
+      relation's health with a cue that does not rely on colour — a glyph at the edge's middle (✓
+      ok, Δ drifted, ✕ incompatible, ? unavailable) and a dotted line for unavailable — its health
+      colour replacing the boundary-hop colour on that edge; where edges fold into one at a
+      collapsed level the worst health wins (incompatible, then unavailable, then drifted, then ok).
+      Hovering or selecting the edge shows the relation: consumer and producer, which uses changed
+      or were removed and why one could not be compared, the pin's commit or short digest, and when
+      it was compared. The legend gains one row — only when the model has a consumption edge —
+      naming the four states with their glyphs and the compared-at time, or saying relation health
+      was not checked when the model carries no relations. A project node opens by drilling in when
+      it holds specs (a contained member, a part's subsystem); a referenced project node selects to
+      show its storage and the relations landing on it; and when the host provides an open-project
+      hook (the web app) a node carrying a recordId offers “Open project ↗” in its panel and opens
+      on double-click when it holds nothing to drill into — never in a standalone file or on a
+      shared page, which have no such hook.
     signature: 'render(model: CanvasModel): string'
     returns: string
     params:
@@ -41,4 +67,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T16:38:05.210Z'
-updatedAt: '2026-10-02T20:47:42.819Z'
+updatedAt: '2026-10-03T12:15:51.739Z'
