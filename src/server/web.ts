@@ -35,6 +35,7 @@ import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
 import * as hostSurfaces from './adapters/surfaces.js';
 import { validateAsComplete } from './adapters/validator.js';
+import * as hostValidator from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
 import { sendJson } from './httpio.js';
@@ -671,22 +672,46 @@ export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, pro
   if (!root) {
     throw new ForbiddenError('project not authorized or unknown');
   }
-  const model = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel());
-  // Steps 6-7: the family canvas — a member project node is linked to its
-  // member's record only when the caller may read that record; any other member
-  // stays an unlinked node drawn through its exports (no id leaks).
-  const readable = new Set(webproject.listProjects(cfg, sessionId).map((r) => r.id));
+  // Steps 5-6: the family's relation health, read within the caller's reach —
+  // the listed projects, exactly as the Relations tab reads — so a member or
+  // producer outside it is unavailable, never ok.
+  const listed = webproject.listProjects(cfg, sessionId);
+  const relations = runWithProjectBinding(root, readReach(cfg, projectId, root, listed), () => hostValidator.familyRelations());
+  // Step 7: the model, each consumption edge carrying its relation's health.
+  const model = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel(relations));
+  // Steps 8-10: the family canvas — a member project node is linked to its
+  // member's record, and an external project node to the hosted record its
+  // external names, only when the caller may read that record; any other node
+  // stays unlinked (no id leaks).
+  const readable = new Set(listed.map((r) => r.id));
   const members = new Set(listFamilyRecords(cfg.dataDir, projectId).filter((r) => r.parentProjectId !== undefined).map((r) => r.id));
-  return withMemberLinks(model, (id) => members.has(id) && readable.has(id));
+  const hostedOf = externalRecords(runWithProjectRoot(root, () => hostCore.loadProjectConfig()));
+  return withProjectLinks(model, (node) => {
+    const id = node.external ? hostedOf.get(node.id) : node.id;
+    if (id === undefined || !readable.has(id)) return undefined;
+    return node.external || members.has(id) ? id : undefined;
+  });
 }
 
-/** The canvas model with each member project node carrying its record id when the caller may read it. */
-function withMemberLinks<T>(model: T, linkable: (id: string) => boolean): T {
-  const m = model as { subsystems?: { id: string; project?: boolean; recordId?: string }[] };
+/** Each declared external's alias → the hosted record its `source.hosted` names. */
+function externalRecords(config: { externals?: Record<string, { source?: { hosted?: string } } | null> } | null): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [alias, decl] of Object.entries(config?.externals ?? {})) {
+    if (decl?.source?.hosted !== undefined) out.set(alias, decl.source.hosted);
+  }
+  return out;
+}
+
+/** The canvas model with each project node carrying the record id `linkOf` answers for it — only one the caller may read. */
+function withProjectLinks<T>(model: T, linkOf: (node: { id: string; external?: boolean }) => string | undefined): T {
+  const m = model as { subsystems?: { id: string; project?: boolean; external?: boolean; recordId?: string }[] };
   if (!Array.isArray(m.subsystems)) return model;
   return {
     ...model,
-    subsystems: m.subsystems.map((s) => (s.project && linkable(s.id) ? { ...s, recordId: s.id } : s)),
+    subsystems: m.subsystems.map((s) => {
+      const recordId = s.project ? linkOf(s) : undefined;
+      return recordId !== undefined ? { ...s, recordId } : s;
+    }),
   } as T;
 }
 
