@@ -245,6 +245,19 @@ methods:
       - project_store.read
       - host_core_adapter.loadSubsystemSpecs
     symbol: declaredSubsystemIds
+  - name: partSubsystems
+    narrative: []
+    intent: >-
+      Loads the persisted set and derives the record's root (null when it holds no record or its
+      root is missing), reads the member declarations in its project.yaml and finds the contained
+      member declared under the alias (null when none), resolves the part's folder through the
+      containment guard, and reads the subsystem specs in that folder, bound for the read, through
+      the host core adapter, answering each one's local id. Writes nothing.
+    calls:
+      - project_store.read
+      - host_core_adapter.resolveContainedProjectPath
+      - host_core_adapter.loadSubsystemSpecs
+    symbol: partSubsystemIds
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-10-03T13:49:59.980Z'
+updatedAt: '2026-10-03T14:25:27.293Z'

@@ -501,14 +501,16 @@ methods:
       - stepNumber: 20
         description: >-
           Is the call membership-changing — sdd_attach_member, sdd_adopt_member, sdd_detach_member,
-          sdd_rename_project, or stage 8's sdd_promote_member and sdd_demote_member (and
-          sdd_add_member with a source), dry run or applied? On hosted, membership decides reach (a
-          member inherits its parent's access; a part is reached through its parent's record), and a
-          detach or an adopt must move storage between isolated roots, so these are handled first
+          sdd_rename_project, stage 8's sdd_promote_member and sdd_demote_member,
+          sdd_externalize_subsystem as a project (and sdd_add_member with a source), dry run or
+          applied? On hosted, membership decides reach (a member inherits its parent's access; a
+          part is reached through its parent's record), and a detach or an adopt must move storage
+          between isolated roots, so these are handled first
         type: branch
         condition: >-
           the called tool is sdd_attach_member, sdd_adopt_member, sdd_detach_member,
-          sdd_rename_project, sdd_promote_member, sdd_demote_member, or sdd_add_member with a source
+          sdd_rename_project, sdd_promote_member, sdd_demote_member, sdd_externalize_subsystem with
+          as project, or sdd_add_member with a source
         onFalseStep: 31
       - stepNumber: 21
         description: Is it a detach?
@@ -549,8 +551,11 @@ methods:
       - stepNumber: 27
         label: screen
         description: >-
-          Screen it: for attach and promote, list every principal who gains access through the new
-          parent; for demote, every principal a member-own setting denied who now reaches the part
+          Screen it: for attach, promote and an externalize as a project, list every principal who
+          gains access through the new parent, and for promote and an externalize as a project every
+          subsystem setting the move carries onto the new project (from `<project>/<subsystem>`, per
+          subject and value, a collapse with the most restrictive value, a role binding as not
+          carried); for demote, every principal a member-own setting denied who now reaches the part
           through the parent's record and every token narrowed to the member alone that loses its
           reach; for a project rename, decide whether the hosted model refuses it (a family root's
           rename); a member declared with a source.path or source.git is refused on hosted (isolated
@@ -582,9 +587,9 @@ methods:
       - stepNumber: 32
         description: >-
           Connect the scoped server to the request transport and process the JSON-RPC message; a
-          screened DRY-RUN result carries the screen's reach changes beside the plan (who gains or
-          loses access), so a human approves the membership change with its access consequences in
-          view
+          screened DRY-RUN result carries the screen's reach changes and carried subsystem settings
+          beside the plan (who gains or loses access, and which subsystem rules the new project
+          takes), so a human approves the membership change with its access consequences in view
         type: local
       - stepNumber: 33
         description: >-
@@ -634,4 +639,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-03T13:41:28.099Z'
+updatedAt: '2026-10-03T14:21:07.753Z'

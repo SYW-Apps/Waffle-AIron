@@ -82,6 +82,33 @@ methods:
         type: return
         outcome: PlannedNarrowing
     detail: full
+  - name: carryPlan
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Collect the parent's project:write assignments with yes or no at `<parentId>/<subsystem>`
+          for every moved subsystem, grouped by subject (a user id, or everyone)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Drop the subjects already holding a project:write setting on the new project's own scope:
+          theirs is kept
+        type: local
+      - stepNumber: 3
+        description: >-
+          Fold each subject's rules into one: carried when one subsystem names it, the most
+          restrictive value (no over yes) when several do
+        type: local
+      - stepNumber: 4
+        description: >-
+          List every user's role binding anchored at a moved subsystem as not carried (can only
+          narrow)
+        type: local
+      - stepNumber: 5
+        description: Return the rules
+        type: return
+        outcome: CarriedSubsystemRule[]
+    detail: full
 status: complete
 createdAt: '2026-10-01T16:56:34.586Z'
-updatedAt: '2026-10-01T17:39:39.645Z'
+updatedAt: '2026-10-03T14:20:15.296Z'
