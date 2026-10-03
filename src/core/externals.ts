@@ -2,10 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
 import { readYamlFile, serializeYaml } from '../utils/yaml.js';
+import { canonicalize } from '../utils/canonical-json.js';
 import {
   ExternalsLockSchema,
+  ParentExcerptSchema,
   SurfaceSnapshotSchema,
   type ExternalsLock,
+  type ParentExcerpt,
   type SurfaceSnapshot,
 } from '../models/index.js';
 
@@ -41,11 +44,11 @@ function writeAtomically(file: string, text: string): void {
   fs.renameSync(tmp, file);
 }
 
-/** The lock with its aliases sorted, so a re-pin of the same set writes the same bytes. */
+/** The lock with its aliases sorted, so a re-pin of the same set writes the same bytes; a part's parent entry kept. */
 function sortedLock(lock: ExternalsLock): ExternalsLock {
   const externals: ExternalsLock['externals'] = {};
   for (const alias of Object.keys(lock.externals).sort()) externals[alias] = lock.externals[alias];
-  return { externals };
+  return { externals, ...(lock.parent !== undefined ? { parent: lock.parent } : {}) };
 }
 
 // ── externals_file_adapter ──────────────────────────────────────────────────
@@ -57,6 +60,8 @@ export interface ExternalsFileAdapter {
   readSnapshot(alias: string): SurfaceSnapshot | null;
   writeSnapshot(alias: string, snapshot: SurfaceSnapshot): void;
   deleteSnapshot(alias: string): boolean;
+  readExcerpt(project: string): ParentExcerpt | null;
+  writeExcerpt(excerpt: ParentExcerpt): void;
 }
 
 export const externalsFileAdapter: ExternalsFileAdapter = {
@@ -102,6 +107,21 @@ export const externalsFileAdapter: ExternalsFileAdapter = {
     if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
     return true;
   },
+  readExcerpt(project) {
+    // Null when absent, not valid YAML or failing the schema: the gate then
+    // reports the part's parent as unpinned rather than throwing (stage 8).
+    const file = snapshotPath(getProjectRoot(), project);
+    if (!fs.existsSync(file)) return null;
+    try {
+      return ParentExcerptSchema.parse(readYamlFile(file));
+    } catch {
+      return null;
+    }
+  },
+  writeExcerpt(excerpt) {
+    // Canonical key order, written atomically; the directory is created when missing.
+    writeAtomically(snapshotPath(getProjectRoot(), excerpt.project), serializeYaml(JSON.parse(canonicalize(ParentExcerptSchema.parse(excerpt)))));
+  },
 };
 
 // ── pinned_externals_store ──────────────────────────────────────────────────
@@ -113,6 +133,8 @@ export interface PinnedExternalsStore {
   readSnapshot(alias: string): SurfaceSnapshot | null;
   writeSnapshot(alias: string, snapshot: SurfaceSnapshot): void;
   removeSnapshot(alias: string): boolean;
+  readExcerpt(project: string): ParentExcerpt | null;
+  writeExcerpt(excerpt: ParentExcerpt): void;
 }
 
 export const pinnedExternalsStore: PinnedExternalsStore = {
@@ -131,6 +153,13 @@ export const pinnedExternalsStore: PinnedExternalsStore = {
   removeSnapshot(alias) {
     return externalsFileAdapter.deleteSnapshot(alias);
   },
+  readExcerpt(project) {
+    // Read-through: no RAM copy.
+    return externalsFileAdapter.readExcerpt(project);
+  },
+  writeExcerpt(excerpt) {
+    externalsFileAdapter.writeExcerpt(excerpt);
+  },
 };
 
 // ── externals_repository ────────────────────────────────────────────────────
@@ -142,6 +171,8 @@ export interface ExternalsRepository {
   readSnapshot(alias: string): SurfaceSnapshot | null;
   saveSnapshot(alias: string, snapshot: SurfaceSnapshot): void;
   removeSnapshot(alias: string): boolean;
+  readExcerpt(project: string): ParentExcerpt | null;
+  saveExcerpt(excerpt: ParentExcerpt): void;
 }
 
 export const externalsRepository: ExternalsRepository = {
@@ -159,6 +190,12 @@ export const externalsRepository: ExternalsRepository = {
   },
   removeSnapshot(alias) {
     return pinnedExternalsStore.removeSnapshot(alias);
+  },
+  readExcerpt(project) {
+    return pinnedExternalsStore.readExcerpt(project);
+  },
+  saveExcerpt(excerpt) {
+    pinnedExternalsStore.writeExcerpt(excerpt);
   },
 };
 
@@ -185,7 +222,7 @@ export function renamePin(alias: string, newAlias: string, project: string): boo
   const externals = Object.fromEntries(Object.entries(lock.externals)
     .filter(([key]) => key !== alias)
     .concat([[newAlias, { ...entry, project, snapshot: `.wai/externals/${newAlias}.yaml` }]]));
-  externalsRepository.saveLock({ externals });
+  externalsRepository.saveLock({ ...lock, externals });
   // Steps 8-9: the snapshot under the old alias goes.
   if (newAlias !== alias) externalsRepository.removeSnapshot(alias);
   // Step 10.
@@ -200,7 +237,7 @@ export function unpin(alias: string): boolean {
   if (!lock || lock.externals[alias] === undefined) return false;
   // Step 4: the entry dropped and the lock saved.
   const externals = Object.fromEntries(Object.entries(lock.externals).filter(([key]) => key !== alias));
-  externalsRepository.saveLock({ externals });
+  externalsRepository.saveLock({ ...lock, externals });
   // Step 5.
   externalsRepository.removeSnapshot(alias);
   // Step 6.

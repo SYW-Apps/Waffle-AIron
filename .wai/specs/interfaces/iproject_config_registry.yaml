@@ -316,6 +316,43 @@ methods:
         description: The external's alias
     guarantees:
       - idempotent
+  - name: updateMember
+    description: >-
+      Change an existing member's declaration (stage 8): set its `source` (a git `#<commit>`
+      included), `ref`, `dir` or description, or drop an asserted `as` or a `use`, keeping every
+      other part of the entry. Rewriting a deprecated long-form `path` to `source` is the same write
+      (`doctor --fix`). Refuses an alias `members` does not declare, and a result with no source or
+      an unparseable one. The entry is written as the shorthand when only its source remains, the
+      long form otherwise. The same values write nothing. The write behind `member update`, `member
+      promote` / `demote`, and `doctor --fix`. Returns whether it wrote.
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: changes
+        type: MemberDeclaration
+        description: The fields to set; a field it does not name is kept
+    guarantees:
+      - idempotent
+  - name: setPartOf
+    description: >-
+      Write (or, with null, remove) the bound configuration's `partOf` — the one thing a
+      NON-CONTAINED part's configuration declares (stage 8; a contained part has no configuration).
+      Refuses to write partOf into a configuration that declares any project field (an id, members,
+      externals, composition, rules, extensions, targets): a project is never quietly turned into a
+      part — that is `member demote`, which moves those fields first. Creates the configuration when
+      the directory has none (a fresh sibling part). The same value writes nothing. Returns whether
+      it wrote.
+    signature: 'setPartOf(partOf: PartOf | null): boolean'
+    returns: boolean
+    params:
+      - name: partOf
+        type: PartOf | null
+        description: The parent the part belongs to, or null to remove it (promote)
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-09-30T20:20:15.906Z'
+updatedAt: '2026-10-02T20:50:43.540Z'

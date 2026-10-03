@@ -332,7 +332,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(status[0].uses.every((u) => u.state === 'unavailable' && u.code === 'EXTERNAL_CHECK_UNAVAILABLE')).toBe(true);
   });
 
-  it('a source.path external outside the family is pinned at instance, with nothing used and status unavailable', () => {
+  it('a source.path external outside the family is pinned at instance; with nothing used, its status compares nothing (stage 8: never the old blanket unavailable)', () => {
     const f = family();
     // A standalone project next to the family, reached only through source.path.
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ext-out-'));
@@ -354,7 +354,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(snapshot.audience).toBe('instance');
     const status = at(f.root, () => getExternalsStatus())[0];
     expect(status).toMatchObject({ sourceKind: 'path', reachable: true, stale: false });
-    expect(status.uses).toEqual([expect.objectContaining({ state: 'unavailable', code: 'EXTERNAL_CHECK_UNAVAILABLE' })]);
+    expect(status.uses).toEqual([]);
     expect(at(f.root, () => listExternals())[0]).toMatchObject({ alias: 'ledger', sourceKind: 'path', audience: 'instance', lock: expect.objectContaining({ project: 'ledger' }) });
   });
 

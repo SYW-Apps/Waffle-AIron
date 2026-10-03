@@ -75,26 +75,33 @@ fields:
       The other projects this project consumes, keyed by alias — the first segment of its
       `alias::name` references. Each value is an ExternalDeclaration; the alias defaults the
       producer id, and a producer is found through the family (parent, members' siblings) or an
-      explicit source.path. Its `use` imports producer names so they may be written bare: a bare
-      name resolves to a local spec first, then to a name exactly one import supplies. A member
-      needs no declaration: its `members` key is its alias. An alias both here and under `members`
-      is a problem of both declarations. Read by the scan and the project graph. Written by hand, or
-      by `doctor --fix` through the registry's declareExternal (adds an alias, never overwrites one)
-      and importNames (adds names to an alias's `use`).
+      explicit source (a path, a git repository, or on a hosted instance a record id). Its `use`
+      imports producer names so they may be written bare: a bare name resolves to a local spec
+      first, then to a name exactly one import supplies. A member needs no declaration: its
+      `members` key is its alias. An alias both here and under `members` is a problem of both
+      declarations. A part's configuration declares none: a part's specs use the parent's aliases.
+      Read by the scan and the project graph. Written by hand, or by `doctor --fix` through the
+      registry's declareExternal (adds an alias, never overwrites one) and importNames (adds names
+      to an alias's `use`).
     optional: true
   - name: members
     type: Map<string, MemberDeclaration | string>
     description: >-
-      The projects this project contains, keyed by alias: `billing: services/billing` (shorthand,
-      the value is the path relative to this root) or `ledger: { path: services/ledger, description:
-      ..., use: [...] }` (long form, a MemberDeclaration). A member is not a subsystem of this
-      project: it has no L1 spec here and carries no content here; this project reaches it only as
-      `alias::name`, through the member's own L0 export table, like any other consumer — or bare,
-      for the names the long form's `use` imports. Its path must lie inside this project
-      (containment is decided against the declaring root). Together with `externals` it is this
-      project's alias table, and one alias names one project. Written by hand, or by `doctor --fix`
-      through the registry's declareMember and importNames; the L1 `projectPath` form still loads
-      for one release (DEPRECATED_MOUNT_FORM).
+      What this project is made of beyond its own specs folder, keyed by alias, each value one
+      `source` in one grammar — `scheduler: services/scheduler` (contained), `admin: ../admin`
+      (sibling), `payments: git@host:acme/payments.git#<commit>` (git at a commit), `marketplace:
+      hosted:marketplace` (hosted record) — or the long form (MemberDeclaration) when it must also
+      say `as`, `ref`, `dir`, `use` or a description. What a member IS follows from its content: one
+      whose tree declares an id, holds an L0 or carries a lock is a PROJECT, anything else a PART. A
+      part's subsystems are this project's own subsystems: keyed under this project, referenced by
+      local id, judged by the ordinary subsystem rules and approved by this project's lock. A
+      project member is not a subsystem of this project: it has no L1 spec here, and this project
+      reaches it only as `alias::name` through its L0 exports — or bare, for the names the long
+      form's `use` imports; a contained one is read live, any other is judged against its pin.
+      Together with `externals` it is this project's alias table, and one alias names one member or
+      external. Written by hand, by `member add` / `promote` / `demote` / `update`, or by `doctor
+      --fix` through the registry (which rewrites the deprecated long-form `path`); the L1
+      `projectPath` form still loads for one release (DEPRECATED_MOUNT_FORM).
     optional: true
   - name: composition
     type: CompositionConfig
@@ -118,6 +125,16 @@ fields:
       otherwise raise — the deadlock stage 3 reported as id-locked. Nothing resolves through it: a
       reference or an external that still names an old id is rewritten by the rename, or reported,
       never redirected.
+    optional: true
+  - name: partOf
+    type: PartOf
+    description: >-
+      Set only in a NON-CONTAINED part's configuration (stage 8: a sibling checkout or a git
+      repository): the project it is a part of, so the part opened alone can say what it belongs to.
+      A contained part has no configuration at all — its parent finds it, and opening its directory
+      resolves to the parent's root. A configuration that sets it declares nothing else a project
+      declares: one that also declares an id makes the member a project by content, which
+      contradicts it (MEMBER_KIND_MISMATCH). Absent in every project's configuration.
     optional: true
 methods:
   - name: declaredPackNames
@@ -177,11 +194,13 @@ methods:
     signature: 'declaredMembers(): DeclaredMember[]'
     returns: DeclaredMember[]
     description: >-
-      The configuration's `members`, one DeclaredMember per alias in declaration order, the
-      shorthand read as `{ path }` with no imports: the path, description and `use` copied as
-      written; an alias outside [a-z0-9-_]+, an empty or absolute path, an alias `externals` also
-      declares, or a malformed `use` entry is recorded as the entry's problem rather than dropped.
-      Empty when nothing is declared.
+      The configuration's `members`, one DeclaredMember per alias in declaration order: the source
+      string (the shorthand, the long form's `source`, or for one release the deprecated `path`,
+      flagged) parsed into its object form and storage, the asserted `as`, the description and `use`
+      copied as written; an alias outside [a-z0-9-_]+, a missing or unparseable source, a git source
+      without its commit, a bad `as`, a hosted source asserted to be a part, an alias `externals`
+      also declares, or a malformed `use` entry is recorded as the entry's problem rather than
+      dropped. Empty when nothing is declared.
   - name: withPack
     signature: 'withPack(entry: PackSelection | string, remove?: boolean): ProjectConfig'
     returns: ProjectConfig
@@ -200,6 +219,13 @@ methods:
       The configuration's `composition.requirePolicies` in declaration order, a second requirement
       for a pack already required dropped (the first one stands, and the family run reports nothing
       about the duplicate). Empty when nothing is required.
+  - name: isPart
+    signature: 'isPart(): boolean'
+    returns: boolean
+    description: >-
+      Whether this is a non-contained part's configuration: `partOf` is set. The test every reader
+      that treats such a root differently from a project's (the owner's gate opened at a part,
+      `externals pin` at a part, status) asks, so they cannot disagree about it.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-30T20:19:27.952Z'
+updatedAt: '2026-10-02T20:45:05.057Z'

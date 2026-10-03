@@ -3,11 +3,13 @@ id: member_pin
 name: MemberPin
 description: >-
   One direct member as a parent's lock recorded it (LockRecord.members, keyed by the alias the
-  parent declares it under): the member's composition subject and its approval state at the moment
-  the parent locked. A record of the member's owner's decision, never of the member's specs: the
-  parent copies what the member's own lock says and never writes below itself. Replaces the stage-1
-  `children` StateId copy, which was taken without checking that the child's lock still matched its
-  tree.
+  parent declares it under). For a PROJECT member: its composition subject and approval state at the
+  moment the parent locked — a record of the member's owner's decision, never of the member's specs;
+  the parent copies what the member's own lock says and never writes below itself. For a PART (stage
+  8): its content digest and, when known, the commit it was read at — a summary of what the parent's
+  own per-spec approvals already cover, so a reader sees which revision of a part stored elsewhere
+  was approved. Replaces the stage-1 `children` StateId copy, which was taken without checking that
+  the child's lock still matched its tree.
 subsystem: sdd_core
 fields:
   - name: project
@@ -27,12 +29,36 @@ fields:
   - name: state
     type: string
     description: >-
-      approved | drifted | never, as it stood when the parent locked: approved = the member's lock
-      matches the member's own gate identity recomputed at its own root; drifted = it has a lock and
-      its gate identity moved since; never = no lock (including a declared member with no project on
-      disk). Recorded beside the subject, never hashed into the parent's identity.
+      Project only: approved | drifted | never, as it stood when the parent locked: approved = the
+      member's lock matches the member's own gate identity recomputed at its own root (the sibling
+      checkout or the git cache at its pinned commit, for a referenced project); drifted = it has a
+      lock and its gate identity moved since; never = no lock (including a declared member with no
+      project on disk). Recorded beside the subject, never hashed into the parent's identity. A part
+      records `approved` (it has no lock of its own: the parent's approval is its approval).
     optional: false
+  - name: as
+    type: string
+    description: >-
+      part | project, as the member's content made it when the parent locked. Absent in a record
+      written before stage 8, which pinned projects only.
+    optional: true
+  - name: commit
+    type: string
+    description: >-
+      The commit the member was read at when the parent locked, recorded only when it lives in
+      another git repository than the parent: a git member's pinned commit, or the head of the work
+      tree holding a `../` sibling that is its own repository. A contained or same-repository member
+      records none. Provenance only: the verdict and the gate identity never read it (content and
+      subjects decide), so the same content at another commit approves identically.
+    optional: true
+  - name: contentDigest
+    type: string
+    description: >-
+      Part only: ScannedPart.contentDigest when the parent locked — the digest of the part's spec
+      documents keyed by their path inside the part, so it does not move when the part's storage
+      does.
+    optional: true
 methods: []
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-09-30T05:47:05.631Z'
-updatedAt: '2026-09-30T06:12:15.984Z'
+updatedAt: '2026-10-02T23:58:39.121Z'

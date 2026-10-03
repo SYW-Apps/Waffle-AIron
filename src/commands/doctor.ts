@@ -879,7 +879,7 @@ function printApplied(report: FamilyMigrationReport): void {
 /** How many writes the plan holds: ids, L0s, entries, externals, imports, pins, mounts, rewrites and family pins. */
 function pendingCount(migration: ChainingMigrationPlan): number {
   return migration.rewrites.length + migration.projects.reduce((n, p) => n + (p.idToWrite ? 1 : 0) + (p.createsSystem ? 1 : 0)
-    + p.exports.length + p.externals.length + p.imports.length + p.pins.length + p.members.length + p.supersededPins.length, 0);
+    + p.exports.length + p.externals.length + p.imports.length + p.pins.length + p.members.length + p.supersededPins.length + p.locations.length, 0);
 }
 
 /** The totals the report ends with — the P1 probe's counts. */
@@ -894,6 +894,8 @@ function chainingTotals(migration: ChainingMigrationPlan): string {
     `${sum((p) => p.imports.length)} import(s)`,
     `${sum((p) => p.pins.length)} pin(s)`,
     `${sum((p) => p.members.length)} mount(s) to move`,
+    // Stage 8's one doctor step, named only when there is one to take.
+    ...(sum((p) => p.locations.length) > 0 ? [`${sum((p) => p.locations.length)} member location(s) to rewrite`] : []),
     `${migration.rewrites.length} rewrite(s)`,
     `${sum((p) => p.supersededPins.length)} family pin(s) to delete`,
     `${sum((p) => p.droppedKeys.length)} dropped key(s)`,
@@ -952,6 +954,9 @@ function printProjectMigration(p: ProjectMigration): void {
   }
   if (p.supersededPins.length > 0) {
     console.log(`    superseded family pins: ${p.supersededPins.length} — deleted once the externals that replace them are pinned; nothing reads them since stage 3`);
+  }
+  for (const alias of p.locations) {
+    console.log(`    member: ${alias}: the deprecated long-form \`path\` rewritten to \`source\` (stage 8) — its meaning unchanged`);
   }
 }
 

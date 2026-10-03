@@ -18,11 +18,15 @@ fields:
     optional: true
   - name: into
     type: string
-    description: 'member internalize --into <subsystem>: the home subsystem for the member''s L0 vision.'
+    description: >-
+      member internalize --into <subsystem>, member demote --home <subsystem>: the home subsystem
+      for the member's L0 vision.
     optional: true
   - name: packs
     type: string
-    description: 'member internalize --packs adopt|drop: what to do with packs only the member selects.'
+    description: >-
+      member internalize / member demote --packs adopt|drop: what to do with packs only the member
+      selects.
     optional: true
   - name: exports
     type: string[]
@@ -32,7 +36,7 @@ fields:
     optional: true
   - name: path
     type: string
-    description: 'subsystem externalize --path <dir>: the new member''s root.'
+    description: 'subsystem externalize --path <dir>: the part''s root (a new directory, or an existing part''s).'
     optional: true
   - name: project
     type: string
@@ -46,6 +50,16 @@ fields:
       member detach --widen: widen exactly the exports the family uses that the member exports only
       to the family to the instance audience, shown in the plan, instead of refusing.
     optional: true
+  - name: as
+    type: string
+    description: >-
+      subsystem externalize --as part|project (stage 8): part, the default, is a storage move;
+      project composes the move with a promote.
+    optional: true
+  - name: id
+    type: string
+    description: 'member promote --id <id> (stage 8): the new project''s id; the alias when absent.'
+    optional: true
 methods: []
 createdAt: '2026-09-30T20:37:46.672Z'
-updatedAt: '2026-10-01T05:54:10.101Z'
+updatedAt: '2026-10-02T22:47:03.160Z'

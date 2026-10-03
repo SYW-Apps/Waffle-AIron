@@ -2,16 +2,28 @@ kind: value-object
 id: externals_lock
 name: ExternalsLock
 description: >-
-  The content of .wai/externals.lock.yaml: one entry per pinned alias. Together with the snapshots
-  it names under .wai/externals/, it is one aggregate — the project's pinned externals — and the
-  gate identity covers both.
+  The content of .wai/externals.lock.yaml: one entry per pinned producer — every external, every
+  referenced project member (a `../`, git or hosted source; stage 8 — members and externals share
+  one alias table, so one map holds both), and in a non-contained part's lock its parent. Together
+  with the snapshots it names under .wai/externals/, it is one aggregate — the project's pinned
+  inputs from outside its own files — and the gate identity covers both, so the human's lock
+  certifies every pin transitively without the lock itself being written by a pin.
 subsystem: sdd_surfaces
 fields:
   - name: externals
     type: Map<string, ExternalLockEntry>
-    description: Alias → what was pinned for it.
+    description: >-
+      Alias → what was pinned for it: a declared external (role external) or a referenced project
+      member (role member).
     optional: false
+  - name: parent
+    type: ExternalLockEntry
+    description: >-
+      A part's lock only: the pinned excerpt of its parent (role parent, snapshot
+      .wai/externals/<parent id>.yaml). What a part opened alone is judged against; absent means
+      "part of <parent>; validate from the parent" (PART_UNPINNED).
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:46:59.348Z'
-updatedAt: '2026-09-26T17:46:59.351Z'
+updatedAt: '2026-10-02T20:48:07.470Z'

@@ -26,8 +26,9 @@ fields:
     description: >-
       Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+ (a dotted
       producer id declared without an explicit alias lands here), a producer id outside the
-      project-id grammar, a `use` entry that is neither `*` nor a public name of [a-z0-9-_]+, or a
-      source naming both or neither of `path` and `hosted`.
+      project-id grammar, a `use` entry that is neither `*` nor a public name of [a-z0-9-_]+, a
+      source naming more or fewer than one of `path`, `hosted` and `git`, or a `commit` on an
+      external's source (an external's commit is the pin's, recorded in the externals lock).
     optional: true
   - name: use
     type: string[]
@@ -41,7 +42,21 @@ fields:
       The declaration's `source.hosted`, as written: the producer's hosted project record id (stage
       7).
     optional: true
+  - name: sourceGit
+    type: string
+    description: >-
+      The declaration's `source.git`, as written (or read from the string shorthand): the producer's
+      repository URL (stage 8).
+    optional: true
+  - name: sourceRef
+    type: string
+    description: 'The declaration''s `source.ref`, as written: the branch or tag a pin follows.'
+    optional: true
+  - name: sourceDir
+    type: string
+    description: 'The declaration''s `source.dir`, as written: the producer''s root inside the repository.'
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-26T17:39:19.261Z'
-updatedAt: '2026-10-01T18:06:34.878Z'
+updatedAt: '2026-10-02T20:16:43.816Z'

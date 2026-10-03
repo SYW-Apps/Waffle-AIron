@@ -188,7 +188,7 @@ describe('wairon member add — states the packs scaffolding applied', () => {
       doc.composition = { requirePolicies: [{ pack: 'acme-base', version: '^1', profile: 'strict' }, { pack: 'audit-trail', version: '*' }] };
     });
     bindRoot(dir);
-    await runMemberAdd('svc', 'services/svc');
+    await runMemberAdd('svc', 'services/svc', { project: true });
     expect(text()).toMatch(/Applied the required pack acme-base@1\.2\.0 to its new configuration/);
     expect(text()).toMatch(/Set its projectType to "strict"/);
     expect(text()).toMatch(/No installed version of "audit-trail" satisfies \*/);

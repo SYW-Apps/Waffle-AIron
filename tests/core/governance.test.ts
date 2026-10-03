@@ -57,7 +57,7 @@ function family(m: GovernanceMachine, requirement: Record<string, unknown>): { r
   const root = m.project('platform');
   editConfig(root, (doc) => { doc.composition = { requirePolicies: [requirement] }; });
   bindRoot(root);
-  createMember('svc', 'services/svc');
+  createMember('svc', 'services/svc', undefined, 'project');
   return { root, member: path.join(root, 'services', 'svc') };
 }
 
@@ -363,7 +363,7 @@ describe('property: scaffold-once — createMember writes the parent\'s required
       doc.composition = { requirePolicies: [{ pack: 'acme-base', version: '^1.0', profile: 'strict' }, { pack: 'audit-trail', version: '^3' }] };
     });
     bindRoot(root);
-    const creation = createMember('svc', 'services/svc');
+    const creation = createMember('svc', 'services/svc', undefined, 'project');
     expect(creation.configCreated).toBe(true);
     expect(creation.adopted).toEqual([{ name: 'acme-base', version: '1.4.0', integrity: newest.digest, source: 'https://packs.example.test/acme-base-1.4.0.wpack' }]);
     expect(creation.unadopted).toEqual([{ pack: 'audit-trail', version: '^3' }]);
@@ -382,19 +382,19 @@ describe('property: scaffold-once — createMember writes the parent\'s required
     const root = m.project('platform');
     editConfig(root, (doc) => { doc.composition = { requirePolicies: [{ pack: 'acme-base', version: '^1.2' }] }; });
     bindRoot(root);
-    const first = createMember('svc', 'services/svc');
+    const first = createMember('svc', 'services/svc', undefined, 'project');
     expect(first.adopted).toHaveLength(1);
     const memberDir = path.join(root, 'services', 'svc');
     // The member drops the selection; a second create must not bring it back.
     memberSelects(memberDir, []);
     bindRoot(root);
-    const again = createMember('svc', 'services/svc');
-    expect(again).toEqual({ configCreated: false, adopted: [], unadopted: [] });
+    const again = createMember('svc', 'services/svc', undefined, 'project');
+    expect(again).toEqual({ configCreated: false, adopted: [], unadopted: [], as: 'project', storage: 'contained' });
     expect((readConfig(memberDir).extensions as { packs: unknown[] }).packs).toEqual([]);
     // A directory that already had its own configuration is completed, never given selections.
     const existing = m.project('ledger', path.join(root, 'services'));
     bindRoot(root);
-    const adoptedExisting = createMember('ledger', 'services/ledger');
+    const adoptedExisting = createMember('ledger', 'services/ledger', undefined, 'project');
     expect(adoptedExisting.configCreated).toBe(false);
     expect(readConfig(existing).extensions).toBeUndefined();
   });
@@ -404,7 +404,7 @@ describe('property: scaffold-once — createMember writes the parent\'s required
     m.install('1.2.0');
     const root = m.project('platform');
     bindRoot(root);
-    expect(createMember('svc', 'services/svc')).toEqual({ configCreated: true, adopted: [], unadopted: [] });
+    expect(createMember('svc', 'services/svc', undefined, 'project')).toEqual({ configCreated: true, adopted: [], unadopted: [], as: 'project', storage: 'contained' });
     expect(readConfig(path.join(root, 'services', 'svc')).extensions).toBeUndefined();
   });
 });

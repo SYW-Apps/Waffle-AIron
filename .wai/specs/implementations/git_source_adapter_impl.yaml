@@ -1,0 +1,48 @@
+id: git_source_adapter_impl
+name: Git Source Adapter Implementation
+description: >-
+  The git client behind stage 8's git sources: shells out to the git executable for ls-remote, a
+  shallow single-commit fetch and rev-parse; the cache root is resolved once per process.
+contract: igit_source_adapter
+sourcePath: src/core/adapters/git-source.ts
+technologies:
+  - name: git
+    matches:
+      - ls-remote
+      - rev-parse
+methods:
+  - name: fetch
+    narrative: []
+    intent: >-
+      Compute the entry directory from the cache root, the sha256 of the URL and the commit. When it
+      exists, answer it (plus `dir`). Otherwise initialize a bare temporary repository beside it,
+      fetch exactly that commit at depth one from the URL, check its tree out into the temporary
+      directory, confirm `dir` exists in it, and rename the temporary directory into the entry's
+      place — a concurrent fetch that won the rename is accepted as the same content. Any failure
+      deletes the temporary directory and throws SourceUnavailable with the git error's reason
+      (offline, authentication refused, commit not found, dir missing), so a failed fetch leaves the
+      cache exactly as it was.
+  - name: resolve
+    narrative: []
+    intent: >-
+      Run ls-remote against the URL for the ref (or HEAD when none is given) and answer the full
+      commit it lists. Throws SourceUnavailable when the remote is unreachable, refuses the
+      credentials or lists no such ref; answers nothing it did not read from the remote.
+  - name: head
+    narrative: []
+    intent: >-
+      Ask git for the commit checked out in the work tree containing the directory (rev-parse HEAD
+      run there). Answers null when the directory is in no work tree or git is not installed;
+      uncommitted changes do not matter here, because the answer is provenance and the content
+      digest is what a verdict compares.
+  - name: repositoryRoot
+    narrative: []
+    detail: intent
+    intent: >-
+      Walk up from the directory to the filesystem root and answer the first ancestor (the directory
+      itself included) holding a `.git` entry — a directory, or a file for a worktree or submodule;
+      null when none does. Runs no git process.
+detail: intent
+status: complete
+createdAt: '2026-10-02T20:19:38.761Z'
+updatedAt: '2026-10-02T23:58:22.017Z'

@@ -22,10 +22,13 @@ fields:
   - name: subsystems
     type: object[]
     description: >-
-      Each subsystem's id, name and description — and, for a project with members, each member as a
-      project node (stage 3); on a hosted instance a member node carries its hosted record id
-      (recordId) only when the caller may read that record, so the app links it to the member's own
-      page.
+      Each subsystem's id, name and description — and, for a project with members, each PROJECT
+      member as a project node (stage 3), a referenced one (a `../`, git or hosted source; stage 8)
+      drawn from outside with its storage; on a hosted instance a member node carries its hosted
+      record id (recordId) only when the caller may read that record, so the app links it to the
+      member's own page. A part's subsystems are the project's own subsystems, each carrying the
+      part's storage badge (`storage`: `part <alias> · contained`, `… · ../admin`, `… · git <short
+      commit>`) — composition decides what is drawn, storage only how it is labelled.
     optional: false
   - name: components
     type: object[]
@@ -35,9 +38,10 @@ fields:
     type: object[]
     description: >-
       Dependency and ownership edges between the nodes, each flagged when it crosses a subsystem
-      boundary.
+      boundary; a dependency on a referenced project's public name lands on that project's node (a
+      consumption edge, stage 8).
     optional: false
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-10-01T18:08:38.748Z'
+updatedAt: '2026-10-02T23:18:47.578Z'

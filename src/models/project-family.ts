@@ -1,5 +1,8 @@
+import * as path from 'path';
 import type { ExportUsage } from './exports.js';
 import type { SubsystemSpec } from './specs.js';
+// TYPE-ONLY: a part is recorded by the scan that read it (spec_index), and the graph carries it as read.
+import type { ScannedPart } from '../core/specs.js';
 
 // ---------------------------------------------------------------------------
 // The project graph: every project root one scan read, the project that owns
@@ -110,8 +113,8 @@ export interface ResolvedExternal {
   alias: string;
   /** The producer id the declaration names (its `project`, else the alias). */
   project: string;
-  /** family | path | hosted | unresolved */
-  sourceKind: 'family' | 'path' | 'hosted' | 'unresolved';
+  /** family | path | git | hosted | unresolved */
+  sourceKind: 'family' | 'path' | 'git' | 'hosted' | 'unresolved';
   /** For a family producer: parent | sibling | member | family. */
   relation?: 'parent' | 'sibling' | 'member' | 'family';
   /** The producer's key in the family graph, for a family producer. */
@@ -124,6 +127,14 @@ export interface ResolvedExternal {
   audience: string;
   /** Why the external is unresolved or unusable. */
   problem?: string;
+  /**
+   * external | member (stage 8): declared under `externals`, or a referenced
+   * project member — declared under `members` with a `../`, git or hosted
+   * source, its content a project's — bound and judged exactly as an external.
+   */
+  role: 'external' | 'member';
+  /** git: the commit the directory holds — a member's pinned commit, an external's ref head when resolved. */
+  commit?: string;
 }
 
 /** project_node — one project root of the family the scan read, keyed by its in-memory key. */
@@ -162,6 +173,12 @@ export interface ProjectNode {
    * written — empty when the alias imports nothing (stage 4).
    */
   imports: ProjectImport[];
+  /**
+   * The project's parts (stage 8): its subsystems stored in another directory
+   * or repository, drawn as this project's own subsystems with the part's
+   * storage badge; nothing about them is a project.
+   */
+  parts: ScannedPart[];
 }
 
 /** project_import — one alias's `use` imports, as the project's configuration declares them. */
@@ -178,7 +195,7 @@ export interface ProjectImport {
  * no single project can see alone. Reported, never judged.
  */
 export interface ProjectFamilyProblem {
-  kind: 'id-collision' | 'no-id' | 'defaulted' | 'member-absent' | 'alias-conflict' | 'duplicate-spec';
+  kind: 'id-collision' | 'no-id' | 'defaulted' | 'member-absent' | 'alias-conflict' | 'duplicate-spec' | 'part-unavailable' | 'kind-mismatch';
   /** The colliding id; the alias to declare (defaulted); the alias (member-absent, alias-conflict); the key (duplicate-spec). */
   id?: string;
   /** The keys of the projects concerned ('' is the bound root). */
@@ -318,6 +335,24 @@ export function landReference(projects: ReadableProject[], reference: string, fr
 /** The in-memory key of a local id in a project. */
 export function keyIn(project: string, localId: string): string {
   return project ? `${project}::${localId}` : localId;
+}
+
+/**
+ * The key one spec file of a project is approved under (stage 8): its path
+ * from the project's root, POSIX — or, for a file one of its parts holds,
+ * `members/<alias>/<path inside the part>`, so moving a part between a
+ * contained folder, a sibling checkout and a git repository changes no key.
+ */
+export function approvalKeyIn(file: string, root: string, parts: readonly ScannedPart[]): string {
+  const resolved = path.resolve(file);
+  for (const part of parts) {
+    if (part.directory === undefined) continue;
+    const rel = path.relative(part.directory, resolved);
+    if (rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+      return `members/${part.alias}/${rel.split(path.sep).join('/')}`;
+    }
+  }
+  return path.relative(root, resolved).split(path.sep).join('/');
 }
 
 // ---- project_family behaviour ----------------------------------------------

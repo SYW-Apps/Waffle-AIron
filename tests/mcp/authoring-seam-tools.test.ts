@@ -254,20 +254,20 @@ describe('the member tools — sdd_add_member, sdd_move_member, sdd_internalize_
     const { root, call } = await bound();
     await seed(call);
 
-    const added = await call('sdd_add_member', { alias: 'billing', path: 'packages/billing', description: 'Invoices' });
+    const added = await call('sdd_add_member', { alias: 'billing', source: 'packages/billing', description: 'Invoices', as: 'project' });
     expect(added.isError ?? false, textOf(added)).toBe(false);
-    expect(textOf(added)).toContain('Added member "billing" at packages/billing');
-    expect(members(root)).toEqual({ billing: { path: 'packages/billing', description: 'Invoices' } });
+    expect(textOf(added)).toContain('Added the project "billing" at packages/billing');
+    expect(members(root)).toEqual({ billing: { source: 'packages/billing', description: 'Invoices' } });
     expect(fs.existsSync(path.join(root, 'packages', 'billing', '.wai', 'project.yaml'))).toBe(true);
     invalidateSpecCache();
     expect(loadSubsystemSpec('billing')).toBeNull();
 
     const moved = await call('sdd_move_member', { alias: 'billing', newPath: 'services/billing' });
     expect(moved.isError ?? false, textOf(moved)).toBe(false);
-    expect(members(root)).toEqual({ billing: { path: 'services/billing', description: 'Invoices' } });
+    expect(members(root)).toEqual({ billing: { source: 'services/billing', description: 'Invoices' } });
     expect(fs.existsSync(path.join(root, 'services', 'billing', '.wai', 'project.yaml'))).toBe(true);
 
-    const bad = await call('sdd_add_member', { alias: 'Bad Alias', path: 'x' });
+    const bad = await call('sdd_add_member', { alias: 'Bad Alias', source: 'x' });
     expect(bad.isError).toBe(true);
     expect(textOf(bad)).toMatch(/^Error: .*an alias and a path are required/);
     const ghost = await call('sdd_move_member', { alias: 'ghost', newPath: 'x' });
@@ -279,7 +279,7 @@ describe('the member tools — sdd_add_member, sdd_move_member, sdd_internalize_
     const { root, call } = await bound();
     await seed(call);
     // The subsystem out and back in: externalize writes a `members` member.
-    const out = await call('sdd_externalize_subsystem', { subsystem: 'shop', path: 'packages/shop' });
+    const out = await call('sdd_externalize_subsystem', { subsystem: 'shop', path: 'packages/shop', as: 'project' });
     expect(out.isError ?? false, textOf(out)).toBe(false);
     expect(members(root)).toEqual({ shop: 'packages/shop' });
 
@@ -296,7 +296,7 @@ describe('the member tools — sdd_add_member, sdd_move_member, sdd_internalize_
     expect(fs.existsSync(path.join(root, 'packages', 'shop', '.wai'))).toBe(false);
 
     // A member selecting a pack this project does not, with no adopt-or-drop answer, is refused as a tool error.
-    expect((await call('sdd_add_member', { alias: 'ledger', path: 'packages/ledger' })).isError ?? false).toBe(false);
+    expect((await call('sdd_add_member', { alias: 'ledger', source: 'packages/ledger', as: 'project' })).isError ?? false).toBe(false);
     const ledgerConfig = path.join(root, 'packages', 'ledger', '.wai', 'project.yaml');
     writeYamlFile(ledgerConfig, { ...(readYamlFile(ledgerConfig) as object), extensions: { packs: [{ name: 'acme-rules', version: '1.0.0' }], useGlobalPacks: false } });
     const refused = await call('sdd_internalize_member', { alias: 'ledger' });

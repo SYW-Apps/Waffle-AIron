@@ -28,8 +28,9 @@ import {
   resolveProjectExports,
   projectFamily,
   exportUsage,
+  loadExtensionsFor,
 } from './adapters/validator-core.js';
-import { listSnapshots, listPinnedExternals } from './adapters/validator-surfaces.js';
+import { listSnapshots, listPinnedExternals, pinnedParent } from './adapters/validator-surfaces.js';
 // family_validator: the family run the portal forwards validateFamily to.
 import * as familyValidator from './family-validation.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
@@ -106,7 +107,19 @@ import {
   type TestsToRevisit,
 } from './source-analysis.js';
 import { getProjectRoot } from '../utils/fs.js';
-import * as path from 'path';
+import { approvalKeyIn } from '../models/project-family.js';
+import {
+  ComponentSpecSchema,
+  ImplementationSpecSchema,
+  InterfaceSpecSchema,
+  SubsystemSpecSchema,
+  SystemSpecSchema,
+  TypeSpecSchema,
+  type ParentExcerpt,
+  type SystemSpec,
+  type TypeSpec,
+} from '../models/index.js';
+import { declaredMembers, isPart, ProjectConfigSchema, RulesConfigSchema } from '../models/project.js';
 import type {
   SubsystemSpec, ComponentSpec, InterfaceSpec, ImplementationSpec, MethodImplementation, ReferenceResolution,
 } from '../models/index.js';
@@ -464,6 +477,10 @@ function runOwnersGate(
 
   // Load specs
   clearLoaderIssues();
+  // Steps 3-4 (stage 8): a non-contained part opened alone is judged against
+  // its pinned parent, never as a project of its own.
+  const boundConfig = boundConfiguration();
+  if (isPart(boundConfig)) return judgePartAlone(boundConfig!, scopeSubsystem);
   const system = loadSystemSpec();
   const subsystems = loadSubsystemSpecs();
   const components = loadComponentSpecs();
@@ -476,7 +493,10 @@ function runOwnersGate(
   // Step 10: the bound project's pinned externals — its own lock and
   // snapshots, never the producer — what a reference into a project outside
   // the scan is judged against.
-  const pinnedExternals = listPinnedExternals();
+  // A part declared with a `../` or git source is no producer (stage 8): its
+  // specs are this project's own, so it has no pin to be judged against.
+  const parts = new Set(projectFamily().nodes.find((n) => n.namespace === '')?.parts.map((p) => p.alias) ?? []);
+  const pinnedExternals = listPinnedExternals().filter((p) => !parts.has(p.alias));
   // Source-code model (per-sourcePath declaration/export/import/anchor facts)
   // — what structural conformance checks realization against. The declared
   // source roots widen the walked set with the files no spec names yet, which
@@ -637,6 +657,8 @@ function runOwnersGate(
       // The bound project's own requirements, for their syntax only.
       packRequirements: boundPackRequirements(),
       projectIdentity: boundProjectIdentity(),
+      // Stage 8: the bound root's declared members, for member-declarations.
+      ...(boundConfig ? { declaredMembers: declaredMembers(boundConfig) } : {}),
       surfaceSnapshots,
       codeModel,
       roundTripIssues,
@@ -672,6 +694,164 @@ function runOwnersGate(
   }
 }
 
+/** The bound root's configuration, or null when it has none or it cannot be read. */
+function boundConfiguration(): ProjectConfig | null {
+  try {
+    return loadProjectConfig();
+  } catch {
+    return null;
+  }
+}
+
+/** The stand-in timestamp an excerpt's canonical documents (which carry none) are read with. */
+const EXCERPT_EPOCH = new Date(0).toISOString();
+
+/** One excerpt document as the spec kind its shape names (as the scan reads a file). */
+interface ExcerptSpecs {
+  system: SystemSpec | null;
+  subsystems: SubsystemSpec[];
+  components: ComponentSpec[];
+  interfaces: InterfaceSpec[];
+  implementations: ImplementationSpec[];
+  types: TypeSpec[];
+  ids: Set<string>;
+}
+
+/** The excerpt's documents read by shape, each through its kind's schema; one that fails it is left out. */
+function readExcerptSpecs(excerpt: ParentExcerpt): ExcerptSpecs {
+  const out: ExcerptSpecs = { system: null, subsystems: [], components: [], interfaces: [], implementations: [], types: [], ids: new Set() };
+  const take = <T extends { id: string }>(list: T[], parsed: { success: boolean; data?: T }): void => {
+    if (!parsed.success || !parsed.data) return;
+    list.push(parsed.data);
+    out.ids.add(parsed.data.id);
+  };
+  // An excerpt is canonical content: its documents carry no timestamps, which the schemas ask for.
+  for (const stored of excerpt.specs) {
+    const doc = { createdAt: EXCERPT_EPOCH, updatedAt: EXCERPT_EPOCH, ...stored };
+    if ('vision' in doc && !('parentSystem' in doc)) {
+      const parsed = SystemSpecSchema.safeParse(doc);
+      if (parsed.success) out.system = parsed.data;
+    } else if ('parentSystem' in doc) take(out.subsystems, SubsystemSpecSchema.safeParse(doc));
+    else if ('componentType' in doc) take(out.components, ComponentSpecSchema.safeParse(doc));
+    else if ('component' in doc) take(out.interfaces, InterfaceSpecSchema.safeParse(doc));
+    else if ('contract' in doc) take(out.implementations, ImplementationSpecSchema.safeParse(doc));
+    else if ('kind' in doc) take(out.types, TypeSpecSchema.safeParse(doc));
+  }
+  return out;
+}
+
+/** Every key a part's own spec names in a binding position — what its references need judging against. */
+function namedKeys(specs: { subsystems: SubsystemSpec[]; components: ComponentSpec[]; interfaces: InterfaceSpec[]; implementations: ImplementationSpec[] }): Map<string, string> {
+  const named = new Map<string, string>();
+  const add = (key: string | undefined, by: string): void => { if (key && !key.includes('::') && !named.has(key)) named.set(key, by); };
+  for (const s of specs.subsystems) (s.trustedLinks ?? []).forEach((l) => add(l.subsystem, s.id));
+  for (const c of specs.components) {
+    add(c.subsystem, c.id);
+    c.dependsOn.forEach((d) => add(d, c.id));
+  }
+  for (const i of specs.interfaces) add(i.component, i.id);
+  for (const impl of specs.implementations) {
+    add(impl.contract, impl.id);
+    for (const m of impl.methods) for (const step of m.narrative) if (step.type === 'call') add(step.targetComponent, impl.id);
+  }
+  return named;
+}
+
+/**
+ * Steps 5-10 of validateProject (stage 8): a part opened alone. Its pinned
+ * parent — the lock's parent entry and the excerpt it names, read from the
+ * part's own files, never the parent's live tree — is what it is judged
+ * against, so the verdict is the same with or without the parent on disk.
+ * With an excerpt: the part's own specs are judged, the excerpt's join the
+ * rule context as read-only context (findings on them are the parent's), the
+ * governing configuration is the excerpt's, the rules flagged needsWholeTree
+ * are skipped and named, and a reference the excerpt does not carry is
+ * EXTERNAL_CHECK_UNAVAILABLE, never a pass. Without one: PART_UNPINNED, and
+ * nothing else is judged — a part's specs mean nothing without its parent.
+ */
+function judgePartAlone(config: ProjectConfig, scopeSubsystem: string | undefined): OwnersGateRun {
+  const root = getProjectRoot();
+  const parentId = config.partOf!.project;
+  // Step 5: the pinned parent, from the part's own files.
+  const pinned = pinnedParent();
+  // Steps 6 and 9-10: nothing to judge against.
+  if (!pinned?.excerpt) {
+    const why = pinned?.problem && !pinned.problem.startsWith('part of') ? ` (${pinned.problem})` : '';
+    return {
+      result: {
+        valid: true,
+        issues: [issue('warning', 'PART_UNPINNED', `Part of "${parentId}"; validate from the parent${why}. To judge it alone, run \`wairon externals pin\` here while the parent is on disk${config.partOf!.path ? ` (at ${config.partOf!.path})` : ''}.`)],
+      },
+      codeModel: buildCodeModel([], [], root, [], []),
+    };
+  }
+  // Step 7: the part's own specs judged, the excerpt's as read-only context.
+  const excerpt = pinned.excerpt;
+  const context = readExcerptSpecs(excerpt);
+  const own = {
+    subsystems: loadSubsystemSpecs(), components: loadComponentSpecs(), interfaces: loadInterfaceSpecs(),
+    implementations: loadImplementationSpecs(), types: loadTypeSpecs(),
+  };
+  const issues: ValidationIssue[] = [];
+  const rulesParsed = RulesConfigSchema.safeParse(excerpt.rules);
+  const rules = rulesParsed.success ? rulesParsed.data : undefined;
+  const projectType = excerpt.projectType ?? 'backend';
+  // Each pack at its pinned version and digest; one that cannot be loaded is unavailable, never judged by another.
+  const packs = excerpt.packs as (string | PackSelection)[];
+  const extensions = packs.length > 0
+    ? loadExtensionsFor(ProjectConfigSchema.parse({ name: '', createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString(), extensions: { packs, useGlobalPacks: false } }))
+    : loadExtensionsFor(ProjectConfigSchema.parse({ name: '', createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString() }));
+  for (const failure of [...extensions.selectionFailures.map((f) => f.message), ...extensions.errors]) {
+    issues.push(issue('warning', 'EXTERNAL_CHECK_UNAVAILABLE', `The parent "${parentId}" governs its parts with a pack this machine cannot load at its pinned version, so its rules were not run here: ${failure}`));
+  }
+  const ownIds = new Set([...own.subsystems, ...own.components, ...own.interfaces, ...own.implementations, ...own.types].map((s) => s.id));
+  const isOwn = (id: string): boolean => ownIds.has(id);
+  issues.push(...getLoaderIssues().filter((e) => !e.specId || isOwn(e.specId)));
+  // A reference into the parent the excerpt does not carry: unavailable, never a pass.
+  for (const [key, by] of namedKeys(own)) {
+    if (ownIds.has(key) || context.ids.has(key)) continue;
+    issues.push(issue('warning', 'EXTERNAL_CHECK_UNAVAILABLE', `"${by}" names "${key}", which neither this part nor its pinned excerpt of "${parentId}" holds — used since the pin: re-pin with \`wairon externals pin\` while the parent is on disk.`, by));
+  }
+  const all = {
+    subsystems: [...own.subsystems, ...context.subsystems], components: [...own.components, ...context.components],
+    interfaces: [...own.interfaces, ...context.interfaces], implementations: [...own.implementations, ...context.implementations],
+    types: [...own.types, ...context.types],
+  };
+  const system = context.system ?? SystemSpecSchema.parse({ createdAt: EXCERPT_EPOCH, updatedAt: EXCERPT_EPOCH, name: parentId, vision: `The part's parent, "${parentId}" (no L0 pinned).` });
+  const codeModel = buildCodeModel(own.implementations, own.types, root, [], []);
+  registerBuiltinRules();
+  registerPackRules(extensions.rules);
+  const sequence = ruleSequence();
+  const skipped = sequence.filter((r) => r.needsWholeTree);
+  const knownCodes = new Set([...knownIssueCodes().map((rc) => rc.code), ...extensions.assertions.map((a) => a.fullCode)]);
+  const ctx = buildRuleContext({
+    system, ...all, rules, projectType, scopeSubsystem, extensions,
+    variants: loadProjectVariants(),
+    exportTables: [],
+    projectFamily: projectFamily(),
+    exportUsages: [],
+    pinnedExternals: [],
+    packSelections: packs.filter((p): p is PackSelection => typeof p !== 'string'),
+    packRequirements: [],
+    surfaceSnapshots: [],
+    codeModel,
+    roundTripIssues: dryRunSerializeSpecs(isOwn),
+    knownIssueCodes: knownCodes,
+    carryableIssueCodes: new Set(knownIssueCodes().filter((rc) => rc.carryable).map((rc) => rc.code)),
+    issues,
+  });
+  for (const rule of sequence) if (!rule.needsWholeTree) rule.check(ctx);
+  // Findings on the excerpt's specs are the parent's to judge; an allow whose
+  // code only a skipped rule reports could not be matched here, so it is not stale.
+  const skippedCodes = skipped.flatMap((r) => r.codes.map((c) => c.code));
+  const staleOnlyBySkip = (i: ValidationIssue): boolean =>
+    i.code === 'UNUSED_LINT_ALLOW' && skippedCodes.some((code) => i.message.includes(`allows "${code}"`));
+  const kept = issues.filter((i) => (!i.specId || !context.ids.has(i.specId)) && !staleOnlyBySkip(i));
+  kept.push(issue('notice', 'PART_JUDGED_ALONE', `This part of "${parentId}" was judged alone against its pinned excerpt (${excerpt.digest}); `
+    + `${skipped.length > 0 ? `the whole-system rules ${skipped.map((r) => r.name).join(', ')} were skipped` : 'no rule was skipped'}. The full verdict is the parent's: validate from "${parentId}".`));
+  return { result: { valid: kept.every((i) => i.severity !== 'error'), issues: kept }, codeModel };
+}
+
 /**
  * The loaded spec objects that a human has approved and that have not moved
  * since — the set presented to the rules as `complete`.
@@ -696,7 +876,9 @@ function settledStatusBearing(loaded: {
 
   const root = getProjectRoot();
   const index = scanAllSpecs();
-  const rel = (abs: string): string => path.relative(root, abs).split(path.sep).join('/');
+  // A part's file is approved under `members/<alias>/…` (stage 8).
+  const parts = projectFamily().nodes.find((n) => n.namespace === '')?.parts ?? [];
+  const rel = (abs: string): string => approvalKeyIn(abs, root, parts);
 
   const out: { status?: 'draft' | 'design' | 'complete' }[] = [];
   const take = (
@@ -878,6 +1060,15 @@ function directMemberSubjects(): Record<string, string> {
     if (node.parent !== '' || node.mountAlias === undefined) continue;
     const record = approvalRecord(node.directory);
     subjects[node.mountAlias] = record ? `${record.stateId.algorithm}:${record.stateId.digest}` : NEVER_SUBJECT;
+  }
+  // Stage 8: each referenced project member (a `../` or git source), at the
+  // root the scan located — its sibling checkout or the fetch cache at its
+  // pinned commit. A hosted one is located by the hosting server alone, so it
+  // does not enter an identity that must read the same everywhere.
+  for (const external of family.nodes.find((n) => n.namespace === '')?.externals ?? []) {
+    if (external.role !== 'member' || external.sourceKind === 'hosted') continue;
+    const record = external.directory ? approvalRecord(external.directory) : null;
+    subjects[external.alias] = record ? `${record.stateId.algorithm}:${record.stateId.digest}` : NEVER_SUBJECT;
   }
   // A declared member with no project on disk carries no decision at all.
   for (const problem of family.problems) {

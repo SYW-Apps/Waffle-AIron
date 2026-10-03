@@ -97,8 +97,8 @@ describe('stage 5 — the lock record, format 2', () => {
     expect(record.children).toBeUndefined();
     const mid = readLockRecordAt(fam.mid)!;
     expect(record.members).toEqual({
-      mid: { project: 'mid', subject: `${mid.stateId.algorithm}:${mid.stateId.digest}`, state: 'approved' },
-      sib: { project: 'sib', state: 'never' },
+      mid: { as: 'project', project: 'mid', subject: `${mid.stateId.algorithm}:${mid.stateId.digest}`, state: 'approved' },
+      sib: { as: 'project', project: 'sib', state: 'never' },
     });
     // The code half is recorded beside the claim, with the analyzer that took it.
     expect(record.code).toBeDefined();
@@ -212,7 +212,7 @@ describe('property: require-refuses', () => {
   it('without the flag the lock proceeds and records each member\'s state', async () => {
     fam = buildApprovalFamily();
     const record = (await lockAt(fam.top))!;
-    expect(record.members).toEqual({ mid: { project: 'mid', state: 'never' }, sib: { project: 'sib', state: 'never' } });
+    expect(record.members).toEqual({ mid: { as: 'project', project: 'mid', state: 'never' }, sib: { as: 'project', project: 'sib', state: 'never' } });
     // …and the family run keeps them as warnings.
     bind(fam.top);
     const run = validateFamily({ family: true });

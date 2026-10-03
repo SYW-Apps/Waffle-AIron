@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ValidationResult } from '../core/validation.js';
+import type { MemberPin } from '../core/lockfile.js';
 
 /**
  * Who approved, and HOW that identity was established — because the two are
@@ -109,6 +110,36 @@ export interface ProjectApproval {
   upgraded?: boolean;
   /** How the parent's lock pinned it; absent on the root. */
   pinned?: PinState;
+  /** part | project (stage 8). A part's state is its declaring project's, and it has no subject of its own. */
+  as?: 'part' | 'project';
+  /** A part's content digest (ScannedPart.contentDigest), recorded by the lock as its MemberPin. */
+  contentDigest?: string;
+  /** The commit a part or a referenced project member was read at, when known — provenance the lock records. */
+  commit?: string;
+}
+
+/**
+ * member_pin as a lock records one direct member (stage 8): a PROJECT
+ * member's {as: project, project, subject, state, commit when known}, or a
+ * PART's {as: part, contentDigest, commit when known, state approved} — a part
+ * has no lock of its own, the parent's approval is its approval.
+ */
+export function memberPinOf(member: ProjectApproval): MemberPin {
+  if (member.as === 'part') {
+    return {
+      as: 'part',
+      ...(member.contentDigest !== undefined ? { contentDigest: member.contentDigest } : {}),
+      ...(member.commit !== undefined ? { commit: member.commit } : {}),
+      state: 'approved',
+    };
+  }
+  return {
+    as: 'project',
+    ...(member.projectId !== undefined ? { project: member.projectId } : {}),
+    ...(member.subject !== undefined ? { subject: member.subject } : {}),
+    state: member.state,
+    ...(member.commit !== undefined ? { commit: member.commit } : {}),
+  };
 }
 
 /**

@@ -45,4 +45,10 @@ export {
   rewriteReferences,
   externalizeSubsystem,
   internalizeMember,
+  // spec_maintenance_portal (stage 8): a member's declaration changed — the
+  // chaining migration's rewrite of a deprecated long-form `path`.
+  updateMember,
+  // spec_maintenance_portal (stage 8): a part made a project in place, and back.
+  promoteMember,
+  demoteMember,
 } from '../../core/index.js';

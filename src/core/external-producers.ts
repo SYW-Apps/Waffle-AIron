@@ -1,9 +1,11 @@
 import * as path from 'path';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import type { ExternalBinding, ProjectFamily, ProjectNode, ResolvedExternal } from '../models/index.js';
+import { declaredExternals, declaredMembers, type ExternalBinding, type ProjectConfig, type ProjectFamily, type ProjectNode, type ResolvedExternal } from '../models/index.js';
 // core_orchestrator.resolveChainingParent (the reach-gated detection) and the
-// spec repository's graph and export usage, all on the one core module.
-import { exportUsage, graph, resolveChainingParent } from './specs.js';
+// spec repository's graph, export usage and pinned usage, all on the one core module.
+import { exportUsage, graph, listProjectRoots, pinnedUsage, resolveChainingParent } from './specs.js';
+// git_source_adapter (stage 8): a git producer's ref resolved and its commit materialized in the fetch cache.
+import * as gitSource from './adapters/git-source.js';
 
 // ---------------------------------------------------------------------------
 // external_producers — the producers of the bound project's declared externals.
@@ -73,28 +75,113 @@ function consumerNode(family: ProjectFamily, bound: string): ProjectNode | undef
   return family.nodes.find((n) => dirKey(n.directory) === dirKey(bound));
 }
 
-/** iexternal_producers.resolveDeclared — every declared external of the bound project, bound to its producer. */
+/** Where a git producer lives, as the consumer declares it: its URL, the ref an external follows, its commit and its root inside the repository. */
+interface GitDeclaration {
+  url: string;
+  ref?: string;
+  commit?: string;
+  dir?: string;
+}
+
+/** A git producer's declaration in the consumer's configuration, as an external or as a referenced member. */
+function gitDeclarationOf(config: ProjectConfig | null, external: ResolvedExternal): GitDeclaration | null {
+  if (!config) return null;
+  if (external.role === 'member') {
+    const member = declaredMembers(config).find((m) => m.alias === external.alias);
+    return member?.source.git ? { url: member.source.git, commit: member.source.commit, ref: member.source.ref, dir: member.source.dir } : null;
+  }
+  const declared = declaredExternals(config).find((e) => e.alias === external.alias);
+  return declared?.sourceGit ? { url: declared.sourceGit, ref: declared.sourceRef, dir: declared.sourceDir } : null;
+}
+
+/**
+ * Steps 13-14: a git producer bound to the cache directory of one commit — an
+ * external's ref head resolved now (the live producer a status compares the
+ * pin against), a referenced member's declared commit (the family is made of
+ * the pinned revision). A remote that cannot be reached, or a commit that
+ * cannot be fetched, leaves the binding without a directory and with the
+ * problem: unavailable, never a pass.
+ */
+function resolveGit(external: ResolvedExternal, config: ProjectConfig | null): ResolvedExternal {
+  if (external.sourceKind !== 'git') return external;
+  const declared = gitDeclarationOf(config, external);
+  if (!declared) return { ...external, problem: 'git producer unavailable: its declaration names no repository' };
+  try {
+    // Step 13: an external follows its ref; a member keeps its declared commit.
+    const commit = external.role === 'member' && declared.commit ? declared.commit : gitSource.resolve(declared.url, declared.ref);
+    // Step 14: that commit materialized (served from the cache offline when it is there).
+    const directory = gitSource.fetch(declared.url, commit, declared.dir);
+    return { ...external, directory: path.resolve(directory), commit, problem: undefined };
+  } catch (e) {
+    const { directory: _gone, ...rest } = external;
+    return { ...rest, problem: `git producer unavailable: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
+/** The consumer's configuration, as the scan the graph came from read it. */
+function consumerConfig(bound: string): ProjectConfig | null {
+  return listProjectRoots().find((r) => dirKey(r.directory) === dirKey(bound))?.config ?? null;
+}
+
+/**
+ * iexternal_producers.resolveDeclared — every declared external of the bound
+ * project, and every referenced project member it declares (stage 8), bound to
+ * its producer, each with the project's usage of it by public name.
+ */
 export function resolveDeclared(): ExternalBinding[] {
   // Step 1: the consumer is the bound root.
   const bound = path.resolve(getProjectRoot());
+  // Steps 2-4: climb to the highest root in reach.
   const { top, whole } = climb(bound);
-  // Steps 5-12: read the graph at the highest root reached; the bound root's
+  // Steps 5-17: read the graph at the highest root reached; the bound root's
   // own graph when the consumer is not in it (a mount that could not load).
   const answer = (root: string): ExternalBinding[] | null => runWithProjectRoot(root, () => {
+    // Step 5.
     const family = graph();
+    // Step 6.
     const node = consumerNode(family, bound);
     if (!node) return null;
-    return node.externals.map((declared): ExternalBinding => {
-      // Step 10: a hosted producer through the record lookup.
-      const external = resolveHosted(declared);
-      return {
-        external,
-        ...(external.sourceKind === 'family' && external.producer !== undefined
-          ? { usage: exportUsage(node.namespace, external.producer) }
-          : {}),
-        reachable: whole,
-      };
-    });
+    const config = consumerConfig(bound);
+    // Step 7: each external, then each referenced project member.
+    return node.externals.map((declared) => bindProducer(node, declared, config, whole));
   });
+  // Steps 19-20: the caller's binding is restored; the bindings in declaration order.
   return answer(top) ?? answer(bound) ?? [];
+}
+
+/** Steps 8-18 for one producer: the usage, and — outside the family — where its live table is. */
+function bindProducer(node: ProjectNode, declared: ResolvedExternal, config: ProjectConfig | null, whole: boolean): ExternalBinding {
+  // Steps 8-10: a family producer, its usage mapped onto its live table.
+  if (declared.sourceKind === 'family' && declared.producer !== undefined) {
+    return { external: declared, usage: exportUsage(node.namespace, declared.producer), reachable: whole };
+  }
+  if (declared.sourceKind === 'unresolved') return { external: declared, reachable: whole };
+  // Step 11: any other producer, its usage counted by the public name it spells.
+  const usage = pinnedUsage(node.namespace, declared.alias);
+  // Steps 12-16: git through the fetch cache; hosted through the record lookup.
+  const external = declared.sourceKind === 'git' ? resolveGit(declared, config) : headAcross(node.directory, resolveHosted(declared));
+  // Step 18.
+  return { external, usage, reachable: whole };
+}
+
+/** A directory as git roots compare: resolved, and case-folded where the filesystem folds case. */
+const repoKey = (dir: string): string => (process.platform === 'win32' ? path.resolve(dir).toLowerCase() : path.resolve(dir));
+
+/**
+ * Step 17: a `../` sibling or path producer records the head of the work tree
+ * holding it only when that is another git repository than the consumer's —
+ * a same-repository producer records no commit (a monorepo re-pin never
+ * churns the lock) and runs no git process.
+ */
+function headAcross(consumerDir: string, external: ResolvedExternal): ResolvedExternal {
+  if (external.directory === undefined || external.sourceKind === 'git') return external;
+  const theirs = gitSource.repositoryRoot(external.directory);
+  const ours = gitSource.repositoryRoot(consumerDir);
+  if (theirs === null || (ours !== null && repoKey(ours) === repoKey(theirs))) {
+    const { commit: _same, ...rest } = external;
+    return rest;
+  }
+  if (external.commit !== undefined) return external;
+  const head = gitSource.head(external.directory);
+  return head ? { ...external, commit: head } : external;
 }

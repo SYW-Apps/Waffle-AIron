@@ -225,7 +225,7 @@ describe('a migration leaves a union type reference exactly as written', () => {
     // `billing::invoice`. A union is never equal to a bare id, so every union is
     // left exactly as written — INCLUDING the ones whose member is in the rename
     // map.
-    externalizeSubsystem('billing', 'sub/billing');
+    externalizeSubsystem('billing', 'sub/billing', 'project');
     invalidateSpecCache();
     setProjectRoot(root);
 
@@ -251,7 +251,7 @@ describe('a migration leaves a union type reference exactly as written', () => {
     const root = freshBilling();
     const before = everyTypeRef(root);
 
-    externalizeSubsystem('billing', 'sub/billing');
+    externalizeSubsystem('billing', 'sub/billing', 'project');
     invalidateSpecCache();
     setProjectRoot(root);
     internalizeMember('billing', { home: '' });

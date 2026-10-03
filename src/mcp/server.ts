@@ -591,6 +591,9 @@ const memberCreationOutput = {
     profile: z.string().optional(),
   })).describe('Requirements no installed version satisfies: nothing was written for them, and the next family run reports each as POLICY_NOT_ADOPTED.'),
   projectType: z.string().optional().describe("The profile written as the new member's projectType, when exactly one adopted requirement names one."),
+  as: z.string().describe('part | project: what was created (stage 8; a part by default).'),
+  storage: z.string().describe('contained | path | git: where its files live.'),
+  commit: z.string().optional().describe('git: the commit the member was pinned at.'),
   ...staleServerOutput,
 };
 
@@ -972,6 +975,8 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_move_member',
   'sdd_externalize_subsystem',
   'sdd_internalize_member',
+  'sdd_promote_member',
+  'sdd_demote_member',
   'sdd_attach_member',
   'sdd_detach_member',
   'sdd_adopt_member',
@@ -1571,26 +1576,27 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ alias: string; path: string; description?: string }>(server,
+  reg<{ alias: string; source: string; description?: string; as?: string }>(server,
     'sdd_add_member',
     {
-      description: "Create a member of the bound project: scaffold the member project at the path (its project.yaml declaring the alias as its project id, and its L0), each part only when absent, and declare it in the bound project's project.yaml `members` with the description. A newly created member configuration also selects the bound project's required packs (composition.requirePolicies), once, each pinned to the highest installed version its range admits; the answer states what was applied and which requirements nothing installed satisfies. Nothing is written into the bound project's spec tree: a member is reached only as `alias::name` through its own L0 exports. Idempotent — the same call again writes nothing; a different member under the alias is refused.",
+      description: "Create a member of the bound project at `source`, in the one members grammar: `services/scheduler` (contained), `../admin` (a sibling checkout), `git@host:acme/payments.git` (a git repository, pinned at its default branch head unless `#<commit>` is given). By default a PART (stage 8): a piece of this project stored in another folder or repository, whose subsystems are this project's own (local ids, the ordinary subsystem rules, this project's lock); it gets only a specs folder, plus a configuration naming this project when it is not contained. With `as: project` an independent PROJECT instead: its project content is created — a project.yaml declaring the alias as its id, its L0, and the bound project's required packs (composition.requirePolicies) once — and it is reached only as `alias::name` through its L0 exports. What a member is follows from that content. A git member is not scaffolded; the repository's content decides what it is. Boundaries are earned: create a part unless the piece needs its own team, release, approval or public surface; sdd_promote_member makes one later. Idempotent — the same call again writes nothing; a different member under the alias is refused.",
       inputSchema: {
-        alias: z.string().describe("The member's alias and new project id ([a-z0-9-_]+)"),
-        path: z.string().describe("The member's root, relative to the bound project"),
-        description: z.string().optional().describe('What the member is to this project; also the vision of a bootstrapped L0'),
+        alias: z.string().describe("The member's alias ([a-z0-9-_]+); a project's new id"),
+        source: z.string().describe('A contained path, a `../` sibling path, or a git URL (optionally `#<commit>`)'),
+        description: z.string().optional().describe('What the member is to this project; also the vision of a bootstrapped project L0'),
+        as: z.enum(['part', 'project']).optional().describe('project to create the project content; omitted creates a part'),
       },
       outputSchema: memberCreationOutput,
     },
-    ({ alias, path: memberPath, description }) => {
+    ({ alias, source, description, as }) => {
       try {
-        // mcp_orchestrator.addMember step 1: scaffold and declare via core;
-        // the answer states the packs the new member was given.
-        const creation = createMember(alias, memberPath, description);
-        return structured(
-          `Added member "${alias}" at ${memberPath} (declared in project.yaml \`members\`).${describeMemberPacks(creation)} Design it from its own root and export what others consume from its L0; reference it here as ${alias}::<name>.`,
-          creation,
-        );
+        // mcp_orchestrator.addMember step 1: create and declare via core;
+        // the answer states what was created and, for a project, its packs.
+        const creation = createMember(alias, source, description, as);
+        const next = creation.as === 'project'
+          ? `${describeMemberPacks(creation)} Design it from its own root and export what others consume from its L0; reference it here as ${alias}::<name>.`
+          : ` Its subsystems are this project's own: write them by their local ids. sdd_promote_member makes it a project when it needs its own team, release, approval or public surface.`;
+        return structured(`Added the ${creation.as} "${alias}" at ${source}${creation.commit ? ` (pinned at ${creation.commit})` : ''}, declared in project.yaml \`members\`.${next}`, creation);
       } catch (e) {
         return errText(String(e));
       }
@@ -1661,17 +1667,51 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   // it, so an agent cannot read it as success. None ever locks.
   const dryRunArg = z.boolean().optional().describe('Answer the plan and write nothing — run this first and show the plan');
 
-  reg<{ subsystem: string; path: string; dryRun?: boolean }>(server,
+  reg<{ subsystem: string; path: string; as?: string; dryRun?: boolean }>(server,
     'sdd_externalize_subsystem',
     {
-      description: "Turn an internal subsystem into a member project at the path, family-wide and all-or-nothing — the member provisioned, the subsystem's specs moved there and declared in `members`, sibling subsystems' references respelled `alias::name`, what crosses the new boundary exported and imported, the new member's external for this project pinned, and every other family project's references checked to still resolve. A reference that would need a component made public refuses the plan instead. Source code is not moved. dryRun answers the plan and writes nothing; run it first and show the plan. Never locks: the answer names the projects to re-lock.",
+      description: "Move an internal subsystem out to the path. By default (stage 8) into a PART — a storage move: the subsystem's specs move to that directory (a new part, or the existing part there), and nothing else changes: no reference, export, external or lock entry, the same verdict. With `as: project`, into a member PROJECT instead, family-wide and all-or-nothing — the move followed by a promote: what crosses the new boundary exported and imported, references respelled `alias::name`, the new member's external for this project pinned, and every other family project's references checked to still resolve (a reference that would need a component made public refuses the plan). Source code is not moved. dryRun answers the plan and writes nothing; run it first and show the plan. Never locks: the answer names the projects to re-lock.",
       inputSchema: {
-        subsystem: z.string().describe('The internal L1 subsystem id to externalize'),
-        path: z.string().describe("The new member's root, relative to the bound project"),
+        subsystem: z.string().describe('The subsystem to move out'),
+        path: z.string().describe("The part's root, relative to the bound project (a new directory, or an existing part's)"),
+        as: z.enum(['part', 'project']).optional().describe('part (default) or project'),
         dryRun: dryRunArg,
       },
     },
-    ({ subsystem, path: memberPath, dryRun }) => migrationTool({ verb: 'externalize', subsystem, path: memberPath }, dryRun),
+    ({ subsystem, path: memberPath, as, dryRun }) => migrationTool({ verb: 'externalize', subsystem, path: memberPath, ...(as !== undefined ? { as } : {}) }, dryRun),
+  );
+
+  reg<{ alias: string; id?: string; dryRun?: boolean }>(server,
+    'sdd_promote_member',
+    {
+      description: "Promote a part of the bound project to an independent project in place (stage 8) — its files stay where they are; it gets an id, an L0 exporting exactly what the rest of the project uses of it, its references across the new boundary respelled `alias::name`, the parent declared as its external, and pins on both sides. Refused (each reason listed) for a part fetched from git, a trusted link that would cross the new boundary, a used component its subsystem does not publish, or an id already taken. All-or-nothing; dryRun answers the plan and writes nothing — run it first and show the plan. Never locks: the answer names the project to re-lock and the new one to lock.",
+      inputSchema: {
+        alias: z.string().describe("The part's alias"),
+        id: z.string().optional().describe("The new project's id (default: the alias)"),
+        dryRun: dryRunArg,
+      },
+    },
+    ({ alias, id, dryRun }) => migrationTool({ verb: 'promote', alias, ...(id !== undefined ? { newId: id } : {}) }, dryRun),
+  );
+
+  reg<{ alias: string; destination?: { home?: string; packs?: string; exports?: string[] }; dryRun?: boolean }>(server,
+    'sdd_demote_member',
+    {
+      description: "Demote a project member of the bound project to a part in place (stage 8) — sdd_promote_member's inverse: its files stay where they are; its own metadata goes to the homes the destination names (as sdd_internalize_member sends it), its L0, lock and pins end, its references across the old boundary become local ids, and its configuration is reduced to naming its parent. Refused while another family project consumes it (a part has no exports — each consumer listed), for a member fetched from git, or for internalize's reasons. All-or-nothing; dryRun answers the plan and writes nothing — run it first and show the plan. Never locks.",
+      inputSchema: {
+        alias: z.string().describe("The project member's alias"),
+        destination: z.object({
+          home: z.string().optional().describe("The subsystem that receives the member's L0 vision"),
+          packs: z.enum(['adopt', 'drop']).optional().describe('adopt | drop: packs only the member selects'),
+          exports: z.array(z.string()).optional().describe('Public names of the member the bound project exports afterwards'),
+        }).optional().describe('Where its own metadata goes (its home subsystem, packs to adopt or drop)'),
+        dryRun: dryRunArg,
+      },
+    },
+    ({ alias, destination, dryRun }) => migrationTool({
+      verb: 'demote', alias,
+      destination: { home: destination?.home ?? '', ...(destination?.packs !== undefined ? { packs: destination.packs } : {}), ...(destination?.exports?.length ? { exports: destination.exports } : {}) },
+    }, dryRun),
   );
 
   reg<{ alias: string; into?: string; packs?: string; exports?: string[]; dryRun?: boolean }>(server,

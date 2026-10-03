@@ -65,18 +65,18 @@ function captureOutput(): () => string {
 const membersOf = (root: string): unknown => (readYamlFile(path.join(root, '.wai', 'project.yaml')) as { members?: unknown }).members;
 
 describe('wairon member add|move|internalize', () => {
-  it('member add scaffolds the member project and declares it in `members` — no L1 spec is written', async () => {
+  it('member add --project scaffolds the member project and declares it in `members` — no L1 spec is written', async () => {
     const root = parentProject();
     const output = captureOutput();
-    await runMemberAdd('billing', 'services/billing', { description: 'Invoices' });
+    await runMemberAdd('billing', 'services/billing', { description: 'Invoices', project: true });
 
-    expect(membersOf(root)).toEqual({ billing: { path: 'services/billing', description: 'Invoices' } });
+    expect(membersOf(root)).toEqual({ billing: { source: 'services/billing', description: 'Invoices' } });
     expect(fs.existsSync(path.join(root, 'services', 'billing', '.wai', 'project.yaml'))).toBe(true);
     expect((readYamlFile(path.join(root, 'services', 'billing', '.wai', 'project.yaml')) as { id?: string }).id).toBe('billing');
     invalidateSpecCache();
     expect(loadSubsystemSpec('billing')).toBeNull();
     expect(fs.existsSync(path.join(root, '.wai', 'specs', 'billing'))).toBe(false);
-    expect(output()).toContain('Added member "billing" → services/billing');
+    expect(output()).toContain('Added the project "billing" → services/billing');
   });
 
   it('member add again changes nothing; a different path under the alias is refused', async () => {
@@ -92,7 +92,7 @@ describe('wairon member add|move|internalize', () => {
   it('member add requires a path, and an initialized project', async () => {
     parentProject();
     captureOutput();
-    await expect(runMemberAdd('billing', '')).rejects.toThrow('a path is required: wairon member add <alias> <path>');
+    await expect(runMemberAdd('billing', '')).rejects.toThrow('a source is required: wairon member add <alias> <path | ../path | git-url[#commit]>');
     const bare = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-cli-bare-')));
     roots.push(bare);
     setProjectRoot(bare);
@@ -102,7 +102,7 @@ describe('wairon member add|move|internalize', () => {
   it('member move relocates a member, and moves a legacy L1 mount into `members` first', async () => {
     const root = parentProject();
     const output = captureOutput();
-    await runMemberAdd('billing', 'services/billing');
+    await runMemberAdd('billing', 'services/billing', { project: true });
     await runMemberMove('billing', 'modules/billing');
     expect(membersOf(root)).toEqual({ billing: 'modules/billing' });
     expect(fs.existsSync(path.join(root, 'modules', 'billing', '.wai', 'project.yaml'))).toBe(true);
@@ -116,7 +116,7 @@ describe('wairon member add|move|internalize', () => {
     fs.mkdirSync(path.join(root, 'services', 'claims', '.wai', 'specs'), { recursive: true });
     invalidateSpecCache();
     await runMemberMove('claims', 'modules/claims');
-    expect(membersOf(root)).toEqual({ billing: 'modules/billing', claims: { path: 'modules/claims', description: 'Claims' } });
+    expect(membersOf(root)).toEqual({ billing: 'modules/billing', claims: { source: 'modules/claims', description: 'Claims' } });
     expect(fs.existsSync(path.join(root, '.wai', 'specs', 'claims', '.index.yaml'))).toBe(false);
   });
 
@@ -126,7 +126,7 @@ describe('wairon member add|move|internalize', () => {
     await expect(runMemberMove('billing', '')).rejects.toThrow('a new path is required: wairon member move <alias> <path>');
   });
 
-  it('subsystem externalize --path turns a subsystem into a member, and member internalize takes it back — each a family migration, applied with --yes', async () => {
+  it('subsystem externalize --path moves a subsystem into a part (stage 8: a storage move), and member internalize takes it back — each a family migration, applied with --yes', async () => {
     const root = parentProject();
     const output = captureOutput();
     saveSpec('subsystem', {
@@ -159,7 +159,7 @@ describe('the retired subsystem commands (real CLI)', () => {
     expect(stdout).not.toMatch(/^\s+move\b/m);
     expect(stdout).not.toMatch(/^\s+internalize\b/m);
     const member = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'member', '--help'], { timeout: 180_000 });
-    expect(member.stdout).toMatch(/add \[options\] <alias> <path>/);
+    expect(member.stdout).toMatch(/add \[options\] <alias> <source>/);
     expect(member.stdout).toMatch(/move <alias> <path>/);
     expect(member.stdout).toMatch(/internalize \[options\] <alias>/);
     for (const verb of ['attach', 'detach', 'adopt', 'rename-alias']) expect(member.stdout).toContain(verb);

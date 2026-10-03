@@ -1,5 +1,6 @@
+import * as fs from 'fs';
 import * as path from 'path';
-import { getProjectRoot, getRequestParentReach, runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 // spec_validator: the owner's gate every selected project runs, and the gate
 // identity a member's lock is compared with.
 import {
@@ -26,7 +27,7 @@ import {
   loadTypeSpecs,
 } from './adapters/validator-core.js';
 import { getExternalsStatus } from './adapters/validator-surfaces.js';
-import { dependencyCycles, familyNode, type ExternalStatus, type ProjectFamily, type ProjectNode } from '../models/index.js';
+import { dependencyCycles, familyNode, keyIn, type ExternalStatus, type ProjectFamily, type ProjectNode } from '../models/index.js';
 import { admits, rangeProblem, requiredPolicies, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 import { packSettings, type PackSettings } from '../models/pack-impact.js';
 import type { LoadedExtensions } from './extensions.js';
@@ -172,6 +173,54 @@ function selectProjects(family: ProjectFamily, options: ValidationOptions): Sele
   return root ? [{ node: root, scope }] : [];
 }
 
+/**
+ * One referenced project member of a selected project (stage 8): a `../`, git
+ * or hosted source whose content is a project's, with the root it is opened at
+ * — its sibling checkout, the fetch cache at its pinned commit, or the root the
+ * hosting server's record lookup answers within reach — or why it cannot be.
+ */
+interface Referenced {
+  key: string;
+  alias: string;
+  parent: string;
+  directory?: string;
+  commit?: string;
+  problem?: string;
+}
+
+/** Each selected project's referenced project members, in declaration order, each located where it is stored. */
+function referencedOf(nodes: ProjectNode[]): Referenced[] {
+  const out: Referenced[] = [];
+  for (const node of nodes) {
+    for (const e of node.externals) {
+      if (e.role !== 'member') continue;
+      let directory = e.directory;
+      let problem = e.problem;
+      if (e.sourceKind === 'hosted') {
+        const lookup = getHostedLookup();
+        const root = lookup && e.hosted !== undefined ? lookup(e.hosted) : null;
+        if (root) directory = path.resolve(root);
+        else problem = lookup ? `the hosted member \`${e.hosted}\` is unknown or outside this request's reach` : `hosted-only member \`${e.hosted}\`: available only through the hosted server`;
+      }
+      if (directory !== undefined && !fs.existsSync(directory)) {
+        problem = `its root ${directory} does not exist`;
+        directory = undefined;
+      }
+      out.push({
+        key: keyIn(node.namespace, e.alias), alias: e.alias, parent: node.namespace,
+        ...(directory !== undefined ? { directory } : {}), ...(e.commit !== undefined ? { commit: e.commit } : {}),
+        ...(directory === undefined ? { problem: problem ?? 'its root could not be located' } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+/** A referenced member's root bound read-only, its own root its ceiling: nothing above it is read. */
+function atReferenced<T>(ref: Referenced, fn: () => T): T {
+  return runWithProjectBinding(ref.directory!, { topRoot: ref.directory!, parentReach: true, narrowed: true }, fn);
+}
+
 /** The graph narrowed to the selection: its nodes, the references between them, and their problems. */
 function narrowed(family: ProjectFamily, selected: Selected[]): ProjectFamily {
   const keys = new Set(['', ...selected.map((s) => s.node.namespace)]);
@@ -254,6 +303,13 @@ export function run(options: ValidationOptions): ValidationResult {
     issues.push(...judged.own.issues.map((i) => ({ ...i, project: node.namespace })), ...judged.composed.findings);
     projects.push(verdictOf(node, judged.own));
     left.push(...judged.composed.notSelected.map((alias) => ({ project: node.namespace, alias })));
+  }
+  // Step 3 (stage 8): then each referenced project member, opened where it is
+  // stored — one whose root cannot be opened is left out (checkMembers counts it).
+  for (const ref of referencedOf(selected.map((s) => s.node)).filter((r) => r.directory !== undefined)) {
+    const judged = atReferenced(ref, () => judgeProject(ref.key, undefined, options));
+    issues.push(...judged.own.issues.map((i) => ({ ...i, project: ref.key })), ...judged.composed.findings);
+    projects.push(verdictOf({ namespace: ref.key, directory: ref.directory! } as ProjectNode, judged.own));
   }
   // Step 9: the family checks over the root's graph, narrowed to the selection.
   issues.push(...within(root, ceiling, () => checkMembers(narrowed(family, selected))));
@@ -421,9 +477,20 @@ export function checkMembers(family: ProjectFamily): ValidationIssue[] {
   // Step 3: every member's approval state, each at its own root — the same
   // answer the lock records and status prints.
   const present = new Set(family.nodes.filter((n) => n.namespace !== '').map((n) => n.namespace));
-  // Step 4: each present member. The root's own lock is not a family finding.
+  // Stage 8: each referenced project member — present when its root opens; one
+  // that cannot be opened is unavailable once, never a pass.
+  for (const ref of referencedOf(family.nodes)) {
+    if (ref.directory !== undefined) {
+      present.add(ref.key);
+      continue;
+    }
+    out.push(finding(config, 'EXTERNAL_CHECK_UNAVAILABLE',
+      `The referenced member ${named(ref.key)} could not be opened: ${ref.problem}. Its own gate and its composition did not run — this is never a pass.`,
+      ref.parent));
+  }
+  // Step 4: each present project member. The root's own lock is not a family finding.
   for (const entry of projectApprovals()) {
-    if (present.has(entry.key)) out.push(approvalFinding(entry, config));
+    if (present.has(entry.key) && entry.as !== 'part') out.push(approvalFinding(entry, config));
   }
   // Step 8: resolved and returned.
   return out.filter((f): f is ValidationIssue => f !== null);
@@ -443,7 +510,12 @@ function subjectOf(record: LockRecord): string {
 
 /** Steps 4-7: one loaded project's own state, bound to its own root. */
 function ownApproval(node: ProjectNode, root: string): ProjectApproval {
-  return within(node.directory, { topRoot: root, narrowed: true }, () => {
+  return approvalAt(node, { topRoot: root, narrowed: true });
+}
+
+/** Steps 4-7 at one project root, bound within a ceiling. */
+function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent' | 'id' | 'directory'>, ceiling: Ceiling): ProjectApproval {
+  return within(node.directory, ceiling, () => {
     // Step 5: its own gate identity — its tree, its members' recorded subjects.
     const current = computeGateStateId();
     // Step 6: its own lock record.
@@ -519,6 +591,34 @@ export function projectApprovals(depth?: number): ProjectApproval[] {
       state: 'never',
       pinned: pinOf(parentRecord(parentKey), problem.id, undefined),
     });
+  }
+  // Stage 8: each referenced project member of a selected project, at the root
+  // it is opened at (its sibling checkout, or the fetch cache at its pinned
+  // commit), and how its declaring project's lock pinned it.
+  for (const ref of referencedOf(selected)) {
+    if (ref.directory === undefined) {
+      entries.push({ key: ref.key, alias: ref.alias, parent: ref.parent, as: 'project', state: 'never', pinned: pinOf(parentRecord(ref.parent), ref.alias, undefined) });
+      continue;
+    }
+    const own = approvalAt({ namespace: ref.key, mountAlias: ref.alias, parent: ref.parent, directory: ref.directory }, { topRoot: ref.directory, narrowed: true });
+    entries.push({ ...own, as: 'project', ...(ref.commit !== undefined ? { commit: ref.commit } : {}), pinned: pinOf(parentRecord(ref.parent), ref.alias, own.subject) });
+  }
+  // Stage 8: each part of a selected project, answered as a part — approved
+  // exactly when its declaring project is (its approval is that project's),
+  // with its content digest and the commit it was read at.
+  for (const node of selected) {
+    const declaring = entries.find((e) => e.key === node.namespace);
+    for (const part of node.parts) {
+      entries.push({
+        key: node.namespace === '' ? part.alias : `${node.namespace}::${part.alias}`,
+        alias: part.alias,
+        parent: node.namespace,
+        as: 'part',
+        state: declaring?.state ?? 'never',
+        ...(part.contentDigest !== undefined ? { contentDigest: part.contentDigest } : {}),
+        ...(part.commit !== undefined ? { commit: part.commit } : {}),
+      });
+    }
   }
   // Step 10: root first.
   return entries;

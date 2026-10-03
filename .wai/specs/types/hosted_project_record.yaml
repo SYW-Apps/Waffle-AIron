@@ -87,7 +87,14 @@ fields:
       declares it; present iff parentProjectId is. The member's alias is not stored: the parent's
       project.yaml owns it.
     optional: true
+  - name: disabledReason
+    type: string
+    description: >-
+      Why a disabled record is disabled, when something said so: "part of <parent>" for a member
+      record retired because its member is now a part of its parent (stage 8: demote). Cleared when
+      the record is active again. Shown by status and the project view.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-10-01T16:55:27.219Z'
+updatedAt: '2026-10-02T23:58:00.716Z'

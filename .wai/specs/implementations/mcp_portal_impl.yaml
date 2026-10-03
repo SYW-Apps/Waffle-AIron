@@ -281,6 +281,20 @@ methods:
         type: call
         targetComponent: mcp_migration_orchestrator
         targetMethod: run
+  - name: sdd_promote_member
+    narrative:
+      - stepNumber: 1
+        description: Build the promote request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+  - name: sdd_demote_member
+    narrative:
+      - stepNumber: 1
+        description: Build the demote request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:52:29.454Z'
+updatedAt: '2026-10-02T20:34:22.635Z'

@@ -296,6 +296,25 @@ methods:
         description: The external's alias
     guarantees:
       - idempotent
+  - name: updateMember
+    description: 'Forward 1:1 to the registry: change an existing member''s `as`, source or description.'
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: changes
+        type: MemberDeclaration
+        description: The fields to set
+  - name: setPartOf
+    description: 'Forward 1:1 to the registry: write or remove the bound configuration''s partOf.'
+    signature: 'setPartOf(partOf: PartOf | null): boolean'
+    returns: boolean
+    params:
+      - name: partOf
+        type: PartOf | null
+        description: The parent, or null
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-09-30T20:20:35.312Z'
+updatedAt: '2026-10-02T20:28:13.958Z'

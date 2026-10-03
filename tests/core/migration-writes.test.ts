@@ -96,12 +96,13 @@ describe('stage 6 — the verbs\' writes, one at a time', () => {
     const f = family();
     const before = dirHash(f.top);
     runWithProjectRoot(f.top, () => {
-      expect(() => declareMember('away', { path: '../elsewhere' })).toThrow(/must resolve within the project root/);
+      // Stage 8: leaving the root is only ever a leading `../` (a sibling); an inner `..` that escapes is refused.
+      expect(() => declareMember('away', { path: 'tools/../../elsewhere' })).toThrow(/must resolve within the project root/);
       expect(() => declareMember('self', { path: '.' })).toThrow(/the project root itself/);
     });
     expect(dirHash(f.top)).toEqual(before);
     runWithProjectRoot(f.top, () => expect(declareMember('tools', { path: 'tools', description: 'Tools' })).toBe(true));
-    expect(projectConfigRepositoryAt(f.top).load()?.members?.tools).toEqual({ path: 'tools', description: 'Tools' });
+    expect(projectConfigRepositoryAt(f.top).load()?.members?.tools).toEqual({ source: 'tools', description: 'Tools' });
   });
 
   it('rewriteReferences replaces exactly the text at its parsed position — a narrative target, a dependsOn entry, an L0 `from` — and refuses the whole spec when one text is not there', () => {

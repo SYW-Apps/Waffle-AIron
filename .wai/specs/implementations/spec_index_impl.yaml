@@ -249,7 +249,9 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          Read the root's member declarations: project_config.declaredMembers(), and, for one
+          Read the root's member declarations: project_config.declaredMembers() — each with its one
+          source parsed (contained path, `../` sibling path, git at a commit, hosted record), the
+          `as` it asserts if any, and whether it used the deprecated long-form `path` — and, for one
           release, every top-level L1 subsystem of the root carrying projectPath — a legacy mount,
           recorded with every field as written on the member it declares and never loaded as a
           subsystem, since a mount carries no content. A `members` entry and a legacy mount under
@@ -276,6 +278,75 @@ methods:
           in one root is a duplicate-spec problem naming both files; the first stays in the index
         type: local
       - stepNumber: 6
+        label: kinds
+        description: >-
+          Decide what each followable member is FROM ITS CONTENT (stage 8): its root — the contained
+          or sibling directory, or a git member's fetched commit below — declaring an id, holding an
+          L0 or carrying a lock (.wai/lock.json) makes it a project; anything else is a part. A
+          hosted source is a project. An asserted `as` the content contradicts is a kind-mismatch
+          problem, and the content still decides. Nothing is inferred and nothing needs writing: an
+          existing member is project-shaped, so it reads as the project it always was. A referenced
+          PROJECT member (a `../` or git source) is recorded with the root it was located at and its
+          commit (ScannedProjectRoot.referenced) and nothing of it is read into this root. On a
+          hosted instance (a request bound with a hosted record lookup) a `../` or git source is
+          never read: it is unavailable, since a hosted project reaches another root only by a
+          `hosted:` source
+        type: local
+      - stepNumber: 7
+        label: parts
+        description: >-
+          Read each part the root declares into the root itself, before its local references are
+          bound: a part is a piece of this project stored elsewhere, not a project
+        type: loop
+        loopKind: forEach
+        over: the root's parts without a problem, in declaration order
+        endStep: 11
+      - stepNumber: 8
+        description: Is the part fetched from git?
+        type: branch
+        condition: the part's source is git
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Materialize the part's pinned commit (its declaration's source.commit) in the fetch cache
+          and take the answered directory — a cached commit needs no network, so an offline run
+          reads it exactly as an online one. No pinned commit, or a commit that cannot be fetched
+          (offline, refused, unknown), is a part-unavailable problem naming why, and the part is
+          skipped: never a ref resolved here, never a pass
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 10
+        label: read-part
+        description: >-
+          Walk the part's specs folder: a contained part's path resolved under the containment guard
+          against this root; a `../` sibling path resolved against this root (the explicit `..` is
+          the one way out of the root), or the fetched cache directory. A directory that is absent
+          is a part-unavailable problem and the part is skipped. A contained part has no
+          configuration and needs none — one declaring PartOf is kind-mismatch. A non-contained
+          part's configuration must hold its PartOf naming this root's id: none, or another id, is
+          kind-mismatch. A part's configuration declaring project fields (members, externals, rules,
+          extensions, composition, targets) without the id that would make it a project is
+          kind-mismatch, and those fields are never loaded — a part is governed by this root's
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: listTree
+      - stepNumber: 11
+        label: fold
+        description: >-
+          Read every spec document of the part through the file store and key each declaration under
+          THIS root's key, exactly as the root's own files are keyed, adding them to the index: the
+          part's subsystems are this project's subsystems, so the next step binds their local
+          references as the root's own and the ordinary subsystem rules judge them
+          (part-is-the-parents-subsystem). A key the root or another part already declares is
+          duplicate-spec naming both files. Record the ScannedPart: alias, storage, the directory
+          read, the commit (the pinned one for git; for a `../` sibling only when it is stored in
+          another git repository than this root — git_source_adapter.repositoryRoot compared, then
+          git_source_adapter.head; a contained or same-repository part records none and runs no git
+          process), its PartOf (null for a contained part), its subsystem keys and spec keys, and
+          the content digest over its documents keyed by their path inside the part
+        type: local
+      - stepNumber: 12
         description: >-
           Bind every local reference of the root — an id without `::` that names a spec of the root,
           compared by reference_resolution.nameKey as local resolution always has — inside it
@@ -286,14 +357,19 @@ methods:
           with `::` exactly as written, with its spec and position, before binding erases the form.
           Type expressions are read per identifier, builtins and generic parameters excepted
         type: local
-      - stepNumber: 7
+      - stepNumber: 13
         label: members
-        description: Follow each followable member the root declares
+        description: >-
+          Follow each followable CONTAINED PROJECT member the root declares (a referenced project
+          member — a `../`, git or hosted source — is not followed: its alias stays in the root's
+          alias table bound to nothing the scan read, so its references bind as outside and the
+          declaring project's own gate judges them against its pin, as an external's; the family run
+          opens its root explicitly, at the root step 6 recorded)
         type: loop
         loopKind: forEach
-        over: the root's member declarations without a problem, in declaration order
-        endStep: 8
-      - stepNumber: 8
+        over: the root's contained project members without a problem, in declaration order
+        endStep: 14
+      - stepNumber: 14
         label: follow
         description: >-
           Resolve the member's path against THIS root and under the containment guard against this
@@ -303,10 +379,11 @@ methods:
           a loader issue carrying the member's key; a missing one records a member-absent problem in
           the graph and no loader issue — the family run reports it as MEMBER_NOT_FOUND (stage 4
           retires SUBPROJECT_NOT_FOUND), and the declaring project's own gate reports its references
-          into the member as unavailable. Each is skipped. Otherwise, below the depth bound, walk
-          the member the same way from step 2, as a member of this root declared under its alias
+          into the member as unavailable. A project member whose configuration declares PartOf is a
+          kind-mismatch problem. Each is skipped. Otherwise, below the depth bound, walk the member
+          the same way from step 2, as a member of this root declared under its alias
         type: local
-      - stepNumber: 9
+      - stepNumber: 15
         label: tables
         description: >-
           Phase two: resolve every root's export tables, in dependency order — each after the
@@ -315,48 +392,51 @@ methods:
         type: loop
         loopKind: forEach
         over: the roots read, producers before their consumers
-        endStep: 11
-      - stepNumber: 10
+        endStep: 17
+      - stepNumber: 16
         description: Resolve the root's L1 subsystem tables from its own specs
         type: call
         targetComponent: export_resolver
         targetMethod: subsystemTables
-      - stepNumber: 11
+      - stepNumber: 17
         description: >-
           Resolve the root's L0 table, handing it the root's key, its alias table and the tables
           already resolved for the producers its aliases name
         type: call
         targetComponent: export_resolver
         targetMethod: projectTable
-      - stepNumber: 12
+      - stepNumber: 18
         label: bind
         description: Bind every recorded reference with `::`
         type: loop
         loopKind: forEach
         over: the references with `::` every root's files wrote
-        endStep: 13
-      - stepNumber: 13
+        endStep: 19
+      - stepNumber: 19
         label: bound
         description: >-
-          Local first; then by form. alias — the first segment is an alias of the referring root:
-          the name is looked up among the public names of the named producer's resolved L0 table:
-          found, it binds to that entry's canonical target (exported); not found, to the producer's
-          spec of that local id (unexported, lenient until stage 4); an alias whose producer the
-          scan did not read keeps the text as written (outside). leading `::a::rest` and path
-          `a::rest` (a first segment the root does not declare) are read the stage-2 way, as a
-          member path from the bound root, one alias per segment, the last segment a local id; a
-          path whose first segment walks no member path from the bound root but names exactly one
-          project of the family by its id — the bound root included, as a path written from a root
-          above it reads — walks on from that project, one alias per segment, at any depth, so a
-          deprecated form lands on the same target whichever root the family is loaded from, for its
-          one-release grace; `super::x` climbs one containing project per hop and reads the rest
-          there, local first. A deprecated form landing in the referring root is local; landing in
-          another project it binds like the alias form when the referrer declares that producer,
-          else leniently (undeclared). A first segment that names no alias, no member path and no
-          family project id stays as written (unresolved). Record the form, the binding, the
-          producer, the public name and the rewrite the writer would emit (AuthoredReference)
+          Local first; then by form. alias — the first segment is an alias of the referring root: a
+          PART's alias names no namespace (its specs are the root's own), so `part::x` binds nothing
+          and is unresolved with the hint to write the local id; otherwise the name is looked up
+          among the public names of the named producer's resolved L0 table: found, it binds to that
+          entry's canonical target (exported); not found, to the producer's spec of that local id
+          (unexported, lenient until stage 4); an alias whose producer the scan did not read — an
+          external outside the family, or a referenced project member — keeps the text as written
+          (outside). leading `::a::rest` and path `a::rest` (a first segment the root does not
+          declare) are read the stage-2 way, as a member path from the bound root, one alias per
+          segment, the last segment a local id; a path whose first segment walks no member path from
+          the bound root but names exactly one project of the family by its id — the bound root
+          included, as a path written from a root above it reads — walks on from that project, one
+          alias per segment, at any depth, so a deprecated form lands on the same target whichever
+          root the family is loaded from, for its one-release grace; `super::x` climbs one
+          containing project per hop and reads the rest there, local first. A deprecated form
+          landing in the referring root is local; landing in another project it binds like the alias
+          form when the referrer declares that producer, else leniently (undeclared). A first
+          segment that names no alias, no member path and no family project id stays as written
+          (unresolved). Record the form, the binding, the producer, the public name and the rewrite
+          the writer would emit (AuthoredReference)
         type: local
-      - stepNumber: 14
+      - stepNumber: 20
         label: imports
         description: >-
           Bind every bare name set aside, per root, through the root's imports — local first always
@@ -374,17 +454,18 @@ methods:
           importing it and the `use` line that would. Nothing outside the root's own alias table is
           ever consulted: no family-wide lookup. Record each as an AuthoredReference of form import
         type: local
-      - stepNumber: 15
+      - stepNumber: 21
         description: >-
           Record per root its key, parent, alias and form, the description its parent's declaration
-          gives it, legacy mount, L0, configuration, alias table, tables, spec keys and authored
-          references, and the family problems met
+          gives it, legacy mount, L0, configuration, alias table, tables, spec keys, its parts, and
+          authored references, and the family problems met (its members' part-unavailable and
+          kind-mismatch problems included)
         type: local
-      - stepNumber: 16
+      - stepNumber: 22
         description: Answer the recorded roots, bound root first
         type: return
         outcome: ScannedProjectRoot[]
     detail: full
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-09-30T05:57:03.206Z'
+updatedAt: '2026-10-02T23:58:57.405Z'

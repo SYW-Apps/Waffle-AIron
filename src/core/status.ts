@@ -18,6 +18,7 @@
 import * as path from 'path';
 import {
   graph,
+  listProjectRoots,
   loadSystemSpec,
   loadSubsystemSpecs,
   loadComponentSpecs,
@@ -28,6 +29,7 @@ import {
 } from './specs.js';
 import { implementationSourceFiles, type SubsystemSpec } from '../models/specs.js';
 import { pathExists, fromProjectRoot } from '../utils/fs.js';
+import { readYamlFile } from '../utils/yaml.js';
 import type { ProjectApproval } from '../models/lock.js';
 
 /**
@@ -149,6 +151,24 @@ function fillDecor(decor?: StatusDecor): FilledDecor {
   };
 }
 
+/** How a member's storage reads in the report: contained, its sibling folder, git and its short commit, or hosted. */
+function storageOf(storage: string, directory: string | undefined, commit: string | undefined): string {
+  if (storage === 'git') return `git ${commit ? commit.slice(0, 7) : ''}`.trim();
+  if (storage === 'path') return directory ? `../${path.basename(directory)}` : 'sibling';
+  if (storage === 'hosted') return 'hosted';
+  return 'contained';
+}
+
+/** A part's pin of its parent, as its own lock records it: the excerpt's short digest, or never pinned. */
+function parentPinState(parent: string): string {
+  try {
+    const lock = readYamlFile(fromProjectRoot('.wai', 'externals.lock.yaml')) as { parent?: { project?: string; digest?: string } } | null;
+    const entry = lock?.parent;
+    if (entry?.project === parent && entry.digest) return `(pinned ${entry.digest.replace(/^sha256:/, '').slice(0, 12)}; \`wairon validate\` here judges this part against the pin)`;
+  } catch { /* an unreadable lock reads as never pinned */ }
+  return `(never pinned — validate from the parent, or pin it here with \`wairon externals pin\`)`;
+}
+
 export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor): StatusReport {
   const mark = fillDecor(decor);
 
@@ -171,11 +191,16 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     return { text: errText, failed: true };
   }
 
+  // Stage 8: at a part's root, one line — what it is a part of, and its pin —
+  // above its own subsystems; a part has no L0 of its own.
+  const partOf = listProjectRoots()[0]?.config?.partOf;
+  const partLine = partOf ? `${mark.layer('system', '● Part of:')} ${mark.emphasis(partOf.project)} ${parentPinState(partOf.project)}\n` : '';
+
   // Step 4/5: a missing L0 is a different state from a tree that failed to
   // parse, and reads differently to whoever is looking. The sentence stops
   // here: `wairon init` is advice only a terminal can give, and the MCP client
   // reading the same report cannot run it.
-  if (!system) {
+  if (!system && !partOf) {
     return { text: 'L0 System specification (system.yaml) is missing.', failed: true };
   }
 
@@ -253,7 +278,9 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   const totalSubsystemsScore = subsystems.reduce((acc, s) => acc + getSubsystemScore(s.id), 0);
   const systemScore = subsystems.length > 0 ? Math.round(totalSubsystemsScore / subsystems.length) : 0;
 
-  output += `${mark.layer('system', '● System:')} ${mark.emphasis(system.name)} ${mark.score(systemScore, `(${systemScore}% Complete)`)}\n`;
+  output += system
+    ? `${mark.layer('system', '● System:')} ${mark.emphasis(system.name)} ${mark.score(systemScore, `(${systemScore}% Complete)`)}\n`
+    : partLine;
 
   // Step 7: the project graph — each member the tree reaches prints as a
   // project holding its own subsystems, never as a subsystem of its parent.
@@ -269,6 +296,14 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   const holdsShown = (ns: string): boolean =>
     subsystems.some((s) => ownerOf(s.id) === ns)
     || family.nodes.some((n) => n.parent === ns && n.namespace !== ns && holdsShown(n.namespace));
+  // Stage 8: each part's subsystems print among their project's own, marked
+  // with the part's alias and storage (a git part's short commit).
+  const partMark = new Map<string, string>();
+  for (const node of family.nodes) {
+    for (const part of node.parts) {
+      for (const sub of part.subsystems) partMark.set(sub, ` [part ${part.alias} · ${storageOf(part.storage, part.directory, part.commit)}]`);
+    }
+  }
 
   // Step 8: each component's progress through the layers, per project.
   const renderSubsystem = (sub: SubsystemSpec, label: string, indent: string, isLastSub: boolean): void => {
@@ -278,7 +313,7 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     const subScore = getSubsystemScore(sub.id);
     const subStatusStr = sub.status !== 'complete' ? mark.draft(` [${sub.status}]`) : '';
 
-    output += `${mark.structure(indent + subPrefix)}${mark.layer('subsystem', `[Subsystem] ${label}`)}${subStatusStr} ${mark.score(subScore, `(${subScore}%)`)}\n`;
+    output += `${mark.structure(indent + subPrefix)}${mark.layer('subsystem', `[Subsystem] ${label}`)}${partMark.has(sub.id) ? mark.structure(partMark.get(sub.id)!) : ''}${subStatusStr} ${mark.score(subScore, `(${subScore}%)`)}\n`;
 
     const subComps = components.filter(c => c.subsystem === sub.id);
     for (let j = 0; j < subComps.length; j++) {
@@ -340,7 +375,12 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     const ownSubs = subsystems.filter((s) => ownerOf(s.id) === ns);
     // Every member prints; narrowed to one subsystem, only the members leading to it.
     const members = family.nodes.filter((n) => n.parent === ns && n.namespace !== ns && (!options.subsystem || holdsShown(n.namespace)));
-    const total = ownSubs.length + members.length;
+    // Stage 8: a part that could not be read, and each referenced project member, print too.
+    const node = family.nodes.find((n) => n.namespace === ns);
+    const unread = options.subsystem ? [] : (node?.parts ?? []).filter((p) => p.availability === 'unavailable');
+    const referenced = options.subsystem ? [] : (node?.externals ?? []).filter((e) => e.role === 'member');
+    const extra = unread.length + referenced.length;
+    const total = ownSubs.length + members.length + extra;
     ownSubs.forEach((sub, i) => {
       // Under a member a subsystem is labelled by its local name: its key
       // stays honest (`billing::billing`), the display does not repeat it.
@@ -356,17 +396,28 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
       output += `${mark.structure(indent + (isLast ? '└── ' : '├── '))}${mark.layer('project', label)}${form}${approval}\n`;
       renderProject(member.namespace, indent + (isLast ? '    ' : '│   '));
     });
+    const prefix = (k: number): string => mark.structure(indent + (ownSubs.length + members.length + k === total - 1 ? '└── ' : '├── '));
+    unread.forEach((part, k) => {
+      output += `${prefix(k)}${mark.missing(`[Part] ${part.alias} (unavailable: ${part.reason ?? 'it cannot be read'})`)}\n`;
+    });
+    referenced.forEach((e, k) => {
+      const key = ns === '' ? e.alias : `${ns}::${e.alias}`;
+      const approval = approvalTag(options.approvals?.find((a) => a.key === key));
+      output += `${prefix(unread.length + k)}${mark.layer('project', `[Project] ${e.alias} · ${storageOf(e.sourceKind, e.directory, e.commit)}`)}${e.problem ? mark.missing(` (unavailable: ${e.problem})`) : ''}${approval}\n`;
+    });
   };
   renderProject('', '');
   // Step 9: members the graph declares but no project stands behind, and the
   // root's own state to close the report.
-  for (const absent of (options.approvals ?? []).filter((a) => a.key !== '' && !family.nodes.some((n) => n.namespace === a.key))) {
+  // A part is no project of its own (stage 8): its state is this project's.
+  const referencedKeys = new Set(family.nodes.flatMap((n) => n.externals.filter((e) => e.role === 'member').map((e) => (n.namespace === '' ? e.alias : `${n.namespace}::${e.alias}`))));
+  for (const absent of (options.approvals ?? []).filter((a) => a.key !== '' && a.as !== 'part' && !referencedKeys.has(a.key) && !family.nodes.some((n) => n.namespace === a.key))) {
     output += `${mark.structure('    ')}${mark.missing(`[Project] ${absent.alias ?? absent.key} (no project on disk)`)}${approvalTag(absent)}\n`;
   }
   // Silent for a lone project never approved: absence of an approval is the
   // normal state of a tree still being designed, not news (the verdict agrees).
   const own = options.approvals?.find((a) => a.key === '');
-  const hasMembers = (options.approvals ?? []).some((a) => a.key !== '');
+  const hasMembers = (options.approvals ?? []).some((a) => a.key !== '' && a.as !== 'part');
   if (own && (own.state !== 'never' || hasMembers)) output += `${mark.layer('system', 'Approval:')} this project is ${own.state}${own.upgraded ? ' (locked under the pre-stage-5 gate identity — re-lock once)' : ''}\n`;
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP

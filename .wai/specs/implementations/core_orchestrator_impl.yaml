@@ -131,7 +131,9 @@ methods:
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Guard the alias and the path
+        description: >-
+          Guard the alias and the source: an alias of [a-z0-9-_]+, and a source string one of the
+          grammar's forms parses (a hosted source refused — hosted project creation makes records)
         type: branch
         condition: the alias is outside [a-z0-9-_]+ or the path is empty
         onFalseStep: 3
@@ -140,12 +142,15 @@ methods:
         type: throw
         error: an alias and a path are required to create a member
       - stepNumber: 3
-        description: Resolve the member directory by joining the bound project root with the path
+        description: >-
+          Resolve the member directory: the bound project root joined with a contained or `../`
+          sibling path
         type: local
       - stepNumber: 4
         description: >-
-          Containment guard: reject a path that escapes the declaring project. The member directory
-          must resolve strictly within the bound project root, lexically and through links
+          Containment guard, for a contained path: reject one that escapes the declaring project —
+          absolute, with an inner `..`, or through a link. Leaving the root is only ever a leading
+          `../`, which is not guarded
         type: branch
         condition: >-
           the resolved child project directory is not contained within the bound project root (an
@@ -156,6 +161,37 @@ methods:
         type: throw
         error: a member path must resolve within the project root
       - stepNumber: 6
+        description: Is the member in a git repository?
+        type: branch
+        condition: the member is declared by a git source
+        onFalseStep: 10
+      - stepNumber: 7
+        description: >-
+          Resolve the commit: the source's `#<commit>` when given, else the remote's default branch
+          head now; unreachable refuses, writing nothing
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: resolve
+      - stepNumber: 8
+        description: >-
+          Fetch that commit and check the repository already holds the member at `dir`; nothing is
+          scaffolded in a repository wairon does not own — its content decides what the member is (a
+          part there must carry its PartOf naming the bound project, else MEMBER_KIND_MISMATCH) —
+          and the commit goes into the declaration as `#<commit>`
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 9
+        description: A git member is only declared
+        type: jump
+        toStep: 23
+      - stepNumber: 10
+        label: kind
+        description: A part (the default) or a project? A project is created by creating its content
+        type: branch
+        condition: 'a project is asked for (as: project)'
+        onFalseStep: 22
+      - stepNumber: 11
         description: >-
           Read the declaring project's configuration through the project config Repository, for the
           packs it requires of its members (project_config.requiredPolicies) — the bound project's
@@ -163,29 +199,29 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: load
-      - stepNumber: 7
+      - stepNumber: 12
         description: >-
           Scope the project root to the member directory, so the next reads and writes address the
           member project
         type: local
-      - stepNumber: 8
+      - stepNumber: 13
         description: Check whether the member already has a configuration
         type: call
         targetComponent: project_config_repository
         targetMethod: exists
-      - stepNumber: 9
+      - stepNumber: 14
         description: 'Complete only what is missing: an existing configuration is never overwritten'
         type: branch
         condition: the member has no configuration
-        onFalseStep: 13
-      - stepNumber: 10
+        onFalseStep: 18
+      - stepNumber: 15
         description: >-
           List the packs installed in this wairon install's store, every version with its digest and
           recorded origin
         type: call
         targetComponent: extension_orchestrator
         targetMethod: listInstalledPacks
-      - stepNumber: 11
+      - stepNumber: 16
         description: >-
           Scaffold the requirements, once: for each required pack pick the highest installed version
           its range admits (pack_requirement.admits) and build the selection `pack use --pin`
@@ -193,7 +229,7 @@ methods:
           installed version satisfies is collected as unadopted and nothing is written for it. When
           exactly one adopted requirement names a profile, it becomes the member's projectType
         type: local
-      - stepNumber: 12
+      - stepNumber: 17
         description: >-
           Write the member's default configuration, named after the alias (or the display name
           given), declaring the alias as its project id, and carrying the scaffolded selections in
@@ -204,13 +240,13 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: create
-      - stepNumber: 13
+      - stepNumber: 18
         label: bootstrap_l0
         description: 'Keep an existing spec tree intact: bootstrap an L0 only for a member that has none'
         type: branch
         condition: the member has no L0 system spec
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 20
+      - stepNumber: 19
         description: >-
           Persist the member's bootstrap L0 system spec, creating its specs directory — its vision
           is the description given, else one line naming it a member of this project — so a fresh
@@ -218,21 +254,38 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 15
+      - stepNumber: 20
         description: Restore the declaring project's scope
         type: local
-      - stepNumber: 16
+      - stepNumber: 21
+        description: The project is scaffolded
+        type: jump
+        toStep: 23
+      - stepNumber: 22
+        label: part
+        description: >-
+          Scaffold a part: its specs directory and, when it is NOT contained, with the project root
+          scoped to it, a configuration holding only its PartOf (the bound project's id, the bound
+          root relative to it) — a contained part needs no configuration, its parent finds it; a
+          directory that already holds a project refuses (adopting an existing project is `member
+          attach`); then restore the declaring project's scope
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setPartOf
+      - stepNumber: 23
         label: declare
         description: >-
-          Declare the member in the declaring project's `members` — the path as given, the
-          description when one is given — through the project config Repository; an equal
-          declaration writes nothing and a different one under the alias is refused. No L1 spec is
-          written: a member carries no content in its parent
+          Declare the member in the declaring project's `members` — the shorthand `alias: <source>`
+          (a git source with its `#<commit>`), the long form only to carry a description — through
+          the project config Repository; an equal declaration writes nothing and a different one
+          under the alias is refused
         type: call
         targetComponent: project_config_repository
         targetMethod: declareMember
-      - stepNumber: 17
-        description: Member declared and its project ensured; answer what was scaffolded
+      - stepNumber: 24
+        description: >-
+          Member declared and ensured; answer what was created (part or project, its storage and
+          commit) and, for a project, the packs scaffolded
         type: return
         outcome: >-
           member created: the MemberCreation (whether the configuration was created, the adopted
@@ -244,7 +297,8 @@ methods:
       - stepNumber: 1
         description: >-
           Read the project graph of the bound root: the member the alias declares, with its
-          declaration form and path
+          declaration form and path — a contained or `../` sibling project member, or (stage 8) a
+          part; one fetched from git or a hosted record is refused
         type: call
         targetComponent: spec_loader
         targetMethod: graph
@@ -295,8 +349,10 @@ methods:
       - stepNumber: 9
         label: relocate
         description: >-
-          Resolve the old and new member directories from the bound project root under the
-          containment guard; reject a target that already exists; relocate the directory on disk
+          Resolve the old and new member directories from the bound project root — a contained one
+          under the containment guard, a sibling's by its leading `../`; reject a move that changes
+          the storage, a target on another volume, and one that already exists; relocate the
+          directory on disk; a sibling part's PartOf path is re-expressed from its new place
         type: local
       - stepNumber: 10
         description: Point the `members` entry at the new path
@@ -313,98 +369,56 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadSubsystemSpec
       - stepNumber: 2
-        description: Guard the subsystem exists and is a subsystem
+        description: >-
+          Guard the subsystem exists, is a subsystem, and lives in the bound project's own specs
+          folder (not already in a part or a member)
         type: branch
-        condition: the subsystem is missing, or is a legacy mount (a member declaration, not a subsystem)
+        condition: >-
+          the subsystem is missing, is a legacy mount (a member declaration, not a subsystem), or is
+          read from a part
         onFalseStep: 4
       - stepNumber: 3
-        description: 'Reject: cannot externalize a missing subsystem or a member'
+        description: 'Reject: cannot externalize a missing subsystem, one already in a part, or a member'
         type: throw
-        error: 'cannot externalize: subsystem is missing or is already a member'
+        error: 'cannot externalize: the subsystem is missing, already in a part, or a member'
       - stepNumber: 4
         description: >-
-          With the project root scoped to the member directory at the path (under the containment
-          guard), write the member's default configuration — declaring the externalized subsystem's
-          id as its project id — through the project config Repository
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: create
+          Create the part's specs directory at the path (under the containment guard; a directory
+          holding a project, or a new one already holding a configuration, refuses — creating one
+          never overwrites it) — a contained part needs no configuration — unless it already is this
+          project's part, which the subsystem joins. As a project, every promote refusal is found
+          here, before anything moves
+        type: local
       - stepNumber: 5
-        description: Persist the member's bootstrap L0 system spec (still scoped to the member root)
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSystemSpec
-      - stepNumber: 6
         description: >-
           Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
-          implementations, and types) into the member's specs dir, re-expressing each moved
+          implementations, and types) into the part's specs dir, re-expressing each moved
           implementation's file paths — sourcePath, each method's sourcePath, simPath — relative to
-          the member root (the same files; code is never moved). The moved subsystem is now keyed
-          `<id>::<id>`; every other moved spec `<id>::<local>`. Each reference that now crosses the
-          boundary is re-expressed so it keeps binding its old target — the parent's references into
-          the moved subtree (components, contracts and the types it takes along, when the whole
-          field names one) as `<id>::<local>`, the moved subtree's component and contract references
-          back into the parent as `<parent id>::<local>`, and a `super::` the moved subtree wrote as
-          `<project id>::<local>` by the project the scan bound it to — never as `super::`. A bare
-          type name that is not the whole field (a union member, a generic argument) stays as
-          written; step 12 imports it. A moved `super::` whose target lies beyond the bound root's
-          reach has no such text: it is refused before anything moves (run from the top project,
-          `wairon doctor --fix` rewrites it first)
+          the part's root, the same files. Keys and references are untouched: the moved specs are
+          still the bound project's own, so nothing is respelled
         type: local
-      - stepNumber: 7
+      - stepNumber: 6
         description: >-
-          Back in the parent's scope, declare the member in `members` under the subsystem id with
-          the path — no L1 mount is written
+          Back in the parent's scope, declare the part in `members` under the subsystem id by the
+          shorthand `alias: <path>` — unless the path is an existing part's, already declared
         type: call
         targetComponent: project_config_repository
         targetMethod: declareMember
+      - stepNumber: 7
+        description: Is the moved subsystem to become a project?
+        type: branch
+        condition: 'the request asks for a project (as: project)'
+        onFalseStep: 9
       - stepNumber: 8
         description: >-
-          Re-save every spec on either side whose references now cross the new boundary, targets
-          unchanged, so the writer spells each again from where it lives: the parent's references
-          into the member as `alias::name`, the member's references back into the parent as `<parent
-          id>::name`
-        type: call
-        targetComponent: spec_loader
-        targetMethod: normalizeReferences
+          Promote the new part in place under the subsystem id — exactly promoteMember's writes
+          (configuration made a project's, minimal L0, exports on both sides for what crosses,
+          references re-saved across the new boundary, the parent declared as its external, `as:
+          project`) and its refusals, which here leave nothing moved: the externalize as project is
+          one write or none
+        type: local
       - stepNumber: 9
-        description: >-
-          Under the member's scope, declare the parent as an external under the parent's id when the
-          moved specs reference it (the same declaration again writes nothing)
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: declareExternal
-      - stepNumber: 10
-        description: >-
-          Re-point the parent L0 entries that re-exported the subsystem (`from: <subsystem>`) at the
-          member (`from: <alias>`), restating what was already exported
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSystemSpec
-      - stepNumber: 11
-        description: >-
-          Read the graph from the parent and, for every reference that crosses the new boundary and
-          names no public name of the other side, export it there under that side's own root: a type
-          through its own subsystem (`{ typeDef }`) and the project's L0, a component its subsystem
-          already publishes through the L0 (`{ from, component }`), each at the family's audience
-          (`project`) and only when missing. A component its subsystem does not publish is not
-          exported — making it public is a design decision, and EXTERNAL_NOT_EXPORTED keeps naming
-          it
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSpec
-      - stepNumber: 12
-        description: >-
-          Import by name each bare type the moving side no longer owns — the parent's union members
-          and generic arguments naming a moved type, the member's bare names of a parent type —
-          through the `use` of the alias that now supplies it (the parent's member alias, the
-          member's external for the parent), so the text stays as written and resolves in the
-          owner's gate; then drop the spec cache
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: importNames
-      - stepNumber: 13
-        description: Subsystem externalized into a member project
+        description: Subsystem moved into a part, or into a member project
         type: return
         outcome: externalized
     conformance: 'off'
@@ -456,12 +470,12 @@ methods:
       - stepNumber: 8
         description: >-
           Collect every refusal before anything moves: a moved subsystem, project-level type or spec
-          file that would land on an existing one; a member or external alias the bound project
-          already declares differently; a pack the member selects that the bound project does not
-          select at the same version while the destination says neither adopt nor drop; conformance
-          debt (rules.conformance.carried) or severity overrides the bound project does not share; a
-          destination export whose public name the bound project already exports for another target;
-          a file of the member's .wai this write does not recognise
+          file that would land on an existing one; a member fetched from git (its files are the
+          fetch cache's); and, for a project member only, a member or external alias the bound
+          project already declares differently, a pack the member selects that differs and the
+          destination neither adopts nor drops, conformance debt or severity overrides the parent
+          does not share, a destination export colliding with a public name the parent already
+          exports, or a file in its .wai this write does not recognise
         type: local
       - stepNumber: 9
         description: Is anything refused?
@@ -489,6 +503,13 @@ methods:
           bound it to before the move, so the re-save below keeps every target
         type: local
       - stepNumber: 13
+        description: Is there a project boundary to dissolve, or only storage to move?
+        type: branch
+        condition: >-
+          the member is a project (stage 8: a part's specs are already the project's own, and it
+          holds no metadata to place)
+        onFalseStep: 21
+      - stepNumber: 14
         description: >-
           Place what the member held for its subsystems: append its L0 vision to the home
           subsystem's description as a paragraph naming the member, and stamp its targetLanguage,
@@ -501,7 +522,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Place what the member held as a project in the bound project's L0: its boundaries,
           globalRequirements and databases merged by identity (an equal entry once), its re-exports
@@ -510,7 +531,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Declare each of the member's own members as the bound project's member under the same
           alias, its path re-expressed from the bound root, its description and `use` kept (an equal
@@ -518,31 +539,31 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: declareMember
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           Declare each of the member's externals other than the parent as the bound project's
           external under the same alias, a relative source re-expressed from the bound root
         type: call
         targetComponent: project_config_repository
         targetMethod: declareExternal
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           Import the names each carried external's `use` held, so the moved specs' bare names still
           resolve
         type: call
         targetComponent: project_config_repository
         targetMethod: importNames
-      - stepNumber: 18
+      - stepNumber: 19
         description: Does the destination adopt the member's packs?
         type: branch
         condition: the destination says adopt and the member selects a pack the bound project does not
-        onFalseStep: 20
-      - stepNumber: 19
+        onFalseStep: 21
+      - stepNumber: 20
         description: Select each such pack in the bound project, pinned at the member's version and digest
         type: call
         targetComponent: project_config_repository
         targetMethod: upsertPackSelection
-      - stepNumber: 20
+      - stepNumber: 21
         label: remove
         description: >-
           Remove the member from `members` (false, writing nothing, for a member declared in the
@@ -550,13 +571,13 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: removeMember
-      - stepNumber: 21
-        description: >-
-          Delete what remains of the member's .wai project — its project.yaml, lock, pins and
-          snapshots, derived outputs and legacy surfaces — recording each file in the result's
-          deleted list
-        type: local
       - stepNumber: 22
+        description: >-
+          Delete what remains of the member's .wai — for a project its project.yaml, lock, pins and
+          snapshots, derived outputs and legacy surfaces; for a part its PartOf configuration and
+          its pin of the parent — recording each file in the result's deleted list
+        type: local
+      - stepNumber: 23
         description: >-
           Re-save every spec that referenced across the old boundary, targets unchanged: the
           parent's `alias::name` references and the moved specs' `<parent id>::name` references
@@ -564,7 +585,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
-      - stepNumber: 23
+      - stepNumber: 24
         description: >-
           Member internalized: answer what moved, where each piece went, the carried externals and
           what was deleted
@@ -756,7 +777,10 @@ methods:
           Read the project's member declarations at that root: its project.yaml `members`
           (project_config.declaredMembers(), read through that root's binding, as the scan reads a
           root's configuration) and, for one release, the subsystem specs of its own tree carrying a
-          projectPath; a `members` entry wins over a legacy mount under the same alias
+          projectPath; a `members` entry wins over a legacy mount under the same alias. A PART
+          (stage 8: a contained member whose folder holds no id, no L0 and no lock) is no chained
+          project — its subsystems are this root's own, generated, briefed and backfilled with it —
+          so it is not listed
         type: local
       - stepNumber: 2
         description: Walk the member declarations
@@ -1944,6 +1968,289 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: rewriteReferences
+  - name: updateMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Containment guard on a contained path
+        type: branch
+        condition: >-
+          the changes carry a contained path that resolves strictly within the bound project root,
+          lexically and through links, or carry none
+        onFalseStep: 4
+      - stepNumber: 2
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: updateMember
+      - stepNumber: 3
+        description: Answer whether it wrote
+        type: return
+        outcome: written or unchanged
+      - stepNumber: 4
+        description: Reject a contained path that resolves outside the project root
+        type: throw
+        error: PROJECTPATH_ESCAPE
+  - name: promoteMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph: the part under the alias with its subsystems and spec
+          keys, and every reference that crosses between the part's specs and the rest of the bound
+          project
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: >-
+          Collect every refusal before anything is written: no part under the alias; a part fetched
+          from git; a trustedLink joining one of its subsystems and another of the bound project
+          (either direction); a component either side uses that its subsystem does not publish; an
+          id that a family project already holds
+        type: local
+      - stepNumber: 3
+        description: Is anything refused?
+        type: branch
+        condition: anything was refused
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Refuse before anything is written, listing every refusal
+        type: throw
+        error: promote refused
+      - stepNumber: 5
+        description: >-
+          With the project root scoped to the part's directory, remove a non-contained part's PartOf
+          configuration (a contained part has none)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setPartOf
+      - stepNumber: 6
+        description: >-
+          Declare its id — the one given, else the alias — creating its configuration (named after
+          its one subsystem, else the id) when the part has none, as a contained part never does
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setId
+      - stepNumber: 7
+        description: >-
+          Write its minimal L0: its vision the member's description, else one line naming it a
+          project of the parent
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 8
+        description: >-
+          Back in the parent's scope, drop an asserted `as: part` from the member's declaration,
+          when it has one — the content now makes it a project; nothing else in the declaration
+          changes
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: updateMember
+      - stepNumber: 9
+        description: >-
+          Re-save every spec on either side whose references now cross the new boundary, targets
+          unchanged, so the writer spells each again from where it lives: the parent's references
+          into the new project as `alias::name`, its references back into the parent as `<parent
+          id>::name`
+        type: call
+        targetComponent: spec_loader
+        targetMethod: normalizeReferences
+      - stepNumber: 10
+        description: >-
+          Under the new project's scope, declare the parent as an external under the parent's id
+          when its specs reference it (the same declaration again writes nothing)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareExternal
+      - stepNumber: 11
+        description: >-
+          Re-point the parent's L0 entries that re-exported the part's subsystems (`from:
+          <subsystem>`) at the member (`from: <alias>`)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 12
+        description: >-
+          For every reference that crosses the new boundary and names no public name of the other
+          side, export it there under that side's own root: a type through its own subsystem (`{
+          typeDef }`) and its L0, a component its subsystem already publishes through its L0 —
+          exactly what is used, nothing more
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 13
+        description: >-
+          Import by name each bare type a side no longer owns through the `use` of the alias that
+          now supplies it, so the text stays as written
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: importNames
+      - stepNumber: 14
+        description: Part promoted to a project in place; nothing locked
+        type: return
+        outcome: promoted
+    conformance: 'off'
+  - name: demoteMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph: the project member under the alias, its subsystems,
+          project-level types, members and externals, and every reference crossing between it and
+          the bound project
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: >-
+          With the project root scoped to the member, read its configuration — members, externals,
+          packs, projectType, rules — then restore the bound scope
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 3
+        description: >-
+          Collect every refusal before anything is written, exactly as internalizeMember collects
+          them (no project member under the alias, the home naming no subsystem, a carried alias
+          declared differently, a pack differing with no adopt or drop, conformance debt or severity
+          overrides the parent does not share, a destination export colliding, an unrecognised file
+          in its .wai), and a member fetched from git
+        type: local
+      - stepNumber: 4
+        description: Is anything refused?
+        type: branch
+        condition: anything was refused
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Refuse before anything is written, listing every refusal
+        type: throw
+        error: demote refused
+      - stepNumber: 6
+        description: >-
+          Place what the member held for its subsystems: its L0 vision appended to the home
+          subsystem's description, its targetLanguage, projectType (as profile) and designDepth
+          stamped on each of its subsystems where they differ from the bound project's
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 7
+        description: >-
+          Place what the member held as a project in the bound project's L0: its boundaries,
+          globalRequirements and databases merged by identity, and its re-exports from the member
+          re-pointed at its subsystems
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 8
+        description: >-
+          Declare each of the member's own members as the bound project's member, its location
+          re-expressed from the bound root
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 9
+        description: >-
+          Declare each of the member's externals other than the parent as the bound project's
+          external
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareExternal
+      - stepNumber: 10
+        description: >-
+          Select each pack the destination adopts in the bound project, pinned at the member's
+          version and digest
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: upsertPackSelection
+      - stepNumber: 11
+        description: >-
+          Delete the member's L0, its lock, its pins and snapshots and its derived outputs,
+          recording each file — a part has none of them
+        type: local
+      - stepNumber: 12
+        description: >-
+          With the root scoped to the member: a non-contained member's configuration is replaced by
+          its PartOf alone; a contained member's configuration is deleted (the project fields were
+          carried above)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setPartOf
+      - stepNumber: 13
+        description: >-
+          Back in the parent's scope, drop an asserted `as: project` and any `use` from the member's
+          declaration — the content now makes it a part
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: updateMember
+      - stepNumber: 14
+        description: >-
+          Re-save every spec that referenced across the old boundary, targets unchanged: the
+          parent's `alias::name` references and the member's `<parent id>::name` references become
+          local ids, and the exports and the parent external that existed only for the boundary are
+          dropped; then drop the spec cache
+        type: call
+        targetComponent: spec_loader
+        targetMethod: normalizeReferences
+      - stepNumber: 15
+        description: >-
+          Member demoted to a part in place: answer where each piece went and what was deleted;
+          nothing locked
+        type: return
+        outcome: InternalizeResult
+    conformance: 'off'
+  - name: advanceMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound configuration and take the member's git source and its pinned commit; an
+          alias that names no git member is refused
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 2
+        description: Was a commit given?
+        type: branch
+        condition: an exact commit was given
+        onTrueStep: 4
+        onFalseStep: 3
+      - stepNumber: 3
+        description: >-
+          Resolve the ref (the one given, else the source's, else the remote's default branch) to
+          its commit now; unreachable refuses, naming why
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: resolve
+      - stepNumber: 4
+        label: fetch
+        description: Materialize the new commit (and the pinned one, for the comparison) in the fetch cache
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 5
+        description: >-
+          Compare the member's spec files at the two commits by their path inside the member: added,
+          changed, removed
+        type: local
+      - stepNumber: 6
+        description: Write the new pin?
+        type: branch
+        condition: dryRun is set, or the commit did not move
+        onTrueStep: 8
+        onFalseStep: 7
+      - stepNumber: 7
+        description: Write the new commit into the member's source
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: updateMember
+      - stepNumber: 8
+        label: answer
+        description: >-
+          Answer from, to, the ref resolved, the spec files added, changed and removed, and whether
+          it was written; nothing locked
+        type: return
+        outcome: MemberAdvance
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-01T23:46:56.376Z'
+updatedAt: '2026-10-03T00:00:02.120Z'

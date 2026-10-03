@@ -93,7 +93,7 @@ describe('sdd_add_member answers what scaffolding applied', () => {
     editConfig(dir, (doc) => { doc.composition = { requirePolicies: [{ pack: 'acme-base', version: '^1.2' }, { pack: 'audit-trail', version: '^3' }] }; });
     bindRoot(dir);
     const client = await connect();
-    const result = await client.callTool({ name: 'sdd_add_member', arguments: { alias: 'svc', path: 'services/svc' } });
+    const result = await client.callTool({ name: 'sdd_add_member', arguments: { alias: 'svc', source: 'services/svc', as: 'project' } });
     expect(result.isError).toBeFalsy();
     const creation = result.structuredContent as { configCreated: boolean; adopted: { name: string; version: string }[]; unadopted: { pack: string }[] };
     expect(creation.configCreated).toBe(true);

@@ -33,7 +33,10 @@ methods:
           decisions the caller should see
         type: local
       - stepNumber: 2
-        description: Persist the serialized document to its component spec path through the file store
+        description: >-
+          Persist the serialized document to its component spec path at the component's home — its
+          subsystem's folder, in the bound root or in the part that holds the subsystem (stage 8; a
+          part fetched from git is refused, read-only) — through the file store
         type: call
         targetComponent: spec_file_store
         targetMethod: write
@@ -104,11 +107,32 @@ methods:
           collects placement notices
         type: local
       - stepNumber: 2
-        description: The typed writer persists the serialized document through the file store
+        label: home
+        description: >-
+          Resolve the spec's home (stage 8), which every typed writer shares: a spec the scan read
+          from a part is written back to its file in that part (a contained directory, or a `../`
+          sibling checkout); a NEW component, interface or implementation goes where its subsystem
+          lives; a NEW subsystem goes to the bound root's own specs folder; a type follows its
+          owning subsystem
+        type: local
+      - stepNumber: 3
+        description: Is the home read-only?
+        type: branch
+        condition: the home lies in the git fetch cache (a part fetched from git)
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse before anything is written, naming the part's repository and commit: a git part is
+          edited in its own repository and taken in by `wairon member update`
+        type: throw
+        error: PartReadOnly
+      - stepNumber: 5
+        label: write
+        description: The typed writer persists the serialized document at its home through the file store
         type: call
         targetComponent: spec_file_store
         targetMethod: write
-      - stepNumber: 3
+      - stepNumber: 6
         description: Answer with the writer's placement notices; none for the L0 and a subsystem
         type: return
         outcome: saved
@@ -193,4 +217,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-09-30T22:47:26.066Z'
+updatedAt: '2026-10-02T20:51:38.599Z'

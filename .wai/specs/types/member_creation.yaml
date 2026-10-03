@@ -2,10 +2,11 @@ kind: value-object
 id: member_creation
 name: MemberCreation
 description: >-
-  What creating a member wrote about packs: the declaring project's required packs it selected in
-  the new member, and the requirements it could not satisfy from what is installed. The answer a CLI
-  or MCP caller states ("applied ..."), since scaffolding is an unattended pack write and shows no
-  impact report.
+  What creating a member wrote: what it is (a part by default, a project with --project), where it
+  lives, the commit a git member was pinned at, and — for a project only — the declaring project's
+  required packs it selected in the new member and the requirements it could not satisfy from what
+  is installed. The answer a CLI or MCP caller states ("applied ..."), since scaffolding is an
+  unattended pack write and shows no impact report. A part selects no packs: its parent's govern it.
 fields:
   - name: configCreated
     type: boolean
@@ -16,9 +17,9 @@ fields:
   - name: adopted
     type: PackSelection[]
     description: >-
-      The selections written into the new member's extensions.packs, one per requirement, each
-      pinned to the highest installed version the range admits, with its digest and fetchable source
-      as `pack use --pin` records them.
+      Project only: the selections written into the new member's extensions.packs, one per
+      requirement, each pinned to the highest installed version the range admits, with its digest
+      and fetchable source as `pack use --pin` records them. Empty for a part.
     optional: false
   - name: unadopted
     type: PackRequirement[]
@@ -32,8 +33,22 @@ fields:
       The profile written as the new member's projectType, when exactly one adopted requirement
       names a profile.
     optional: true
+  - name: as
+    type: string
+    description: 'part | project: what was created.'
+    optional: false
+  - name: storage
+    type: string
+    description: >-
+      contained | path | git: where its files live (a hosted record is created by the hosted project
+      creation, never here).
+    optional: false
+  - name: commit
+    type: string
+    description: 'git: the commit the member was pinned at (the source''s ref head when it was created).'
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 symbol: MemberCreation
 createdAt: '2026-09-29T15:51:12.579Z'
-updatedAt: '2026-09-29T15:51:12.580Z'
+updatedAt: '2026-10-02T20:18:34.742Z'

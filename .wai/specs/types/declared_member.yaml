@@ -2,9 +2,11 @@ kind: value-object
 id: declared_member
 name: DeclaredMember
 description: >-
-  One member as the configuration declares it, normalized from either form: the alias, the path as
-  written, the description when the long form gives one, and what is wrong with the declaration on
-  its own (before the loader looks for the directory). The answer of
+  One member as the configuration declares it, normalized from the shorthand or the long form: the
+  alias, its source parsed into its object form with the storage that implies, the `as` it asserts
+  (if any), the description, and what is wrong with the declaration on its own (before the loader
+  looks for the directory). What the member IS follows from its content, so it is the scan's to
+  decide (ScannedPart, ProjectNode), never this value's. The answer of
   project_config.declaredMembers().
 subsystem: sdd_core
 fields:
@@ -17,8 +19,10 @@ fields:
     key: primary
   - name: path
     type: string
-    description: The member's root directory as written, relative to the declaring project's root.
-    optional: false
+    description: >-
+      A contained member's root as written, relative to the declaring project's root — from a
+      contained `source` or the deprecated long-form `path`; absent for any other storage.
+    optional: true
   - name: description
     type: string
     description: The long form's description, when given.
@@ -26,9 +30,12 @@ fields:
   - name: problem
     type: string
     description: >-
-      Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+, an empty
-      path, an absolute path, an alias this configuration also declares under `externals` (one alias
-      names one project), or a `use` entry that is neither `*` nor a public name of [a-z0-9-_]+.
+      Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+, no source
+      (or both `source` and the deprecated `path`), an absolute path, a source string none of the
+      four forms parses, a git source without `#<full commit>`, an `as` other than part or project,
+      a `hosted:` source asserted `as: part` (a part is part of its parent's record), an alias this
+      configuration also declares under `externals` (one alias names one project), or a `use` entry
+      that is neither `*` nor a public name of [a-z0-9-_]+.
     optional: true
   - name: use
     type: string[]
@@ -36,7 +43,29 @@ fields:
       The long form's `use` as written, deduplicated in first-seen order; empty for the shorthand
       and when it imports nothing.
     optional: false
+  - name: as
+    type: string
+    description: part | project when the declaration asserts one; absent otherwise (the usual case).
+    optional: true
+  - name: source
+    type: ExternalSource
+    description: >-
+      The source string parsed: { path } for a contained or sibling path, { git, commit, ref?, dir?
+      }, or { hosted }.
+    optional: false
+  - name: storage
+    type: string
+    description: >-
+      contained | path | git | hosted: where the member's files live, from `path` or the source's
+      one set field. Shown on the canvas as the part's storage badge.
+    optional: false
+  - name: deprecatedPath
+    type: boolean
+    description: >-
+      Whether the entry used the deprecated long-form `path` key (DEPRECATED_MOUNT_FORM; `doctor
+      --fix` rewrites it).
+    optional: false
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:33.853Z'
-updatedAt: '2026-09-28T16:05:28.674Z'
+updatedAt: '2026-10-02T20:44:53.094Z'

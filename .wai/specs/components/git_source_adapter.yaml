@@ -1,0 +1,20 @@
+id: git_source_adapter
+name: Git Source Adapter
+description: >-
+  The only block that talks to git for stage 8's sources: it materializes a repository at one commit
+  into wairon's content-addressed fetch cache, resolves a ref to the commit it names now, and reads
+  the commit of a work tree on disk. The cache lives outside every project tree (WAIRON_CACHE_DIR,
+  else the OS user cache directory, under git/<sha256 of the URL>/<commit>), so nothing fetched is
+  ever committed with a project; an entry is written to a temporary directory and renamed into
+  place, so a cut-short fetch never leaves half a commit; and an entry is immutable, because a
+  commit's content never changes — there is nothing to refresh. Moving to newer content is moving
+  the pin (`wairon member update`, `wairon externals pin`), never a cache operation. Offline, a
+  cached commit serves exactly as online; an uncached one is unavailable, never a pass. A verdict
+  never resolves a ref: only pinning and updating do.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-10-02T20:19:23.835Z'
+updatedAt: '2026-10-02T21:40:53.877Z'

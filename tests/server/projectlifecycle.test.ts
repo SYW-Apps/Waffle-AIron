@@ -427,7 +427,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     seedProject('hosted-pins');
     const root = existingProjectRoot(dataDir, 'hosted-pins')!;
     runWithProjectRoot(root, () => {
-      createMember('billing', 'packages/billing');
+      createMember('billing', 'packages/billing', undefined, 'project');
       writeLegacyMount({
         id: 'claims', name: 'claims', description: 'd', parentSystem: 'x', publicInterfaces: [], trustedLinks: [],
         projectPath: 'packages/claims', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',

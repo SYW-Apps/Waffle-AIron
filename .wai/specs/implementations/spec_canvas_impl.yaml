@@ -25,18 +25,24 @@ methods:
         targetMethod: resolveProjectExports
       - stepNumber: 3
         description: >-
-          Read the project graph: one project node per member (its alias, display name and the
-          description its parent gives it), drawn through its exports — a member's internals hang
-          under its node, and an edge from another project lands on the member's exported name
+          Read the project graph: one project node per PROJECT member — contained, or referenced (a
+          `../`, git or hosted source, drawn from its pin when its root is not on hand) — with its
+          alias, display name and the description its parent gives it, drawn through its exports (a
+          member's internals hang under its node, and an edge from another project lands on the
+          member's exported name); and each PART with its storage (stage 8), whose subsystems are
+          this project's own
         type: call
         targetComponent: spec_loader
         targetMethod: graph
       - stepNumber: 4
         description: >-
-          Emit a node per spec with its level and containment — a member's specs under its project
-          node — and an edge per dependency and ownership between the nodes emitted. Ids stay
-          honest; only the displayed label collapses a subsystem whose key repeats its member's
-          alias (`billing::billing` shows as `billing` under the billing node)
+          Emit a node per spec with its level and containment — a project member's specs under its
+          project node; a part's subsystems as this project's own subsystems, each carrying the
+          part's alias and a storage badge (contained, sibling path, git with its short commit),
+          never a node of their own: composition decides what is drawn, storage only how it is
+          labelled — and an edge per dependency and ownership between the nodes emitted, consumption
+          edges between projects included. Ids stay honest; only the displayed label collapses a
+          subsystem whose key repeats its member's alias
         type: local
       - stepNumber: 5
         description: >-
@@ -75,4 +81,4 @@ methods:
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-09-27T10:47:27.326Z'
+updatedAt: '2026-10-02T20:47:11.995Z'

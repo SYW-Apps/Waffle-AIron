@@ -151,7 +151,7 @@ describe('provisioning through the project config Repository', () => {
     const child = path.join(root, 'packages', 'billing');
     writeConfig(child, 'billing-own');
 
-    createMember('billing', 'packages/billing');
+    createMember('billing', 'packages/billing', undefined, 'project');
 
     expect(untouched(child)).toBe(true);
     expect(fs.existsSync(path.join(child, '.wai', 'specs', '.index.yaml'))).toBe(true);
@@ -164,7 +164,7 @@ describe('provisioning through the project config Repository', () => {
     saveL0('root-system');
     saveSpec('subsystem', subsystem('core', 'Core Service'));
 
-    externalizeSubsystem('core', 'packages/core');
+    externalizeSubsystem('core', 'packages/core', 'project');
 
     const child = path.join(root, 'packages', 'core');
     expect(projectConfigRepositoryAt(child).load()?.name).toBe('Core Service');
@@ -180,7 +180,7 @@ describe('provisioning through the project config Repository', () => {
     const child = path.join(root, 'packages', 'core');
     writeConfig(child, 'core-own');
 
-    expect(() => externalizeSubsystem('core', 'packages/core')).toThrow(/already exists/);
+    expect(() => externalizeSubsystem('core', 'packages/core', 'project')).toThrow(/already holds a configuration/);
 
     invalidateSpecCache();
     expect(loadSubsystemSpec('core')?.projectPath).toBeUndefined();
@@ -246,7 +246,7 @@ describe('provisioning writes the project id', () => {
     setProjectRoot(root);
     saveL0('root-system');
 
-    createMember('billing', 'packages/billing', 'Billing Service');
+    createMember('billing', 'packages/billing', 'Billing Service', 'project');
 
     const child = projectConfigRepositoryAt(path.join(root, 'packages', 'billing')).load();
     expect(child?.name).toBe('billing');
@@ -260,7 +260,7 @@ describe('provisioning writes the project id', () => {
     saveL0('root-system');
     saveSpec('subsystem', subsystem('core', 'Core Service'));
 
-    externalizeSubsystem('core', 'packages/core');
+    externalizeSubsystem('core', 'packages/core', 'project');
 
     expect(projectConfigRepositoryAt(path.join(root, 'packages', 'core')).load()?.id).toBe('core');
   });

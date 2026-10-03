@@ -1,6 +1,8 @@
 import {
   SURFACE_AUDIENCES,
   nameKey,
+  parseDeclaredCall,
+  type AuthoredReference,
   type ComponentSpec,
   type CrossProjectReference,
   type InterfaceSpec,
@@ -20,7 +22,7 @@ import {
 } from '../models/exports.js';
 // export_index projects the tables the Spec Index's scan resolved — the one
 // sanctioned case of an Index over another Index of the same Repository.
-import { listProjectRoots } from './specs.js';
+import { listProjectRoots, loadComponentSpecs, loadImplementationSpecs } from './specs.js';
 // ...and over the Project Family Index of the same Repository, for the
 // the references the scan bound, counted into each consumer's usage (never in
 // a cycle: the family index depends on the Spec Index alone).
@@ -713,5 +715,81 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort() })),
     unexported,
+  };
+}
+
+/** The public name a bare import spells, as the consumer's `use` on the alias writes it. */
+function importedName(authored: string, use: string[]): string {
+  const key = nameKey(authored);
+  return use.find((u) => u !== '*' && nameKey(u) === key) ?? authored;
+}
+
+/**
+ * The members one outside reference reaches, read off the position it stands
+ * at: each call or register step's method and each dispatch step's capability
+ * naming it, a declared call's method, a dispatch binding's method, `type` at a
+ * type position — nothing for a bare dependsOn or mount.
+ */
+function membersAt(ref: AuthoredReference): string[] {
+  if (ref.position === 'type') return ['type'];
+  if (ref.position === 'narrative' || ref.position === 'calls') {
+    const impl = loadImplementationSpecs().find((i) => i.id === ref.specId);
+    const out: string[] = [];
+    for (const method of impl?.methods ?? []) {
+      if (ref.position === 'calls') {
+        for (const entry of method.calls ?? []) {
+          const call = parseDeclaredCall(entry);
+          if (call && call.compId === ref.authored) out.push(call.methodName);
+        }
+        continue;
+      }
+      for (const step of method.narrative) {
+        if (step.targetComponent !== ref.authored && step.targetComponent !== ref.resolved) continue;
+        if ((step.type === 'call' || step.type === 'register') && step.targetMethod) out.push(step.targetMethod);
+        if (step.type === 'dispatch' && step.capability) out.push(`capability:${step.capability}`);
+      }
+    }
+    return out;
+  }
+  if (ref.position === 'dispatch') {
+    const comp = loadComponentSpecs().find((c) => c.id === ref.specId);
+    return (comp?.dispatch ?? []).filter((b) => b.component === ref.authored && b.method).map((b) => b.method!);
+  }
+  return [];
+}
+
+/**
+ * iexport_index.pinnedUsage — one consumer's references into a producer the
+ * scan did NOT read (an external outside the family, or a referenced project
+ * member), counted by the public name they spell (stage 8): each `alias::name`
+ * through the alias counts `name`, each bare name the consumer's `use` on the
+ * alias imports counts that name, each with the member its position reaches.
+ * Nothing is unexported here: what the producer exports is the pin's and the
+ * status's to compare.
+ */
+export function pinnedUsageOf(consumer: string, alias: string): ExportUsage {
+  // Step 1: the graph, whose authored references keep each reference's form, binding and position.
+  const family = projectFamilyGraph();
+  const use = family.nodes.find((n) => n.namespace === consumer)?.imports.find((i) => i.alias === alias)?.use ?? [];
+  // Step 2: the consumer's references bound outside through the alias.
+  const through = family.authoredReferences.filter((r) => (family.owners.get(r.specId) ?? '') === consumer && r.binding === 'outside'
+    && ((r.form === 'alias' && r.authored.split('::').length === 2 && r.authored.startsWith(`${alias}::`))
+      || (r.form === 'import' && (r.importedVia ?? '').split(', ').includes(alias))));
+  // Step 3: each counted under the public name it spells, with the members its position reaches.
+  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string> }>();
+  for (const ref of through) {
+    const publicName = ref.form === 'import' ? importedName(ref.authored, use) : ref.authored.slice(alias.length + 2);
+    const slot = used.get(publicName) ?? { kind: ref.position === 'type' ? 'type' as const : 'component' as const, members: new Set<string>() };
+    for (const member of membersAt(ref)) slot.members.add(member);
+    used.set(publicName, slot);
+  }
+  // Step 4: no unexported references; names sorted, each name's members sorted.
+  return {
+    consumer,
+    producer: alias,
+    used: [...used.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort() })),
+    unexported: [],
   };
 }

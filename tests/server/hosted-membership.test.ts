@@ -25,6 +25,7 @@ import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import { runWithProjectRoot, setProjectRoot } from '../../src/utils/fs.js';
 import * as transaction from '../../src/migrations/transaction.js';
+import * as migrationsPortal from '../../src/migrations/index.js';
 import { allow, mintUserToken, seedUnit, subjectOf } from './helpers.js';
 import { buildHostedFamily, writeProject, type HostedFamily } from './hosted-family.js';
 import type { HostConfig, HostedUserRecord, Principal, RoleBinding } from '../../src/server/types.js';
@@ -333,7 +334,8 @@ describe('source.hosted resolves only through the hosting server, within reach',
     const tok = mintUserToken(dataDir, { id: 'tok-unit', userId: 'u-unit', projects: ['*'] });
     const answer = await call(tok, 'sdd_get_externals_status', {}, 'docs');
     expect(answer.isError, answer.text).toBe(false);
-    expect(answer.text).toMatch(/billing → billing: hosted, not pinned, current — the producer is outside the family/);
+    // Stage 8: a hosted producer is compared per use like any other — read, not "outside the family".
+    expect(answer.text).toMatch(/billing → billing: hosted, not pinned, current$/m);
   });
 
   it('out of reach: unavailable, never a pass, and never read', async () => {
@@ -361,7 +363,7 @@ describe('source.hosted resolves only through the hosting server, within reach',
 describe('reconcile: the records follow the family on disk', () => {
   it('after sdd_add_member: the new member is registered, inherits through its parent, and the reach it opens is audited', async () => {
     const { dev } = seedPeople();
-    const added = await call(dev, 'sdd_add_member', { alias: 'tools', path: 'packages/tools', description: 'build tools' }, 'platform');
+    const added = await call(dev, 'sdd_add_member', { alias: 'tools', source: 'packages/tools', description: 'build tools', as: 'project' }, 'platform');
     expect(added.isError, added.text).toBe(false);
     expect(recordOf('tools')).toMatchObject({ parentProjectId: 'platform', memberPath: 'packages/tools', status: 'active' });
     const event = queryAuditEvents(dataDir, { action: 'member.registered' }).find((e) => e.projectId === 'tools');
@@ -390,7 +392,7 @@ describe('reconcile: the records follow the family on disk', () => {
     const { dev } = seedPeople();
     const sub = await call(dev, 'sdd_add_subsystem', { id: 'tooling', name: 'Tooling', description: 'Build tooling' }, 'platform');
     expect(sub.isError, sub.text).toBe(false);
-    const ext = await call(dev, 'sdd_externalize_subsystem', { subsystem: 'tooling', path: 'packages/tooling' }, 'platform');
+    const ext = await call(dev, 'sdd_externalize_subsystem', { subsystem: 'tooling', path: 'packages/tooling', as: 'project' }, 'platform');
     expect(ext.isError, ext.text).toBe(false);
     expect(recordOf('tooling')).toMatchObject({ parentProjectId: 'platform', memberPath: 'packages/tooling' });
   });
@@ -563,5 +565,70 @@ describe('a detached member binds at its new root', () => {
     const all: Principal = { tokenId: 't', role: 'editor', projects: ['*'], authenticated: true };
     expect(resolveProjectBinding(dataDir, all, 'billing')).toMatchObject({ rootPath: newRootOf('billing'), familyRootId: 'billing' });
     expect(resolveProjectBinding(dataDir, all, 'payments')).toMatchObject({ familyRootId: 'billing' });
+  });
+});
+
+// ── stage 8 on hosted: parts, promote and demote ────────────────────────────
+
+describe('stage 8 on hosted — a part is part of its parent\'s record', () => {
+  it('refuses a member declared with a `../` or git source before dispatch: hosted roots are isolated', async () => {
+    const { dev } = seedPeople();
+    const tree = bytes(fam.platform);
+    for (const source of ['../elsewhere', 'https://git.example.invalid/acme/x.git#0123456789abcdef0123456789abcdef01234567']) {
+      const answer = await call(dev, 'sdd_add_member', { alias: 'x', source }, 'platform');
+      expect(answer.isError, source).toBe(true);
+      expect(answer.text, source).toMatch(/refused on a hosted instance/);
+    }
+    expect(bytes(fam.platform)).toEqual(tree);
+  });
+
+  it('demote retires the member\'s record — listing whom a member-own `no` denied, auditing member.retired — and promote re-enables it', async () => {
+    const { dev } = seedPeople();
+    // payments holds one subsystem: the home its L0 vision goes to when it becomes a part.
+    fs.mkdirSync(path.join(fam.payments, '.wai', 'specs', 'settlement'), { recursive: true });
+    fs.writeFileSync(path.join(fam.payments, '.wai', 'specs', 'settlement', '.index.yaml'), ['id: settlement', 'name: settlement', 'description: Settles payments', 'parentSystem: payments', 'publicInterfaces: []', 'trustedLinks: []', 'status: complete', "createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'", ''].join('\n'));
+    // A member-own `no`: u-view reads the family, but not payments.
+    allow(dataDir, 'u-view', 'project:read', 'project', 'payments', 'no');
+    const dry = await call(dev, 'sdd_demote_member', { alias: 'payments', dryRun: true }, 'billing');
+    expect(dry.isError, dry.text).toBe(false);
+    const listing = dry.texts.find((t) => t.startsWith('Reach changes'))!;
+    expect(listing).toMatch(/u-view project:read no -> yes/);
+    expect(recordOf('payments')).toMatchObject({ status: 'active' });
+
+    const demoted = await call(dev, 'sdd_demote_member', { alias: 'payments' }, 'billing');
+    expect(demoted.isError, demoted.text).toBe(false);
+    // Disabled, never deleted; its own-scope settings kept for a later promote.
+    expect(recordOf('payments')).toMatchObject({ status: 'disabled', parentProjectId: 'billing', disabledReason: 'part of billing' });
+    expect(listAssignments(dataDir).some((a) => a.scopeId === 'payments')).toBe(true);
+    const retired = queryAuditEvents(dataDir, { action: 'member.retired' }).find((e) => e.projectId === 'payments');
+    expect(JSON.parse(retired!.metadata!)).toMatchObject({ parent: 'billing', reason: 'part of billing' });
+    expect(JSON.parse(retired!.metadata!).reach).toContain('u-view project:read: no -> yes');
+    // The part's specs are reached through billing's record now: no record of its own is registered for it.
+    expect(fs.existsSync(path.join(fam.payments, '.wai', 'project.yaml'))).toBe(false);
+
+    const promoted = await call(dev, 'sdd_promote_member', { alias: 'payments' }, 'billing');
+    expect(promoted.isError, promoted.text).toBe(false);
+    expect(recordOf('payments')).toMatchObject({ status: 'active', parentProjectId: 'billing', memberPath: 'sub/payments' });
+    expect(recordOf('payments')!.disabledReason).toBeUndefined();
+    expect(queryAuditEvents(dataDir, { action: 'member.returned' }).some((e) => e.projectId === 'payments')).toBe(true);
+    // The member-own `no` applies again, exactly as before.
+    expect(authorize(dataDir, principalOf('u-view'), 'project:read', 'project', 'payments').value).toBe('no');
+  });
+});
+
+describe('stage 8 on hosted — reconcile names what it retired', () => {
+  it('answers a retired record under `retired`, never `departed`, with its reason', () => {
+    fs.mkdirSync(path.join(fam.payments, '.wai', 'specs', 'settlement'), { recursive: true });
+    fs.writeFileSync(path.join(fam.payments, '.wai', 'specs', 'settlement', '.index.yaml'), ['id: settlement', 'name: settlement', 'description: Settles', 'parentSystem: payments', 'publicInterfaces: []', 'trustedLinks: []', 'status: complete', "createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'", ''].join('\n'));
+    // The member becomes a part on disk (as a demote leaves it), then the records follow.
+    setProjectRoot(fam.billing);
+    invalidateSpecCache();
+    const planned = migrationsPortal.plan({ verb: 'demote', alias: 'payments' });
+    expect(planned.refusals).toEqual([]);
+    expect(migrationsPortal.apply(planned).applied).toBe(true);
+    const all: Principal = { tokenId: 't', role: 'editor', projects: ['*'], authenticated: true };
+    const reconciled = memberRegistration.reconcile(dataDir, all, 'billing', ['billing']);
+    expect(reconciled).toMatchObject({ retired: ['payments'], departed: [] });
+    expect(recordOf('payments')).toMatchObject({ status: 'disabled', disabledReason: 'part of billing' });
   });
 });

@@ -154,7 +154,8 @@ export function mountCanvas(host, model, opts = {}) {
   }
   function childOfScopeContaining(compId, scope) {
     var c = compById[compId];
-    if (!c) return null;
+    // A consumption edge may land on a referenced project's node itself (stage 8).
+    if (!c) return scope.kind === 'system' && subById[compId] ? { kind: 'subsystem', id: compId } : null;
     var subs = subsystemChainOf(c);
     var owners = ownerChainOf(c);
     if (scope.kind === 'system') {
@@ -173,7 +174,7 @@ export function mountCanvas(host, model, opts = {}) {
   }
   function anchorNodeId(entry) { return entry.kind === 'subsystem' ? SN(entry.id) : CN(entry.id); }
   function nameOf(entry) {
-    if (entry.kind === 'subsystem') { var s = subById[entry.id]; return s ? s.name : entry.id; }
+    if (entry.kind === 'subsystem') { var s = subById[entry.id]; return s ? s.name + (s.storage ? '\n\u29C9 ' + s.storage : '') : entry.id; }
     var c = compById[entry.id]; return c ? c.name : entry.id;
   }
 

@@ -60,20 +60,42 @@ export function rehearse(scope: TransactionScope): Rehearsal {
   const familyRoot = path.resolve(scope.familyRoot);
   const projects = [...new Set(scope.projects.map((p) => path.resolve(p)))];
   const whole = scope.whole ? [...new Set(scope.whole.map((p) => path.resolve(p)))] : undefined;
+  // Stage 8: the owners are laid out under their common ancestor, so a sibling
+  // checkout beside the family root keeps its place (the mirror refuses one on
+  // another volume).
+  const base = commonAncestor([familyRoot, ...projects, ...(whole ?? [])]) ?? familyRoot;
   // Steps 3-4: only the scoped areas and whole owners are copied — every
   // writer run on the copy must read nothing outside them (the rehearsal
   // precondition).
   let baseDigests: Map<string, string>;
   try {
-    baseDigests = files.mirror({ familyRoot, projects, ...(scope.areas ? { areas: scope.areas } : {}), ...(whole ? { whole } : {}) }, directory);
+    baseDigests = files.mirror({ familyRoot, base, projects, ...(scope.areas ? { areas: scope.areas } : {}), ...(whole ? { whole } : {}) }, directory);
   } catch (e) {
     // Steps 6-7.
     repository.dropRehearsal(id);
     throw e;
   }
   // Step 5.
-  const roots = new Map(projects.map((p) => [p, path.join(directory, path.relative(familyRoot, p))]));
-  return { id, directory, familyRoot, roots, baseDigests, ...(scope.areas ? { areas: [...scope.areas] } : {}), ...(whole ? { whole } : {}) };
+  const roots = new Map(projects.map((p) => [p, path.join(directory, path.relative(base, p))]));
+  return {
+    id, directory, familyRoot, roots, baseDigests, ...(base !== familyRoot ? { base } : {}),
+    ...(scope.areas ? { areas: [...scope.areas] } : {}), ...(whole ? { whole } : {}),
+  };
+}
+
+/** The nearest directory every path lies within; null when they share none (another drive). */
+function commonAncestor(paths: string[]): string | null {
+  let at = paths[0];
+  const inside = (root: string, p: string): boolean => {
+    const rel = path.relative(root, p);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  };
+  while (!paths.every((p) => inside(at, p))) {
+    const up = path.dirname(at);
+    if (up === at) return null;
+    at = up;
+  }
+  return at;
 }
 
 /** ifamily_transaction.diff — the rehearsal's difference from the live family. */
@@ -228,7 +250,7 @@ function stageOwner(rehearsal: Rehearsal, journal: TransactionJournal): void {
 
 /** Steps 7-8: the new bytes, read from the rehearsal and staged in the owner's area. */
 function stageBytes(rehearsal: Rehearsal, journal: TransactionJournal, entry: FileChange): void {
-  const copy = path.join(rehearsal.directory, path.relative(rehearsal.familyRoot, journal.owner), ...entry.path.split('/'));
+  const copy = path.join(rehearsal.directory, path.relative(rehearsal.base ?? rehearsal.familyRoot, journal.owner), ...entry.path.split('/'));
   const bytes = files.read(copy);
   if (bytes === null || `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}` !== entry.stagedDigest) {
     throw new StagingError(`the rehearsal no longer holds what was planned: ${copy}`);

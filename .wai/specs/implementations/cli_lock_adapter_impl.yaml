@@ -22,19 +22,22 @@ methods:
         targetMethod: diffAgainstApproval
       - stepNumber: 2
         description: >-
-          Read each DIRECT member's approval state, subject and pin, each computed at the member's
-          own root (depth 1)
+          Read each DIRECT member's approval state, subject and pin, each project member computed at
+          its own root (depth 1) — and each part, answered as a part with its content digest and the
+          commit it was read at (stage 8)
         type: call
         targetComponent: validator_portal
         targetMethod: familyApprovals
       - stepNumber: 3
         description: >-
-          Print the summary: the own specs changed, added and removed; the code results of the gate
-          on a line of their own ("code: N errors, M warnings recorded beside the claim — CI
-          enforces them, not the lock"); then each direct member with its state (approved | drifted
-          | never) and, where its pin moved, the subject this approval recorded and the one it
-          carries now — a member's own edits never appear in this project's spec diff; what the
-          parent reviews is the member's approval moving
+          Print the summary: the own specs changed, added and removed — a part's specs among them,
+          under `members/<alias>/…`, since a part is this project's own content; the code results of
+          the gate on a line of their own ("code: N errors, M warnings recorded beside the claim —
+          CI enforces them, not the lock"); then each direct project member with its state (approved
+          | drifted | never) and, where its pin moved, the subject this approval recorded and the
+          one it carries now — a project member's own edits never appear in this project's spec
+          diff; what the parent reviews is the member's approval moving; then each part stored
+          outside the project with the commit being approved
         type: local
       - stepNumber: 4
         description: >-
@@ -45,7 +48,9 @@ methods:
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 5
-        description: Does the project require approved members, and is one not approved?
+        description: >-
+          Does the project require approved members, and is a PROJECT member not approved? (A part
+          has no approval of its own: this lock is its approval)
         type: branch
         condition: >-
           composition.requireApprovedMembers is true and a direct member is drifted or never
@@ -73,8 +78,10 @@ methods:
         outcome: null (declined)
       - stepNumber: 9
         description: >-
-          Capture the approval: one digest per OWN spec file; a --subsystem scope re-captures only
-          what it covers and carries the rest of the previous approval forward
+          Capture the approval: one digest per OWN spec file — the project's own and its parts'
+          (stage 8), a part's keyed `members/<alias>/<path inside the part>` so moving its storage
+          changes no key; a --subsystem scope re-captures only what it covers and carries the rest
+          of the previous approval forward
         type: call
         targetComponent: approval_portal
         targetMethod: captureApprovedSpecs
@@ -108,9 +115,10 @@ methods:
         description: >-
           Assemble a format-2 LockRecord: stateId = the captured identity, lockedAt, lockedBy,
           validatorVersion, validationResult = the design half's counts (gate.designOnly()), status
-          ready, projectId when there is one, specs, `members` = each direct member's alias →
-          {project, subject, state}, and `code` = gate.analysis without its codes list. No
-          `children`
+          ready, projectId when there is one, specs, `members` = each direct member's alias → a
+          project member's {as: project, project, subject, state, commit when referenced} or a
+          part's {as: part, contentDigest, commit when known, state approved}, and `code` =
+          gate.analysis without its codes list. No `children`
         type: local
       - stepNumber: 15
         description: Persist the commit-scoped lock record — the only file this lock writes
@@ -226,4 +234,4 @@ methods:
         outcome: unlocked
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-09-30T06:03:19.809Z'
+updatedAt: '2026-10-02T20:51:15.745Z'

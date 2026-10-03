@@ -1,0 +1,90 @@
+id: part_context_impl
+name: Part Context Implementation
+description: >-
+  src/core/part-context.ts. Binds the parent root read-only from the part's PartOf.path, reads the
+  parent's scan (which folds this part in, so the part's references bind exactly as the parent binds
+  them), and collects the excerpt from the bindings.
+contract: ipart_context
+sourcePath: src/core/part-context.ts
+methods:
+  - name: excerpt
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's configuration and take its PartOf; remember the root and the
+          caller's binding, which every path below restores
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 2
+        description: Is there a parent on disk to excerpt?
+        type: branch
+        condition: the configuration is a part's and PartOf names a path that holds a directory
+        onFalseStep: 12
+      - stepNumber: 3
+        description: Bind the parent's root read-only (PartOf.path resolved against the part's root)
+        type: local
+      - stepNumber: 4
+        description: >-
+          Read the parent's configuration: its effective id must equal PartOf.project and one of its
+          members must be this part (as part, by its contained path or its source naming this
+          directory); otherwise refuse, naming what disagrees
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 5
+        description: >-
+          Read the parent's project graph: its scan folds this part in, so every reference the
+          part's files make is bound exactly as the parent binds it, and the part's own spec keys
+          are known (its ScannedPart)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 6
+        description: >-
+          Collect the referenced parent specs: every spec key a part spec's reference bound to that
+          the part does not itself declare (dependsOn and owns targets, call, register and dispatch
+          targets, declared calls, dispatch-table bindings, lifecycle entries, trusted links, type
+          positions), each a component, subsystem or type of the parent — or of another of its parts
+        type: local
+      - stepNumber: 7
+        description: Close the excerpt over what judging them needs
+        type: loop
+        loopKind: forEach
+        over: the collected keys, growing as the closure finds more
+        endStep: 8
+      - stepNumber: 8
+        label: closed
+        description: >-
+          Load the spec; for a component add its contract and its subsystem's L1; for a contract or
+          type add every type its methods or fields name
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSpec
+      - stepNumber: 9
+        description: Read the commit of the work tree holding the parent, for provenance
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: head
+      - stepNumber: 10
+        description: >-
+          Restore the caller's binding. Build the excerpt: the parent's id and commit, its governing
+          projectType, rules and pack selections as its configuration records them, its L0 and the
+          collected specs in canonical form ordered by key, and the digest over all of it without
+          the commit
+        type: local
+      - stepNumber: 11
+        description: Answer the excerpt
+        type: return
+        outcome: ParentExcerpt
+      - stepNumber: 12
+        label: refuse
+        description: >-
+          Restore the caller's binding and refuse, naming why: not a part, no parent path recorded,
+          the parent absent, another id, or a parent that does not declare this part
+        type: throw
+        error: PartContextUnavailable
+    detail: full
+status: complete
+createdAt: '2026-10-02T20:23:56.291Z'
+updatedAt: '2026-10-02T21:40:57.776Z'

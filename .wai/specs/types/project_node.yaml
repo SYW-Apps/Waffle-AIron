@@ -71,7 +71,11 @@ fields:
     optional: false
   - name: externals
     type: ResolvedExternal[]
-    description: The project's declared externals, each bound to its producer (empty when none are declared).
+    description: >-
+      The project's declared externals, each bound to its producer, followed by its referenced
+      project members (a `../`, git or hosted source; role member) — a referenced project is judged
+      against its pin exactly as an external is, so it is bound the same way. Empty when there are
+      none.
     optional: false
   - name: memberDescription
     type: string
@@ -87,7 +91,14 @@ fields:
       declaration order (members first), each with the names it imports as written — empty when the
       alias imports nothing (stage 4). What the owner's gate resolves a bare name through.
     optional: false
+  - name: parts
+    type: ScannedPart[]
+    description: >-
+      The project's parts (stage 8): its subsystems stored in another directory or repository. The
+      canvas draws each part's subsystems as this project's own subsystems with the part's storage
+      badge; nothing about them is a project.
+    optional: false
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:52.264Z'
-updatedAt: '2026-09-28T17:16:23.570Z'
+updatedAt: '2026-10-02T20:48:08.858Z'

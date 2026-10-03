@@ -108,7 +108,14 @@ methods:
         targetComponent: project_write_registry
         targetMethod: setStatus
     symbol: setProjectRecordStatus
+  - name: isRetiredPart
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: isRetiredPart
 detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:36.287Z'
-updatedAt: '2026-10-01T16:29:27.549Z'
+updatedAt: '2026-10-02T23:20:02.284Z'

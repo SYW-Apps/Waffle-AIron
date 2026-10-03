@@ -2,21 +2,27 @@ kind: value-object
 id: member_declaration
 name: MemberDeclaration
 description: >-
-  One `members` entry of project.yaml in its long form: the value under an alias key. The shorthand
-  `billing: services/billing` is read as `{ path: services/billing }`; the long form leaves room for
-  later fields. A member is a project this one contains: it has no spec in this project's tree,
-  carries no content here, and is named only by its alias, which defaults to nothing but the key
-  (the member's own id is whatever its project.yaml declares).
+  One `members` entry of project.yaml in its long form: the value under an alias key. The usual form
+  is the string shorthand, which is the member's `source` alone: `scheduler: services/scheduler`
+  (contained), `admin: ../admin` (a sibling checkout), `payments:
+  git@host:acme/payments.git#<commit>` (a git repository at a commit), `marketplace:
+  hosted:marketplace` (a hosted record). The long form `{ source, as?, ref?, dir?, use?,
+  description? }` is only for what the shorthand cannot say. WHAT a member is follows from its
+  content (stage 8): a member whose own tree declares an id, holds an L0 or carries a lock is a
+  project, anything else a part; `as` only asserts that intent, and a contradiction is
+  MEMBER_KIND_MISMATCH. A part's subsystems are this project's own subsystems, keyed under this
+  project and judged by the ordinary subsystem rules; a project is reached only through its L0
+  exports as `alias::name`. Storage never changes what a member is (storage-is-orthogonal).
 subsystem: sdd_core
 fields:
   - name: path
     type: string
     description: >-
-      The member's root directory, relative to the declaring project's root. Containment is decided
-      against the declaring project: an absolute path, a ../-escaping path or one that leaves
-      through a link is refused (PROJECTPATH_ESCAPE) and not followed, identically from every
-      loading root.
-    optional: false
+      DEPRECATED (stage 8): the pre-stage-8 long-form key for a contained member's root. Read for
+      one release as `source` and reported (DEPRECATED_MOUNT_FORM, notice); `doctor --fix` rewrites
+      it to `source` (or the shorthand). Never written. An entry naming both `path` and `source` is
+      a declaration problem.
+    optional: true
   - name: description
     type: string
     description: >-
@@ -27,13 +33,45 @@ fields:
   - name: use
     type: string[]
     description: >-
-      The member's public names this project imports, exactly as an external's `use`: `['*']`
-      imports everything the member exports, a list only those names. A member is a dependency like
-      any other, so its names are no more in scope than an external's: without `use` the parent
-      names them `alias::name`. The shorthand `alias: path` imports nothing; importing needs the
-      long form.
+      Project members only: the member's public names this project imports, exactly as an external's
+      `use`: `['*']` imports everything the member exports, a list only those names. Without `use`
+      the parent names them `alias::name`. A part's names are already this project's own, so `use`
+      on a part is a declaration problem. The shorthand imports nothing; importing needs the long
+      form.
+    optional: true
+  - name: source
+    type: string
+    description: >-
+      Where the member lives, in one grammar: a relative path without a leading `..` is CONTAINED
+      (it must resolve strictly inside the declaring project, lexically and through links, else
+      PROJECTPATH_ESCAPE — containment security unchanged); a path that begins with `../` is a
+      SIBLING checkout — leaving the root is only ever this explicit `..`, and an absolute path is
+      refused; a git URL (scheme https:// or ssh:// or git://, or the scp form user@host:path)
+      followed by `#<full commit>` is a git repository pinned at that commit — the commit is
+      required and written by `member add` / `member update`, never resolved by a verdict;
+      `hosted:<record id>` is a hosted record (projects only: a part is part of its parent's
+      record). Required in the long form; the shorthand is this value alone.
+    optional: true
+  - name: as
+    type: string
+    description: >-
+      part | project — optional, and only an assertion of intent: what the member is follows from
+      its content (a project declares an id, holds an L0 or carries a lock; anything else is a
+      part). When stated and contradicted by the content, MEMBER_KIND_MISMATCH. Changing what a
+      member is is `member promote` / `member demote`, which create or remove the project content —
+      never an edit of this field.
+    optional: true
+  - name: ref
+    type: string
+    description: >-
+      git only: the branch or tag `member update` follows to a new commit; absent means the remote's
+      default branch. Never read by a verdict.
+    optional: true
+  - name: dir
+    type: string
+    description: 'git only: the member''s root inside the repository; absent means the repository root.'
     optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:30.244Z'
-updatedAt: '2026-09-28T16:05:24.932Z'
+updatedAt: '2026-10-02T20:44:40.154Z'

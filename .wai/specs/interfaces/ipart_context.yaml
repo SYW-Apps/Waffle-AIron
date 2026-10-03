@@ -1,0 +1,24 @@
+id: ipart_context
+name: Part Context Interface
+description: The read a part needs of its parent. Writes nothing.
+component: part_context
+methods:
+  - name: excerpt
+    description: >-
+      With a part's root bound: the ParentExcerpt it can be judged against alone — the parent's
+      specs the part's files reference and the closure judging them needs (each referenced component
+      with its contract, its subsystem's L1, the types their methods and the part's specs name,
+      transitively through type fields, and the parent's L0), the parent's governing projectType,
+      rules and pack selections, the commit of the work tree holding the parent, and the excerpt's
+      digest. Refuses, naming why, when the bound root is not a part, when its PartOf names no path
+      or the parent is not on disk there, when the project there answers to another id than
+      PartOf.project, or when that project does not declare this part (by its directory or its
+      source) — a pin is only ever taken from the parent that really claims the part.
+    signature: 'excerpt(): ParentExcerpt'
+    returns: ParentExcerpt
+    params: []
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-10-02T20:23:45.173Z'
+updatedAt: '2026-10-02T21:40:56.808Z'

@@ -84,7 +84,16 @@ fields:
       alias then name order. Written through the registry's importNames after the external it names
       is declared.
     optional: false
+  - name: locations
+    type: string[]
+    description: >-
+      Stage 8's one doctor step, this project's share: the aliases of its members declared with the
+      deprecated long-form `path` key (PositionMigrationPlan.locations), in declaration order, each
+      rewritten by apply to the one location key — the shorthand when the entry holds nothing else,
+      else the long form's `source` — through the registry's updateMember, its meaning unchanged. No
+      kind is ever written: what a member is follows from its content.
+    optional: false
 methods: []
 sourcePath: src/migrations/chaining-migration.ts
 createdAt: '2026-09-26T21:11:55.782Z'
-updatedAt: '2026-09-30T21:05:09.461Z'
+updatedAt: '2026-10-02T21:40:42.672Z'

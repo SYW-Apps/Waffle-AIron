@@ -277,24 +277,31 @@ methods:
     params: []
   - name: addMember
     description: >-
-      The sdd_add_member workflow: create a member of the bound project — scaffold its project
-      (configuration with the alias as its project id, L0), each part only when absent, and declare
-      it in project.yaml `members` with the path and description. A newly created configuration
-      carries the bound project's required packs, once; the answer states the packs it applied and
-      the requirements nothing installed satisfies, and shows no impact report (an unattended
+      The sdd_add_member workflow: create a member of the bound project at a source in the members
+      grammar (a contained path, a `../` sibling path, or a git URL pinned at its `#<commit>` or its
+      default branch head) — a PART by default (stage 8: only its specs directory, plus a PartOf
+      configuration when not contained; its subsystems are the project's own), or a PROJECT with
+      `as: project` (the project content: configuration with the alias as its id, L0, the bound
+      project's required packs once) — each piece only when absent, and declare it in project.yaml
+      `members` by the shorthand. The answer states what was created and, for a project, the packs
+      it applied and the requirements nothing installed satisfies; no impact report (an unattended
       write).
-    signature: 'addMember(alias: string, path: string, description?: string): MemberCreation'
+    signature: 'addMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
     returns: MemberCreation
     params:
       - name: alias
         type: string
-        description: The member's alias and new project id
-      - name: path
+        description: The member's alias (a project's new id)
+      - name: source
         type: string
-        description: The member's root, relative to the bound project root
+        description: A contained path, a `../` sibling path, or a git URL (optionally `#<commit>`)
       - name: description
         type: string
         description: What the member is to this project
+        optional: true
+      - name: as
+        type: string
+        description: project to create the project content; omitted creates a part
         optional: true
   - name: packImpact
     description: >-
@@ -318,4 +325,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-09-30T20:40:09.268Z'
+updatedAt: '2026-10-02T20:50:00.891Z'

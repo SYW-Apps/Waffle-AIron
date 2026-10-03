@@ -89,9 +89,10 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 280 files / 4633 tests |
+| `npx vitest run` | 285 files / 4704 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
 | `npm run build` | clean |
+| `npm run build:web` | clean (typechecks the SPA) |
 | `node dist/cli/index.js validate` | 0 errors, 0 warnings, 0 notices; register 318 findings / 423 units |
 | `node dist/cli/index.js validate --ci` | passes |
 

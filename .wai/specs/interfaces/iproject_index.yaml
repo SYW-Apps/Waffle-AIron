@@ -62,15 +62,20 @@ methods:
         description: Any record of the family
   - name: declaredMembers
     description: >-
-      The members the family rooted at a record declares ON DISK, members of members included: from
-      the record's root, each project.yaml `members` entry (and, for one release, a legacy L1 mount)
-      is followed through the containment guard, and the member's own project id is read from its
-      project.yaml. Each is answered as the record it should hold (id, parentProjectId = the
-      declaring project's id, memberPath as declared), with the pre-stage-7 qualifier that bound it
-      and the action against the stored records (register, relocate, rename, return — a record
-      disabled as departed whose member is declared again — or unchanged). A member whose
-      declaration, directory or project.yaml cannot be followed or read is answered with action
-      unreadable and the reason, never skipped.
+      The PROJECT members the family rooted at a record declares ON DISK and CONTAINS, members of
+      members included: from the record's root, each project.yaml `members` entry with a contained
+      source whose content makes it a project (stage 8: its tree declares an id, holds an L0 or
+      carries a lock — every pre-stage-8 member is project-shaped, so an existing family registers
+      exactly as before) and, for one release, each legacy L1 mount, followed through the
+      containment guard, with the member's own project id read from its project.yaml. Each is
+      answered as the record it should hold (id, parentProjectId = the declaring project's id,
+      memberPath as declared), with the pre-stage-7 qualifier that bound it and the action against
+      the stored records (register, relocate, rename, return — a record disabled as departed or
+      retired whose project member is declared again, retire — a record whose member's content is
+      now a part). Not answered (stage 8): a PART, which is part of its declaring project's record
+      and never a record of its own; and a `hosted:` project member, which is its own top-level
+      record, related to the declarer but not contained by it, so it gets no parentProjectId and
+      inherits no access through it. Records only, read from disk; nothing written.
     signature: 'declaredMembers(id: string): PlannedMemberRecord[]'
     returns: PlannedMemberRecord[]
     params:
@@ -87,6 +92,17 @@ methods:
     params:
       - name: id
         type: string
+  - name: isRetiredPart
+    description: >-
+      Whether a member record was retired as a part (stage 8): disabled, and its folder holding no
+      project content any more (no id, no L0, no lock) — so its specs are reached, permissioned and
+      written through its parent's record. Reads the record's folder; writes nothing.
+    signature: 'isRetiredPart(record: HostedProjectRecord): boolean'
+    returns: boolean
+    params:
+      - name: record
+        type: HostedProjectRecord
+        description: A record of the family
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-10-01T19:51:36.637Z'
+updatedAt: '2026-10-02T23:19:59.595Z'

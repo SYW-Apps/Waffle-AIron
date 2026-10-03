@@ -3,6 +3,8 @@ import { SddRule } from '../types.js';
 /** Dependency-cycle detection over the component dependsOn graph. */
 export const cyclesRule: SddRule = {
   name: 'dependency-cycles',
+  // Stage 8: its verdict needs the whole system's specs, so a part judged alone skips it.
+  needsWholeTree: true,
   judges: 'design',
   description: 'The component dependsOn graph must be a DAG; the first cycle through a component in the run\'s scope is reported with its full path.',
   codes: [

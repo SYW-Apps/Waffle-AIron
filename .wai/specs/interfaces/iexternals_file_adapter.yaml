@@ -45,6 +45,26 @@ methods:
     params:
       - name: alias
         type: string
+  - name: readExcerpt
+    description: >-
+      Read .wai/externals/<parent id>.yaml as a part's pinned parent excerpt (stage 8); null when
+      absent or malformed.
+    signature: 'readExcerpt(project: string): ParentExcerpt | null'
+    returns: ParentExcerpt | null
+    params:
+      - name: project
+        type: string
+        description: The parent's project id
+  - name: writeExcerpt
+    description: >-
+      Write a part's parent excerpt to .wai/externals/<parent id>.yaml, creating the directory when
+      missing and overwriting atomically.
+    signature: 'writeExcerpt(excerpt: ParentExcerpt): void'
+    returns: void
+    params:
+      - name: excerpt
+        type: ParentExcerpt
+        description: The excerpt, named by its project
 status: complete
 createdAt: '2026-09-26T18:11:39.137Z'
-updatedAt: '2026-09-26T18:43:58.487Z'
+updatedAt: '2026-10-02T20:23:22.341Z'

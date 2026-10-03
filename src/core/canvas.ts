@@ -61,6 +61,10 @@ export interface CanvasModel {
     /** Hosted (stage 7): a member project node's record id, present only when the
      *  caller may read that record — the web app links the node to its page. */
     recordId?: string;
+    /** Stage 8: the storage badge of a subsystem a PART holds (it is this
+     *  project's own subsystem, stored elsewhere) — `part <alias> · contained`,
+     *  `… · ../admin`, `… · git a1b2c3d` — or of a referenced project node. */
+    storage?: string;
     /** Opt-in deep expansion: with Internals on, this subsystem's box renders
      *  its WHOLE subtree (nested boundary boxes + leaf tiles + direct relation
      *  lines) instead of one layer. Never set by buildCanvasModel — the hosted
@@ -163,7 +167,8 @@ export interface CanvasModel {
  * keeps that id and shows its own name.
  */
 function memberProjectNodes(): CanvasModel['subsystems'] {
-  return graph().nodes
+  const family = graph();
+  const contained = family.nodes
     .filter((n) => n.namespace !== '')
     .map((n) => ({
       id: n.namespace,
@@ -172,6 +177,31 @@ function memberProjectNodes(): CanvasModel['subsystems'] {
       trustedLinks: [],
       project: true,
     }));
+  // Stage 8: a referenced project member (a `../`, git or hosted source) is a
+  // project node too — composition decides what is drawn, storage only how it
+  // is labelled. Its specs are not read here: it is drawn from outside.
+  const referenced = (family.nodes.find((n) => n.namespace === '')?.externals ?? [])
+    .filter((e) => e.role === 'member')
+    .map((e) => ({ id: e.alias, name: e.alias, description: '', trustedLinks: [], project: true, storage: storageBadge(e.sourceKind === 'family' ? 'contained' : e.sourceKind, e.directory, e.commit) }));
+  return [...contained, ...referenced];
+}
+
+/** How a member's storage reads on its badge: contained, its sibling path, or git and its short commit. */
+function storageBadge(storage: string, directory: string | undefined, commit: string | undefined): string {
+  if (storage === 'git') return `git ${commit ? commit.slice(0, 7) : ''}`.trim();
+  if (storage === 'hosted') return 'hosted';
+  if (storage === 'path') return directory ? `../${directory.split(/[\\/]/).pop()}` : 'sibling';
+  return 'contained';
+}
+
+/** Stage 8: each part subsystem's badge — the part's alias and its storage. */
+function partBadges(): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const part of graph().nodes.find((n) => n.namespace === '')?.parts ?? []) {
+    const badge = `part ${part.alias} · ${storageBadge(part.storage, part.directory, part.commit)}`;
+    for (const sub of part.subsystems) out.set(sub, badge);
+  }
+  return out;
 }
 
 export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
@@ -298,13 +328,22 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
     };
   });
 
-  // Step 3: one project node per member, its specs contained under its key.
+  // Step 3: one project node per member, its specs contained under its key;
+  // each part's subsystems stay this project's own, badged with their storage.
   const projectNodes = memberProjectNodes();
+  const badges = partBadges();
 
   const componentSub = new Map(components.map(c => [c.id, c.subsystem]));
   const edges: CanvasModel['edges'] = [];
+  const referencedIds = new Set(projectNodes.filter((p) => p.storage !== undefined).map((p) => p.id));
   for (const comp of components) {
     for (const depId of comp.dependsOn) {
+      // A consumption edge to a referenced project (stage 8): it lands on the project node.
+      const alias = depId.includes('::') ? depId.split('::')[0] : '';
+      if (referencedIds.has(alias) && !componentIds.has(depId)) {
+        edges.push({ from: comp.id, to: alias, cross: true });
+        continue;
+      }
       if (!componentIds.has(depId)) continue;
       edges.push({
         from: comp.id,
@@ -441,6 +480,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
         ...(s.targetLanguage ? { targetLanguage: s.targetLanguage } : {}),
         ...(s.status ? { status: s.status } : {}),
         trustedLinks: s.trustedLinks ?? [],
+        ...(badges.has(s.id) ? { storage: badges.get(s.id) } : {}),
       })),
     ],
     components: modelComponents,
@@ -957,7 +997,8 @@ var MODEL = __MODEL_JSON__;
   }
   function childOfScopeContaining(compId, scope) {
     var c = compById[compId];
-    if (!c) return null;
+    // A consumption edge may land on a referenced project's node itself (stage 8).
+    if (!c) return scope.kind === 'system' && subById[compId] ? { kind: 'subsystem', id: compId } : null;
     var subs = subsystemChainOf(c);
     var owners = ownerChainOf(c);
     if (scope.kind === 'system') {
@@ -976,7 +1017,7 @@ var MODEL = __MODEL_JSON__;
   }
   function anchorNodeId(entry) { return entry.kind === 'subsystem' ? SN(entry.id) : CN(entry.id); }
   function nameOf(entry) {
-    if (entry.kind === 'subsystem') { var s = subById[entry.id]; return s ? s.name : entry.id; }
+    if (entry.kind === 'subsystem') { var s = subById[entry.id]; return s ? s.name + (s.storage ? '\\n\\u29C9 ' + s.storage : '') : entry.id; }
     var c = compById[entry.id]; return c ? c.name : entry.id;
   }
 

@@ -81,11 +81,17 @@ methods:
     returns: Promise<void>
   - name: runMemberAdd
     description: >-
-      `wairon member add <alias> <path> [--description]`: create a member of the current project —
-      scaffold an isolated wairon project at the path (its project.yaml declaring the alias as its
-      id, its L0) and declare it in this project's project.yaml `members`. Replaces `wairon
-      subsystem add --project-path`, which wrote the L1 mount form.
-    signature: 'runMemberAdd(alias: string, path: string, options: { description?: string }): Promise<void>'
+      `wairon member add <alias> <source> [--project] [--description]`: create a member of the
+      current project at a source in the one members grammar — `services/scheduler` (contained),
+      `../admin` (a sibling checkout), `git@host:acme/payments.git[#<commit>]` (git, pinned at its
+      default branch head unless a commit is given) — a PART by default (stage 8: its subsystems are
+      this project's own), or with --project an isolated wairon project (its project content:
+      project.yaml declaring the alias as its id, its L0) — and declare it in this project's
+      project.yaml `members` by the shorthand. Replaces `wairon subsystem add --project-path`, which
+      wrote the L1 mount form.
+    signature: >-
+      runMemberAdd(alias: string, source: string, options: { description?: string, project?: boolean
+      }): Promise<void>
     returns: Promise<void>
   - name: runMemberMove
     description: >-
@@ -96,13 +102,15 @@ methods:
     returns: Promise<void>
   - name: runSubsystemExternalize
     description: >-
-      `wairon subsystem externalize <id> --path <dir> [--report] [--yes]`: turn an internal
-      subsystem into a member project at the path, family-wide and all-or-nothing — its specs move
-      there, it is declared in `members`, sibling subsystems' references are respelled
-      `alias::name`, what crosses the new boundary is exported and imported, and the new member's
-      external for this project is pinned; a reference that would need a component made public
-      refuses the plan instead. It keeps its name because it acts on a subsystem. Source code is
-      moved by the user. Through runMigration.
+      `wairon subsystem externalize <id> --path <dir> [--as part|project] [--report] [--yes]`: move
+      an internal subsystem's specs out to a folder. By default (stage 8) into a PART — a storage
+      move: a new part at the path (or the existing part there, which it joins), declared in
+      `members`, and nothing else changes (no reference, export, external or pin; the same verdict).
+      With `--as project` into a member PROJECT instead, family-wide and all-or-nothing: the move
+      followed by a promote — what crosses the new boundary exported and imported, references
+      respelled `alias::name`, the new member's external for this project pinned; a reference that
+      would need a component made public refuses the plan. It keeps its name because it acts on a
+      subsystem. Source code is moved by the user. Through runMigration.
     signature: 'runSubsystemExternalize(id: string, options: MigrationCommandOptions): Promise<void>'
     returns: Promise<void>
     params:
@@ -649,6 +657,35 @@ methods:
       - name: options
         type: MigrationCommandOptions
         description: '--report, --yes'
+  - name: runMemberPromote
+    description: >-
+      `wairon member promote <alias> [--id <id>] [--report] [--yes]` (stage 8): a part becomes an
+      independent project in place — its id, an export table for exactly what the rest of the
+      project uses, references respelled `alias::name`, pins on both sides, its own lock to take.
+      Plan first, confirmed, all-or-nothing, never locks. Through runMigration.
+    signature: >-
+      runMemberPromote(alias: string, options: MigrationCommandOptions & { id?: string }):
+      Promise<void>
+    returns: Promise<void>
+  - name: runMemberDemote
+    description: >-
+      `wairon member demote <alias> [--home <subsystem>] [--adopt-packs|--drop-packs] [--report]
+      [--yes]` (stage 8): a project member becomes a part of the current project in place —
+      promote's inverse; refused while another family project consumes it. Plan first, confirmed,
+      all-or-nothing, never locks. Through runMigration.
+    signature: 'runMemberDemote(alias: string, options: MigrationCommandOptions): Promise<void>'
+    returns: Promise<void>
+  - name: runMemberUpdate
+    description: >-
+      `wairon member update <alias> [--ref <ref> | --commit <sha>] [--report]` (stage 8): move a git
+      member's pinned commit to its ref's head (or the given ref or commit), first printing the
+      commits and the member's spec files added, changed and removed; --report prints and writes
+      nothing. The only way a git member's content changes. Never locks: the parent's lock reads
+      stale when the content moved.
+    signature: >-
+      runMemberUpdate(alias: string, options: { ref?: string, commit?: string, report?: boolean }):
+      Promise<void>
+    returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-01T23:45:49.036Z'
+updatedAt: '2026-10-02T22:47:15.488Z'

@@ -74,6 +74,36 @@ methods:
         outcome: ExportUsage
     detail: full
     symbol: exportUsageOf
+  - name: pinnedUsage
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project graph, whose authored references keep each reference's written form,
+          binding and position
+        type: call
+        targetComponent: project_family_index
+        targetMethod: graph
+      - stepNumber: 2
+        description: >-
+          Keep the consumer's authored references bound outside through the alias: `alias::name`
+          written through it, and bare names its `use` on the alias imports (form import, binding
+          outside, supplier the alias)
+        type: local
+      - stepNumber: 3
+        label: count
+        description: >-
+          Count each under the public name it spells, with the member its position reaches — a call
+          step's, declared call's or dispatch binding's method, a capability as `capability:<name>`,
+          `type` at a type position, nothing for a bare dependsOn
+        type: local
+      - stepNumber: 4
+        description: >-
+          Answer the usage with no unexported references, names sorted and each name's members
+          sorted
+        type: return
+        outcome: ExportUsage
+    detail: full
+    symbol: pinnedUsageOf
 status: complete
 createdAt: '2026-09-26T16:09:07.864Z'
-updatedAt: '2026-09-27T10:38:00.069Z'
+updatedAt: '2026-10-02T22:31:52.727Z'

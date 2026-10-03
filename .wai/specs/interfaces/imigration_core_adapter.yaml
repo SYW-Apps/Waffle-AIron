@@ -173,9 +173,9 @@ methods:
         description: The edits for this spec
   - name: externalizeSubsystem
     description: >-
-      Forward to spec_maintenance_portal.externalizeSubsystem: Turn an internal subsystem of the
-      bound project into a member project.
-    signature: 'externalizeSubsystem(subsystemId: string, path: string): void'
+      Forward to spec_maintenance_portal.externalizeSubsystem: move an internal subsystem of the
+      bound project out into a contained part, or with `as: project` into a member project.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): void'
     returns: void
     params:
       - name: subsystemId
@@ -183,7 +183,11 @@ methods:
         description: The subsystem
       - name: path
         type: string
-        description: The new member's root, relative to the bound root
+        description: The part's root, relative to the bound root
+      - name: as
+        type: string
+        description: part (default) or project
+        optional: true
   - name: internalizeMember
     description: >-
       Forward to spec_maintenance_portal.internalizeMember: Take a member back into the bound
@@ -270,6 +274,43 @@ methods:
       - name: id
         type: string
         description: The spec's in-memory key, from the family's top root
+  - name: promoteMember
+    description: 'Forward to spec_maintenance_portal.promoteMember: a part becomes a project in place.'
+    signature: 'promoteMember(alias: string, id?: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The part's alias
+      - name: id
+        type: string
+        description: The new project's id
+        optional: true
+  - name: demoteMember
+    description: 'Forward to spec_maintenance_portal.demoteMember: a project member becomes a part in place.'
+    signature: 'demoteMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where its metadata goes
+  - name: updateMember
+    description: >-
+      Forward to spec_maintenance_portal.updateMember: change a member's declaration — the chaining
+      migration's rewrite of a deprecated long-form `path` to the one location key, and promote /
+      demote dropping a contradicted `as`.
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
+    returns: boolean
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: changes
+        type: MemberDeclaration
+        description: The fields to set
 status: complete
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-09-30T22:58:33.846Z'
+updatedAt: '2026-10-02T20:50:33.859Z'

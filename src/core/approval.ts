@@ -4,6 +4,7 @@ import { getProjectRoot } from '../utils/fs.js';
 import { snapshotSpecFiles, graph } from './specs.js';
 import { readLockRecord, readLockRecordAt } from './lockfile.js';
 import { describeApprover, type ProjectApproval } from '../models/lock.js';
+import { approvalKeyIn } from '../models/project-family.js';
 import type { LockRecord } from './lockfile.js';
 import type { StateId } from './statehash.js';
 
@@ -100,15 +101,18 @@ function digest(content: string): string {
 export function currentSpecDigests(root: string = getProjectRoot()): Record<string, string> {
   // Every member the scan read, in either declaration form (stage 3: a member is
   // a project of its own, never a subsystem of this one).
-  const mountDirs = graph().nodes
+  const nodes = graph().nodes;
+  const mountDirs = nodes
     .filter((n) => n.namespace !== '')
     .map((n) => `${path.resolve(n.directory).split(path.sep).join('/')}/`);
+  // A part's files ARE this project's own (stage 8), keyed `members/<alias>/…`.
+  const parts = nodes.find((n) => n.namespace === '')?.parts ?? [];
 
   const out: Record<string, string> = {};
   for (const [abs, content] of snapshotSpecFiles()) {
     const normalized = path.resolve(abs).split(path.sep).join('/');
     if (mountDirs.some((dir) => normalized.startsWith(dir))) continue;
-    out[path.relative(root, abs).split(path.sep).join('/')] = digest(content);
+    out[approvalKeyIn(abs, root, parts)] = digest(content);
   }
   return out;
 }
@@ -129,12 +133,16 @@ export function captureApprovedSpecs(
   const current = currentSpecDigests(root);
   if (!scope) return current;
 
+  // A scope names files by their path from the root; a part's file is approved
+  // under its storage-independent key (stage 8).
+  const parts = graph().nodes.find((n) => n.namespace === '')?.parts ?? [];
+  const keys = new Set([...scope.paths].map((rel) => approvalKeyIn(path.resolve(root, rel), root, parts)));
   const previous = readLockRecord()?.specs ?? {};
   const specs: Record<string, string> = { ...previous };
   for (const rel of Object.keys(previous)) {
-    if (scope.paths.has(rel) && current[rel] === undefined) delete specs[rel];
+    if (keys.has(rel) && current[rel] === undefined) delete specs[rel];
   }
-  for (const rel of scope.paths) {
+  for (const rel of keys) {
     if (current[rel] !== undefined) specs[rel] = current[rel];
   }
   return specs;
@@ -327,7 +335,8 @@ export const GATE_UPGRADE_NOTE =
  */
 function memberNotes(approvals: ProjectApproval[]): { text: string; drift: boolean } {
   const own = approvals.find((a) => a.key === '');
-  const direct = approvals.filter((a) => a.parent === '');
+  // A part has no approval of its own (stage 8): this project's is its approval.
+  const direct = approvals.filter((a) => a.parent === '' && a.as !== 'part');
   const moved = direct.filter((a) => a.pinned === 'moved');
   const unapproved = direct.filter((a) => a.state !== 'approved');
   const lines: string[] = [];

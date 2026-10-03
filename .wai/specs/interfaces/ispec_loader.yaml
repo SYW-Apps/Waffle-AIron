@@ -277,6 +277,22 @@ methods:
     guarantees:
       - idempotent
     effect: write
+  - name: pinnedUsage
+    description: >-
+      Forward 1:1 to the Export Index: one consumer's references into a producer the scan did not
+      read (an outside external, or a referenced project member — a `../`, git or hosted source),
+      counted by the public name they spell.
+    signature: 'pinnedUsage(consumer: string, alias: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: alias
+        type: string
+        description: The alias the consumer declares the producer under
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T20:22:42.701Z'
+updatedAt: '2026-10-02T20:47:47.208Z'

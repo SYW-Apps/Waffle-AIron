@@ -1,0 +1,33 @@
+kind: value-object
+id: pinned_parent
+name: PinnedParent
+description: >-
+  A part's parent as the part's own gate judges against it (stage 8): the lock's parent entry and
+  the excerpt it names, read from the part's own files and nothing else — the PinnedExternal of a
+  part's one producer.
+subsystem: sdd_surfaces
+fields:
+  - name: project
+    type: string
+    description: 'The parent''s id: the part''s PartOf.project.'
+    optional: false
+    key: primary
+  - name: entry
+    type: ExternalLockEntry
+    description: The lock's parent entry. Absent when the part was never pinned.
+    optional: true
+  - name: excerpt
+    type: ParentExcerpt
+    description: The excerpt the entry names. Absent when unpinned, or the file is missing or malformed.
+    optional: true
+  - name: problem
+    type: string
+    description: >-
+      Why there is nothing to judge against: never pinned ("part of <parent>; validate from the
+      parent"), the excerpt missing or unreadable, or an excerpt of another project than PartOf
+      names.
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-02T20:25:00.144Z'
+updatedAt: '2026-10-02T20:25:00.145Z'

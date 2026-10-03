@@ -388,12 +388,27 @@ methods:
           and the alias read alike
   - name: memberDeclarations
     description: >-
-      Rule member-declarations. A project declares its members in project.yaml `members`; a member
-      is not a subsystem and carries no content in its parent. The L1 form — a subsystem carrying
-      projectPath — still loads for one release and is reported (DEPRECATED_MOUNT_FORM), naming the
+      Rule member-declarations. A project declares its members in project.yaml `members`, each by
+      one source in one grammar. A deprecated declaration form loads for one release and is reported
+      (DEPRECATED_MOUNT_FORM, notice): the L1 form — a subsystem carrying projectPath — naming the
       mount, its path, the `members` entry that replaces it, and every field it carries that `doctor
       --fix` will move into the member (or stop on); a mount whose alias `members` also declares is
-      reported as ignored. It reads the project graph's nodes and their legacy mounts.
+      reported as ignored; and (stage 8) the long-form `path` key, naming the `source` (or
+      shorthand) `doctor --fix` rewrites it to. Since stage 8 it also judges what each member of the
+      bound project IS against what is declared or written about it, from the scan's problems at the
+      bound root (a member's own members are that member's gate's): what a member is follows from
+      its content — an id, an L0 or a lock make it a project, anything else a part — and every
+      contradiction is ONE finding, MEMBER_KIND_MISMATCH (error), naming the alias and the
+      contradiction: an asserted `as` the content contradicts; a part whose configuration declares
+      project fields (members, externals, rules, extensions, composition, targets) without the id
+      that would make it a project (add the id, or move them to the parent); a non-contained part
+      with no PartOf, or one naming another project (opened alone it could not say what it belongs
+      to); a contained member declaring PartOf; a `use` on a member whose content is a part (its
+      names are already this project's own). A part whose files could not be read — its directory
+      absent, or its git commit not cached and not fetchable (offline, refused, unknown) — is
+      PART_UNAVAILABLE (error): the project's own subsystems are missing, so its verdict cannot be a
+      pass. The member findings name no spec: members live in configuration. It reads the project
+      graph's nodes, their legacy mounts, the bound root's declared members and its problems.
     signature: 'memberDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -404,8 +419,20 @@ methods:
       - code: DEPRECATED_MOUNT_FORM
         severity: notice
         summary: >-
-          A member declared as an L1 subsystem carrying projectPath instead of a project.yaml
-          `members` entry
+          A member declared in a deprecated form — an L1 subsystem carrying projectPath, or (stage
+          8) the long-form `path` key — which doctor --fix rewrites to a `members` entry with one
+          `source`.
+      - code: MEMBER_KIND_MISMATCH
+        severity: error
+        summary: >-
+          What a member's content makes it (an id, L0 or lock: a project; else a part) contradicts
+          what is declared or written about it: an asserted `as`, project fields in a part, a
+          missing or wrong PartOf, a `use` on a part.
+      - code: PART_UNAVAILABLE
+        severity: error
+        summary: >-
+          A part's files could not be read (absent directory, unpinned or unfetchable git commit):
+          the project's own subsystems are missing.
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-09-30T20:19:49.060Z'
+updatedAt: '2026-10-02T20:48:26.096Z'

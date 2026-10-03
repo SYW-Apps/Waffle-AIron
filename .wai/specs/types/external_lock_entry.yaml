@@ -2,9 +2,12 @@ kind: value-object
 id: external_lock_entry
 name: ExternalLockEntry
 description: >-
-  What `wairon externals pin` recorded for one alias in .wai/externals.lock.yaml: which producer it
-  pinned, where the snapshot is, the snapshot's content digest, and the digest of every member the
-  consumer's references use, so a later status says stale only when something used changed.
+  What `wairon externals pin` recorded for one pinned producer in .wai/externals.lock.yaml: which
+  producer it pinned, where the snapshot is, the snapshot's content digest, the digest of every
+  member the consumer's references use (so a later status says stale only when something used
+  changed), and since stage 8 the producer's commit and the role it was pinned in — an external, a
+  referenced project member (pinned exactly as an external), or, in a non-contained part's lock, the
+  part's parent (whose snapshot is a ParentExcerpt).
 subsystem: sdd_surfaces
 fields:
   - name: project
@@ -13,7 +16,10 @@ fields:
     optional: false
   - name: snapshot
     type: string
-    description: 'The snapshot path, project-relative: .wai/externals/<alias>.yaml.'
+    description: >-
+      The snapshot path, project-relative: .wai/externals/<alias>.yaml — a SurfaceSnapshot for an
+      external or a referenced project, a ParentExcerpt at .wai/externals/<parent id>.yaml for a
+      part's parent.
     optional: false
   - name: digest
     type: string
@@ -24,12 +30,26 @@ fields:
     description: >-
       Public name → member → sha256:… (SurfaceSnapshot.memberDigest). A member is a method name,
       `capability:<name>` or `type` (a typeDef export); a public name the consumer only depends on
-      maps to an empty member map. A type reaches the lock only through the signature closure of a
-      used method or as a used typeDef export: a type the consumer names directly (a field, say)
-      that the producer exports only inside a closure is not pinned in stage 2. Empty for a producer
-      outside the family: no stage-2 reference form reaches it.
+      maps to an empty member map. Filled for every producer since stage 8 — a family producer from
+      the scan's binding, any other from the references written through its alias
+      (export_index.pinnedUsage) — so a path, git or hosted producer is compared per use too. Empty
+      for a part's parent: an excerpt is compared whole, by digest.
     optional: false
+  - name: commit
+    type: string
+    description: >-
+      The producer's commit at pin time, recorded only when the producer lives in another git
+      repository than the consumer: the fetched commit of a git source (an external's ref head; a
+      referenced project's pinned commit), or the head of the work tree holding a `../` sibling or
+      path producer that is its own repository. A family, contained or same-repository producer
+      records none, so a monorepo re-pin never churns the lock. Provenance for a reader and the base
+      an `externals status` reports `ahead` against; never compared by a verdict.
+    optional: true
+  - name: role
+    type: string
+    description: external | member | parent. Absent reads as external (every entry written before stage 8).
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:46:57.120Z'
-updatedAt: '2026-09-26T18:13:44.129Z'
+updatedAt: '2026-10-02T23:58:44.061Z'

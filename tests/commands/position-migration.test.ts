@@ -164,7 +164,7 @@ describe('stage 3 — the position migration over the reference family', () => {
     }
     // The member entry carries the mount's description; no L1 document is left.
     const members = (yaml.load(fs.readFileSync(path.join(f.top, '.wai', 'project.yaml'), 'utf8')) as { members: unknown }).members;
-    expect(members).toEqual({ core: 'core', shared: { path: 'shared', description: 'The vocabulary every project speaks' } });
+    expect(members).toEqual({ core: 'core', shared: { source: 'shared', description: 'The vocabulary every project speaks' } });
     expect(fs.existsSync(path.join(f.top, '.wai', 'specs', 'shared', '.index.yaml'))).toBe(false);
     // The rewritten text, on disk.
     const lowering = yaml.load(fs.readFileSync(path.join(f.transpiler, '.wai', 'specs', 'lowering', 'lowering-core', '.index.yaml'), 'utf8')) as { dependsOn: string[] };
@@ -270,7 +270,7 @@ describe('stage 3 — the wave-B follow-ups', () => {
       saveSpec('subsystem', { id: 'core', name: 'core', description: 'the core', parentSystem: 'fleet', publicInterfaces: [{ type: 'Custom', details: 'core api', component: 'core_portal' }], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now } as never);
       saveComponentSpec({ id: 'core_portal', name: 'Core Portal', description: 'front door', subsystem: 'core', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as never);
       invalidateSpecCache();
-      externalizeSubsystem('core', 'packages/core');
+      externalizeSubsystem('core', 'packages/core', 'project');
     });
     // A second member, ops, reaches core through an external of its own.
     const ops = path.join(root, 'packages', 'ops');

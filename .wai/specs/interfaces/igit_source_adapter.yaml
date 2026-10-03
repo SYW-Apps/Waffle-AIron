@@ -1,0 +1,69 @@
+id: igit_source_adapter
+name: Git Source Adapter Interface
+description: >-
+  Materialize a repository at a commit, resolve a ref, read a work tree's commit. Content-addressed
+  and immutable per commit; network only in fetch (when the commit is not cached) and resolve.
+component: git_source_adapter
+methods:
+  - name: fetch
+    description: >-
+      The cache directory holding `dir` of the repository at exactly that commit, fetching it (that
+      commit only, shallow) when the cache does not hold it yet. Throws SourceUnavailable naming why
+      when it cannot: offline, refused credentials, an unknown commit, or a `dir` the commit does
+      not hold. Idempotent: a cached commit is answered without touching the network.
+    signature: 'fetch(url: string, commit: string, dir?: string): string'
+    returns: string
+    params:
+      - name: url
+        type: string
+        description: The repository URL as the source declares it
+      - name: commit
+        type: string
+        description: The full commit to materialize
+      - name: dir
+        type: string
+        description: The producer's root inside the repository
+        optional: true
+    guarantees:
+      - idempotent
+  - name: resolve
+    description: >-
+      The full commit a ref names on the remote now (the remote's default branch when no ref is
+      given). Network; throws SourceUnavailable when the remote cannot be reached or the ref does
+      not exist. Called only by pinning and updating, never by a validate.
+    signature: 'resolve(url: string, ref?: string): string'
+    returns: string
+    params:
+      - name: url
+        type: string
+        description: The repository URL
+      - name: ref
+        type: string
+        description: A branch or tag
+        optional: true
+  - name: head
+    description: >-
+      The commit checked out in the work tree that holds a directory, or null when the directory is
+      in no git work tree. No network. Provenance for a part or member stored on disk: the parent's
+      lock records it, and nothing judges by it.
+    signature: 'head(directory: string): string | null'
+    returns: string | null
+    params:
+      - name: directory
+        type: string
+        description: An absolute directory
+  - name: repositoryRoot
+    description: >-
+      The root of the git work tree that holds a directory (the nearest ancestor holding a `.git`
+      entry), or null when it lies in none. No process and no network: a filesystem walk. What tells
+      a producer in another repository (whose commit a pin records) from a contained or
+      same-repository one (whose commit nothing records).
+    signature: 'repositoryRoot(directory: string): string | null'
+    returns: string | null
+    params:
+      - name: directory
+        type: string
+        description: An absolute directory
+status: complete
+createdAt: '2026-10-02T20:19:32.127Z'
+updatedAt: '2026-10-02T23:58:20.593Z'

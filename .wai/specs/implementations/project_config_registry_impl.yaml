@@ -275,7 +275,31 @@ methods:
     calls:
       - project_config_store.read
       - project_config_store.write
+  - name: updateMember
+    narrative: []
+    intent: >-
+      Reads the configuration through the store, refusing when the project has none or `members`
+      does not declare the alias. Merges the named fields into the entry (a deprecated `path`
+      becomes `source`), refusing a result with no source, an unparseable source, a git source
+      without its `#<commit>`, or an `as` other than part or project, each before writing. When the
+      merged entry equals the stored one, returns false and writes nothing; otherwise writes it back
+      as the shorthand when only its source remains and the long form otherwise, through the store,
+      which keeps every comment, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: setPartOf
+    narrative: []
+    intent: >-
+      Reads the configuration through the store (none yet reads as empty, for a fresh part). Refuses
+      to set partOf on a configuration declaring any project field, naming them. When partOf already
+      equals the value (or is absent and the value is null), returns false and writes nothing;
+      otherwise sets or removes it and writes the configuration through the store, creating the file
+      for a fresh part with only its schema version and partOf, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-09-30T20:20:22.889Z'
+updatedAt: '2026-10-02T20:50:26.474Z'

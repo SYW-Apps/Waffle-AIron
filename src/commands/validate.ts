@@ -6,7 +6,7 @@ import { ProjectNotInitializedError } from '../utils/errors.js';
 // The core reads this adapter makes land on the core portals: the configuration,
 // the agent registry, and the legacy spec filenames a migration would rename.
 import { loadProjectConfig, loadRegistry, findLegacySpecFiles } from '../core/index.js';
-import { declaredMembers, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
+import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
 import {
@@ -232,7 +232,10 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
 
   // --- Project config ---
   logger.header('Project Config');
-  const configResult = validateProjectConfig(projectConfig);
+  // A part's configuration says only what it is a part of (stage 8): its
+  // parent's configuration governs it, so it has no targets of its own to check.
+  const part = isPart(projectConfig);
+  const configResult = part ? { valid: true, issues: [] } : validateProjectConfig(projectConfig);
   if (configResult.issues.length === 0) {
     logger.success('Project config is valid.');
   } else {
@@ -274,7 +277,8 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   }
 
   // --- SDD Spec Tree ---
-  if (pathExists(AI_PATHS.specsSystem())) {
+  // A part opened alone has no L0 of its own: its gate judges it against its pinned parent (stage 8).
+  if (pathExists(AI_PATHS.specsSystem()) || part) {
     logger.header('SDD Architectural Specs');
     const sddOptions = {
       rules: projectConfig.rules,

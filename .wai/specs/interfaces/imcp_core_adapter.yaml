@@ -189,21 +189,26 @@ methods:
         type: VariantDef[]
   - name: createMember
     description: >-
-      Calls createMember on the core portal: scaffold a member project (with the bound project's
-      required packs, once, when its configuration is created) and declare it in the bound project's
-      `members`; answers what was scaffolded.
-    signature: 'createMember(alias: string, path: string, description?: string): MemberCreation'
+      Calls createMember on the core portal: create a member at a source in the members grammar — a
+      part by default, a project with `as: project` (stage 8; a project with the bound project's
+      required packs, once) — and declare it in the bound project's `members`; answers what was
+      created.
+    signature: 'createMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
     returns: MemberCreation
     params:
       - name: alias
         type: string
-        description: The member's alias and new project id
-      - name: path
+        description: The member's alias
+      - name: source
         type: string
-        description: The member's root, relative to the bound project root
+        description: A contained path, a `../` sibling path, or a git URL (optionally `#<commit>`)
       - name: description
         type: string
         description: What the member is to this project
+        optional: true
+      - name: as
+        type: string
+        description: project to create the project content; omitted creates a part
         optional: true
   - name: listDirectChainedSubprojects
     description: >-
@@ -220,4 +225,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:40:11.069Z'
+updatedAt: '2026-10-02T20:49:57.185Z'

@@ -65,7 +65,7 @@ describe('importNames', () => {
     const root = project();
     const repo = projectConfigRepositoryAt(root);
     expect(repo.importNames('ui', ['*'])).toBe(true);
-    expect(repo.load()?.members?.ui).toEqual({ path: 'packages/ui', use: ['*'] });
+    expect(repo.load()?.members?.ui).toEqual({ source: 'packages/ui', use: ['*'] });
     expect(repo.importNames('ui', ['banner'])).toBe(false);
   });
 

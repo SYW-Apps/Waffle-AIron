@@ -29,7 +29,15 @@ fields:
       reference it resolves and whether the producer needs the export and the consumer the external
       — which the chaining migration plans with its own entries and declarations
     optional: false
+  - name: locations
+    type: string[]
+    description: >-
+      Stage 8's one doctor step: every member declared with the deprecated long-form `path`, as
+      `<declaring project key>/<alias>`, whose entry is rewritten to the one location key — the
+      shorthand when nothing else is in the entry, else the long form's `source` — meaning
+      unchanged; projects in walk order.
+    optional: false
 methods: []
 sourcePath: src/migrations/position-migration.ts
 createdAt: '2026-09-27T10:44:31.358Z'
-updatedAt: '2026-09-30T21:05:11.591Z'
+updatedAt: '2026-10-02T20:45:23.783Z'

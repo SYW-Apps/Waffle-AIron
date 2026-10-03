@@ -358,8 +358,9 @@ methods:
         outcome: cannot lock — validation failed
       - stepNumber: 10
         description: >-
-          Read the direct members' approval states, each computed at the member's own root, with
-          their subjects (depth 1)
+          Read the direct members' approval states, each project member computed at its own root,
+          with their subjects (depth 1) — and each part, as a part with its content digest and
+          commit (stage 8)
         type: call
         targetComponent: host_validator_adapter
         targetMethod: familyApprovals
@@ -372,7 +373,9 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 12
-        description: Does the project require approved members, and is one not approved?
+        description: >-
+          Does the project require approved members, and is a PROJECT member not approved? (A part's
+          approval is this lock)
         type: branch
         condition: >-
           composition.requireApprovedMembers is true and a direct member is drifted or never
@@ -388,8 +391,9 @@ methods:
         error: 'composition.requireApprovedMembers: direct members not approved'
       - stepNumber: 14
         description: >-
-          Capture the approved tree as one content digest per OWN spec file (a member's files are
-          its own lock's). Nothing is written into the spec files
+          Capture the approved tree as one content digest per OWN spec file — its parts' included
+          (stage 8), keyed `members/<alias>/<path inside the part>`; a project member's files are
+          its own lock's. Nothing is written into the spec files
         type: call
         targetComponent: host_core_adapter
         targetMethod: captureApprovedSpecs
@@ -417,8 +421,10 @@ methods:
           Assemble a format-2 LockRecord: stateId = the captured identity, lockedAt, the
           AUTHENTICATED approver the caller resolved from the credential, validatorVersion,
           validationResult = the design half's counts, status ready, the effective id as projectId,
-          the captured specs, `members` = each direct member's alias → {project, subject, state},
-          and `code` = the result's analysis without its codes list. No `children` is written
+          the captured specs, `members` = each direct member's alias → a project member's {as:
+          project, project, subject, state} or a part's {as: part, contentDigest, commit when known,
+          state approved}, and `code` = the result's analysis without its codes list. No `children`
+          is written
         type: local
       - stepNumber: 19
         description: >-
@@ -1167,4 +1173,4 @@ methods:
         outcome: gate identity
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-10-01T16:58:56.697Z'
+updatedAt: '2026-10-02T20:51:19.447Z'

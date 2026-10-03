@@ -27,6 +27,8 @@ interface CallEdge {
 
 export const unconditionalCallCyclesRule: SddRule = {
   name: 'unconditional-call-cycles',
+  // Stage 8: its verdict needs the whole system's specs, so a part judged alone skips it.
+  needsWholeTree: true,
   judges: 'design',
   description:
     'A method-level call cycle across components in which every call edge is unavoidable on every entry-to-exit path of its narrative is unbounded recursion, by construction. Dispatch steps are resolved through their portal\'s table; register steps are never edges (a handoff defers the invocation to the runtime, so it cannot recurse). A cycle with even one guarded edge is NOT flagged, since prose conditions are never judged. Structure-only — a warning, lint.allow-suppressible, anchored on the member edge that sorts first so one allow covers the cycle.',

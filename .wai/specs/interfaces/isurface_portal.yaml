@@ -127,6 +127,14 @@ methods:
         description: The alias whose pin goes
     guarantees:
       - idempotent
+  - name: pinnedParent
+    description: >-
+      A part's pinned parent — its lock's parent entry and the excerpt it names, read from its own
+      .wai/externals files only — what the owner's gate opened at a part judges against (stage 8);
+      null at a project. Pure 1:1 forward.
+    signature: 'pinnedParent(): PinnedParent | null'
+    returns: PinnedParent | null
+    params: []
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-09-30T20:23:34.368Z'
+updatedAt: '2026-10-02T20:25:10.637Z'

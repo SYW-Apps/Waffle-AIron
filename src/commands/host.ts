@@ -298,7 +298,7 @@ export async function runHostProject(action: string, options: HostOptions = {}):
         if (!list.length) {
           logger.info('No projects.');
         } else {
-          for (const r of list) logger.info(`  ${r.id.padEnd(20)} ${r.status.padEnd(9)} ${chalk.gray(r.rootPath)}`);
+          for (const r of list) logger.info(`  ${r.id.padEnd(20)} ${r.status.padEnd(9)} ${chalk.gray(r.rootPath)}${r.status === 'disabled' && r.disabledReason ? chalk.gray(` (${r.disabledReason})`) : ''}`);
         }
         break;
       }

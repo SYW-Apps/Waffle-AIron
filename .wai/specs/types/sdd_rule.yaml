@@ -36,7 +36,16 @@ fields:
       certifies the design and an analyzer upgrade never stales it. A pack rule declares none and
       counts as design.
     optional: true
+  - name: needsWholeTree
+    type: boolean
+    description: >-
+      Stage 8: whether the rule's verdict needs the whole system's specs — reachability and unused
+      detection, topic pairing, cycles across subsystems, hydration. Such a rule is skipped (and
+      named in PART_JUDGED_ALONE) when a part is judged alone against its pinned parent excerpt,
+      since the excerpt carries only what the part references. Absent means false: a rule that
+      judges what it is handed runs everywhere.
+    optional: true
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:52.909Z'
-updatedAt: '2026-09-30T05:48:11.568Z'
+updatedAt: '2026-10-02T20:52:00.408Z'

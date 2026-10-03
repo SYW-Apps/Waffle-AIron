@@ -172,6 +172,27 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: normalizeReferences
+  - name: promoteMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: promoteMember
+  - name: demoteMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: demoteMember
+  - name: updateMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: updateMember
 status: complete
 createdAt: '2026-09-30T20:31:36.988Z'
-updatedAt: '2026-09-30T22:58:41.212Z'
+updatedAt: '2026-10-02T20:50:34.752Z'

@@ -18,4 +18,6 @@ export {
   // The bound project's declared externals, each bound to its producer: the
   // surfaces plane never walks the family itself.
   resolveExternals,
+  // A part's excerpt of its parent, for `wairon externals pin` at a part (stage 8).
+  excerptParent,
 } from '../index.js';

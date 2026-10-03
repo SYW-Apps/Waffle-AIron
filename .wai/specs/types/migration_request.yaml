@@ -11,22 +11,29 @@ fields:
   - name: verb
     type: string
     description: >-
-      attach | rename | rename-alias | detach | adopt | internalize | externalize | chaining.
-      chaining is the stage 2–4 chaining migration (`doctor --fix`, `doctor --report chaining`),
-      which takes no other argument.
+      attach | rename | rename-alias | detach | adopt | internalize | externalize | promote | demote
+      | chaining. chaining is the stage 2–4 chaining migration (`doctor --fix`, `doctor --report
+      chaining`), which takes no other argument; since stage 8 it also rewrites each deprecated
+      long-form member `path` to the one location key. Stage 8's two composition verbs leave storage
+      alone: promote (a part becomes a project: its project content is created) and demote (a
+      project becomes a part: its project content is removed). externalize and internalize are
+      storage verbs again: they move a subsystem out to a part's directory or a part's subsystems
+      back in, and with `as: project` (externalize) or on a project member (internalize) they
+      compose with promote / demote.
     optional: false
   - name: alias
     type: string
     description: >-
       attach: the alias to declare; rename-alias: the alias as declared now; detach, adopt,
-      internalize: the member or external it acts on.
+      internalize, promote, demote: the member or external it acts on.
     optional: true
   - name: path
     type: string
     description: >-
-      attach: the existing project's root; externalize: the new member's root; adopt with a
-      relocation (hosted): the member path to adopt it at, since a source.hosted external names no
-      directory — relative to the bound project.
+      attach: the existing project's root; externalize: the part's root — a new directory, or an
+      existing part's, which the subsystem joins; adopt with a relocation (hosted): the member path
+      to adopt it at, since a source.hosted external names no directory — relative to the bound
+      project.
     optional: true
   - name: project
     type: string
@@ -36,7 +43,9 @@ fields:
     optional: true
   - name: newId
     type: string
-    description: 'rename: the new project id.'
+    description: >-
+      rename: the new project id. promote: the id the promoted part's project declares (default: its
+      alias).
     optional: true
   - name: newAlias
     type: string
@@ -48,7 +57,9 @@ fields:
     optional: true
   - name: destination
     type: InternalizeDestination
-    description: 'internalize: where the member''s own metadata goes.'
+    description: >-
+      internalize of a project member, and demote: where the member's own metadata goes (its L0,
+      configuration, externals, packs). Ignored for a part, which has none.
     optional: true
   - name: rehearse
     type: boolean
@@ -75,7 +86,14 @@ fields:
       isolated root of its own in the same transaction — detach writes hosted sources instead of
       path sources, adopt removes them. Absent everywhere else.
     optional: true
+  - name: as
+    type: string
+    description: >-
+      externalize: part (default) — the subsystem moves to the path as a part of the bound project,
+      and no reference, export or lock entry changes — or project, today's externalize: the moved
+      subsystem becomes a member project (externalize, then promote, in one plan).
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:03.011Z'
-updatedAt: '2026-10-01T18:07:23.007Z'
+updatedAt: '2026-10-02T20:45:48.335Z'

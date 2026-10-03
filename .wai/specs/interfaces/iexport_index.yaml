@@ -60,6 +60,28 @@ methods:
         description: The producer's namespace in the family graph
     guarantees:
       - idempotent
+  - name: pinnedUsage
+    description: >-
+      One consumer's references into a producer the scan did NOT read — an external outside the
+      family (path, git, hosted) or a referenced project member (a `../`, git or hosted source) —
+      counted by the public name they spell, since there is no live table here to bind them to
+      (stage 8): each `alias::name` reference through the alias counts `name`, each bare name the
+      consumer's `use` on that alias imports counts that name, each with the member it reaches (the
+      contract method a call step, declared call or dispatch binding names, or `type` at a type
+      position). What the producer actually exports is the pin's and the status's to compare, so
+      nothing here is unexported. This is what fills the lock's `used` map for an outside producer,
+      so a sibling checkout or a git repository that breaks a used method is EXTERNAL_INCOMPATIBLE
+      in the family run rather than only drifted.
+    signature: 'pinnedUsage(consumer: string, alias: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's project key
+      - name: alias
+        type: string
+        description: The alias the consumer declares the producer under
+    effect: read
 status: complete
 createdAt: '2026-09-26T16:08:30.136Z'
-updatedAt: '2026-09-28T17:16:48.858Z'
+updatedAt: '2026-10-02T20:47:32.568Z'

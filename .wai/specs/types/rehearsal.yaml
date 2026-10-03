@@ -48,7 +48,14 @@ fields:
       file under them, whatever the file, is compared, so a move reads as deletes at the old place
       and creates at the new. Absent for every other transaction.
     optional: true
+  - name: base
+    type: string
+    description: >-
+      Stage 8: the directory the rehearsal lays every owner out under (the nearest common ancestor
+      of the coordinator and every owner, a sibling checkout included); an owner's image is
+      <directory>/<its path from base>. Absent reads as the family root.
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:23.894Z'
-updatedAt: '2026-10-01T18:06:29.931Z'
+updatedAt: '2026-10-02T23:57:59.113Z'

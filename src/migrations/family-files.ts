@@ -168,23 +168,44 @@ function scopedFiles(owner: string, areas: string[] | undefined): string[] {
   return areas ? [...new Set(areas.flatMap((a) => areaFiles(owner, a)))].sort() : waiFiles(owner);
 }
 
-/** ifamily_file_adapter.mirror — copy each scoped owner's areas (its .wai tree by default) into the target at its path from the coordinator root. */
+/**
+ * ifamily_file_adapter.mirror — copy each scoped owner's areas (its .wai tree
+ * by default) into the target at its path from the scope's base: the nearest
+ * common ancestor of the coordinator and every owner (stage 8: a sibling
+ * checkout beside the family root is an owner like any other), the
+ * coordinator when the scope names none. An owner outside the base, or on
+ * another volume than the coordinator, is refused.
+ */
 export function mirror(scope: TransactionScope, target: string): Map<string, string> {
   const digests = new Map<string, string>();
   const whole = scope.whole ?? [];
-  for (const owner of [...scope.projects, ...whole]) {
-    if (!within(scope.familyRoot, owner)) {
-      throw new Error(`${owner} does not lie within the family root ${scope.familyRoot}; a rehearsal copies only the family's own trees`);
-    }
-  }
+  const base = scope.base ?? scope.familyRoot;
+  for (const owner of [...scope.projects, ...whole]) assertPlaceable(scope.familyRoot, base, owner);
   // An owner inside a whole owner is copied once, by the whole owner.
   for (const project of scope.projects.filter((p) => !insideWhole(whole, p))) {
-    copyFiles(project, scopedFiles(project, scope.areas), nodePath.join(target, nodePath.relative(scope.familyRoot, project)), digests);
+    copyFiles(project, scopedFiles(project, scope.areas), nodePath.join(target, nodePath.relative(base, project)), digests);
   }
   for (const owner of whole) {
-    copyFiles(owner, everyFile(owner), nodePath.join(target, nodePath.relative(scope.familyRoot, owner)), digests);
+    copyFiles(owner, everyFile(owner), nodePath.join(target, nodePath.relative(base, owner)), digests);
   }
   return digests;
+}
+
+/** An owner the rehearsal can lay out: on the family root's volume, and under the base. */
+function assertPlaceable(familyRoot: string, base: string, owner: string): void {
+  if (!within(familyRoot, owner) && !sameVolume(familyRoot, nearestExisting(owner))) {
+    throw new Error(`cross-volume: ${owner} lies on another volume than the family root ${familyRoot}, and a rename across volumes is not atomic`);
+  }
+  if (!within(base, owner)) {
+    throw new Error(`${owner} does not lie within ${base}; a rehearsal copies only the family's own trees and the sibling checkouts beside it`);
+  }
+}
+
+/** A path, or its nearest ancestor that exists. */
+function nearestExisting(p: string): string {
+  let at = nodePath.resolve(p);
+  while (!fs.existsSync(at) && at !== nodePath.dirname(at)) at = nodePath.dirname(at);
+  return at;
 }
 
 /** Copy an owner's files (relative paths) to the same paths under `at`, recording each live file's digest. */
@@ -234,8 +255,8 @@ function comparedFiles(rehearsal: Rehearsal): [string, string, string][] {
   const whole = rehearsal.whole ?? [];
   const owners: [string, string, string[]][] = rehearsal.areas
     ? [...rehearsal.roots].map(([live, copy]) => [live, copy, scopedFiles(copy, rehearsal.areas)])
-    : waiOwners(rehearsal.directory).map((copy) => [nodePath.join(rehearsal.familyRoot, nodePath.relative(rehearsal.directory, copy)), copy, waiFiles(copy)]);
-  const imageOf = (live: string): string => nodePath.join(rehearsal.directory, nodePath.relative(rehearsal.familyRoot, live));
+    : waiOwners(rehearsal.directory).map((copy) => [nodePath.join(rehearsal.base ?? rehearsal.familyRoot, nodePath.relative(rehearsal.directory, copy)), copy, waiFiles(copy)]);
+  const imageOf = (live: string): string => nodePath.join(rehearsal.directory, nodePath.relative(rehearsal.base ?? rehearsal.familyRoot, live));
   const all: [string, string, string[]][] = [
     ...owners.filter(([live]) => !insideWhole(whole, live)),
     ...whole.map((live): [string, string, string[]] => [live, imageOf(live), everyFile(imageOf(live))]),

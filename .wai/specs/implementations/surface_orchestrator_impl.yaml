@@ -111,132 +111,149 @@ methods:
     sourcePath: src/core/surfaces.ts
     narrative:
       - stepNumber: 1
+        description: Read the bound root's configuration through the core
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
         description: >-
-          Resolve the bound project's declared externals through the core: each bound to its
-          producer, with the consumer's references into each family producer mapped onto its public
-          names
+          Is the bound root a part (stage 8)? A part declares no externals: what it pins is its
+          parent
+        type: branch
+        condition: the configuration is a part's (ProjectConfig.isPart)
+        onFalseStep: 5
+      - stepNumber: 3
+        description: 'Pin the part''s parent instead: its excerpt, into the part''s lock `parent` entry'
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinParent
+      - stepNumber: 4
+        description: Answer the parent's outcome
+        type: return
+        outcome: ExternalPin[]
+      - stepNumber: 5
+        label: externals
+        description: >-
+          Resolve the bound project's declared externals and its referenced project members (a
+          `../`, git or hosted source) through the core: each bound to its producer (family,
+          source.path, git at its ref's head or a member's pinned commit, hosted), with the
+          consumer's references into each by public name
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
-      - stepNumber: 2
+      - stepNumber: 6
         description: Keep the aliases asked for, or every declared external when none are named
         type: local
-      - stepNumber: 3
+      - stepNumber: 7
         description: Is an alias named that the project does not declare?
         type: branch
         condition: a named alias is not among the declared externals
-        onFalseStep: 5
-      - stepNumber: 4
+        onFalseStep: 9
+      - stepNumber: 8
         description: Refuse before anything is written, naming the alias and the declared ones
         type: throw
         error: UnknownExternalAliasError
-      - stepNumber: 5
+      - stepNumber: 9
         label: read-lock
         description: Read the current externals lock (none yet reads as empty)
         type: call
         targetComponent: externals_repository
         targetMethod: readLock
-      - stepNumber: 6
+      - stepNumber: 10
         description: For each external to pin
         type: loop
         loopKind: forEach
         over: the kept bindings
-        endStep: 17
-      - stepNumber: 7
+        endStep: 21
+      - stepNumber: 11
         description: Is its producer resolved?
         type: branch
         condition: the binding's sourceKind is unresolved
-        onTrueStep: 16
-        onFalseStep: 8
-      - stepNumber: 8
+        onTrueStep: 20
+        onFalseStep: 12
+      - stepNumber: 12
         description: >-
-          Bind the producer's root read-only, restoring the consumer's binding afterwards. The
-          caller must gate on reach itself: a producer root outside the request's reach, missing, or
-          holding no project is recorded as unreachable with the reason, and its previous pin stays
+          Bind the producer's root read-only — for a git producer the cache directory of the bound
+          commit — restoring the consumer's binding afterwards. The caller must gate on reach
+          itself: a producer root outside the request's reach, missing, unfetchable or holding no
+          project is recorded as unreachable with the reason, and its previous pin stays
         type: local
-      - stepNumber: 9
+      - stepNumber: 13
         description: >-
           Project the producer's resolved project export table at the external's audience ceiling
-          (project for a family producer, instance for a source.path one), each entry with its
-          stereotype, narrowed interface and full contract, plus the exported types and the type
-          closure
+          (project for a family producer, instance for a source.path, git or hosted one), each entry
+          with its stereotype, narrowed interface and full contract, plus the exported types and the
+          type closure of every signature
         type: call
         targetComponent: surface_projector
         targetMethod: projectOwnSurface
-      - stepNumber: 10
+      - stepNumber: 14
         description: >-
           Restore the consumer's binding and stamp the snapshot with the audience it was filtered
           to; take its content digest (SurfaceSnapshot.contentDigest)
         type: local
-      - stepNumber: 11
+      - stepNumber: 15
         description: Read the snapshot pinned for the alias now
         type: call
         targetComponent: externals_repository
         targetMethod: readSnapshot
-      - stepNumber: 12
+      - stepNumber: 16
         description: Is the pinned snapshot's content the same?
         type: branch
         condition: a snapshot is pinned and its content digest equals the new one
-        onTrueStep: 14
-        onFalseStep: 13
-      - stepNumber: 13
+        onTrueStep: 18
+        onFalseStep: 17
+      - stepNumber: 17
         description: Write the new snapshot to .wai/externals/<alias>.yaml
         type: call
         targetComponent: externals_repository
         targetMethod: saveSnapshot
-      - stepNumber: 14
+      - stepNumber: 18
         label: used
         description: >-
-          Compute the lock entry: the producer id, the snapshot path, the content digest, and `used`
-          — each public name of the binding's usage mapped to each of its members'
-          SurfaceSnapshot.memberDigest (an empty map for a name only depended on; a member the
-          snapshot does not carry cannot be pinned and is reported); record the outcome as pinned
-          when the snapshot or the entry changed, else unchanged, with the usage's unexported
-          references
+          Compute the lock entry: the producer id, the snapshot path, the content digest, the role
+          (external, or member for a referenced project member), the commit the binding carries
+          (only a producer in another git repository than the consumer has one: a git producer's
+          fetched commit, or the head of a `../` sibling that is its own repository — a family,
+          contained or same-repository producer records none), and `used` — each public name of the
+          binding's usage mapped to each of its members' SurfaceSnapshot.memberDigest (an empty map
+          for a name only depended on; a member the snapshot does not carry is reported missing and
+          not pinned). Usage exists for every producer since stage 8, so an outside producer's
+          `used` is filled too
         type: local
-      - stepNumber: 15
+      - stepNumber: 19
         description: Next external
         type: jump
-        toStep: 17
-      - stepNumber: 16
+        toStep: 21
+      - stepNumber: 20
         label: unresolved-pin
         description: >-
           Record the outcome as unresolved with the external's problem — for a source.hosted
           external pinned outside a hosted server, "hosted-only producer `<id>`: available only
           through the hosted server" — and its previous pin stays
         type: local
-      - stepNumber: 17
+      - stepNumber: 21
         label: next
         description: The external is handled
         type: local
-      - stepNumber: 18
+      - stepNumber: 22
         description: >-
-          With no aliases named, prune: every lock entry whose alias is no longer declared is
-          dropped
-        type: local
-      - stepNumber: 19
-        description: For each pruned alias
-        type: loop
-        loopKind: forEach
-        over: the pruned aliases
-        endStep: 20
-      - stepNumber: 20
-        label: pruned
-        description: Remove its snapshot
+          With no aliases named, prune every lock entry whose alias is no longer declared, with its
+          snapshot
         type: call
-        targetComponent: externals_repository
-        targetMethod: removeSnapshot
-      - stepNumber: 21
+        targetComponent: surface_orchestrator
+        targetMethod: prune
+      - stepNumber: 23
         description: Did the lock change?
         type: branch
         condition: any lock entry was added, changed or pruned
-        onFalseStep: 23
-      - stepNumber: 22
+        onFalseStep: 25
+      - stepNumber: 24
         description: Write the lock
         type: call
         targetComponent: externals_repository
         targetMethod: saveLock
-      - stepNumber: 23
+      - stepNumber: 25
         label: answer
         description: Answer one outcome per external handled, in declaration order
         type: return
@@ -247,8 +264,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the bound project's declared externals through the core, with the consumer's
-          references as they are now
+          Resolve the bound project's declared externals and its referenced project members (a
+          `../`, git or hosted source) through the core, with the consumer's references as they are
+          now — counted by public name for every producer, the outside ones included
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
@@ -271,7 +289,10 @@ methods:
       - stepNumber: 5
         description: Can the live producer be read?
         type: branch
-        condition: the producer is resolved, its root is in the request's reach and holds a project
+        condition: >-
+          the producer is resolved, its root is in the request's reach (a git producer — a fetched
+          commit — and a referenced member — a root its declarer names explicitly — are never a root
+          above the family, so no ceiling applies to them) and holds a project
         onFalseStep: 10
       - stepNumber: 6
         description: >-
@@ -286,14 +307,12 @@ methods:
       - stepNumber: 8
         description: >-
           Restore the consumer's binding. Compare every used member — the lock's and the one the
-          references use now — at signature level: a live SurfaceSnapshot.memberDigest equal to the
-          locked one is unchanged, a different one changed, none removed, and a member used now but
-          absent from the lock is unlocked; an unexported reference is unavailable
-          (EXTERNAL_CHECK_UNAVAILABLE). A producer found only through source.path has no used
-          members to compare: report it unavailable with EXTERNAL_CHECK_UNAVAILABLE and the reason —
-          no stage-2 reference form reaches a project outside the family, so nothing it exports can
-          be used or compared until stage 3's `alias::name` — never as a pass. Stale when any member
-          is changed or removed; drifted when the live content digest differs from the pinned one
+          references use now — at signature level, for every producer alike (family, path, git,
+          hosted, a referenced project): a live SurfaceSnapshot.memberDigest equal to the locked one
+          is unchanged, a different one changed, none removed, and a member used now but not in the
+          lock unlocked; an unexported reference of a family producer is unavailable. Stale when a
+          used member changed or went away; drifted when the live content digest differs from the
+          pinned one
         type: local
       - stepNumber: 9
         description: Next external
@@ -304,12 +323,9 @@ methods:
         description: >-
           Report every locked used member — or, when none is locked, the external itself — as
           unavailable with EXTERNAL_CHECK_UNAVAILABLE and the reason: unresolved (the external's
-          problem), unreachable (why its root could not be read), for a producer outside the family
-          that no stage-2 reference form reaches outside the family, or — for a source.hosted
-          external read outside a hosted server — "hosted-only producer `<id>`: available only
-          through the hosted server" (the pin still judges the consumer; nothing is wrong with the
-          external). A producer whose root lies outside the request's reach is also marked
-          outOfReach, and was never read. Never a pass
+          problem), unreachable (why its root could not be read), a git producer that could not be
+          fetched or resolved (offline, refused, unknown ref), or a source.hosted producer read
+          outside a hosted server or out of the request's reach (outOfReach). Never a pass
         type: local
       - stepNumber: 11
         label: reported
@@ -484,6 +500,106 @@ methods:
         description: The pin is gone
         type: return
         outcome: 'true'
+  - name: pinnedParent
+    narrative:
+      - stepNumber: 1
+        description: Read the bound root's configuration through the core; nothing is bound or climbed
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Is the bound root a part?
+        type: branch
+        condition: the configuration is a part's
+        onFalseStep: 6
+      - stepNumber: 3
+        description: Read the part's externals lock and take its parent entry
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 4
+        description: Read the excerpt the entry names, when there is an entry
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readExcerpt
+      - stepNumber: 5
+        description: >-
+          Answer the parent's id with the entry and the excerpt — or the problem: never pinned, the
+          excerpt missing or unreadable, or an excerpt of another project than PartOf names
+        type: return
+        outcome: PinnedParent
+      - stepNumber: 6
+        label: none
+        description: 'Not a part: answer null'
+        type: return
+        outcome: 'null'
+    detail: full
+  - name: pinParent
+    narrative:
+      - stepNumber: 1
+        description: A part has no alias to name
+        type: branch
+        condition: an alias is named
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Refuse before anything is written: a part declares no externals; what it pins is its
+          parent
+        type: throw
+        error: UnknownExternalAlias
+      - stepNumber: 3
+        description: >-
+          Take the excerpt of the parent the part's files reference, read with the parent on disk at
+          PartOf.path; a parent the core cannot read or that does not claim the part is answered
+          unreachable with the reason, and the previous pin stays
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: excerptParent
+      - stepNumber: 4
+        description: Read the part's externals lock (none yet reads as empty)
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 5
+        description: >-
+          Write the excerpt to .wai/externals/<parent id>.yaml when its digest differs from the
+          lock's parent entry
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveExcerpt
+      - stepNumber: 6
+        description: >-
+          Record the lock's parent entry — the parent's id, the excerpt's path and digest, the
+          commit, role parent, an empty used map — when it changed
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveLock
+      - stepNumber: 7
+        description: 'Answer one outcome, the parent''s: pinned, unchanged or unreachable'
+        type: return
+        outcome: ExternalPin[]
+    detail: full
+  - name: prune
+    narrative:
+      - stepNumber: 1
+        description: Drop every lock entry whose alias the project no longer declares
+        type: local
+      - stepNumber: 2
+        description: For each pruned alias
+        type: loop
+        loopKind: forEach
+        over: the dropped aliases
+        endStep: 3
+      - stepNumber: 3
+        description: Remove its snapshot
+        type: call
+        targetComponent: externals_repository
+        targetMethod: removeSnapshot
+      - stepNumber: 4
+        description: Answer whether any entry was dropped
+        type: return
+        outcome: whether the lock changed
+    detail: full
 lint:
   allow:
     - code: UNDECLARED_COLOCATED_CALL
@@ -498,4 +614,4 @@ lint:
         replaced listExternalInterfaces, whose entry for it was retired with it.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-01T17:07:53.716Z'
+updatedAt: '2026-10-02T23:58:51.731Z'
