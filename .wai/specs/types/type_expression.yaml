@@ -1,0 +1,99 @@
+kind: value-object
+id: type_expression
+name: TypeExpression
+description: >-
+  A type position's value, parsed under wairon's language-neutral type grammar: the one form every
+  consumer reads instead of tokenizing a string. The grammar, in full: `type-position = ["async"]
+  type; type = member {"|" member}; member = primary ["?"]; primary = name ["<" type {"," type} ">"]
+  | "(" type ")"; name = ident {("::" | ".") ident}`. A position is read whole — anything left over
+  is invalid, so no trailing prose, comment or aside. The ten primitives are string, int, float,
+  bool, bytes, date, datetime, duration, void and any; the collections are list<T>, set<T> and
+  map<K, V>; `T?` is T or no value (one "none": TypeScript's null and undefined both read as it); `A
+  | B` is exactly one of the named types (entity, value-object, enum or signature) — a non-named
+  member joins a union only through `?`, and a union mixing in a primitive or a collection is a form
+  the grammar leaves out (TYPE_FORM_UNSUPPORTED: model the choice as a named type, or as two
+  params); `async T` is a call completing later with T. The position rules (TYPE_POSITION_INVALID):
+  void only as a whole returns (or `async void`), never inside a collection or union and never
+  `void?`; async only at the top of a returns; a map key is string, int or an enum; `T??` is refused
+  and `any?` reads as any. Inline object shapes, inline function types, string-literal unions,
+  intersections, utility types and tuples are not in the grammar either: each has a named
+  replacement (a value-object, a signature type, an enum). Today's spellings are aliases the parser
+  accepts and normalises — TypeScript's (`T[]`, `Array<T>`, `ReadonlyArray<T>` → list; `Set`,
+  `ReadonlySet` → set; `Map`, `Record`, `ReadonlyMap` → map; `T | null`, `T | undefined`,
+  `Option<T>`, `Optional<T>` → `T?`; `Promise<T>` at the top of a returns → `async T`; boolean →
+  bool; integer, long and the sized integers → int; double, f32, f64 → float; Buffer, Uint8Array →
+  bytes; Date, timestamp → datetime; object, unknown, json, Json → any) and the legacy builtin
+  vocabulary existing trees can hold (str, vec, vector, List, dict, dictionary, HashMap). `number`
+  is NOT an alias: it means int and float alike in TypeScript, so it is read as float until fixed
+  and reported (TYPE_NOT_NEUTRAL, "int or float?"). Legacy builtins with no neutral meaning (uuid,
+  decimal, char, byte, time, tuple, result, error, never, box, arc, rc, ref, cell, refcell, mutex,
+  rwlock, std, mcpserver) are reported the same way, each with its replacement. A user generic
+  `Page<T>` stays a named type applied to arguments.
+fields:
+  - name: form
+    type: string
+    description: >-
+      primitive | named | list | set | map | optional | union | async | applied (a named generic
+      applied to arguments)
+    optional: false
+  - name: name
+    type: string
+    description: >-
+      The primitive's canonical name, the named type's reference as written (`billing.invoice`,
+      `alias::name`), or an applied generic's head; absent on the structural forms
+    optional: true
+  - name: args
+    type: TypeExpression[]
+    description: >-
+      The element (list, set), key then value (map), inner (optional, async), members in written
+      order (union) or arguments (applied); empty on a primitive or named type
+    optional: false
+methods:
+  - name: parse
+    signature: 'parse(text: string, position: string): TypeParse'
+    params:
+      - name: text
+        type: string
+        description: The type position as written
+      - name: position
+        type: string
+        description: >-
+          param | returns | field | type-method-param | type-method-returns | signature-param |
+          signature-returns: what the position rules judge
+    returns: TypeParse
+    description: >-
+      Read one written type position under the grammar, normalising every alias, and judge it for
+      the position it stands in. Answers the canonical expression and its canonical text, or — when
+      the text does not parse, uses a form the grammar leaves out, names a builtin with no neutral
+      meaning, or breaks a position rule — the problem with the replacement it names; a text that
+      parses but is not neutral (number) still answers its reading (number as float) beside the
+      problem, so consumers never see an invented shape. Pure: the text and the position are the
+      whole input.
+  - name: canonicalText
+    signature: 'canonicalText(): string'
+    params: []
+    returns: string
+    description: >-
+      The one spelling of this expression: lower-case primitives, `list<T>` / `set<T>` / `map<K, V>`
+      with `, ` between arguments, `?` directly after its member and `(A | B)?` around a union with
+      none, ` | ` between union members in written order, and `async ` before a returns. Named
+      references are kept exactly as written, so binding and relativizing them stays the reference
+      table's job.
+  - name: namedRefs
+    signature: 'namedRefs(): string[]'
+    params: []
+    returns: string[]
+    description: >-
+      Every named type this expression references, in order of appearance, duplicates kept — what
+      the reference rules, the surface closure, the ERD and unused-type detection resolve.
+      Primitives and the collection forms name nothing; an applied generic names its head and its
+      arguments' references.
+  - name: isMany
+    signature: 'isMany(): boolean'
+    params: []
+    returns: boolean
+    description: >-
+      Whether a value of this type holds many: a list, a set or a map at the top, under `?` or under
+      async. What the ERD draws as a `*` multiplicity.
+createdAt: '2026-10-03T22:02:49.343Z'
+updatedAt: '2026-10-03T22:12:22.394Z'

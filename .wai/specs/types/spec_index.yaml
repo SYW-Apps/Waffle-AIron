@@ -41,7 +41,14 @@ fields:
       What the scan's signature resolution recorded: each signatureFrom it met and how it resolved,
       and each stored signature text its params contradict
     optional: false
+  - name: typeSpellings
+    type: TypeSpellingFacts
+    description: >-
+      What the scan's type canonicalisation recorded: each stored type position that is an alias of
+      its canonical spelling, and each that is not canonical at all. The loaded interfaces and types
+      hold canonical text, so this is the only place the stored spellings are still visible
+    optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-10-03T19:31:36.431Z'
+updatedAt: '2026-10-03T22:04:18.765Z'

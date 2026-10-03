@@ -68,7 +68,15 @@ fields:
     type: ExecutionBudget
     description: The execution budget (turns, tools) for this agent; absent unless execution.tier opts in.
     optional: true
+  - name: typeMapping
+    type: string[]
+    description: >-
+      How the neutral types of the contracts this agent implements are spelled in its language
+      (type_dialect.mappingLines of the dialect for the language its implementations' technologies
+      or source files name), also folded into instructions. Absent when no dialect is shipped for
+      that language or the agent implements nothing.
+    optional: true
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-08-08T11:11:36.097Z'
-updatedAt: '2026-10-03T17:05:03.727Z'
+updatedAt: '2026-10-03T22:04:36.395Z'

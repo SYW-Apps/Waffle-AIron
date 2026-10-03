@@ -565,6 +565,17 @@ methods:
       - name: apply
         type: boolean
         description: Write the repair; false plans without writing
+  - name: repairTypeSpellings
+    description: >-
+      Forward to core_portal.repairTypeSpellings: plan, and with apply write, the rewrite of stored
+      type positions into their canonical spelling, with the int proposals and the positions needing
+      an author beside it.
+    signature: 'repairTypeSpellings(apply: boolean): TypeSpellingRepair[]'
+    returns: TypeSpellingRepair[]
+    params:
+      - name: apply
+        type: boolean
+        description: Write the rewrite; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T20:53:53.937Z'
+updatedAt: '2026-10-03T22:07:19.077Z'

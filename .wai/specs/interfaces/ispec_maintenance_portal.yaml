@@ -313,6 +313,18 @@ methods:
       - name: apply
         type: boolean
         description: Write the repair; false plans without writing
+  - name: repairTypeSpellings
+    description: >-
+      Forward to core_orchestrator.repairTypeSpellings: plan, and with apply write, the rewrite of
+      every stored type position that is an alias into its canonical spelling, with int proposed
+      (never written) for number positions whose name plainly says an integer and the positions only
+      an author can settle listed. Without apply nothing is written.
+    signature: 'repairTypeSpellings(apply: boolean): TypeSpellingRepair[]'
+    returns: TypeSpellingRepair[]
+    params:
+      - name: apply
+        type: boolean
+        description: Write the rewrite; false plans without writing
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-03T20:54:08.671Z'
+updatedAt: '2026-10-03T22:07:17.323Z'

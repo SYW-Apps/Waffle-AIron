@@ -1,0 +1,27 @@
+kind: value-object
+id: type_parse
+name: TypeParse
+description: >-
+  What reading one written type position gave: its canonical expression and text, or the problem
+  that kept it from being canonical. A position whose reading stands beside a problem (number read
+  as float) carries both.
+fields:
+  - name: expression
+    type: TypeExpression | null
+    description: >-
+      The canonical expression; null when the text does not parse or uses a form the grammar leaves
+      out
+    optional: false
+  - name: canonical
+    type: string
+    description: >-
+      The canonical text (type_expression.canonicalText); the text as written when there is no
+      expression
+    optional: false
+  - name: problem
+    type: TypeExpressionProblem | null
+    description: Why the position is not canonical, when it is not
+    optional: false
+methods: []
+createdAt: '2026-10-03T22:02:59.496Z'
+updatedAt: '2026-10-03T22:02:59.496Z'

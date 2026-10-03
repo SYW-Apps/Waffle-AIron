@@ -64,7 +64,14 @@ fields:
       caller can show them before anything is written. Absent when there are none. Named, never
       silently lost.
     optional: true
+  - name: respellings
+    type: TypeRespelling[]
+    description: >-
+      Each type position of the merged spec the write normalised (or, on a dry run, would): what the
+      delta or the stored file wrote against the canonical spelling stored. Empty when every
+      position was already canonical.
+    optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-09-27T11:01:27.402Z'
+updatedAt: '2026-10-03T22:04:23.505Z'

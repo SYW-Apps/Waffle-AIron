@@ -63,6 +63,17 @@ methods:
     description: The generic parameters declared in its name
     sourcePath: src/models/type-references.ts
     symbol: interfaceGenericParameters
+  - name: canonicalTypes
+    signature: 'canonicalTypes(): TypeCanonicalization'
+    params: []
+    returns: TypeCanonicalization
+    description: >-
+      This contract with every structured type position read under the grammar
+      (type_expression.parse, as param or returns): each canonicalisable position respelled to its
+      canonical text, every alias position recorded as a respelling, and every position that is not
+      canonical recorded as a located problem and left as written. A method without params keeps its
+      prose signature and only its returns is read; a sourced method states no params or returns and
+      has none to read. Pure.
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T17:03:18.215Z'
+updatedAt: '2026-10-03T22:04:05.950Z'

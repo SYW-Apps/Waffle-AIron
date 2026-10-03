@@ -42,7 +42,13 @@ fields:
       The methods the candidate changes or removes against the stored spec — the subject of the
       tests-to-revisit search. Empty for a new spec and for a kind without methods
     optional: false
+  - name: respellings
+    type: TypeRespelling[]
+    description: >-
+      Each type position of the candidate whose written text was an alias, now holding its canonical
+      spelling — what the write receipt reports back so the author sees the canonical form
+    optional: false
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:29.854Z'
-updatedAt: '2026-09-24T23:00:58.113Z'
+updatedAt: '2026-10-03T22:04:43.893Z'

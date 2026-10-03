@@ -512,6 +512,74 @@ methods:
         summary: >-
           A signature type carries a member other than params and returns, or lacks returns; or a
           data type carries params or returns
+  - name: typeExpressions
+    description: >-
+      Rule type-expressions. Reports what the scan's type canonicalisation recorded
+      (ctx.typeSpellingFacts), one finding per position, located by spec and path: a stored text
+      that does not parse (TYPE_EXPRESSION_INVALID); one that breaks a position rule — void or async
+      out of place, a map key that is not string, int or an enum, `T??` (TYPE_POSITION_INVALID); one
+      using a form the grammar leaves out — an inline object shape, an inline function type, a
+      string-literal union, a union mixing in a primitive or a collection, an intersection, a
+      utility type or a tuple (TYPE_FORM_UNSUPPORTED); one naming `number` or a legacy builtin with
+      no neutral meaning (TYPE_NOT_NEUTRAL); and one that is an alias of its canonical spelling
+      (TYPE_SPELLING_STALE, which any save or doctor --fix repairs). Every message names the
+      replacement: `number` asks "int or float?" (and says when the doctor repair proposes int), a
+      function type names a signature type, a literal union an enum, an inline object or a mixed
+      union a named value-object. The writer refuses all but the stale spelling at write time; these
+      findings are how a tree that held them before the grammar existed is told, while it still
+      loads and its consumers read the position as opaque any — which is why only what no real tree
+      holds (a text that does not parse, a broken position rule) is an error. No finding when the
+      run carries no facts (a candidate run).
+    signature: 'typeExpressions(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: TYPE_EXPRESSION_INVALID
+        severity: error
+        summary: A structured type position does not parse under the type grammar
+      - code: TYPE_POSITION_INVALID
+        severity: error
+        summary: >-
+          A type position breaks a position rule: void or async out of place, a non-scalar map key,
+          or T??
+      - code: TYPE_FORM_UNSUPPORTED
+        severity: warning
+        summary: >-
+          A type position uses a form the grammar leaves out — inline object, inline function type,
+          string-literal union, union mixing in a primitive or collection, intersection, utility
+          type or tuple — and the message names its named replacement
+      - code: TYPE_NOT_NEUTRAL
+        severity: warning
+        summary: >-
+          A type position names number (int or float?) or a legacy builtin with no neutral meaning,
+          and the message names the replacement
+      - code: TYPE_SPELLING_STALE
+        severity: warning
+        summary: >-
+          A stored type position is an alias of its canonical spelling; any save or doctor --fix
+          rewrites it
+  - name: enumTypes
+    description: >-
+      Rule enum-types. An enum is a closed, ordered set of named values with optional pure methods,
+      nothing else: an enum without values, with two values equal by reference_resolution.nameKey
+      (every language derives one identifier from both), or carrying fields, params, returns,
+      invariants, componentClass, database, table or linkedEntity is reported; so are values on a
+      type of any other kind, where they mean nothing.
+    signature: 'enumTypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ENUM_MEMBERS
+        severity: error
+        summary: >-
+          An enum has no values, two values equal by nameKey, or a member it cannot carry; or a type
+          of another kind carries values
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-03T19:43:45.518Z'
+updatedAt: '2026-10-03T22:12:29.336Z'

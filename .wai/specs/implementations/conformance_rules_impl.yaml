@@ -1497,9 +1497,12 @@ methods:
           For each matched position, report a name that differs while the declared type agrees. The
           type agreeing is what makes this a rename rather than a different argument, and a rename
           is worth saying: the contract, the ERD and every brief carry one word and the code answers
-          to another. Where the code annotates no type, say nothing about the name — without it a
-          rename cannot be told from a substitution, and a guess about somebody's signature is worse
-          than silence
+          to another. Agreement is read through the file's dialect (source_file_facts.dialect, then
+          type_dialect.agrees on the code's annotation and the contract's canonical type, a named
+          type matching through its code-level name); with no dialect for the file's language, or
+          where the code annotates no type or the dialect cannot read it, say nothing about the name
+          — without it a rename cannot be told from a substitution, and a guess about somebody's
+          signature is worse than silence
         type: local
       - stepNumber: 8
         description: >-
@@ -1629,6 +1632,84 @@ methods:
         outcome: judged
     symbol: check
     exportedVia: portalImportsRule
-status: complete
+  - name: enumValues
+    sourcePath: src/core/rules/conformance/enum-values.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each enum type that names a source file, ask the analyzer for the values of the
+          enum-like declaration there under the type's own code name — its `symbol` when it declares
+          one, else its name
+        type: local
+      - stepNumber: 2
+        description: Decide whether the values can honestly be read
+        type: branch
+        condition: the file was read at exact grade and values were read for that name
+        onFalseStep: 6
+      - stepNumber: 3
+        description: >-
+          Report each value the enum lists that the declaration does not hold
+          (UNREALIZED_ENUM_VALUE), compared exactly — a value is data, and `local_only` is not
+          `local-only`
+        type: local
+      - stepNumber: 4
+        description: >-
+          Report each value the declaration holds that the enum does not list
+          (UNDECLARED_ENUM_VALUE)
+        type: local
+      - stepNumber: 5
+        description: 'Done: the enum''s values were compared to the code''s'
+        type: return
+        outcome: judged
+      - stepNumber: 6
+        label: silent
+        description: >-
+          Say nothing: below exact grade a value list cannot be told from a mention, and a
+          declaration the file does not hold at all is typeRealization's finding
+        type: return
+        outcome: unjudged
+    detail: full
+    symbol: check
+    exportedVia: enumValuesRule
+  - name: asyncConformance
+    sourcePath: src/core/rules/conformance/async-conformance.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each implementation method with a contract method, find the bodies realizing it in its
+          own file under its `symbol` when it declares one, as param-conformance does
+        type: local
+      - stepNumber: 2
+        description: Decide whether a body is there to read
+        type: branch
+        condition: the file was read at exact grade and at least one function of that name has a body
+        onFalseStep: 6
+      - stepNumber: 3
+        description: >-
+          Read whether the contract's returns is `async T` from its canonical expression, and
+          whether each body completes later from source_file_facts.asyncFunctions
+        type: local
+      - stepNumber: 4
+        description: >-
+          Report ASYNC_MISMATCH when every body disagrees with the contract the same way, naming
+          which side says async; a wider answer can only narrow what this rule accuses
+        type: local
+      - stepNumber: 5
+        description: Done
+        type: return
+        outcome: judged
+      - stepNumber: 6
+        label: silent
+        description: >-
+          Say nothing: below exact grade a body cannot be told from a call, and a file that only
+          calls the function is methodRealization's finding
+        type: return
+        outcome: unjudged
+    detail: full
+    symbol: check
+    exportedVia: asyncConformanceRule
+status: design
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-03T17:55:19.393Z'
+updatedAt: '2026-10-03T22:11:32.454Z'

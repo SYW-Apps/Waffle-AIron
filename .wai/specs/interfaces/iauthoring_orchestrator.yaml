@@ -11,11 +11,13 @@ methods:
       Patch an existing spec of any level through the same judgement, by injecting it into the
       store's delta update as a write hook. The hook judges the MERGED spec, because a delta on its
       own cannot tell you the resulting componentType, and it is the resulting componentType that
-      decides whether a field belongs. Answers with the change report: exactly what changed, which
-      of the delta's paths changed nothing, or that nothing did and nothing was written — and every
-      key the stored file carries that the schema will drop (strippedKeys), so no write loses data
-      unannounced. A dry run forwards the caller's request to be told what the delta would do
-      without writing it.
+      decides whether a field belongs. A type position the delta writes as an alias is stored
+      canonical and reported back; one the delta writes that is not canonical at all is refused,
+      naming the replacement, while a stored one it leaves alone is not judged. Answers with the
+      change report: exactly what changed, which of the delta's paths changed nothing, or that
+      nothing did and nothing was written — the respellings applied, and every key the stored file
+      carries that the schema will drop (strippedKeys), so no write loses data unannounced. A dry
+      run forwards the caller's request to be told what the delta would do without writing it.
     signature: >-
       updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
       SpecChangeReport
@@ -65,14 +67,18 @@ methods:
   - name: writeSpec
     description: >-
       Write a whole spec as a create tool states it, at any level: require its parent, apply the
-      restatement to the stored spec (status, carry, clear, removal), resolve narrative labels,
-      judge a component candidate against the intrinsic rules, and persist. A subsystem naming a
-      projectPath is refused: that is the legacy mount form, and a member is declared in
-      project.yaml `members` instead. An interface method naming a signatureFrom and also stating
-      params or returns is refused (SIGNATURE_SOURCE_RESTATED): the source supplies them. A refused
-      status, a missing parent, an unresolved label, the mount form, a restated source or an
-      intrinsic error throws before anything touches disk. Answers with the write receipt, carrying
-      the tests a changed or removed method invalidated.
+      restatement to the stored spec (status, carry, clear, removal), resolve narrative labels, read
+      an interface's or a type's type positions under the grammar, judge a component candidate
+      against the intrinsic rules, and persist. A subsystem naming a projectPath is refused: that is
+      the legacy mount form, and a member is declared in project.yaml `members` instead. An
+      interface method naming a signatureFrom and also stating params or returns is refused
+      (SIGNATURE_SOURCE_RESTATED): the source supplies them. A type position written as an alias is
+      accepted and stored canonical, and reported back; one that is not canonical at all is refused
+      (TYPE_EXPRESSION_INVALID, TYPE_POSITION_INVALID, TYPE_FORM_UNSUPPORTED, TYPE_NOT_NEUTRAL),
+      naming the replacement. A refused status, a missing parent, an unresolved label, the mount
+      form, a restated source, a non-canonical type or an intrinsic error throws before anything
+      touches disk. Answers with the write receipt, carrying the respellings applied and the tests a
+      changed or removed method invalidated.
     signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -94,4 +100,4 @@ methods:
         description: The spec id
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-10-03T19:37:17.341Z'
+updatedAt: '2026-10-03T22:08:21.892Z'

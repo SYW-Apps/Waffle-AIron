@@ -19,7 +19,7 @@ fields:
     optional: false
   - name: kind
     type: string
-    description: entity | value-object | signature.
+    description: entity | value-object | signature | enum
     optional: false
   - name: fields
     type: object[]
@@ -37,7 +37,11 @@ fields:
     type: string
     description: A signature's one output type, referencing the closure. Only on kind signature.
     optional: true
+  - name: values
+    type: EnumValue[]
+    description: An enum's values in declared order; only on kind enum
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:32.022Z'
-updatedAt: '2026-10-03T19:42:58.446Z'
+updatedAt: '2026-10-03T22:04:24.652Z'

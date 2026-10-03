@@ -47,11 +47,20 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
+          Draw the data model: an edge from each type to each type a field's parsed expression
+          references (type_expression.namedRefs, plus a foreign key's `references`), labelled with
+          its multiplicity read from the expression and never by pattern — `*` when it holds many
+          (type_expression.isMany), `0..1` when the field is optional or its type is `T?`, else `1`;
+          no edge to an enum, which is a value domain rather than an entity relation. An enum node
+          lists its values in place of fields; a signature type node shows its derived text
+        type: local
+      - stepNumber: 6
+        description: >-
           Mark each node the passed-in findings name, keeping each finding's severity, so the canvas
           shows a judgement it did not make — and can draw a node holding only notices apart from
           one holding errors or warnings
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Draw the passed-in relation health, without judging it: when relations were passed, turn
           each consumer-to-producer pair the consumption edges connect (the edge's ends lie in
@@ -66,7 +75,7 @@ methods:
           relations at all, so the page says health was not checked rather than drawing anything as
           good
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Answer with the model
         type: return
         outcome: built
@@ -101,4 +110,4 @@ methods:
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-10-03T12:26:00.282Z'
+updatedAt: '2026-10-03T22:09:02.502Z'

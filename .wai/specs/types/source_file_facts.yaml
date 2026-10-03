@@ -171,6 +171,23 @@ fields:
       is what lets a reader follow a republished name to the module that wrote it, and a weaker
       grade leaves it unset rather than guess
     optional: true
+  - name: asyncFunctions
+    type: string[]
+    description: >-
+      The named function-likes in the file that complete later: declared `async`, or annotated to
+      return a Promise. What ASYNC_MISMATCH compares a contract method's `async` returns with. EXACT
+      grade only.
+    optional: true
+  - name: enumValues
+    type: Record<string, string[]>
+    description: >-
+      The values of each enum-like declaration in the file, by declaration name, in declared order:
+      a string-literal union alias, the string array a `z.enum([...])` constant holds (an alias
+      `z.infer<typeof X>` followed one hop, as a derived shape is), or a string enum's member
+      values. What lets an enum type's values be checked against the code (UNREALIZED_ENUM_VALUE,
+      UNDECLARED_ENUM_VALUE). EXACT grade only; a union mixing non-literals is not enum-like and is
+      left out.
+    optional: true
 methods:
   - name: resolveImport
     signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
@@ -224,6 +241,15 @@ methods:
       The type names a locally bound name is declared with, or EMPTY when the file binds no such
       name, annotates it with nothing, or was analyzed below exact grade — the empty answer being
       what keeps an unannotated receiver from becoming a guess, exactly as it is for a field
+  - name: dialect
+    signature: 'dialect(): TypeDialect | null'
+    params: []
+    returns: TypeDialect | null
+    description: >-
+      The type dialect shipped for the language this file was analyzed as (type_dialect.forLanguage
+      of its effective language), or none — what a conformance rule reads this file's type
+      annotations through. None means the rule stays silent on types for this file rather than
+      guess.
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-09-26T10:59:00.469Z'
+updatedAt: '2026-10-03T22:11:30.212Z'

@@ -2,18 +2,24 @@ kind: value-object
 id: type_spec
 name: TypeSpec
 description: >-
-  L3 data type specification loaded from the types spec tree, of one of three kinds: an entity or a
-  value-object (data: fields, pure methods, invariants) or a signature — a named function type,
-  Waffler's WafflerSignature: params (the method_signature param shape) and one returns, with a
-  description, and nothing else: no fields, no methods, no invariants, no inheritance. A contract
-  method takes a signature by naming it in its signatureFrom; a param may also be typed by one (a
-  callback). sourcePath and symbol make the type a CLAIM on code — the file it names must resolve
-  and its declaration must be anchored in it — exactly as an implementation_spec's sourcePath claims
-  the code realizing a contract.
+  L3 data type specification loaded from the types spec tree, of one of four kinds: an entity or a
+  value-object (data: fields, pure methods, invariants), a signature — a named function type: params
+  (the method_signature param shape) and one returns, with a description, and nothing else: no
+  fields, no methods, no invariants, no inheritance — or an enum: a closed, ordered set of named
+  values (EnumValue), with optional pure methods exactly as a value-object's, and nothing else (no
+  fields, params, returns, componentClass, database, table or linkedEntity — ENUM_MEMBERS). A
+  contract method takes a signature by naming it in its signatureFrom; a param may also be typed by
+  one (a callback). An enum may type any position a named type may, a map key included. Every type
+  position it holds — a field's type, a type method's params and returns, a signature's params and
+  returns — is written in the neutral type grammar (type_expression). sourcePath and symbol make the
+  type a CLAIM on code — the file it names must resolve and its declaration must be anchored in it —
+  exactly as an implementation_spec's sourcePath claims the code realizing a contract; an enum's
+  declaration is a string-literal union alias, a z.enum schema or a string enum in TypeScript, and
+  its values are compared with the code's (UNREALIZED_ENUM_VALUE, UNDECLARED_ENUM_VALUE).
 fields:
   - name: kind
     type: string
-    description: 'Type category: entity, value-object or signature'
+    description: 'Type category: entity, value-object, signature or enum'
     optional: false
   - name: id
     type: string
@@ -116,6 +122,12 @@ fields:
       A signature's one output type; required on kind signature and only there
       (SIGNATURE_TYPE_MEMBERS)
     optional: true
+  - name: values
+    type: EnumValue[]
+    description: >-
+      An enum's values, in declared order (the order is part of the design), unique by nameKey;
+      required and non-empty on kind enum and only there (ENUM_MEMBERS)
+    optional: true
 methods:
   - name: qualifiedId
     signature: 'qualifiedId(): string'
@@ -141,10 +153,11 @@ methods:
     signature: 'fieldTypeRefs(fieldType: string): string[]'
     returns: string[]
     description: >-
-      The type identifiers one of this type's field types names, with comments, trailing prose and
-      string literals stripped and this type's own generic parameters left out (compared ignoring
-      case). It takes the field's type rather than its name, because nothing makes field names
-      unique within a type.
+      The named types one of this type's field types references (type_expression.namedRefs of the
+      field's parsed type), with this type's own generic parameters left out (compared ignoring
+      case). A field type that does not parse names nothing here: the problem is
+      TYPE_EXPRESSION_INVALID's to report. It takes the field's type rather than its name, because
+      nothing makes field names unique within a type.
     sourcePath: src/models/type-references.ts
   - name: sourceFiles
     signature: 'sourceFiles(): string[]'
@@ -169,6 +182,17 @@ methods:
       The type identifiers a signature type names in place of fields: every param type, then its
       returns. None on an entity or a value-object, whose references are its fields'.
     sourcePath: src/models/type-references.ts
+  - name: canonicalTypes
+    signature: 'canonicalTypes(): TypeCanonicalization'
+    params: []
+    returns: TypeCanonicalization
+    description: >-
+      This type with every type position read under the grammar (type_expression.parse, with the
+      position each stands in: field, type-method-param, type-method-returns, signature-param,
+      signature-returns): each canonicalisable position respelled to its canonical text, every alias
+      position recorded as a respelling, and every position that is not canonical recorded as a
+      located problem and left as written. A type method without params keeps its prose signature;
+      only its returns is read. Pure.
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-03T20:29:44.185Z'
+updatedAt: '2026-10-03T22:03:54.242Z'

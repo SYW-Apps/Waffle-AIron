@@ -47,7 +47,14 @@ fields:
       so the create reports them the same way. Empty for a new spec, when no method changed, when
       the project declares no test roots, or when nothing references them.
     optional: false
+  - name: respellings
+    type: TypeRespelling[]
+    description: >-
+      Each type position the write normalised: what the input wrote against the canonical spelling
+      stored. Aliases are accepted, never refused, and this list is how an author learns the
+      canonical form. Empty when every position was already canonical.
+    optional: false
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-19T07:48:15.465Z'
-updatedAt: '2026-09-27T15:37:27.514Z'
+updatedAt: '2026-10-03T22:04:22.002Z'

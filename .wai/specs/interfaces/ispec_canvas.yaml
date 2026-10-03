@@ -12,22 +12,24 @@ methods:
       the edges between them, and any findings to surface on them. A contract method is drawn with
       the signature text the loaded tree carries — derived from its params, and its source's when it
       names a signatureFrom, which the node shows beside it ("from billing_portal.createInvoice") —
-      and a signature type is drawn with its derived text in place of a field list. The overview
-      follows composition, not storage (stage 8): each PROJECT member of the bound project —
-      contained, or referenced (a `../`, git or hosted source) — gets a project node, its specs
-      contained in it and reached through its exports, with consumption edges between projects; each
-      external the bound project declares that is not a project of its family gets an EXTERNAL
-      project node (dashed) that its consumption edges land on, so peers that only consume each
-      other still show their relations; each PART's subsystems are drawn as the bound project's own
-      subsystems with a storage badge (contained, sibling, git and its commit). A subsystem whose
-      key repeats its member's alias (`billing::billing`) keeps its honest id and is labelled by its
-      local name only. Findings and relation health are passed in rather than computed here — the
-      canvas draws a judgement, it does not make one: given the family's relations, each
-      consumer-to-producer pair the edges connect becomes a CanvasRelation (its health from
-      ExternalStatus.health(), the uses that changed, were removed or could not be compared, the pin
-      and when it was compared) and each consumption edge names it; a pair the relations do not
-      answer is unavailable, never ok. Without relations the model carries none, and the canvas says
-      health was not checked.
+      and a signature type is drawn with its derived text in place of a field list, an enum with its
+      values. The data model's edges come from each field's parsed type expression: multiplicity `*`
+      for a list, set or map, `0..1` for an optional field or a `T?` type, `1` otherwise, and no
+      edge to an enum. The overview follows composition, not storage (stage 8): each PROJECT member
+      of the bound project — contained, or referenced (a `../`, git or hosted source) — gets a
+      project node, its specs contained in it and reached through its exports, with consumption
+      edges between projects; each external the bound project declares that is not a project of its
+      family gets an EXTERNAL project node (dashed) that its consumption edges land on, so peers
+      that only consume each other still show their relations; each PART's subsystems are drawn as
+      the bound project's own subsystems with a storage badge (contained, sibling, git and its
+      commit). A subsystem whose key repeats its member's alias (`billing::billing`) keeps its
+      honest id and is labelled by its local name only. Findings and relation health are passed in
+      rather than computed here — the canvas draws a judgement, it does not make one: given the
+      family's relations, each consumer-to-producer pair the edges connect becomes a CanvasRelation
+      (its health from ExternalStatus.health(), the uses that changed, were removed or could not be
+      compared, the pin and when it was compared) and each consumption edge names it; a pair the
+      relations do not answer is unavailable, never ok. Without relations the model carries none,
+      and the canvas says health was not checked.
     signature: 'build(issues?: ValidationIssue[], relations?: ProjectRelations[]): CanvasModel'
     returns: CanvasModel
     params:
@@ -74,4 +76,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T16:38:05.210Z'
-updatedAt: '2026-10-03T19:38:25.316Z'
+updatedAt: '2026-10-03T22:09:07.251Z'

@@ -15,10 +15,12 @@ fields:
   - name: foreignBuiltins
     type: string[]
     description: >-
-      Builtin-type markers unambiguous to this language (enables the foreign-builtin check both
-      ways).
+      DEPRECATED, accepted and ignored for one release: the foreign-builtin check it fed
+      (LANGUAGE_FOREIGN_BUILTIN) is retired, because contracts are written in the neutral type
+      grammar and a language is chosen at L4. A pack still declaring it is told so by the extension
+      loader (a deprecation notice); the field is removed in the release after.
     optional: false
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:56:30.920Z'
-updatedAt: '2026-09-19T11:07:10.054Z'
+updatedAt: '2026-10-03T22:04:34.749Z'

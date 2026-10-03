@@ -46,9 +46,10 @@ methods:
         description: >-
           Turn each method into its stored form (method_signature.storedForm()): a method naming a
           signatureFrom keeps the source and drops the params, returns and signature the loader
-          resolved into it; a method with params stores the text they derive; a prose method is
-          written as it is. So a rename, a move or a lock that re-saves a loaded contract never
-          writes a source's params back, and no stored text can disagree with its params
+          resolved into it; a method with params stores the text they derive, from its canonical
+          types (the save step writes every type position canonical); a prose method is written as
+          it is. So a rename, a move or a lock that re-saves a loaded contract never writes a
+          source's params back, and no stored text can disagree with its params
         type: local
       - stepNumber: 2
         description: >-
@@ -110,11 +111,16 @@ methods:
       - stepNumber: 1
         description: >-
           Turn the kind into this registry's typed writer of that kind, whose pipeline keys the id
-          and writes references back relative to the owning project, writes an interface's methods
-          and a type's methods (and a signature type's text) in their stored form — derived
-          signature text for every method with params, nothing a signatureFrom supplies — keeps the
-          stored status on a draft or status-less save, stamps updatedAt, re-parses through the
-          writer schema and collects placement notices
+          and writes references back relative to the owning project, writes every type position of
+          an interface or a type in its canonical spelling (interface_spec.canonicalTypes,
+          type_spec.canonicalTypes: an alias is respelled, a position that is not canonical is
+          written as it stands — the authoring seam has already refused one on an authored write,
+          and a mechanical re-save must not destroy what only an author can settle), writes an
+          interface's methods and a type's methods (and a signature type's text) in their stored
+          form — derived signature text for every method with params, from the canonical types,
+          nothing a signatureFrom supplies — keeps the stored status on a draft or status-less save,
+          stamps updatedAt, re-parses through the writer schema and collects placement notices and
+          the respellings it applied
         type: local
       - stepNumber: 2
         label: home
@@ -257,4 +263,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-10-03T19:33:39.672Z'
+updatedAt: '2026-10-03T22:07:57.874Z'

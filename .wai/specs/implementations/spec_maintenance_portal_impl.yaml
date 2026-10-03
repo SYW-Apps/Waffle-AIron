@@ -161,6 +161,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: repairSignatures
+  - name: repairTypeSpellings
+    narrative:
+      - stepNumber: 1
+        description: Forward the type-spelling repair to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: repairTypeSpellings
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-10-03T19:36:07.062Z'
+updatedAt: '2026-10-03T22:07:20.474Z'

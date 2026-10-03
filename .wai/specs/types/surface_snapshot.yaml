@@ -76,17 +76,16 @@ methods:
     signature: 'contentDigest(): string'
     returns: string
     description: >-
-      sha256 over the snapshot's canonical CONTRACT, never over how its references are spelled
-      (stage 2's promise): the public names with each entry's stereotype, transport, auth kind,
-      dispatch bindings and method shapes, the exported types and the closure's type shapes — a data
-      type's shape is its kind and fields, a signature type's is its kind, its params' types and
-      optionality in order (never their names) and its returns — every type expression passed
-      through canonicalTypeRef, every list in a fixed order — with provenance (stateId, generatedAt,
-      origin) and prose (descriptions, groups, display names) left out. Ignoring prose is intended
-      (stage 4 decision): a producer rewording a description, regrouping a type or re-spelling a
-      reference changes no consumer's pin and raises no EXTERNAL_DRIFTED; only a change to the
-      contract a caller can depend on does. Re-pinning an unchanged contract never moves it. The
-      lock's `digest`, and what EXTERNAL_DRIFTED compares.
+      sha256 over the snapshot's canonical CONTRACT, never over how its references or types are
+      spelled: the public names with each entry's stereotype, transport, auth kind, dispatch
+      bindings and method shapes, the exported types and the closure's type shapes — a data type's
+      shape is its kind and fields, a signature type's is its kind, its params' types and
+      optionality in order (never their names) and its returns, an enum's is its kind and its value
+      names in declared order — every type expression passed through canonicalTypeRef, every list in
+      a fixed order — with provenance (stateId, generatedAt, origin) and prose (descriptions,
+      groups, display names) left out. Because the type expressions are canonical, a producer
+      respelling `T[]` as `list<T>` moves the digest once (the day the grammar ships) and never
+      again.
     sourcePath: src/models/surface-references.ts
   - name: memberDigest
     signature: 'memberDigest(publicName: string, member: string): string | null'
@@ -110,13 +109,15 @@ methods:
     signature: 'canonicalTypeRef(typeExpr: string): string'
     returns: string
     description: >-
-      A type expression rewritten into the one spelling a digest may see, identifier by identifier,
-      generics and unions kept in place: a builtin becomes its lower-cased builtin name; an
-      identifier naming a type of this snapshot's closure (bare, or prefixed with this snapshot's
-      own project id or alias, compared by reference_resolution.nameKey) becomes that type's id; an
-      identifier that names another project's type becomes `<producer id>::<its id>`; anything
-      unresolvable is kept as written. Pure: the snapshot is the whole input.
+      A type expression rewritten into the one spelling a digest may see: parsed under the type
+      grammar (type_expression.parse) and answered as its canonical text, so an alias and its
+      canonical spelling digest alike, with every named reference rewritten in place — an identifier
+      naming a type of this snapshot's closure (bare, or prefixed with this snapshot's own project
+      id or alias, compared by reference_resolution.nameKey) becomes that type's id; an identifier
+      that names another project's type becomes `<producer id>::<its id>`; anything unresolvable is
+      kept as written. A text that does not parse is kept as written, identifier by identifier, as
+      before the grammar. Pure: the snapshot is the whole input.
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-03T19:43:04.336Z'
+updatedAt: '2026-10-03T22:04:29.411Z'

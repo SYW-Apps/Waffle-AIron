@@ -68,7 +68,14 @@ fields:
       carries its own severity: every code is an error except PACK_STORE_DRIFT, a warning under
       which the pack still applies.
     optional: false
+  - name: deprecations
+    type: string[]
+    description: >-
+      Each deprecated field a loaded pack still declares, as `<pack>: <path> — <what replaces it>`
+      (today: a language's foreignBuiltins, whose check is retired); accepted and ignored, and
+      reported as a notice so a pack author learns it before the field is removed
+    optional: false
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:57:07.906Z'
-updatedAt: '2026-10-03T17:04:25.893Z'
+updatedAt: '2026-10-03T22:10:46.967Z'

@@ -2336,6 +2336,69 @@ methods:
         type: return
         outcome: SignatureTextRepair[]
     detail: full
-status: complete
+  - name: repairTypeSpellings
+    sourcePath: src/core/type-spelling-repair.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read what the scan's type canonicalisation recorded: the stored aliases and the positions
+          that are not canonical
+        type: call
+        targetComponent: spec_loader
+        targetMethod: typeSpellingFacts
+      - stepNumber: 2
+        description: >-
+          Group into one repair per interface or type of the bound project itself (a contained
+          member's specs are keyed under its namespace and are its own doctor's): its respellings as
+          rewritten; each of its TYPE_NOT_NEUTRAL problems on `number` whose position name (the
+          param or field name, or for a returns the method name) plainly says an integer as a
+          proposal of int, never applied; and every other problem as needing an author
+        type: local
+      - stepNumber: 3
+        description: Was the write asked for?
+        type: branch
+        condition: apply, and at least one repair rewrites a position
+        onFalseStep: 10
+      - stepNumber: 4
+        description: For each repair that rewrites a position
+        type: loop
+        loopKind: forEach
+        over: the planned repairs with rewritten positions
+        endStep: 9
+      - stepNumber: 5
+        description: Is it an interface?
+        type: branch
+        condition: the repair's kind is interface
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Re-save the loaded interface: the writer stores every type position canonical, and every
+          params-bearing method's derived text follows
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 7
+        description: Done with this spec
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        label: type
+        description: Re-save the loaded type, whose writer stores every type position canonical
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 9
+        label: next
+        description: On to the next repair
+        type: local
+      - stepNumber: 10
+        label: report
+        description: >-
+          Answer the planned repairs, written or not, with their proposals and the positions needing
+          an author
+        type: return
+        outcome: TypeSpellingRepair[]
+    detail: full
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T20:54:44.038Z'
+updatedAt: '2026-10-03T22:07:28.345Z'

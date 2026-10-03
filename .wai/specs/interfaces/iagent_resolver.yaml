@@ -28,11 +28,13 @@ methods:
       topology, locate the record by id, load its instruction template through the template source
       adapter, render the record's variables into it (scope fence, domain context, variant
       guidance), fold in the optional user-owned project guidance file (.wai/agents/<agentId>.md,
-      read live), and return the structured AgentBrief — rendered instructions plus
-      ownedPaths/readPaths. Always reflects the CURRENT spec tree and guidance, so a re-lock or a
-      guidance edit changes the next call's result with no session restart; an unknown agentId (or
-      an alias that names no direct member) throws. A hosted caller must gate on reach itself before
-      asking for a member's brief.
+      read live) and, when a type dialect is shipped for the language the agent's implementations
+      are written in, the type mapping (how the contracts' neutral types are spelled in that
+      language), and return the structured AgentBrief — rendered instructions plus
+      ownedPaths/readPaths and typeMapping. Always reflects the CURRENT spec tree and guidance, so a
+      re-lock or a guidance edit changes the next call's result with no session restart; an unknown
+      agentId (or an alias that names no direct member) throws. A hosted caller must gate on reach
+      itself before asking for a member's brief.
     signature: 'composeAgentBrief(agentId: string): AgentBrief'
     returns: AgentBrief
     params:
@@ -52,4 +54,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-30T05:56:27.317Z'
+updatedAt: '2026-10-03T22:09:36.708Z'

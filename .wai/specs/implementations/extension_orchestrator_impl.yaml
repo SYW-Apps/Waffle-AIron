@@ -451,7 +451,8 @@ methods:
           Read each target's raw manifest, then parse/validate it against the pack schema and merge
           it (project packs win on collision) into the accumulated result; at the candidate entry's
           position a supplied manifest is merged instead of a read one. A failed pack is recorded as
-          an EXTENSION_LOAD_ERROR.
+          an EXTENSION_LOAD_ERROR. A language declaring the deprecated foreignBuiltins is merged
+          without it and recorded among the result's deprecations
         type: call
         targetComponent: pack_source_adapter
         targetMethod: readManifest
@@ -516,4 +517,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-09-29T21:27:56.698Z'
+updatedAt: '2026-10-03T22:10:48.860Z'

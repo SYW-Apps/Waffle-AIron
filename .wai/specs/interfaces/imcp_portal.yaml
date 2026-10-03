@@ -76,13 +76,17 @@ methods:
       signatureFrom naming its source — a signature type, or `component.method` along a
       dependsOn/owns edge — with neither params nor returns (both together are refused,
       SIGNATURE_SOURCE_RESTATED), or, for a method without params, a prose signature with returns.
-      The input may state the spec's lifecycle status, so a contract can be authored straight at
-      design or complete instead of being born draft and needing a follow-up edit nobody remembers.
-      An unstated status means draft for a new spec and the stored status for a re-authoring, and a
-      stated status that would lower the stored one is refused by name — reopening a frozen spec is
-      an update, not a restatement. The answer carries the write receipt as structured content
-      beside the sentence, so a caller learns the status written and whether a spec already held
-      that id without parsing English; the sentence itself is unchanged.
+      Every param type and returns is written in the neutral type grammar; today's spellings (`T[]`,
+      `T | null`, `Promise<T>`, `boolean`, `Record<K, V>`, ...) are accepted and stored canonical,
+      the receipt's respellings naming each, and a position that is not canonical is refused with
+      its replacement (`number`: int or float?; an inline function type: a signature type; a literal
+      union: an enum). The input may state the spec's lifecycle status, so a contract can be
+      authored straight at design or complete instead of being born draft and needing a follow-up
+      edit nobody remembers. An unstated status means draft for a new spec and the stored status for
+      a re-authoring, and a stated status that would lower the stored one is refused by name —
+      reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
+      as structured content beside the sentence, so a caller learns the status written and whether a
+      spec already held that id without parsing English; the sentence itself is unchanged.
     signature: 'sdd_define_interface(spec: InterfaceSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -284,12 +288,14 @@ methods:
       a sourced method carries only its signatureFrom — and a method's signature text is derived
       from its params on the write, never taken from the delta. Adopting a source on a method that
       states params means unsetting its params and returns in the same delta, or the write is
-      refused (SIGNATURE_SOURCE_RESTATED). The delta's arrays UPSERT by element identity rather than
-      replace, so a delta naming one element leaves the others intact, and it is deliberately open
-      below its top level — a key that is not a field at its depth is named back under NO EFFECT
-      instead of being silently dropped. The answer carries the change report as structured content
-      beside the rendered sentence, from the one report, so the prose can never disagree with the
-      data.
+      refused (SIGNATURE_SOURCE_RESTATED). A type position the delta writes as an alias is stored
+      canonical and named in the report's respellings; one it writes that is not canonical is
+      refused with its replacement, while a stored one it leaves alone is not judged. The delta's
+      arrays UPSERT by element identity rather than replace, so a delta naming one element leaves
+      the others intact, and it is deliberately open below its top level — a key that is not a field
+      at its depth is named back under NO EFFECT instead of being silently dropped. The answer
+      carries the change report as structured content beside the rendered sentence, from the one
+      report, so the prose can never disagree with the data.
     signature: >-
       sdd_update_spec(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
       SpecChangeReport
@@ -390,16 +396,22 @@ methods:
       address: mcp tools/call sdd_get_spec
   - name: sdd_add_type
     description: >-
-      Tool: define a type — an entity or value-object, the data the components operate on, or a
-      signature, a named function type. Entities are owned by a subsystem; a shared value object or
-      signature names none and is system-level. Fields are data; methods are PURE intrinsic
-      behaviour only, because anything needing a collaborator belongs on a component that takes the
-      entity as an argument, and a type method may carry structured params, which then derive its
-      signature text as a contract method's do. A signature carries params and returns and nothing
-      else (SIGNATURE_TYPE_MEMBERS); a contract method takes it by naming it as its signatureFrom. A
-      type may also CLAIM code: a sourcePath names the file holding its declaration and a symbol
-      binds the code-level name, and the file must then resolve with the declaration anchored in it.
-      The answer carries the write receipt as structured content beside the sentence.
+      Tool: define a type — an entity or value-object, the data the components operate on, a
+      signature, a named function type, or an enum, a closed ordered set of named values (`values:
+      [{name, description?}]`, with optional pure methods and nothing else — ENUM_MEMBERS). Entities
+      are owned by a subsystem; a shared value object, signature or enum names none and is
+      system-level. Fields are data; methods are PURE intrinsic behaviour only, because anything
+      needing a collaborator belongs on a component that takes the entity as an argument, and a type
+      method may carry structured params, which then derive its signature text as a contract
+      method's do. A signature carries params and returns and nothing else (SIGNATURE_TYPE_MEMBERS);
+      a contract method takes it by naming it as its signatureFrom. Every type position is written
+      in the neutral type grammar (string, int, float, bool, bytes, date, datetime, duration, void,
+      any; list<T>, set<T>, map<K, V>; `T?`; `A | B` of named types; `async T` on a returns);
+      today's spellings are accepted and stored canonical, the receipt's respellings naming each,
+      and a position that is not canonical is refused with its replacement (`number`: int or
+      float?). A type may also CLAIM code: a sourcePath names the file holding its declaration and a
+      symbol binds the code-level name, and the file must then resolve with the declaration anchored
+      in it. The answer carries the write receipt as structured content beside the sentence.
     signature: 'sdd_add_type(spec: TypeSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -807,4 +819,4 @@ methods:
       address: mcp tools/call sdd_demote_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T20:52:14.487Z'
+updatedAt: '2026-10-03T22:10:07.370Z'

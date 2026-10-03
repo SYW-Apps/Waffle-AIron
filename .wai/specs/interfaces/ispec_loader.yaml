@@ -239,6 +239,14 @@ methods:
     signatureFrom: spec_index.signatureFacts
     guarantees:
       - idempotent
+  - name: typeSpellingFacts
+    description: >-
+      What the current scan's type canonicalisation recorded (spec_index.typeSpellingFacts): every
+      stored type position that is an alias of its canonical spelling, and every one that is not
+      canonical at all.
+    signatureFrom: spec_index.typeSpellingFacts
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T21:10:52.124Z'
+updatedAt: '2026-10-03T22:04:58.348Z'

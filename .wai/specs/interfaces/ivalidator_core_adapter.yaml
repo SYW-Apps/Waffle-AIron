@@ -230,6 +230,13 @@ methods:
         description: The types, the signature types among them
     guarantees:
       - idempotent
+  - name: typeSpellingFacts
+    description: >-
+      Forward to the core portal: what the current scan's type canonicalisation recorded, the stored
+      positions that are aliases and the ones that are not canonical at all.
+    signature: 'typeSpellingFacts(): TypeSpellingFacts'
+    returns: TypeSpellingFacts
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T20:28:48.133Z'
+updatedAt: '2026-10-03T22:05:01.102Z'

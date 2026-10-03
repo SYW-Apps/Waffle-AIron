@@ -12,14 +12,19 @@ methods:
       - stepNumber: 2
         description: >-
           Map each contract method to an OpenAPI operation: endpoint method+path, params to
-          parameters/requestBody, returns to responses, guarantees and effect noted as extensions
+          parameters/requestBody, returns to responses, guarantees and effect noted as extensions;
+          each param and return type is parsed (type_expression.parse) and rendered from its
+          canonical expression — `async T` as T, `T?` admitting null, collections, primitives and
+          formats as the contract lists them
         type: local
       - stepNumber: 3
         description: >-
-          Render the embedded type closure as JSON-Schema component schemas; a signature type
-          becomes a component with no type constraint, a description saying it is a function type
-          with no JSON form, and an x-wairon-signature extension holding its params (name, the type
-          as written and as a $ref or schema, optional) and returns
+          Render the embedded type closure as JSON-Schema component schemas, each field's schema
+          from its parsed canonical expression; an enum becomes a string component with its values
+          as `enum`; a signature type becomes a component with no type constraint, a description
+          saying it is a function type with no JSON form, and an x-wairon-signature extension
+          holding its params (name, the type as written and as a $ref or schema, optional) and
+          returns
         type: local
       - stepNumber: 4
         description: >-
@@ -54,13 +59,17 @@ methods:
       - stepNumber: 4
         description: >-
           Map operations to contract methods: parameters/requestBody to structured params, responses
-          to returns, method+path to endpoints
+          to returns, method+path to endpoints — each schema read back into its canonical type
+          expression's text (an inline anonymous enum as string, its values listed in the
+          description)
         type: local
       - stepNumber: 5
         description: >-
           Derive the type closure from component schemas: a component carrying x-wairon-signature
           decodes back into a signature type with its params and returns (each type as written when
-          the extension carries it, else read from its schema), any other into a data type
+          the extension carries it, else read from its schema), a string component carrying `enum`
+          into an enum type with those values, any other into a data type whose field types are read
+          back canonical
         type: local
       - stepNumber: 6
         description: >-
@@ -125,4 +134,4 @@ methods:
     symbol: isOpenApiDocument
 status: complete
 createdAt: '2026-07-10T23:15:26.486Z'
-updatedAt: '2026-10-03T21:08:11.086Z'
+updatedAt: '2026-10-03T22:08:44.259Z'
