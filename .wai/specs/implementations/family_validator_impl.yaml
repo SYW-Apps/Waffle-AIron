@@ -532,53 +532,100 @@ methods:
         description: >-
           Select the projects to answer for: the graph's root, then every project member in walk
           order, contained and referenced alike. Parts are not selected — their consumption is their
-          declaring project's
+          declaring project's. Keep the reach the caller granted (a hosted request's credential
+          reach, with its record lookup); with none granted — a local caller — read with no ceiling,
+          the explicit walk `validate --family` makes, so a `../` producer a project declares is
+          compared rather than left out of reach
         type: local
       - stepNumber: 3
         description: For each selected project
         type: loop
         loopKind: forEach
         over: the selected projects, root first
-        endStep: 9
+        endStep: 15
       - stepNumber: 4
         description: Can its root be opened within the request's reach?
         type: branch
         condition: >-
           the project loaded and its root is on disk (or in the fetch cache) and within the reach
-          the caller granted
-        onFalseStep: 8
+          the caller granted — on a hosted request, a contained member's record is one the request's
+          record lookup answers
+        onFalseStep: 14
       - stepNumber: 5
         description: >-
-          Bind the project's own root for the next call, restoring the caller's binding afterwards —
-          a relation is always read where its consumer's lock is
+          Bind the project's own root for the next calls, keeping the granted reach and restoring
+          the caller's binding afterwards — a relation is always read where its consumer's lock is
         type: local
       - stepNumber: 6
         description: >-
           Read its externals status there through the surfaces adapter — every external and
           referenced project member it consumes, per use, a producer out of reach marked outOfReach
-          and unread — and record it with the time it was read
+          and unread
         type: call
         targetComponent: validator_surfaces_adapter
         targetMethod: getExternalsStatus
       - stepNumber: 7
+        description: >-
+          Does it reference a CONTAINED project member of its own that no status above already
+          answers? A contained member is not an external (resolveDeclared walks only the declared
+          externals and the referenced members), so without this its consumption would have no
+          relation at all
+        type: branch
+        condition: >-
+          its own project graph holds a reference from it into a contained project member whose
+          alias no status above names
+        onFalseStep: 12
+      - stepNumber: 8
+        description: >-
+          Read its own project graph there: the references it writes into each contained project
+          member, each with its spec, position and the public name it bound to
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 9
+        description: Read its own configuration, so its own rule severities judge it
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 10
+        description: >-
+          Run its own gate there — the same call its own validate makes — for the findings it raises
+          on those references
+        type: call
+        targetComponent: spec_validator
+        targetMethod: validateProject
+      - stepNumber: 11
+        description: >-
+          Answer each such member with one status under the alias the project declares it by: each
+          reference a use, removed (so the relation reads incompatible) when the gate raised
+          EXTERNAL_NOT_EXPORTED or any other resolution failure at that reference's call site, with
+          the resolution's reason, and unchanged otherwise. A contained member is read live, so it
+          is never drifted and carries no pin. A member whose record lies outside the request's
+          reach is answered unreachable and out of reach, every use unavailable — never ok
+        type: local
+      - stepNumber: 12
+        label: record
+        description: Record the project's statuses with the time they were read
+        type: local
+      - stepNumber: 13
         description: Next project
         type: jump
-        toStep: 9
-      - stepNumber: 8
+        toStep: 15
+      - stepNumber: 14
         label: unopened
         description: >-
           Record the project with no statuses and the reason (not on disk, not fetched, or outside
           the request's reach), so every edge from it is drawn unavailable — never a pass
         type: local
-      - stepNumber: 9
+      - stepNumber: 15
         label: next
         description: On to the next project
         type: local
-      - stepNumber: 10
+      - stepNumber: 16
         description: Return the entries, root first
         type: return
         outcome: ProjectRelations[]
     symbol: familyRelations
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-03T12:15:12.160Z'
+updatedAt: '2026-10-03T12:36:12.166Z'

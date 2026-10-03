@@ -18,7 +18,9 @@ fields:
     type: ExternalStatus[]
     description: >-
       Its externals status (surface_orchestrator.getExternalsStatus at its root): one entry per
-      external and referenced project member, each per use; empty when it consumes nothing.
+      external and referenced project member, each per use — and one per CONTAINED project member it
+      references, built from its own gate's findings on those references (sourceKind family, never
+      drifted, no pin); empty when it consumes nothing.
     optional: false
   - name: comparedAt
     type: string
@@ -35,4 +37,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-03T12:14:14.074Z'
-updatedAt: '2026-10-03T12:14:14.076Z'
+updatedAt: '2026-10-03T12:25:39.996Z'

@@ -194,13 +194,21 @@ methods:
         targetMethod: family
       - stepNumber: 9
         description: >-
-          Give each member project node its member's record id only when that record is in the
-          caller's listed projects from step 2 (read, write or administer); any other member stays a
-          node without one (no id leaks). The engine opens the member's own project page from
-          exactly those nodes through the app's open-project hook; a node without an id is drawn
-          without a link
-        type: local
+          Read the project's configuration through the host core adapter: the hosted record each
+          declared external names (`source.hosted`), the record its external project node stands for
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
       - stepNumber: 10
+        description: >-
+          Give each member project node its member's record id, and each external project node the
+          hosted record its external names, only when that record is in the caller's listed projects
+          from step 2 (read, write or administer); any other node stays one without one (no id
+          leaks). The engine opens that project's own page from exactly those nodes through the
+          app's open-project hook; a node without an id is drawn without a link (and an external out
+          of reach is already unavailable in the relations)
+        type: local
+      - stepNumber: 11
         description: Return the model
         type: return
         outcome: project canvas model
@@ -302,4 +310,4 @@ methods:
     symbol: getWebProjectExternals
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-10-03T12:16:38.662Z'
+updatedAt: '2026-10-03T12:26:12.015Z'

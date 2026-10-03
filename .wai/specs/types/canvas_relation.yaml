@@ -19,8 +19,9 @@ fields:
   - name: producer
     type: string
     description: >-
-      The alias the consumer reaches the producer under — for a referenced member, the id of its
-      project node.
+      The alias the consumer reaches the producer under — for a referenced member or a declared
+      external drawn as its own node, the id of that node; for a contained member, the alias its
+      parent declares it by.
     optional: false
   - name: health
     type: string
@@ -58,4 +59,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-03T12:14:20.817Z'
-updatedAt: '2026-10-03T12:14:20.818Z'
+updatedAt: '2026-10-03T12:25:41.246Z'

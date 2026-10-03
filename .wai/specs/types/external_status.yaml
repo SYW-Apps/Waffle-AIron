@@ -79,6 +79,7 @@ methods:
       read and every use compared unchanged. A known break outranks the unknown, and the unknown
       outranks a benign change, so nothing that could not be checked ever reads as ok. Pure: over
       the status's own fields.
+    symbol: relationHealth
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:47:16.586Z'
-updatedAt: '2026-10-03T12:14:03.018Z'
+updatedAt: '2026-10-03T12:25:13.594Z'

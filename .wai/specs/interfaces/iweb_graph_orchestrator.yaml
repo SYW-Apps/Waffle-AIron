@@ -59,12 +59,13 @@ methods:
       7 this is the FAMILY canvas for a project that declares members: each member renders as a
       project node (stage 3's project node), carrying the member's hosted record id ONLY when that
       record is in the caller's listed projects (the web project orchestrator's scoped list); any
-      other member carries none (no id leaks). The engine opens a member's own project page from
-      exactly the nodes that carry one, through the app's open-project hook; a node without one is
-      drawn unlinked. Each consumption edge carries its relation's health (ok, drifted,
-      incompatible, unavailable) from the same comparison the Relations tab shows, read within the
-      same reach — the caller's listed projects — so a member or producer out of that reach is
-      unavailable, never ok.
+      other member carries none (no id leaks). A declared external that is no project of the family
+      is an external project node, carrying the hosted record its `source.hosted` names under the
+      same rule. The engine opens a project's own page from exactly the nodes that carry one,
+      through the app's open-project hook; a node without one is drawn unlinked. Each consumption
+      edge carries its relation's health (ok, drifted, incompatible, unavailable) from the same
+      comparison the Relations tab shows, read within the same reach — the caller's listed projects
+      — so a member or producer out of that reach is unavailable, never ok.
     signature: 'getProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
     returns: CanvasModel
     params:
@@ -117,4 +118,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-10-03T12:16:46.497Z'
+updatedAt: '2026-10-03T12:26:29.911Z'

@@ -12,16 +12,18 @@ methods:
       the edges between them, and any findings to surface on them. The overview follows composition,
       not storage (stage 8): each PROJECT member of the bound project — contained, or referenced (a
       `../`, git or hosted source) — gets a project node, its specs contained in it and reached
-      through its exports, with consumption edges between projects; each PART's subsystems are drawn
-      as the bound project's own subsystems with a storage badge (contained, sibling, git and its
-      commit). A subsystem whose key repeats its member's alias (`billing::billing`) keeps its
-      honest id and is labelled by its local name only. Findings and relation health are passed in
-      rather than computed here — the canvas draws a judgement, it does not make one: given the
-      family's relations, each consumer-to-producer pair the edges connect becomes a CanvasRelation
-      (its health from ExternalStatus.health(), the uses that changed, were removed or could not be
-      compared, the pin and when it was compared) and each consumption edge names it; a pair the
-      relations do not answer is unavailable, never ok. Without relations the model carries none,
-      and the canvas says health was not checked.
+      through its exports, with consumption edges between projects; each external the bound project
+      declares that is not a project of its family gets an EXTERNAL project node (dashed) that its
+      consumption edges land on, so peers that only consume each other still show their relations;
+      each PART's subsystems are drawn as the bound project's own subsystems with a storage badge
+      (contained, sibling, git and its commit). A subsystem whose key repeats its member's alias
+      (`billing::billing`) keeps its honest id and is labelled by its local name only. Findings and
+      relation health are passed in rather than computed here — the canvas draws a judgement, it
+      does not make one: given the family's relations, each consumer-to-producer pair the edges
+      connect becomes a CanvasRelation (its health from ExternalStatus.health(), the uses that
+      changed, were removed or could not be compared, the pin and when it was compared) and each
+      consumption edge names it; a pair the relations do not answer is unavailable, never ok.
+      Without relations the model carries none, and the canvas says health was not checked.
     signature: 'build(issues?: ValidationIssue[], relations?: ProjectRelations[]): CanvasModel'
     returns: CanvasModel
     params:
@@ -51,12 +53,13 @@ methods:
       or were removed and why one could not be compared, the pin's commit or short digest, and when
       it was compared. The legend gains one row — only when the model has a consumption edge —
       naming the four states with their glyphs and the compared-at time, or saying relation health
-      was not checked when the model carries no relations. A project node opens by drilling in when
-      it holds specs (a contained member, a part's subsystem); a referenced project node selects to
-      show its storage and the relations landing on it; and when the host provides an open-project
-      hook (the web app) a node carrying a recordId offers “Open project ↗” in its panel and opens
-      on double-click when it holds nothing to drill into — never in a standalone file or on a
-      shared page, which have no such hook.
+      was not checked when the model carries no relations. An external project node is drawn with a
+      dashed border. A project node opens by drilling in when it holds specs (a contained member, a
+      part's subsystem); a referenced or external project node selects to show its storage and the
+      relations landing on it; and when the host provides an open-project hook (the web app) a node
+      carrying a recordId offers “Open project ↗” in its panel and opens on double-click when it
+      holds nothing to drill into — never in a standalone file or on a shared page, which have no
+      such hook.
     signature: 'render(model: CanvasModel): string'
     returns: string
     params:
@@ -67,4 +70,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T16:38:05.210Z'
-updatedAt: '2026-10-03T12:15:51.739Z'
+updatedAt: '2026-10-03T12:25:54.747Z'
