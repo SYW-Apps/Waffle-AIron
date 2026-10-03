@@ -12,6 +12,7 @@ import {
   ImplementationSpec,
   PATTERN_TYPES,
   isOwnComponentEntry,
+  type ProjectRelations,
 } from '../models/index.js';
 import { buildCanvasModel, renderCanvasHtml, type CanvasModel } from './canvas.js';
 import { generateDrawioXml, generateExcalidrawScene } from './diagram-export.js';
@@ -30,9 +31,10 @@ import type { WebGraphModel, WebGraphNode, LandscapeEdge } from '../server/types
 // all formats are self-contained.
 // ---------------------------------------------------------------------------
 
-export function renderDiagram(format: string): string {
+export function renderDiagram(format: string, relations?: ProjectRelations[]): string {
   switch (format) {
-    case 'canvas':     return renderCanvasHtml(buildCanvasModel(diagramIssues()));
+    // Only the canvas carries relation health; the other formats ignore it.
+    case 'canvas':     return renderCanvasHtml(buildCanvasModel(diagramIssues(), relations));
     case 'mermaid':    return generateComponentDiagram();
     case 'drawio':     return generateDrawioXml(buildCanvasModel());
     case 'excalidraw': return generateExcalidrawScene(buildCanvasModel());
@@ -45,10 +47,11 @@ export function renderDiagram(format: string): string {
  * The full CanvasModel for the current (request-scoped) project — the same model
  * `renderDiagram('canvas')` renders to the standalone HTML, but returned as data
  * so the React web app can mount the shared renderer directly (no iframe) and,
- * later, receive it in on-demand scope slices. Pure derivation, no side effects.
+ * later, receive it in on-demand scope slices. Pure derivation, no side effects;
+ * relation health is drawn only when passed in.
  */
-export function buildCanvasDataModel(): CanvasModel {
-  return buildCanvasModel(diagramIssues());
+export function buildCanvasDataModel(relations?: ProjectRelations[]): CanvasModel {
+  return buildCanvasModel(diagramIssues(), relations);
 }
 
 function diagramIssues(): ValidationIssue[] {

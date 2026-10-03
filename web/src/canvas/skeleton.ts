@@ -92,6 +92,7 @@ export const CANVAS_SKELETON = `<header id="hdr">
     <div class="viewhint" id="viewHint"></div>
     <div id="typesWarn"></div>
     <div class="legend" id="legend"></div>
+    <div class="reltip" id="relTip"></div>
   </div>
   <div id="panelResizer" title="Drag to resize details sidebar"></div>
   <div id="panel"></div>

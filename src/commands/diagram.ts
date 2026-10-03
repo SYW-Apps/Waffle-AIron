@@ -8,6 +8,9 @@ import { ensureDir } from '../utils/fs.js';
 // renderDiagram is the whole of the four-format path; the scoped Mermaid and
 // the --all set come through the adapter too.
 import { renderDiagram } from './adapters/core.js';
+// cli_validator_adapter: the family's relation health the canvas colours its
+// consumption edges by.
+import { familyRelations } from './validate.js';
 import {
   generateComponentDiagram,
   generateSequenceDiagram,
@@ -17,6 +20,7 @@ import {
   loadSpecGraph,
 } from './subsystem.js';
 import { WaironError } from '../utils/errors.js';
+import type { ProjectRelations } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // diagram command
@@ -46,6 +50,13 @@ export interface DiagramOptions {
   format?: string;
   /** Output file (or directory with --all). Default with --all: .wai/docs/diagrams */
   out?: string;
+  /**
+   * Compare each consumption relation of the family with its live producer and
+   * colour the canvas's edges by it. On unless `--no-health` sets it false; then
+   * every consumption edge is drawn neutral, labelled not checked. Only the
+   * canvas carries health.
+   */
+  health?: boolean;
 }
 
 const FORMATS = ['mermaid', 'canvas', 'drawio', 'excalidraw'] as const;
@@ -82,6 +93,18 @@ function parseSequenceRef(ref: string): { component: string; method: string } {
   return { component: ref.slice(0, sep), method: ref.slice(sep + 1) };
 }
 
+/**
+ * Steps 1-2 of runDiagram: should the canvas carry relation health, and if so
+ * the family's relations compared with their live producers — each project's
+ * externals status at its own root, within a plain run's reach (the family
+ * root); what cannot be compared is unavailable, never a pass. Undefined with
+ * `--no-health`, so the canvas says health was not checked.
+ */
+function canvasRelations(options: DiagramOptions): ProjectRelations[] | undefined {
+  if (options.health === false) return undefined;
+  return familyRelations();
+}
+
 export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void> {
   assertProjectInitialized();
   const options = applyFormat(rawOptions);
@@ -90,7 +113,7 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
   // Step 2: write the artifact where it was asked for and say where it landed.
   if (options.canvas && !options.all) {
     const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
-    writeArtifact(dest, renderDiagram('canvas'));
+    writeArtifact(dest, renderDiagram('canvas', canvasRelations(options)));
     logger.success(`Interactive canvas written to ${dest}`);
     logger.info('Open it in a browser — fully self-contained (works offline).');
     return;
@@ -118,7 +141,7 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
     || !!options.sequence;
   if (!options.all && !options.sequence && !wantsMermaid) {
     const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
-    writeArtifact(dest, renderDiagram('canvas'));
+    writeArtifact(dest, renderDiagram('canvas', canvasRelations(options)));
     logger.success(`Interactive canvas written to ${dest}`);
     logger.info('Open it in a browser — fully self-contained (works offline). Other formats: --format mermaid|drawio|excalidraw.');
     return;
@@ -134,7 +157,7 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
     for (const file of files) {
       writeArtifact(path.join(outDir, file.relPath), toMarkdown(file));
     }
-    writeArtifact(path.join(outDir, 'canvas.html'), renderDiagram('canvas'));
+    writeArtifact(path.join(outDir, 'canvas.html'), renderDiagram('canvas', canvasRelations(options)));
     writeArtifact(path.join(outDir, 'architecture.drawio'), renderDiagram('drawio'));
     writeArtifact(path.join(outDir, 'architecture.excalidraw'), renderDiagram('excalidraw'));
     const graph = loadSpecGraph();

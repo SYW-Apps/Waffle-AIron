@@ -10,7 +10,7 @@ import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type Rul
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
 import {
-  validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId, familyApprovals,
+  validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId, familyApprovals, familyRelations,
   type ValidationIssue, type ValidationResult, type ValidationOptions,
 } from '../core/validation.js';
 
@@ -46,6 +46,9 @@ import {
 // republished as the adapter's forward to the validator portal: the local lock
 // asks with depth 1, `wairon status` for every level.
 export { validateAsComplete, computeGateStateId, familyApprovals };
+// cli_validator_adapter.familyRelations — the bound family's relation health,
+// for `wairon diagram` to colour the canvas's consumption edges.
+export { familyRelations };
 
 /** cli_validator_adapter.validateProject — the owner's gate, forwarded to the validator portal. */
 export function validateProject(options?: ValidationOptions, projectType?: string): ValidationResult {

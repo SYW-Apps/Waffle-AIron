@@ -126,6 +126,11 @@ export function CanvasView({
         const tail = kind + (idPath ? '/' + idPath : '');
         navigate(isLocal ? '/specs/' + tail : '/projects/' + encodeURIComponent(projectIdRef.current) + '/specs/' + tail);
       },
+      // A project node carrying a record id (a member, or an external whose hosted
+      // record the caller may read) opens that project's own page. The server
+      // stamps recordId only on records the caller may read, so a node without
+      // one never offers the link.
+      onOpenProject: (recordId: string) => navigate('/projects/' + encodeURIComponent(recordId)),
       // Stage G: focus a component / open a method's narrative modal when the URL hash asks.
       initialFlow: hashCmdRef.current.flow,
       initialSelect: hashCmdRef.current.select,
@@ -155,63 +160,7 @@ export function CanvasView({
 
   return (
     <AsyncView state={state}>
-      {(m) => (
-        <>
-          <FamilyStrip model={m} />
-          <div ref={hostRef} className="canvas-host" />
-        </>
-      )}
+      {() => <div ref={hostRef} className="canvas-host" />}
     </AsyncView>
-  );
-}
-
-/** A member project node of the family canvas: its record id only when the caller may read that record. */
-interface MemberNode {
-  id: string;
-  name: string;
-  project?: boolean;
-  recordId?: string;
-  /** Stage 8: where it is stored — a part subsystem's `part <alias> · …`, or a referenced project's storage. */
-  storage?: string;
-}
-
-/** A storage badge beside a member or a part (stage 8): how it is stored, never what it is. */
-function StorageBadge({ storage }: { storage?: string }) {
-  return storage ? <code className="subtle" title="Where its files are stored"> {storage}</code> : null;
-}
-
-/**
- * The family canvas's member project nodes as links (stage 7): a member the
- * caller may read carries its hosted record id and opens its own canvas; any
- * other member is named as the canvas draws it, unlinked — no id leaks.
- */
-function FamilyStrip({ model }: { model: unknown }) {
-  const navigate = useNavigate();
-  const nodes = ((model as { subsystems?: MemberNode[] } | undefined)?.subsystems) ?? [];
-  const members = nodes.filter((s) => s.project);
-  // Stage 8: a part's subsystems are this project's own — listed with their storage, never as projects.
-  const parts = nodes.filter((s) => !s.project && s.storage);
-  if (members.length === 0 && parts.length === 0) return null;
-  return (
-    <div className="canvas-bar">
-      {members.length > 0 ? <span className="hint">Members:</span> : null}
-      {members.map((m) =>
-        m.recordId ? (
-          <button key={m.id} className="btn btn-ghost btn-sm" onClick={() => navigate('/projects/' + encodeURIComponent(m.recordId!))} title="Open this member's own page">
-            {m.name} ↗<StorageBadge storage={m.storage} />
-          </button>
-        ) : (
-          <span key={m.id} className="subtle" title="You may not open this member">
-            {m.name}<StorageBadge storage={m.storage} />
-          </span>
-        ),
-      )}
-      {parts.length > 0 ? <span className="hint">Parts:</span> : null}
-      {parts.map((p) => (
-        <span key={p.id} className="subtle" title="A subsystem of this project stored elsewhere">
-          {p.name}<StorageBadge storage={p.storage} />
-        </span>
-      ))}
-    </div>
   );
 }

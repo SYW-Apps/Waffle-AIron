@@ -1677,6 +1677,41 @@ export interface ExternalStatus {
    * counts it in its hint rather than as a comparison that failed.
    */
   outOfReach?: boolean;
+  /** The content digest the lock recorded for this producer; provenance only, never compared here. */
+  pinnedDigest?: string;
+  /** The producer's commit as the lock recorded it (another repository only); provenance only. */
+  pinnedCommit?: string;
+}
+
+/** ok | drifted | incompatible | unavailable — a relation's health in one word. */
+export type RelationHealth = 'ok' | 'drifted' | 'incompatible' | 'unavailable';
+
+/**
+ * external_status.health — the relation's health in one word, the same on the
+ * canvas's edges and on the hosted Relations tab. A known break outranks the
+ * unknown, and the unknown outranks a benign change, so nothing that could not
+ * be checked ever reads as ok. Pure: over the status's own fields.
+ */
+export function relationHealth(status: ExternalStatus): RelationHealth {
+  if (status.uses.some((u) => u.state === 'changed' || u.state === 'removed')) return 'incompatible';
+  if (!status.reachable || status.outOfReach || status.uses.some((u) => u.state === 'unavailable' || u.state === 'unlocked')) return 'unavailable';
+  if (status.drifted) return 'drifted';
+  return 'ok';
+}
+
+/**
+ * project_relations — one project of a family with its externals status, read
+ * at its own root: what the canvas colours its consumption edges from.
+ */
+export interface ProjectRelations {
+  /** The consuming project's key in the bound family ('' for the bound root). */
+  project: string;
+  /** Its externals status, per use — and one per contained project member it references. */
+  externals: ExternalStatus[];
+  /** ISO-8601 time the statuses were read. */
+  comparedAt: string;
+  /** Why the project's statuses could not be read at all; then externals is empty. */
+  detail?: string;
 }
 
 /** external_listing — one row of `wairon externals list`. */

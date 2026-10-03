@@ -133,6 +133,7 @@ header input[type="search"]::placeholder { color:var(--dim); }
 #cy { position:absolute; inset:0; }
 .legend { position:absolute; left:12px; bottom:12px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; padding:8px 12px; font-size:11px; color:var(--dim); z-index:5; pointer-events:none; }
 .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; border:1.5px solid; }
+.reltip { position:absolute; display:none; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:8px; padding:6px 10px; font-size:11px; color:var(--dim); white-space:pre; z-index:6; pointer-events:none; max-width:520px; overflow:hidden; }
 /* Stage overlays clear the floating header (52px + 10px top + 10px gap). The
    header hides in presentation mode, where they return to the top edge. */
 .viewhint { position:absolute; top:72px; left:12px; color:var(--dim); font-size:11px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:9px; padding:5px 10px; z-index:5; pointer-events:none; }

@@ -392,6 +392,9 @@ const externalStatusesOutput = {
     drifted: z.boolean().optional(),
     uses: z.array(z.record(z.unknown())),
     detail: z.string().optional(),
+    outOfReach: z.boolean().optional(),
+    pinnedDigest: z.string().optional().describe('The content digest the lock recorded; provenance, never compared here.'),
+    pinnedCommit: z.string().optional().describe('The producer commit the lock recorded, for one in another repository; provenance only.'),
   })).describe('One status per declared external, in declaration order; EXTERNAL_CHECK_UNAVAILABLE marks what could not be compared.'),
   ...staleServerOutput,
 };

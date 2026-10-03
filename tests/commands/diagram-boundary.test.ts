@@ -130,7 +130,9 @@ describe('wairon diagram renders through cli_core_adapter, not through sdd_core 
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
     const cases: { options: Record<string, unknown>; file: string; format: string }[] = [
-      { options: { canvas: true }, file: 'c.html', format: 'canvas' },
+      // Without relation health, so the page is the adapter's render byte for byte
+      // (health is compared live and stamped; tests/core/relation-health.test.ts covers it).
+      { options: { canvas: true, health: false }, file: 'c.html', format: 'canvas' },
       { options: { drawio: true }, file: 'a.drawio', format: 'drawio' },
       { options: { excalidraw: true }, file: 'a.excalidraw', format: 'excalidraw' },
     ];
