@@ -18,7 +18,7 @@ import * as memberRegistration from './members.js';
 import type { MemberAdoption, MemberDetachment, MembershipScreen, ReachComparison } from './types.js';
 import { createScopedServer } from './adapters/mcp.js';
 import * as hostCore from './adapters/core.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import {
   initializeProject,
   lockProject,
@@ -107,7 +107,7 @@ export function deriveMcpOutcome(response: unknown): 'success' | 'failed' {
 
 /**
  * Steps 12–17: build the redacted `mcp.tool.call` audit event for a handled
- * data-plane request and append it under the default retention policy. An append
+ * data-plane request and append it under the effective retention policy. An append
  * failure is recorded as a server diagnostic and never propagates — auditing must
  * never fail the request. A legacy principal with no resolved subject gets a
  * synthesized service actor so the (required) actor is always present.
@@ -117,7 +117,7 @@ export function deriveMcpOutcome(response: unknown): 'success' | 'failed' {
  * (via), the family root it named is recorded as `composition`.
  */
 export function auditToolCall(
-  dataDir: string,
+  cfg: HostConfig,
   principal: Principal,
   binding: Pick<ProjectBinding, 'projectId' | 'via'>,
   body: unknown,
@@ -146,7 +146,7 @@ export function auditToolCall(
     ...(composition ? { composition } : {}),
   };
   try {
-    appendAuditEvent(dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (e) {
     console.error(
       `[sdd_host] audit append failed for ${event.action} (target=${target}): ` +
@@ -726,7 +726,7 @@ export async function handleMcpRequest(
     const dispatchedResponse = await dispatchProjectLifecycleTool(cfg, cred, projectId, body);
     if (dispatchedResponse !== undefined) {
       sendJson(res, 200, dispatchedResponse);
-      auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(dispatchedResponse));
+      auditToolCall(cfg, principal, binding, body, deriveMcpOutcome(dispatchedResponse));
       // Realtime: nudge the channels a successful lifecycle mutation touched.
       for (const ch of mcpChangeChannels(body, projectId, dispatchedResponse)) publishChange(ch);
       return;
@@ -744,7 +744,7 @@ export async function handleMcpRequest(
     const permissionError = dataPlanePermissionError(cfg, principal, projectId, body, reach.family);
     if (permissionError !== undefined) {
       sendJson(res, 200, permissionError);
-      auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(permissionError));
+      auditToolCall(cfg, principal, binding, body, deriveMcpOutcome(permissionError));
       return;
     }
 
@@ -755,7 +755,7 @@ export async function handleMcpRequest(
     const membership = serveMembershipTool(cfg, principal, binding, body);
     if (membership.response !== undefined) {
       sendJson(res, 200, membership.response);
-      auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(membership.response));
+      auditToolCall(cfg, principal, binding, body, deriveMcpOutcome(membership.response));
       for (const ch of mcpChangeChannels(body, projectId, membership.response)) publishChange(ch);
       if (deriveMcpOutcome(membership.response) === 'success') publishChange('projects');
       return;
@@ -794,7 +794,7 @@ export async function handleMcpRequest(
     reconcileAfter(cfg, principal, binding, body, response);
 
     // Step 35: audit the handled data-plane tool call (best-effort).
-    auditToolCall(cfg.dataDir, principal, binding, body, deriveMcpOutcome(response));
+    auditToolCall(cfg, principal, binding, body, deriveMcpOutcome(response));
     // Realtime: a successful sdd_* WRITE changed the spec tree — nudge the
     // project channel so open canvases/views refetch (spec-tree change → live).
     for (const ch of mcpChangeChannels(body, projectId, response)) publishChange(ch);
@@ -859,10 +859,10 @@ function serveMembershipTool(
     switch (call.name) {
       case 'sdd_detach_member':
         // Steps 21–23.
-        return answer(relocationResult('detach', memberRegistration.detach(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), apply), apply));
+        return answer(relocationResult('detach', memberRegistration.detach(cfg, principal, binding, String(call.args.alias ?? ''), apply), apply));
       case 'sdd_adopt_member':
         // Steps 24–26.
-        return answer(relocationResult('adopt', memberRegistration.adopt(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), String(call.args.path ?? ''), apply), apply));
+        return answer(relocationResult('adopt', memberRegistration.adopt(cfg, principal, binding, String(call.args.alias ?? ''), String(call.args.path ?? ''), apply), apply));
       default: {
         // Steps 27–30: attach, promote, demote, an externalize as a project, a
         // member's source and a project rename are screened.
@@ -935,7 +935,7 @@ function reconcileAfter(cfg: HostConfig, principal: Principal, binding: ProjectB
   const call = toolCall(body);
   if (!call || !FAMILY_SHAPE_TOOLS.has(call.name) || call.args.dryRun === true || deriveMcpOutcome(response) !== 'success') return;
   try {
-    memberRegistration.reconcile(cfg.dataDir, principal, binding.projectId, writtenOwners(cfg, binding, response));
+    memberRegistration.reconcile(cfg, principal, binding.projectId, writtenOwners(cfg, binding, response));
     publishChange('projects');
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
@@ -945,7 +945,7 @@ function reconcileAfter(cfg: HostConfig, principal: Principal, binding: ProjectB
         id: '', timestamp: '', level: 'warning', category: 'project', action: 'member.reconcile', outcome: 'failed',
         actor: principal.subject ?? { userId: `token:${principal.tokenId}`, kind: 'service', issuer: 'local' },
         tokenId: principal.tokenId, projectId: binding.projectId, target: call.name, metadata: JSON.stringify({ failure: detail }),
-      }, DEFAULT_AUDIT_POLICY);
+      }, effectiveAuditPolicy(cfg));
     } catch { /* best-effort */ }
   }
 }
@@ -1019,7 +1019,7 @@ function hostedRecordLookup(cfg: HostConfig, principal: Principal): HostedRecord
 /** Step 13: roll back a crashed family migration under the bound family before the tool runs; never fails the request. */
 function recoverBoundFamily(cfg: HostConfig, principal: Principal, binding: ProjectBinding): void {
   try {
-    recoverUnfinishedMigrations(cfg.dataDir, principal, binding);
+    recoverUnfinishedMigrations(cfg, principal, binding);
   } catch (e) {
     console.error(`[sdd_host] family upkeep failed for project ${binding.projectId}: ${e instanceof Error ? e.message : String(e)}`);
   }

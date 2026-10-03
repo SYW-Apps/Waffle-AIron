@@ -206,11 +206,42 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository facades', 
       'lint:',
       '  allow:',
       '    - code: FACADE_FORWARDING',
+      '      at: saveRecord',
       '      reason: transitional — normalization moves into the registry next pass',
     ]);
     proj.activate();
     try {
       expect(facadeIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
+  });
+
+  it('names the method as its site, so an allow can be held to one method', () => {
+    const narrative = [
+      '      - stepNumber: 1',
+      '        description: Normalize the record id before storing',
+      '        type: local',
+      '      - stepNumber: 2',
+      '        description: Forward to the registry write face',
+      '        type: call',
+      '        targetComponent: record-registry',
+      '        targetMethod: storeRecord',
+    ];
+    const at = (site: string) => {
+      const proj = createTempProject();
+      proj.facadeContract();
+      proj.facadeImpl([
+        ...narrative,
+        'lint:',
+        '  allow:',
+        '    - code: FACADE_FORWARDING',
+        `      at: ${site}`,
+        '      reason: the one deliberate exception on this facade',
+      ]);
+      proj.activate();
+      try { return facadeIssues(validateProject()); } finally { proj.cleanup(); }
+    };
+    expect(at('saveRecord')).toHaveLength(0);
+    // An allow held to another method leaves this one reported.
+    expect(at('loadRecord')).toHaveLength(1);
   });
 });

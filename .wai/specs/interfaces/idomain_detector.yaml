@@ -13,18 +13,18 @@ methods:
       candidate, the parent directory is prepended to make the id unique — `shared` under `packages`
       becomes `packages-shared` rather than silently losing one of the two.
     signature: >-
-      detectCandidates(projectRoot: string, trackedPaths?: Set<string>, trackedIds?: Set<string>):
-      DetectedDomainCandidate[]
+      detectCandidates(projectRoot: string, alreadyTrackedPaths?: Set<string>, alreadyTrackedIds?:
+      Set<string>): DetectedDomainCandidate[]
     returns: DetectedDomainCandidate[]
     params:
       - name: projectRoot
         type: string
         description: The repository root to scan
-      - name: trackedPaths
+      - name: alreadyTrackedPaths
         type: Set<string>
         description: Paths already claimed by a registered domain, so they are not proposed again
         optional: true
-      - name: trackedIds
+      - name: alreadyTrackedIds
         type: Set<string>
         description: Domain ids already in use, so a candidate never proposes one that would collide
         optional: true
@@ -32,4 +32,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T22:06:35.500Z'
-updatedAt: '2026-09-20T22:06:35.512Z'
+updatedAt: '2026-10-03T16:46:35.748Z'

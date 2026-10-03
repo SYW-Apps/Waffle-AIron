@@ -2,12 +2,11 @@ import * as http from 'http';
 import * as memberRegistration from './members.js';
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
-import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram } from './request.js';
-import { sendJson, bearerToken } from './httpio.js';
-import { handleWebRequest, sessionCookieValue, startDevSession, setSessionCookie } from './web.js';
+import { sendJson, bearerToken, sessionCookieValue, setSessionCookie } from './httpio.js';
+import { handleWebRequest, startDevSession } from './web.js';
 import { getRealtimeHub, channelsForWebMutation, publishChange } from './realtime.js';
-import { serveSharedView, serveSharedModel, serveSharedOpenApi, serveSharedDownload } from './sharehttp.js';
+import { handleShareRequest } from './sharehttp.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
 import * as backupSchedule from './backup-schedule.js';
@@ -17,7 +16,7 @@ import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
 import * as landscape from './landscape.js';
 import * as operations from './operations.js';
-import { AdminAuthError, LockValidationError } from './admin.js';
+import { AdminAuthError, LockValidationError, UnauthenticatedError, ForbiddenError } from './errors.js';
 import { migratePermissionModel } from './migration.js';
 import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy } from './types.js';
 
@@ -227,22 +226,7 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
       sendJson(res, 404, { error: 'not found' });
       return;
     }
-    const parts = url.pathname.split('/').filter(Boolean); // ['share', token, sub?, kind?]
-    const token = decodeURIComponent(parts[1] ?? '');
-    const sub = parts[2];
-    if (!token) {
-      sendJson(res, 404, { error: 'not found' });
-    } else if (!sub) {
-      serveSharedView(cfg, token, req, res);
-    } else if (sub === 'model') {
-      serveSharedModel(cfg, token, req, res);
-    } else if (sub === 'openapi') {
-      serveSharedOpenApi(cfg, token, req, res);
-    } else if (sub === 'download' && parts[3]) {
-      serveSharedDownload(cfg, token, decodeURIComponent(parts[3]), req, res);
-    } else {
-      sendJson(res, 404, { error: 'not found' });
-    }
+    handleShareRequest(cfg, req, res);
     return;
   }
 
@@ -397,13 +381,13 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
 // The compatible default posture lives with the exposure repository
 // (policy.ts) so the admin edit surface and this gate share one source.
 
-/** Read an optional <dataDir>/exposure-policy.json override (a partial policy);
- *  absent/malformed yields undefined so the compatible default stands. */
+/** Read the optional persisted exposure override through the policy repository
+ *  (a partial policy is fine); absent/malformed yields undefined so the
+ *  compatible default stands — the gate never fails a request over it. */
 function readExposurePolicyFile(dataDir: string): Partial<HostExposurePolicy> | undefined {
   try {
-    const raw = fs.readFileSync(path.join(dataDir, 'exposure-policy.json'), 'utf8');
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as Partial<HostExposurePolicy>) : undefined;
+    const stored: unknown = policy.getExposurePolicyRecord(dataDir);
+    return stored && typeof stored === 'object' ? (stored as Partial<HostExposurePolicy>) : undefined;
   } catch {
     return undefined;
   }
@@ -414,7 +398,7 @@ function readExposurePolicyFile(dataDir: string): Partial<HostExposurePolicy> | 
  *  default so unset flags keep current (mounted) behavior. */
 export function resolveExposurePolicy(cfg: HostConfig): HostExposurePolicy {
   const override = cfg.exposurePolicy ?? readExposurePolicyFile(cfg.dataDir);
-  return { ...policy.COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+  return policy.effectiveExposure(override);
 }
 
 // ── Admin plane ───────────────────────────────────────────────────────────
@@ -642,8 +626,8 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
         }
         return sendJson(res, 404, { error: 'not found' });
       } catch (err) {
-        if (err instanceof identity.UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
-        if (err instanceof identity.ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
+        if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
+        if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
         const msg = err instanceof Error ? err.message : String(err);
         if (/not found/i.test(msg)) return sendJson(res, 404, { error: msg });
         return sendJson(res, 400, { error: msg });
@@ -653,10 +637,10 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     sendJson(res, 404, { error: 'not found' });
   } catch (err) {
     if (err instanceof PayloadTooLargeError) return sendJson(res, 413, { error: err.message });
-    if (err instanceof identity.UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
+    if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
     // Scope denials from the Phase 6 admin lifecycle throw ForbiddenError; map it
     // to 403 like every other plane (AdminAuthError stays 403 for compatibility).
-    if (err instanceof identity.ForbiddenError) return sendJson(res, 403, { error: err.message });
+    if (err instanceof ForbiddenError) return sendJson(res, 403, { error: err.message });
     if (err instanceof AdminAuthError) return sendJson(res, 403, { error: 'forbidden' });
     if (err instanceof LockValidationError) return sendJson(res, 409, { error: err.message, errors: err.errors });
     // A lock that refused before writing (the design moved since it was
@@ -777,7 +761,7 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   // Step 4: before serving, roll back what a crash left unfinished under the
   // data directory (a crashed member upgrade, a hosted detach or adopt) —
   // audited and logged; a failure never prevents the server from starting.
-  memberRegistration.recoverData(cfg.dataDir, true);
+  memberRegistration.recoverData(cfg, true);
   // Step 5: members that hold no record yet await `wairon host doctor --fix`.
   warnIfMembersPending(cfg);
 

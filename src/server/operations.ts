@@ -5,11 +5,11 @@ import { listProjectRecords } from './projects.js';
 import { sendJson } from './httpio.js';
 import { authorize, visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
 import {
-  COMPATIBLE_DEFAULT_EXPOSURE,
+  effectiveExposure,
   getExposurePolicyRecord,
   setExposurePolicyRecord,
 } from './policy.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import * as packs from './packs.js';
 import { listProjectRelations } from './relations.js';
 import { getPublicSurfaceSnapshot } from './surfaces.js';
@@ -477,7 +477,7 @@ function principalSubject(principal: Principal): PrincipalSubject {
 /** Append a redacted audit event best-effort — never fails the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[operations] audit append failed for "${event.action}": ` +
@@ -502,7 +502,7 @@ function requireInstanceExposureAdmin(cfg: HostConfig, credential: string | null
  */
 export function getExposurePolicy(cfg: HostConfig, credential: string | null): HostExposurePolicy {
   requireInstanceExposureAdmin(cfg, credential);
-  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(getExposurePolicyRecord(cfg.dataDir) ?? {}) };
+  return effectiveExposure(getExposurePolicyRecord(cfg.dataDir));
 }
 
 /**
@@ -514,13 +514,10 @@ export function getExposurePolicy(cfg: HostConfig, credential: string | null): H
 export function setExposurePolicy(
   cfg: HostConfig,
   credential: string | null,
-  exposure: HostExposurePolicy,
+  policy: HostExposurePolicy,
 ): HostExposurePolicy {
   const principal = requireInstanceExposureAdmin(cfg, credential);
-  const stored = setExposurePolicyRecord(cfg.dataDir, {
-    ...COMPATIBLE_DEFAULT_EXPOSURE,
-    ...exposure,
-  });
+  const stored = setExposurePolicyRecord(cfg.dataDir, effectiveExposure(policy));
   const event: AuditEvent = {
     id: '',
     timestamp: '',

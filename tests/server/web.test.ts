@@ -21,7 +21,7 @@ import {
 import { allow, seedUnit } from './helpers.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { signSsoState, verifySsoState, authenticate } from '../../src/server/auth.js';
-import { ForbiddenError, UnauthenticatedError } from '../../src/server/identity.js';
+import { ForbiddenError, UnauthenticatedError, AdminAuthError } from '../../src/server/errors.js';
 import * as identity from '../../src/server/identity.js';
 import { upsertIdentityProviderRecord } from '../../src/server/policy.js';
 import { findUserByExternalSubject, setUserStatus, upsertUser as repoUpsertUser } from '../../src/server/users.js';
@@ -32,7 +32,6 @@ import {
 } from '../../src/server/websessions.js';
 import { createProjectRecord, listProjectRecords } from '../../src/server/projects.js';
 import * as webproject from '../../src/server/webproject.js';
-import { AdminAuthError } from '../../src/server/admin.js';
 import { createCredential, hashToken, findByTokenHash } from '../../src/server/credentials.js';
 import { queryAuditEvents as auditQuery } from '../../src/server/audit.js';
 import { createUnit as createOrgUnit, placeProject, listProjectPlacements } from '../../src/server/organization.js';
@@ -607,7 +606,6 @@ describe('web graph orchestrator (sdd_host)', () => {
       sourceProjectId: 'proj-a',
       targetProjectId: 'proj-b',
       kind: 'consumes',
-      sourceAdapter: 'a-client',
       targetPublicInterface: { projectId: 'proj-b', systemInterfaceId: 'b-api', reason: 'r' },
       reason: 'r',
       status: 'active',

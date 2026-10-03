@@ -1290,7 +1290,11 @@ methods:
       - stepNumber: 3
         description: >-
           Add what the data model legitimately publishes from the same files: a type's own
-          declaration and each pure type method under its symbol. Whether a type IS published is
+          declaration and each pure type method under its symbol. A file that re-exports one of
+          those type methods from the file the method is promised at publishes the same promised
+          name — a method travels with its type — so the re-export counts as promised there too (a
+          star re-export republishes every type method of its module); a re-exported contract method
+          of another component does not, and stays a crossing. Whether a type IS published is
           `typeRealization`'s question and stays there; this rule only needs to stop re-reporting
           its answers as surface nobody promised
         type: local
@@ -1627,4 +1631,4 @@ methods:
     exportedVia: portalImportsRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-09-26T11:01:44.705Z'
+updatedAt: '2026-10-03T17:55:19.393Z'

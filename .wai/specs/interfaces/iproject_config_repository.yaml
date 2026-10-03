@@ -315,6 +315,33 @@ methods:
       - name: partOf
         type: PartOf | null
         description: The parent, or null
+  - name: describeProject
+    description: >-
+      Set the project's human-readable `name` and, when given, its `description` (forwarded to the
+      registry).
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
+  - name: at
+    description: >-
+      This same Repository bound to an explicit project root instead of the ambient one (the
+      request's binding, else the override, else the working directory): every method of the answer
+      reads and writes the configuration under rootDir. Binding to a root is a real operation — a
+      provisioner writes a project it is not bound to, and a test reads a fixture tree — so it is
+      part of the contract rather than a second way in.
+    signature: 'at(rootDir: string): ProjectConfigRepository'
+    returns: object
+    params:
+      - name: rootDir
+        type: string
+        description: The project root whose .wai/project.yaml the answer reads and writes.
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-10-02T20:28:13.958Z'
+updatedAt: '2026-10-03T17:51:53.585Z'

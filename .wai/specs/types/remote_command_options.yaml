@@ -40,10 +40,6 @@ fields:
     type: string
     description: 'Pull: the local project root to import into'
     optional: true
-  - name: 'yes'
-    type: boolean
-    description: Skip the confirmation prompt (for scripts / CI)
-    optional: true
   - name: allowPartial
     type: boolean
     description: >-
@@ -54,4 +50,4 @@ methods: []
 componentClass: cli_runner
 sourcePath: src/commands/remote.ts
 createdAt: '2026-08-12T18:33:33.586Z'
-updatedAt: '2026-09-24T13:20:14.430Z'
+updatedAt: '2026-10-03T17:04:53.776Z'

@@ -33,46 +33,6 @@ fields:
     type: string
     description: ISO-8601 provisioning timestamp
     optional: false
-  - name: displayName
-    type: string
-    description: Human-readable project name for hosted UI, token administration, and audit views.
-    optional: true
-  - name: description
-    type: string
-    description: >-
-      Short hosted-instance description of the project; not a replacement for the project's own L0
-      spec.
-    optional: true
-  - name: createdBySubject
-    type: PrincipalSubject
-    description: Identity that provisioned the hosted project.
-    optional: true
-  - name: ownerSubject
-    type: PrincipalSubject
-    description: Primary responsible identity for project administration.
-    optional: true
-  - name: tags
-    type: string[]
-    description: Optional instance-level tags for filtering projects in hosted UI and audit views.
-    optional: true
-  - name: environment
-    type: string
-    description: Optional environment label such as "development", "staging", or "production".
-    optional: true
-  - name: ownerUnitId
-    type: string
-    description: Primary organization unit responsible for this hosted project, if one is assigned.
-    optional: true
-  - name: placementIds
-    type: string[]
-    description: ProjectPlacement ids that place or share this project across hosted organization units.
-    optional: true
-  - name: mcpServerDisplayName
-    type: string
-    description: >-
-      Optional MCP server display name for clients that cannot override server names. Defaults to
-      "Wairon - <displayName or id>" when omitted.
-    optional: true
   - name: parentProjectId
     type: string
     description: >-
@@ -94,7 +54,24 @@ fields:
       record retired because its member is now a part of its parent (stage 8: demote). Cleared when
       the record is active again. Shown by status and the project view.
     optional: true
-methods: []
+  - name: unitId
+    type: string
+    description: >-
+      The project's home organization unit, derived when the record is listed from its 'owner'
+      ProjectPlacement; never persisted on the record. A project's name and description live in its
+      own .wai/project.yaml, and who placed it is the owner placement's createdBy.
+    optional: true
+methods:
+  - name: isValidId
+    signature: 'isValidId(id: unknown): boolean'
+    returns: boolean
+    description: >-
+      Whether a value is a valid record id: a path-safe id (lowercase letters, digits and hyphens,
+      starting with a letter or digit, at most 64 characters), so a crafted id can never escape the
+      projects directory. Every record write applies it, and a workflow that must refuse a bad id
+      before queuing an approval asks it first.
+    sourcePath: src/server/projects.ts
+    symbol: isValidProjectId
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-10-02T23:58:00.716Z'
+updatedAt: '2026-10-03T17:57:24.760Z'

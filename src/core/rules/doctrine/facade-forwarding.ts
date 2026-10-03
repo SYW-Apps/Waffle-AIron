@@ -47,6 +47,8 @@ export const facadeForwardingRule: SddRule = {
             `Facade method "${method.name}" of ${comp.componentType} "${comp.id}" (implementation "${impl.id}") must be pure 1:1 forwarding — exactly one call step to an owned member (${comp.owns.join(', ') || 'none declared'}) — but its narrative ${problem}. Move the logic into a member block, or lint.allow a deliberate exception.`,
             impl.id,
             isDraftCtx,
+            undefined,
+            { at: method.name },
           );
         }
       }

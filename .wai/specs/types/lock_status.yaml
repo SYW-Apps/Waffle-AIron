@@ -17,12 +17,12 @@ fields:
       algorithm — see upgraded()).
     optional: false
   - name: record
-    type: LockRecord
+    type: LockRecord | null
     description: >-
       The persisted record, or null when the project was never locked. Retained for a stale verdict
       too — staleness is a judgement ABOUT the record, not its deletion, so a caller can prompt for
       a re-lock rather than present the project as never frozen.
-    optional: true
+    optional: false
   - name: current
     type: StateId
     description: >-
@@ -43,4 +43,4 @@ methods:
     symbol: lockUpgraded
 sourcePath: src/core/specs.ts
 createdAt: '2026-07-30T15:58:52.007Z'
-updatedAt: '2026-09-30T06:12:26.018Z'
+updatedAt: '2026-10-03T17:03:27.183Z'

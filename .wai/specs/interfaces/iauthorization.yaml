@@ -92,6 +92,27 @@ methods:
         type: string
     guarantees:
       - idempotent
+  - name: actionableProjects
+    description: >-
+      The project ids among a principal's visible scopes that it can act on: the visibleScopes
+      answer read down to its project entries, dropping the breadcrumb ancestors that are visible
+      only so a deeper grant can be reached.
+    signature: 'actionableProjects(scopes: VisibleScope[]): string[]'
+    returns: string[]
+    params:
+      - name: scopes
+        type: VisibleScope[]
+        description: The visibleScopes answer for the principal.
+  - name: actionableUnits
+    description: >-
+      The organization unit ids among a principal's visible scopes that it can act on: the
+      visibleScopes answer read down to its unit entries, dropping the breadcrumb ancestors.
+    signature: 'actionableUnits(scopes: VisibleScope[]): string[]'
+    returns: string[]
+    params:
+      - name: scopes
+        type: VisibleScope[]
+        description: The visibleScopes answer for the principal.
 status: complete
 createdAt: '2026-07-15T21:31:59.946Z'
-updatedAt: '2026-10-03T13:36:45.854Z'
+updatedAt: '2026-10-03T17:48:59.407Z'

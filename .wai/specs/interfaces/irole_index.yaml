@@ -8,8 +8,15 @@ methods:
     signature: 'list(): Role[]'
     returns: Role[]
     params: []
+  - name: effective
+    description: >-
+      Return the effective role set: every stored role whose id is not a reserved built-in id,
+      followed by the built-in role definitions.
+    signature: 'effective(): Role[]'
+    returns: Role[]
+    params: []
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-15T20:27:36.106Z'
-updatedAt: '2026-09-17T20:37:29.474Z'
+updatedAt: '2026-10-03T17:57:14.187Z'

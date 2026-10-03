@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { setProjectRoot } from '../../src/utils/fs.js';
+import { runWithProjectRoot, setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
   saveSpec,
@@ -254,9 +254,9 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery 
 
     // The child imports its own (stage 3 retired `surface pin`; a child's own
     // .wai/surfaces holds whatever it imported)…
-    saveSnapshot(SurfaceSnapshotSchema.parse({
+    runWithProjectRoot(kidDir, () => saveSnapshot(SurfaceSnapshotSchema.parse({
       projectName: 'root-system', origin: 'generated', stateId: 'sha256:pinned', generatedAt: new Date().toISOString(), interfaces: [], types: [],
-    }), kidDir);
+    })));
     setProjectRoot(null);
     invalidateSpecCache();
     const pinned = fs.readdirSync(surfacesDir).map((f) => {

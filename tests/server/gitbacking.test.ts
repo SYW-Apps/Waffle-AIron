@@ -143,7 +143,7 @@ describe('container-level git backing (sdd_host)', () => {
     const unit = seedUnit(dataDir, 'acme');
     const fam = buildHostedFamily(dataDir);
     placeProject(dataDir, { id: '', projectId: 'platform', unitId: unit.id, role: 'owner', createdAt: '', createdBy: subjectOf('seeder') });
-    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+    expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
     const remote = seedBareRemote(base, 'acme-family');
     const stored = bindScope(cfg, MASTER, bindingFor({ scopeKind: 'unit', scopeId: unit.id, remote }));
     expect(syncScope(cfg, MASTER, stored.id)).toBe(true);

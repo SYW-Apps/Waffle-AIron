@@ -353,6 +353,18 @@ methods:
         description: The parent the part belongs to, or null to remove it (promote)
     guarantees:
       - idempotent
+  - name: describeProject
+    description: Set the project's human-readable `name` and, when given, its `description`.
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-10-02T20:50:43.540Z'
+updatedAt: '2026-10-03T17:09:56.770Z'

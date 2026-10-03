@@ -140,7 +140,7 @@ export type { TestsToRevisit };
 export function findTestsReferencing(
   methods: ReadonlyArray<Pick<MethodImplementation, 'name' | 'symbol'>>,
   projectRoot: string,
-  testRoots: readonly string[] = [],
+  testRoots: readonly string[],
 ): TestsToRevisit[] {
   return findTestsUnderRoots(methods, projectRoot, testRoots);
 }

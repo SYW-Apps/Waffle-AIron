@@ -12,11 +12,13 @@ methods:
       URL and (when the entry carries them) the project selector and bearer credential. Returns null
       when no wairon entry is registered anywhere. Pure read — never writes, and never fails a
       command: an unparseable config reads as "nothing registered".
-    signature: 'detectHostedMcpSource(cwd: string): DetectedMcpSource | null'
+    signature: 'detectHostedMcpSource(cwd?: string): DetectedMcpSource | null'
     returns: DetectedMcpSource | null
     params:
       - name: cwd
         type: string
+        description: The directory to detect from; the process working directory when omitted
+        optional: true
     guarantees:
       - idempotent
   - name: installMcpServer
@@ -28,11 +30,12 @@ methods:
       or machine-wide configuration) is first copied beside itself as
       <file>.wairon-backup-<timestamp>, and the backup's path is printed, so the previous value can
       always be restored.
-    signature: 'installMcpServer(options: McpInstallOptions): void'
+    signature: 'installMcpServer(options?: McpInstallOptions): void'
     returns: void
     params:
       - name: options
         type: mcp_install_options
+        optional: true
   - name: reportMcpStatus
     description: >-
       Report, per known config location, whether a wairon server entry is registered and what it
@@ -84,4 +87,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-08-12T18:42:15.287Z'
-updatedAt: '2026-10-01T23:46:08.170Z'
+updatedAt: '2026-10-03T16:46:29.298Z'

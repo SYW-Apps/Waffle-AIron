@@ -503,7 +503,15 @@ Start the hosting server. Data plane on `0.0.0.0:8080` (`POST /mcp`, `/healthz`,
 default** and requires `WAIRON_ADMIN_TOKEN` (the master credential) — the server
 refuses to start without it; `--no-auth` disables data-plane auth for a trusted
 network. `--data-dir` (or `WAIRON_DATA_DIR`, default `~/.wairon/data`) is the data
-root holding `projects/` and `auth/`.
+root holding `projects/` and `auth/`. `WAIRON_AUDIT_POLICY` (optional) sets the
+durable audit policy as a JSON object of overrides laid over the secure default
+(capture `info` and above, keep events 90 days and `security` events 365, skip read
+events, redacted metadata) — e.g. `{"retentionDays":30,"includeReadEvents":true}`.
+Its fields are `enabled` and `includeReadEvents` (booleans), `retentionDays` and
+`securityRetentionDays` (non-negative numbers), `minimumLevel` (`debug`, `info`,
+`warning`, `error` or `security`) and `metadataMode` (`none`, `redacted` or
+`full-redacted`); an unknown field, a wrong type or invalid JSON stops the server at
+startup with a message naming the variable.
 
 ### `wairon host …` — control plane
 Runs **in-process** (no running server needed), so it works over SSH /

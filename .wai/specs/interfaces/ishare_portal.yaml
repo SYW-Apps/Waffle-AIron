@@ -1,9 +1,11 @@
 id: ishare_portal
 name: Share Portal Interface
 description: >-
-  Public unauthenticated HTTP surface for share links under /share. Each method sets the hardening
-  headers (Referrer-Policy: no-referrer, X-Robots-Tag: noindex, CSP frame-ancestors from the link's
-  allowlist), sets no session cookie, and routes to the share access orchestrator.
+  Public unauthenticated HTTP surface for share links under /share. Each method takes the token, the
+  request meta its transport derives (IP / user-agent / referer) and, where the route has one, the
+  `spec` selection, routes to the share access orchestrator, and answers a ShareResponse. The
+  transport writes every response with the hardening headers (Referrer-Policy: no-referrer,
+  X-Robots-Tag: noindex, CSP frame-ancestors from the link's allowlist) and sets no session cookie.
 component: share_portal
 methods:
   - name: getSharedView
@@ -11,8 +13,8 @@ methods:
       Serve the read-only shared-view HTML page for a token (the app rendering the link's snapshot).
       Derives the request meta (IP / user-agent / referer) and delegates to the access orchestrator;
       404s an unknown/disabled/expired token.
-    signature: 'getSharedView(token: string, meta: ShareRequestMeta): string'
-    returns: string
+    signature: 'getSharedView(token: string, meta: ShareRequestMeta): ShareResponse'
+    returns: ShareResponse
     params:
       - name: token
         type: string
@@ -23,9 +25,11 @@ methods:
       method: GET
       path: /share/:token
   - name: getSharedModel
-    description: Serve the link's immutable snapshot model as JSON for the view page to render.
-    signature: 'getSharedModel(token: string, meta: ShareRequestMeta): SharedViewResult'
-    returns: SharedViewResult
+    description: >-
+      Serve the link's immutable snapshot model as JSON for the view page to render, with the link's
+      download flags; 404s an unknown/disabled/expired token.
+    signature: 'getSharedModel(token: string, meta: ShareRequestMeta): ShareResponse'
+    returns: ShareResponse
     params:
       - name: token
         type: string
@@ -42,8 +46,8 @@ methods:
       per-portal API to view; omitted with several captured specs serves an index page listing every
       shared API, each linking to its own viewer; omitted with exactly one opens that API directly.
       Distinct portals are never merged into one viewer.
-    signature: 'getSharedOpenApi(token: string, meta: ShareRequestMeta, portalId?: string): string'
-    returns: string
+    signature: 'getSharedOpenApi(token: string, meta: ShareRequestMeta, portalId?: string): ShareResponse'
+    returns: ShareResponse
     params:
       - name: token
         type: string
@@ -63,8 +67,8 @@ methods:
       per-portal document; omitted with several serves an index listing them.
     signature: >-
       downloadSharedArtifact(token: string, kind: string, meta: ShareRequestMeta, portalId?:
-      string): ShareArtifactResult
-    returns: ShareArtifactResult
+      string): ShareResponse
+    returns: ShareResponse
     params:
       - name: token
         type: string
@@ -81,4 +85,4 @@ methods:
       path: /share/:token/download/:kind
 status: complete
 createdAt: '2026-07-17T22:30:37.401Z'
-updatedAt: '2026-07-23T22:15:45.098Z'
+updatedAt: '2026-10-03T17:53:37.146Z'

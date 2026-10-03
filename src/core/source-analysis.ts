@@ -1567,7 +1567,7 @@ interface MethodSearch {
 export function findTestsReferencing(
   methods: ReadonlyArray<Pick<MethodImplementation, 'name' | 'symbol' | 'sourcePath'>>,
   projectRoot: string,
-  testRoots: readonly string[] = [],
+  testRoots: readonly string[],
 ): TestsToRevisit[] {
   // Steps 1-2: resolve and walk the declared roots, and read what they hold.
   const scanned = readTestFiles(testRoots, projectRoot);

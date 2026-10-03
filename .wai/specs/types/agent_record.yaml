@@ -64,7 +64,31 @@ fields:
       agents is rendered into this layer, and a brief for one of them composes at the member's root
       (composeAgentBrief).
     optional: true
+  - name: description
+    type: string
+    description: Short description of what this agent is responsible for.
+    optional: false
+  - name: bundleOrigin
+    type: string
+    description: The bundle this agent was created as part of, if any.
+    optional: true
+  - name: readPaths
+    type: string[]
+    description: 'Paths this agent may read but does not own (default: an empty list).'
+    optional: false
+  - name: writePaths
+    type: string[]
+    description: 'Paths this agent may write to but does not own (default: an empty list).'
+    optional: false
+  - name: dependencies
+    type: string[]
+    description: 'Ids of related agents this agent should be aware of (default: an empty list).'
+    optional: false
+  - name: targets
+    type: string[]
+    description: 'The output targets that receive this agent''s generated file (default: claude).'
+    optional: false
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-30T05:48:16.157Z'
+updatedAt: '2026-10-03T17:05:06.333Z'

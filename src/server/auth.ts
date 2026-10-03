@@ -7,9 +7,10 @@ import {
   type PrincipalSubject,
   type ViewGrant,
   UNAUTHENTICATED,
+  WEB_SESSION_PREFIX,
 } from './types.js';
 import { findByTokenHash, hashToken } from './credentials.js';
-import { getWebSessionById, WEB_SESSION_PREFIX } from './websessions.js';
+import { getWebSessionById } from './websessions.js';
 import { findUserByRecordOrSubjectId } from './users.js';
 import { getInstanceIdentity } from './instance.js';
 import { resolveSecret } from '../utils/secrets.js';
@@ -32,11 +33,11 @@ import { resolveSecret } from '../utils/secrets.js';
 /** LEGACY reserved literal — the built-in super-admin's former guessable
  *  userId. No longer a live subject id (the persisted boot-reserved UUID is),
  *  but it stays UNCLAIMABLE by user records for defense-in-depth. */
-export const LEGACY_SUPERADMIN_USER_ID = 'builtin:superadmin';
+const LEGACY_SUPERADMIN_USER_ID = 'builtin:superadmin';
 
 /** LEGACY reserved literal — the synthetic local-developer subject's former
  *  guessable userId. No longer a live subject id; stays unclaimable. */
-export const LEGACY_LOCALDEV_USER_ID = 'builtin:localdev';
+const LEGACY_LOCALDEV_USER_ID = 'builtin:localdev';
 
 /** The issuer the built-in subjects are minted under. */
 const LOCAL_ISSUER = 'local';
@@ -78,6 +79,16 @@ function isInstanceAdminSubject(dataDir: string, subject: PrincipalSubject | und
   const identity = getInstanceIdentity(dataDir);
   if (!identity) return false; // unseeded instance: no recognizable built-ins
   return subject.userId === identity.superadminUserId || subject.userId === identity.localDevUserId;
+}
+
+/**
+ * True when `userId` is one of the LEGACY built-in literals ('builtin:superadmin'
+ * / 'builtin:localdev') — the guessable ids the built-in subjects carried before
+ * the boot-reserved UUIDs. Recognising them is authentication's concern; the
+ * permission-model migration uses it to re-own legacy built-in records.
+ */
+export function isLegacyBuiltin(userId: string | undefined): boolean {
+  return userId !== undefined && RESERVED_SUBJECT_IDS.includes(userId);
 }
 
 /**

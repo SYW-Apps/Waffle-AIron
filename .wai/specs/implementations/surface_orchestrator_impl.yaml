@@ -60,28 +60,33 @@ methods:
         targetComponent: surface_transfer_adapter
         targetMethod: readDocument
       - stepNumber: 2
+        description: Ask the codec whether the document is an OpenAPI spec
+        type: call
+        targetComponent: openapi_codec
+        targetMethod: recognizes
+      - stepNumber: 3
         description: The document is an OpenAPI spec
         type: branch
         condition: document parses as OpenAPI
-        onFalseStep: 5
-      - stepNumber: 3
+        onFalseStep: 6
+      - stepNumber: 4
         description: Decode the OpenAPI document into an authored snapshot
         type: call
         targetComponent: openapi_codec
         targetMethod: fromOpenApi
-      - stepNumber: 4
+      - stepNumber: 5
         description: Continue at persistence
         type: jump
-        toStep: 6
-      - stepNumber: 5
+        toStep: 7
+      - stepNumber: 6
         description: Parse the native surface-snapshot YAML and stamp the requested origin
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: Persist the imported snapshot into the repository
         type: call
         targetComponent: surface_repository
         targetMethod: saveSnapshot
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the imported snapshot
         type: return
         outcome: SurfaceSnapshot
@@ -616,4 +621,4 @@ lint:
         replaced listExternalInterfaces, whose entry for it was retired with it.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-03T12:17:14.450Z'
+updatedAt: '2026-10-03T17:59:27.400Z'

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as webadmin from '../../src/server/webadmin.js';
-import { ForbiddenError } from '../../src/server/identity.js';
+import { ForbiddenError } from '../../src/server/errors.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { createWebSession } from '../../src/server/websessions.js';
 import {

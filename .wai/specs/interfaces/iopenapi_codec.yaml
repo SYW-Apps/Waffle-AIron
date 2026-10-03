@@ -41,6 +41,17 @@ methods:
     params:
       - name: snapshot
         type: SurfaceSnapshot
+  - name: recognizes
+    description: >-
+      Whether a body is an OpenAPI document: it parses as JSON or YAML into an object carrying a
+      string `openapi` version. Lets a reader choose fromOpenApi over the native snapshot parse; a
+      body that does not parse is not one.
+    signature: 'recognizes(body: string): boolean'
+    returns: boolean
+    params:
+      - name: body
+        type: string
+        description: The raw document body, JSON or YAML.
 status: complete
 createdAt: '2026-07-10T23:13:57.188Z'
-updatedAt: '2026-08-11T17:05:46.217Z'
+updatedAt: '2026-10-03T17:50:56.625Z'

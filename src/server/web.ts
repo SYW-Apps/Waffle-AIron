@@ -6,10 +6,8 @@ import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin, 
 import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
   resolveEnabledProvider,
-  tryAppendAudit,
-  buildSsoAuditEvent,
+  auditSignIn,
   isInAdminGroup,
-  ANONYMOUS_SSO_ACTOR,
   type SsoStatePayload,
 } from './identity.js';
 import { SSO_ADMIN_ROLE_ID } from './types.js';
@@ -17,7 +15,6 @@ import * as webadmin from './webadmin.js';
 import * as webproject from './webproject.js';
 import * as projectops from './projectops.js';
 import { listIdentityProviderRecords } from './policy.js';
-import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
 import { listPendingRequests, decideRequest } from './projectlifecycle.js';
 import { UnauthenticatedError, ForbiddenError, AdminAuthError } from './errors.js';
@@ -38,7 +35,7 @@ import { validateAsComplete } from './adapters/validator.js';
 import * as hostValidator from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
-import { sendJson } from './httpio.js';
+import { sendJson, setSessionCookie, clearSessionCookie } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
 import type { LockRecord } from '../core/lockfile.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
@@ -190,21 +187,18 @@ export async function startSignIn(
 ): Promise<{ url: string; nonce: string }> {
   const provider = resolveEnabledProvider(cfg, providerId); // steps 1–4 (throws on unknown/disabled)
 
-  // Pin the redirect URI to the provider's server-side allowlist (when configured)
-  // — the callback destination must never be attacker-chosen (open-redirect /
-  // code-delivery hardening on top of the nonce-cookie login-CSRF defense).
-  assertAllowedRedirectUri(provider, redirectUri);
-
   const nonce = crypto.randomBytes(16).toString('hex'); // step 5
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
   const state = signSsoState(JSON.stringify(payload)); // step 6
   // step 7: resolve the provider's concrete endpoints (overrides -> discovery ->
   // template); step 8: build the authorization URL against the front-channel endpoint.
   const endpoints = await resolveEndpoints(provider);
+  // buildAuthorizationUrl enforces the provider's redirect allowlist, as it does
+  // on every sign-in start path.
   const url = buildAuthorizationUrl(provider, endpoints, state, redirectUri);
 
-  // steps 9–12: best-effort append (tryAppendAudit wraps the try/jump/catch).
-  tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'web.signin.start', 'info', { target: providerId }));
+  // steps 9–12: best-effort append (auditSignIn wraps the try/jump/catch).
+  auditSignIn(cfg, null, 'web.signin.start', 'info', { target: providerId });
 
   return { url, nonce }; // step 13
 }
@@ -313,7 +307,7 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
   // steps 22–25: best-effort security-level append. The actor carries WHO signed
   // in; the target is the providerId (the session id is a secret credential and
   // must never be logged — the audit sink rejects credential-shaped targets).
-  tryAppendAudit(cfg, buildSsoAuditEvent(user.subject, 'web.signin', 'security', { target: providerId }));
+  auditSignIn(cfg, user.subject, 'web.signin', 'security', { target: providerId });
 
   return stored.id; // step 26 (the portal sets it as the session cookie)
 }
@@ -394,7 +388,7 @@ export function signInWithPassword(cfg: HostConfig, user: string, password: stri
   const stored = createWebSession(cfg.dataDir, session); // step 8
 
   // steps 9–12: best-effort security-level append (no credential-shaped target).
-  tryAppendAudit(cfg, buildSsoAuditEvent(subject, 'web.signin.password', 'security'));
+  auditSignIn(cfg, subject, 'web.signin.password', 'security');
 
   return stored.id; // step 13 (the portal sets it as the session cookie)
 }
@@ -410,7 +404,7 @@ export function signOut(cfg: HostConfig, sessionId: string): void {
   pruneExpiredWebSessions(cfg.dataDir, new Date().toISOString()); // step 2
 
   // steps 3–6: best-effort append.
-  tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'web.signout', 'info'));
+  auditSignIn(cfg, null, 'web.signout', 'info');
   // step 7: return once removed.
 }
 
@@ -560,7 +554,7 @@ export function signOutEverywhere(cfg: HostConfig, sessionId: string): void {
 
   // steps 7–10: best-effort security-level append. The actor carries the subject;
   // no session id is logged (the audit sink rejects credential-shaped targets).
-  tryAppendAudit(cfg, buildSsoAuditEvent(subject, 'web.signout.all', 'security'));
+  auditSignIn(cfg, subject, 'web.signout.all', 'security');
   // step 11: return, all of the principal's sessions revoked.
 }
 
@@ -940,37 +934,6 @@ function overlayProjectIssues(
 // listener (gated by exposure.webUiEnabled in http.ts). The cookie/CSRF/exposure
 // security decisions live in http.ts (routeData); this handler owns the route
 // dispatch, cookie management on the response, and its own error → status mapping.
-
-/** The browser cookie carrying the session id (a first-class credential). It is
- *  HttpOnly, so client JS cannot read it — the server reads it from the Cookie
- *  header as the auth bridge. */
-export const WEB_SESSION_COOKIE = 'wairon_session';
-
-/** Read the wairon_session cookie (a ws_-prefixed session id) from the request's
- *  Cookie header, or null when absent. */
-export function sessionCookieValue(req: IncomingMessage): string | null {
-  const header = req.headers['cookie'];
-  if (!header) return null;
-  const raw = Array.isArray(header) ? header.join(';') : header;
-  for (const part of raw.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq === -1) continue;
-    if (part.slice(0, eq).trim() === WEB_SESSION_COOKIE) return part.slice(eq + 1).trim();
-  }
-  return null;
-}
-
-/** The Set-Cookie value that installs the session cookie: HttpOnly + SameSite=Lax +
- *  Path=/, plus Secure when the effective exposure requires TLS. Exported so the
- *  HTTP layer can install the cookie inline on the dev auto-login path. */
-export function setSessionCookie(sessionId: string, secure: boolean): string {
-  return `${WEB_SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Lax; Path=/${secure ? '; Secure' : ''}`;
-}
-
-/** The Set-Cookie value that clears the session cookie (Max-Age=0). */
-function clearSessionCookie(secure: boolean): string {
-  return `${WEB_SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
-}
 
 /** Short-lived cookie binding the browser that STARTED an SSO flow to the one that
  *  COMPLETES it — the callback requires the cookie's nonce to equal the nonce inside

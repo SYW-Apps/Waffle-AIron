@@ -18,7 +18,7 @@ fields:
   - name: signature
     type: string
     description: Prose signature; display-only when structured params are present
-    optional: true
+    optional: false
   - name: params
     type: object[]
     description: Structured parameters ({name, type}) — authoritative for cross-contract type checking
@@ -26,7 +26,7 @@ fields:
   - name: returns
     type: string
     description: Return type or description
-    optional: true
+    optional: false
   - name: guarantees
     type: string[]
     description: >-
@@ -63,6 +63,10 @@ fields:
       Opaque namespaced extension data a pack or tool attaches to this method. Never validated or
       interpreted by the core, preserved verbatim through load and save.
     optional: true
+  - name: description
+    type: string
+    description: What the method does and what it promises its caller
+    optional: false
 methods:
   - name: typeRefs
     signature: 'typeRefs(): string[]'
@@ -88,4 +92,4 @@ methods:
     symbol: methodGenericParameters
 sourcePath: src/models/specs.ts
 createdAt: '2026-08-11T15:28:28.921Z'
-updatedAt: '2026-09-23T18:35:59.077Z'
+updatedAt: '2026-10-03T17:03:25.002Z'

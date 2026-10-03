@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import { canonicalize } from '../utils/canonical-json.js';
-import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
+import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { safeFilenamePart } from '../utils/filenames.js';
 import {
   SurfaceSnapshot,
@@ -279,8 +279,8 @@ function canonicalReferences(snapshot: SurfaceSnapshot): SurfaceSnapshot {
 // Stored snapshots (surface_repository over .wai/surfaces/)
 // ---------------------------------------------------------------------------
 
-export function listSnapshots(rootDir: string = getProjectRoot()): SurfaceSnapshot[] {
-  const dir = surfacesDir(rootDir);
+export function listSnapshots(): SurfaceSnapshot[] {
+  const dir = surfacesDir(getProjectRoot());
   if (!fs.existsSync(dir)) return [];
   const out: SurfaceSnapshot[] = [];
   for (const file of fs.readdirSync(dir)) {
@@ -294,8 +294,8 @@ export function listSnapshots(rootDir: string = getProjectRoot()): SurfaceSnapsh
   return out;
 }
 
-export function getSnapshot(projectName: string, rootDir: string = getProjectRoot()): SurfaceSnapshot | null {
-  return listSnapshots(rootDir).find(s => s.projectName === projectName) ?? null;
+export function getSnapshot(projectName: string): SurfaceSnapshot | null {
+  return listSnapshots().find(s => s.projectName === projectName) ?? null;
 }
 
 /** Snapshot filename for a storage key. The key itself (projectName, possibly
@@ -343,12 +343,12 @@ function writeSnapshotIfChanged(
   return { path: p, changed: true };
 }
 
-export function saveSnapshot(snapshot: SurfaceSnapshot, rootDir: string = getProjectRoot()): string {
-  return writeSnapshotIfChanged(snapshot, rootDir).path;
+export function saveSnapshot(snapshot: SurfaceSnapshot): string {
+  return writeSnapshotIfChanged(snapshot, getProjectRoot()).path;
 }
 
-export function removeSnapshot(projectName: string, rootDir: string = getProjectRoot()): boolean {
-  const dir = surfacesDir(rootDir);
+export function removeSnapshot(projectName: string): boolean {
+  const dir = surfacesDir(getProjectRoot());
   const direct = path.join(dir, snapshotFilename(projectName));
   if (fs.existsSync(direct)) {
     fs.unlinkSync(direct);
@@ -471,8 +471,8 @@ function perPortalPath(resolvedOut: string, portalId: string): string {
  *  native format (and for an openapi export that renders no portals at all), the
  *  single document when one portal remains, else ONE FILE PER PORTAL — never just
  *  the first, which would silently drop the other APIs. */
-function writeSurfaceFile(outPath: string, snapshot: SurfaceSnapshot, renderedSet?: NamedOpenApiSpec[]): string[] {
-  const resolved = path.resolve(outPath);
+function writeSurfaceFile(targetPath: string, snapshot: SurfaceSnapshot, renderedSet?: NamedOpenApiSpec[]): string[] {
+  const resolved = path.resolve(targetPath);
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
   if (!renderedSet || renderedSet.length === 0) {
     writeYamlFile(resolved, snapshot);
@@ -515,12 +515,19 @@ export function exportSurface(maxAudience: string, format: string, outPath?: str
   return exportResult(snapshot, renderedSet, writtenPaths);
 }
 
-export function importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot {
+/** Read a foreign surface document as UTF-8 text without interpreting it;
+ *  decoding is the caller's concern. Fails naming the path when it is missing. */
+function readSurfaceDocument(sourcePath: string): string {
   const resolved = path.resolve(sourcePath);
   if (!fs.existsSync(resolved)) {
     throw new Error(`Surface document not found: ${resolved}`);
   }
-  const body = fs.readFileSync(resolved, 'utf8');
+  return fs.readFileSync(resolved, 'utf8');
+}
+
+export function importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot {
+  const resolved = path.resolve(sourcePath);
+  const body = readSurfaceDocument(resolved);
 
   let snapshot: SurfaceSnapshot;
   if (isOpenApiDocument(body)) {
@@ -528,7 +535,7 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
     snapshot = fromOpenApi(body, projectName);
     snapshot = { ...snapshot, origin };
   } else {
-    snapshot = SurfaceSnapshotSchema.parse(readYamlFile(resolved));
+    snapshot = SurfaceSnapshotSchema.parse(parseYaml(body, resolved));
     snapshot = { ...snapshot, origin };
   }
   saveSnapshot(snapshot);

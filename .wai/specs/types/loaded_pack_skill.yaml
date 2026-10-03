@@ -1,0 +1,39 @@
+kind: value-object
+id: loaded_pack_skill
+name: LoadedPackSkill
+description: >-
+  A pack skill as loaded: the authored PackSkill tagged with the pack that ships it (provenance for
+  install and `skills list`) and the absolute path to its SKILL.md.
+fields:
+  - name: id
+    type: string
+    description: Skill id within the pack; present for a new skill, absent when extending.
+    optional: true
+  - name: source
+    type: string
+    description: Path to the SKILL.md file, relative to the pack directory.
+    optional: false
+  - name: targets
+    type: string[]
+    description: AI client targets this skill installs into.
+    optional: false
+  - name: extends
+    type: string
+    description: The builtin skill this section is appended to; absent for a new skill.
+    optional: true
+  - name: pack
+    type: string
+    description: 'Provenance: the name of the pack that ships this skill.'
+    optional: false
+  - name: packVersion
+    type: string
+    description: 'Provenance: the version of the pack that ships this skill, when the pack declares one.'
+    optional: true
+  - name: sourcePath
+    type: string
+    description: The absolute path to the skill's SKILL.md.
+    optional: false
+methods: []
+sourcePath: src/core/extensions.ts
+createdAt: '2026-10-03T17:04:17.241Z'
+updatedAt: '2026-10-03T17:04:17.242Z'

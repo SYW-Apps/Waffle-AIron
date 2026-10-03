@@ -27,14 +27,6 @@ fields:
     type: string[]
     description: AI client targets this skill installs into (claude, gemini, codex, ...).
     optional: false
-  - name: pack
-    type: string
-    description: 'Provenance: the id/name of the pack that ships this skill.'
-    optional: true
-  - name: version
-    type: string
-    description: 'Provenance: the pack version that ships this skill.'
-    optional: true
   - name: extends
     type: string
     description: >-
@@ -45,4 +37,4 @@ fields:
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:56:18.960Z'
-updatedAt: '2026-09-19T11:07:12.747Z'
+updatedAt: '2026-10-03T17:04:22.550Z'

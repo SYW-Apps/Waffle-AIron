@@ -134,6 +134,13 @@ methods:
         type: return
         outcome: refreshed
     symbol: reinjectLocalGuides
+  - name: body
+    narrative:
+      - stepNumber: 1
+        description: Return the global guide body for the global scope, else the local guide body
+        type: return
+        outcome: the guide body
+    symbol: guideBody
 status: complete
 createdAt: '2026-09-23T00:11:34.495Z'
-updatedAt: '2026-09-23T00:14:15.375Z'
+updatedAt: '2026-10-03T17:50:04.450Z'

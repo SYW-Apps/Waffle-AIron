@@ -422,30 +422,37 @@ methods:
         targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
+        description: >-
+          Read the actionable units down from that view: its unit entries that are not breadcrumb
+          context
+        type: call
+        targetComponent: authorization
+        targetMethod: actionableUnits
+      - stepNumber: 4
         description: If the caller has no actionable unit scope, deny
         type: branch
         condition: the caller has no actionable unit scope in the visible set
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
         description: Reject the listing
         type: throw
         error: Forbidden — user administration required
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           List hosted users through the repository, optionally narrowed by status (the user store
           owns NO project filter — membership is a grid question)
         type: call
         targetComponent: user_repository
         targetMethod: list
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           If a caller-supplied project filter is present, resolve its holders from the permission
           grid; otherwise skip to the scope filter
         type: branch
         condition: a caller-supplied project filter is present
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 9
+      - stepNumber: 8
         description: >-
           List the DIRECT user assignments at that project scope through the permission repository
           and narrow the listing to those subject ids (user records carry no project reference of
@@ -453,13 +460,13 @@ methods:
         type: call
         targetComponent: permission_repository
         targetMethod: listAssignments
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Filter the returned users to those whose home unit is an actionable unit in the visible
           set (an instance-admin keeps every user), intersected with the grid-resolved project
           holders when a project filter was supplied
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Return the hosted user records filtered to the caller's scope
         type: return
         outcome: scoped hosted user records
@@ -725,85 +732,103 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Resolve the token's owner user by request.ownerUserId — matching the record id or the
-          record's subject userId (record id wins) — to confirm existence and read status
-        type: call
-        targetComponent: user_repository
-        targetMethod: findByRecordOrSubjectId
-      - stepNumber: 3
-        description: If no user matches request.ownerUserId, reject as not found
-        type: branch
-        condition: no user matches request.ownerUserId
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Reject minting for an unknown owner
-        type: throw
-        error: unknown owner user
-      - stepNumber: 5
-        description: >-
-          If the owner user's status is not 'active', reject — a fresh token must never revive a
-          deactivated user whose credentials were revoked at deactivation
-        type: branch
-        condition: the owner user's status is not 'active'
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject minting a token for a deactivated user
-        type: throw
-        error: cannot mint a token for a deactivated user
-      - stepNumber: 7
-        description: >-
           If the caller is not an instance admin (permissionSubject.instanceAdmin is false), deny —
           the minted token acts as the OWNER's live permission, which may exceed a non-super-admin
           minter's own authority (confused deputy); only the env-anchored instance-admin dominates
           every owner
         type: branch
         condition: the caller is not an instance admin (permissionSubject.instanceAdmin is false)
-        onTrueStep: 8
-        onFalseStep: 9
-      - stepNumber: 8
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
         description: Reject minting a token on behalf of another user without instance-admin
         type: throw
         error: >-
-          Forbidden — minting a token for another user requires instance-admin; delegated minting
-          bounded by the minter's own scope is a future enhancement, and a user mints their own
-          single-project tokens via mintSelfToken
+          Forbidden — minting a token for another user requires instance-admin; a user mints their
+          own single-project tokens via mintSelfToken
+      - stepNumber: 4
+        description: >-
+          Refuse a reserved built-in subject id as the owner: the env-anchored paths are the only
+          super-admin routes
+        type: local
+      - stepNumber: 5
+        description: >-
+          If request.projects is missing or empty, reject — the narrowing is required, and '*' is
+          the full reach
+        type: branch
+        condition: request.projects is missing or empty
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the request, telling the caller to pass the project ids or '*'
+        type: throw
+        error: >-
+          projects is required: pass the project ids the token may name, or '*' for the owner's full
+          reach
+      - stepNumber: 7
+        description: >-
+          Validate each narrowing entry through the project repository (a hosted record id or '*');
+          a deprecated member-qualified entry is stored as the member's record id and the mapping
+          kept for the answer; an unknown project or unheld member is refused
+        type: call
+        targetComponent: project_repository
+        targetMethod: admitNarrowing
+      - stepNumber: 8
+        description: >-
+          Resolve the owner's user record by request.ownerUserId — matching the record id or the
+          record's subject userId (record id wins). An owner id with no user record is a service
+          principal, allowed by design
+        type: call
+        targetComponent: user_repository
+        targetMethod: findByRecordOrSubjectId
       - stepNumber: 9
         description: >-
-          Generate a cryptographically random token, compute its salted hash, and build the
-          ApiKeyRecord (keyHash, ownerSubject = the owner user's subject, createdBySubject = the
-          caller's subject, projects = request.projects narrowing, createdAt now, optional
-          expiresAt); the token carries NO grants — within its narrowing it acts as the owner's live
-          permission and permission rules gate per project
-        type: local
+          If a user record matches and its status is not 'active', reject — a fresh token must never
+          revive a deactivated user whose credentials were revoked at deactivation
+        type: branch
+        condition: a user record matches and its status is not 'active'
+        onTrueStep: 10
+        onFalseStep: 11
       - stepNumber: 10
+        description: Reject minting a token for a deactivated user
+        type: throw
+        error: cannot mint a token for a deactivated user
+      - stepNumber: 11
+        description: >-
+          Generate a cryptographically random token, compute its salted hash, and build the
+          ApiKeyRecord (keyHash, ownerSubject = the owner record's subject, or a synthesized service
+          subject for a record-less service principal, createdBySubject = the caller's subject,
+          projects = the validated narrowing, createdAt now, optional expiresAt); the token carries
+          NO grants — within its narrowing it acts as the owner's live permission and permission
+          rules gate per project
+        type: local
+      - stepNumber: 12
         description: Persist only the hashed credential record
         type: call
         targetComponent: credential_repository
         targetMethod: create
-      - stepNumber: 11
+      - stepNumber: 13
         description: Append a redacted audit event without letting a failure fail the mint
         type: try
-        endStep: 13
+        endStep: 15
         catches:
           - error: audit append failure
-            step: 14
-      - stepNumber: 12
+            step: 16
+      - stepNumber: 14
         description: >-
-          Append the redacted token.mint audit event (security level) under the active retention
+          Append the redacted token.mint audit event (security level) under the effective audit
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 13
+      - stepNumber: 15
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 15
-      - stepNumber: 14
+        toStep: 17
+      - stepNumber: 16
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 15
+      - stepNumber: 17
         description: >-
           Return the plaintext token (shown exactly once) with the mapping of every deprecated
           member-qualified entry to the record id it was stored as
@@ -836,8 +861,8 @@ methods:
         error: Forbidden — audit administration requires instance-wide project:admin
       - stepNumber: 5
         description: >-
-          Resolve the active AuditRetentionPolicy from the host config, using the secure default
-          policy when unset
+          Resolve the effective AuditRetentionPolicy: the host config's auditPolicy, else the secure
+          default (host_config.effectiveAuditPolicy)
         type: local
       - stepNumber: 6
         description: Apply the retention policy and delete expired audit events
@@ -1063,6 +1088,18 @@ methods:
         type: return
         outcome: void
     symbol: tryAppendAudit
+  - name: auditSignIn
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the redacted auth event: the given subject as the actor, or the anonymous local
+          service actor when none is resolved yet, with the fields laid over it
+        type: local
+      - stepNumber: 2
+        description: Append it best-effort, so a failed append never fails the sign-in step
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-10-01T18:07:17.430Z'
+updatedAt: '2026-10-03T17:58:56.809Z'

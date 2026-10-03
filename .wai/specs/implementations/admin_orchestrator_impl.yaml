@@ -609,13 +609,20 @@ methods:
         error: Forbidden — locking a project requires project:write over it
       - stepNumber: 5
         description: >-
+          Name the approver the lock records: the authenticated caller's subject, or the instance
+          master credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: approverFor
+      - stepNumber: 6
+        description: >-
           Lock through the pre-authorized entry with the authenticated caller as approver: the same
           workflow an approved request runs, so capture-before-validation, the design-only gate, the
           member states and requireApprovedMembers hold identically on both paths
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
-      - stepNumber: 6
+      - stepNumber: 7
         description: Return the lock record
         type: return
         outcome: lock record
@@ -652,16 +659,12 @@ methods:
       - stepNumber: 6
         description: >-
           Resolve the clone's token from the host's own secret repository: the connection's own
-          credential ref first, when it has one, so each connection can carry a distinct PAT
+          credential ref first, when it has one, so each connection can carry a distinct PAT, else
+          the shared git-token (none at all for a public remote)
         type: call
         targetComponent: secret_repository
-        targetMethod: resolve
+        targetMethod: resolveGit
       - stepNumber: 7
-        description: Otherwise fall back to the shared git-token (none at all for a public remote)
-        type: call
-        targetComponent: secret_repository
-        targetMethod: resolve
-      - stepNumber: 8
         description: >-
           Bind the project to its REAL repository (clone the remote onto the isolated working
           branch), handing the git plane the resolved token as an argument; wairon will commit ONLY
@@ -669,7 +672,7 @@ methods:
         type: call
         targetComponent: host_git_adapter
         targetMethod: enable
-      - stepNumber: 9
+      - stepNumber: 8
         description: Return the project record
         type: return
         outcome: project record
@@ -1203,6 +1206,24 @@ methods:
         description: Return it rendered `<algorithm>:<digest>`
         type: return
         outcome: gate identity
+  - name: approverFor
+    narrative:
+      - stepNumber: 1
+        description: Decide whether a subject was resolved
+        type: branch
+        condition: no subject (the master credential)
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Return the instance master credential as the approver, source hosted
+        type: return
+        outcome: the master approver
+      - stepNumber: 3
+        description: Return the subject's user id and display name as the approver, source hosted
+        type: return
+        outcome: the subject's approver identity
+    detail: full
+    symbol: hostedApprover
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-10-03T13:39:11.369Z'
+updatedAt: '2026-10-03T17:58:48.202Z'

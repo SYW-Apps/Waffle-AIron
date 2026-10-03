@@ -1,5 +1,5 @@
 import * as packs from './packs.js';
-import * as policy from './policy.js';
+import * as projectPolicy from './policy.js';
 import * as admin from './admin.js';
 import * as identity from './identity.js';
 import * as operations from './operations.js';
@@ -127,27 +127,27 @@ export function previewProjectPackRemoval(cfg: HostConfig, credential: string | 
 // ── pack/profile policy ───────────────────────────────────────────────────────
 
 export function getPackPolicy(cfg: HostConfig, credential: string | null): InstancePackPolicy {
-  return policy.getPackPolicy(cfg, credential);
+  return projectPolicy.getPackPolicy(cfg, credential);
 }
 
-export function setPackPolicy(cfg: HostConfig, credential: string | null, packPolicy: InstancePackPolicy): InstancePackPolicy {
-  return policy.setPackPolicy(cfg, credential, packPolicy);
+export function setPackPolicy(cfg: HostConfig, credential: string | null, policy: InstancePackPolicy): InstancePackPolicy {
+  return projectPolicy.setPackPolicy(cfg, credential, policy);
 }
 
 export function evaluateProjectPolicy(cfg: HostConfig, credential: string | null, projectId: string): PolicyEvaluationResult {
-  return policy.evaluateProjectPolicy(cfg, credential, projectId);
+  return projectPolicy.evaluateProjectPolicy(cfg, credential, projectId);
 }
 
 export function reconcileProjectPolicy(cfg: HostConfig, credential: string | null, projectId: string): PolicyEvaluationResult {
-  return policy.reconcileProjectPolicy(cfg, credential, projectId);
+  return projectPolicy.reconcileProjectPolicy(cfg, credential, projectId);
 }
 
 export function getProjectConfig(cfg: HostConfig, credential: string | null, projectId: string): ProjectConfigView {
-  return policy.getProjectConfig(cfg, credential, projectId);
+  return projectPolicy.getProjectConfig(cfg, credential, projectId);
 }
 
 export function setProjectType(cfg: HostConfig, credential: string | null, projectId: string, projectType: string): ProjectConfigView {
-  return policy.setProjectType(cfg, credential, projectId, projectType);
+  return projectPolicy.setProjectType(cfg, credential, projectId, projectType);
 }
 
 export function listProjectProfiles(cfg: HostConfig, credential: string | null, project: string): AvailableProfile[] {
@@ -244,6 +244,6 @@ export function getExposurePolicy(cfg: HostConfig, credential: string | null): H
   return operations.getExposurePolicy(cfg, credential);
 }
 
-export function setExposurePolicy(cfg: HostConfig, credential: string | null, exposure: HostExposurePolicy): HostExposurePolicy {
-  return operations.setExposurePolicy(cfg, credential, exposure);
+export function setExposurePolicy(cfg: HostConfig, credential: string | null, policy: HostExposurePolicy): HostExposurePolicy {
+  return operations.setExposurePolicy(cfg, credential, policy);
 }

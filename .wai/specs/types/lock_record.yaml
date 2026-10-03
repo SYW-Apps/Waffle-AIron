@@ -59,14 +59,6 @@ fields:
     type: string
     description: 'For git-backed projects: the compare/PR URL a human opens to merge'
     optional: true
-  - name: lockedBySubject
-    type: PrincipalSubject
-    description: Resolved user or service identity that created the lock.
-    optional: true
-  - name: lockedByTokenId
-    type: string
-    description: Credential id used to create the lock, if the action came through MCP or HTTP auth.
-    optional: true
   - name: specs
     type: Record<string, string>
     description: >-
@@ -128,4 +120,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-09-30T06:03:11.900Z'
+updatedAt: '2026-10-03T17:04:52.729Z'

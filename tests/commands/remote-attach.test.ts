@@ -258,7 +258,7 @@ describe('remote attachment', () => {
     await runRemote('detach', {});
     expect(readBinding(local)).toBeNull();
 
-    await runLogout(url, {});
+    await runLogout(url);
     expect(storedCredentialFor(url)).toBeNull();
 
     await expect(runRemote('teleport', { url, project: 'demo', token })).rejects.toThrow(

@@ -89,7 +89,7 @@ describe('stage 7 — a hosted detach relocates the member atomic-or-nothing', (
     buildHostedFamily(dir);
     const unit = seedUnit(dir, 'eng');
     placeProject(dir, { id: '', projectId: 'platform', unitId: unit.id, role: 'owner', createdAt: '', createdBy: subjectOf('u-seed') });
-    expect(upgradeMemberRecords(dir, true).applied).toBe(true);
+    expect(upgradeMemberRecords({ dataDir: dir }, true).applied).toBe(true);
     invalidateSpecCache();
     return dir;
   }
@@ -99,7 +99,7 @@ describe('stage 7 — a hosted detach relocates the member atomic-or-nothing', (
     const binding = resolveProjectBinding(dir, PRINCIPAL, 'platform')!;
     const reach = { topRoot: binding.rootPath, parentReach: true, unwritableRoots: [], hostedLookup: (id: string) => existingProjectRoot(dir, id) };
     invalidateSpecCache();
-    return runWithProjectBinding(binding.rootPath, reach, () => memberRegistration.detach(dir, PRINCIPAL, binding, 'billing', true));
+    return runWithProjectBinding(binding.rootPath, reach, () => memberRegistration.detach({ dataDir: dir }, PRINCIPAL, binding, 'billing', true));
   }
 
   /** Every file and directory under the data dir's stores and projects, by digest — audit and sessions aside. */

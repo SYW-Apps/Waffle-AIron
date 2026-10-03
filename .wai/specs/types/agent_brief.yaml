@@ -60,7 +60,15 @@ fields:
       ownedPaths and readPaths are re-expressed under this prefix so the fence is correct from the
       asking root. Absent for an agent of the asking project itself.
     optional: true
+  - name: profile
+    type: ExecutionProfile
+    description: The execution profile (model, effort) for this agent; absent unless execution.tier opts in.
+    optional: true
+  - name: budget
+    type: ExecutionBudget
+    description: The execution budget (turns, tools) for this agent; absent unless execution.tier opts in.
+    optional: true
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-08-08T11:11:36.097Z'
-updatedAt: '2026-09-30T05:48:18.309Z'
+updatedAt: '2026-10-03T17:05:03.727Z'

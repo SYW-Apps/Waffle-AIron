@@ -7,6 +7,8 @@ description: >-
   Performs no writes and no audit.
 contract: ioperations_orchestrator
 sourcePath: src/server/operations.ts
+injectedParams:
+  - cfg
 methods:
   - name: getHealthReport
     narrative:
@@ -230,4 +232,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T11:27:00.178Z'
-updatedAt: '2026-09-13T12:16:26.436Z'
+updatedAt: '2026-10-03T16:39:46.543Z'

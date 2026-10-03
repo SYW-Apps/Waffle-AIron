@@ -12,7 +12,8 @@ import {
   executeApprovedRequest,
   awaitApproval,
 } from '../../src/server/projectlifecycle.js';
-import { createProject, executeApprovedLock, LockValidationError } from '../../src/server/admin.js';
+import { createProject, executeApprovedLock } from '../../src/server/admin.js';
+import { LockValidationError } from '../../src/server/errors.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
 import * as hostCore from '../../src/server/adapters/core.js';
 import { computeGateStateId } from '../../src/server/adapters/validator.js';
@@ -368,7 +369,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     runWithProjectRoot(child, () => hostCore.provisionProject(mountId));
     seedSubsystem(parent, 'plain'); // exists, but carries no projectPath
     invalidateSpecCache();
-    const upgrade = upgradeMemberRecords(dataDir, true);
+    const upgrade = upgradeMemberRecords({ dataDir }, true);
     expect(upgrade.applied, JSON.stringify(upgrade.plan.refusals)).toBe(true);
     return { parent, child };
   }
@@ -434,7 +435,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
       } as SubsystemSpec, 'claims');
     });
     invalidateSpecCache();
-    const upgrade = upgradeMemberRecords(dataDir, true);
+    const upgrade = upgradeMemberRecords({ dataDir }, true);
     expect(upgrade.applied, JSON.stringify(upgrade.plan.refusals)).toBe(true);
     // Each member approves its own tree first, through its own hosted record.
     const billing = executeApprovedLock(cfg, 'billing', TEST_APPROVER);

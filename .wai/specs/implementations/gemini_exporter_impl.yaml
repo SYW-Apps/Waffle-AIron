@@ -33,6 +33,7 @@ methods:
         description: Answer with where it landed and what it holds
         type: return
         outcome: written
+    exportedVia: GeminiExporter
   - name: outputPath
     narrative:
       - stepNumber: 1
@@ -41,6 +42,7 @@ methods:
           agent, without rendering or writing anything
         type: return
         outcome: resolved
+    exportedVia: GeminiExporter
 status: complete
 createdAt: '2026-09-20T19:46:19.734Z'
-updatedAt: '2026-09-20T19:46:19.742Z'
+updatedAt: '2026-10-03T17:52:23.153Z'

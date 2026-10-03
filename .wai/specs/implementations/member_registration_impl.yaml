@@ -5,10 +5,15 @@ description: >-
   It writes records and key narrowings, never a grant or a placement: a member's reach is inherited
   through its project chain. The upgrade's writes are made by the ordinary repositories wired to the
   rehearsal's copy of the data root, and committed by the family transaction with the data directory
-  as its one owner and the project-record and credential store files as its areas.
+  as its one owner and the project-record and credential store files as its areas. Every method that
+  audits (apply, recover, recoverData, reconcile, detach, adopt) is handed the host config and
+  appends under its effective audit policy: the serving host's, and for the offline `wairon host
+  doctor` the config the serve command resolves from the same environment; the read-only methods are
+  handed the data directory alone.
 contract: imember_registration
 sourcePath: src/server/members.ts
 injectedParams:
+  - cfg
   - dataDir
 methods:
   - name: plan
@@ -968,4 +973,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-03T14:21:00.582Z'
+updatedAt: '2026-10-03T17:54:24.510Z'

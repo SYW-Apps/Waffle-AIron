@@ -49,8 +49,14 @@ fields:
       Pull only: the local project root the tree landed in — reported because a pull may target a
       directory other than the bound project root.
     optional: true
+  - name: skipped
+    type: object[]
+    description: >-
+      The mounts a partial export left out (allowed by allowPartial), each as {mount, projectPath,
+      reason}; absent when nothing was skipped.
+    optional: true
 methods: []
 componentClass: remote_orchestrator
 sourcePath: src/commands/remote.ts
 createdAt: '2026-08-12T18:31:17.450Z'
-updatedAt: '2026-09-19T11:07:15.820Z'
+updatedAt: '2026-10-03T17:04:55.224Z'

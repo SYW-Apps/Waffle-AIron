@@ -24,21 +24,29 @@ fields:
     optional: false
   - name: defaultTags
     type: string[]
-    description: Tags every agent from this template carries unless it overrides them.
-    optional: true
+    description: 'Tags applied to agents created from this template (default: an empty list)'
+    optional: false
   - name: requiresOwnedPaths
     type: boolean
-    description: Whether an agent from this template must declare owned paths to be valid.
-    optional: true
+    description: 'Whether an agent created from this template must declare owned paths (default: true)'
+    optional: false
   - name: frontmatter
     type: object
     description: Extra frontmatter keys the exporters carry through to the written file.
     optional: true
   - name: version
     type: string
-    description: The template's version, so a regenerated file can be told from a stale one.
-    optional: true
-methods: []
+    description: 'Template version (default: 1.0.0)'
+    optional: false
+methods:
+  - name: render
+    signature: 'render(vars: Record<string, string>): string'
+    returns: string
+    description: >-
+      The template's instruction body with each {{variable}} placeholder replaced by its value; a
+      placeholder with no value stays as written.
+    sourcePath: src/core/templates.ts
+    symbol: renderTemplateInstructions
 sourcePath: src/models/template.ts
 createdAt: '2026-09-20T19:47:43.160Z'
-updatedAt: '2026-09-20T19:47:43.172Z'
+updatedAt: '2026-10-03T17:53:14.672Z'

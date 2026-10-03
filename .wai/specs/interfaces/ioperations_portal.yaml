@@ -7,7 +7,7 @@ component: operations_portal
 methods:
   - name: getHealthReport
     description: Return a redacted operational health report.
-    signature: 'getHealthReport(credential: string, scope: string): InstanceHealthReport'
+    signature: 'getHealthReport(credential: string, scope?: string): InstanceHealthReport'
     returns: InstanceHealthReport
     params:
       - name: credential
@@ -21,7 +21,7 @@ methods:
       path: /operations/health
   - name: getUsage
     description: Return redacted resource usage snapshots.
-    signature: 'getUsage(credential: string, scope: string): ResourceUsageSnapshot[]'
+    signature: 'getUsage(credential: string, scope?: string): ResourceUsageSnapshot[]'
     returns: ResourceUsageSnapshot[]
     params:
       - name: credential
@@ -35,7 +35,7 @@ methods:
       path: /operations/usage
   - name: evaluateQuota
     description: Return resource usage snapshots annotated with advisory (observe/warn) quota observations.
-    signature: 'evaluateQuota(credential: string, scope: string): ResourceUsageSnapshot[]'
+    signature: 'evaluateQuota(credential: string, scope?: string): ResourceUsageSnapshot[]'
     returns: ResourceUsageSnapshot[]
     params:
       - name: credential
@@ -49,4 +49,4 @@ methods:
       path: /operations/quota
 status: complete
 createdAt: '2026-07-09T09:10:34.177Z'
-updatedAt: '2026-07-10T11:27:29.221Z'
+updatedAt: '2026-10-03T16:46:51.277Z'

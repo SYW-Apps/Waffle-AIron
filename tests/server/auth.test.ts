@@ -9,7 +9,8 @@ import {
   authenticateSession,
 } from '../../src/server/auth.js';
 import { createCredential, findByTokenHash, hashToken } from '../../src/server/credentials.js';
-import { createWebSession, WEB_SESSION_PREFIX } from '../../src/server/websessions.js';
+import { createWebSession } from '../../src/server/websessions.js';
+import { WEB_SESSION_PREFIX } from '../../src/server/types.js';
 import { upsertUser } from '../../src/server/users.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import * as identity from '../../src/server/identity.js';

@@ -225,8 +225,48 @@ methods:
         type: call
         targetComponent: export_index
         targetMethod: pinnedUsage
+  - name: subsystemPath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: subsystemPath
+    symbol: getSubsystemPath
+  - name: componentPath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: componentPath
+    symbol: getComponentPath
+  - name: interfacePath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: interfacePath
+    symbol: getInterfacePath
+  - name: implementationPath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: implementationPath
+    symbol: getImplementationPath
+  - name: snapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: snapshot
+    symbol: snapshotSpecFiles
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T20:22:23.557Z'
+updatedAt: '2026-10-03T17:58:01.328Z'

@@ -192,7 +192,6 @@ describe('findTestsReferencing — what it refuses to walk', () => {
     write(root, 'tests/billing.test.ts', "import { runBilling } from '../src/billing.js';");
 
     expect(findTestsReferencing([{ name: 'runBilling' }], root, [])).toEqual([]);
-    expect(findTestsReferencing([{ name: 'runBilling' }], root)).toEqual([]);
   });
 
   it('refuses a root that escapes the project root rather than walking it', () => {

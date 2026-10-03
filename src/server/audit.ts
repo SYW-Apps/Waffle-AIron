@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import type { AuditEvent, AuditQuery, AuditRetentionPolicy } from './types.js';
+import type { AuditEvent, AuditQuery, AuditRetentionPolicy, HostConfig } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Audit Repository (sdd_host)
@@ -47,7 +47,7 @@ const METADATA_CAP = 2048;
 /** The design doc's secure default: capture info+ events, keep them 90 days
  *  (security events a year), skip high-volume reads, and persist redacted
  *  metadata only. */
-export const DEFAULT_AUDIT_POLICY: AuditRetentionPolicy = {
+const DEFAULT_AUDIT_POLICY: AuditRetentionPolicy = {
   enabled: true,
   minimumLevel: 'info',
   retentionDays: 90,
@@ -55,6 +55,17 @@ export const DEFAULT_AUDIT_POLICY: AuditRetentionPolicy = {
   includeReadEvents: false,
   metadataMode: 'redacted',
 };
+
+/**
+ * host_config.effectiveAuditPolicy — the audit retention policy in force: the
+ * secure default with each field the configured `auditPolicy` sets laid over it.
+ * The one place the policy is resolved; every audit append passes what it
+ * answers. A tool running without a host config (an offline migration) gets the
+ * secure default.
+ */
+export function effectiveAuditPolicy(cfg?: Pick<HostConfig, 'auditPolicy'>): AuditRetentionPolicy {
+  return cfg?.auditPolicy ? { ...DEFAULT_AUDIT_POLICY, ...cfg.auditPolicy } : DEFAULT_AUDIT_POLICY;
+}
 
 // ── file helpers ───────────────────────────────────────────────────────────
 

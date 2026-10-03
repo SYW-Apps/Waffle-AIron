@@ -12,6 +12,7 @@
 
 import * as memberRegistration from './members.js';
 import type { MemberUpgradeReport } from './members.js';
+import type { HostConfig } from './types.js';
 
 // Project, key, producer, secret, git-backing and lock workflows, and the dev
 // server's project registration (admin_orchestrator).
@@ -36,7 +37,6 @@ export {
   getGitBinding,
   configureGitSync,
   registerLocalDevProject,
-  LockValidationError,
 } from './admin.js';
 
 // Instance-wide and project extension packs (pack_orchestrator).
@@ -74,8 +74,9 @@ export { startHostServer } from './http.js';
 // Whether a project id is registered — a read through the project repository.
 export { existingProjectRoot } from './projects.js';
 
-// The admin plane's authorization refusal.
-export { AdminAuthError } from './errors.js';
+// The admin plane's authorization refusal, and the refusal of a lock whose tree
+// does not validate as-complete.
+export { AdminAuthError, LockValidationError } from './errors.js';
 
 // The stage-7 member upgrade behind `wairon host doctor` (member_registration).
 export type { MemberUpgradeReport, MemberUpgradePlan } from './members.js';
@@ -87,15 +88,15 @@ export type { MemberUpgradeReport, MemberUpgradePlan } from './members.js';
  * to a record id, nobody's reach changed — all or nothing. A dry run or a
  * blocked plan writes nothing.
  */
-export function upgradeMemberRecords(dataDir: string, apply: boolean): MemberUpgradeReport {
+export function upgradeMemberRecords(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, apply: boolean): MemberUpgradeReport {
   // Step 1: what a crash left unfinished under the data directory — resolved
   // (and audited) with apply, only reported without it.
-  const recovered = memberRegistration.recoverData(dataDir, apply);
+  const recovered = memberRegistration.recoverData(cfg, apply);
   // Step 2.
-  const plan = memberRegistration.plan(dataDir);
+  const plan = memberRegistration.plan(cfg.dataDir);
   // Steps 3-5.
   if (apply && plan.refusals.length === 0 && plan.rehearsal) {
-    return { ...memberRegistration.apply(dataDir, plan), recovered };
+    return { ...memberRegistration.apply(cfg, plan), recovered };
   }
   // Steps 6-7.
   memberRegistration.discard(plan);

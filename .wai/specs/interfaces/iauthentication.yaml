@@ -124,6 +124,28 @@ methods:
     params:
       - name: userId
         type: string
+  - name: localDevSubject
+    description: >-
+      The synthetic local-developer subject behind `wairon dev` sessions: the persisted
+      boot-reserved local-developer UUID under issuer 'local', which authentication recognizes as
+      instance-admin by its full tuple. Authentication owns built-in subject recognition and minting
+      together. Fails when the instance identity has never been seeded; the dev server always runs
+      the lifecycle init entrypoint before serving.
+    signature: 'localDevSubject(): PrincipalSubject'
+    returns: PrincipalSubject
+    params: []
+  - name: isLegacyBuiltin
+    description: >-
+      Whether a user id is one of the legacy built-in literals ('builtin:superadmin' /
+      'builtin:localdev'), the guessable ids the built-in subjects carried before the boot-reserved
+      UUIDs. The permission-model migration uses it to re-own legacy built-in records; an absent id
+      is never one.
+    signature: 'isLegacyBuiltin(userId: string | undefined): boolean'
+    returns: boolean
+    params:
+      - name: userId
+        type: string | undefined
+        description: The user id a legacy record carries, if any.
 status: complete
 createdAt: '2026-07-04T12:49:50.542Z'
-updatedAt: '2026-09-15T20:46:47.496Z'
+updatedAt: '2026-10-03T17:49:26.065Z'

@@ -6,7 +6,8 @@ import * as path from 'node:path';
 import { writeSpecFile } from '../../src/core/spec-files.js';
 import { ComponentSpecSchema, ImplementationSpecSchema, InterfaceSpecSchema } from '../../src/models/index.js';
 import * as admin from '../../src/server/admin.js';
-import { executeApprovedLock, gateIdentity, LockValidationError } from '../../src/server/admin.js';
+import { executeApprovedLock, gateIdentity } from '../../src/server/admin.js';
+import { LockValidationError } from '../../src/server/errors.js';
 import { lockProject, decideRequest, executeApprovedRequest } from '../../src/server/projectlifecycle.js';
 import * as hostCore from '../../src/server/adapters/core.js';
 import { computeGateStateId, validateAsComplete } from '../../src/server/adapters/validator.js';
@@ -62,7 +63,7 @@ beforeEach(() => {
   // each of its members (mid, mid's leaf, sib) a hosted record of its own.
   registerProjectRecord(dataDir, 'top', fam.top);
   invalidateSpecCache();
-  expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+  expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
 });
 
 afterEach(() => {

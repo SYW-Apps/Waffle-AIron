@@ -33,10 +33,10 @@ methods:
         targetComponent: permission_repository
         targetMethod: listAssignments
       - stepNumber: 5
-        description: Gather the role definitions the principal's bindings reference
+        description: 'Gather the effective role set: the built-in roles merged over the stored ones'
         type: call
         targetComponent: role_repository
-        targetMethod: list
+        targetMethod: effective
       - stepNumber: 6
         description: >-
           Assemble the PermissionWorld from the gathered assignments, units, and placements, and a
@@ -80,10 +80,10 @@ methods:
         targetComponent: permission_repository
         targetMethod: listAssignments
       - stepNumber: 5
-        description: Gather the role definitions
+        description: 'Gather the effective role set: the built-in roles merged over the stored ones'
         type: call
         targetComponent: role_repository
-        targetMethod: list
+        targetMethod: effective
       - stepNumber: 6
         description: >-
           Assemble the PermissionWorld (stored roles MERGED with the intrinsic built-in reserved
@@ -121,14 +121,14 @@ methods:
         targetComponent: permission_repository
         targetMethod: listAssignments
       - stepNumber: 5
-        description: Gather the stored role definitions
+        description: 'Gather the effective role set: the built-in roles merged over the stored ones'
         type: call
         targetComponent: role_repository
-        targetMethod: list
+        targetMethod: effective
       - stepNumber: 6
         description: >-
-          Assemble and return the PermissionWorld, the stored roles MERGED with the intrinsic
-          built-in reserved roles exactly as authorize assembles it
+          Assemble and return the PermissionWorld over that effective role set, exactly as authorize
+          assembles it
         type: return
         outcome: PermissionWorld
     detail: full
@@ -186,7 +186,19 @@ methods:
         type: return
         outcome: EffectivePermission
     detail: full
+  - name: actionableProjects
+    narrative:
+      - stepNumber: 1
+        description: Keep the visible scopes that are projects and not breadcrumb context, and answer their ids
+        type: local
+    symbol: actionableProjectIds
+  - name: actionableUnits
+    narrative:
+      - stepNumber: 1
+        description: Keep the visible scopes that are units and not breadcrumb context, and answer their ids
+        type: local
+    symbol: actionableUnitIds
 detail: full
 status: complete
 createdAt: '2026-07-15T21:32:08.971Z'
-updatedAt: '2026-10-03T13:36:56.140Z'
+updatedAt: '2026-10-03T17:49:08.334Z'

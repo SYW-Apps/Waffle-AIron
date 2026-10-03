@@ -59,7 +59,16 @@ fields:
     type: string
     description: ISO-8601 revocation timestamp when the token has been revoked instead of hard-deleted.
     optional: true
-methods: []
+methods:
+  - name: hashOf
+    signature: 'hashOf(token: string): string'
+    returns: string
+    description: >-
+      The keyHash a record stores for a plaintext bearer token: its salted SHA-256 digest under the
+      credential store's namespace. Every minting and lookup site hashes the same way, so no record
+      ever holds a plaintext token.
+    sourcePath: src/server/credentials.ts
+    symbol: hashToken
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-10-01T16:55:29.669Z'
+updatedAt: '2026-10-03T17:57:22.779Z'

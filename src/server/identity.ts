@@ -36,7 +36,6 @@ import type {
   ApiKeyRecord,
   AuditEvent,
   AuditQuery,
-  AuditRetentionPolicy,
   HostConfig,
   HostedUserRecord,
   IdentityProviderConfig,
@@ -69,18 +68,27 @@ export interface TokenMintRequest {
   ownerUserId: string;
   /** Human-readable token label for administration and audit views. */
   label: string;
-  /** The token's project NARROWING (which projects it may name), or ['*'] for
-   *  the owner's full accessible set. NOT a grant: the token acts as the OWNER's
-   *  live permission, resolved fresh on every request. */
-  projects?: string[];
+  /** The token's project NARROWING (which projects it may name). Required and
+   *  non-empty; ['*'] is the owner's full accessible set. NOT a grant: the token
+   *  acts as the OWNER's live permission, resolved fresh on every request. */
+  projects: string[];
   /** Optional ISO-8601 token expiry. */
   expiresAt?: string;
 }
 
-// Error classes moved to errors.ts (breaking the identity↔policy import cycle);
-// imported for local use and re-exported so existing importers keep working.
+/** The answer to a mint request that names no projects. */
+const PROJECTS_REQUIRED = "projects is required: pass the project ids the token may name, or '*' for the owner's full reach";
+
+/** Refuse a mint request whose narrowing is missing or empty: the list is
+ *  required, and '*' is the full reach. */
+function assertNarrowingGiven(request: { projects?: unknown }): void {
+  if (!Array.isArray(request.projects) || request.projects.length === 0) {
+    throw new Error(PROJECTS_REQUIRED);
+  }
+}
+
+// Error classes live in errors.ts (breaking the identity↔policy import cycle).
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-export { UnauthenticatedError, ForbiddenError };
 
 // ── authorization helpers (hierarchical permission rules) ───────────────────
 //
@@ -154,12 +162,6 @@ function auditReadView(cfg: HostConfig, principal: Principal): { all: boolean; p
 
 // ── audit helpers ──────────────────────────────────────────────────────────
 
-/** Resolve the active audit retention policy. Host-config plumbing
- *  (HostConfig.auditPolicy) is a later phase; until then the secure default. */
-function resolveAuditPolicy(_cfg: HostConfig): AuditRetentionPolicy {
-  return auditRepo.DEFAULT_AUDIT_POLICY;
-}
-
 /** The audit actor for an action: the caller's resolved subject, or — when a
  *  legacy master/token credential carries no subject — a synthesized service
  *  identity keyed by the credential's token id. */
@@ -197,13 +199,12 @@ function buildAuditEvent(
 /** The audit actor for the unauthenticated login-start step: no user is resolved
  *  yet (the provider hasn't spoken), so the action is attributed to an anonymous
  *  local service identity — the provider it targets is carried on the event target. */
-export const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'service', issuer: 'local' };
+const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'service', issuer: 'local' };
 
 /** Build a redacted audit event for an actor SUBJECT directly (category 'auth'),
  *  for the unauthenticated SSO login pair (start/complete) which carries no
- *  Principal. Mirrors buildAuditEvent but takes the resolved subject as the actor.
- *  Exported so the web plane (web.ts) builds its web sign-in / sign-out events. */
-export function buildSsoAuditEvent(
+ *  Principal. Mirrors buildAuditEvent but takes the resolved subject as the actor. */
+function buildSsoAuditEvent(
   actor: PrincipalSubject,
   action: string,
   level: string,
@@ -221,12 +222,28 @@ export function buildSsoAuditEvent(
   };
 }
 
+/**
+ * Record a sign-in or sign-out event, best-effort: the actor is the resolved
+ * subject, or null when no user is resolved yet (the login-start and sign-out
+ * steps), which records the anonymous local service actor. Category 'auth'.
+ * The web plane (web.ts) records its browser sign-in events through this.
+ */
+export function auditSignIn(
+  cfg: HostConfig,
+  actor: PrincipalSubject | null,
+  action: string,
+  level: string,
+  over: Partial<AuditEvent> = {},
+): void {
+  tryAppendAudit(cfg, buildSsoAuditEvent(actor ?? ANONYMOUS_SSO_ACTOR, action, level, over));
+}
+
 /** Append a redacted audit event, best-effort: a failure is recorded as a server
  *  diagnostic and swallowed so an append can never fail the primary action.
  *  Exported so the web plane (web.ts) reuses the same best-effort append path. */
 export function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    auditRepo.appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
+    auditRepo.appendAuditEvent(cfg.dataDir, event, auditRepo.effectiveAuditPolicy(cfg));
   } catch (err) {
     // Server diagnostic (audit appends are best-effort by invariant).
     console.error(
@@ -311,13 +328,13 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
   assertNotReservedSubjectId(cfg, [request.ownerUserId]);
 
   // The token's project NARROWING (never a grant): which records it may name,
-  // each covering its members. ['*'] (or omitted) = the owner's full accessible
-  // set, still resolved live. A member-qualified entry ('projectId::alias') is
+  // each covering its members. The list is required; ['*'] = the owner's full
+  // accessible set, still resolved live. A member-qualified entry ('projectId::alias') is
   // DEPRECATED: for one release it is accepted and STORED as the member's
   // record id; an unknown project, an alias that declares no member, or a
   // member no record holds is rejected with guidance, never stored broken.
-  const requested = request.projects?.length ? request.projects : ['*'];
-  const stored = requested.map((p) => ({ asked: p, as: assertMintableNarrowingEntry(cfg.dataDir, p) }));
+  assertNarrowingGiven(request);
+  const stored = request.projects.map((p) => ({ asked: p, as: assertMintableNarrowingEntry(cfg.dataDir, p) }));
   const projects = [...new Set(stored.map((e) => e.as))];
   // The caller learns what each deprecated qualified entry was stored as.
   const mapped = stored.filter((e) => e.as !== e.asked).map((e) => `${e.asked} -> ${e.as}`);
@@ -558,7 +575,7 @@ export function pruneAuditEvents(cfg: HostConfig, credential: string | null): nu
   const principal = requirePrincipal(cfg, credential);
   requireInstanceProjectAdmin(cfg, principal, 'audit administration');
 
-  const policy = resolveAuditPolicy(cfg);
+  const policy = auditRepo.effectiveAuditPolicy(cfg);
   const removed = auditRepo.pruneAuditEvents(cfg.dataDir, policy, new Date().toISOString());
 
   tryAppendAudit(cfg, buildAuditEvent(principal, 'audit.prune', 'info', 'audit', { target: 'audit' }));
@@ -993,6 +1010,7 @@ export async function handleIdentityRequest(
     // POST /identity/tokens
     if (req.method === 'POST' && parts.length === 2 && parts[1] === 'tokens') {
       {
+        assertNarrowingGiven(body ?? {});
         const minted = mintToken(cfg, credential, body as TokenMintRequest);
         return sendJson(res, 201, { key: minted.token, mapped: minted.mapped });
       }

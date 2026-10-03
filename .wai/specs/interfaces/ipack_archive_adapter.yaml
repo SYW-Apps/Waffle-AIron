@@ -19,13 +19,14 @@ methods:
         type: bytes
   - name: inflateEntry
     description: Decompress and return the bytes of a single named entry.
-    signature: 'inflateEntry(archive: bytes, path: string): bytes'
+    signature: 'inflateEntry(archive: bytes, entryPath: string): bytes'
     returns: bytes
     params:
       - name: archive
         type: bytes
-      - name: path
+      - name: entryPath
         type: string
+        description: The archive-relative path of the entry to inflate
   - name: assembleArchive
     description: Deflate a set of files (the envelope + pack contents) into a single ZIP byte buffer.
     signature: 'assembleArchive(files: PackFile[]): bytes'
@@ -55,4 +56,4 @@ methods:
         type: pack_file[]
 status: complete
 createdAt: '2026-07-21T18:13:23.876Z'
-updatedAt: '2026-07-21T19:26:05.126Z'
+updatedAt: '2026-10-03T16:46:52.833Z'

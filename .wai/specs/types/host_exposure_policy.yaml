@@ -5,9 +5,9 @@ description: >-
   Runtime exposure posture for a hosted Wairon instance. It controls which control-plane surfaces
   are bound over HTTP, which are local/CLI-only, and whether browser UI, identity, landscape, or
   policy surfaces are enabled. The secure default posture disables every HTTP control-plane surface
-  (admin API, admin UI, identity, landscape, project-policy, and operations); cliControlEnabled
-  defaults to true and requireTls defaults to true, so the data plane is the only surface exposed by
-  default.
+  (admin API, admin UI, the web UI, identity, landscape, project-policy, and operations);
+  cliControlEnabled defaults to true and requireTls defaults to true, so the data plane is the only
+  surface exposed by default.
 fields:
   - name: adminApiMode
     type: string
@@ -55,7 +55,20 @@ fields:
       Whether the operations control-plane API for read-only health, usage, and advisory quota
       reporting is served over HTTP.
     optional: false
-methods: []
+  - name: webUiEnabled
+    type: boolean
+    description: 'Whether the browser web UI (canvas, specs, admin) is served. Opt-in: default false.'
+    optional: false
+methods:
+  - name: effective
+    signature: 'effective(override?: HostExposurePolicy | null): HostExposurePolicy'
+    returns: HostExposurePolicy
+    description: >-
+      The effective exposure posture for a partial override: each flag the override sets wins, and
+      every unset flag keeps the compatible default (the admin API local-only, the admin UI and
+      control-plane APIs on, TLS required, the web UI off).
+    sourcePath: src/server/policy.ts
+    symbol: effectiveExposure
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:28.871Z'
-updatedAt: '2026-09-19T11:07:08.842Z'
+updatedAt: '2026-10-03T17:53:23.196Z'

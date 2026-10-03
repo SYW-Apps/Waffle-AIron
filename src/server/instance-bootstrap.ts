@@ -23,11 +23,11 @@ export const DEV_UNIT_ID = 'local';
  *   2. Under devMode, ensure the synthetic local development organization unit
  *      exists so dev projects can always be placed.
  */
-export function bootstrapInstance(cfg: HostConfig): void {
-  ensureInstanceIdentity(cfg.dataDir);
-  if (cfg.devMode && !getOrganizationUnit(cfg.dataDir, DEV_UNIT_ID)) {
+export function bootstrapInstance(config: HostConfig): void {
+  ensureInstanceIdentity(config.dataDir);
+  if (config.devMode && !getOrganizationUnit(config.dataDir, DEV_UNIT_ID)) {
     const system: PrincipalSubject = { userId: 'system', kind: 'service', issuer: 'local' };
-    createUnit(cfg.dataDir, {
+    createUnit(config.dataDir, {
       id: DEV_UNIT_ID,
       name: 'Local Development',
       kind: 'team',

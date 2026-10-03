@@ -12,6 +12,11 @@ description: >-
   reconciled.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
+injectedParams:
+  - cfg
+  - dataDir
+  - req
+  - res
 methods:
   - name: viewDiagram
     narrative:
@@ -47,7 +52,7 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Read the single JSON-RPC message from the request body, together with the called tool
+          Read the single JSON-RPC message from the decoded body, together with the called tool
           name, its decoded arguments, and the request id the response must echo
         type: local
       - stepNumber: 2
@@ -337,7 +342,10 @@ methods:
   - name: handle
     narrative:
       - stepNumber: 1
-        description: Extract the bearer token from the request Authorization header
+        description: >-
+          Take the credential the HTTP layer resolved and passed in (a bearer token, or a
+          web-session id bridged from the browser cookie); when none was passed, extract the bearer
+          token from the request's Authorization header
         type: local
       - stepNumber: 2
         description: >-
@@ -639,4 +647,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-03T14:21:07.753Z'
+updatedAt: '2026-10-03T17:54:13.301Z'

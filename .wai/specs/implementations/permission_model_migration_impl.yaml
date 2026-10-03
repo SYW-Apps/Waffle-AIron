@@ -38,31 +38,38 @@ methods:
         type: branch
         condition: apply mode is on and units were found
         onTrueStep: 6
-        onFalseStep: 9
+        onFalseStep: 8
       - stepNumber: 6
-        description: Rewrite the units and placements file raw with the remapped ids
-        type: local
-      - stepNumber: 7
-        description: Remap assignment scopes onto the renamed units
+        description: >-
+          Rewrite the units and placements file raw with the remapped ids, then remap assignment
+          scopes onto the renamed units
         type: call
         targetComponent: permission_repository
         targetMethod: remapScope
-      - stepNumber: 8
+      - stepNumber: 7
         description: Remap user home units and role-binding scopes
         type: call
         targetComponent: user_repository
         targetMethod: remapUnitReferences
-      - stepNumber: 9
+      - stepNumber: 8
         description: For every user carrying stored grants (read raw), record a finding
         type: loop
         loopKind: forEach
         over: users with stored grants
-        endStep: 10
-      - stepNumber: 10
+        endStep: 9
+      - stepNumber: 9
         description: In apply mode, seed each translated grant as a grid assignment, skipping an identical row
         type: call
         targetComponent: permission_repository
         targetMethod: setAssignment
+      - stepNumber: 10
+        description: >-
+          Recognise the records owned by the retired built-in literals through authentication, which
+          owns built-in subject recognition: a key or web session whose owner is a legacy built-in
+          id
+        type: call
+        targetComponent: authentication
+        targetMethod: isLegacyBuiltin
       - stepNumber: 11
         description: >-
           Rewrite the users file raw without stored grants (apply mode); read API keys raw, revoking
@@ -150,4 +157,4 @@ methods:
     symbol: migratePermissionModel
 status: complete
 createdAt: '2026-09-25T22:56:53.266Z'
-updatedAt: '2026-10-01T17:05:56.180Z'
+updatedAt: '2026-10-03T18:02:14.798Z'

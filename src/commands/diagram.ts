@@ -105,30 +105,30 @@ function canvasRelations(options: DiagramOptions): ProjectRelations[] | undefine
   return familyRelations();
 }
 
-export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void> {
+export async function runDiagram(options: DiagramOptions = {}): Promise<void> {
   assertProjectInitialized();
-  const options = applyFormat(rawOptions);
+  const formatted = applyFormat(options);
 
   // Step 1: render the requested format through the core client adapter.
   // Step 2: write the artifact where it was asked for and say where it landed.
-  if (options.canvas && !options.all) {
-    const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
-    writeArtifact(dest, renderDiagram('canvas', canvasRelations(options)));
+  if (formatted.canvas && !formatted.all) {
+    const dest = formatted.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
+    writeArtifact(dest, renderDiagram('canvas', canvasRelations(formatted)));
     logger.success(`Interactive canvas written to ${dest}`);
     logger.info('Open it in a browser — fully self-contained (works offline).');
     return;
   }
 
-  if (options.drawio && !options.all) {
-    const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'architecture.drawio');
+  if (formatted.drawio && !formatted.all) {
+    const dest = formatted.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'architecture.drawio');
     writeArtifact(dest, renderDiagram('drawio'));
     logger.success(`draw.io diagram written to ${dest}`);
     logger.info('Open with draw.io / diagrams.net (or import into tools that accept the format).');
     return;
   }
 
-  if (options.excalidraw && !options.all) {
-    const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'architecture.excalidraw');
+  if (formatted.excalidraw && !formatted.all) {
+    const dest = formatted.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'architecture.excalidraw');
     writeArtifact(dest, renderDiagram('excalidraw'));
     logger.success(`Excalidraw scene written to ${dest}`);
     logger.info('Open with excalidraw.com or the VS Code extension.');
@@ -136,19 +136,19 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
   }
 
   // Bare `wairon diagram` (no format, no scope) → the interactive canvas.
-  const wantsMermaid = options.format?.toLowerCase().startsWith('mermaid')
-    || !!options.subsystem
-    || !!options.sequence;
-  if (!options.all && !options.sequence && !wantsMermaid) {
-    const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
-    writeArtifact(dest, renderDiagram('canvas', canvasRelations(options)));
+  const wantsMermaid = formatted.format?.toLowerCase().startsWith('mermaid')
+    || !!formatted.subsystem
+    || !!formatted.sequence;
+  if (!formatted.all && !formatted.sequence && !wantsMermaid) {
+    const dest = formatted.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', 'canvas.html');
+    writeArtifact(dest, renderDiagram('canvas', canvasRelations(formatted)));
     logger.success(`Interactive canvas written to ${dest}`);
     logger.info('Open it in a browser — fully self-contained (works offline). Other formats: --format mermaid|drawio|excalidraw.');
     return;
   }
 
-  if (options.all) {
-    const outDir = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams');
+  if (formatted.all) {
+    const outDir = formatted.out ?? path.join(AI_PATHS.docsDir(), 'diagrams');
     const files = generateDiagramSet();
     if (files.length === 0) {
       logger.warn('No diagrams to generate — the spec tree has no components yet.');
@@ -157,7 +157,7 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
     for (const file of files) {
       writeArtifact(path.join(outDir, file.relPath), toMarkdown(file));
     }
-    writeArtifact(path.join(outDir, 'canvas.html'), renderDiagram('canvas', canvasRelations(options)));
+    writeArtifact(path.join(outDir, 'canvas.html'), renderDiagram('canvas', canvasRelations(formatted)));
     writeArtifact(path.join(outDir, 'architecture.drawio'), renderDiagram('drawio'));
     writeArtifact(path.join(outDir, 'architecture.excalidraw'), renderDiagram('excalidraw'));
     const graph = loadSpecGraph();
@@ -178,22 +178,22 @@ export async function runDiagram(rawOptions: DiagramOptions = {}): Promise<void>
   let title: string;
   let defaultDest: string;
   const diagramsDir = path.join(AI_PATHS.docsDir(), 'diagrams');
-  if (options.sequence) {
-    const { component, method } = parseSequenceRef(options.sequence);
-    mermaid = generateSequenceDiagram(component, method, { depth: options.depth });
+  if (formatted.sequence) {
+    const { component, method } = parseSequenceRef(formatted.sequence);
+    mermaid = generateSequenceDiagram(component, method, { depth: formatted.depth });
     title = `${component}.${method} — narrative sequence`;
     defaultDest = path.join(diagramsDir, 'sequences', `${component.replace(/::/g, '--')}.${method}.md`);
-  } else if (options.subsystem) {
-    mermaid = generateComponentDiagram({ subsystem: options.subsystem });
-    title = `${options.subsystem} — components`;
-    defaultDest = path.join(diagramsDir, 'subsystems', `${options.subsystem.replace(/::/g, '--')}.md`);
+  } else if (formatted.subsystem) {
+    mermaid = generateComponentDiagram({ subsystem: formatted.subsystem });
+    title = `${formatted.subsystem} — components`;
+    defaultDest = path.join(diagramsDir, 'subsystems', `${formatted.subsystem.replace(/::/g, '--')}.md`);
   } else {
     mermaid = renderDiagram('mermaid');
     title = 'Component architecture';
     defaultDest = path.join(diagramsDir, 'system.md');
   }
 
-  const dest = options.out ?? defaultDest;
+  const dest = formatted.out ?? defaultDest;
   const content = dest.endsWith('.mmd')
     ? `${mermaid}\n`
     : toMarkdown({ relPath: dest, title, mermaid });

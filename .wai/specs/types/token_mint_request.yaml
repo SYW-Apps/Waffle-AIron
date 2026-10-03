@@ -21,10 +21,10 @@ fields:
   - name: projects
     type: string[]
     description: >-
-      The project ids the token may act on (or "*" for the owner's full accessible set) — the
-      token's narrowing.
+      The project ids the token may act on — the token's narrowing. Required and non-empty: ["*"] is
+      the owner's full accessible set and must be written to mean it.
     optional: false
 methods: []
 sourcePath: src/server/identity.ts
 createdAt: '2026-07-08T20:17:13.853Z'
-updatedAt: '2026-09-19T11:07:19.727Z'
+updatedAt: '2026-10-03T17:07:28.354Z'

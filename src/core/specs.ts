@@ -7069,6 +7069,11 @@ export function setProjectType(projectType: string): void {
   projectConfigRepository.setProjectType(projectType);
 }
 
+/** Set the project's human-readable `name` and, when given, its `description`. */
+export function describeProject(name: string, description?: string): void {
+  projectConfigRepository.describeProject(name, description);
+}
+
 /** Record the profile selection hosted policy applied. */
 export function recordProfileSelection(selection: ProjectProfileSelection): void {
   projectConfigRepository.recordProfileSelection(selection);

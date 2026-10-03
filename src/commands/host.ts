@@ -18,6 +18,7 @@ import { runWithProjectRoot } from '../utils/fs.js';
 import { buildCanvasDataModel } from './subsystem.js';
 import { seedDemoTree } from '../core/demo-seed.js';
 import type {
+  AuditRetentionPolicy,
   Capability,
   DisplayRole,
   HostConfig,
@@ -97,7 +98,63 @@ function resolveHostConfig(options: HostOptions): HostConfig {
   const builtinPassword = process.env['WAIRON_ADMIN_PASSWORD'];
   if (builtinUser) cfg.builtinAdminUser = builtinUser;
   if (builtinPassword) cfg.builtinAdminPassword = builtinPassword;
+  // Durable audit policy (optional): a JSON object of overrides laid over the
+  // secure default. Refused at startup when it is not one.
+  const auditPolicy = process.env['WAIRON_AUDIT_POLICY'];
+  if (auditPolicy !== undefined && auditPolicy.trim() !== '') cfg.auditPolicy = parseAuditPolicyEnv(auditPolicy);
   return cfg;
+}
+
+/** The fields WAIRON_AUDIT_POLICY may set, each with the check its value must pass. */
+const AUDIT_POLICY_FIELDS: Record<keyof AuditRetentionPolicy, { expects: string; accepts: (v: unknown) => boolean }> = {
+  enabled: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
+  minimumLevel: {
+    expects: 'one of "debug", "info", "warning", "error", "security"',
+    accepts: (v) => typeof v === 'string' && ['debug', 'info', 'warning', 'error', 'security'].includes(v),
+  },
+  retentionDays: { expects: 'a non-negative number', accepts: (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 },
+  securityRetentionDays: {
+    expects: 'a non-negative number',
+    accepts: (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0,
+  },
+  includeReadEvents: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
+  metadataMode: {
+    expects: 'one of "none", "redacted", "full-redacted"',
+    accepts: (v) => typeof v === 'string' && ['none', 'redacted', 'full-redacted'].includes(v),
+  },
+};
+
+/**
+ * Parse WAIRON_AUDIT_POLICY: a JSON object setting any of the audit policy's
+ * fields, each laid over the secure default when the policy is resolved. An
+ * unparsable value, an unknown field or a wrong type is refused with a message
+ * naming the variable, so a misspelt policy never silently runs as the default.
+ * Exported for tests.
+ */
+export function parseAuditPolicyEnv(raw: string): Partial<AuditRetentionPolicy> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    throw new WaironError(`WAIRON_AUDIT_POLICY is not valid JSON: ${(e as Error).message}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new WaironError('WAIRON_AUDIT_POLICY must be a JSON object of audit policy fields.');
+  }
+  const policy: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    const field = AUDIT_POLICY_FIELDS[key as keyof AuditRetentionPolicy];
+    if (!Object.prototype.hasOwnProperty.call(AUDIT_POLICY_FIELDS, key) || !field) {
+      throw new WaironError(
+        `WAIRON_AUDIT_POLICY sets an unknown field "${key}"; the known fields are ${Object.keys(AUDIT_POLICY_FIELDS).join(', ')}.`,
+      );
+    }
+    if (!field.accepts(value)) {
+      throw new WaironError(`WAIRON_AUDIT_POLICY field "${key}" must be ${field.expects}.`);
+    }
+    policy[key] = value;
+  }
+  return policy as Partial<AuditRetentionPolicy>;
 }
 
 function masterCredential(): string | null {
@@ -444,7 +501,7 @@ export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {
     }
   }
   // Step 4: then the stage-7 member upgrade — a dry-run plan, applied all or nothing only with --fix.
-  const upgrade = localAdmin.upgradeMemberRecords(cfg.dataDir, fix);
+  const upgrade = localAdmin.upgradeMemberRecords(cfg, fix);
   const plan = upgrade.plan;
   const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
   // Steps 5-6.

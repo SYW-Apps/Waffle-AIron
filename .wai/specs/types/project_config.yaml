@@ -40,7 +40,7 @@ fields:
       that resolves to no loaded profile disables that doctrine (UNKNOWN_PROFILE), which is why
       hosted writes ensure the contributing pack is registered before writing it. Defaults to
       'backend' when the config omits it.
-    optional: true
+    optional: false
   - name: schemaVersion
     type: string
     description: >-
@@ -136,6 +136,24 @@ fields:
       declares: one that also declares an id makes the member a project by content, which
       contradicts it (MEMBER_KIND_MISMATCH). Absent in every project's configuration.
     optional: true
+  - name: description
+    type: string
+    description: A short description of the project. A hosted init writes the request's description here.
+    optional: true
+  - name: execution
+    type: ExecutionConfig
+    description: 'Execution budgets, the resource axis of the derived topology (default: tier off, no overrides)'
+    optional: false
+  - name: paths
+    type: object
+    description: 'Project path settings: specsDir, the spec tree''s root (default .wai/specs)'
+    optional: false
+  - name: globalTemplatesDir
+    type: string
+    description: >-
+      A directory of org- or user-level default templates, resolved after project-local templates
+      and before the built-in ones
+    optional: true
 methods:
   - name: declaredPackNames
     signature: 'declaredPackNames(): string[]'
@@ -228,4 +246,4 @@ methods:
       `externals pin` at a part, status) asks, so they cannot disagree about it.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-02T20:45:05.057Z'
+updatedAt: '2026-10-03T17:03:51.449Z'

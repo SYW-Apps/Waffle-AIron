@@ -11,6 +11,7 @@ methods:
         type: call
         targetComponent: project_config_index
         targetMethod: load
+    exportedVia: projectConfigRepository
   - name: exists
     narrative:
       - stepNumber: 1
@@ -18,6 +19,7 @@ methods:
         type: call
         targetComponent: project_config_index
         targetMethod: exists
+    exportedVia: projectConfigRepository
   - name: declaresGlobalPacks
     narrative:
       - stepNumber: 1
@@ -25,6 +27,7 @@ methods:
         type: call
         targetComponent: project_config_index
         targetMethod: declaresGlobalPacks
+    exportedVia: projectConfigRepository
   - name: specsDir
     narrative:
       - stepNumber: 1
@@ -32,6 +35,7 @@ methods:
         type: call
         targetComponent: project_config_index
         targetMethod: specsDir
+    exportedVia: projectConfigRepository
   - name: create
     narrative:
       - stepNumber: 1
@@ -39,6 +43,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: create
+    exportedVia: projectConfigRepository
   - name: upsertPackSelection
     narrative:
       - stepNumber: 1
@@ -46,6 +51,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: upsertPackSelection
+    exportedVia: projectConfigRepository
   - name: removePackSelection
     narrative:
       - stepNumber: 1
@@ -53,6 +59,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: removePackSelection
+    exportedVia: projectConfigRepository
   - name: setProjectType
     narrative:
       - stepNumber: 1
@@ -60,6 +67,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: setProjectType
+    exportedVia: projectConfigRepository
   - name: recordProfileSelection
     narrative:
       - stepNumber: 1
@@ -67,6 +75,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: recordProfileSelection
+    exportedVia: projectConfigRepository
   - name: setExecutionTier
     narrative:
       - stepNumber: 1
@@ -74,6 +83,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: setExecutionTier
+    exportedVia: projectConfigRepository
   - name: registerPackRef
     narrative:
       - stepNumber: 1
@@ -81,6 +91,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: registerPackRef
+    exportedVia: projectConfigRepository
   - name: deregisterPackRef
     narrative:
       - stepNumber: 1
@@ -88,6 +99,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: deregisterPackRef
+    exportedVia: projectConfigRepository
   - name: markSelectionsBundled
     narrative:
       - stepNumber: 1
@@ -95,6 +107,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: markSelectionsBundled
+    exportedVia: projectConfigRepository
   - name: pinGlobalPacksAsSelections
     narrative:
       - stepNumber: 1
@@ -102,6 +115,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: pinGlobalPacksAsSelections
+    exportedVia: projectConfigRepository
   - name: rekeyCarried
     narrative:
       - stepNumber: 1
@@ -109,6 +123,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: rekeyCarried
+    exportedVia: projectConfigRepository
   - name: setId
     narrative:
       - stepNumber: 1
@@ -116,6 +131,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: setId
+    exportedVia: projectConfigRepository
   - name: declareExternal
     narrative:
       - stepNumber: 1
@@ -123,6 +139,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: declareExternal
+    exportedVia: projectConfigRepository
   - name: declareMember
     narrative:
       - stepNumber: 1
@@ -130,6 +147,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: declareMember
+    exportedVia: projectConfigRepository
   - name: setMemberPath
     narrative:
       - stepNumber: 1
@@ -137,6 +155,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: setMemberPath
+    exportedVia: projectConfigRepository
   - name: removeMember
     narrative:
       - stepNumber: 1
@@ -144,6 +163,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: removeMember
+    exportedVia: projectConfigRepository
   - name: importNames
     narrative:
       - stepNumber: 1
@@ -151,6 +171,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: importNames
+    exportedVia: projectConfigRepository
   - name: renameId
     narrative:
       - stepNumber: 1
@@ -158,6 +179,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: renameId
+    exportedVia: projectConfigRepository
   - name: renameAlias
     narrative:
       - stepNumber: 1
@@ -165,6 +187,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: renameAlias
+    exportedVia: projectConfigRepository
   - name: repointExternal
     narrative:
       - stepNumber: 1
@@ -172,6 +195,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: repointExternal
+    exportedVia: projectConfigRepository
   - name: removeExternal
     narrative:
       - stepNumber: 1
@@ -179,6 +203,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: removeExternal
+    exportedVia: projectConfigRepository
   - name: updateMember
     narrative:
       - stepNumber: 1
@@ -186,6 +211,7 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: updateMember
+    exportedVia: projectConfigRepository
   - name: setPartOf
     narrative:
       - stepNumber: 1
@@ -193,6 +219,33 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: setPartOf
+    exportedVia: projectConfigRepository
+  - name: describeProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: describeProject
+    exportedVia: projectConfigRepository
+  - name: at
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Bind the file adapter to the root and compose the facade over it: reads forward to the
+          index, writes to the registry, both over that root
+        type: local
+    symbol: projectConfigRepositoryAt
+lint:
+  allow:
+    - code: FACADE_FORWARDING
+      at: at
+      reason: >-
+        The facade's `at` method binds the Repository itself to a root, not a read or write to
+        forward: it composes the owned members (the file adapter, store, registry and index) over
+        rootDir and answers the facade over them. There is no member method it could forward 1:1 to,
+        because what it returns IS the Repository; every other method of this facade forwards 1:1,
+        and this allow is held to `at` alone.
 status: complete
 createdAt: '2026-09-13T11:19:36.287Z'
-updatedAt: '2026-10-02T20:28:15.507Z'
+updatedAt: '2026-10-03T18:11:44.087Z'

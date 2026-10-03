@@ -19,7 +19,7 @@ import {
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import * as admin from '../../src/server/admin.js';
-import { AdminAuthError } from '../../src/server/admin.js';
+import { AdminAuthError } from '../../src/server/errors.js';
 import * as hostCore from '../../src/server/adapters/core.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
 import { seedChainedMount } from './helpers.js';
@@ -305,7 +305,7 @@ describe('git-backed projects (sdd_git)', () => {
     const child = seedChainedMount(root, 'billing', 'packages/billing');
     runWithProjectRoot(child, () => hostCore.provisionProject('billing'));
     invalidateSpecCache();
-    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+    expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
 
     // Dirty the PARENT's .wai/, and stage an unrelated source file — neither may ride along.
     const idx = path.join(root, '.wai', 'specs', '.index.yaml');
@@ -345,7 +345,7 @@ describe('git-backed projects (sdd_git)', () => {
     const docs = seedChainedMount(root, 'docs', 'packages/docs');
     runWithProjectRoot(docs, () => hostCore.provisionProject('docs'));
     invalidateSpecCache();
-    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+    expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
     // Commit the scaffolding so only the edits below are pending.
     git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'add', '-A'], root);
     git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'commit', '-qm', 'scaffold'], root);
@@ -386,7 +386,7 @@ describe('git-backed projects (sdd_git)', () => {
     const billing = seedChainedMount(root, 'billing', 'packages/billing');
     runWithProjectRoot(billing, () => hostCore.provisionProject('billing'));
     invalidateSpecCache();
-    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+    expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
     git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'add', '-A'], root);
     git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'commit', '-qm', 'scaffold'], root);
 
@@ -399,7 +399,7 @@ describe('git-backed projects (sdd_git)', () => {
     invalidateSpecCache();
     const headBefore = git(['rev-parse', 'HEAD'], root);
     const principal = { tokenId: 't-op', role: 'admin', projects: ['*'], authenticated: true, subject: { userId: 'u-op', kind: 'human', issuer: 'local' } };
-    const result = memberRegistration.reconcile(dataDir, principal, 'demo', ['demo']);
+    const result = memberRegistration.reconcile({ dataDir }, principal, 'demo', ['demo']);
     expect(result.registered).toEqual(['tools']);
     expect(result.commit?.published).toBe(true);
 

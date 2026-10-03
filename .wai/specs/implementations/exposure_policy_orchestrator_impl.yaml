@@ -7,6 +7,8 @@ description: >-
   security level. The replacement is the only write.
 contract: iexposure_policy_orchestrator
 sourcePath: src/server/operations.ts
+injectedParams:
+  - cfg
 methods:
   - name: getExposurePolicy
     narrative:
@@ -98,4 +100,4 @@ methods:
         outcome: stored exposure policy
 status: complete
 createdAt: '2026-09-13T12:09:16.058Z'
-updatedAt: '2026-09-13T12:09:37.109Z'
+updatedAt: '2026-10-03T16:39:43.000Z'

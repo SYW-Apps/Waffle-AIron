@@ -219,6 +219,13 @@ methods:
         targetComponent: extension_portal
         targetMethod: parseDeclarativePack
     detail: calls-only
+  - name: describeProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: describeProject
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-09-30T05:57:18.124Z'
+updatedAt: '2026-10-03T17:10:11.406Z'

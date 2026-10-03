@@ -280,6 +280,20 @@ methods:
     params:
       - name: manifest
         type: Json
+  - name: describeProject
+    description: >-
+      Set the project's human-readable `name` and, when given, its `description`. Forwarded to the
+      core portal.
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -295,4 +309,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-10-03T12:16:16.746Z'
+updatedAt: '2026-10-03T17:10:02.919Z'

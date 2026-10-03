@@ -1,0 +1,27 @@
+kind: value-object
+id: loaded_instruction_block
+name: LoadedInstructionBlock
+description: >-
+  A pack instruction block as loaded: the authored PackInstructionBlock tagged with the pack that
+  contributes it, which is the attribution rendered into the composed instructions.
+fields:
+  - name: text
+    type: string
+    description: The guidance appended to wairon's instructions.
+    optional: false
+  - name: profile
+    type: string[]
+    description: >-
+      Optional scope: the governing profiles this block applies to. Absent = every project the pack
+      governs.
+    optional: true
+  - name: pack
+    type: string
+    description: >-
+      Provenance: the name of the pack contributing this block, rendered into the attributed
+      heading.
+    optional: false
+methods: []
+sourcePath: src/core/extensions.ts
+createdAt: '2026-10-03T17:04:19.739Z'
+updatedAt: '2026-10-03T17:04:19.741Z'

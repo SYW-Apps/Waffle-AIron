@@ -54,7 +54,7 @@ describe('hosted member qualifiers: the same root before and after the mounts mo
     seedSubsystem(demoRoot, 'plain');
     invalidateSpecCache();
     // Stage 7: billing, payments and other become hosted records.
-    expect(upgradeMemberRecords(dataDir, true).applied).toBe(true);
+    expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
   });
 
   afterEach(() => {

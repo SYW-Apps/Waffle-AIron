@@ -11,7 +11,7 @@ import {
   placeProject,
 } from './organization.js';
 import { listProjectRecords } from './projects.js';
-import { LEGACY_SUPERADMIN_USER_ID, LEGACY_LOCALDEV_USER_ID } from './auth.js';
+import { isLegacyBuiltin } from './auth.js';
 import type {
   Capability,
   PrincipalSubject,
@@ -123,10 +123,6 @@ function slugify(name: string): string {
 }
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
-
-function isLegacyBuiltin(userId: string | undefined): boolean {
-  return userId === LEGACY_SUPERADMIN_USER_ID || userId === LEGACY_LOCALDEV_USER_ID;
-}
 
 /** Seed one migrated assignment (idempotence: skip when an identical
  *  subject×scope×capability row already sits in the grid). */

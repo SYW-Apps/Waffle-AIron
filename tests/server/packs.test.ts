@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import * as admin from '../../src/server/admin.js';
-import { AdminAuthError } from '../../src/server/admin.js';
+import { AdminAuthError } from '../../src/server/errors.js';
 import { UnauthenticatedError } from '../../src/server/errors.js';
 import * as packs from '../../src/server/packs.js';
 import { createPlacedProject, mintUserToken } from './helpers.js';

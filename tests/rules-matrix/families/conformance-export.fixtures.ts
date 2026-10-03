@@ -329,6 +329,115 @@ function mountedBookingTree(bookingExports: 'handleBookingRequest' | 'routeBooki
   };
 }
 
+/**
+ * A shipping portal whose module is the subsystem's published entry: it
+ * declares its own quoting method and RE-EXPORTS `billableGrams` from the
+ * parcel module, where the `ParcelWeight` value object is declared. The label
+ * orchestrator takes `billableGrams` from the portal's module. Whether the
+ * type models `billableGrams` as its own pure method is what each fixture
+ * varies: modelled, the barrel republishes a name the design promised (a
+ * method travels with its type); unmodelled, it is a helper nobody promised.
+ */
+function republishedTypeMethodTree(modelsBillableGrams: boolean): FixtureTree {
+  return {
+    subsystems: [{ id: 'shipping', description: 'Rate quotes and carrier labels for outbound parcels.' }],
+    components: [
+      {
+        id: 'shipping-portal',
+        componentType: 'Portal',
+        subsystem: 'shipping',
+        description: 'The published entry of the shipping subsystem, for quoting parcels.',
+      },
+      {
+        id: 'label-orchestrator',
+        componentType: 'Orchestrator',
+        subsystem: 'shipping',
+        description: 'Renders the carrier label for a booked shipment.',
+      },
+    ],
+    interfaces: [
+      {
+        id: 'ishipping_portal',
+        component: 'shipping-portal',
+        methods: [{ name: 'quoteParcel', description: 'Quote an outbound parcel for a destination.' }],
+      },
+      {
+        id: 'ilabel_orchestrator',
+        component: 'label-orchestrator',
+        methods: [{ name: 'generateLabel', description: 'Render the carrier label for a booked shipment.' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'shipping_portal_impl',
+        contract: 'ishipping_portal',
+        sourcePath: 'src/shipping/index.ts',
+        methods: [{ name: 'quoteParcel' }],
+      },
+      {
+        id: 'label_orchestrator_impl',
+        contract: 'ilabel_orchestrator',
+        sourcePath: 'src/shipping/label-orchestrator.ts',
+        methods: [
+          {
+            name: 'generateLabel',
+            narrative: [
+              { stepNumber: 1, type: 'local', description: 'Count the billable grams of the parcel and print them on the label line.' },
+            ],
+          },
+        ],
+      },
+    ],
+    types: [{
+      id: 'parcel-weight',
+      name: 'ParcelWeight',
+      kind: 'value-object',
+      subsystem: 'shipping',
+      sourcePath: 'src/shipping/parcel.ts',
+      description: 'The measured weight of a parcel, in grams.',
+      fields: [{ name: 'grams', type: 'number', description: 'The weight on the depot scale.' }],
+      ...(modelsBillableGrams
+        ? {
+          methods: [{
+            name: 'billableGrams',
+            signature: 'billableGrams(weight: ParcelWeight): number',
+            returns: 'number',
+            description: 'The weight rounded up to the 100 g billing band of the carrier.',
+          }],
+        }
+        : {}),
+    }],
+    files: {
+      'src/shipping/parcel.ts': [
+        'export interface ParcelWeight {',
+        '  grams: number;',
+        '}',
+        '',
+        'export function billableGrams(weight: ParcelWeight): number {',
+        '  return Math.ceil(weight.grams / 100) * 100;',
+        '}',
+        '',
+      ].join('\n'),
+      'src/shipping/index.ts': [
+        'export { billableGrams } from \'./parcel.js\';',
+        '',
+        'export function quoteParcel(destination: string, grams: number): number {',
+        '  return destination.length * grams;',
+        '}',
+        '',
+      ].join('\n'),
+      'src/shipping/label-orchestrator.ts': [
+        'import { billableGrams } from \'./index.js\';',
+        '',
+        'export function generateLabel(grams: number): string {',
+        '  return \'LABEL:\' + billableGrams({ grams });',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
+
 export default [
   // -------------------------------------------------------------------------
   // UNDECLARED_EXPORT — fire: a private helper reached from another component
@@ -858,5 +967,27 @@ export default [
       'No contract of the booking portal declares handleBookingRequest — its contract is its routes — and the listener, a different component, imports it. The mount\'s `via` declares that entry as the portal\'s published router surface, so the import is promised rather than a crossing; without the `via` this same tree is reported.',
     scenario: 'The clinic\'s public listener imports the booking portal\'s router entry, which its mount of the booking portal declares as the entry it calls.',
     tree: mountedBookingTree('handleBookingRequest', 'handleBookingRequest'),
+  }),
+  // -------------------------------------------------------------------------
+  // UNDECLARED_EXPORT — a barrel republishing a type's pure method. A method
+  // travels with its type, so the republished name is promised surface; a
+  // republished helper the type does not model is still a crossing.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_EXPORT',
+    severity: 'warning',
+    anchoredTo: 'shipping_portal_impl',
+    expectFire: true,
+    scenario:
+      'The shipping portal module re-exports a billing-band helper from the parcel module, the label orchestrator takes it from the portal, and the parcel weight type does not model it, so the portal publishes a name nobody promised.',
+    tree: republishedTypeMethodTree(false),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_EXPORT',
+    expectFire: false,
+    reason:
+      'billableGrams is the ParcelWeight value object\'s own pure method, which the design promises from the parcel module. The portal module re-exports that same name beside the value it hands out, and a method travels with its type, so the republication is promised surface rather than a crossing.',
+    scenario: 'The shipping portal module re-exports the billing-band method of the parcel weight type, and the label orchestrator takes it from the portal.',
+    tree: republishedTypeMethodTree(true),
   }),
 ];

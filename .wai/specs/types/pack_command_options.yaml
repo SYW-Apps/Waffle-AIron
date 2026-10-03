@@ -1,0 +1,52 @@
+kind: value-object
+id: pack_command_options
+name: PackCommandOptions
+description: >-
+  The flags of the `wairon pack` / `wairon packs` subcommands as the CLI hands them to the runner;
+  each subcommand reads only the ones it takes.
+subsystem: sdd_cli
+fields:
+  - name: global
+    type: boolean
+    description: Act on the global pack store instead of the project's
+    optional: true
+  - name: kind
+    type: string
+    description: 'init: declarative (default) or code'
+    optional: true
+  - name: dir
+    type: string
+    description: 'init: the directory to scaffold into'
+    optional: true
+  - name: skill
+    type: boolean
+    description: 'init: scaffold a skill too'
+    optional: true
+  - name: out
+    type: string
+    description: 'build: where to write the archive'
+    optional: true
+  - name: source
+    type: string
+    description: 'use: where to take the pack from'
+    optional: true
+  - name: bundle
+    type: boolean
+    description: 'use: vendor the pack into the project bundle'
+    optional: true
+  - name: pin
+    type: boolean
+    description: 'use: pin the resolved version'
+    optional: true
+  - name: all
+    type: boolean
+    description: 'bundle: every selection the project declares'
+    optional: true
+  - name: 'yes'
+    type: boolean
+    description: Apply without showing the impact report first
+    optional: true
+methods: []
+sourcePath: src/commands/packs.ts
+createdAt: '2026-10-03T16:49:18.609Z'
+updatedAt: '2026-10-03T16:49:18.616Z'

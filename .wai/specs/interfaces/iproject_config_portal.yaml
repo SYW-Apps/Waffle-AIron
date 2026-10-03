@@ -255,6 +255,20 @@ methods:
         description: The member's alias
     guarantees:
       - idempotent
+  - name: describeProject
+    description: >-
+      Published write: set the project's human-readable `name` and, when given, its `description`.
+      Routed through the core orchestrator.
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:06.947Z'
-updatedAt: '2026-09-30T20:23:04.870Z'
+updatedAt: '2026-10-03T17:10:01.566Z'

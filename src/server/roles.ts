@@ -32,7 +32,7 @@ import type { Role } from './types.js';
 // an edge onto this repository); republished here for the role-domain surface.
 export { SSO_ADMIN_ROLE_ID } from './types.js';
 
-export const BUILTIN_ROLES: Role[] = [
+const BUILTIN_ROLES: Role[] = [
   {
     id: SSO_ADMIN_ROLE_ID,
     name: 'SSO Admin',
@@ -157,6 +157,11 @@ function registryDelete(dataDir: string, roleId: string): void {
 
 // ── Index (read path) ──────────────────────────────────────────────────────
 
+/** The stored roles minus any carrying a reserved id, followed by the built-in roles. */
+function indexListEffectiveRoles(dataDir: string): Role[] {
+  return [...indexListRoles(dataDir).filter((r) => !isBuiltinRoleId(r.id)), ...BUILTIN_ROLES];
+}
+
 /** Return every stored role, sorted by id for stable listing. */
 function indexListRoles(dataDir: string): Role[] {
   return load(dataDir).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -182,4 +187,15 @@ export function deleteRole(dataDir: string, roleId: string): void {
 /** List the stored (admin-defined) roles through the repository facade. */
 export function listRoles(dataDir: string): Role[] {
   return indexListRoles(dataDir);
+}
+
+/**
+ * The role set permission rules walk: the intrinsic BUILT-IN roles merged over the
+ * stored admin-defined ones. Built-ins are code constants, never stored rows, so
+ * a binding to one ALWAYS resolves — there is no seeding step to forget and no
+ * silent admin lockout. A stray stored row carrying a reserved id can never
+ * shadow the built-in definition.
+ */
+export function listEffectiveRoles(dataDir: string): Role[] {
+  return indexListEffectiveRoles(dataDir);
 }

@@ -4,7 +4,7 @@ import { acceptWebSocket, isWebSocketUpgrade } from './websocket.js';
 import type { WsConnection } from './websocket.js';
 import { authenticateSession } from './auth.js';
 import { authorize, isInstanceAdmin } from './authorization.js';
-import { sessionCookieValue } from './web.js';
+import { sessionCookieValue } from './httpio.js';
 import type { HostConfig, Principal } from './types.js';
 
 // ---------------------------------------------------------------------------

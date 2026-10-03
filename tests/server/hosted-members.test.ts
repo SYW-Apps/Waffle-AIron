@@ -102,7 +102,7 @@ afterEach(() => {
 });
 
 const upgrade = (): void => {
-  const report = upgradeMemberRecords(dataDir, true);
+  const report = upgradeMemberRecords({ dataDir }, true);
   expect(report.applied, JSON.stringify(report.plan.refusals)).toBe(true);
 };
 
@@ -235,7 +235,7 @@ describe('no-widening: every subject x capability equal before and after the upg
     const before = new Map<string, EffectiveValue>();
     for (const u of subjects) for (const cap of CAPABILITIES) before.set(`${u.id}|${cap}`, valueOf(principalOf(u), cap, 'platform'));
 
-    const dry = upgradeMemberRecords(dataDir, false);
+    const dry = upgradeMemberRecords({ dataDir }, false);
     expect(dry.plan.refusals).toEqual([]);
     // The plan's own proof: every user record (and everyone else) x capability x member, all equal.
     expect(dry.plan.reach).toHaveLength((subjects.length + 1) * CAPABILITIES.length * MEMBERS.length);
@@ -274,7 +274,7 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
   it('a dry run plans every member and writes nothing; apply writes it all; a re-run plans empty', () => {
     mintUserToken(dataDir, { id: 'k-q', userId: 'u-q', projects: ['platform::billing::payments'] });
     const before = stores();
-    const dry = upgradeMemberRecords(dataDir, false);
+    const dry = upgradeMemberRecords({ dataDir }, false);
     expect(dry.applied).toBe(false);
     expect(dry.plan.members.map((m) => [m.record.id, m.action, m.qualifier])).toEqual([
       ['billing', 'register', 'platform::billing'],
@@ -291,7 +291,7 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
     expect(listCredentials(dataDir, '*').find((k) => k.id === 'k-q')!.projects).toEqual(['payments']);
 
     const after = stores();
-    const again = upgradeMemberRecords(dataDir, true);
+    const again = upgradeMemberRecords({ dataDir }, true);
     expect(again.applied).toBe(false);
     expect(again.plan.members.every((m) => m.action === 'unchanged')).toBe(true);
     expect(again.plan.narrowings).toEqual([]);
@@ -320,7 +320,7 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
     fs.rmSync(path.join(fam.payments, '.wai', 'project.yaml')); // unreadable
     allow(dataDir, 'u-x', 'project:read', 'project', 'billing'); // a setting scoped at a member id
     const before = stores();
-    const report = upgradeMemberRecords(dataDir, true);
+    const report = upgradeMemberRecords({ dataDir }, true);
     expect(report.applied).toBe(false);
     const details = report.plan.refusals.map((r) => r.detail).join('\n');
     expect(details).toMatch(/platform::docs: the id docs is already held by another record \(a family root\)/);

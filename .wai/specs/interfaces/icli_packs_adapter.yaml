@@ -14,7 +14,7 @@ methods:
       registers nothing. Under --yes, or with no terminal to ask on, it applies and says so without
       the report. `--global` copies into the machine-wide folder and selects nothing for any
       project, so it shows no report.
-    signature: 'addPack(source: string, global: boolean, yes?: boolean): void'
+    signature: 'addPack(source: string, global?: boolean, yes?: boolean): void'
     returns: void
     params:
       - name: source
@@ -38,7 +38,7 @@ methods:
       declining deregisters and deletes nothing. Under --yes, or with no terminal, it removes and
       says so without the report. `--global` removes a machine-wide file and selects nothing for any
       project, so it shows no report.
-    signature: 'removePack(name: string, global: boolean, yes?: boolean): void'
+    signature: 'removePack(name: string, global?: boolean, yes?: boolean): void'
     returns: void
     params:
       - name: name
@@ -54,7 +54,7 @@ methods:
     description: >-
       Scaffold a new pack project (`wairon pack init <name>`) via the SDK portal — declarative or
       code variant (--kind), optional skill stub (--skill) — into a target directory.
-    signature: 'initPack(name: string, options: object): void'
+    signature: 'initPack(name: string, options?: object): void'
     returns: void
     params:
       - name: name
@@ -62,11 +62,12 @@ methods:
       - name: options
         type: object
         description: '{ kind?: ''declarative''|''code''; dir?: string; skill?: boolean }'
+        optional: true
   - name: buildPack
     description: >-
       Build an installable .wpack archive from a pack directory (`wairon pack build [source]`) via
       the SDK portal; write it to <name>-<version>.wpack (or --out) and report the path + size.
-    signature: 'buildPack(source: string, options: object): void'
+    signature: 'buildPack(source: string, options?: object): void'
     returns: void
     params:
       - name: source
@@ -74,6 +75,7 @@ methods:
       - name: options
         type: object
         description: '{ out?: string }'
+        optional: true
   - name: installPack
     description: >-
       `wairon pack install <source>` — install a pack into this wairon install's store from a pack
@@ -136,7 +138,7 @@ methods:
       pack replaces its existing entry rather than duplicating it (an update: the report then also
       shows the replaced version), and an origin that is not a fetchable URL is reported because CI
       and a fresh clone could not resolve it.
-    signature: 'usePack(spec: string, options: object): void'
+    signature: 'usePack(spec: string, options?: object): void'
     returns: void
     params:
       - name: spec
@@ -145,6 +147,7 @@ methods:
       - name: options
         type: object
         description: source / pin / bundle / yes (apply without the report).
+        optional: true
   - name: unusePack
     description: >-
       `wairon pack unuse <name>` — drop this project's selection of a pack. The pack stays installed
@@ -169,7 +172,7 @@ methods:
       version, because a bundle is a copy of one specific version and a floating selection would let
       the committed bytes and the declared intent drift apart. With no argument it bundles every
       selection already marked for bundling.
-    signature: 'bundlePack(name: string, options: object): void'
+    signature: 'bundlePack(name?: string, options?: object): void'
     returns: void
     params:
       - name: name
@@ -179,6 +182,7 @@ methods:
       - name: options
         type: object
         description: all — bundle every selection this project declares.
+        optional: true
   - name: syncPacks
     description: >-
       `wairon pack sync` — install every declared-but-missing pack from the source its selection
@@ -210,4 +214,4 @@ methods:
         description: A pack name, or name@version.
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-09-29T16:10:18.257Z'
+updatedAt: '2026-10-03T17:10:41.977Z'

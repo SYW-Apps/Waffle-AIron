@@ -82,7 +82,7 @@ describe('diagnostics specialist (pure)', () => {
     const projects = [rec({ id: 'a', rootPath: '/x/a' })];
     const relation = (id: string, target: string, ifaceId: string) => ({
       id, sourceProjectId: 'a', targetProjectId: target, kind: 'consumes',
-      sourceAdapter: 'ad', targetPublicInterface: { projectId: target, systemInterfaceId: ifaceId, reason: 'r' },
+      targetPublicInterface: { projectId: target, systemInterfaceId: ifaceId, reason: 'r' },
       reason: 'r', status: 'active', createdAt: '', createdBy: { kind: 'user', id: 'u' },
     }) as never;
     const snap = (projectId: string, ifaceId: string) => ({

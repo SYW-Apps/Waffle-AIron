@@ -39,6 +39,7 @@ methods:
       - host_core_adapter.checkDeclarativePack
       - host_core_adapter.globalPacksDir
       - host_core_adapter.loadExtensionPacks
+    symbol: storeInstallGlobalPack
   - name: removeGlobalPack
     narrative: []
     detail: intent
@@ -49,6 +50,7 @@ methods:
       Removing an instance pack that shadowed a same-named image pack re-exposes the image pack.
       Removal intentionally invalidates any project that still references the pack — that fallout
       surfaces via the missing-pack-references drift check.
+    symbol: storeRemoveGlobalPack
   - name: listProjectPacks
     narrative: []
     detail: intent
@@ -64,6 +66,7 @@ methods:
       - host_core_adapter.packEntryLabel
       - host_core_adapter.packEntryRef
       - host_core_adapter.loadExtensionPacks
+    symbol: storeListProjectPacks
   - name: installProjectPack
     narrative: []
     detail: intent
@@ -75,6 +78,7 @@ methods:
       the calling orchestrator to register (registration appends only when absent, so a re-install
       leaves a single registration). Because the pack and its registration are committed with the
       project, every clone and CI then enforce it.
+    symbol: storeInstallProjectPack
   - name: removeProjectPack
     narrative: []
     detail: intent
@@ -84,6 +88,7 @@ methods:
       by-name selection) — the pack's bundle directory .wai/packs/<name>/. Guarded to never delete a
       path outside .wai/packs, so a reference pointing elsewhere keeps its files; a path that is
       already gone is not an error. Reads and writes no configuration.
+    symbol: storeRemoveProjectPack
   - name: storeListGlobalPacks
     narrative: []
     intent: >-
@@ -125,6 +130,7 @@ methods:
       - host_sdk_adapter.extractArchive
       - host_core_adapter.globalPacksDir
       - host_core_adapter.loadExtensionPacks
+    symbol: storeInstallGlobalPackArchive
   - name: installProjectPackArchive
     narrative: []
     detail: intent
@@ -139,6 +145,7 @@ methods:
       - host_sdk_adapter.inspectArchive
       - host_sdk_adapter.extractArchive
       - host_core_adapter.loadExtensionPacks
+    symbol: storeInstallProjectPackArchive
   - name: executeApprovedResolveGlobalPacks
     narrative: []
     detail: intent
@@ -217,4 +224,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-09-25T21:35:36.068Z'
+updatedAt: '2026-10-03T16:39:57.777Z'

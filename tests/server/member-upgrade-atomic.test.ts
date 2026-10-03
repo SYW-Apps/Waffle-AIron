@@ -100,7 +100,7 @@ describe('stage 7 — the member upgrade is atomic-or-nothing', () => {
     const cleanPlan = memberRegistration.plan(dataDir);
     let positions = 0;
     hook.before = () => { positions++; return undefined; };
-    expect(memberRegistration.apply(dataDir, cleanPlan).applied).toBe(true);
+    expect(memberRegistration.apply({ dataDir }, cleanPlan).applied).toBe(true);
     hook.before = null;
     const applied = stores(dataDir);
     expect(positions).toBeGreaterThan(10);
@@ -113,7 +113,7 @@ describe('stage 7 — the member upgrade is atomic-or-nothing', () => {
       expect(planned.refusals).toEqual([]);
       let n = 0;
       hook.before = () => (++n === k ? ioError() : undefined);
-      const report = memberRegistration.apply(dir, planned);
+      const report = memberRegistration.apply({ dataDir: dir }, planned);
       hook.before = null;
       const now = stores(dir);
       if (report.applied) {
@@ -128,7 +128,7 @@ describe('stage 7 — the member upgrade is atomic-or-nothing', () => {
       expect(leftover(dir), `position ${k}`).toEqual([]);
       expect(fs.existsSync(planned.rehearsal!.directory), `position ${k}`).toBe(false);
       // Nothing half-applied is left to find: the upgrade, made again, applies whole.
-      if (!report.applied) expect(upgradeMemberRecords(dir, true).applied).toBe(true);
+      if (!report.applied) expect(upgradeMemberRecords({ dataDir: dir }, true).applied).toBe(true);
     }
     expect(rolledBack).toBeGreaterThan(0);
   }, 300_000);

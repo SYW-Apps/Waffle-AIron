@@ -74,6 +74,13 @@ methods:
         targetMethod: render
       - stepNumber: 6
         description: >-
+          Take the wairon usage guide's global body — the same body the guide injector writes
+          between its markers
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: body
+      - stepNumber: 7
+        description: >-
           Assemble one document: the project's own words first, then the domain map, then the wairon
           usage guide — so an AI tool importing this single file needs nothing else to understand
           where it is
@@ -127,4 +134,4 @@ methods:
     symbol: derivedDocPaths
 status: complete
 createdAt: '2026-09-23T11:11:29.644Z'
-updatedAt: '2026-10-01T23:45:06.508Z'
+updatedAt: '2026-10-03T17:59:24.256Z'

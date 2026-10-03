@@ -4,10 +4,10 @@ import * as organization from './organization.js';
 import * as permissionadmin from './permissionadmin.js';
 import { remapScope, removeAssignmentsForScopes } from './permissions.js';
 import { remapUnitReferences } from './users.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { authorize } from './authorization.js';
 import { listFamilyRecords } from './projects.js';
-import { ForbiddenError } from './identity.js';
+import { ForbiddenError } from './errors.js';
 import { listSecretKeys, setSecret as storeSecret } from '../utils/secrets.js';
 import type {
   ApiKeyRecord,
@@ -137,7 +137,7 @@ function auditActor(principal: Principal): PrincipalSubject {
  *  server diagnostic and swallowed so it can never fail the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[webadmin] audit append failed for "${event.action}": ` +

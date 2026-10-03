@@ -21,6 +21,7 @@ mounts:
   - portal: share_portal
     prefixes:
       - /share
+    via: handleShareRequest
 status: complete
 createdAt: '2026-07-04T12:33:41.703Z'
-updatedAt: '2026-09-24T20:10:25.468Z'
+updatedAt: '2026-10-03T17:53:45.571Z'

@@ -549,9 +549,23 @@ methods:
       boolean): SpecChangeReport
     returns: SpecChangeReport
     params:
+      - name: kind
+        type: string
+        description: >-
+          The writable spec kind the id names (subsystem, component, interface, implementation, type
+          or system)
+      - name: id
+        type: string
+        description: The id of the spec to change
       - name: delta
         type: SpecDelta
         description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
+      - name: hooks
+        type: SpecWriteHooks
+        description: >-
+          The write seam's hooks: what to run beside the write (the candidate gate, the report
+          collectors)
+        optional: true
       - name: dryRun
         type: boolean
         description: Report what the delta would do and write nothing
@@ -652,6 +666,7 @@ methods:
       - name: scopeSubsystem
         type: string
         description: The subsystem to scope to, or the whole tree when omitted
+        optional: true
     guarantees:
       - idempotent
   - name: loadSpec
@@ -1103,6 +1118,20 @@ methods:
         type: boolean
         description: Answer what would change and write nothing
         optional: true
+  - name: describeProject
+    description: >-
+      Set the project's human-readable `name` and, when given, its `description`, through the
+      project config Repository.
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T13:40:26.510Z'
+updatedAt: '2026-10-03T17:09:59.922Z'

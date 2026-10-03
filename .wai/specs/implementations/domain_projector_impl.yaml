@@ -40,6 +40,16 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadComponentSpecs
       - stepNumber: 3
+        description: Ask the spec loader where each subsystem's spec lives, the first path its domain owns
+        type: call
+        targetComponent: spec_loader
+        targetMethod: subsystemPath
+      - stepNumber: 4
+        description: Ask where each component's spec under it lives, the rest of the paths the domain owns
+        type: call
+        targetComponent: spec_loader
+        targetMethod: componentPath
+      - stepNumber: 5
         description: >-
           Emit one domain per subsystem, bound to it and owning those paths. Projected on every call
           and never stored, so a renamed subsystem cannot leave a stale domain behind
@@ -48,4 +58,4 @@ methods:
     symbol: deriveSubsystemDomains
 status: complete
 createdAt: '2026-09-20T22:44:42.166Z'
-updatedAt: '2026-09-20T22:45:24.388Z'
+updatedAt: '2026-10-03T17:59:31.198Z'

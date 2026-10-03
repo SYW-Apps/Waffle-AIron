@@ -30,7 +30,7 @@ methods:
         type: string
       - name: projectId
         type: string
-        optional: true
+        description: The project to graph; ignored (may be '') for the landscape tier
       - name: level
         type: number
   - name: getProjectCanvas
@@ -121,4 +121,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-10-03T13:38:57.223Z'
+updatedAt: '2026-10-03T16:47:08.076Z'

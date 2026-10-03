@@ -3,6 +3,8 @@ name: Share Snapshots Implementation
 description: Freezes a project view into an immutable snapshot payload set via the core + surfaces adapters.
 contract: ishare_snapshots
 sourcePath: src/server/sharesnapshots.ts
+injectedParams:
+  - dataDir
 methods:
   - name: capture
     narrative:
@@ -55,4 +57,4 @@ methods:
     symbol: captureSnapshot
 status: complete
 createdAt: '2026-07-18T09:30:49.067Z'
-updatedAt: '2026-10-03T12:17:03.359Z'
+updatedAt: '2026-10-03T16:39:50.489Z'

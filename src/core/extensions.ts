@@ -566,16 +566,17 @@ export function resolvePackRef(ref: string, projectRoot: string): string {
  * Read a resolved target's pack manifest, deserializing it into a DeclarativePack
  * (with any programmatic rules attached): a *.yaml/*.yml target is parsed as YAML
  * (throwing on a missing/empty file); any other target is required as a CommonJS
- * module from the project root and its default/module export used. A read/require/
+ * module resolved from `resolveFrom` (the directory a relative module target is
+ * resolved against) and its default/module export used. A read/require/
  * parse failure propagates to the caller, which records an EXTENSION_LOAD_ERROR.
  */
-export function readManifest(target: string, projectRoot: string): ExtensionPack {
+export function readManifest(target: string, resolveFrom: string): ExtensionPack {
   if (isYamlPath(target)) {
     const raw = readYamlFile(target);
     if (raw == null) throw new Error('file not found or empty');
     return { ...DeclarativePackSchema.parse(raw), rules: [] };
   }
-  const req = createRequire(path.join(projectRoot, 'package.json'));
+  const req = createRequire(path.join(resolveFrom, 'package.json'));
   const modRaw: unknown = req(target);
   const mod = ((modRaw as { default?: unknown })?.default ?? modRaw) as Record<string, unknown>;
   const parsed = DeclarativePackSchema.parse({

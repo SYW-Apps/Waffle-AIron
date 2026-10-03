@@ -16,11 +16,12 @@ methods:
     description: >-
       Atomically swap the in-memory relation set to the supplied complete set after the registry has
       persisted it.
-    signature: 'replaceAll(records: ProjectRelationRecord[]): void'
+    signature: 'replaceAll(relations: ProjectRelationRecord[]): void'
     returns: void
     params:
-      - name: records
+      - name: relations
         type: ProjectRelationRecord[]
+        description: The complete relation set that replaces the stored one
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -37,4 +38,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:05:52.453Z'
-updatedAt: '2026-09-19T21:29:24.140Z'
+updatedAt: '2026-10-03T16:46:54.327Z'

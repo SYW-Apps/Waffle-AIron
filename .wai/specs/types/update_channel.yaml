@@ -18,6 +18,13 @@ methods:
       question anyone asks about a raw channel string, and every caller that asks it — the CLI flag,
       the stored setting — must get the same answer.
     symbol: isUpdateChannel
+  - name: all
+    signature: 'all(): UpdateChannel[]'
+    returns: UpdateChannel[]
+    description: >-
+      Every update channel, in order from most stable to least: stable, beta, preview, dev. The
+      order is the meaning — a channel follows every channel before it.
+    symbol: UPDATE_CHANNELS
 sourcePath: src/config/userconfig.ts
 createdAt: '2026-09-22T21:20:58.590Z'
-updatedAt: '2026-09-22T21:21:29.940Z'
+updatedAt: '2026-10-03T17:53:08.906Z'

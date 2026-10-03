@@ -152,7 +152,6 @@ describe('handleMcpRequest landscape discovery dispatch (end-to-end)', () => {
       sourceProjectId: source,
       targetProjectId: target,
       kind,
-      sourceAdapter: `${source}_client_adapter`,
       targetPublicInterface: { projectId: target, systemInterfaceId: interfaceId, reason: 'declared dependency' },
       reason: 'declared dependency',
       status: 'active',

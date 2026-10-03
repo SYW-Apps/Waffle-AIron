@@ -109,34 +109,34 @@ export async function showExecution(): Promise<void> {
   }
 }
 
-export async function setExecutionTier(raw: string): Promise<void> {
+export async function setExecutionTier(tier: string): Promise<void> {
   assertInitialized();
 
-  const parsed = BudgetTierSchema.safeParse(raw);
+  const parsed = BudgetTierSchema.safeParse(tier);
   if (!parsed.success) {
     throw new WaironError(
-      `Unknown tier "${raw}" — expected one of: ${BudgetTierSchema.options.join(', ')}.`,
+      `Unknown tier "${tier}" — expected one of: ${BudgetTierSchema.options.join(', ')}.`,
     );
   }
-  const tier: BudgetTier = parsed.data;
+  const chosen: BudgetTier = parsed.data;
 
   const config = loadProjectConfig();
   if (!config) throw new ProjectNotInitializedError();
   const previous = config.execution.tier;
-  if (previous === tier) {
-    logger.info(`Execution tier is already ${chalk.bold(tier)}.`);
+  if (previous === chosen) {
+    logger.info(`Execution tier is already ${chalk.bold(chosen)}.`);
     return;
   }
 
-  writeExecutionTier(tier);
+  writeExecutionTier(chosen);
 
-  logger.success(`Execution tier: ${chalk.gray(previous)} → ${chalk.bold(tier)}`);
-  logger.info(BUDGET_TIER_DESCRIPTIONS[tier]);
+  logger.success(`Execution tier: ${chalk.gray(previous)} → ${chalk.bold(chosen)}`);
+  logger.info(BUDGET_TIER_DESCRIPTIONS[chosen]);
   logger.blank();
   logger.info(`Run ${chalk.bold('wairon execution show')} to see what each agent now gets,`);
   logger.info(`then ${chalk.bold('wairon generate')} to write it into agent files (if materialized).`);
 
-  if (tier === 'trade' || tier === 'aggressive') {
+  if (chosen === 'trade' || chosen === 'aggressive') {
     logger.blank();
     logger.warn(
       'This tier trades quality for cost. Measure on real work before keeping it — ' +

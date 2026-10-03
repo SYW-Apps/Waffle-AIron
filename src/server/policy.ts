@@ -10,7 +10,7 @@ import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedCreate } from './admin.js';
 import { resolveProjectRoot } from './projects.js';
 import { authorize } from './authorization.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
 import * as hostCore from './adapters/core.js';
@@ -18,7 +18,6 @@ import * as hostValidator from './adapters/validator.js';
 import { computeGateStateId } from './adapters/validator.js';
 import type {
   AuditEvent,
-  AuditRetentionPolicy,
   AvailableProfile,
   GovernedProjectCreation,
   HostConfig,
@@ -121,7 +120,7 @@ function exposurePolicyPath(dataDir: string): string {
  *  admin listener (matching pre-exposure-policy behavior), TLS required, and the
  *  unified web UI OFF — a NEW public surface stays opt-in, so an existing
  *  instance is entirely unaffected until an operator turns it on. */
-export const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
+const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
   adminApiMode: 'local_only',
   adminUiEnabled: true,
   identityApiEnabled: true,
@@ -132,6 +131,12 @@ export const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
   operationsApiEnabled: true,
   webUiEnabled: false,
 };
+
+/** The effective exposure posture for a partial override: each flag the
+ *  override sets wins, and every unset flag keeps the compatible default. */
+export function effectiveExposure(override?: Partial<HostExposurePolicy> | null): HostExposurePolicy {
+  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+}
 
 /**
  * Read the persisted instance exposure policy, or null when none has ever been
@@ -351,10 +356,6 @@ function principalSubject(principal: Principal): PrincipalSubject {
 /** The audit actor for the pre-authorized (no-principal) init path. */
 const SYSTEM_SUBJECT: PrincipalSubject = { userId: 'system', kind: 'service', issuer: 'local' };
 
-function resolveAuditPolicy(_cfg: HostConfig): AuditRetentionPolicy {
-  return DEFAULT_AUDIT_POLICY;
-}
-
 function buildAuditEvent(
   actor: PrincipalSubject,
   action: string,
@@ -381,7 +382,7 @@ function buildAuditEvent(
  *  diagnostic and swallowed so an append can never fail the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[policy] audit append failed for "${event.action}": ` +
@@ -861,6 +862,11 @@ function performInit(
   );
   // The created project's isolated root, bound for every configuration call below.
   const root = record.rootPath;
+  // The request's display name and description belong to the project itself:
+  // written into its .wai/project.yaml (name falls back to the id).
+  if (request.displayName || request.description) {
+    runWithProjectRoot(root, () => hostCore.describeProject(request.displayName ?? request.id, request.description));
+  }
 
   const packResolution = packs.executeApprovedResolveGlobalPacks([
     ...policy.requiredGlobalPacks,

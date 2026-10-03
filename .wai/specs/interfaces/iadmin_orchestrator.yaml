@@ -194,7 +194,9 @@ methods:
       createProject but WITHOUT credential authentication — the caller
       (project_lifecycle_orchestrator) has already enforced permission-based authorization. Creates
       the project and places it in the REQUIRED owner unit. Never exposed on any portal.
-    signature: 'executeApprovedCreate(id: string, unitId: string): HostedProjectRecord'
+    signature: >-
+      executeApprovedCreate(id: string, unitId: string, placedBy?: PrincipalSubject):
+      HostedProjectRecord
     returns: HostedProjectRecord
     params:
       - name: id
@@ -204,6 +206,12 @@ methods:
         description: >-
           REQUIRED owner organization unit the new project is placed in (from
           ProjectInitRequest.ownerUnitId).
+      - name: placedBy
+        type: PrincipalSubject
+        description: >-
+          The subject recorded as having placed the project (the acting principal of the approval);
+          omitted records the system
+        optional: true
   - name: executeApprovedLock
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
@@ -252,7 +260,7 @@ methods:
       source code. A member's own history is the family log filtered to its pathspec. A no-op when
       nothing under the scoped path changed. Returns the publish outcome (commit id or clean).
     signature: >-
-      commitProject(credential: string, project: string, subsystem: string, message: string):
+      commitProject(credential: string, project: string, subsystem?: string, message?: string):
       GitPublish
     returns: GitPublish
     params:
@@ -297,8 +305,8 @@ methods:
       backup cadence is repository-binding administration, distinct from the project:write commit
       itself.
     signature: >-
-      configureGitSync(credential: string, project: string, periodicSyncMinutes: number,
-      skipIfClean: boolean): void
+      configureGitSync(credential: string, project: string, periodicSyncMinutes?: number,
+      skipIfClean?: boolean): void
     returns: void
     params:
       - name: credential
@@ -384,6 +392,19 @@ methods:
         type: string
     guarantees:
       - idempotent
+  - name: approverFor
+    description: >-
+      The approver identity a hosted lock records for the subject the instance resolved the
+      credential to (source 'hosted'): its user id and display name. No subject means the bootstrap
+      master credential, recorded as the instance master credential. The hosted counterpart of the
+      approval portal's localApprover.
+    signature: 'approverFor(subject?: PrincipalSubject): ApproverIdentity'
+    returns: ApproverIdentity
+    params:
+      - name: subject
+        type: PrincipalSubject
+        description: The resolved subject of the approving credential; absent for the master credential.
+        optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-10-03T13:39:17.266Z'
+updatedAt: '2026-10-03T17:51:28.770Z'

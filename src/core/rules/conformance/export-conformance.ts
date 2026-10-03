@@ -80,7 +80,9 @@ import { RuleContext, SddRule } from '../types.js';
 // The data model is not re-litigated here. A type's own declaration and its
 // pure methods are surface the design DID promise from those same files;
 // whether the file actually publishes them is `typeRealization`'s question,
-// and this rule only needs to stop reporting its answers a second time.
+// and this rule only needs to stop reporting its answers a second time. A
+// barrel that re-exports a type's pure method publishes that same promised
+// name — a method travels with its type — so the republication is promised too.
 //
 // A namespace import (`import * as webadmin from …`) binds the whole module,
 // and the BINDING names no export of it. The CALL does: `webadmin.setSecret(…)`
@@ -226,11 +228,39 @@ export const exportConformanceRule: SddRule = {
     }
 
     // ---- 3. what the data model publishes from those same files ----
+    const typeMethodsAt = new Map<string, Set<string>>();
     for (const type of ctx.types) {
       if (!type.sourcePath) continue;
       promise(type.sourcePath, type.symbol ?? type.name);
       for (const method of type.methods ?? []) {
-        promise(method.sourcePath ?? type.sourcePath, method.symbol ?? method.name);
+        const at = pathKey(method.sourcePath ?? type.sourcePath);
+        const name = method.symbol ?? method.name;
+        promise(at, name);
+        let names = typeMethodsAt.get(at);
+        if (!names) typeMethodsAt.set(at, (names = new Set<string>()));
+        names.add(name);
+      }
+    }
+
+    // A barrel that re-exports a modelled type's pure method republishes the
+    // same promised name: a method travels with its type, so a module that
+    // hands out the value may hand out its arithmetic beside it. Only the
+    // TYPE's methods travel this way — a contract method re-exported from a
+    // sibling component's file is that component's surface, not this one's,
+    // and stays a crossing. Read at exact grade, from the re-export bindings
+    // the analyzer records (a star republishes every method of the module).
+    for (const file of realization.paths) {
+      const facts = code.factsAt(file);
+      if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
+      for (const binding of facts.reexportBindings ?? []) {
+        const target = resolveImport(file, binding.from, code.paths);
+        const methods = target ? typeMethodsAt.get(target) : undefined;
+        if (!methods) continue;
+        if (binding.local === '*') {
+          for (const name of methods) promise(file, name);
+        } else if (methods.has(binding.local)) {
+          promise(file, binding.exported);
+        }
       }
     }
 

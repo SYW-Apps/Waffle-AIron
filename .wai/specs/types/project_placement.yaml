@@ -29,8 +29,8 @@ fields:
   - name: createdBy
     type: PrincipalSubject
     description: Identity that created the placement.
-    optional: true
+    optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:16.787Z'
-updatedAt: '2026-09-19T11:07:14.539Z'
+updatedAt: '2026-10-03T17:03:39.778Z'

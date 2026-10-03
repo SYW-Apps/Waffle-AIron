@@ -293,24 +293,31 @@ methods:
         targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
+        description: >-
+          Read the decidable project set down from that view: its project entries that are not
+          breadcrumb context
+        type: call
+        targetComponent: authorization
+        targetMethod: actionableProjects
+      - stepNumber: 4
         description: Reject (Forbidden) a non-admin caller whose decidable project set is empty
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Lazily expire overdue pending requests before listing (pass the current timestamp)
         type: call
         targetComponent: approval_repository
         targetMethod: expirePending
-      - stepNumber: 5
+      - stepNumber: 6
         description: List the pending approval requests, optionally narrowed to one project
         type: call
         targetComponent: approval_repository
         targetMethod: list
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Filter to the requests whose project is in the caller's decidable set (an instance-admin
           keeps all; a request with no project id is instance-admin-only — fail closed)
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the pending approval requests the caller may decide
         type: return
         outcome: pending approval requests
@@ -674,4 +681,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-03T13:39:29.644Z'
+updatedAt: '2026-10-03T17:58:49.837Z'

@@ -2272,8 +2272,8 @@ function moveRenamedSpecs(
   componentId: string,
   newId: string,
   component: ComponentSpec,
-  movingInterface: InterfaceSpec | undefined,
-  movingImplementation: ImplementationSpec | undefined,
+  movingInterface?: InterfaceSpec,
+  movingImplementation?: ImplementationSpec,
 ): void {
   const interfaceId = `i${newId}`;
   const implementationId = `${newId}_impl`;

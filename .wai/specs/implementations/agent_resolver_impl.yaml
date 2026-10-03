@@ -74,6 +74,26 @@ methods:
           walk stops at one level, so this layer's topology stays proportional to itself
         type: local
       - stepNumber: 11
+        description: Ask the spec loader where each local subsystem's spec lives, for its owner's ownedPaths
+        type: call
+        targetComponent: spec_loader
+        targetMethod: subsystemPath
+      - stepNumber: 12
+        description: Ask where each component's spec lives, for its owner's and implementer's ownedPaths
+        type: call
+        targetComponent: spec_loader
+        targetMethod: componentPath
+      - stepNumber: 13
+        description: Ask where each of the component's interfaces lives, for its implementer's ownedPaths
+        type: call
+        targetComponent: spec_loader
+        targetMethod: interfacePath
+      - stepNumber: 14
+        description: Ask where each of the component's implementations lives, for its implementer's ownedPaths
+        type: call
+        targetComponent: spec_loader
+        targetMethod: implementationPath
+      - stepNumber: 15
         description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per member project this project declares (in `members`, or for
@@ -187,4 +207,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-02T23:19:04.855Z'
+updatedAt: '2026-10-03T17:59:41.039Z'
