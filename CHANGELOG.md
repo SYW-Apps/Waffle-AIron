@@ -1043,6 +1043,18 @@ from where its files live.
 - **Hosted:** a member with a `../` or git source is refused; promote/demote change records
   through reconcile, as every family-shape tool does.
 
+### Fixed: a delta's absent fields, and two tests that failed under load
+
+- **A field a delta element leaves out keeps its stored value, at every depth.**
+  An element `sdd_update_spec` names merges field by field: a field it leaves
+  out, or passes as `null`/`undefined`, is "no change" below the top level as
+  it always was at it. The element merge was a shallow spread, so a key present
+  with no value replaced the stored one — `undefined` erased an interface
+  method's `params` or a try step's `catches` and `endStep`, and `null` was
+  refused by the schema instead. Only `[]` or an `unset` clears. The tool
+  description now says so, and that `narrative: []` on a method you are not
+  editing clears its steps. (F88)
+
 ### Fixed: technology tokens, context sync, global writes and two delta merges
 
 - **A technology can declare the tokens it is matched by.** An entry of
