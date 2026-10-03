@@ -609,7 +609,6 @@ export interface ProjectInitRequest {
    *  fresh instance must create its first organization unit before
    *  initializing projects. */
   ownerUnitId: string;
-  environment?: string;
   profileSelection?: ProjectProfileSelection;
 }
 
@@ -942,13 +941,13 @@ export interface ProjectRelationRecord {
   targetProjectId: string;
   /** e.g. 'consumes' | 'depends-on' | 'observes' */
   kind: string;
-  /** The source-side client Adapter component id realizing the hop. */
-  sourceAdapter: string;
   targetPublicInterface: RemotePublicInterfaceRef;
   reason: string;
   /** 'active' | 'suspended' | 'retired' — only active relations confer reachability. */
   status: string;
+  /** Recorded by the server when the relation is first created; kept on update. */
   createdAt: string;
+  /** Recorded by the server from the creating principal; kept on update. */
   createdBy: PrincipalSubject;
 }
 
@@ -1324,6 +1323,9 @@ export interface HostConfig {
   /** Advisory (observe/warn) resource quota policy; a disabled default is
    *  resolved when omitted. Never blocks or throttles in this draft. */
   quotaPolicy?: ResourceQuotaPolicy;
+  /** Durable audit capture and retention policy; the secure default is resolved
+   *  when omitted (audit.ts effectiveAuditPolicy). */
+  auditPolicy?: AuditRetentionPolicy;
   /** True only when the server runs as the local single-project developer server
    *  (`wairon dev`): loopback-bound, auth off, the one project = the current
    *  working directory. NEVER set by the hosted `serve` command, so the dev-only

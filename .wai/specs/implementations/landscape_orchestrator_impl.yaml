@@ -364,30 +364,43 @@ methods:
           unknown target public interface — a relation must target a system public interface present
           in the target's public-surface snapshot
       - stepNumber: 17
+        description: >-
+          Find a stored relation with this id, so an update keeps its original creator and creation
+          time
+        type: call
+        targetComponent: project_relation_repository
+        targetMethod: list
+      - stepNumber: 18
+        description: >-
+          Record the creator server-side: a new relation gets createdBy = the caller's subject and
+          createdAt = now; an update keeps the stored relation's createdBy and createdAt. The body's
+          values for either are ignored
+        type: local
+      - stepNumber: 19
         description: Create or update the validated cross-project relation
         type: call
         targetComponent: project_relation_repository
         targetMethod: upsert
-      - stepNumber: 18
+      - stepNumber: 20
         description: Append a redacted audit event without letting a failure fail the relation write
         type: try
-        endStep: 20
+        endStep: 22
         catches:
           - error: audit append failure
-            step: 21
-      - stepNumber: 19
+            step: 23
+      - stepNumber: 21
         description: Append the redacted relation.upsert audit event (info level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 20
+      - stepNumber: 22
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 22
-      - stepNumber: 21
+        toStep: 24
+      - stepNumber: 23
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 22
+      - stepNumber: 24
         description: Return the stored cross-project relation
         type: return
         outcome: the stored cross-project relation
@@ -577,4 +590,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T22:10:36.787Z'
-updatedAt: '2026-10-03T16:39:44.877Z'
+updatedAt: '2026-10-03T17:08:24.720Z'

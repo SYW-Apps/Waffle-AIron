@@ -1,6 +1,6 @@
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { authorize, explain as explainPermission } from './authorization.js';
 import { declaredSubsystemIds } from './projects.js';
 import {
@@ -122,7 +122,7 @@ function buildAuditEvent(
  *  diagnostic and swallowed so an append can never fail the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[permissionadmin] audit append failed for "${event.action}": ` +

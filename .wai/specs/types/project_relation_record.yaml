@@ -23,12 +23,6 @@ fields:
     type: string
     description: Relation kind such as "consumes", "publishes_to", "depends_on", "mirrors", or "documents".
     optional: false
-  - name: sourceAdapter
-    type: string
-    description: >-
-      Optional source project adapter component id responsible for consuming the remote public
-      surface.
-    optional: true
   - name: targetPublicInterface
     type: RemotePublicInterfaceRef
     description: >-
@@ -45,13 +39,15 @@ fields:
     optional: false
   - name: createdAt
     type: string
-    description: ISO-8601 creation timestamp.
+    description: When the relation was first created, recorded by the server; kept unchanged on later updates
     optional: false
   - name: createdBy
     type: PrincipalSubject
-    description: Identity that created the relation.
-    optional: true
+    description: >-
+      The subject who first created the relation, recorded by the server from the writing principal;
+      kept unchanged on later updates
+    optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:25.097Z'
-updatedAt: '2026-09-19T11:07:14.727Z'
+updatedAt: '2026-10-03T17:03:41.245Z'

@@ -58,6 +58,7 @@ export interface ProjectConfigRepository {
   upsertPackSelection(selection: PackSelection): boolean;
   removePackSelection(packName: string): boolean;
   setProjectType(projectType: string): void;
+  describeProject(name: string, description?: string): void;
   recordProfileSelection(selection: ProjectProfileSelection): void;
   setExecutionTier(tier: string): void;
   registerPackRef(ref: string): boolean;
@@ -874,6 +875,9 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     setProjectType(projectType) {
       save({ ...current(), projectType });
     },
+    describeProject(name: string, description?: string) {
+      save({ ...current(), name, ...(description !== undefined ? { description } : {}) });
+    },
     recordProfileSelection(selection) {
       save({ ...current(), profileSelection: selection });
     },
@@ -1299,6 +1303,7 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     upsertPackSelection(selection) { return registry.upsertPackSelection(selection); },
     removePackSelection(packName) { return registry.removePackSelection(packName); },
     setProjectType(projectType) { registry.setProjectType(projectType); },
+    describeProject(name: string, description?: string) { registry.describeProject(name, description); },
     recordProfileSelection(selection) { registry.recordProfileSelection(selection); },
     setExecutionTier(tier) { registry.setExecutionTier(tier); },
     registerPackRef(ref) { return registry.registerPackRef(ref); },
@@ -1341,6 +1346,7 @@ export const projectConfigRepository: ProjectConfigRepository = {
   upsertPackSelection(selection) { return bound().upsertPackSelection(selection); },
   removePackSelection(packName) { return bound().removePackSelection(packName); },
   setProjectType(projectType) { bound().setProjectType(projectType); },
+  describeProject(name: string, description?: string) { bound().describeProject(name, description); },
   recordProfileSelection(selection) { bound().recordProfileSelection(selection); },
   setExecutionTier(tier) { bound().setExecutionTier(tier); },
   registerPackRef(ref) { return bound().registerPackRef(ref); },

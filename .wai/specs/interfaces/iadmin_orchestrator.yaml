@@ -260,7 +260,7 @@ methods:
       source code. A member's own history is the family log filtered to its pathspec. A no-op when
       nothing under the scoped path changed. Returns the publish outcome (commit id or clean).
     signature: >-
-      commitProject(credential: string, project: string, subsystem: string, message: string):
+      commitProject(credential: string, project: string, subsystem?: string, message?: string):
       GitPublish
     returns: GitPublish
     params:
@@ -305,8 +305,8 @@ methods:
       backup cadence is repository-binding administration, distinct from the project:write commit
       itself.
     signature: >-
-      configureGitSync(credential: string, project: string, periodicSyncMinutes: number,
-      skipIfClean: boolean): void
+      configureGitSync(credential: string, project: string, periodicSyncMinutes?: number,
+      skipIfClean?: boolean): void
     returns: void
     params:
       - name: credential
@@ -394,4 +394,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-10-03T16:45:44.291Z'
+updatedAt: '2026-10-03T17:10:40.721Z'

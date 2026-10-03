@@ -18,7 +18,7 @@ import { listUsers, remapUnitReferences } from './users.js';
 import { listCredentials, renarrowCredential } from './credentials.js';
 import { remapScope, listAssignments, setAssignment } from './permissions.js';
 import { deletePlacement, listProjectPlacements, placeProject } from './organization.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { relink, compare, narrowing, carryPlan } from './member-reach.js';
 
 /** The subject a carry plan names for everyone without settings of their own. */
@@ -278,7 +278,7 @@ export function discard(plan: MemberUpgradePlan): void {
 function audit(dataDir: string, fields: Partial<AuditEvent> & { action: string; outcome: string; level: string }): void {
   const event: AuditEvent = { id: '', timestamp: '', category: 'project', actor: OPERATOR, ...fields };
   try {
-    appendAuditEvent(dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, event, effectiveAuditPolicy());
   } catch (e) {
     console.error(`[sdd_host] audit append failed for ${event.action}: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -344,7 +344,7 @@ function auditRecovery(dataDir: string, principal: Principal, projectId: string,
     metadata: JSON.stringify({ verb: t.verb, phase: t.phase, action: t.action }),
   };
   try {
-    appendAuditEvent(dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, event, effectiveAuditPolicy());
   } catch (e) {
     console.error(`[sdd_host] audit append failed for migration.recovered (target=${t.id}): ${e instanceof Error ? e.message : String(e)}`);
   }

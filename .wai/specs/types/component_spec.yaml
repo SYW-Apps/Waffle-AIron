@@ -43,15 +43,8 @@ fields:
     optional: false
   - name: status
     type: string
-    description: draft | design | complete
-    optional: true
-  - name: remoteInterfaces
-    type: RemotePublicInterfaceRef[]
-    description: >-
-      Optional remote project public surfaces consumed by this component. Valid only for Adapter
-      components; dependsOn remains local-only and must not point directly into another hosted
-      project.
-    optional: true
+    description: draft | design | complete (an omitted status is parsed as complete)
+    optional: false
   - name: dispatch
     type: DispatchBinding[]
     description: >-
@@ -196,4 +189,4 @@ methods:
       diagrams, "cli_packs_adapter" about packs. Empty when every word names a block.
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-24T19:43:38.367Z'
+updatedAt: '2026-10-03T17:03:07.591Z'

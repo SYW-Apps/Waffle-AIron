@@ -7,7 +7,7 @@ import {
   queryAuditEvents,
   countAuditEvents,
   pruneAuditEvents,
-  DEFAULT_AUDIT_POLICY,
+  effectiveAuditPolicy,
 } from '../../src/server/audit.js';
 import type { AuditEvent, AuditRetentionPolicy, PrincipalSubject } from '../../src/server/types.js';
 
@@ -34,7 +34,7 @@ function mkEvent(over: Partial<AuditEvent> = {}): AuditEvent {
 }
 
 function policy(over: Partial<AuditRetentionPolicy> = {}): AuditRetentionPolicy {
-  return { ...DEFAULT_AUDIT_POLICY, ...over };
+  return { ...effectiveAuditPolicy(), ...over };
 }
 
 describe('audit repository (sdd_host)', () => {
@@ -54,8 +54,14 @@ describe('audit repository (sdd_host)', () => {
 
   // ── default policy ────────────────────────────────────────────────────────
 
+  it('resolves the configured audit policy when the host config sets one, else the secure default', () => {
+    const configured = { ...effectiveAuditPolicy(), retentionDays: 7, includeReadEvents: true };
+    expect(effectiveAuditPolicy({ auditPolicy: configured })).toBe(configured);
+    expect(effectiveAuditPolicy({})).toEqual(effectiveAuditPolicy());
+  });
+
   it('exposes the secure default audit policy', () => {
-    expect(DEFAULT_AUDIT_POLICY).toEqual({
+    expect(effectiveAuditPolicy()).toEqual({
       enabled: true,
       minimumLevel: 'info',
       retentionDays: 90,

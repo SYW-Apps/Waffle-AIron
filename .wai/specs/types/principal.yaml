@@ -44,7 +44,13 @@ fields:
       bypass. There is no '*'@instance assignment. Replaces the former grants field; precise
       authorization is expressed through the permission rules over this subject.
     optional: true
+  - name: authenticated
+    type: boolean
+    description: >-
+      Whether the request presented a valid credential. The unauthenticated principal carries false;
+      every gate checks it first.
+    optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-10-01T16:55:31.109Z'
+updatedAt: '2026-10-03T17:04:58.880Z'

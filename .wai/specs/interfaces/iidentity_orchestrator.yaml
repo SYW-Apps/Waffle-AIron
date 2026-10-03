@@ -14,21 +14,23 @@ component: identity_orchestrator
 methods:
   - name: mintToken
     description: >-
-      Authenticate the caller and look up the token's owner user (not-found when absent; a
-      deactivated owner is rejected so a fresh token cannot revive revoked access). Require the
-      caller to be an instance-admin: the minted token ACTS AS the owner user's live permission,
-      which could exceed a non-super-admin minter's own authority (confused deputy), so only the
-      env-anchored instance-admin — who dominates every owner — may mint on another user's behalf (a
-      user mints their own single-project tokens via mintSelfToken). Mint a token narrowed to
-      request.projects, each entry a hosted record id or '*' — a member is named by its own record
-      id since stage 7. A member-qualified entry ('projectId::alias', one alias per hop) is
+      Authenticate the caller and require it to be an instance-admin: the minted token ACTS AS the
+      owner user's live permission, which could exceed a non-super-admin minter's own authority
+      (confused deputy), so only the env-anchored instance-admin — who dominates every owner — may
+      mint on another user's behalf (a user mints their own single-project tokens via
+      mintSelfToken). A reserved built-in subject id is refused as the owner. request.projects is
+      REQUIRED and non-empty: a missing or empty list is rejected, and '*' is written to mean the
+      owner's full reach. Each entry is a hosted record id or '*' — a member is named by its own
+      record id since stage 7. A member-qualified entry ('projectId::alias', one alias per hop) is
       DEPRECATED: for one release it is accepted and stored as the member's record id (mapped
       through the project repository's binding resolution; an alias that declares no member, or a
       member no record holds, is rejected with guidance, never stored broken), and the answer says
-      so: MintedToken.mapped carries '<qualified entry> -> <record id>' for each. The token carries
-      no grants and permission rules gate per record at use time. Persist only the hashed credential
-      record, append a redacted token.mint audit event, and return the plaintext exactly once with
-      the mapping.
+      so: MintedToken.mapped carries '<qualified entry> -> <record id>' for each. Look up the
+      owner's user record: a deactivated owner is rejected so a fresh token cannot revive revoked
+      access, and an owner id with no user record is a service principal, allowed by design and
+      given a synthesized service subject. The token carries no grants and permission rules gate per
+      record at use time. Persist only the hashed credential record, append a redacted token.mint
+      audit event, and return the plaintext exactly once with the mapping.
     signature: 'mintToken(credential: string, request: TokenMintRequest): MintedToken'
     returns: MintedToken
     params:
@@ -282,4 +284,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-01T18:06:57.853Z'
+updatedAt: '2026-10-03T17:07:32.500Z'

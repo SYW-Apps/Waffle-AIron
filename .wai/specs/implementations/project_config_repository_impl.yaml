@@ -193,6 +193,13 @@ methods:
         type: call
         targetComponent: project_config_registry
         targetMethod: setPartOf
+  - name: describeProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: describeProject
 status: complete
 createdAt: '2026-09-13T11:19:36.287Z'
-updatedAt: '2026-10-02T20:28:15.507Z'
+updatedAt: '2026-10-03T17:10:07.441Z'

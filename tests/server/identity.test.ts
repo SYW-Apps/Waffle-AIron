@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -18,7 +19,7 @@ import { upsertUser as repoUpsertUser } from '../../src/server/users.js';
 import { createUnit, placeProject } from '../../src/server/organization.js';
 import { mintUserToken, allow, seedSubsystem, seedChainedMount } from './helpers.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
-import { appendAuditEvent, queryAuditEvents as auditQuery, DEFAULT_AUDIT_POLICY } from '../../src/server/audit.js';
+import { appendAuditEvent, queryAuditEvents as auditQuery, effectiveAuditPolicy } from '../../src/server/audit.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
@@ -177,6 +178,31 @@ describe('identity orchestrator (sdd_host)', () => {
     ).toThrow(/instance admin/i);
   });
 
+  it('rejects a mint that names no projects, or an empty list: the list is required and `*` is the full reach', () => {
+    const missing = { ownerUserId: 'u-owner', label: 't' } as unknown as identity.TokenMintRequest;
+    expect(() => identity.mintToken(cfg, MASTER, missing)).toThrow(/projects is required.*'\*'/);
+    expect(() => identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: [] })).toThrow(/projects is required/);
+    expect(listCredentials(dataDir, '*')).toHaveLength(0);
+    // `*` written out is the full reach.
+    expect(identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['*'] }).token).toMatch(/^wk_/);
+  });
+
+  it('the identity portal answers 400 to a POST /identity/tokens body with no projects', async () => {
+    let status = 0;
+    let body = '';
+    const res = {
+      writeHead(code: number) { status = code; return res; },
+      end(text: string) { body = text; },
+    } as unknown as ServerResponse;
+    await identity.handleIdentityRequest(
+      cfg, MASTER, { method: 'POST' } as IncomingMessage, res,
+      { ownerUserId: 'u-owner', label: 't' }, new URL('http://localhost/identity/tokens'),
+    );
+    expect(status).toBe(400);
+    expect(JSON.parse(body).error).toMatch(/projects is required/);
+    expect(listCredentials(dataDir, '*')).toHaveLength(0);
+  });
+
   it('rejects a mint whose narrowing references an unknown project', () => {
     // admin passes the gate, so the failure is the project-existence check.
     expect(() =>
@@ -187,7 +213,7 @@ describe('identity orchestrator (sdd_host)', () => {
   it('rejects a mint whose OWNER claims a reserved built-in subject id (legacy literal or persisted UUID)', () => {
     const instance = ensureInstanceIdentity(dataDir);
     for (const ownerUserId of ['builtin:superadmin', 'builtin:localdev', instance.superadminUserId, instance.localDevUserId]) {
-      expect(() => identity.mintToken(cfg, MASTER, { ownerUserId, label: 't' })).toThrow(/reserved/i);
+      expect(() => identity.mintToken(cfg, MASTER, { ownerUserId, label: 't', projects: ['*'] })).toThrow(/reserved/i);
     }
   });
 
@@ -475,7 +501,7 @@ describe('identity orchestrator (sdd_host)', () => {
   // ── queryAuditEvents authorization ──────────────────────────────────────────
 
   it('returns audit events for a project:admin caller and rejects one without', () => {
-    appendAuditEvent(dataDir, mkEvent({ action: 'token.mint', level: 'security' }), DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, mkEvent({ action: 'token.mint', level: 'security' }), effectiveAuditPolicy());
 
     const reader = tokenWith('project:admin', 'instance');
     expect(identity.queryAuditEvents(cfg, reader, {}).length).toBeGreaterThanOrEqual(1);
@@ -493,9 +519,9 @@ describe('identity orchestrator (sdd_host)', () => {
     createProjectRecord(dataDir, 'acme');
     placeProject(dataDir, placement('acme', tenant.id));
 
-    appendAuditEvent(dataDir, mkEvent({ action: 'evt.acme', projectId: 'acme' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'evt.other', projectId: 'other' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'evt.global' }), DEFAULT_AUDIT_POLICY); // instance-level, no projectId
+    appendAuditEvent(dataDir, mkEvent({ action: 'evt.acme', projectId: 'acme' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'evt.other', projectId: 'other' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'evt.global' }), effectiveAuditPolicy()); // instance-level, no projectId
 
     // A project-scoped admin reads ONLY its own project's events.
     const scoped = tokenWith('project:admin', 'project', 'acme');
@@ -520,10 +546,10 @@ describe('identity orchestrator (sdd_host)', () => {
 
   it('queryAuditEvents: a unit-scoped admin sees only its subtree events, never another unit\'s or instance-level ones', () => {
     seedOrg(dataDir);
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.web', projectId: 'p-web' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.eng', projectId: 'p-eng' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.sales', projectId: 'p-sales' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.global' }), DEFAULT_AUDIT_POLICY); // no projectId
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.web', projectId: 'p-web' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.eng', projectId: 'p-eng' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.sales', projectId: 'p-sales' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.global' }), effectiveAuditPolicy()); // no projectId
 
     const caller = tokenWith('project:admin', 'unit', ENG);
 
@@ -610,7 +636,7 @@ describe('identity orchestrator (sdd_host)', () => {
 
   it('prunes expired audit events as admin and audits audit.prune', () => {
     const old = new Date(Date.now() - 100 * 86_400_000).toISOString(); // beyond 90d retention
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.old', timestamp: old }), DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.old', timestamp: old }), effectiveAuditPolicy());
 
     const removed = identity.pruneAuditEvents(cfg, MASTER);
     expect(removed).toBeGreaterThanOrEqual(1);
@@ -680,7 +706,7 @@ describe('identity orchestrator (sdd_host)', () => {
   // ── authentication ──────────────────────────────────────────────────────────
 
   it('throws an unauthenticated error for a bogus token and for no credential', () => {
-    const req = { ownerUserId: 'u', label: 't' };
+    const req = { ownerUserId: 'u', label: 't', projects: ['*'] };
     expect(() => identity.mintToken(cfg, 'not-a-real-token', req)).toThrow(UnauthenticatedError);
     expect(() => identity.mintToken(cfg, null, req)).toThrow(UnauthenticatedError);
   });

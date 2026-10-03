@@ -42,7 +42,13 @@ fields:
       revocation; never a raw token. Left unset when the session itself is the credential (the
       subject resolves the Principal directly, with permissionSubject resolved live).
     optional: true
+  - name: projects
+    type: string[]
+    description: >-
+      The session's project narrowing: the project ids it may reach, or ['*'] for no narrowing
+      beyond the subject's own permissions.
+    optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T22:00:22.213Z'
-updatedAt: '2026-09-19T11:07:21.687Z'
+updatedAt: '2026-10-03T17:04:58.126Z'

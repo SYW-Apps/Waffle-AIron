@@ -111,7 +111,7 @@ methods:
       respelled `alias::name`, the new member's external for this project pinned; a reference that
       would need a component made public refuses the plan. It keeps its name because it acts on a
       subsystem. Source code is moved by the user. Through runMigration.
-    signature: 'runSubsystemExternalize(id: string, options: MigrationCommandOptions): Promise<void>'
+    signature: 'runSubsystemExternalize(id: string, options?: MigrationCommandOptions): Promise<void>'
     returns: Promise<void>
     params:
       - name: id
@@ -585,9 +585,19 @@ methods:
       unchanged, changed, removed, unlocked, or unavailable with EXTERNAL_CHECK_UNAVAILABLE; it
       reports and never fails the command on staleness), and list (the declared externals, how each
       resolves, and what is pinned). `--json` prints the structured answer instead of the table.
-    signature: 'runExternals(action: string, aliases: string[], options: { json?: boolean }): Promise<void>'
+    signature: 'runExternals(action: string, aliases: string[], options?: ExternalsOptions): Promise<void>'
     returns: Promise<void>
-    params: []
+    params:
+      - name: action
+        type: string
+        description: pin | status
+      - name: aliases
+        type: string[]
+        description: The declared externals to act on; empty for all
+      - name: options
+        type: ExternalsOptions
+        description: '--json: print the structured answer instead of the table'
+        optional: true
   - name: runMigration
     description: >-
       The one flow every family-migration command runs, so the verbs cannot drift apart: plan the
@@ -716,4 +726,4 @@ methods:
     returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T16:49:21.773Z'
+updatedAt: '2026-10-03T17:11:29.511Z'

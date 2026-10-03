@@ -1,0 +1,14 @@
+kind: value-object
+id: externals_options
+name: ExternalsOptions
+description: The options `wairon externals` reads.
+subsystem: sdd_cli
+fields:
+  - name: json
+    type: boolean
+    description: '--json: print the structured answer instead of the table.'
+    optional: true
+methods: []
+sourcePath: src/commands/externals.ts
+createdAt: '2026-10-03T17:11:27.059Z'
+updatedAt: '2026-10-03T17:11:27.061Z'

@@ -19,7 +19,7 @@ fields:
     description: >-
       The L5 narrative: a flat numbered step list whose order mimics the code lines; flow steps jump
       by step number. Empty when the method is specified by intent.
-    optional: true
+    optional: false
   - name: detail
     type: string
     description: >-
@@ -68,6 +68,13 @@ fields:
       minus the position in the flow that this check never reads, so it can no more buy reachability
       without the code than a step can. Refused beside a non-empty narrative, where the steps
       already say what is called.
+    optional: true
+  - name: exportedVia
+    type: string
+    description: >-
+      The exported binding a consumer imports to reach this method when the realization is published
+      as a value that composes it rather than exported in its own right. A handle the method's
+      source file does not export is reported (UNREALIZED_EXPORT_HANDLE).
     optional: true
 methods:
   - name: sourceFile
@@ -135,4 +142,4 @@ methods:
     symbol: resolveNarrativeLabels
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T16:59:08.774Z'
-updatedAt: '2026-09-24T22:20:54.297Z'
+updatedAt: '2026-10-03T17:03:23.752Z'

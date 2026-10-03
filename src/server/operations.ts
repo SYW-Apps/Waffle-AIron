@@ -9,7 +9,7 @@ import {
   getExposurePolicyRecord,
   setExposurePolicyRecord,
 } from './policy.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import * as packs from './packs.js';
 import { listProjectRelations } from './relations.js';
 import { getPublicSurfaceSnapshot } from './surfaces.js';
@@ -477,7 +477,7 @@ function principalSubject(principal: Principal): PrincipalSubject {
 /** Append a redacted audit event best-effort — never fails the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[operations] audit append failed for "${event.action}": ` +

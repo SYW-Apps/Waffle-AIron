@@ -8,7 +8,7 @@ import {
   cancelApprovalRequest,
   expirePendingApprovals,
 } from './approvals.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { executeApprovedLock, gateIdentity, hostedApprover } from './admin.js';
 import type { ApproverIdentity } from '../models/lock.js';
@@ -22,7 +22,6 @@ import type {
   ApprovalRequest,
   ApprovalDecision,
   AuditEvent,
-  AuditRetentionPolicy,
   GovernedProjectCreation,
   HostConfig,
   Principal,
@@ -128,12 +127,6 @@ function isOriginalRequester(principal: Principal, req: ApprovalRequest): boolea
   return subjectMatch || tokenMatch;
 }
 
-/** Resolve the active audit retention policy. Host-config plumbing is a later
- *  phase; until then the secure default (mirrors identity.ts). */
-function resolveAuditPolicy(_cfg: HostConfig): AuditRetentionPolicy {
-  return DEFAULT_AUDIT_POLICY;
-}
-
 function buildAuditEvent(
   principal: Principal,
   action: string,
@@ -158,7 +151,7 @@ function buildAuditEvent(
  *  diagnostic and swallowed so an append can never fail the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     // Server diagnostic (audit appends are best-effort by invariant).
     console.error(

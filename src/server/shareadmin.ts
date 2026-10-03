@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { authenticateSession } from './auth.js';
 import { authorize } from './authorization.js';
 import { hashToken } from './credentials.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { captureSnapshot, putSnapshot } from './sharesnapshots.js';
 import { createLink, updateLink, removeLink, getLink, listProjectLinks } from './sharelinks.js';
@@ -58,7 +58,7 @@ function tryAudit(cfg: HostConfig, principal: Principal, action: string, target:
   };
   if (principal.tokenId) event.tokenId = principal.tokenId;
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(`[share] audit append failed for "${action}": ` + (err instanceof Error ? err.message : String(err)));
   }

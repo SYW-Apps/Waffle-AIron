@@ -14,7 +14,7 @@ methods:
       registers nothing. Under --yes, or with no terminal to ask on, it applies and says so without
       the report. `--global` copies into the machine-wide folder and selects nothing for any
       project, so it shows no report.
-    signature: 'addPack(source: string, global: boolean, yes?: boolean): void'
+    signature: 'addPack(source: string, global?: boolean, yes?: boolean): void'
     returns: void
     params:
       - name: source
@@ -38,7 +38,7 @@ methods:
       declining deregisters and deletes nothing. Under --yes, or with no terminal, it removes and
       says so without the report. `--global` removes a machine-wide file and selects nothing for any
       project, so it shows no report.
-    signature: 'removePack(name: string, global: boolean, yes?: boolean): void'
+    signature: 'removePack(name: string, global?: boolean, yes?: boolean): void'
     returns: void
     params:
       - name: name
@@ -214,4 +214,4 @@ methods:
         description: A pack name, or name@version.
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-10-03T16:46:31.288Z'
+updatedAt: '2026-10-03T17:10:41.977Z'

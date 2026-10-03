@@ -40,6 +40,7 @@ export {
   deregisterPackRef,
   removePackSelection,
   setProjectType,
+  describeProject,
   recordProfileSelection,
   // Extension packs, for the hosted pack store and the policy plane.
   globalPacksDir,

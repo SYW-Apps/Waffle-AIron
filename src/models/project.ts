@@ -726,17 +726,6 @@ export const ProjectConfigSchema = z.object({
    */
   globalTemplatesDir: z.string().optional(),
 
-  /**
-   * Tracks whether the wairon usage guide has been injected into each target's
-   * AI tool configuration files so the tool knows how to use wairon.
-   */
-  aiGuide: z.object({
-    claudeGlobal: z.boolean().default(false),
-    claudeLocal: z.boolean().default(false),
-    geminiGlobal: z.boolean().default(false),
-    geminiLocal: z.boolean().default(false),
-  }).optional(),
-
   /** Created by wairon at init time */
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

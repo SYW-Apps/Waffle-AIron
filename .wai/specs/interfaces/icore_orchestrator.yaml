@@ -1118,6 +1118,20 @@ methods:
         type: boolean
         description: Answer what would change and write nothing
         optional: true
+  - name: describeProject
+    description: >-
+      Set the project's human-readable `name` and, when given, its `description`, through the
+      project config Repository.
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T16:46:21.425Z'
+updatedAt: '2026-10-03T17:09:59.922Z'

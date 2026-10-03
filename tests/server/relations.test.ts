@@ -25,7 +25,6 @@ function mkRel(over: Partial<ProjectRelationRecord> = {}): ProjectRelationRecord
     sourceProjectId: 'proj-a',
     targetProjectId: 'proj-b',
     kind: 'consumes',
-    sourceAdapter: 'billing_client_adapter',
     targetPublicInterface: {
       projectId: 'proj-b',
       systemInterfaceId: 'iinvoice_api',

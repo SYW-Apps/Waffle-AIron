@@ -34,8 +34,8 @@ fields:
     optional: false
   - name: status
     type: string
-    description: draft | design | complete
-    optional: true
+    description: draft | design | complete (an omitted status is parsed as complete)
+    optional: false
   - name: lint
     type: LintConfig
     description: >-
@@ -65,4 +65,4 @@ methods:
     symbol: interfaceGenericParameters
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-23T18:35:50.360Z'
+updatedAt: '2026-10-03T17:03:18.215Z'

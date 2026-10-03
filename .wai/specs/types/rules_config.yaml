@@ -25,7 +25,7 @@ fields:
       Per-code severity overrides for the SDD conformance rules: error, warning, notice or off. A
       code set to notice is still reported but never fails the gate; one set to off is not reported
       at all.
-    optional: true
+    optional: false
   - name: naming
     type: NamingRuleConfig
     description: Naming convention enforcement rules applied by the linter
@@ -44,7 +44,23 @@ fields:
       Where this project's own source lives and what of it no spec claims yet — the opt-in domain of
       the unclaimed-source check
     optional: true
+  - name: generateComponentImplementers
+    type: boolean
+    description: 'Whether generation derives an implementer agent per component (default: false)'
+    optional: false
+  - name: materializeAgentFiles
+    type: boolean
+    description: >-
+      Whether generation writes agent files to disk; when false the live briefs are the only view of
+      the topology (default: false)
+    optional: false
+  - name: designDepth
+    type: string
+    description: >-
+      How deep the design must go before it is complete: components | interfaces | implementations |
+      narratives. A subsystem may override it.
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-26T14:48:50.814Z'
+updatedAt: '2026-10-03T17:03:37.832Z'

@@ -17,7 +17,7 @@ fields:
     optional: false
   - name: locked
     type: boolean
-    description: True when the project currently has a lock record (a current lock exists).
+    description: 'True when a lock is in force: the lock record exists AND matches the current tree.'
     optional: false
   - name: profileSource
     type: string
@@ -65,7 +65,13 @@ fields:
       profile (and the pack registered to contribute it, when one was) measured before the write. An
       unattended policy write, so this is how it states what it changed.
     optional: true
+  - name: lockStale
+    type: boolean
+    description: >-
+      Present (and true) only when a lock record exists but no longer matches the tree, so a UI
+      prompts for a re-lock instead of showing the project as never locked.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-23T11:23:30.795Z'
-updatedAt: '2026-09-29T16:11:05.937Z'
+updatedAt: '2026-10-03T17:04:38.753Z'

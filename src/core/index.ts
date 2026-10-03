@@ -406,6 +406,7 @@ export {
   deregisterPackRef,
   markSelectionsBundled,
   setProjectType,
+  describeProject,
   recordProfileSelection,
   setExecutionTier,
   // project_config_portal setId / declareExternal: the deliberate identity and

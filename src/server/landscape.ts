@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { resolveProjectRoot, listProjectRecords, listFamilyRecords } from './projects.js';
 import * as hostCore from './adapters/core.js';
 import {
@@ -39,7 +39,6 @@ import { safeFilenamePart } from '../utils/filenames.js';
 import { openApiIndexDocument } from './openapiindex.js';
 import type {
   AuditEvent,
-  AuditRetentionPolicy,
   HostConfig,
   HostedProjectRecord,
   LandscapeEdge,
@@ -206,10 +205,6 @@ function principalSubject(principal: Principal): PrincipalSubject {
   );
 }
 
-function resolveAuditPolicy(_cfg: HostConfig): AuditRetentionPolicy {
-  return DEFAULT_AUDIT_POLICY;
-}
-
 function buildAuditEvent(
   principal: Principal,
   action: string,
@@ -235,7 +230,7 @@ function buildAuditEvent(
  *  diagnostic and swallowed so an append can never fail the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[landscape] audit append failed for "${event.action}": ` +
@@ -587,7 +582,9 @@ export function refreshPublicSurface(
  * Authenticate the caller, require a landscape:manage or instance-admin grant,
  * validate the relation's targetPublicInterface against the target project's
  * stored public-surface snapshot (no snapshot → reject with refresh guidance;
- * unknown interface → reject), create or update the relation, and append a
+ * unknown interface → reject), create or update the relation — the server
+ * records createdBy (the caller) and createdAt (now) on create and keeps both on
+ * update — and append a
  * redacted relation.upsert audit event (info, best-effort).
  */
 export function upsertRelation(
@@ -632,7 +629,23 @@ export function upsertRelation(
     );
   }
 
-  const stored = upsertProjectRelation(cfg.dataDir, relation);
+  // The server records who created the relation and when: a new relation is
+  // stamped from the caller and the clock, an update keeps the stored creator.
+  const existing = relation.id
+    ? listProjectRelations(cfg.dataDir).find((r) => r.id === relation.id)
+    : undefined;
+  const record: ProjectRelationRecord = {
+    id: relation.id,
+    sourceProjectId: relation.sourceProjectId,
+    targetProjectId: relation.targetProjectId,
+    kind: relation.kind,
+    targetPublicInterface: relation.targetPublicInterface,
+    reason: relation.reason,
+    status: relation.status,
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    createdBy: existing?.createdBy ?? principalSubject(principal),
+  };
+  const stored = upsertProjectRelation(cfg.dataDir, record);
   tryAppendAudit(
     cfg,
     buildAuditEvent(principal, 'relation.upsert', 'info', 'landscape', {

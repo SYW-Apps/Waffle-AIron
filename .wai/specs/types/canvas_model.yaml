@@ -4,10 +4,11 @@ name: CanvasModel
 description: >-
   The whole tree as the interactive canvas needs it: the system with its vision, target language,
   databases and view preferences, every subsystem and component with its prose, and the edges
-  between them. Wider than the export model on purpose — the canvas is explorable, so it carries
-  what a reader clicks into, while a static export carries only what it can draw. It is also the
-  model the live web canvas consumes, which is why building it is a separate method from rendering
-  it.
+  between them; the type nodes and their references for the types/ERD view; and the validator's
+  findings for the issue overlay. Wider than the export model on purpose — the canvas is explorable,
+  so it carries what a reader clicks into, while a static export carries only what it can draw. It
+  is also the model the live web canvas consumes, which is why building it is a separate method from
+  rendering it.
 fields:
   - name: system
     type: object
@@ -67,7 +68,29 @@ fields:
       green for something no one compared. A snapshot or exported page carries the relations as they
       were when it was built, each with its comparedAt.
     optional: true
+  - name: types
+    type: object[]
+    description: >-
+      The type nodes of the types/ERD view: each type's id, name, kind, fields, methods, the
+      interface methods that use it, and its database binding.
+    optional: false
+  - name: typeEdges
+    type: object[]
+    description: >-
+      Type-to-type references derived from field types (the ERD edges): {from, to, field, card: 1 |
+      0..1 | *}.
+    optional: false
+  - name: dataEdges
+    type: object[]
+    description: >-
+      Data-coupling edges: a component that uses a type another subsystem owns, pointed at that
+      subsystem's published portal ({from, to}).
+    optional: false
+  - name: issues
+    type: object[]
+    description: 'The validator''s findings for the issue overlay: {severity, code, message, specId?}.'
+    optional: false
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-10-03T12:29:09.854Z'
+updatedAt: '2026-10-03T17:05:17.244Z'

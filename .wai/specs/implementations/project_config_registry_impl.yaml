@@ -299,7 +299,16 @@ methods:
     calls:
       - project_config_store.read
       - project_config_store.write
+  - name: describeProject
+    narrative: []
+    intent: >-
+      Reads the configuration, sets `name` and, when one is given, `description`, and writes it back
+      through the store, leaving every other field and key untouched. Refuses when the project has
+      no configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-10-02T20:50:26.474Z'
+updatedAt: '2026-10-03T17:10:06.201Z'

@@ -19,7 +19,7 @@ import { mintUserToken, allow } from './helpers.js';
 import {
   appendAuditEvent,
   queryAuditEvents as auditQuery,
-  DEFAULT_AUDIT_POLICY,
+  effectiveAuditPolicy,
 } from '../../src/server/audit.js';
 import { routeAdmin } from '../../src/server/http.js';
 import type {
@@ -386,9 +386,9 @@ describe('identity SSO orchestrator (sdd_host)', () => {
   // ── countAuditEvents ───────────────────────────────────────────────────────
 
   it('countAuditEvents is audit-read gated and returns filter-consistent counts', () => {
-    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.a' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.a' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.b' }), DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.a' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.a' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.b' }), effectiveAuditPolicy());
 
     const reader = tokenWith('project:admin', 'instance');
 
@@ -509,9 +509,9 @@ describe('identity SSO portal (sdd_host http)', () => {
   });
 
   it('GET /identity/audit/count responds via routeAdmin with a filter-consistent count', async () => {
-    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.a' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.a' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.b' }), DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.a' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.a' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.b' }), effectiveAuditPolicy());
 
     const all = await api('GET', '/identity/audit/count', { cred: MASTER });
     expect(all.status).toBe(200);

@@ -21,13 +21,7 @@ fields:
       Optional scope: apply this block only when the bound project's governing profile/projectType
       is one of these. Absent = applies to every project the pack governs.
     optional: true
-  - name: pack
-    type: string
-    description: >-
-      Provenance: the name of the pack contributing this block, rendered into the attributed
-      heading.
-    optional: true
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-29T10:47:52.530Z'
-updatedAt: '2026-09-19T11:07:12.375Z'
+updatedAt: '2026-10-03T17:04:23.351Z'

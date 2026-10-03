@@ -64,7 +64,9 @@ methods:
       (the unit graph gates only once it exists). Then validate targetPublicInterface against the
       target project's stored public-surface snapshot (reject an unknown interface ref; when the
       target has no snapshot reject with guidance to run refreshPublicSurface first), create or
-      update the relation, and append a redacted audit event (relation.upsert, info).
+      update the relation, and append a redacted audit event (relation.upsert, info). The server
+      records who created the relation and when: createdBy is the caller's subject and createdAt the
+      current time on create, and an update keeps the stored creator and creation time.
     signature: 'upsertRelation(credential: string, relation: ProjectRelationRecord): ProjectRelationRecord'
     returns: ProjectRelationRecord
     params:
@@ -119,4 +121,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-10-03T16:46:46.586Z'
+updatedAt: '2026-10-03T17:08:32.692Z'

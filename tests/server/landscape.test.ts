@@ -77,7 +77,6 @@ function relationRec(over: Partial<ProjectRelationRecord> = {}): ProjectRelation
     sourceProjectId: 'src',
     targetProjectId: 'dst',
     kind: 'consumes',
-    sourceAdapter: 'src_client_adapter',
     targetPublicInterface: { projectId: 'dst', systemInterfaceId: 'dst-api', reason: 'needs it' },
     reason: 'declared dependency',
     status: 'active',
@@ -309,6 +308,38 @@ describe('landscape orchestrator (sdd_host)', () => {
     removeRelation(cfg, MASTER, stored.id);
     expect(listRelations(cfg, MASTER, 'h-src')).toHaveLength(0);
     expect(queryAuditEvents(dataDir, { action: 'relation.remove' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('upsertRelation: the server records createdBy and createdAt, and an update keeps the original creator', () => {
+    const dst = project('c-dst');
+    project('c-src');
+    seedSurface(dst.rootPath, [{ id: 'dst-api', name: 'DST', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 'c-dst');
+    const asked = {
+      sourceProjectId: 'c-src',
+      targetProjectId: 'c-dst',
+      targetPublicInterface: { projectId: 'c-dst', systemInterfaceId: 'dst-api', reason: 'r' },
+    };
+
+    const before = Date.now();
+    const created = upsertRelation(cfg, MASTER, relationRec({
+      ...asked,
+      createdAt: '1999-01-01T00:00:00.000Z',
+      createdBy: { userId: 'someone-else', kind: 'human', issuer: 'local' },
+    }));
+    expect(created.createdBy.userId).not.toBe('someone-else');
+    expect(Date.parse(created.createdAt)).toBeGreaterThanOrEqual(before - 1000);
+
+    const updated = upsertRelation(cfg, MASTER, relationRec({
+      ...asked,
+      id: created.id,
+      reason: 'changed',
+      createdAt: '2000-01-01T00:00:00.000Z',
+      createdBy: { userId: 'another', kind: 'human', issuer: 'local' },
+    }));
+    expect(updated.reason).toBe('changed');
+    expect(updated.createdBy).toEqual(created.createdBy);
+    expect(updated.createdAt).toBe(created.createdAt);
   });
 
   it('listRelations / removeRelation: gated by landscape grants', () => {
@@ -691,9 +722,9 @@ describe('landscape diagram specialist (pure buildGraph)', () => {
       [{ projectId: 'p2', stateId: 's', systemName: 'P2', interfaces: [{ id: 'p2-api', name: 'P2 API', type: 'REST', audience: 'public', methods: [], details: '' }], exportedAt: '' }],
       [
         // Relation to a KNOWN interface node.
-        { id: 'r1', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'consumes', sourceAdapter: 'a', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'p2-api', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
+        { id: 'r1', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'consumes', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'p2-api', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
         // Relation whose target interface node is ABSENT → falls back to the project node.
-        { id: 'r2', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'depends_on', sourceAdapter: 'a', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'missing', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
+        { id: 'r2', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'depends_on', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'missing', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
       ],
     );
 
@@ -808,7 +839,6 @@ describe('landscape portal (sdd_host http)', () => {
         sourceProjectId: 'src-proj',
         targetProjectId: 'dst-proj',
         kind: 'consumes',
-        sourceAdapter: 'src_client_adapter',
         targetPublicInterface: { projectId: 'dst-proj', systemInterfaceId: 'dst-api', reason: 'r' },
         reason: 'r',
         status: 'active',

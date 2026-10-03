@@ -5,7 +5,7 @@ import { execFileSync } from 'child_process';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { authorize, visibleScopes, actionableUnitIds, isInstanceAdmin } from './authorization.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import {
   getOrganizationUnit,
   listOrganizationUnits,
@@ -306,7 +306,7 @@ function principalSubject(principal: Principal): PrincipalSubject {
 
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[git-backing] audit append failed for "${event.action}": ` +

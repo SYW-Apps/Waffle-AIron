@@ -28,8 +28,8 @@ fields:
     optional: true
   - name: ownedPaths
     type: string[]
-    description: Glob patterns the domain's agents are responsible for.
-    optional: true
+    description: Glob patterns the domain's agents are responsible for (an empty list when none are declared).
+    optional: false
   - name: path
     type: string
     description: The domain's directory, relative to the project root.
@@ -37,4 +37,4 @@ fields:
 methods: []
 sourcePath: src/models/domain.ts
 createdAt: '2026-09-20T20:42:00.586Z'
-updatedAt: '2026-09-20T20:42:00.595Z'
+updatedAt: '2026-10-03T17:03:26.196Z'

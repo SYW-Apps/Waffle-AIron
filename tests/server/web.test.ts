@@ -607,7 +607,6 @@ describe('web graph orchestrator (sdd_host)', () => {
       sourceProjectId: 'proj-a',
       targetProjectId: 'proj-b',
       kind: 'consumes',
-      sourceAdapter: 'a-client',
       targetPublicInterface: { projectId: 'proj-b', systemInterfaceId: 'b-api', reason: 'r' },
       reason: 'r',
       status: 'active',

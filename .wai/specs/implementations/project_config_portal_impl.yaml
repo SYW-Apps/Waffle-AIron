@@ -154,6 +154,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: removeMember
+  - name: describeProject
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: describeProject
 status: complete
 createdAt: '2026-09-25T17:33:08.848Z'
-updatedAt: '2026-09-30T20:23:08.562Z'
+updatedAt: '2026-10-03T17:10:10.000Z'

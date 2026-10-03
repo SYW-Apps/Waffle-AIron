@@ -28,8 +28,8 @@ fields:
     description: Merged pack-registered language tables, keyed by language.
     optional: false
   - name: skills
-    type: PackSkill[]
-    description: Merged pack-provided skills across all loaded packs.
+    type: LoadedPackSkill[]
+    description: Merged pack-provided skills across all loaded packs, each tagged with the pack that ships it.
     optional: false
   - name: patterns
     type: PatternDef[]
@@ -52,7 +52,7 @@ fields:
       its namespaced finding code (<PACK>_<CODE>).
     optional: false
   - name: instructions
-    type: PackInstructionBlock[]
+    type: LoadedInstructionBlock[]
     description: >-
       Merged pack-contributed instruction blocks across all loaded packs, each tagged with its pack
       provenance, preserved in pack LOAD ORDER (load order is append order in the composed
@@ -62,12 +62,13 @@ fields:
     type: PackSelectionFailure[]
     description: >-
       Declared by-name SELECTIONS that could not be resolved, each carrying the code the conformance
-      gate reports it under (absent / wrong version / wrong content). Kept separate from `errors` —
-      which covers packs that failed to parse — so the gate can report WHY a project is not getting
-      the doctrine it declared instead of one undifferentiated load error. Every code is error
-      severity: a gate running without declared doctrine must never look clean.
+      gate reports it under (absent / wrong version / wrong content / store drift). Kept separate
+      from `errors` — which covers packs that failed to parse — so the gate can report WHY a project
+      is not getting the doctrine it declared instead of one undifferentiated load error. Each
+      carries its own severity: every code is an error except PACK_STORE_DRIFT, a warning under
+      which the pack still applies.
     optional: false
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:57:07.906Z'
-updatedAt: '2026-09-19T11:07:10.232Z'
+updatedAt: '2026-10-03T17:04:25.893Z'

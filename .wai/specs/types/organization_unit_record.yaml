@@ -40,7 +40,7 @@ fields:
   - name: createdBy
     type: PrincipalSubject
     description: Identity that created the unit.
-    optional: true
+    optional: false
   - name: visibility
     type: string
     description: >-
@@ -68,4 +68,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:11.067Z'
-updatedAt: '2026-09-19T11:07:11.923Z'
+updatedAt: '2026-10-03T17:03:38.684Z'

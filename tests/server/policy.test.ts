@@ -290,6 +290,32 @@ describe('project policy orchestrator (sdd_host)', () => {
     expect(readRawConfig(rec.rootPath).profileSelection.selectedBy.userId).toBe('u-cr');
   });
 
+  it('initializeProjectWithProfile: writes the display name and description into the new project.yaml', () => {
+    const unit = seedUnit(dataDir, 'named-unit');
+    allow(dataDir, 'u-nm', 'project:create', 'instance', undefined);
+    const creator = mintUserToken(dataDir, { id: 'nm', userId: 'u-nm' });
+
+    const { record: named } = initializeProjectWithProfile(cfg, creator, {
+      id: 'named-proj', ownerUnitId: unit.id, displayName: 'Billing Service', description: 'Invoices and payments',
+    });
+    const raw = readRawConfig(named.rootPath);
+    expect(raw.name).toBe('Billing Service');
+    expect(raw.description).toBe('Invoices and payments');
+    expect(raw.id).toBe('named-proj');
+
+    // Only a description: the name stays the project id.
+    const { record: described } = initializeProjectWithProfile(cfg, creator, {
+      id: 'described-proj', ownerUnitId: unit.id, description: 'Just a description',
+    });
+    expect(readRawConfig(described.rootPath).name).toBe('described-proj');
+    expect(readRawConfig(described.rootPath).description).toBe('Just a description');
+
+    // Neither: the bootstrap name, no description.
+    const { record: plain } = initializeProjectWithProfile(cfg, creator, { id: 'plain-proj', ownerUnitId: unit.id });
+    expect(readRawConfig(plain.rootPath).name).toBe('plain-proj');
+    expect(readRawConfig(plain.rootPath).description).toBeUndefined();
+  });
+
   // ── project config (projectType + lock) ──────────────────────────────────
 
   it('getProjectConfig: a fresh project defaults to backend, reports unlocked, and reports the profile genuinely in force', () => {

@@ -315,6 +315,20 @@ methods:
       - name: partOf
         type: PartOf | null
         description: The parent, or null
+  - name: describeProject
+    description: >-
+      Set the project's human-readable `name` and, when given, its `description` (forwarded to the
+      registry).
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-10-02T20:28:13.958Z'
+updatedAt: '2026-10-03T17:09:58.357Z'

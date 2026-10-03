@@ -2682,10 +2682,9 @@ function advertiseHostedTools(server: McpServer, options: McpServerOptions): voi
       description: 'Hosted project lifecycle (execute-primary): initialize a new hosted project into its REQUIRED owner organization unit (with an optional profile selection). Executes directly when your resolved permission is yes; when it is approval, a pending approval request is created instead.',
       inputSchema: {
         id: z.string().describe('Requested project id'),
-        displayName: z.string().optional(),
-        description: z.string().optional(),
+        displayName: z.string().optional().describe("Human-readable project name, written as `name` into the new project's .wai/project.yaml"),
+        description: z.string().optional().describe("Short project description, written into the new project's .wai/project.yaml"),
         ownerUnitId: z.string().describe('REQUIRED organization unit that owns the new project (every project is placed at creation)'),
-        environment: z.string().optional(),
       },
     }, hostedStub);
     reg<{ requestId: string }>(server, 'sdd_host_get_approval_status', {

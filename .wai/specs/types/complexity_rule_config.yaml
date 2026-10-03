@@ -45,7 +45,13 @@ fields:
       The band above which a narrative is an error rather than a warning. No default: unset means
       the cognitive band only ever warns.
     optional: true
+  - name: maxUnnarratedComplexity
+    type: i32
+    description: >-
+      The cyclomatic complexity above which a method specified below full detail is reported
+      (UNNARRATED_COMPLEXITY); 8 when unset.
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-07-06T20:47:08.558Z'
-updatedAt: '2026-09-19T11:07:06.255Z'
+updatedAt: '2026-10-03T17:05:02.177Z'
