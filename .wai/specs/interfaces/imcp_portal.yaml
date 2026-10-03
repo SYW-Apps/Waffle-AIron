@@ -70,14 +70,19 @@ methods:
       address: mcp tools/call sdd_add_component
   - name: sdd_define_interface
     description: >-
-      Tool: define an L3 interface contract for a component. The input may state the spec's
-      lifecycle status, so a contract can be authored straight at design or complete instead of
-      being born draft and needing a follow-up edit nobody remembers. An unstated status means draft
-      for a new spec and the stored status for a re-authoring, and a stated status that would lower
-      the stored one is refused by name — reopening a frozen spec is an update, not a restatement.
-      The answer carries the write receipt as structured content beside the sentence, so a caller
-      learns the status written and whether a spec already held that id without parsing English; the
-      sentence itself is unchanged.
+      Tool: define an L3 interface contract for a component. Each method states its signature one of
+      three ways: structured params with returns (the signature text is then DERIVED and written by
+      the server — a text the caller passes is ignored, and a notice names one that differed), a
+      signatureFrom naming its source — a signature type, or `component.method` along a
+      dependsOn/owns edge — with neither params nor returns (both together are refused,
+      SIGNATURE_SOURCE_RESTATED), or, for a method without params, a prose signature with returns.
+      The input may state the spec's lifecycle status, so a contract can be authored straight at
+      design or complete instead of being born draft and needing a follow-up edit nobody remembers.
+      An unstated status means draft for a new spec and the stored status for a re-authoring, and a
+      stated status that would lower the stored one is refused by name — reopening a frozen spec is
+      an update, not a restatement. The answer carries the write receipt as structured content
+      beside the sentence, so a caller learns the status written and whether a spec already held
+      that id without parsing English; the sentence itself is unchanged.
     signature: 'sdd_define_interface(spec: InterfaceSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -275,12 +280,16 @@ methods:
       address: mcp tools/call sdd_rename_method
   - name: sdd_update_spec
     description: >-
-      Tool: patch an existing spec with a granular delta. The delta's arrays UPSERT by element
-      identity rather than replace, so a delta naming one element leaves the others intact, and it
-      is deliberately open below its top level — a key that is not a field at its depth is named
-      back under NO EFFECT instead of being silently dropped. The answer carries the change report
-      as structured content beside the rendered sentence, from the one report, so the prose can
-      never disagree with the data.
+      Tool: patch an existing spec with a granular delta. The delta merges onto the spec as STORED —
+      a sourced method carries only its signatureFrom — and a method's signature text is derived
+      from its params on the write, never taken from the delta. Adopting a source on a method that
+      states params means unsetting its params and returns in the same delta, or the write is
+      refused (SIGNATURE_SOURCE_RESTATED). The delta's arrays UPSERT by element identity rather than
+      replace, so a delta naming one element leaves the others intact, and it is deliberately open
+      below its top level — a key that is not a field at its depth is named back under NO EFFECT
+      instead of being silently dropped. The answer carries the change report as structured content
+      beside the rendered sentence, from the one report, so the prose can never disagree with the
+      data.
     signature: >-
       sdd_update_spec(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
       SpecChangeReport
@@ -350,13 +359,17 @@ methods:
   - name: sdd_get_spec
     description: >-
       Tool: read the parsed contents of one stored spec, without filesystem path searching. A
+      contract's methods come back in their STORED form — a method that takes its signature from a
+      source carries the source, not its params — so the answer can be re-authored from as it is. A
       methods filter reads only the named methods of a contract, an implementation or a type — a
       forty-method spec fetched whole to look at one of them is the read side of the same waste a
       restatement is on the write side — and the answer then carries a partial-result marker naming
       what was left out, which must never be re-authored from. For a variant-tagged component the
-      answer also carries derived, read-only variant guidance. The structured content keeps both
-      derived markers SEPARATE from the stored spec, so nothing derived can be written back by
-      accident; the text block folds them in as it always has.
+      answer also carries derived, read-only variant guidance, and for a contract with sourced
+      methods the derived, read-only resolved signatures (each sourced method's resolved params,
+      returns and text, and the source they came from). The structured content keeps every derived
+      marker SEPARATE from the stored spec, so nothing derived can be written back by accident; the
+      text block folds them in as it always has.
     signature: 'sdd_get_spec(kind: string, id: string, methods?: string[]): SpecReadResult'
     returns: SpecReadResult
     params:
@@ -377,13 +390,16 @@ methods:
       address: mcp tools/call sdd_get_spec
   - name: sdd_add_type
     description: >-
-      Tool: define an entity or value-object — the data the components operate on. Entities are
-      owned by a subsystem; a shared value object names none and is system-level. Fields are data;
-      methods are PURE intrinsic behaviour only, because anything needing a collaborator belongs on
-      a component that takes the entity as an argument. A type may also CLAIM code: a sourcePath
-      names the file holding its declaration and a symbol binds the code-level name, and the file
-      must then resolve with the declaration anchored in it. The answer carries the write receipt as
-      structured content beside the sentence.
+      Tool: define a type — an entity or value-object, the data the components operate on, or a
+      signature, a named function type. Entities are owned by a subsystem; a shared value object or
+      signature names none and is system-level. Fields are data; methods are PURE intrinsic
+      behaviour only, because anything needing a collaborator belongs on a component that takes the
+      entity as an argument, and a type method may carry structured params, which then derive its
+      signature text as a contract method's do. A signature carries params and returns and nothing
+      else (SIGNATURE_TYPE_MEMBERS); a contract method takes it by naming it as its signatureFrom. A
+      type may also CLAIM code: a sourcePath names the file holding its declaration and a symbol
+      binds the code-level name, and the file must then resolve with the declaration anchored in it.
+      The answer carries the write receipt as structured content beside the sentence.
     signature: 'sdd_add_type(spec: TypeSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -791,4 +807,4 @@ methods:
       address: mcp tools/call sdd_demote_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:50:08.735Z'
+updatedAt: '2026-10-03T19:38:05.747Z'

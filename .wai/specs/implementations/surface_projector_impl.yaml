@@ -56,7 +56,9 @@ methods:
         description: >-
           List each type entry as an exported type under its public name, and compute the transitive
           type closure of every exported signature and every exported type, gathered by qualified id
-          so two subsystems' types of one name both arrive
+          so two subsystems' types of one name both arrive — following a data type's fields and a
+          signature type's params and returns, and carrying a signature type into the closure with
+          its params and returns
         type: local
       - stepNumber: 10
         description: >-
@@ -81,4 +83,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-09-28T17:17:01.938Z'
+updatedAt: '2026-10-03T19:43:19.005Z'

@@ -1,0 +1,24 @@
+kind: value-object
+id: signature_resolution
+name: SignatureResolution
+description: >-
+  The scan's specs with every signature resolved, and the facts resolving them produced: each
+  sourced contract method carries its source's params and returns, each method and type method with
+  params carries its derived text, and each signature type its derived text.
+subsystem: sdd_core
+fields:
+  - name: interfaces
+    type: InterfaceSpec[]
+    description: The interfaces, sourced methods resolved and every params-bearing method's signature derived
+    optional: false
+  - name: types
+    type: TypeSpec[]
+    description: The types, every params-bearing type method's signature derived
+    optional: false
+  - name: facts
+    type: SignatureFacts
+    description: What the resolution found
+    optional: false
+methods: []
+createdAt: '2026-10-03T19:31:30.104Z'
+updatedAt: '2026-10-03T19:34:01.749Z'

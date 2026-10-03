@@ -202,6 +202,13 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: signatureFacts
+    description: >-
+      Forward to the core portal: what the current scan's signature resolution recorded, the sources
+      it met and the stored texts their params contradict.
+    signature: 'signatureFacts(): SignatureFacts'
+    returns: SignatureFacts
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:56:50.441Z'
+updatedAt: '2026-10-03T19:33:09.026Z'

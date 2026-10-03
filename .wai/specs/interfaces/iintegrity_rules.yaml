@@ -104,9 +104,11 @@ methods:
         summary: Reference to a type that is not defined anywhere
   - name: signatureTypeReferences
     description: >-
-      Rule signature-type-references. Every type identifier an interface method signature names must
-      resolve to a builtin, a generic parameter in scope on the interface or the method, or a
-      defined entity/value-object type.
+      Rule signature-type-references. Every type identifier a method signature names must resolve to
+      a builtin, a generic parameter in scope on the interface or the method, or a defined type: an
+      interface method's params and returns, a type method's params when it has them, and a
+      signature type's params and returns. A method that takes its signature from a source is
+      skipped — its params are its source's, judged once where the source declares them.
     signature: 'signatureTypeReferences(ctx: RuleContext): void'
     returns: void
     params:
@@ -433,6 +435,83 @@ methods:
         summary: >-
           A part's files could not be read (absent directory, unpinned or unfetchable git commit):
           the project's own subsystems are missing.
+  - name: signatureSources
+    description: >-
+      Rule signature-sources. Judges every signatureFrom the loader met, from ctx.signatureFacts
+      (the loaded specs are already resolved). The value is read both ways, as a contract method and
+      as a signature type: neither resolving — or only a type that is an entity or value-object — is
+      unresolved; both resolving is ambiguous, and the finding names both candidates and asks the
+      author to qualify the reference; a source that itself names a signatureFrom is a chain, which
+      is never followed (when that source's own source is a signature type, the finding names it as
+      the one to take directly); a method source whose component the method's component does not
+      name in dependsOn or owns is off the design's edges; a stored method that names a source and
+      also states params or returns that differ from the source's restates it, and the source's are
+      in force. Every finding sits at the method.
+    signature: 'signatureSources(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SIGNATURE_SOURCE_UNRESOLVED
+        severity: error
+        summary: A method's signatureFrom names no contract method and no signature type
+      - code: SIGNATURE_SOURCE_CHAINED
+        severity: error
+        summary: A method's signature source takes its own signature from a source; sources do not chain
+      - code: SIGNATURE_SOURCE_OFF_EDGE
+        severity: error
+        summary: >-
+          A method takes its signature from a method of a component its own component neither
+          dependsOn nor owns
+      - code: SIGNATURE_SOURCE_RESTATED
+        severity: error
+        summary: >-
+          A method names a signature source and also states params or returns that differ from the
+          source's
+      - code: SIGNATURE_SOURCE_AMBIGUOUS
+        severity: error
+        summary: >-
+          A method's signatureFrom resolves both as a contract method and as a signature type;
+          qualify it
+  - name: signatureText
+    description: >-
+      Rule signature-text. A stored signature text that differs from the text its method's params
+      derive is stale: every reader is shown the derived text, but the file says something else, and
+      a file read on its own (a diff, a review, a lock approval) is misled. Reported per method,
+      from ctx.signatureFacts, for contract and type methods alike; `wairon doctor --fix`
+      regenerates the stored text, and any save of the spec writes the derived text too.
+    signature: 'signatureText(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SIGNATURE_TEXT_STALE
+        severity: warning
+        summary: >-
+          A stored signature text differs from the text its params derive; doctor --fix regenerates
+          it
+  - name: signatureTypes
+    description: >-
+      Rule signature-types. A type of kind signature is a named function type and carries params and
+      one returns, nothing else: fields, methods, invariants, componentClass, database, table or
+      linkedEntity on it — or a returns missing from it — are reported; so are params or returns on
+      an entity or a value-object, where they mean nothing.
+    signature: 'signatureTypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SIGNATURE_TYPE_MEMBERS
+        severity: error
+        summary: >-
+          A signature type carries a member other than params and returns, or lacks returns; or a
+          data type carries params or returns
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-02T20:48:26.096Z'
+updatedAt: '2026-10-03T19:43:45.518Z'

@@ -1110,6 +1110,135 @@ methods:
     detail: full
     symbol: check
     exportedVia: memberDeclarationsRule
-status: complete
+  - name: signatureText
+    sourcePath: src/core/rules/integrity/signature-text.ts
+    narrative:
+      - stepNumber: 1
+        description: For each stale text the loader recorded
+        type: loop
+        loopKind: forEach
+        over: ctx.signatureFacts.staleTexts, in scope
+        endStep: 2
+      - stepNumber: 2
+        description: >-
+          Report SIGNATURE_TEXT_STALE at the method on its interface or type, quoting the stored
+          text and the derived one, and naming doctor --fix as the repair
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureTextRule
+  - name: signatureTypes
+    sourcePath: src/core/rules/integrity/signature-types.ts
+    narrative:
+      - stepNumber: 1
+        description: For each loaded type
+        type: loop
+        loopKind: forEach
+        over: ctx.types, in scope
+        endStep: 4
+      - stepNumber: 2
+        description: Is it a signature?
+        type: branch
+        condition: the type's kind is signature
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report SIGNATURE_TYPE_MEMBERS naming every member a signature cannot carry — fields,
+          methods, invariants, componentClass, database, table, linkedEntity — and a missing returns
+        type: local
+      - stepNumber: 4
+        description: >-
+          On an entity or value-object, report SIGNATURE_TYPE_MEMBERS when it carries params or
+          returns
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureTypesRule
+  - name: signatureSources
+    sourcePath: src/core/rules/integrity/signature-sources.ts
+    narrative:
+      - stepNumber: 1
+        description: For each source fact the loader recorded
+        type: loop
+        loopKind: forEach
+        over: ctx.signatureFacts.sources, in scope
+        endStep: 13
+      - stepNumber: 2
+        description: Dispatch on what resolving the source found
+        type: switch
+        'on': fact.outcome
+        cases:
+          - value: unresolved
+            step: 3
+          - value: chained
+            step: 7
+          - value: restated
+            step: 9
+          - value: ambiguous
+            step: 5
+        defaultStep: 11
+      - stepNumber: 3
+        label: unresolved
+        description: >-
+          Report SIGNATURE_SOURCE_UNRESOLVED at the method, naming what the source matched if
+          anything — a type of another kind, or nothing
+        type: local
+      - stepNumber: 4
+        description: Done with this fact
+        type: jump
+        toStep: 13
+      - stepNumber: 5
+        label: ambiguous
+        description: >-
+          Report SIGNATURE_SOURCE_AMBIGUOUS at the method, naming both candidates — the contract
+          method and the signature type the value resolves to — and telling the author to qualify
+          the reference so only one reading matches
+        type: local
+      - stepNumber: 6
+        description: Done with this fact
+        type: jump
+        toStep: 13
+      - stepNumber: 7
+        label: chained
+        description: >-
+          Report SIGNATURE_SOURCE_CHAINED at the method, naming the source's own source and, when
+          that is a signature type, suggesting it be named directly
+        type: local
+      - stepNumber: 8
+        description: Done with this fact
+        type: jump
+        toStep: 13
+      - stepNumber: 9
+        label: restated
+        description: >-
+          Does the restatement differ from the source? An equal one is only redundant, left to the
+          doctor's repair
+        type: branch
+        condition: fact.differs
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Report SIGNATURE_SOURCE_RESTATED at the method, naming what differs
+        type: local
+      - stepNumber: 11
+        label: edge
+        description: Is a method source off the design's edges?
+        type: branch
+        condition: >-
+          the fact's form is method and the target's component is in neither the owning component's
+          dependsOn nor its owns (ctx.componentMap)
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Report SIGNATURE_SOURCE_OFF_EDGE at the method, naming the target's component and the edge
+          that would license it
+        type: local
+      - stepNumber: 13
+        label: next
+        description: Move on to the next fact
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureSourcesRule
+status: design
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-02T20:48:30.975Z'
+updatedAt: '2026-10-03T19:43:42.226Z'

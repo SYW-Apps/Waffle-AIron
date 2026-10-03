@@ -2269,6 +2269,65 @@ methods:
         targetComponent: project_config_repository
         targetMethod: describeProject
     conformance: 'off'
-status: complete
+  - name: repairSignatures
+    sourcePath: src/core/signature-repair.ts
+    narrative:
+      - stepNumber: 1
+        description: 'Read what the scan''s signature resolution recorded: the stale texts and the sources'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: signatureFacts
+      - stepNumber: 2
+        description: >-
+          Group into one repair per interface or type: its stale texts as regenerated, and its
+          sourced methods with an equal restatement (a restated fact that does not differ) as
+          dropped; a differing restatement is not a repair
+        type: local
+      - stepNumber: 3
+        description: Was the write asked for?
+        type: branch
+        condition: apply, and at least one repair is planned
+        onFalseStep: 10
+      - stepNumber: 4
+        description: For each repaired spec
+        type: loop
+        loopKind: forEach
+        over: the planned repairs
+        endStep: 9
+      - stepNumber: 5
+        description: Is it an interface?
+        type: branch
+        condition: the repair's kind is interface
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Re-save the loaded interface: the writer stores every method in its stored form, so its
+          texts are derived and its sourced methods hold only the source
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 7
+        description: Done with this spec
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        label: type
+        description: >-
+          Re-save the loaded type, whose writer stores every params-bearing type method's derived
+          text
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 9
+        label: next
+        description: On to the next repaired spec
+        type: local
+      - stepNumber: 10
+        label: report
+        description: Answer the planned repairs, written or not
+        type: return
+        outcome: SignatureTextRepair[]
+    detail: full
+status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T18:00:27.938Z'
+updatedAt: '2026-10-03T19:36:53.709Z'

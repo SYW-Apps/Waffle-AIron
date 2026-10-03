@@ -1,0 +1,33 @@
+kind: value-object
+id: stale_signature_text
+name: StaleSignatureText
+description: >-
+  A stored signature text that differs from the text its params derive: what the file holds against
+  what every reader is shown. The loader records it before it replaces the text in memory, so the
+  file's dishonesty stays visible to the rule that reports it and to the doctor repair that rewrites
+  it.
+subsystem: sdd_core
+fields:
+  - name: specId
+    type: string
+    description: The interface or type holding the method
+    optional: false
+  - name: kind
+    type: string
+    description: interface | type
+    optional: false
+  - name: method
+    type: string
+    description: The method whose text is stale
+    optional: false
+  - name: stored
+    type: string
+    description: The text the file holds
+    optional: false
+  - name: derived
+    type: string
+    description: The text the params derive, which is what is shown
+    optional: false
+methods: []
+createdAt: '2026-10-03T19:31:20.376Z'
+updatedAt: '2026-10-03T19:34:03.351Z'

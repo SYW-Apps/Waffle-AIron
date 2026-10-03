@@ -1,0 +1,66 @@
+kind: value-object
+id: signature_source_fact
+name: SignatureSourceFact
+description: >-
+  What resolving one contract method's signatureFrom found, recorded by the loader for the rules to
+  judge: the source as written, which form it read as, what it bound to, and the outcome. Resolution
+  itself never refuses anything; every problem is a fact.
+subsystem: sdd_core
+fields:
+  - name: interfaceId
+    type: string
+    description: The contract declaring the method, keyed as the index keys it
+    optional: false
+  - name: component
+    type: string
+    description: The component that contract belongs to — the end the dependsOn/owns edge is read from
+    optional: false
+  - name: method
+    type: string
+    description: The method naming the source
+    optional: false
+  - name: source
+    type: string
+    description: The signatureFrom as the file wrote it
+    optional: false
+  - name: form
+    type: string
+    description: method | signature — which reading resolved; absent when neither or both did
+    optional: false
+  - name: target
+    type: string
+    description: >-
+      What the source bound to: `<component key>.<method>` for a method source, the type's qualified
+      id for a signature source
+    optional: true
+  - name: outcome
+    type: string
+    description: >-
+      resolved | unresolved (neither reading finds a contract method or a signature type; a type of
+      another kind is named in detail) | ambiguous (the value resolves both as a contract method and
+      as a signature type; both are named in candidates) | chained (the source names a signatureFrom
+      of its own) | restated (the stored method also states params or returns; the source's are in
+      force either way)
+    optional: false
+  - name: detail
+    type: string
+    description: >-
+      What the finding should say beyond the outcome: the kind of the type found, the source's own
+      source, or the restated difference
+    optional: true
+  - name: differs
+    type: boolean
+    description: >-
+      On a restated outcome: whether the stated params or returns differ from the source's. A
+      difference is SIGNATURE_SOURCE_RESTATED; an equal restatement is only redundant, and the
+      doctor's signature repair drops it
+    optional: true
+  - name: candidates
+    type: string[]
+    description: >-
+      On an ambiguous outcome: the method (`<component key>.<method>`) and the signature type's
+      qualified id the value both names
+    optional: true
+methods: []
+createdAt: '2026-10-03T19:31:17.009Z'
+updatedAt: '2026-10-03T19:43:26.347Z'

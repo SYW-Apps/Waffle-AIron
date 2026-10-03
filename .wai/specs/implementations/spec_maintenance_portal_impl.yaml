@@ -154,6 +154,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: advanceMember
+  - name: repairSignatures
+    narrative:
+      - stepNumber: 1
+        description: Forward the signature repair to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: repairSignatures
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-10-02T20:50:36.605Z'
+updatedAt: '2026-10-03T19:36:07.062Z'

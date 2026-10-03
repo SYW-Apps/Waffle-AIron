@@ -4,7 +4,9 @@ name: SurfaceTypeDef
 description: >-
   A self-contained type definition embedded in a surface snapshot — the member of the transitive
   type closure of the exported contracts, so a consumer can resolve every param/return/field
-  reference without access to the producing project's tree.
+  reference without access to the producing project's tree. A signature type arrives complete: its
+  params and returns travel with it, so a contract that types a param by a named function type is as
+  self-contained as one using data types.
 fields:
   - name: id
     type: string
@@ -17,15 +19,25 @@ fields:
     optional: false
   - name: kind
     type: string
-    description: entity | value-object.
+    description: entity | value-object | signature.
     optional: false
   - name: fields
     type: object[]
     description: >-
       Data fields (name, type, optional, description) — types reference each other within the
-      closure.
+      closure. Empty on a signature.
     optional: false
+  - name: params
+    type: object[]
+    description: >-
+      A signature's parameters (name, type, optional, description), in declared order; types
+      reference the closure. Only on kind signature.
+    optional: true
+  - name: returns
+    type: string
+    description: A signature's one output type, referencing the closure. Only on kind signature.
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:32.022Z'
-updatedAt: '2026-09-19T11:07:19.425Z'
+updatedAt: '2026-10-03T19:42:58.446Z'

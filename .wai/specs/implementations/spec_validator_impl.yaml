@@ -617,16 +617,25 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: exportUsage
       - stepNumber: 42
+        label: signature-facts
+        description: >-
+          Read what the scan's signature resolution recorded through the core adapter: the sources
+          it met and the stored texts their params contradict — the loaded specs are already
+          resolved, so the stored form is visible only here
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: signatureFacts
+      - stepNumber: 43
         description: >-
           Build the rule context from the gathered inputs: the loaded specs and their lookup maps,
-          the foreign surface snapshots, the pinned externals, the code model, the round-trip
-          findings, the known issue codes, the pack data (the by-name pack selections from the
-          options when a dry run supplies them, else the stored configuration's; and the bound
-          project's OWN composition.requirePolicies, for the pack-requirements rule to check their
-          syntax), the project identity, the export tables, the project graph and the export usages,
-          and the lint-allow bookkeeping. Its resolveCrossProject decides every cross-project
-          reference's outcome before any severity; its addIssue drops a finding on a spec a
-          contained member owns, then applies the designDepth gate, severity resolution (the
+          the signature facts, the foreign surface snapshots, the pinned externals, the code model,
+          the round-trip findings, the known issue codes, the pack data (the by-name pack selections
+          from the options when a dry run supplies them, else the stored configuration's; and the
+          bound project's OWN composition.requirePolicies, for the pack-requirements rule to check
+          their syntax), the project identity, the export tables, the project graph and the export
+          usages, and the lint-allow bookkeeping. Its resolveCrossProject decides every
+          cross-project reference's outcome before any severity; its addIssue drops a finding on a
+          spec a contained member owns, then applies the designDepth gate, severity resolution (the
           project's sddRuleSeverity, else the governing pack profile's, else the draft-context
           downgrade, else the rule default), a matching lint allow or debt-register entry (an error
           is never silenced or carried), and attaches the reference resolution a cross-project
@@ -634,31 +643,31 @@ methods:
           do not reach any member's own gate, and whether members adopt this project's requirements
           is the family run's question
         type: local
-      - stepNumber: 43
+      - stepNumber: 44
         description: For each rule in the run sequence
         type: loop
         loopKind: forEach
         over: the rule run sequence read in step 20 (built-ins, then pack rules, lint-allows last)
-        endStep: 44
-      - stepNumber: 44
+        endStep: 45
+      - stepNumber: 45
         label: run-rule
         description: >-
           Run the rule's check against the rule context; the rule reports its findings through
           ctx.addIssue
         type: local
-      - stepNumber: 45
+      - stepNumber: 46
         label: hint
         description: Does the project declare externals?
         type: branch
         condition: the pinned externals read in step 10 are not empty
-        onFalseStep: 47
-      - stepNumber: 46
+        onFalseStep: 48
+      - stepNumber: 47
         description: >-
           Add the one-line hint to the result: its externals were judged against their pins alone,
           and `validate --family` composes them against their live producers. A hint, not a finding:
           it never changes the verdict
         type: local
-      - stepNumber: 47
+      - stepNumber: 48
         label: done
         description: Return the project's verdict — the same from every root
         type: return
@@ -678,4 +687,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T00:00:12.205Z'
+updatedAt: '2026-10-03T19:33:28.103Z'

@@ -213,8 +213,9 @@ methods:
         targetMethod: collectUsage
       - stepNumber: 8
         description: >-
-          Resolve the advisory ResourceQuotaPolicy from the host config, using the secure default
-          policy when unset
+          Resolve the advisory ResourceQuotaPolicy in force through
+          host_config.effectiveQuotaPolicy(): the disabled default with each field the configured
+          quotaPolicy (WAIRON_QUOTA_POLICY) sets laid over it
         type: local
       - stepNumber: 9
         description: >-
@@ -232,4 +233,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T11:27:00.178Z'
-updatedAt: '2026-10-03T16:39:46.543Z'
+updatedAt: '2026-10-03T19:31:46.004Z'

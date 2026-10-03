@@ -1,0 +1,29 @@
+kind: value-object
+id: signature_text_repair
+name: SignatureTextRepair
+description: >-
+  One spec the doctor's signature repair rewrites into its stored form: the methods whose stored
+  text it regenerates from their params, and the sourced methods whose restated params and returns —
+  equal to the source's — it drops. A sourced method restating DIFFERENT ones is never repaired:
+  only its author knows which contract was meant, and SIGNATURE_SOURCE_RESTATED keeps reporting it.
+subsystem: sdd_core
+fields:
+  - name: specId
+    type: string
+    description: The interface or type the repair rewrites
+    optional: false
+  - name: kind
+    type: string
+    description: interface | type
+    optional: false
+  - name: regenerated
+    type: StaleSignatureText[]
+    description: Each method whose stored text is replaced by its derived text
+    optional: false
+  - name: dropped
+    type: string[]
+    description: Each sourced method whose restated params and returns are dropped
+    optional: false
+methods: []
+createdAt: '2026-10-03T19:31:33.599Z'
+updatedAt: '2026-10-03T19:34:04.223Z'

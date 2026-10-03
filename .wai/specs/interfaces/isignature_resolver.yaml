@@ -1,0 +1,39 @@
+id: isignature_resolver
+name: Signature Resolver Interface
+description: >-
+  Pure contract resolving a scanned tree's method signatures: sources bound and resolved, texts
+  derived, problems returned as facts.
+component: signature_resolver
+methods:
+  - name: resolveTree
+    description: >-
+      Resolve every signature of one scan. For each contract method naming a signatureFrom, the
+      value is read BOTH ways: as a method source (split at the last dot, the head a component of
+      the index — keyed as the scan keys it, local first, `alias::component` bound already — and the
+      tail a method on any of its contracts) and as a type reference (matched as every type
+      reference is, and only a type of kind signature counts). Exactly one reading resolving binds
+      it; both resolving is ambiguous and neither is unresolved, and either leaves the method
+      without params and with returns `unknown`, as does a chained source (one that itself names a
+      signatureFrom), which is never followed. A resolved source puts its params and returns on the
+      method, whatever the stored method stated — a stored method that also states them is restated,
+      differing or not. Then every contract method and type method with params gets
+      method_signature.derivedSignature() as its signature, recording a stale text where the stored
+      one differed, and every signature type gets type_spec.derivedSignature(). Answers the resolved
+      specs and the facts; the specs it is handed are not mutated.
+    signature: >-
+      resolveTree(interfaces: InterfaceSpec[], components: ComponentSpec[], types: TypeSpec[]):
+      SignatureResolution
+    returns: SignatureResolution
+    params:
+      - name: interfaces
+        type: InterfaceSpec[]
+        description: Every interface of the scan, keyed and with its references bound
+      - name: components
+        type: ComponentSpec[]
+        description: Every component of the scan, to read a source's head against
+      - name: types
+        type: TypeSpec[]
+        description: Every type of the scan, the signature types among them
+status: design
+createdAt: '2026-10-03T19:32:09.206Z'
+updatedAt: '2026-10-03T19:43:30.144Z'

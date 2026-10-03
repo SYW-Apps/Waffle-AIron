@@ -1066,6 +1066,42 @@ methods:
         type: local
     symbol: check
     exportedVia: technologyRule
-status: complete
+  - name: signatureSourceSuggestions
+    sourcePath: src/core/rules/heuristic/signature-source-suggestions.ts
+    narrative:
+      - stepNumber: 1
+        description: For each implementation whose contract is in scope and belongs to a Repository
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations of Repository contracts
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          Collect its facade hand-offs: each method whose narrative is exactly one call step, or
+          which shows no steps and declares exactly one call, naming a member the Repository owns
+        type: local
+      - stepNumber: 3
+        description: >-
+          Keep the hand-offs whose own contract method names no signatureFrom and has params, whose
+          member method names no signatureFrom of its own, and whose params (name, type, optional
+          marker, order) and returns equal the member method's
+        type: local
+      - stepNumber: 4
+        description: Is anything left?
+        type: branch
+        condition: at least one restating hand-off remains
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report SIGNATURE_SOURCE_AVAILABLE once on the contract, covering the restating methods,
+          each named with the `component.method` its signatureFrom would read
+        type: local
+      - stepNumber: 6
+        description: Move on to the next implementation
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureSourceSuggestionsRule
+status: design
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-01T23:59:38.260Z'
+updatedAt: '2026-10-03T19:43:51.559Z'

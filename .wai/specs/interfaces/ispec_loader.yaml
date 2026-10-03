@@ -351,6 +351,15 @@ methods:
     returns: Map<string, string>
     params: []
     effect: read
+  - name: signatureFacts
+    description: >-
+      What the current scan's signature resolution recorded (spec_index.signatureFacts): every
+      signatureFrom met and how it resolved, and every stored signature text its params contradict.
+    signature: 'signatureFacts(): SignatureFacts'
+    returns: SignatureFacts
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T17:51:20.413Z'
+updatedAt: '2026-10-03T19:33:03.384Z'

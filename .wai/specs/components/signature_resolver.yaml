@@ -1,0 +1,22 @@
+id: signature_resolver
+name: Signature Resolver
+description: >-
+  Resolves every method signature of a scanned tree, as pure logic over the specs it is handed: each
+  contract method's signatureFrom is bound to its source — a contract method `component.method` when
+  the head names a component, else a signature type — and the source's params and returns are put on
+  the method; every params-bearing contract method, type method and signature type gets its derived
+  text. It never refuses: a source it cannot bind, a source that names a source of its own, and
+  stored params that differ from the source's are each a fact for the rules, and an unresolved or
+  chained source leaves the method without params. It does not judge edges: a method source off the
+  dependsOn/owns edges still resolves, so consumers see its params while the rule reports the edge.
+  It reads nothing and holds nothing. Its own component, like the Export Resolver, because the Spec
+  Index runs it inside its scan, after every reference is bound and before the index is cached, and
+  nothing else may run there.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: design
+createdAt: '2026-10-03T19:31:52.820Z'
+updatedAt: '2026-10-03T19:31:52.826Z'

@@ -138,11 +138,13 @@ methods:
           remove it
   - name: unusedTypes
     description: >-
-      Rule unused-types. Flags types no field of any type, no interface method signature and no
-      other type's method signature references. References are matched through the type-reference
-      grammar (generic arguments, collections, qualified ids), and the declaring type's own generic
-      parameters are left out — a type parameter is not a reference to a type. A type named only by
-      its OWN methods stays unused, the way a function that only calls itself is.
+      Rule unused-types. Flags types no field of any type, no interface method signature, no
+      contract method's signatureFrom and no other type's method signature references. References
+      are matched through the type-reference grammar (generic arguments, collections, qualified
+      ids), and the declaring type's own generic parameters are left out — a type parameter is not a
+      reference to a type. A signature type is used when a method names it as its signatureFrom or a
+      param is typed by it. A type named only by its OWN methods stays unused, the way a function
+      that only calls itself is.
     signature: 'unusedTypes(ctx: RuleContext): void'
     returns: void
     params:
@@ -325,4 +327,4 @@ methods:
           its own — a whole surface nothing serves
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-09-24T19:43:47.199Z'
+updatedAt: '2026-10-03T19:35:31.601Z'

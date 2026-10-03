@@ -1,0 +1,55 @@
+kind: value-object
+id: type_method
+name: TypeMethod
+description: >-
+  One pure intrinsic method of an entity or value-object: the unit of a type_spec methods list. Like
+  a contract method it may carry structured params, which are then authoritative for type checking
+  and DERIVE its shown signature (type_method.derivedSignature) on every save and load; a type
+  method without params keeps its prose signature. A type method takes no signatureFrom: it reaches
+  no component, so it has no edge to take one along.
+fields:
+  - name: name
+    type: string
+    description: Method name, unique within the type
+    optional: false
+    key: primary
+  - name: signature
+    type: string
+    description: >-
+      Shown signature text: derived from name, params and returns when params are present, else
+      prose
+    optional: false
+  - name: params
+    type: object[]
+    description: >-
+      Structured parameters in the method_signature param shape ({name, type, description,
+      optional}) — authoritative for type checking when present
+    optional: true
+  - name: returns
+    type: string
+    description: Return type
+    optional: false
+  - name: description
+    type: string
+    description: What the method computes from the value's own fields
+    optional: true
+  - name: sourcePath
+    type: string
+    description: Source file realizing this method when it is not the type's own sourcePath
+    optional: true
+  - name: symbol
+    type: string
+    description: Code-level name realizing this method when it differs from the method name
+    optional: true
+methods:
+  - name: derivedSignature
+    signature: 'derivedSignature(): string | undefined'
+    returns: string | undefined
+    description: >-
+      The signature text its structured params determine, in method_signature.derivedSignature's
+      exact form; undefined for a type method without params, whose prose is its signature.
+    sourcePath: src/models/specs.ts
+    symbol: deriveMethodSignature
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-03T19:31:10.963Z'
+updatedAt: '2026-10-03T19:34:00.250Z'

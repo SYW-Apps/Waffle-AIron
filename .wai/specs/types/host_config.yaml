@@ -3,7 +3,8 @@ id: host_config
 name: HostConfig
 description: >-
   Resolved runtime configuration for the hosting server: bind addresses for the data and admin
-  planes, the data root, auth posture, durable audit policy, and control-plane exposure posture.
+  planes, the data root, auth posture, durable audit policy, advisory quota policy, and
+  control-plane exposure posture.
 fields:
   - name: host
     type: string
@@ -42,9 +43,14 @@ fields:
   - name: quotaPolicy
     type: ResourceQuotaPolicy
     description: >-
-      Hosted quota/rate policy evaluated for advisory (observe/warn) reporting only in this draft;
-      it does not yet block or throttle project, token, or MCP usage. Actual enforcement in the data
-      plane is a future integration and out of scope for now.
+      Hosted quota/rate policy, as overrides of the disabled default: each field set here wins and
+      every unset field keeps the default (see effectiveQuotaPolicy). The serve command sets it from
+      WAIRON_QUOTA_POLICY, a JSON object of these fields — enabled (boolean), mode (observe | warn |
+      block), and the non-negative integer limits maxProjectsPerUser, maxMcpRequestsPerMinute,
+      maxProjectBytes and maxAuditEventsPerDay — refusing invalid JSON, an unknown field or a wrong
+      type at startup, so a misspelt policy never silently runs as the default. Evaluated for
+      advisory (observe/warn) reporting only; it does not yet block or throttle project, token, or
+      MCP usage, and a block mode is downgraded to an observation.
     optional: true
   - name: devMode
     type: boolean
@@ -83,6 +89,14 @@ methods:
       what it answers. A tool running without a host config (an offline migration) gets the secure
       default.
     sourcePath: src/server/audit.ts
+  - name: effectiveQuotaPolicy
+    signature: 'effectiveQuotaPolicy(): ResourceQuotaPolicy'
+    returns: ResourceQuotaPolicy
+    description: >-
+      The quota policy in force: the disabled default (enabled false, mode observe, no limits) with
+      each field the configured quotaPolicy sets laid over it. The one place the policy is resolved;
+      quota evaluation passes what it answers.
+    sourcePath: src/server/operations.ts
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:58:10.758Z'
-updatedAt: '2026-10-03T17:53:25.405Z'
+updatedAt: '2026-10-03T19:31:42.655Z'

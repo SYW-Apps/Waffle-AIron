@@ -68,9 +68,11 @@ methods:
       restatement to the stored spec (status, carry, clear, removal), resolve narrative labels,
       judge a component candidate against the intrinsic rules, and persist. A subsystem naming a
       projectPath is refused: that is the legacy mount form, and a member is declared in
-      project.yaml `members` instead. A refused status, a missing parent, an unresolved label, the
-      mount form or an intrinsic error throws before anything touches disk. Answers with the write
-      receipt, carrying the tests a changed or removed method invalidated.
+      project.yaml `members` instead. An interface method naming a signatureFrom and also stating
+      params or returns is refused (SIGNATURE_SOURCE_RESTATED): the source supplies them. A refused
+      status, a missing parent, an unresolved label, the mount form, a restated source or an
+      intrinsic error throws before anything touches disk. Answers with the write receipt, carrying
+      the tests a changed or removed method invalidated.
     signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -92,4 +94,4 @@ methods:
         description: The spec id
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-09-27T11:01:43.057Z'
+updatedAt: '2026-10-03T19:37:17.341Z'

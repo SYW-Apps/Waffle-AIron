@@ -2,14 +2,18 @@ kind: value-object
 id: type_spec
 name: TypeSpec
 description: >-
-  L3 data type specification for entities and value objects loaded from the types spec tree.
-  sourcePath and symbol make the type a CLAIM on code — the file it names must resolve and its
-  declaration must be anchored in it — exactly as an implementation_spec's sourcePath claims the
-  code realizing a contract.
+  L3 data type specification loaded from the types spec tree, of one of three kinds: an entity or a
+  value-object (data: fields, pure methods, invariants) or a signature — a named function type,
+  Waffler's WafflerSignature: params (the method_signature param shape) and one returns, with a
+  description, and nothing else: no fields, no methods, no invariants, no inheritance. A contract
+  method takes a signature by naming it in its signatureFrom; a param may also be typed by one (a
+  callback). sourcePath and symbol make the type a CLAIM on code — the file it names must resolve
+  and its declaration must be anchored in it — exactly as an implementation_spec's sourcePath claims
+  the code realizing a contract.
 fields:
   - name: kind
     type: string
-    description: 'Type category: entity or value-object'
+    description: 'Type category: entity, value-object or signature'
     optional: false
   - name: id
     type: string
@@ -33,15 +37,16 @@ fields:
     optional: true
   - name: fields
     type: object[]
-    description: Data fields declared by this type
+    description: Data fields declared by this type; none on a signature (SIGNATURE_TYPE_MEMBERS)
     optional: false
   - name: methods
-    type: object[]
+    type: TypeMethod[]
     description: >-
-      Pure intrinsic methods declared by this type. Each may carry its own sourcePath (when it is
-      realized outside the type's own file) and its own symbol (the code-level name realizing it,
-      when that differs from the method name) — the same two overrides a method_implementation
-      carries.
+      Pure intrinsic methods declared by this type (type_method), none on a signature
+      (SIGNATURE_TYPE_MEMBERS). Each may carry structured params, which then derive its shown
+      signature exactly as a contract method's do, its own sourcePath (when it is realized outside
+      the type's own file) and its own symbol (the code-level name realizing it, when that differs
+      from the method name) — the same two overrides a method_implementation carries.
     optional: false
   - name: componentClass
     type: string
@@ -99,6 +104,18 @@ fields:
     type: string
     description: When this spec was last written. Store-managed.
     optional: false
+  - name: params
+    type: object[]
+    description: >-
+      A signature's parameters, in the method_signature param shape ({name, type, description,
+      optional}); only on kind signature (SIGNATURE_TYPE_MEMBERS otherwise)
+    optional: true
+  - name: returns
+    type: string
+    description: >-
+      A signature's one output type; required on kind signature and only there
+      (SIGNATURE_TYPE_MEMBERS)
+    optional: true
 methods:
   - name: qualifiedId
     signature: 'qualifiedId(): string'
@@ -136,6 +153,15 @@ methods:
       Every source file this type names — its own sourcePath, then each method's — deduplicated, in
       declaration order.
     symbol: typeSourceFiles
+  - name: derivedSignature
+    signature: 'derivedSignature(): string | undefined'
+    returns: string | undefined
+    description: >-
+      A signature type's shown text, `(a: T, b?: U): R`, derived from its params and returns the way
+      method_signature.derivedSignature derives a method's, without a name; undefined on an entity
+      or a value-object.
+    sourcePath: src/models/specs.ts
+    symbol: deriveTypeSignature
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-09-23T18:35:55.288Z'
+updatedAt: '2026-10-03T19:33:59.344Z'
