@@ -1043,6 +1043,51 @@ from where its files live.
 - **Hosted:** a member with a `../` or git source is refused; promote/demote change records
   through reconcile, as every family-shape tool does.
 
+### The canvas shows relation health, and its project nodes open
+
+- **Each consumption edge carries its relation's health.** `wairon diagram`
+  compares the family's relations with their live producers by default — each
+  project's externals status read at its own root (`family_validator.relations`,
+  the very comparison a family run judges, so an edge and a verdict cannot
+  disagree) — and draws each edge between two projects by it: a glyph at its
+  middle (✓ ok, Δ drifted, ✕ incompatible, ? unavailable), its colour, and a
+  dotted line for unavailable, so the state never rests on colour alone. Where
+  edges fold at a collapsed level, the worst health wins. Hovering an edge, or
+  selecting it, shows which uses changed or were removed, why one could not be
+  compared, the pin's commit or short digest and when it was compared. One legend
+  row names the four states and the compared-at time. `ExternalStatus` gains
+  `health()` (incompatible > unavailable > drifted > ok — nothing that could not
+  be checked reads ok) and carries the lock's `pinnedDigest`/`pinnedCommit` as
+  provenance; `sdd_get_externals_status` declares them (and `outOfReach`) in its
+  output schema.
+- **`wairon diagram --no-health`** skips the comparison: consumption edges are
+  drawn neutral and the legend says health was not checked. Without health the
+  canvas never draws an edge as good. Only the canvas carries health; Mermaid,
+  draw.io and Excalidraw ignore it. A local run reads within the explicit reach
+  `validate --family` uses, so a `../` producer is compared, not left out.
+- **A contained project member has a relation too.** It is no external, so no
+  externals status ever named it: a parent consuming its own contained member
+  now answers that relation from its own gate's findings on those references —
+  incompatible when `EXTERNAL_NOT_EXPORTED` or another resolution failure lands
+  on one, ok otherwise; it is read live, so it never drifts.
+- **Declared externals that are no project of the family are drawn** as
+  external project nodes (dashed, with their storage badge) that their
+  consumption edges land on, so peers that only consume each other still show
+  their relations.
+- **Frozen where it is exported.** A written canvas page and a share snapshot
+  carry the relations as they were, each with its `comparedAt`; the legend says
+  "as of". A share snapshot reads them within its creator's reach and carries no
+  member record ids.
+- **Hosted:** the web canvas reads relations within the caller's listed projects,
+  exactly as the Relations tab does — a member or producer out of that reach is
+  unavailable, never ok. A project node carrying a `recordId` (a member, or an
+  external whose `source.hosted` record the caller may read) offers "Open project
+  ↗" in its panel and opens on double-click through the new host hook
+  `onOpenProject`; a node without one is drawn unlinked. Locally a contained
+  member drills in and a referenced or external one opens its details panel.
+- **The SPA's member-links strip above the canvas is retired**: the nodes open
+  themselves.
+
 ### Fixed: a delta's absent fields, and two tests that failed under load
 
 - **A field a delta element leaves out keeps its stored value, at every depth.**
