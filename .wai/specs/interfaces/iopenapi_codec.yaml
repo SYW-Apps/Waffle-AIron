@@ -7,6 +7,13 @@ methods:
     description: >-
       Render a snapshot's HTTP-transport entries as an OpenAPI 3.1 document; the type closure
       becomes JSON-Schema components; provenance (project, version/StateId) lands in the info block.
+      A signature type is a function type, which no JSON value can carry, so it gets no invented
+      JSON-Schema shape: its component carries no `type` constraint, a description saying it is a
+      function type with no JSON form, and an `x-wairon-signature` extension holding its params
+      (name, the type as wairon writes it and as a $ref or schema, optional) and returns (the same
+      two forms) — honest to an OpenAPI reader, and complete for a wairon one. A wire operation
+      whose param or return is typed by a signature therefore documents a value that cannot be sent;
+      the codec renders it as it is rather than hiding it.
     signature: 'toOpenApi(snapshot: SurfaceSnapshot): string'
     returns: string
     params:
@@ -21,7 +28,9 @@ methods:
   - name: fromOpenApi
     description: >-
       Decode a 3rd-party OpenAPI document into an authored-origin snapshot: operations become
-      contract methods with endpoints, component schemas become the type closure.
+      contract methods with endpoints, component schemas become the type closure. A component
+      carrying `x-wairon-signature` decodes back into a signature type with its params and returns,
+      so a wairon-rendered document round-trips; any other component is a data type.
     signature: 'fromOpenApi(document: string, projectName: string): SurfaceSnapshot'
     returns: SurfaceSnapshot
     params:
@@ -35,7 +44,7 @@ methods:
       Portal: partition the entries by backing portal, render each portal over just its own entries
       (its own servers from basePath, its own securitySchemes and per-operation security), and
       return the named set. One portal yields one spec; distinct portals are never merged into a
-      combined document.
+      combined document. Signature types render as toOpenApi renders them (`x-wairon-signature`).
     signature: 'toOpenApiSet(snapshot: SurfaceSnapshot): NamedOpenApiSpec[]'
     returns: NamedOpenApiSpec[]
     params:
@@ -54,4 +63,4 @@ methods:
         description: The raw document body, JSON or YAML.
 status: complete
 createdAt: '2026-07-10T23:13:57.188Z'
-updatedAt: '2026-10-03T17:50:56.625Z'
+updatedAt: '2026-10-03T21:08:05.933Z'

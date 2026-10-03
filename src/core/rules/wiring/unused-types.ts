@@ -1,9 +1,10 @@
 import { SddRule } from '../types.js';
-import { fieldTypeRefs, methodTypeRefs, typeMatchesRef } from '../../../models/index.js';
+import { fieldTypeRefs, methodTypeRefs, signatureTypeRefs, typeMatchesRef } from '../../../models/index.js';
 
 /**
- * A type nothing names: no field of any type, no contract signature and no
- * other type's method signature references it. Its own scan, not the
+ * A type nothing names: no field of any type, no contract signature, no
+ * contract method's signatureFrom and no other type's method signature
+ * references it. Its own scan, not the
  * reachability walk — a type is reached by being NAMED, never by an execution
  * chain, so nothing here rides the narrative graph.
  */
@@ -13,7 +14,7 @@ export const unusedTypesRule: SddRule = {
   needsWholeTree: true,
   judges: 'design',
   description:
-    'Flags types no field of any type, no interface method signature and no other type\'s method signature references. References are matched through the type-reference grammar (generic arguments, collections, qualified ids), and the declaring type\'s own generic parameters are left out — a type parameter is not a reference to a type. A type named only by its OWN methods stays unused, the way a function that only calls itself is.',
+    'Flags types no field of any type, no interface method signature, no contract method\'s signatureFrom and no other type\'s method signature references. References are matched through the type-reference grammar (generic arguments, collections, qualified ids), and the declaring type\'s own generic parameters are left out — a type parameter is not a reference to a type. A signature type is used when a method names it as its signatureFrom or a param is typed by it. A type named only by its OWN methods stays unused, the way a function that only calls itself is.',
   codes: [
     { code: 'UNUSED_TYPE', defaultSeverity: 'warning', summary: 'Type never referenced by fields, signatures or type methods' },
   ],
@@ -30,7 +31,9 @@ export const unusedTypesRule: SddRule = {
       }
     };
 
-    // 1. Scan type fields (the type's own generic parameters are left out)
+    // 1. Scan type fields (the type's own generic parameters are left out),
+    // and a signature type's params and returns, its references in place of
+    // fields (a signature naming itself is not a use of it).
     for (const t of ctx.types) {
       for (const field of t.fields) {
         const refs = fieldTypeRefs(t, field.type);
@@ -38,6 +41,7 @@ export const unusedTypesRule: SddRule = {
           markTypeReferenced(ref);
         }
       }
+      for (const ref of signatureTypeRefs(t)) markTypeReferenced(ref, t.id);
     }
 
     // 2. Scan interface method signatures & returns (structured params preferred)
@@ -50,7 +54,20 @@ export const unusedTypesRule: SddRule = {
       }
     }
 
-    // 3. Scan the methods declared ON types. A type returned only by another
+    // 3. The signature types methods take their signature from, as the loader
+    // resolved them (ctx.signatureFacts; none on a candidate run): a fact whose
+    // type reading named a signature type — its target, or an ambiguous
+    // fact's signature candidate — is a use of that type.
+    for (const fact of ctx.signatureFacts?.sources ?? []) {
+      const named = fact.form === 'signature' && fact.target ? fact.target
+        : fact.outcome === 'ambiguous' ? fact.candidates?.[1] : undefined;
+      if (!named) continue;
+      for (const spec of ctx.types) {
+        if (spec.id === named || typeMatchesRef(spec, named)) referencedTypes.add(spec.id);
+      }
+    }
+
+    // 4. Scan the methods declared ON types. A type returned only by another
     // type's method — `rule_context.codeIndex(): CodeIndex` — is named, and
     // reading only fields and contracts made it look like nobody's. The
     // declaring type is excluded from its OWN methods' refs: a type named

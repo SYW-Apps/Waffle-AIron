@@ -14,7 +14,7 @@ methods:
     description: >-
       Forward to identity_orchestrator.listUsers with the session as the credential; returns the
       hosted users within the caller's scope, optionally narrowed to one project's grant holders.
-    signature: 'listUsers(sessionId: string, project: string): HostedUserRecord[]'
+    signature: 'listUsers(sessionId: string, project?: string): HostedUserRecord[]'
     returns: HostedUserRecord[]
     params:
       - name: sessionId
@@ -157,8 +157,8 @@ methods:
       Forward to permission_admin_orchestrator.listAssignments with the session as the credential
       (project:admin over the scope upstream).
     signature: >-
-      listAssignments(sessionId: string, scopeKind: string, scopeId: string, subjectKind: string,
-      subjectId: string): PermissionAssignment[]
+      listAssignments(sessionId: string, scopeKind?: string, scopeId?: string, subjectKind?: string,
+      subjectId?: string): PermissionAssignment[]
     returns: PermissionAssignment[]
     params:
       - name: sessionId
@@ -196,7 +196,7 @@ methods:
   - name: bindRole
     description: Forward to permission_admin_orchestrator.bindRole with the session as the credential.
     signature: >-
-      bindRole(sessionId: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      bindRole(sessionId: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
       string): HostedUserRecord
     returns: HostedUserRecord
     params:
@@ -215,7 +215,7 @@ methods:
   - name: unbindRole
     description: Forward to permission_admin_orchestrator.unbindRole with the session as the credential.
     signature: >-
-      unbindRole(sessionId: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      unbindRole(sessionId: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
       string): HostedUserRecord
     returns: HostedUserRecord
     params:
@@ -253,4 +253,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-10-03T13:37:42.931Z'
+updatedAt: '2026-10-03T20:54:11.451Z'

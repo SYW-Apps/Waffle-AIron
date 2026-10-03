@@ -23,7 +23,7 @@ methods:
     description: >-
       List hosted users, optionally narrowed by status. There is no project filter: project
       membership is a permission-grid question the identity orchestrator answers.
-    signature: 'list(status: string): HostedUserRecord[]'
+    signature: 'list(status?: string): HostedUserRecord[]'
     returns: HostedUserRecord[]
     params:
       - name: status
@@ -40,4 +40,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T20:16:24.537Z'
-updatedAt: '2026-07-19T13:29:42.555Z'
+updatedAt: '2026-10-03T20:54:10.452Z'

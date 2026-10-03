@@ -238,6 +238,30 @@ methods:
         summary: >-
           Orchestrator's methods form two or more groups of two or more that share no called
           component
+  - name: signatureSourceSuggestions
+    description: >-
+      Rule signature-source-suggestions. A Repository facade method is pure 1:1 forwarding to an
+      owned member by doctrine (facade-forwarding), so its signature IS the member's: where its
+      params (name, type, optional marker, order) and returns equal the owned member method it
+      forwards to, it could name that method as its signatureFrom, and the reference can never be
+      wrong. Suggested only where the adoption would be legal: the member method names no source of
+      its own (no chain). Nothing else is suggested: another forwarder — a Portal restating an
+      Orchestrator, a client Adapter restating a remote Portal — is often a public surface that
+      should stay deliberately decoupled from an internal signature, so wairon does not suggest
+      coupling them. Adoption is opt-in, so this is a notice, and ONE per facade contract, the
+      restating methods being the units it covers.
+    signature: 'signatureSourceSuggestions(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SIGNATURE_SOURCE_AVAILABLE
+        severity: notice
+        summary: >-
+          A Repository facade's methods restate exactly the owned member methods they forward to and
+          could name them as their signatureFrom
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-10-01T23:59:37.718Z'
+updatedAt: '2026-10-03T19:43:49.218Z'

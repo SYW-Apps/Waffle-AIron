@@ -27,6 +27,7 @@ import {
   InterfaceSpecSchema,
   ImplementationSpecSchema,
   TypeSpecSchema,
+  storedMethodSignature,
 } from '../models/specs.js';
 import { EndpointSchema, type Endpoint, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
 import type { ComponentSpec, Technology } from '../models/specs.js';
@@ -745,8 +746,47 @@ const getSpecOutput = {
     'Derived, read-only guidance for a variant-tagged component — resolved from the variant registry, not '
     + 'part of the spec. Never write it back.',
   ),
+  resolvedSignatures: z.array(z.object({
+    method: z.string().describe('The contract method that takes its signature from a source.'),
+    signatureFrom: z.string().describe('The source it names, as the spec holds it.'),
+    signature: z.string().describe('The text it shows, derived from the resolved params and returns.'),
+    params: z.array(z.record(z.unknown())).optional().describe('The params the source supplies; absent when it supplies none (unresolved, ambiguous or chained).'),
+    returns: z.string().describe('The returns the source supplies (`unknown` when it supplies none).'),
+  })).optional().describe(
+    'Derived, read-only: for a contract whose methods take their signature from a source, each such method\'s '
+    + 'RESOLVED params, returns and text. The spec carries those methods in stored form (the signatureFrom alone) '
+    + 'so it can be re-authored from as it is; never write these back beside the source.',
+  ),
   ...staleServerOutput,
 };
+
+/** One sourced method's resolved signature, as sdd_get_spec answers it beside the stored spec. */
+interface ResolvedSignatureMarker {
+  method: string;
+  signatureFrom: string;
+  signature: string;
+  params?: unknown[];
+  returns: string;
+}
+
+/**
+ * A loaded contract in its STORED form, and the resolved signatures of its
+ * sourced methods beside it (mcp_orchestrator.getSpec): the loader resolves a
+ * source's params into the method, and an answer carrying them would be
+ * re-authored with the source AND its params — which the seam refuses.
+ */
+function storedContractAnswer(loaded: InterfaceSpec): { spec: InterfaceSpec; resolvedSignatures: ResolvedSignatureMarker[] } {
+  const resolvedSignatures = loaded.methods
+    .filter((m) => m.signatureFrom !== undefined)
+    .map((m) => ({
+      method: m.name,
+      signatureFrom: m.signatureFrom!,
+      signature: m.signature,
+      ...(m.params ? { params: m.params } : {}),
+      returns: m.returns,
+    }));
+  return { spec: { ...loaded, methods: loaded.methods.map((m) => storedMethodSignature(m)) } as InterfaceSpec, resolvedSignatures };
+}
 
 // Spec WRITES go through core/authoring.ts, never straight to the store: the
 // candidate gate (and anything else that decides what may be written) lives
@@ -1998,21 +2038,34 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
+  // One structured parameter, the shape a contract method, a type method and a
+  // signature type all state their params in.
+  const methodParamItem = z.object({
+    name: z.string(),
+    type: z.string().describe(TYPE_REF_GRAMMAR('The parameter\'s type')),
+    description: z.string().optional(),
+    optional: z.boolean().optional().describe(
+      'Whether the parameter may be OMITTED by a caller. It is not nullability: a parameter that must be '
+      + 'passed but may be passed as nothing is a required parameter whose type is a union — '
+      + '"ProjectConfig | null". Say whichever is true; they are different contracts.',
+    ),
+  }).strict();
+
   const interfaceMethodShape = {
           name: z.string(),
           description: z.string(),
-          signature: z.string(),
-          returns: z.string().describe(TYPE_REF_GRAMMAR('The type the method answers with')),
-          params: z.array(z.object({
-            name: z.string(),
-            type: z.string().describe(TYPE_REF_GRAMMAR('The parameter\'s type')),
-            description: z.string().optional(),
-            optional: z.boolean().optional().describe(
-              'Whether the parameter may be OMITTED by a caller. It is not nullability: a parameter that must be '
-              + 'passed but may be passed as nothing is a required parameter whose type is a union — '
-              + '"ProjectConfig | null". Say whichever is true; they are different contracts.',
-            ),
-          }).strict()).optional().describe('Structured parameters — authoritative for type checking (the prose signature becomes display-only). Strongly preferred.'),
+          signature: z.string().optional().describe(
+            'Prose signature — only for a method WITHOUT params. With params the server derives and writes the text '
+            + '(`name(a: T, b?: U): R`) and ignores this one (a notice names one that differed); a method with a signatureFrom states none.',
+          ),
+          returns: z.string().optional().describe(TYPE_REF_GRAMMAR('The type the method answers with. Required unless signatureFrom is set, whose source supplies it')),
+          signatureFrom: z.string().min(1).optional().describe(
+            'Take this method\'s params and returns from ONE source instead of stating them: a signature type id '
+            + '(`billing.change_listener`, `alias::name`) or a contract method `component.method` whose component this one '
+            + 'names in dependsOn or owns (no chains). State it ALONE — params or returns beside it are refused '
+            + '(SIGNATURE_SOURCE_RESTATED). A value that names both a method and a signature type is ambiguous: qualify it.',
+          ),
+          params: z.array(methodParamItem).optional().describe('Structured parameters — authoritative for type checking, and the signature text is derived from them. Strongly preferred.'),
           guarantees: z.array(z.string().min(1)).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here. Builtin tokens: idempotent | atomic | transactional | exactly-once; extension packs may declare more (any other token is UNKNOWN_GUARANTEE)'),
           effect: z.enum(['read', 'write']).optional().describe('State-effect direction on the component\'s held state — required on a durable Store\'s contract methods so the durability round-trip rule can pair writes with hydration read-backs'),
           invokedBy: z.object({
@@ -2037,10 +2090,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   };
   const interfaceInputFields = Object.keys(interfaceInput);
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature: string; returns: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'read' | 'write'; invokedBy?: { kind: 'runtime' | 'external' | 'sibling-subsystem'; caller?: string }; findings?: { code: string; severity: 'error' | 'warning'; summary: string }[]; ext?: Record<string, unknown> }[]; status?: StatedStatus }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature?: string; returns?: string; signatureFrom?: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'read' | 'write'; invokedBy?: { kind: 'runtime' | 'external' | 'sibling-subsystem'; caller?: string }; findings?: { code: string; severity: 'error' | 'warning'; summary: string }[]; ext?: Record<string, unknown> }[]; status?: StatedStatus }>(server,
     'sdd_define_interface',
     {
-      description: 'Define an L3 Contract / Interface with method signatures for a component. Prefer supplying structured `params` per method — they are the authoritative source for type checking (the free-form signature string then becomes display-only and is never heuristically parsed). A method declares the finding codes it reports in `findings` ({code, severity, summary}); each code must be anchored in the method\'s source file, as a string literal or a property-access name (UNREALIZED_FINDING). Re-defining an existing id REPLACES the method list: a method left out of the input is REMOVED (and reported); spec-level lint/ext and each method\'s endpoint binding are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the notices a restatement raised, each as its own entry.',
+      description: 'Define an L3 Contract / Interface with method signatures for a component. Each method states its signature ONE of three ways: structured `params` with `returns` (strongly preferred — authoritative for type checking, and the signature text is then DERIVED and written by the server; a text you pass is ignored and a notice names one that differed), a `signatureFrom` naming its source — a signature type, or `component.method` along a dependsOn/owns edge — with neither params nor returns (both together are refused, SIGNATURE_SOURCE_RESTATED), or, for a method without params, a prose `signature` with `returns`. A method declares the finding codes it reports in `findings` ({code, severity, summary}); each code must be anchored in the method\'s source file, as a string literal or a property-access name (UNREALIZED_FINDING). Re-defining an existing id REPLACES the method list: a method left out of the input is REMOVED (and reported); spec-level lint/ext and each method\'s endpoint binding are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the notices a restatement raised, each as its own entry.',
       inputSchema: interfaceInput,
       outputSchema: specWriteReceiptOutput,
     },
@@ -2271,7 +2324,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   );
 
   const typeInput = {
-        kind: z.enum(['entity', 'value-object']).describe('entity (owned by a subsystem) or value-object (often system-level shared)'),
+        kind: z.enum(['entity', 'value-object', 'signature']).describe('entity (owned by a subsystem), value-object (often system-level shared), or signature — a named function type: params and returns, nothing else'),
         id: z.string().describe('Lowercase identifier'),
         name: z.string().describe('Human-readable name'),
         description: z.string().optional(),
@@ -2287,7 +2340,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         }).strict()).optional().describe('Data fields (type is a primitive or a qualified type id, e.g. "billing.Invoice")'),
         methods: z.array(z.object({
           name: z.string(),
-          signature: z.string(),
+          signature: z.string().optional().describe('Prose signature — only for a method WITHOUT params; with params the server derives and writes the text'),
+          params: z.array(methodParamItem).optional().describe('Structured parameters — authoritative for type checking; the signature text is derived from them'),
           returns: z.string().describe(TYPE_REF_GRAMMAR('The type the method answers with')),
           description: z.string().optional(),
           sourcePath: z.string().optional().describe('Source file realizing this method when the type\'s own sourcePath does not hold it — a pure type method often lives apart from the declaration'),
@@ -2303,17 +2357,20 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         linkedEntity: z.string().optional().describe('Optional logical entity id represented by this table-schema type'),
         sourcePath: z.string().optional().describe('Source file holding the declaration of this type (project-relative). Naming one turns the type into a claim on code: the file must resolve and the declaration must be anchored in it (UNREALIZED_TYPE)'),
         symbol: z.string().optional().describe('Code-level name realizing the declaration when it differs from name, e.g. a type named "Invoice Line" declared as InvoiceLine'),
+        params: z.array(methodParamItem).optional().describe('kind signature only: the function type\'s parameters, in declared order (SIGNATURE_TYPE_MEMBERS on any other kind)'),
+        returns: z.string().optional().describe(TYPE_REF_GRAMMAR('kind signature only, and required there: the function type\'s one output')),
   };
   const typeInputFields = Object.keys(typeInput);
 
-  reg<{ kind: 'entity' | 'value-object'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature: string; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string }>(server,
+  type ParamInput = { name: string; type: string; description?: string; optional?: boolean };
+  reg<{ kind: 'entity' | 'value-object' | 'signature'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature?: string; params?: ParamInput[]; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string; params?: ParamInput[]; returns?: string }>(server,
     'sdd_add_type',
     {
-      description: 'Define an entity or value-object type (the data components operate on). Entities are owned by a subsystem; shared value objects omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument. A type may also CLAIM code: sourcePath names the file holding its declaration (and each method may name its own), symbol binds the code-level name when it differs — the file must then resolve and the declaration must be anchored in it. An owning subsystem the tree does not have is refused, writing nothing, exactly as a component under an unknown subsystem is. Re-defining an existing id REPLACES fields/methods/invariants and restates sourcePath/symbol (an omitted list or path is CLEARED, and a dropped member is reported); lint/ext are carried forward. The answer carries a write receipt as structured content beside the sentence — whether a spec already held the id, and the notices a restatement raised, each as its own entry. A type carries no lifecycle status, so the receipt states none.',
+      description: 'Define a type: an entity or value-object (the data components operate on), or a signature — a named function type. Entities are owned by a subsystem; shared value objects and signatures omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument — and a type method may carry structured params, which then derive its signature text as a contract method\'s do. A signature carries top-level params and returns and nothing else (no fields, methods or invariants — SIGNATURE_TYPE_MEMBERS); a contract method takes it by naming it as its signatureFrom, and a param may be typed by one (a callback). A type may also CLAIM code: sourcePath names the file holding its declaration (and each method may name its own), symbol binds the code-level name when it differs — the file must then resolve and the declaration must be anchored in it. An owning subsystem the tree does not have is refused, writing nothing, exactly as a component under an unknown subsystem is. Re-defining an existing id REPLACES fields/methods/invariants and restates sourcePath/symbol (an omitted list or path is CLEARED, and a dropped member is reported); lint/ext are carried forward. The answer carries a write receipt as structured content beside the sentence — whether a spec already held the id, and the notices a restatement raised, each as its own entry. A type carries no lifecycle status, so the receipt states none.',
       inputSchema: typeInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol }) => {
+    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol, params, returns }) => {
       try {
         // mcp_orchestrator.addType step 1: the restatement, each field's
         // optional flag defaulted to false.
@@ -2340,6 +2397,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           ...(linkedEntity ? { linkedEntity } : {}),
           ...(sourcePath ? { sourcePath } : {}),
           ...(symbol ? { symbol } : {}),
+          ...(params ? { params } : {}),
+          ...(returns ? { returns } : {}),
         } as unknown as TypeSpec;
         // Step 2: through the seam, which names every field or method the
         // restatement removed. Step 3: the receipt — `kind` here is the type's
@@ -2412,7 +2471,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; methods?: string[] }>(server,
     'sdd_get_spec',
     {
-      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. Pass "methods" to read only the named methods of a contract, an implementation or a type — a 45-method spec fetched whole to look at one of them is the read side of the same waste a restatement is on the write side; the answer then carries a "partialResult" marker naming what was left out, and must never be re-authored from. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back. The structured content carries the same answer with the two derived markers KEPT SEPARATE from the stored spec ({kind, id, spec, partialResult?, variantGuidance?}), so nothing derived can be mistaken for something stored; the text block folds them in as it always has.',
+      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. Pass "methods" to read only the named methods of a contract, an implementation or a type — a 45-method spec fetched whole to look at one of them is the read side of the same waste a restatement is on the write side; the answer then carries a "partialResult" marker naming what was left out, and must never be re-authored from. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back. A contract\'s methods come back in their STORED form — a method that takes its signature from a source carries its signatureFrom, not the params the loader resolves into it — so the answer can be re-authored from as it is; the resolved params, returns and text of each such method come back as a derived, read-only "resolvedSignatures" marker. The structured content carries the same answer with the derived markers KEPT SEPARATE from the stored spec ({kind, id, spec, partialResult?, variantGuidance?, resolvedSignatures?}), so nothing derived can be mistaken for something stored; the text block folds them in as it always has.',
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of specification'),
         id: z.string().describe('The identifier of the spec to fetch (the L0 system spec is a singleton — pass the system name or "system")'),
@@ -2434,6 +2493,14 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           case 'type':           result = loadTypeSpec(id); break;
         }
         if (!result) return errText(`Spec of kind "${kind}" with ID "${id}" does not exist.`);
+        // A contract answers in STORED form, its sourced methods' resolved
+        // signatures beside it as a derived marker (mcp_orchestrator.getSpec).
+        let resolvedSignatures: ResolvedSignatureMarker[] = [];
+        if (kind === 'interface') {
+          const answer = storedContractAnswer(result as InterfaceSpec);
+          result = answer.spec;
+          resolvedSignatures = answer.resolvedSignatures;
+        }
         // A filter that quietly returned nothing, or quietly returned everything,
         // would be the same silent drop this surface exists to end — so a name the
         // spec does not declare is refused, and a partial answer says it is one.
@@ -2463,6 +2530,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
               + 'so every method missing here would be removed from the spec.',
           };
           result = { ...(result as object), methods: kept };
+          resolvedSignatures = resolvedSignatures.filter((r) => methods.includes(r.method));
         }
         // A variant carries implementation guidance that attaches to the component
         // an implementer is holding — the right hook for platform guidance, with no
@@ -2476,10 +2544,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // sees no change. The structured twin keeps `spec` to what is STORED and
         // the markers beside it, so nothing derived can be re-authored by
         // accident.
+        const resolved = resolvedSignatures.length > 0 ? { resolvedSignatures } : {};
         const folded = {
           ...(result as object),
           ...(partial ? { partialResult: partial } : {}),
           ...(guidance ? { variantGuidance: guidance } : {}),
+          ...resolved,
         };
         return structured(JSON.stringify(folded, null, 2), {
           kind,
@@ -2487,6 +2557,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           spec: result as Record<string, unknown>,
           ...(partial ? { partialResult: partial } : {}),
           ...(guidance ? { variantGuidance: guidance } : {}),
+          ...resolved,
         });
       } catch (e) {
         return errText(String(e));

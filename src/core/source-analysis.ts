@@ -555,31 +555,6 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     return argument.exprName.text;
   };
 
-  // The BASE `.object({…})` call of a chained schema expression. Walking to
-  // the base is the whole of it: `z.object({…}).refine(fn, { message })` hands
-  // the REFINE OPTIONS to whoever takes the first object literal it meets, and
-  // the shape then reads as one field called `message`.
-  const baseObjectLiteral = (
-    expression: import('typescript').Expression,
-  ): import('typescript').ObjectLiteralExpression | undefined => {
-    let node: import('typescript').Node | undefined = expression;
-    const walked = new Set<import('typescript').Node>();
-    while (node && !walked.has(node)) {
-      walked.add(node);
-      if (ts.isCallExpression(node)) {
-        const callee: import('typescript').Expression = node.expression;
-        if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'object') {
-          const literal = node.arguments.find(argument => ts.isObjectLiteralExpression(argument));
-          if (literal) return literal as import('typescript').ObjectLiteralExpression;
-        }
-        node = callee;
-      } else if (ts.isPropertyAccessExpression(node)) {
-        node = node.expression;
-      } else break;
-    }
-    return undefined;
-  };
-
   // The combinators applied to ONE schema expression, read off its own call
   // chain and never off its text: a `.default()` nested inside a record's
   // value says nothing about whether the outer key may be absent.
@@ -966,19 +941,71 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
   visit(sf);
 
-  // The derived hop, now that both halves have been seen. ONE hop and no
-  // more: an alias whose schema const this file does not declare, or whose
-  // chain never reaches an object literal, records NO shape. Silence is the
-  // honest answer — the type still has to be DECLARED somewhere, which is
-  // `typeRealization`'s question, and a guessed member list would be read as
-  // measurement by everything downstream.
+  // The members a schema expression composes, read off this file alone: the
+  // base `.object({…})` call's keys, or — when the chain is built on another
+  // schema constant THIS FILE declares (`Base.extend({…})`,
+  // `Base.superRefine(…)`) — that constant's members, with each `.extend`
+  // literal's keys laid over them, the outermost last. Every part of the
+  // composition is written in this file, so following it guesses nothing; a
+  // base the file does not declare, or a cycle, ends in NO answer. Only the
+  // `.object` and `.extend` literals are taken: `z.object({…}).refine(fn,
+  // { message })` hands the REFINE OPTIONS to whoever takes the first object
+  // literal it meets, and the shape would then read as one field `message`.
+  const composedMembers = (
+    expression: import('typescript').Expression,
+    seen: Set<string>,
+  ): ShapeMemberFact[] | undefined => {
+    const extensions: import('typescript').ObjectLiteralExpression[] = [];
+    /** The base's members with every extension laid over them, innermost first. */
+    const compose = (members: ShapeMemberFact[]): ShapeMemberFact[] => {
+      const byName = new Map(members.map(member => [member.name, member]));
+      for (const extension of [...extensions].reverse()) {
+        for (const member of schemaMembers(extension)) byName.set(member.name, member);
+      }
+      return [...byName.values()];
+    };
+    let node: import('typescript').Node | undefined = expression;
+    const walked = new Set<import('typescript').Node>();
+    while (node && !walked.has(node)) {
+      walked.add(node);
+      if (ts.isCallExpression(node)) {
+        const callee: import('typescript').Expression = node.expression;
+        if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'object') {
+          // The base literal — never the options object a refinement takes.
+          const literal = node.arguments.find(argument => ts.isObjectLiteralExpression(argument));
+          if (literal) return compose(schemaMembers(literal as import('typescript').ObjectLiteralExpression));
+        } else if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'extend') {
+          const extension = node.arguments.find(argument => ts.isObjectLiteralExpression(argument));
+          if (!extension) return undefined;
+          extensions.push(extension as import('typescript').ObjectLiteralExpression);
+        }
+        node = callee;
+      } else if (ts.isPropertyAccessExpression(node)) {
+        node = node.expression;
+      } else if (ts.isIdentifier(node)) {
+        const base = schemaConstants.get(node.text);
+        if (!base || seen.has(node.text)) return undefined;
+        const members = composedMembers(base, new Set([...seen, node.text]));
+        return members ? compose(members) : undefined;
+      } else break;
+    }
+    return undefined;
+  };
+
+  // The derived hop, now that both halves have been seen. ONE hop from the
+  // alias to the value, then only along a composition this file writes out
+  // (composedMembers): an alias whose schema const this file does not
+  // declare, or whose chain never reaches an object literal, records NO
+  // shape. Silence is the honest answer — the type still has to be DECLARED
+  // somewhere, which is `typeRealization`'s question, and a guessed member
+  // list would be read as measurement by everything downstream.
   for (const alias of derivedAliases) {
     if (typeShapes.has(alias.name)) continue;
     const initializer = schemaConstants.get(alias.constant);
     if (!initializer) continue;
-    const literal = baseObjectLiteral(initializer);
-    if (!literal) continue;
-    typeShapes.set(alias.name, { origin: 'derived', fields: schemaMembers(literal), methods: [] });
+    const fields = composedMembers(initializer, new Set([alias.constant]));
+    if (!fields) continue;
+    typeShapes.set(alias.name, { origin: 'derived', fields, methods: [] });
   }
 
   // A pure re-export barrel, stated as what it IS: a file whose every

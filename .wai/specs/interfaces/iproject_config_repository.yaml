@@ -7,30 +7,22 @@ component: project_config_repository
 methods:
   - name: load
     description: The whole configuration, or null when the project has none (forwarded to the index).
-    signature: 'load(): ProjectConfig | null'
-    returns: ProjectConfig | null
-    params: []
+    signatureFrom: project_config_index.load
     guarantees:
       - idempotent
   - name: exists
     description: Whether the project has a configuration file (forwarded to the index).
-    signature: 'exists(): boolean'
-    returns: boolean
-    params: []
+    signatureFrom: project_config_index.exists
     guarantees:
       - idempotent
   - name: declaresGlobalPacks
     description: Whether `extensions.useGlobalPacks` is set explicitly (forwarded to the index).
-    signature: 'declaresGlobalPacks(): boolean'
-    returns: boolean
-    params: []
+    signatureFrom: project_config_index.declaresGlobalPacks
     guarantees:
       - idempotent
   - name: specsDir
     description: The absolute specs folder, resolved at binding (forwarded to the index).
-    signature: 'specsDir(): string'
-    returns: string
-    params: []
+    signatureFrom: project_config_index.specsDir
     guarantees:
       - idempotent
     invokedBy:
@@ -41,100 +33,60 @@ methods:
         method and hands it to the spec repository.
   - name: create
     description: Write a fresh configuration for a project that has none (forwarded to the registry).
-    signature: 'create(config: ProjectConfig): void'
-    returns: void
-    params:
-      - name: config
-        type: ProjectConfig
+    signatureFrom: project_config_registry.create
   - name: upsertPackSelection
     description: >-
       Select a pack by name, moving a re-selected pack last; returns whether an earlier selection
       was replaced (forwarded to the registry).
-    signature: 'upsertPackSelection(selection: PackSelection): boolean'
-    returns: boolean
-    params:
-      - name: selection
-        type: PackSelection
+    signatureFrom: project_config_registry.upsertPackSelection
     guarantees:
       - idempotent
   - name: removePackSelection
     description: >-
       Deselect a pack by name, leaving path references alone; returns whether anything was dropped
       (forwarded to the registry).
-    signature: 'removePackSelection(packName: string): boolean'
-    returns: boolean
-    params:
-      - name: packName
-        type: string
+    signatureFrom: project_config_registry.removePackSelection
     guarantees:
       - idempotent
   - name: setProjectType
     description: Set the governing `projectType` (forwarded to the registry).
-    signature: 'setProjectType(projectType: string): void'
-    returns: void
-    params:
-      - name: projectType
-        type: string
+    signatureFrom: project_config_registry.setProjectType
     guarantees:
       - idempotent
   - name: recordProfileSelection
     description: Record the applied profile selection (forwarded to the registry).
-    signature: 'recordProfileSelection(selection: ProjectProfileSelection): void'
-    returns: void
-    params:
-      - name: selection
-        type: ProjectProfileSelection
+    signatureFrom: project_config_registry.recordProfileSelection
     guarantees:
       - idempotent
   - name: setExecutionTier
     description: Set `execution.tier` (forwarded to the registry).
-    signature: 'setExecutionTier(tier: string): void'
-    returns: void
-    params:
-      - name: tier
-        type: string
+    signatureFrom: project_config_registry.setExecutionTier
     guarantees:
       - idempotent
   - name: registerPackRef
     description: >-
       Append a legacy path reference when it is absent; returns whether it was added (forwarded to
       the registry).
-    signature: 'registerPackRef(ref: string): boolean'
-    returns: boolean
-    params:
-      - name: ref
-        type: string
+    signatureFrom: project_config_registry.registerPackRef
     guarantees:
       - idempotent
   - name: deregisterPackRef
     description: >-
       Drop a legacy path reference that matches exactly; returns whether anything was dropped
       (forwarded to the registry).
-    signature: 'deregisterPackRef(ref: string): boolean'
-    returns: boolean
-    params:
-      - name: ref
-        type: string
+    signatureFrom: project_config_registry.deregisterPackRef
     guarantees:
       - idempotent
   - name: markSelectionsBundled
     description: Record bundled packs on their selections in place, in one write (forwarded to the registry).
-    signature: 'markSelectionsBundled(bundled: PackSelection[]): void'
-    returns: void
-    params:
-      - name: bundled
-        type: PackSelection[]
+    signatureFrom: project_config_registry.markSelectionsBundled
     guarantees:
       - idempotent
   - name: pinGlobalPacksAsSelections
     description: >-
       Append implicitly applied global packs as selections and turn global packs off, in one write
       (forwarded to the registry).
-    signature: 'pinGlobalPacksAsSelections(selections: PackSelection[]): void'
-    returns: void
-    params:
-      - name: selections
-        type: PackSelection[]
+    signatureFrom: project_config_registry.pinGlobalPacksAsSelections
   - name: rekeyCarried
     description: >-
       Rekey the debt register for an identity move — a component rename, a method rename, a method
@@ -142,27 +94,13 @@ methods:
       formatting of the document survive; only the renamed ids change. Answers each edit; a dry run
       proves it and writes nothing; a register that cannot be edited precisely is refused and
       nothing is written.
-    signature: 'rekeyCarried(rename: IdentityRename, dryRun?: boolean): CarriedRekey[]'
-    returns: CarriedRekey[]
-    params:
-      - name: rename
-        type: IdentityRename
-        description: The identity move the register follows
-      - name: dryRun
-        type: boolean
-        description: Answer the edits and write nothing
-        optional: true
+    signatureFrom: project_config_registry.rekeyCarried
   - name: setId
     description: >-
       Declare the project's id; refused for a malformed id or when a different id is already
       declared, and a no-op when the same id is (forwarded to the registry). Returns whether it
       wrote.
-    signature: 'setId(id: string): boolean'
-    returns: boolean
-    params:
-      - name: id
-        type: string
-        description: The project id to declare
+    signatureFrom: project_config_registry.setId
     guarantees:
       - idempotent
   - name: declareExternal
@@ -170,15 +108,7 @@ methods:
       Declare one external under an alias; refused for a malformed alias or producer id, or when the
       alias already holds a different declaration, and a no-op when it holds the same one (forwarded
       to the registry). Returns whether it wrote.
-    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The alias key
-      - name: declaration
-        type: ExternalDeclaration
-        description: The value under the alias
+    signatureFrom: project_config_registry.declareExternal
     guarantees:
       - idempotent
   - name: declareMember
@@ -186,53 +116,24 @@ methods:
       Declare one member under an alias; refused for a malformed alias, an empty or absolute path,
       an alias `externals` holds, or when the alias already holds a different member declaration,
       and a no-op when it holds the same one (forwarded to the registry). Returns whether it wrote.
-    signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The alias key
-      - name: declaration
-        type: MemberDeclaration
-        description: The member's path and optional description
+    signatureFrom: project_config_registry.declareMember
     guarantees:
       - idempotent
   - name: setMemberPath
     description: Point an existing member at a new path (forwarded to the registry). Returns whether it wrote.
-    signature: 'setMemberPath(alias: string, path: string): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The member's alias
-      - name: path
-        type: string
-        description: The new path, relative to this root
+    signatureFrom: project_config_registry.setMemberPath
     guarantees:
       - idempotent
   - name: removeMember
     description: Remove one member declaration (forwarded to the registry). Returns whether it wrote.
-    signature: 'removeMember(alias: string): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The member's alias
+    signatureFrom: project_config_registry.removeMember
     guarantees:
       - idempotent
   - name: importNames
     description: >-
       Add public names to the `use` of the external or member under an alias (forwarded to the
       registry); a no-op for names already imported. Returns whether it wrote.
-    signature: 'importNames(alias: string, names: string[]): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The external or member alias
-      - name: names
-        type: string[]
-        description: The public names to import, or `*`
+    signatureFrom: project_config_registry.importNames
     guarantees:
       - idempotent
   - name: renameId
@@ -240,15 +141,7 @@ methods:
       Move the project's id from the one it answers to now to a new one, keeping the old in
       previousIds; refused for a malformed new id or when the project no longer answers to the old
       one, a no-op once done (forwarded to the registry). Returns whether it wrote.
-    signature: 'renameId(from: string, to: string): boolean'
-    returns: boolean
-    params:
-      - name: from
-        type: string
-        description: The id the project answers to now
-      - name: to
-        type: string
-        description: The new id
+    signatureFrom: project_config_registry.renameId
     guarantees:
       - idempotent
   - name: renameAlias
@@ -256,15 +149,7 @@ methods:
       Rekey one member or external alias, keeping its value and place; refused for a malformed or
       taken new alias or an undeclared old one, a no-op once done (forwarded to the registry).
       Returns whether it wrote.
-    signature: 'renameAlias(from: string, to: string): boolean'
-    returns: boolean
-    params:
-      - name: from
-        type: string
-        description: The alias as declared now
-      - name: to
-        type: string
-        description: The alias to declare it under
+    signatureFrom: project_config_registry.renameAlias
     guarantees:
       - idempotent
   - name: repointExternal
@@ -272,61 +157,25 @@ methods:
       Revise one external's producer id and explicit source, keeping its `use` and description;
       refused for an undeclared alias or a malformed producer id, a no-op when equal (forwarded to
       the registry). Returns whether it wrote.
-    signature: 'repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The external's alias
-      - name: project
-        type: string | null
-        description: The producer id, or null when the alias is the id
-      - name: source
-        type: ExternalSource | null
-        description: The explicit place, or null to find it through the family
+    signatureFrom: project_config_registry.repointExternal
     guarantees:
       - idempotent
   - name: removeExternal
     description: Remove one external declaration (forwarded to the registry). Returns whether it wrote.
-    signature: 'removeExternal(alias: string): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The external's alias
+    signatureFrom: project_config_registry.removeExternal
     guarantees:
       - idempotent
   - name: updateMember
     description: 'Forward 1:1 to the registry: change an existing member''s `as`, source or description.'
-    signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
-    returns: boolean
-    params:
-      - name: alias
-        type: string
-        description: The member's alias
-      - name: changes
-        type: MemberDeclaration
-        description: The fields to set
+    signatureFrom: project_config_registry.updateMember
   - name: setPartOf
     description: 'Forward 1:1 to the registry: write or remove the bound configuration''s partOf.'
-    signature: 'setPartOf(partOf: PartOf | null): boolean'
-    returns: boolean
-    params:
-      - name: partOf
-        type: PartOf | null
-        description: The parent, or null
+    signatureFrom: project_config_registry.setPartOf
   - name: describeProject
     description: >-
       Set the project's human-readable `name` and, when given, its `description` (forwarded to the
       registry).
-    signature: 'describeProject(name: string, description?: string): void'
-    returns: void
-    params:
-      - name: name
-        type: string
-      - name: description
-        type: string
-        optional: true
+    signatureFrom: project_config_registry.describeProject
     guarantees:
       - idempotent
   - name: at
@@ -336,7 +185,7 @@ methods:
       reads and writes the configuration under rootDir. Binding to a root is a real operation — a
       provisioner writes a project it is not bound to, and a test reads a fixture tree — so it is
       part of the contract rather than a second way in.
-    signature: 'at(rootDir: string): ProjectConfigRepository'
+    signature: 'at(rootDir: string): object'
     returns: object
     params:
       - name: rootDir
@@ -344,4 +193,4 @@ methods:
         description: The project root whose .wai/project.yaml the answer reads and writes.
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-10-03T17:51:53.585Z'
+updatedAt: '2026-10-03T21:10:12.045Z'

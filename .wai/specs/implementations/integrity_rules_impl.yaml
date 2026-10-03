@@ -340,7 +340,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.interfaces
-        endStep: 7
+        endStep: 8
       - stepNumber: 2
         description: >-
           Compute isDraftCtx as ctx.isComponentDraft(intf.component) or the interface's own status
@@ -352,31 +352,70 @@ methods:
         type: loop
         loopKind: forEach
         over: intf.methods
-        endStep: 7
+        endStep: 8
       - stepNumber: 4
+        description: >-
+          Skip a method that takes its signature from a source: its params are its source's, judged
+          once where the source declares them.
+        type: branch
+        condition: m names no signatureFrom
+        onFalseStep: 3
+      - stepNumber: 5
         description: >-
           methodGenerics = m.genericParameters(); allGenerics = the union of interfaceGenerics and
           methodGenerics; refs = m.typeRefs().
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         label: refs
         description: For each type identifier the method's signature names.
         type: loop
         loopKind: forEach
         over: refs
-        endStep: 7
-      - stepNumber: 6
+        endStep: 8
+      - stepNumber: 7
         description: 'Branch: does the reference fail to resolve?'
         type: branch
         condition: >-
           ctx.isTypeResolved(ref, allGenerics) is false (the reference does not resolve to a
           builtin, an in-scope generic, or a defined type)
-        onFalseStep: 5
-      - stepNumber: 7
+        onFalseStep: 6
+      - stepNumber: 8
         label: refsEnd
         description: >-
           Report UNDEFINED_TYPE_REFERENCE (error; isDraftCtx) naming the method, the interface, and
           the undefined reference.
+        type: local
+      - stepNumber: 9
+        label: types
+        description: For each loaded type, check the type references its structured signatures name.
+        type: loop
+        loopKind: forEach
+        over: ctx.types
+        endStep: 13
+      - stepNumber: 10
+        description: >-
+          isDraftCtx = the owning subsystem (t.subsystem in ctx.subsystems) having status draft or
+          design; typeGenerics = t.genericParameters(); refs = m.typeRefs() for every method m of t
+          that carries params (its params and returns), then t.signatureTypeRefs() (a signature
+          type's params and returns; none on an entity or a value-object).
+        type: local
+      - stepNumber: 11
+        label: typeRefs
+        description: For each type identifier those signatures name.
+        type: loop
+        loopKind: forEach
+        over: refs
+        endStep: 13
+      - stepNumber: 12
+        description: 'Branch: does the reference fail to resolve?'
+        type: branch
+        condition: ctx.isTypeResolved(ref, typeGenerics) is false
+        onFalseStep: 11
+      - stepNumber: 13
+        label: typeRefsEnd
+        description: >-
+          Report UNDEFINED_TYPE_REFERENCE (error; isDraftCtx) on the type, naming the type method or
+          the signature type and the undefined reference.
         type: local
     symbol: check
     exportedVia: signatureTypeReferencesRule
@@ -1110,6 +1149,140 @@ methods:
     detail: full
     symbol: check
     exportedVia: memberDeclarationsRule
+  - name: signatureText
+    sourcePath: src/core/rules/integrity/signature-text.ts
+    narrative:
+      - stepNumber: 1
+        description: For each stale text the loader recorded
+        type: loop
+        loopKind: forEach
+        over: ctx.signatureFacts.staleTexts, in scope
+        endStep: 2
+      - stepNumber: 2
+        description: >-
+          Report SIGNATURE_TEXT_STALE at the method on its interface or type, quoting the stored
+          text and the derived one, and naming doctor --fix as the repair
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureTextRule
+  - name: signatureTypes
+    sourcePath: src/core/rules/integrity/signature-types.ts
+    narrative:
+      - stepNumber: 1
+        description: For each loaded type
+        type: loop
+        loopKind: forEach
+        over: ctx.types, in scope
+        endStep: 4
+      - stepNumber: 2
+        description: Is it a signature?
+        type: branch
+        condition: the type's kind is signature
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report SIGNATURE_TYPE_MEMBERS naming every member a signature cannot carry — fields,
+          methods, invariants, componentClass, database, table, linkedEntity — and a missing returns
+        type: local
+      - stepNumber: 4
+        description: >-
+          On an entity or value-object, report SIGNATURE_TYPE_MEMBERS when it carries params or
+          returns
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureTypesRule
+  - name: signatureSources
+    sourcePath: src/core/rules/integrity/signature-sources.ts
+    narrative:
+      - stepNumber: 1
+        description: For each source fact the loader recorded
+        type: loop
+        loopKind: forEach
+        over: ctx.signatureFacts.sources, in scope
+        endStep: 14
+      - stepNumber: 2
+        description: Dispatch on what resolving the source found
+        type: switch
+        'on': fact.outcome
+        cases:
+          - value: unresolved
+            step: 3
+          - value: chained
+            step: 7
+          - value: restated
+            step: 9
+          - value: ambiguous
+            step: 5
+        defaultStep: 12
+      - stepNumber: 3
+        label: unresolved
+        description: >-
+          Report SIGNATURE_SOURCE_UNRESOLVED at the method, naming what the source matched if
+          anything — a type of another kind, or nothing
+        type: local
+      - stepNumber: 4
+        description: Done with this fact
+        type: jump
+        toStep: 14
+      - stepNumber: 5
+        label: ambiguous
+        description: >-
+          Report SIGNATURE_SOURCE_AMBIGUOUS at the method, naming both candidates — the contract
+          method and the signature type the value resolves to — and telling the author to qualify
+          the reference so only one reading matches
+        type: local
+      - stepNumber: 6
+        description: Done with this fact
+        type: jump
+        toStep: 14
+      - stepNumber: 7
+        label: chained
+        description: >-
+          Report SIGNATURE_SOURCE_CHAINED at the method, naming the source's own source and, when
+          that is a signature type, suggesting it be named directly
+        type: local
+      - stepNumber: 8
+        description: Done with this fact
+        type: jump
+        toStep: 14
+      - stepNumber: 9
+        label: restated
+        description: >-
+          Does the restatement differ from the source? An equal one is only redundant, left to the
+          doctor's repair. Either way the edge is judged on the resolved fact the loader records
+          right after every restated one, never here, so it is reported once
+        type: branch
+        condition: fact.differs
+        onFalseStep: 14
+      - stepNumber: 10
+        description: Report SIGNATURE_SOURCE_RESTATED at the method, naming what differs
+        type: local
+      - stepNumber: 11
+        description: Done with this fact
+        type: jump
+        toStep: 14
+      - stepNumber: 12
+        label: edge
+        description: Is a method source off the design's edges?
+        type: branch
+        condition: >-
+          the fact's form is method and the target's component is in neither the owning component's
+          dependsOn nor its owns (ctx.componentMap)
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Report SIGNATURE_SOURCE_OFF_EDGE at the method, naming the target's component and the edge
+          that would license it
+        type: local
+      - stepNumber: 14
+        label: next
+        description: Move on to the next fact
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureSourcesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-02T20:48:30.975Z'
+updatedAt: '2026-10-03T20:54:42.859Z'

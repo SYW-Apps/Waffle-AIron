@@ -7,6 +7,7 @@ import {
   fieldTypeRefs,
   methodTypeRefs,
   parseDeclaredCall,
+  signatureTypeRefs,
   typeMatchesRef,
   type ComponentSpec,
   type ImplementationSpec,
@@ -98,7 +99,7 @@ function referencedKeys(part: ScannedPart, types: TypeSpec[]): Set<string> {
   }
   for (const i of loadInterfaceSpecs().filter((x) => own.has(x.id))) {
     add(i.component);
-    for (const m of i.methods) addTypes(methodTypeRefs(m));
+    for (const m of i.methods) addTypes(sourcedMethodTypeRefs(m));
   }
   for (const impl of loadImplementationSpecs().filter((x) => own.has(x.id))) {
     add(impl.contract);
@@ -111,9 +112,28 @@ function referencedKeys(part: ScannedPart, types: TypeSpec[]): Set<string> {
   }
   for (const t of types.filter((x) => own.has(x.id))) {
     add(t.subsystem);
-    for (const f of t.fields ?? []) addTypes(fieldTypeRefs(t, f.type));
+    addTypes(typeSpecTypeRefs(t));
   }
   return out;
+}
+
+/**
+ * The types a contract method names: its signature's, and its signatureFrom
+ * read as a type — a signature type it takes its params from is as much a
+ * reference as a param typed by one. (A `component.method` source reaches its
+ * component along dependsOn/owns, which the closure already follows.)
+ */
+function sourcedMethodTypeRefs(m: InterfaceSpec['methods'][number]): string[] {
+  return [...methodTypeRefs(m), ...(m.signatureFrom !== undefined ? [m.signatureFrom] : [])];
+}
+
+/** The types a type names: its fields', its methods' params and returns when they carry params, and a signature's params and returns. */
+function typeSpecTypeRefs(t: TypeSpec): string[] {
+  return [
+    ...(t.fields ?? []).flatMap((f) => fieldTypeRefs(t, f.type)),
+    ...(t.methods ?? []).filter((m) => m.params !== undefined).flatMap((m) => methodTypeRefs(m)),
+    ...signatureTypeRefs(t),
+  ];
 }
 
 /** The kinds a key may be loaded as, in the order a reference most often names them. */
@@ -138,10 +158,9 @@ function closeOver(keys: Set<string>, types: TypeSpec[]): Map<string, Record<str
       queue.push(comp.subsystem);
       for (const contract of interfaces.filter((i) => i.component === comp.id)) queue.push(contract.id);
     } else if (found.kind === 'interface') {
-      for (const m of (found.spec as InterfaceSpec).methods) addTypes(methodTypeRefs(m));
+      for (const m of (found.spec as InterfaceSpec).methods) addTypes(sourcedMethodTypeRefs(m));
     } else if (found.kind === 'type') {
-      const type = found.spec as TypeSpec;
-      for (const f of type.fields ?? []) addTypes(fieldTypeRefs(type, f.type));
+      addTypes(typeSpecTypeRefs(found.spec as TypeSpec));
     } else if (found.kind === 'implementation') {
       queue.push((found.spec as ImplementationSpec).contract);
     }

@@ -256,7 +256,7 @@ methods:
       List approval requests for the human decision surface, optionally filtered by status and
       project. Human decision surface for the project-lifecycle approval exception until the admin
       UI lands.
-    signature: 'listApprovals(credential: string, status: string, project: string): ApprovalRequest[]'
+    signature: 'listApprovals(credential: string, status?: string, project?: string): ApprovalRequest[]'
     returns: ApprovalRequest[]
     params:
       - name: credential
@@ -276,7 +276,7 @@ methods:
       Approve or deny a pending approval request. Human decision surface for the project-lifecycle
       approval exception until the admin UI lands.
     signature: >-
-      decideApproval(credential: string, requestId: string, approved: boolean, reason: string):
+      decideApproval(credential: string, requestId: string, approved: boolean, reason?: string):
       ApprovalRequest
     returns: ApprovalRequest
     params:
@@ -393,4 +393,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-09-29T16:16:51.516Z'
+updatedAt: '2026-10-03T20:53:52.614Z'

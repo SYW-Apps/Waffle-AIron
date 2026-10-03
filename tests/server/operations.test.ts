@@ -483,6 +483,14 @@ describe('operations orchestrator (sdd_host)', () => {
     expect(warned[0].quotaMessages.some((m) => m.startsWith('[warn]'))).toBe(true);
     expect(() => evaluateQuota(cfg, plainToken())).toThrow(ForbiddenError);
   });
+
+  it('evaluateQuota: a partial policy is laid over the disabled default (mode observe)', () => {
+    createPlacedProject(cfg, MASTER, 'proj-a');
+    // WAIRON_QUOTA_POLICY sets only what it names; the unset mode keeps the default observe.
+    const observed = evaluateQuota({ ...cfg, quotaPolicy: { enabled: true, maxProjectsPerUser: 0 } }, opsToken());
+    expect(observed[0].quotaMessages.length).toBeGreaterThan(0);
+    expect(observed[0].quotaMessages.every((m) => !m.startsWith('[warn]'))).toBe(true);
+  });
 });
 
 // ── HTTP portal (routeAdmin) ─────────────────────────────────────────────────

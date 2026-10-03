@@ -10,7 +10,7 @@ methods:
     description: >-
       Render the scaffold file map (pack_scaffold) and write it under the target directory
       (adapter); return the created file paths.
-    signature: 'scaffoldPack(request: PackScaffoldRequest): string[]'
+    signature: 'scaffoldPack(request: pack_scaffold_request): string[]'
     returns: string[]
     params:
       - name: request
@@ -43,7 +43,7 @@ methods:
       (adapter), and return where it landed + the parsed manifest. Omitted limits fall back to the
       codec default profile.
     signature: >-
-      extractPack(archive: bytes, destDir: string, limits?: PackExtractionLimits):
+      extractPack(archive: bytes, destDir: string, limits?: pack_extraction_limits):
       PackExtractionResult
     returns: PackExtractionResult
     params:
@@ -61,7 +61,7 @@ methods:
       assemble the files into a .waitree (adapter). Returns the archive bytes + sealed manifest +
       suggested file name.
     signature: >-
-      buildTreeArchive(roots: TreeRootSource[], projectName: string, stateId?: string,
+      buildTreeArchive(roots: tree_root_source[], projectName: string, stateId?: string,
       includeDerived?: boolean): TreeBuildResult
     returns: TreeBuildResult
     params:
@@ -98,7 +98,7 @@ methods:
       fall back to the codec's tree profile. Writes only; replacing or preserving an existing tree
       is the caller's policy.
     signature: >-
-      extractTreeArchive(archive: bytes, destDir: string, limits?: PackExtractionLimits,
+      extractTreeArchive(archive: bytes, destDir: string, limits?: pack_extraction_limits,
       refuseExecutableEntries?: boolean): TreeExtractionResult
     returns: TreeExtractionResult
     params:
@@ -115,4 +115,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-21T18:13:51.375Z'
-updatedAt: '2026-09-15T20:49:31.874Z'
+updatedAt: '2026-10-03T20:54:07.326Z'

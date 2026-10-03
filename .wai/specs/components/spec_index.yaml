@@ -8,11 +8,16 @@ description: >-
   project.yaml, or a legacy L1 mount for one release), each once, keyed by the member's project id
   at every depth, and puts every root's specs in the index under that key without folding any of
   them into another's namespace. It binds references without position, in two passes: first every
-  root is parsed, its declarations keyed and its local references (no `::`) bound inside it; then
-  each root's export tables are resolved through the pure export resolver, in dependency order, and
-  every `alias::name` is bound through the referring root's alias table to a public name of the
-  producer's resolved L0 table — the deprecated leading `::`, `super::` and member-path forms still
-  binding for one release, each recorded with its form and rewrite. It records per root what the
+  root is parsed, its declarations keyed and its local references (no `::`) bound inside it — a
+  contract method's signatureFrom among them, its head bound as a component when it names one and
+  kept as a type reference otherwise; then each root's export tables are resolved through the pure
+  export resolver, in dependency order, and every `alias::name` is bound through the referring
+  root's alias table to a public name of the producer's resolved L0 table — the deprecated leading
+  `::`, `super::` and member-path forms still binding for one release, each recorded with its form
+  and rewrite. Last, once every reference of the family is bound, it hands the whole index to the
+  pure signature resolver: every method that takes its signature from a source is read with the
+  source's params and returns, every params-bearing method shows its derived signature text, and
+  what resolving found is kept on the index as its signature facts. It records per root what the
   graph, the export tables and the writer need (key, alias table, legacy mount, L0, configuration,
   tables, spec keys, authored references). The scan is a cache the index keeps fresh itself: every
   spec write drops it, a cached scan is re-verified against the tree's file signature — which covers
@@ -26,6 +31,7 @@ dependsOn:
   - spec_file_store
   - export_resolver
   - git_source_adapter
+  - signature_resolver
 status: complete
 createdAt: '2026-07-18T22:57:53.159Z'
-updatedAt: '2026-10-02T20:19:41.516Z'
+updatedAt: '2026-10-03T19:32:46.385Z'

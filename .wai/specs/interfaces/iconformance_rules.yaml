@@ -428,8 +428,10 @@ methods:
       eventually breaks at a call site and a type spec that lies is only ever read by humans and
       agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists, and
       a DERIVED one, an alias followed one hop to the object literal its schema is built from, where
-      the keys are the members. A shape that extends another is judged on what it shows and never on
-      what it omits, since its inherited members are not in this file to count.
+      the keys are the members — and on through a composition the same file writes out
+      (`Base.extend({…})` on a schema constant it declares), the extension's keys laid over the
+      base's. A shape that extends another is judged on what it shows and never on what it omits,
+      since its inherited members are not in this file to count.
     signature: 'typeShape(ctx: RuleContext): void'
     returns: void
     params:
@@ -554,4 +556,4 @@ methods:
           published components
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-09-25T20:48:17.532Z'
+updatedAt: '2026-10-03T20:38:11.425Z'

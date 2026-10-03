@@ -243,6 +243,20 @@ methods:
         type: call
         targetComponent: part_context
         targetMethod: excerpt
+  - name: signatureFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: signatureFacts
+  - name: resolveSignatures
+    narrative:
+      - stepNumber: 1
+        description: Hand the specs to the pure signature resolver and answer what it resolved
+        type: call
+        targetComponent: signature_resolver
+        targetMethod: resolveTree
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T12:16:29.861Z'
+updatedAt: '2026-10-03T20:28:45.683Z'

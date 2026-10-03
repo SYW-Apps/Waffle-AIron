@@ -186,6 +186,13 @@ fields:
       deprecated long-form `path` without I/O. Absent when the root has no readable configuration,
       and on a candidate run.
     optional: true
+  - name: signatureFacts
+    type: SignatureFacts
+    description: >-
+      What the loader's signature resolution recorded — the sources it met and the stored texts
+      their params contradict. The loaded interfaces and types are already resolved, so these facts
+      are the only place the stored form is still visible. Absent on a candidate run.
+    optional: true
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -374,4 +381,4 @@ methods:
       INVALID_DEPENDENCY_REFERENCE, INVALID_TARGET_COMPONENT_REFERENCE) append it to their message.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-02T21:40:48.955Z'
+updatedAt: '2026-10-03T19:31:38.107Z'

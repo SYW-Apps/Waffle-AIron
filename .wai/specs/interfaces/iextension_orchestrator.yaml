@@ -121,7 +121,7 @@ methods:
     description: >-
       One installed pack by name, at a given version or the newest when none is named, or nothing
       when it is not installed.
-    signature: 'resolveInstalledPack(name: string, version?: string): InstalledPack | null'
+    signature: 'resolveInstalledPack(name: string, version: string): InstalledPack | null'
     returns: InstalledPack | null
     params:
       - name: name
@@ -136,7 +136,7 @@ methods:
     description: >-
       Install a pack from a directory on disk, recording where it came from so a later listing can
       say whether it was fetched or made locally.
-    signature: 'installPackFromDirectory(sourceDir: string, origin?: string): InstalledPack'
+    signature: 'installPackFromDirectory(sourceDir: string, origin: string): InstalledPack'
     returns: InstalledPack
     params:
       - name: sourceDir
@@ -151,7 +151,7 @@ methods:
       Remove an installed pack, answering whether there was one to remove. Removing from the machine
       store never edits a project: a project that declared the pack still declares it, and that
       mismatch is something to report rather than silently repair.
-    signature: 'uninstallPack(name: string, version?: string): boolean'
+    signature: 'uninstallPack(name: string, version: string): boolean'
     returns: boolean
     params:
       - name: name
@@ -264,4 +264,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-09-29T21:27:48.323Z'
+updatedAt: '2026-10-03T20:53:55.761Z'

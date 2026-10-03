@@ -13,7 +13,7 @@ methods:
       project was created and where the hosted side backed up any tree it replaced. When archivePath
       is given the archive is also written there, so the same command produces the artifact an
       air-gapped transfer needs.
-    signature: 'pushTree(target: RemoteTarget, options: RemoteTransferOptions): RemoteTransferOutcome'
+    signature: 'pushTree(target: remote_target, options: remote_transfer_options): RemoteTransferOutcome'
     returns: RemoteTransferOutcome
     params:
       - name: target
@@ -27,7 +27,7 @@ methods:
       replaced without replaceExisting, and whatever is replaced is backed up. Local extraction does
       NOT apply the executable-entry guard: the archive came from an instance the operator chose to
       trust, and refusing a bundled code pack on the way OUT would make a hosted project unpullable.
-    signature: 'pullTree(target: RemoteTarget, options: RemoteTransferOptions): RemoteTransferOutcome'
+    signature: 'pullTree(target: remote_target, options: remote_transfer_options): RemoteTransferOutcome'
     returns: RemoteTransferOutcome
     params:
       - name: target
@@ -42,7 +42,7 @@ methods:
       user's credential store for that instance, else the token carried on the agent's MCP entry.
       Returns null when nothing resolves — an unattached checkout is a normal state, and the caller
       decides whether that is an error.
-    signature: 'resolveTarget(root: string, overrides: RemoteCommandOptions): RemoteTarget | null'
+    signature: 'resolveTarget(root: string, overrides: remote_command_options): RemoteTarget | null'
     returns: RemoteTarget | null
     params:
       - name: root
@@ -55,7 +55,7 @@ methods:
       resolves — an attach that cannot reach the instance, or is refused by it, fails LOUDLY here
       rather than leaving every later command to fail mysteriously. Stores the credential in the
       user's credential store and the binding (URL + project only) with the project.
-    signature: 'attach(root: string, target: RemoteTarget): RemoteBinding'
+    signature: 'attach(root: string, target: remote_target): RemoteBinding'
     returns: RemoteBinding
     params:
       - name: root
@@ -91,7 +91,7 @@ methods:
       Run validation against the ATTACHED hosted project's tree and return its report, for a
       checkout that has no local tree to validate. With family, ask the instance for the family run
       (`wairon validate --family`); it composes within the credential's reach and never beyond it.
-    signature: 'validateAttached(target: RemoteTarget, subsystem?: string, family?: boolean): Json'
+    signature: 'validateAttached(target: remote_target, subsystem?: string, family?: boolean): Json'
     returns: Json
     params:
       - name: target
@@ -105,7 +105,7 @@ methods:
         optional: true
   - name: statusAttached
     description: Read the completeness dashboard of the ATTACHED hosted project's tree.
-    signature: 'statusAttached(target: RemoteTarget, subsystem?: string): string'
+    signature: 'statusAttached(target: remote_target, subsystem?: string): string'
     returns: string
     params:
       - name: target
@@ -117,7 +117,7 @@ methods:
     description: >-
       Freeze the ATTACHED hosted project's tree. Reports an approval-requested outcome as such —
       never as a completed lock.
-    signature: 'lockAttached(target: RemoteTarget): string'
+    signature: 'lockAttached(target: remote_target): string'
     returns: string
     params:
       - name: target
@@ -174,4 +174,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-08-12T18:31:56.292Z'
-updatedAt: '2026-09-29T13:54:56.248Z'
+updatedAt: '2026-10-03T20:54:06.908Z'

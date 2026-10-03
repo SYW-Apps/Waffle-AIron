@@ -134,22 +134,34 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], 
     for (const field of spec.fields) {
       for (const ref of extractTypeIdentifiers(field.type)) enqueueRef(ref);
     }
+    // A signature type's closure runs through its params and returns, as a data type's runs through its fields.
+    for (const param of spec.params ?? []) {
+      for (const ref of extractTypeIdentifiers(param.type)) enqueueRef(ref);
+    }
+    if (spec.returns) {
+      for (const ref of extractTypeIdentifiers(spec.returns)) enqueueRef(ref);
+    }
   }
 
   const usedIds = new Set<string>();
   return [...included.entries()].map(([qualified, t]) => {
     const id = usedIds.has(t.id) ? qualified : t.id;
     usedIds.add(id);
+    const describe = <V extends { name: string; type: string; description?: string; optional?: boolean }>(v: V) => ({
+      name: v.name,
+      type: v.type,
+      ...(v.description ? { description: v.description } : {}),
+      ...(v.optional ? { optional: true } : {}),
+    });
     return {
       id,
       name: t.name,
       kind: t.kind,
-      fields: t.fields.map(f => ({
-        name: f.name,
-        type: f.type,
-        ...(f.description ? { description: f.description } : {}),
-        ...(f.optional ? { optional: true } : {}),
-      })),
+      fields: t.fields.map(describe),
+      // A signature type travels complete: its params and returns with it.
+      ...(t.kind === 'signature'
+        ? { params: (t.params ?? []).map(describe), returns: t.returns ?? 'unknown' }
+        : {}),
     };
   });
 }
@@ -170,7 +182,11 @@ function boundProjectId(): string | undefined {
 function contractEntry(entry: ResolvedExport, comp: ComponentSpec, interfaces: InterfaceSpec[]): SurfaceContractEntry {
   const methods = interfaces
     .filter(i => i.component === comp.id && (!entry.interface || i.id === entry.interface))
-    .flatMap(i => i.methods);
+    .flatMap(i => i.methods)
+    // The loaded tree carries every method resolved: a sourced method already
+    // holds its source's params and returns inline, so the snapshot drops the
+    // signatureFrom — it names no producer-internal method.
+    .map(({ signatureFrom: _source, ...method }) => method);
   return {
     id: entry.publicName,
     name: entry.name ?? comp.name,
@@ -271,7 +287,12 @@ function canonicalReferences(snapshot: SurfaceSnapshot): SurfaceSnapshot {
         ...(m.params ? { params: m.params.map((p) => ({ ...p, type: canon(p.type) })) } : {}),
       })),
     })),
-    types: snapshot.types.map((def) => ({ ...def, fields: def.fields.map((f) => ({ ...f, type: canon(f.type) })) })),
+    types: snapshot.types.map((def) => ({
+      ...def,
+      fields: def.fields.map((f) => ({ ...f, type: canon(f.type) })),
+      ...(def.params ? { params: def.params.map((p) => ({ ...p, type: canon(p.type) })) } : {}),
+      ...(def.returns !== undefined ? { returns: canon(def.returns) } : {}),
+    })),
   };
 }
 

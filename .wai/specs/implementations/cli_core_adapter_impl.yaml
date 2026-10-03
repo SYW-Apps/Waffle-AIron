@@ -336,6 +336,13 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: advanceMember
+  - name: repairSignatures
+    narrative:
+      - stepNumber: 1
+        description: Forward the signature repair, planned or applied, to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: repairSignatures
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:34:43.181Z'
+updatedAt: '2026-10-03T19:36:10.099Z'

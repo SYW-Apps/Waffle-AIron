@@ -51,7 +51,7 @@ methods:
       core portal. The CLI does NOT set the executable-entry guard: a developer extracting an
       archive from an instance they chose to trust is the trusted-filesystem tier, the same tier
       `wairon packs add` installs code packs through.
-    signature: 'importSpecTree(archive: bytes, options: TreeImportOptions): TreeImportResult'
+    signature: 'importSpecTree(archive: bytes, options: tree_import_options): TreeImportResult'
     returns: TreeImportResult
     params:
       - name: archive
@@ -412,7 +412,7 @@ methods:
       How complete the spec tree is, for `wairon status`, marked up with the terminal's own colours
       — and whether it could be reported on, which is what decides the exit code. Forwarded to the
       core portal.
-    signature: 'getStatusReport(options: StatusOptions, decor?: StatusDecor): StatusReport'
+    signature: 'getStatusReport(options: StatusOptions, decor: StatusDecor): StatusReport'
     returns: StatusReport
     params:
       - name: options
@@ -554,6 +554,17 @@ methods:
         type: boolean
         description: Report and write nothing
         optional: true
+  - name: repairSignatures
+    description: >-
+      Forward to core_portal.repairSignatures: plan, and with apply write, the regeneration of
+      stored signature texts from their params and the removal of restatements equal to a method's
+      signature source.
+    signature: 'repairSignatures(apply: boolean): SignatureTextRepair[]'
+    returns: SignatureTextRepair[]
+    params:
+      - name: apply
+        type: boolean
+        description: Write the repair; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T12:16:13.793Z'
+updatedAt: '2026-10-03T20:53:53.937Z'

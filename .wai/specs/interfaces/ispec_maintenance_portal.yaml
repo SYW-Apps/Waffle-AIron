@@ -61,7 +61,7 @@ methods:
     description: >-
       Imports a .waitree archive into a project root under an explicit import policy, backing up any
       tree it replaces
-    signature: 'importSpecTree(archive: bytes, options: TreeImportOptions): TreeImportResult'
+    signature: 'importSpecTree(archive: bytes, options: tree_import_options): TreeImportResult'
     returns: TreeImportResult
     params:
       - name: archive
@@ -302,6 +302,17 @@ methods:
         type: boolean
         description: Report and write nothing
         optional: true
+  - name: repairSignatures
+    description: >-
+      Forward to core_orchestrator.repairSignatures: plan, and with apply write, the regeneration of
+      every stored signature text its params contradict and the removal of every restatement equal
+      to its method's signature source. Without apply nothing is written.
+    signature: 'repairSignatures(apply: boolean): SignatureTextRepair[]'
+    returns: SignatureTextRepair[]
+    params:
+      - name: apply
+        type: boolean
+        description: Write the repair; false plans without writing
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-02T20:50:35.728Z'
+updatedAt: '2026-10-03T20:54:08.671Z'

@@ -135,7 +135,7 @@ methods:
       Import a .waitree archive into the bound project root under an explicit policy, backing up any
       tree it replaces. Forwarded to the core portal; the hosted caller always sets the
       executable-entry refusal, because the archive arrived over the wire.
-    signature: 'importSpecTree(archive: bytes, options: TreeImportOptions): TreeImportResult'
+    signature: 'importSpecTree(archive: bytes, options: tree_import_options): TreeImportResult'
     returns: TreeImportResult
     params:
       - name: archive
@@ -309,4 +309,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-10-03T17:10:02.919Z'
+updatedAt: '2026-10-03T20:53:57.537Z'

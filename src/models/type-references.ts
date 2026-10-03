@@ -1,4 +1,4 @@
-import type { InterfaceSpec, MethodSignature, TypeSpec } from './specs.js';
+import type { InterfaceSpec, TypeSpec } from './specs.js';
 
 // ---------------------------------------------------------------------------
 // The type-reference grammar over free-form type strings and signatures, and
@@ -173,10 +173,16 @@ function extractTypesFromSignature(signature: string, returns: string): string[]
   return Array.from(new Set(types));
 }
 
-/** The method shape the type references are read from. */
+/**
+ * The method shape the type references are read from: a contract method or a
+ * type method (whose params feed its references exactly as a contract
+ * method's do). The text and returns may be absent while a method is still in
+ * its stored form — a sourced method states neither, and a params-bearing one
+ * need not store its text — and an absent one names nothing.
+ */
 export interface MethodLike {
-  signature: string;
-  returns: string;
+  signature?: string;
+  returns?: string;
   params?: { name: string; type: string }[];
 }
 
@@ -192,10 +198,21 @@ export function methodTypeRefs(m: MethodLike): string[] {
     for (const p of m.params) {
       refs.push(...extractTypeIdentifiers(p.type));
     }
-    refs.push(...extractTypeIdentifiers(m.returns));
+    refs.push(...extractTypeIdentifiers(m.returns ?? ''));
     return Array.from(new Set(refs));
   }
-  return extractTypesFromSignature(m.signature, m.returns);
+  return extractTypesFromSignature(m.signature ?? '', m.returns ?? '');
+}
+
+/**
+ * The type identifiers a signature type names: every param type, then its
+ * returns — the references a signature carries in place of fields. None for
+ * an entity or a value-object, whose references are its fields'.
+ */
+export function signatureTypeRefs(type: Pick<TypeSpec, 'kind' | 'params' | 'returns'>): string[] {
+  if (type.kind !== 'signature') return [];
+  const refs = [...(type.params ?? []).flatMap((p) => extractTypeIdentifiers(p.type)), ...extractTypeIdentifiers(type.returns ?? '')];
+  return Array.from(new Set(refs));
 }
 
 /**
@@ -203,8 +220,8 @@ export function methodTypeRefs(m: MethodLike): string[] {
  * the parameter list of the method's prose signature (find<T>(id: string)
  * gives T).
  */
-export function methodGenericParameters(method: Pick<MethodSignature, 'signature'>): Set<string> {
-  return extractGenericTypeVariables(method.signature);
+export function methodGenericParameters(method: { signature?: string }): Set<string> {
+  return extractGenericTypeVariables(method.signature ?? '');
 }
 
 function normalizePart(part: string): string {

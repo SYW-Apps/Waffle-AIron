@@ -1,0 +1,25 @@
+id: signature_resolver
+name: Signature Resolver
+description: >-
+  Resolves every method signature of a scanned tree, as pure logic over the specs it is handed: each
+  contract method's signatureFrom is read both ways — as a contract method `component.method` and as
+  a signature type, an `alias::name` type reading landing where the scan bound that reference — and
+  bound when exactly one reading resolves; the source's params and returns are put on the method,
+  and every params-bearing contract method and type method gets its derived text. A signature type
+  stores no text: its text is derived on display (type_spec.derivedSignature). It never refuses: a
+  source it cannot bind, a source both readings name, a source that names a source of its own, and
+  stored params that differ from the source's are each a fact for the rules, and an unresolved,
+  ambiguous or chained source leaves the method without params. It does not judge edges: a method
+  source off the dependsOn/owns edges still resolves, so consumers see its params while the rule
+  reports the edge. It reads nothing and holds nothing. Its own component, like the Export Resolver,
+  because the Spec Index runs it inside its scan, after every reference is bound and before the
+  index is cached; the spec tree portal also hands it a part's own specs together with its pinned
+  parent excerpt, so a part judged alone sees the excerpt's sourced methods resolved.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: complete
+createdAt: '2026-10-03T19:31:52.820Z'
+updatedAt: '2026-10-03T20:54:41.749Z'

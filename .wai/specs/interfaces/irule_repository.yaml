@@ -7,31 +7,19 @@ component: rule_repository
 methods:
   - name: registerBuiltinRules
     description: Seed the built-in SDD rule set.
-    signature: 'registerBuiltinRules(): void'
-    returns: void
-    params: []
+    signatureFrom: rule_registry.registerBuiltinRules
   - name: registerPackRules
     description: Register programmatic pack rules after the built-ins.
-    signature: 'registerPackRules(packRules: SddRule[]): void'
-    returns: void
-    params:
-      - name: packRules
-        type: SddRule[]
+    signatureFrom: rule_registry.registerPackRules
   - name: ruleSequence
     description: Return the ordered rule run sequence.
-    signature: 'ruleSequence(): SddRule[]'
-    returns: SddRule[]
-    params: []
+    signatureFrom: rule_index.ruleSequence
   - name: knownIssueCodes
     description: Return the aggregate known-issue-code set.
-    signature: 'knownIssueCodes(): RuleCode[]'
-    returns: RuleCode[]
-    params: []
+    signatureFrom: rule_index.knownIssueCodes
   - name: specScopedRules
     description: Return the spec-scoped rules in run order, for the write gate.
-    signature: 'specScopedRules(): SddRule[]'
-    returns: SddRule[]
-    params: []
+    signatureFrom: rule_index.specScopedRules
 status: complete
 createdAt: '2026-07-14T19:17:21.194Z'
-updatedAt: '2026-09-14T06:07:03.628Z'
+updatedAt: '2026-10-03T21:10:34.684Z'

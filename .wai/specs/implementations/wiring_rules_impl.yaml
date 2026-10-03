@@ -688,7 +688,9 @@ methods:
           Mark the types referenced by fields: for every field of every type t in ctx.types, pass
           each ref of t.fieldTypeRefs(field.type) to the private helper markTypeReferenced, which
           ignores a ref when ctx.isBuiltinType(ref) holds and otherwise records the id of every type
-          in ctx.types whose matchesRef(ref) holds
+          in ctx.types whose matchesRef(ref) holds; and, a signature type's params and returns being
+          its references in place of fields, each ref of t.signatureTypeRefs() for every type t,
+          except t itself
         type: local
       - stepNumber: 2
         description: >-
@@ -697,23 +699,31 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
+          Mark the signature types methods take their signature from: for every source fact in
+          ctx.signatureFacts (none on a candidate run) whose type reading named a signature type —
+          the target of a fact of form signature, or the signature candidate of an ambiguous one —
+          record every type in ctx.types whose matchesRef(that target) holds. The facts are what the
+          loader resolved, so a signatureFrom counts exactly when it names the type
+        type: local
+      - stepNumber: 4
+        description: >-
           Mark the types referenced by type methods: pass each ref of m.typeRefs(), for every method
           m of every type t in ctx.types, to markTypeReferenced — except t itself, so a type named
           only by its own methods stays unmarked, the way a function that only calls itself is
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         label: types
         description: Judge each type against the recorded references
         type: loop
         loopKind: forEach
         over: the types t of ctx.types within scope (ctx.isSpecInScope(t.id))
-        endStep: 6
-      - stepNumber: 5
-        description: A type no field, no interface signature and no other type's method names is unused
+        endStep: 7
+      - stepNumber: 6
+        description: A type no field, no signature, no signatureFrom and no other type's method names is unused
         type: branch
         condition: t.id was never recorded as referenced
-        onFalseStep: 4
-      - stepNumber: 6
+        onFalseStep: 5
+      - stepNumber: 7
         label: typesEnd
         description: >-
           Report UNUSED_TYPE (warning; draft context when the subsystem in ctx.subsystems whose id
@@ -913,4 +923,4 @@ methods:
     exportedVia: portalMountsRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-09-27T15:25:34.288Z'
+updatedAt: '2026-10-03T20:29:58.004Z'

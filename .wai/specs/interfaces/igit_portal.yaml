@@ -38,7 +38,7 @@ methods:
       Commit ONLY the scoped pathspecs of the working tree (default ['.wai/'] — never the whole
       tree) in one commit, push the working branch, and return the pushed commit + compare URL;
       no-op (published=false) when not git-backed or every scoped path is clean.
-    signature: 'publish(message: string, subpaths: string[]): GitPublish'
+    signature: 'publish(message: string, subpaths?: string[]): GitPublish'
     returns: GitPublish
     params:
       - name: message
@@ -55,7 +55,7 @@ methods:
     params: []
   - name: configureSync
     description: Persist the project's periodic-sync setting (interval + skip-if-clean).
-    signature: 'configureSync(periodicSyncMinutes: number, skipIfClean: boolean): void'
+    signature: 'configureSync(periodicSyncMinutes?: number, skipIfClean?: boolean): void'
     returns: void
     params:
       - name: periodicSyncMinutes
@@ -66,4 +66,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T16:31:50.042Z'
-updatedAt: '2026-10-01T16:32:41.546Z'
+updatedAt: '2026-10-03T20:53:57.068Z'

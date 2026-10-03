@@ -8,6 +8,9 @@ import {
   SystemSpecSchema,
   TypeMethodSchema,
   TypeSpecSchema,
+  deriveMethodSignature,
+  storedMethodSignature,
+  storedTypeMethod,
   type ComponentSpec,
   type ImplementationSpec,
   type InterfaceSpec,
@@ -189,12 +192,87 @@ export function componentCandidateGate(
   return {
     gate: (kind, merged) => {
       refuseUnknownOwner(kind, merged as { subsystem?: string }, storedOwner);
+      // The merge is over the spec as STORED, so a sourced method carries only
+      // its source: params or returns beside it are ones the delta stated.
+      const restated = kind === 'interface' ? restatedSources((merged as { methods?: unknown }).methods) : [];
+      if (restated.length) throw new Error(`${restatedSourceRefusal(String((merged as { id?: string }).id), restated)} Nothing was written.`);
       if (kind !== 'component') return;
       const verdict = validateComponentCandidate(merged as ComponentSpec, options);
       if (verdict.errors.length) throw new Error(formatCandidateRefusal(verdict));
       return noticesFrom(verdict);
     },
   };
+}
+
+/** A stated method as the signature checks read it. */
+type StatedMethod = { name?: unknown; signatureFrom?: unknown; params?: unknown; returns?: unknown; signature?: unknown };
+
+/**
+ * The interface methods that name a signatureFrom and ALSO state params or
+ * returns (SIGNATURE_SOURCE_RESTATED): the source supplies both, so stating
+ * them beside it says the contract twice. Judged on each method alone.
+ */
+function restatedSources(methods: unknown): string[] {
+  if (!Array.isArray(methods)) return [];
+  return (methods as StatedMethod[])
+    .filter((m) => m && typeof m === 'object' && m.signatureFrom !== undefined && (m.params !== undefined || m.returns !== undefined))
+    .map((m) => String(m.name));
+}
+
+/** The sentence a restated source is refused with — what is wrong and both ways out. */
+function restatedSourceRefusal(id: string, methods: string[]): string {
+  return `SIGNATURE_SOURCE_RESTATED: interface "${id}" — ${methods.map((n) => `"${n}"`).join(', ')} `
+    + `${methods.length === 1 ? 'names' : 'name'} a signatureFrom and also ${methods.length === 1 ? 'states' : 'state'} params or returns. `
+    + 'The source supplies them: state the signatureFrom alone, or the params and returns alone. To adopt a source on a '
+    + 'method that states its own, unset its params and returns in the same delta.';
+}
+
+/** The methods that state neither params, a signatureFrom nor a prose signature — nothing says what they take. */
+function unsignedMethods(methods: unknown): string[] {
+  if (!Array.isArray(methods)) return [];
+  return (methods as StatedMethod[])
+    .filter((m) => m && typeof m === 'object' && m.signatureFrom === undefined && m.params === undefined
+      && (typeof m.signature !== 'string' || m.signature.trim() === ''))
+    .map((m) => String(m.name));
+}
+
+/**
+ * Every params-bearing, unsourced method of the candidate given the text its
+ * params derive, IN PLACE — the door's text is never taken. Answers a notice
+ * naming each stated text that differed from the derived one.
+ */
+function deriveStatedTexts(kind: WritableSpecKind, candidate: Record<string, any>): string[] {
+  if ((kind !== 'interface' && kind !== 'type') || !Array.isArray(candidate.methods)) return [];
+  const differed: string[] = [];
+  candidate.methods = candidate.methods.map((m: Record<string, any>) => {
+    if (!m || typeof m !== 'object' || m.signatureFrom !== undefined || !Array.isArray(m.params)) return m;
+    const derived = deriveMethodSignature(m as { name: string; params: [] });
+    if (derived === undefined) return m;
+    if (typeof m.signature === 'string' && m.signature !== derived) differed.push(`"${m.name}": stated "${m.signature}", written "${derived}"`);
+    return { ...m, signature: derived };
+  });
+  return differed.length === 0 ? [] : [
+    `Signature text derived from params, not taken as stated — ${differed.join('; ')}. A method with params shows the text its params derive.`,
+  ];
+}
+
+/**
+ * A stored spec in the form its file holds — what a restatement carries from
+ * and is compared with: a sourced method keeps only its source, a params-bearing
+ * method its derived text. The loader resolves sources into what it answers, and
+ * carrying those resolved params into a restatement would state them twice.
+ */
+function storedForm(kind: WritableSpecKind, spec: Spec | null): Spec | null {
+  if (!spec) return spec;
+  if (kind === 'interface') {
+    const intf = spec as InterfaceSpec;
+    return { ...intf, methods: intf.methods.map((m) => storedMethodSignature(m)) } as Spec;
+  }
+  if (kind === 'type') {
+    const type = spec as TypeSpec;
+    return { ...type, methods: type.methods.map((m) => storedTypeMethod(m)) } as Spec;
+  }
+  return spec;
 }
 
 /**
@@ -310,9 +388,11 @@ export function restatementParent(restatement: SpecRestatement): SpecParent | nu
  */
 export function applyRestatement(
   restatement: SpecRestatement,
-  existing: Spec | null,
+  loaded: Spec | null,
   parent: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | null,
 ): SpecRestatementApplication {
+  // The stored spec as its file holds it: a sourced method carries only its source.
+  const existing = storedForm(restatement.kind, loaded);
   const replacedExisting = existing !== null;
   const parentRef = restatementParent(restatement);
   if (parentRef && !parent) return refused(restatement, replacedExisting, MISSING_PARENT[restatement.kind]!(parentRef.id));
@@ -325,6 +405,21 @@ export function applyRestatement(
   const cleared = clearedByOmission(existing, candidate, restatement.fields);
   stampLifecycle(candidate, existing, status.status);
 
+  // A source stated beside params or returns, and a method stating nothing it
+  // takes, are refused; a params-bearing method's text is derived, not taken.
+  if (restatement.kind === 'interface') {
+    const restated = restatedSources(candidate.methods);
+    if (restated.length) return refused(restatement, replacedExisting, `${restatedSourceRefusal(String(candidate.id), restated)} Nothing was written.`);
+  }
+  const unsigned = restatement.kind === 'interface' || restatement.kind === 'type' ? unsignedMethods(candidate.methods) : [];
+  if (unsigned.length) {
+    return refused(restatement, replacedExisting,
+      `Refusing to write ${restatement.kind} "${String(candidate.id)}": ${unsigned.map((n) => `"${n}"`).join(', ')} `
+      + `${unsigned.length === 1 ? 'states' : 'state'} neither params${restatement.kind === 'interface' ? ', a signatureFrom' : ''} nor a prose signature, `
+      + 'so nothing says what the method takes. Nothing was written.');
+  }
+  const derivedNotices = deriveStatedTexts(restatement.kind, candidate);
+
   const labelErrors = resolveLabelsOf(restatement.kind, candidate);
   if (labelErrors.length) {
     return refused(restatement, replacedExisting, `Unresolved narrative label references — nothing was saved:\n- ${labelErrors.join('\n- ')}`);
@@ -335,7 +430,7 @@ export function applyRestatement(
     spec: parsed.spec,
     ...(status.status ? { status: status.status } : {}),
     replacedExisting,
-    notices: existing ? rewriteNotices(restatement.kind, existing, candidate, carried, cleared) : [],
+    notices: [...(existing ? rewriteNotices(restatement.kind, existing, candidate, carried, cleared) : []), ...derivedNotices],
     changedMethods: changedMethodsOf(restatement.kind, existing, candidate),
   };
 }

@@ -29,7 +29,10 @@ methods:
     description: >-
       Verify the owning component exists, then persist an L3 interface specification and answer with
       the receipt for it: which spec was written, at what status, and whether one already held that
-      id.
+      id. The tool's method items take params, returns, signatureFrom and an optional prose
+      signature: a method states params with returns, or a signatureFrom alone, or a prose signature
+      with returns — the authoring seam refuses a signatureFrom stated beside params or returns
+      (SIGNATURE_SOURCE_RESTATED), and the writer stores the text params derive.
     signature: 'defineInterface(spec: InterfaceSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
   - name: writeNarrative
@@ -197,11 +200,14 @@ methods:
     description: >-
       The sdd_get_spec workflow: read one stored spec by kind and id through the core client
       adapter, optionally narrowed to named methods, and answer with the stored spec plus the
-      derived markers a read may attach. A methods filter that names something the spec does not
-      declare returns nothing and says what it does declare, so a misspelling never reads as a
-      method with no content; a narrowed answer carries the partial-result marker, because the write
-      tools REPLACE a method list and re-authoring from a partial read would delete every method
-      left out.
+      derived markers a read may attach. A contract's methods are answered in their stored form
+      (method_signature.storedForm), so a sourced method shows its signatureFrom and not the params
+      the loader resolved into it; those come back beside the spec as the derived resolvedSignatures
+      marker, one entry per sourced method, never inside it. A methods filter that names something
+      the spec does not declare returns nothing and says what it does declare, so a misspelling
+      never reads as a method with no content; a narrowed answer carries the partial-result marker,
+      because the write tools REPLACE a method list and re-authoring from a partial read would
+      delete every method left out.
     signature: 'getSpec(kind: string, id: string, methods?: string[]): SpecReadResult'
     returns: SpecReadResult
     params:
@@ -219,11 +225,12 @@ methods:
         optional: true
   - name: addType
     description: >-
-      The sdd_add_type workflow: define an entity or value-object through the core client adapter
-      and answer with the receipt for it. A define is an UPSERT, so re-defining an id REPLACES its
-      fields, methods and invariants and restates its code claim — the notices name what was carried
-      forward, what a dropped member removed and what an omission cleared. A type carries no
-      lifecycle status, so the receipt states none.
+      The sdd_add_type workflow: define an entity, a value-object or a signature through the core
+      client adapter and answer with the receipt for it. The tool takes the kind signature with
+      top-level params and returns, and a type method's optional params. A define is an UPSERT, so
+      re-defining an id REPLACES its fields, methods, invariants, params and returns and restates
+      its code claim — the notices name what was carried forward, what a dropped member removed and
+      what an omission cleared. A type carries no lifecycle status, so the receipt states none.
     signature: 'addType(spec: TypeSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -325,4 +332,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-02T20:50:00.891Z'
+updatedAt: '2026-10-03T19:38:11.218Z'

@@ -35,7 +35,13 @@ fields:
     type: Record<string, Record<string, string>>
     description: Per kind, each spec id's absolute file path
     optional: false
+  - name: signatures
+    type: SignatureFacts
+    description: >-
+      What the scan's signature resolution recorded: each signatureFrom it met and how it resolved,
+      and each stored signature text its params contradict
+    optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-09-25T21:08:41.061Z'
+updatedAt: '2026-10-03T19:31:36.431Z'

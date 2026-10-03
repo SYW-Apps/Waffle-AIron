@@ -1219,8 +1219,11 @@ methods:
         endStep: 16
       - stepNumber: 16
         description: >-
-          Write the contract with the method under newName: its name, and the method name inside its
-          signature string. Params, returns, description, guarantees and findings stay as they are
+          Write the contract with the method under newName: its name, and, for a prose method (no
+          params and no signatureFrom), the method name inside its signature string. A method with
+          params has its text derived from the new name by the writer, and a sourced method stores
+          no text at all. Params, returns, signatureFrom, description, guarantees and findings stay
+          as they are
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
@@ -2269,6 +2272,70 @@ methods:
         targetComponent: project_config_repository
         targetMethod: describeProject
     conformance: 'off'
+  - name: repairSignatures
+    sourcePath: src/core/signature-repair.ts
+    narrative:
+      - stepNumber: 1
+        description: 'Read what the scan''s signature resolution recorded: the stale texts and the sources'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: signatureFacts
+      - stepNumber: 2
+        description: >-
+          Group into one repair per interface or type of the bound project itself (a contained
+          member's specs are keyed under its namespace and are its own doctor's): its stale texts as
+          regenerated, and its sourced methods with an equal restatement (a restated fact that does
+          not differ) as dropped. A differing restatement is never a repair, and neither is any
+          other method of the interface holding one: the writer stores every sourced method with
+          only its source, so re-saving that interface would silently decide the contract only its
+          author can — it stays as it is, reported by SIGNATURE_SOURCE_RESTATED, until the author
+          settles it
+        type: local
+      - stepNumber: 3
+        description: Was the write asked for?
+        type: branch
+        condition: apply, and at least one repair is planned
+        onFalseStep: 10
+      - stepNumber: 4
+        description: For each repaired spec
+        type: loop
+        loopKind: forEach
+        over: the planned repairs
+        endStep: 9
+      - stepNumber: 5
+        description: Is it an interface?
+        type: branch
+        condition: the repair's kind is interface
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Re-save the loaded interface: the writer stores every method in its stored form, so its
+          texts are derived and its sourced methods hold only the source
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 7
+        description: Done with this spec
+        type: jump
+        toStep: 9
+      - stepNumber: 8
+        label: type
+        description: >-
+          Re-save the loaded type, whose writer stores every params-bearing type method's derived
+          text
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 9
+        label: next
+        description: On to the next repaired spec
+        type: local
+      - stepNumber: 10
+        label: report
+        description: Answer the planned repairs, written or not
+        type: return
+        outcome: SignatureTextRepair[]
+    detail: full
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T18:00:27.938Z'
+updatedAt: '2026-10-03T20:54:44.038Z'

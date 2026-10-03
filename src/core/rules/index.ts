@@ -256,6 +256,8 @@ export interface BuildContextOptions {
   projectFamily?: import('../../models/project-family.js').ProjectFamily;
   /** The export usage of every connected project pair (see RuleContext.exportUsages); absent on a candidate run. */
   exportUsages?: import('../../models/exports.js').ExportUsage[];
+  /** What the loader's signature resolution recorded (see RuleContext.signatureFacts); absent on a candidate run. */
+  signatureFacts?: import('../signature-sources.js').SignatureFacts;
   /** The bound project's declared externals with their lock entries and pinned snapshots (see RuleContext.pinnedExternals). */
   pinnedExternals?: PinnedExternal[];
   /** Source-code model for structural conformance; empty when not built. */
@@ -1006,6 +1008,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ...(opts.exportTables ? { exportTables: opts.exportTables } : {}),
     ...(opts.projectFamily ? { projectFamily: opts.projectFamily } : {}),
     ...(opts.exportUsages ? { exportUsages: opts.exportUsages } : {}),
+    ...(opts.signatureFacts ? { signatureFacts: opts.signatureFacts } : {}),
     pinnedExternals,
     codeModel: opts.codeModel ?? emptyCodeModel(),
     roundTripIssues: opts.roundTripIssues,

@@ -29,7 +29,7 @@ methods:
         description: The archive-relative path of the entry to inflate
   - name: assembleArchive
     description: Deflate a set of files (the envelope + pack contents) into a single ZIP byte buffer.
-    signature: 'assembleArchive(files: PackFile[]): bytes'
+    signature: 'assembleArchive(files: pack_file[]): bytes'
     returns: bytes
     params:
       - name: files
@@ -47,7 +47,7 @@ methods:
     description: >-
       Write a file map as a directory tree under destDir, creating parent directories. Callers pass
       only codec-approved files.
-    signature: 'writeTree(destDir: string, files: PackFile[]): void'
+    signature: 'writeTree(destDir: string, files: pack_file[]): void'
     returns: void
     params:
       - name: destDir
@@ -56,4 +56,4 @@ methods:
         type: pack_file[]
 status: complete
 createdAt: '2026-07-21T18:13:23.876Z'
-updatedAt: '2026-10-03T16:46:52.833Z'
+updatedAt: '2026-10-03T20:54:01.542Z'

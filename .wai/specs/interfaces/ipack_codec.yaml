@@ -17,7 +17,7 @@ methods:
         type: string
   - name: serializeManifest
     description: Serialize a PackArchiveManifest to canonical wairon-pack.yaml text (used by build).
-    signature: 'serializeManifest(manifest: PackArchiveManifest): string'
+    signature: 'serializeManifest(manifest: pack_archive_manifest): string'
     returns: string
     params:
       - name: manifest
@@ -35,7 +35,9 @@ methods:
       normalize + confine each path under the destination (zip-slip), reject absolute/`..`/backslash
       paths, symlinks, and non-regular entries, and enforce entry-count / total-size / per-entry /
       compression-ratio / depth caps.
-    signature: 'planExtraction(entries: ArchiveEntryMeta[], limits: PackExtractionLimits): PackExtractionPlan'
+    signature: >-
+      planExtraction(entries: archive_entry_meta[], limits: pack_extraction_limits):
+      PackExtractionPlan
     returns: PackExtractionPlan
     params:
       - name: entries
@@ -46,7 +48,7 @@ methods:
     description: >-
       Assert the envelope's name/version match the inner pack manifest's; throw on mismatch (a
       tampered or mis-assembled archive).
-    signature: 'verifyIdentity(manifest: PackArchiveManifest, packName: string, packVersion: string): void'
+    signature: 'verifyIdentity(manifest: pack_archive_manifest, packName: string, packVersion: string): void'
     returns: void
     params:
       - name: manifest
@@ -60,7 +62,7 @@ methods:
       When the envelope carries integrity data, verify every entry's sha256 against entryDigests;
       returns true if integrity data was present and matched, false if the archive carried none.
       Throws on a digest mismatch.
-    signature: 'verifyIntegrity(manifest: PackArchiveManifest, files: PackFile[]): boolean'
+    signature: 'verifyIntegrity(manifest: pack_archive_manifest, files: pack_file[]): boolean'
     returns: boolean
     params:
       - name: manifest
@@ -71,7 +73,7 @@ methods:
     description: >-
       Return whether the archive's formatVersion and minWaironVersion are compatible with the
       running wairon version.
-    signature: 'checkCompatibility(manifest: PackArchiveManifest, waironVersion: string): boolean'
+    signature: 'checkCompatibility(manifest: pack_archive_manifest, waironVersion: string): boolean'
     returns: boolean
     params:
       - name: manifest
@@ -85,7 +87,7 @@ methods:
       caller-supplied values (time is passed in, keeping the codec pure), and return the sealed
       PackArchiveManifest.
     signature: >-
-      sealIntegrity(manifest: PackArchiveManifest, files: PackFile[], generatedBy: string,
+      sealIntegrity(manifest: pack_archive_manifest, files: pack_file[], generatedBy: string,
       generatedAt: string): PackArchiveManifest
     returns: PackArchiveManifest
     params:
@@ -99,4 +101,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-21T18:13:36.380Z'
-updatedAt: '2026-07-21T19:26:05.204Z'
+updatedAt: '2026-10-03T20:54:02.008Z'

@@ -6,17 +6,9 @@ component: record-repository
 methods:
   - name: get
     description: Loads a stored scenario record by its id.
-    signature: "get(id: string): scenario_record"
-    returns: "scenario_record"
-    params:
-      - name: id
-        type: string
+    signatureFrom: record-store.readRow
   - name: save
     description: Persists a scenario record.
-    signature: "save(record: scenario_record): void"
-    returns: "void"
-    params:
-      - name: record
-        type: scenario_record
+    signatureFrom: record-store.writeRow
 createdAt: '2026-07-03T12:00:00Z'
 updatedAt: '2026-07-03T12:00:00Z'

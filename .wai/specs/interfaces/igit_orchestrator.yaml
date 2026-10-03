@@ -40,7 +40,7 @@ methods:
       and produce the compare URL; no-op when not git-backed or when every scoped path is clean. A
       hosted member commits through its family root's repository with its own <path>/.wai/ pathspec;
       a family migration publishes every touched project's pathspec in one commit.
-    signature: 'publish(message: string, subpaths: string[]): GitPublish'
+    signature: 'publish(message: string, subpaths?: string[]): GitPublish'
     returns: GitPublish
     params:
       - name: message
@@ -60,7 +60,7 @@ methods:
     description: >-
       Persist the periodic-sync setting (interval + skip-if-clean) into the project's git-backing
       config; rejects when the project is not git-backed.
-    signature: 'configureSync(periodicSyncMinutes: number, skipIfClean: boolean): void'
+    signature: 'configureSync(periodicSyncMinutes?: number, skipIfClean?: boolean): void'
     returns: void
     params:
       - name: periodicSyncMinutes
@@ -71,4 +71,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T16:31:53.451Z'
-updatedAt: '2026-10-01T16:32:39.704Z'
+updatedAt: '2026-10-03T20:53:56.582Z'

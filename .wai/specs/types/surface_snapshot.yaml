@@ -78,13 +78,15 @@ methods:
     description: >-
       sha256 over the snapshot's canonical CONTRACT, never over how its references are spelled
       (stage 2's promise): the public names with each entry's stereotype, transport, auth kind,
-      dispatch bindings and method shapes, the exported types and the closure's type shapes — every
-      type expression passed through canonicalTypeRef, every list in a fixed order — with provenance
-      (stateId, generatedAt, origin) and prose (descriptions, groups, display names) left out.
-      Ignoring prose is intended (stage 4 decision): a producer rewording a description, regrouping
-      a type or re-spelling a reference changes no consumer's pin and raises no EXTERNAL_DRIFTED;
-      only a change to the contract a caller can depend on does. Re-pinning an unchanged contract
-      never moves it. The lock's `digest`, and what EXTERNAL_DRIFTED compares.
+      dispatch bindings and method shapes, the exported types and the closure's type shapes — a data
+      type's shape is its kind and fields, a signature type's is its kind, its params' types and
+      optionality in order (never their names) and its returns — every type expression passed
+      through canonicalTypeRef, every list in a fixed order — with provenance (stateId, generatedAt,
+      origin) and prose (descriptions, groups, display names) left out. Ignoring prose is intended
+      (stage 4 decision): a producer rewording a description, regrouping a type or re-spelling a
+      reference changes no consumer's pin and raises no EXTERNAL_DRIFTED; only a change to the
+      contract a caller can depend on does. Re-pinning an unchanged contract never moves it. The
+      lock's `digest`, and what EXTERNAL_DRIFTED compares.
     sourcePath: src/models/surface-references.ts
   - name: memberDigest
     signature: 'memberDigest(publicName: string, member: string): string | null'
@@ -94,7 +96,9 @@ methods:
       moves it: for a contract method, its name, its parameters' types and optionality in order
       (never their names) and its return type; for `capability:<name>`, the dispatch binding and the
       bound method's signature so digested; for `type`, the type's shape; in every case followed by
-      the shapes of every type in the transitive closure of the types it names. Every type
+      the shapes of every type in the transitive closure of the types it names — a signature type's
+      closure followed through its params and returns as a data type's is through its fields, so
+      changing a named signature moves the digest of every member that names it. Every type
       expression is passed through canonicalTypeRef before it is hashed, and the closure is found by
       canonical id, never by the suffix match — so the rewrite `shared::native-access-kind` →
       `native-access-kind` inside the producer moves no digest. Null when the name is not in the
@@ -115,4 +119,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-09-28T17:16:03.303Z'
+updatedAt: '2026-10-03T19:43:04.336Z'

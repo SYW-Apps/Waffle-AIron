@@ -35,11 +35,15 @@ methods:
         description: >-
           Build the judgement as a write hook over those same settings. It judges the MERGED spec,
           because a delta on its own cannot tell you the resulting componentType, and it is the
-          resulting componentType that decides whether a field belongs. For a component or a type it
-          also refuses an owning subsystem the delta CHANGED to one the tree does not have, read
-          through the core adapter's loadSpec — as every create refuses an unknown parent; an owner
-          the delta leaves alone is not judged, so a spec already pointing at a missing subsystem
-          can still be repaired
+          resulting componentType that decides whether a field belongs. The merge is over the spec
+          as STORED, so a method that takes its signature from a source carries only the source, not
+          the params the loader resolved into it; the hook refuses a merged interface method that
+          names a signatureFrom and also states params or returns (SIGNATURE_SOURCE_RESTATED), so
+          adopting a source on a method that restated it means unsetting its params and returns in
+          the same delta. For a component or a type it also refuses an owning subsystem the delta
+          CHANGED to one the tree does not have, read through the core adapter's loadSpec — as every
+          create refuses an unknown parent; an owner the delta leaves alone is not judged, so a spec
+          already pointing at a missing subsystem can still be repaired
         type: local
       - stepNumber: 4
         description: >-
@@ -162,7 +166,9 @@ methods:
       - stepNumber: 8
         description: >-
           Refuse with the application's own sentence — a missing parent, a status the write would
-          lower, or a label that does not resolve — before anything reaches disk
+          lower, a label that does not resolve, or an interface method that names a signature source
+          and also states params or returns (SIGNATURE_SOURCE_RESTATED) — before anything reaches
+          disk
         type: throw
         error: restatement refused
       - stepNumber: 9
@@ -301,4 +307,4 @@ methods:
         outcome: reported
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-09-27T10:54:25.786Z'
+updatedAt: '2026-10-03T19:37:14.961Z'

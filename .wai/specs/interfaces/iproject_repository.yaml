@@ -39,93 +39,44 @@ methods:
     description: >-
       The root path of the hosted project registered under this id, or null. Pure 1:1 forward to the
       index; unscoped, for callers that authorized the operation it serves.
-    signature: 'existingRoot(id: string): string | null'
-    returns: string | null
-    params:
-      - name: id
-        type: string
+    signatureFrom: project_index.existingRoot
   - name: register
     description: >-
       Upsert a project record at an existing directory instead of allocating one under the data
       root. Pure 1:1 forward to the write registry.
-    signature: 'register(id: string, rootPath: string): HostedProjectRecord'
-    returns: HostedProjectRecord
-    params:
-      - name: id
-        type: string
-      - name: rootPath
-        type: string
+    signatureFrom: project_write_registry.register
   - name: family
     description: The hosted family a record belongs to, family root first. Pure 1:1 forward to the index.
-    signature: 'family(id: string): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
-    params:
-      - name: id
-        type: string
+    signatureFrom: project_index.family
   - name: declaredMembers
     description: >-
       The members a family root declares on disk, nested included, each as the record it should
       hold. Pure 1:1 forward to the index.
-    signature: 'declaredMembers(id: string): PlannedMemberRecord[]'
-    returns: PlannedMemberRecord[]
-    params:
-      - name: id
-        type: string
+    signatureFrom: project_index.declaredMembers
   - name: repositoryScope
     description: The repository root and the pathspecs a record commits through. Pure 1:1 forward to the index.
-    signature: 'repositoryScope(id: string): RepositoryScope | null'
-    returns: RepositoryScope | null
-    params:
-      - name: id
-        type: string
+    signatureFrom: project_index.repositoryScope
   - name: registerMember
     description: Upsert a member record. Pure 1:1 forward to the write registry.
-    signature: 'registerMember(record: HostedProjectRecord): HostedProjectRecord'
-    returns: HostedProjectRecord
-    params:
-      - name: record
-        type: HostedProjectRecord
+    signatureFrom: project_write_registry.registerMember
   - name: setStatus
     description: >-
       Set a record's status, with the reason a disabled record is disabled. Pure 1:1 forward to the
       write registry.
-    signature: 'setStatus(id: string, status: string, reason?: string): HostedProjectRecord'
-    returns: HostedProjectRecord
-    params:
-      - name: id
-        type: string
-      - name: status
-        type: string
-      - name: reason
-        type: string
-        optional: true
+    signatureFrom: project_write_registry.setStatus
   - name: isRetiredPart
     description: Whether a member record was retired as a part (stage 8). Pure 1:1 forward to the index.
-    signature: 'isRetiredPart(record: HostedProjectRecord): boolean'
-    returns: boolean
-    params:
-      - name: record
-        type: HostedProjectRecord
+    signatureFrom: project_index.isRetiredPart
   - name: declaredSubsystems
     description: >-
       The subsystem ids a record's spec tree declares now (a part's included), or null for an id
       with no root. Pure 1:1 forward to the index.
-    signature: 'declaredSubsystems(id: string): string[] | null'
-    returns: string[] | null
-    params:
-      - name: id
-        type: string
+    signatureFrom: project_index.declaredSubsystems
     guarantees:
       - idempotent
   - name: partSubsystems
     description: The subsystem ids a record's part holds now, or null. Pure 1:1 forward to the index.
-    signature: 'partSubsystems(id: string, alias: string): string[] | null'
-    returns: string[] | null
-    params:
-      - name: id
-        type: string
-      - name: alias
-        type: string
+    signatureFrom: project_index.partSubsystems
     guarantees:
       - idempotent
   - name: admitNarrowing
@@ -135,13 +86,8 @@ methods:
       member's record id. An unknown project, an alias that declares no member, an internal
       subsystem, or a member no record holds is refused with guidance, so a broken narrowing is
       never stored.
-    signature: 'admitNarrowing(entry: string): string'
-    returns: string
-    params:
-      - name: entry
-        type: string
-        description: One entry of a mint request's projects narrowing.
+    signatureFrom: project_index.admitNarrowing
     effect: read
 status: complete
 createdAt: '2026-07-04T12:49:59.044Z'
-updatedAt: '2026-10-03T17:57:30.771Z'
+updatedAt: '2026-10-03T21:10:22.330Z'

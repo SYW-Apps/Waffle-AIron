@@ -2469,14 +2469,22 @@ export function renameMethod(componentId: string, methodName: string, newName: s
     Array.isArray(registerEdits) && registerEdits.length > 0,
   );
 
-  // Steps 15–16: the method moves on each of those contracts — its name, and
-  // the name inside its signature. Params, returns, description, guarantees,
-  // endpoint and findings stay exactly as they are.
+  // Steps 15–16: the method moves on each of those contracts — its name, and,
+  // for a prose method, the name inside its signature. A method with params has
+  // its text derived from the new name by the writer, and a sourced method
+  // stores no text at all. Params, returns, signatureFrom, description,
+  // guarantees, endpoint and findings stay exactly as they are.
   for (const contract of moving) {
     saveInterfaceSpec({
       ...contract,
       methods: contract.methods.map((m) => (m.name === methodName
-        ? { ...m, name: newName, signature: renameInSignature(m.signature, methodName, newName) }
+        ? {
+          ...m,
+          name: newName,
+          ...(m.params === undefined && m.signatureFrom === undefined
+            ? { signature: renameInSignature(m.signature, methodName, newName) }
+            : {}),
+        }
         : m)),
     });
     renamed.push(contract.id);
@@ -2536,7 +2544,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
 }
 
 /**
- * A method's signature with the method's own name rewritten: the first
+ * A prose method's signature with the method's own name rewritten: the first
  * occurrence of `from` as a whole identifier, which is the name the signature
  * opens with. A signature that names it nowhere is left as it is — the method's
  * `name` is what the contract is read by.

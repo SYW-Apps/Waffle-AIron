@@ -108,7 +108,7 @@ methods:
       are isolated, so a hosted project reaches another root only by a `hosted:` source (git sources
       on hosted are a later, operator-enabled capability).
     signature: >-
-      screen(binding: ProjectBinding, tool: string, alias: string, path: string, newId?: string):
+      screen(binding: ProjectBinding, tool: string, alias: string, path?: string, newId?: string):
       MembershipScreen
     returns: MembershipScreen
     params:
@@ -281,4 +281,4 @@ methods:
         description: The members registered or returned, each with its parent record
 status: complete
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-03T14:20:56.741Z'
+updatedAt: '2026-10-03T20:54:00.105Z'

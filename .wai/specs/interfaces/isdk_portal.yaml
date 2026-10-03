@@ -12,7 +12,7 @@ methods:
     description: >-
       Scaffold a new pack project (declarative or code) into a directory; returns the created file
       paths.
-    signature: 'scaffoldPack(request: PackScaffoldRequest): string[]'
+    signature: 'scaffoldPack(request: pack_scaffold_request): string[]'
     returns: string[]
     params:
       - name: request
@@ -43,7 +43,7 @@ methods:
   - name: extractPack
     description: Safely extract a .wpack archive into a destination directory under enforced limits.
     signature: >-
-      extractPack(archive: bytes, destDir: string, limits?: PackExtractionLimits):
+      extractPack(archive: bytes, destDir: string, limits?: pack_extraction_limits):
       PackExtractionResult
     returns: PackExtractionResult
     params:
@@ -60,7 +60,7 @@ methods:
   - name: buildTreeArchive
     description: Pack a project's spec tree — the supplied roots' .wai directories — into a .waitree archive.
     signature: >-
-      buildTreeArchive(roots: TreeRootSource[], projectName: string, stateId?: string,
+      buildTreeArchive(roots: tree_root_source[], projectName: string, stateId?: string,
       includeDerived?: boolean): TreeBuildResult
     returns: TreeBuildResult
     params:
@@ -92,7 +92,7 @@ methods:
       Safely extract a .waitree archive into a destination project root under enforced limits,
       optionally refusing executable entries.
     signature: >-
-      extractTreeArchive(archive: bytes, destDir: string, limits?: PackExtractionLimits,
+      extractTreeArchive(archive: bytes, destDir: string, limits?: pack_extraction_limits,
       refuseExecutableEntries?: boolean): TreeExtractionResult
     returns: TreeExtractionResult
     params:
@@ -111,4 +111,4 @@ methods:
       address: '@wairon/sdk#extractTreeArchive'
 status: complete
 createdAt: '2026-07-21T18:13:58.018Z'
-updatedAt: '2026-08-12T17:19:57.111Z'
+updatedAt: '2026-10-03T20:54:07.794Z'

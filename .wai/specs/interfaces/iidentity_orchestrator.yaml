@@ -57,7 +57,7 @@ methods:
       tree (the units they may administer); deny when that set is empty. List hosted users, keeping
       only those whose home unit is an actionable unit in the visible set (an instance-admin sees
       all), optionally narrowed to one project's holders.
-    signature: 'listUsers(credential: string, project: string): HostedUserRecord[]'
+    signature: 'listUsers(credential: string, project?: string): HostedUserRecord[]'
     returns: HostedUserRecord[]
     params:
       - name: credential
@@ -309,4 +309,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-03T17:52:30.105Z'
+updatedAt: '2026-10-03T20:53:59.097Z'

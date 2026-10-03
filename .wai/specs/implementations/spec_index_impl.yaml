@@ -455,13 +455,25 @@ methods:
           ever consulted: no family-wide lookup. Record each as an AuthoredReference of form import
         type: local
       - stepNumber: 21
+        label: signatures
+        description: >-
+          Once every reference of the family is bound, resolve the index's signatures, handing over
+          every root's authored references so an `alias::` signature type lands where the scan bound
+          it: each signatureFrom read with its source's params and returns, each params-bearing
+          contract method and type method given its derived text (a signature type's text is derived
+          on display, never stored); the resolved interfaces and types replace the index's, and the
+          facts are kept on the index as its signatures
+        type: call
+        targetComponent: signature_resolver
+        targetMethod: resolveTree
+      - stepNumber: 22
         description: >-
           Record per root its key, parent, alias and form, the description its parent's declaration
           gives it, legacy mount, L0, configuration, alias table, tables, spec keys, its parts, and
           authored references, and the family problems met (its members' part-unavailable and
           kind-mismatch problems included)
         type: local
-      - stepNumber: 22
+      - stepNumber: 23
         description: Answer the recorded roots, bound root first
         type: return
         outcome: ScannedProjectRoot[]
@@ -505,6 +517,17 @@ methods:
         description: Read each file's bytes and answer them keyed by path
         type: local
     symbol: snapshotSpecFiles
+  - name: signatureFacts
+    narrative:
+      - stepNumber: 1
+        description: Serve the workspace scan, rescanning when the tree's file signature no longer holds
+        type: call
+        targetComponent: spec_index
+        targetMethod: listProjectRoots
+      - stepNumber: 2
+        description: Answer the signature facts the scan kept on the index
+        type: return
+        outcome: SignatureFacts
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-03T17:57:58.175Z'
+updatedAt: '2026-10-03T20:28:37.169Z'

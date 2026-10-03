@@ -28,8 +28,11 @@ import {
   resolveProjectExports,
   projectFamily,
   exportUsage,
+  signatureFacts,
+  resolveSignatures,
   loadExtensionsFor,
 } from './adapters/validator-core.js';
+import type { SignatureFacts } from './signature-sources.js';
 import { listSnapshots, listPinnedExternals, pinnedParent } from './adapters/validator-surfaces.js';
 // family_validator: the family run the portal forwards validateFamily to.
 import * as familyValidator from './family-validation.js';
@@ -629,6 +632,9 @@ function runOwnersGate(
       .map((n) => resolveProjectExports(n.namespace));
     const producers = new Set(family.references.filter((r) => r.consumer === '').map((r) => r.producer));
     const exportUsages = [...producers].map((producer) => exportUsage('', producer));
+    // Step 44: what the scan's signature resolution recorded — the loaded
+    // specs are already resolved, so the stored form is visible only here.
+    const signatures = signatureFacts();
 
     const ctx = buildRuleContext({
       system,
@@ -651,6 +657,7 @@ function runOwnersGate(
       ],
       projectFamily: family,
       exportUsages,
+      signatureFacts: signatures,
       pinnedExternals,
       // By-name selections only: a legacy path ref pins nothing to check. A dry
       // run supplies its candidate's; otherwise the stored ones.
@@ -813,10 +820,29 @@ function judgePartAlone(config: ProjectConfig, scopeSubsystem: string | undefine
     if (ownIds.has(key) || context.ids.has(key)) continue;
     issues.push(issue('warning', 'EXTERNAL_CHECK_UNAVAILABLE', `"${by}" names "${key}", which neither this part nor its pinned excerpt of "${parentId}" holds — used since the pin: re-pin with \`wairon externals pin\` while the parent is on disk.`, by));
   }
+  // Steps 7-8: the excerpt's documents are stored forms, and a part's own
+  // method may take its signature from a parent's, which the part's scan alone
+  // could not bind — so both are resolved together, as the scan resolves its
+  // own. The facts are this resolution's on the part's own methods, with the
+  // restatements and stale texts only the part's stored form shows.
+  const ownSignatures = signatureFacts();
+  const resolved = resolveSignatures(
+    [...own.interfaces, ...context.interfaces],
+    [...own.components, ...context.components],
+    [...own.types, ...context.types],
+  );
+  const ownInterfaceIds = new Set(own.interfaces.map((i) => i.id));
+  const partSignatures: SignatureFacts = {
+    sources: [
+      ...resolved.facts.sources.filter((f) => ownInterfaceIds.has(f.interfaceId) && f.outcome !== 'restated'),
+      ...ownSignatures.sources.filter((f) => f.outcome === 'restated'),
+    ],
+    staleTexts: ownSignatures.staleTexts,
+  };
   const all = {
     subsystems: [...own.subsystems, ...context.subsystems], components: [...own.components, ...context.components],
-    interfaces: [...own.interfaces, ...context.interfaces], implementations: [...own.implementations, ...context.implementations],
-    types: [...own.types, ...context.types],
+    interfaces: resolved.interfaces, implementations: [...own.implementations, ...context.implementations],
+    types: resolved.types,
   };
   const system = context.system ?? SystemSpecSchema.parse({ createdAt: EXCERPT_EPOCH, updatedAt: EXCERPT_EPOCH, name: parentId, vision: `The part's parent, "${parentId}" (no L0 pinned).` });
   const codeModel = buildCodeModel(own.implementations, own.types, root, [], []);
@@ -831,6 +857,7 @@ function judgePartAlone(config: ProjectConfig, scopeSubsystem: string | undefine
     exportTables: [],
     projectFamily: projectFamily(),
     exportUsages: [],
+    signatureFacts: partSignatures,
     pinnedExternals: [],
     packSelections: packs.filter((p): p is PackSelection => typeof p !== 'string'),
     packRequirements: [],

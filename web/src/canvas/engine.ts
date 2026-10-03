@@ -1299,15 +1299,17 @@ export function mountCanvas(host, model, opts = {}) {
     function tableShape(t) {
       var fields = visibleFields(t);
       var meths = det === 'full' ? t.methods : [];
+      // A signature type is drawn with its derived text in place of a field list.
+      var sig = t.signature && det !== 'names' ? t.signature : '';
       var head = t.name + '  \u00AB' + t.kind + '\u00BB';
-      var rows = fields.map(function (f) { return rowText(t, f); })
+      var rows = (sig ? [sig] : []).concat(fields.map(function (f) { return rowText(t, f); }))
         .concat(meths.map(function (m) { return '\u0192 ' + m.name + '(): ' + m.returns; }));
       var longest = head.length + 4;
       rows.forEach(function (r) { if (r.length > longest) longest = r.length; });
       var plain = rows.length === 0;
       var pw = Math.max(170, head.length * 6.8 + 26);
       var W = Math.max(210, Math.min(400, longest * 6.6 + 30));
-      return { fields: fields, meths: meths, head: head, plain: plain, w: plain ? pw : W, h: plain ? 40 : TH_H + fields.length * ROW_H + meths.length * ROW_H };
+      return { fields: fields, meths: meths, sig: sig, head: head, plain: plain, w: plain ? pw : W, h: plain ? 40 : TH_H + (sig ? ROW_H : 0) + fields.length * ROW_H + meths.length * ROW_H };
     }
 
     // Emit one type table with its top-left at (ax, ay); returns its size.
@@ -1331,6 +1333,13 @@ export function mountCanvas(host, model, opts = {}) {
         position: { x: ax + sh.w / 2, y: ay + TH_H / 2 }, classes: 'typeHead ' + kindCls + (dim ? ' dimmed' : ''), grabbable: false,
       });
       var ry = ay + TH_H;
+      if (sh.sig) {
+        eles.push({
+          data: { id: 'TS~' + t.id, parent: 'T~' + t.id, label: sh.sig, w: sh.w, h: ROW_H, tw: sh.w - 14 },
+          position: { x: ax + sh.w / 2, y: ry + ROW_H / 2 }, classes: 'typeRow methRow' + (dim ? ' dimmed' : ''), grabbable: false,
+        });
+        ry += ROW_H;
+      }
       sh.fields.forEach(function (f) {
         var rid = 'TF~' + t.id + '~' + f.name;
         rowIds[rid] = 1;
@@ -3417,7 +3426,7 @@ export function mountCanvas(host, model, opts = {}) {
       var mi = methodInfo(top.comp, top.method);
       var parts = ['<div class="fstep" style="opacity:.7">No step-by-step narrative \u2014 showing intent / contract:</div>'];
       if (mi) {
-        parts.push('<div class="fstep"><code>' + escText(mi.m.signature) + '</code></div>');
+        parts.push('<div class="fstep"><code>' + escText(mi.m.signature) + '</code>' + (mi.m.signatureFrom ? ' from <code>' + escText(mi.m.signatureFrom) + '</code>' : '') + '</div>');
         parts.push('<div class="fstep">' + escText(mi.m.description) + (mi.m.returns ? ' \u2014 returns ' + escText(mi.m.returns) : '') + '</div>');
       }
       if (intent) parts.push('<div class="fstep" style="font-style:italic">' + escText(intent) + '</div>');
@@ -3758,6 +3767,7 @@ export function mountCanvas(host, model, opts = {}) {
                   : '<span class="chip" style="opacity:.6">no narrative</span>')
               + '</div>'
               + '<code>' + esc(m.signature) + '</code>'
+              + (m.signatureFrom ? '<div class="mdesc">signature from <code style="display:inline">' + esc(m.signatureFrom) + '</code></div>' : '')
               + '<div class="mdesc">' + esc(m.description) + ' \u2014 returns ' + typeRefHtml(m.returns) + '</div>'
               + (mIntent && !hasNarr ? '<div class="mdesc" style="font-style:italic">' + esc(mIntent) + '</div>' : '')
               + (m.params ? '<div class="mdesc">params: ' + m.params.map(function (p) { return esc(p.name) + ': ' + typeRefHtml(p.type); }).join(', ') + '</div>' : '')
@@ -3861,7 +3871,11 @@ export function mountCanvas(host, model, opts = {}) {
                 + '</div>';
             }).join('')
           : '<span class="desc">no fields</span>';
-        body += section('Fields', ty.fields.length, fieldsInner, true);
+        if (ty.signature) {
+          body += section('Signature', 1, '<div class="method"><code>' + esc(ty.signature) + '</code></div>', true);
+        } else {
+          body += section('Fields', ty.fields.length, fieldsInner, true);
+        }
         if (ty.usedBy && ty.usedBy.length) {
           body += section('Used by methods', ty.usedBy.length, ty.usedBy.map(function (u) {
             return chip(u.component + '.' + u.method + '()', 'component', u.component);

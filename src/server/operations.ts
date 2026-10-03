@@ -101,10 +101,14 @@ function narrowToScope(projects: HostedProjectRecord[], scope: OperationsReadSco
   return projects.filter((p) => scope.projectIds.includes(p.id));
 }
 
-/** Resolve the advisory quota policy from host config, secure (disabled) default
- *  when unset. */
-function resolveQuotaPolicy(cfg: HostConfig): ResourceQuotaPolicy {
-  return cfg.quotaPolicy ?? DISABLED_QUOTA_POLICY;
+/**
+ * host_config.effectiveQuotaPolicy — the quota policy in force: the disabled
+ * default (enabled false, mode observe, no limits) with each field the
+ * configured `quotaPolicy` sets laid over it. The one place the policy is
+ * resolved; quota evaluation passes what it answers.
+ */
+export function effectiveQuotaPolicy(cfg?: Pick<HostConfig, 'quotaPolicy'>): ResourceQuotaPolicy {
+  return cfg?.quotaPolicy ? { ...DISABLED_QUOTA_POLICY, ...cfg.quotaPolicy } : DISABLED_QUOTA_POLICY;
 }
 
 // ── Diagnostics (pure) ────────────────────────────────────────────────────────
@@ -457,7 +461,7 @@ export function evaluateQuota(
 
   const projects = narrowToScope(listProjectRecords(cfg.dataDir), readScope);
   const usage = collectUsage(projects, scope);
-  const policy = resolveQuotaPolicy(cfg);
+  const policy = effectiveQuotaPolicy(cfg);
   return evaluateUsage(usage, policy);
 }
 

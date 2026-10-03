@@ -45,7 +45,9 @@ methods:
           Collect the referenced parent specs: every spec key a part spec's reference bound to that
           the part does not itself declare (dependsOn and owns targets, call, register and dispatch
           targets, declared calls, dispatch-table bindings, lifecycle entries, trusted links, type
-          positions), each a component, subsystem or type of the parent — or of another of its parts
+          positions — a contract method's signatureFrom read as a type among them, and a signature
+          type's params and returns), each a component, subsystem or type of the parent — or of
+          another of its parts
         type: local
       - stepNumber: 7
         description: Close the excerpt over what judging them needs
@@ -56,8 +58,9 @@ methods:
       - stepNumber: 8
         label: closed
         description: >-
-          Load the spec; for a component add its contract and its subsystem's L1; for a contract or
-          type add every type its methods or fields name
+          Load the spec; for a component add its contract and its subsystem's L1; for a contract add
+          every type its methods name, a signatureFrom read as a type included; for a type add every
+          type its fields, its methods' params and, for a signature, its params and returns name
         type: call
         targetComponent: spec_loader
         targetMethod: loadSpec
@@ -87,4 +90,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-02T20:23:56.291Z'
-updatedAt: '2026-10-02T21:40:57.776Z'
+updatedAt: '2026-10-03T20:45:36.104Z'

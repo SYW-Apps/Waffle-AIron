@@ -42,7 +42,7 @@ methods:
     description: >-
       Published read: one installed pack by name and optional version. Forwarded to the extension
       orchestrator.
-    signature: 'resolveInstalledPack(name: string, version?: string): InstalledPack | null'
+    signature: 'resolveInstalledPack(name: string, version: string): InstalledPack | null'
     returns: InstalledPack | null
     params:
       - name: name
@@ -57,7 +57,7 @@ methods:
     description: >-
       Published write: install a pack from a directory on disk. Forwarded to the extension
       orchestrator.
-    signature: 'installPackFromDirectory(sourceDir: string, origin?: string): InstalledPack'
+    signature: 'installPackFromDirectory(sourceDir: string, origin: string): InstalledPack'
     returns: InstalledPack
     params:
       - name: sourceDir
@@ -71,7 +71,7 @@ methods:
     description: >-
       Published write: remove an installed pack, answering whether there was one. Forwarded to the
       extension orchestrator.
-    signature: 'uninstallPack(name: string, version?: string): boolean'
+    signature: 'uninstallPack(name: string, version: string): boolean'
     returns: boolean
     params:
       - name: name
@@ -243,4 +243,4 @@ lint:
         no site, so this allow is spec-wide; it is the only untyped parameter on this contract.
 status: complete
 createdAt: '2026-09-25T17:33:10.144Z'
-updatedAt: '2026-09-29T21:27:50.265Z'
+updatedAt: '2026-10-03T20:53:56.193Z'

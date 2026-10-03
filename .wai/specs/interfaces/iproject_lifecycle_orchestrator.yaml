@@ -68,7 +68,7 @@ methods:
       list pending approval requests the caller may decide: an instance-admin sees all; otherwise a
       request is included only when the caller's resolved approval:decide permission over the
       request's project is yes. Optionally narrowed to one project.
-    signature: 'listPendingRequests(credential: string, projectId: string): ApprovalRequest[]'
+    signature: 'listPendingRequests(credential: string, projectId?: string): ApprovalRequest[]'
     returns: ApprovalRequest[]
     params:
       - name: credential
@@ -137,4 +137,4 @@ methods:
         type: number
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-10-03T13:39:32.871Z'
+updatedAt: '2026-10-03T20:54:04.664Z'

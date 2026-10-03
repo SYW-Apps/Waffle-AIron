@@ -38,7 +38,7 @@ methods:
       actual backup; both happen). Called at a family root's repository root: a family root commits
       ['.wai/'], a member its own ['<path>/.wai/'], a family migration every touched project's
       pathspec at once. A no-op returning a clean outcome when nothing under the pathspecs changed.
-    signature: 'publish(message: string, subpaths: string[]): GitPublish'
+    signature: 'publish(message: string, subpaths?: string[]): GitPublish'
     returns: GitPublish
     params:
       - name: message
@@ -61,7 +61,7 @@ methods:
     description: >-
       Persist the project's periodic-sync setting (interval minutes + skip-if-clean) into its
       git-backing config; an absent interval disables periodic sync for this project.
-    signature: 'configureSync(periodicSyncMinutes: number, skipIfClean: boolean): void'
+    signature: 'configureSync(periodicSyncMinutes?: number, skipIfClean?: boolean): void'
     returns: void
     params:
       - name: periodicSyncMinutes
@@ -72,4 +72,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T16:32:06.430Z'
-updatedAt: '2026-10-01T16:32:44.443Z'
+updatedAt: '2026-10-03T20:53:58.048Z'

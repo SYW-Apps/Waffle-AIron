@@ -9,7 +9,7 @@ methods:
   - name: buildTreeArchive
     description: Pack the supplied tree roots' .wai directories into .waitree archive bytes (SDK forward).
     signature: >-
-      buildTreeArchive(roots: TreeRootSource[], projectName: string, stateId?: string,
+      buildTreeArchive(roots: tree_root_source[], projectName: string, stateId?: string,
       includeDerived?: boolean): TreeBuildResult
     returns: TreeBuildResult
     params:
@@ -122,4 +122,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-08-12T17:24:09.167Z'
-updatedAt: '2026-08-12T18:28:00.354Z'
+updatedAt: '2026-10-03T20:54:09.110Z'

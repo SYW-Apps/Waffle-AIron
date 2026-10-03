@@ -1163,6 +1163,66 @@ from where its files live.
   master credential's whole-instance reach. Other formats are unchanged, and the
   signed view link still renders with health "not checked".
 
+### Signatures: one source, named when shared
+
+A method's signature is stated once. The text is derived from structured params, a
+function type can be named and reused, and a method that only forwards can take its
+params and returns from what it forwards to instead of restating them.
+
+- **Derived text.** A contract method with `params` shows `name(a: T, b?: U): R`: its
+  params in declared order, `?` after an optional one, the types exactly as written, then
+  the returns. The writer stores that text and the loader re-derives it on every load, so
+  a stale stored text is never shown; a hand edit that drifted is `SIGNATURE_TEXT_STALE`
+  (warning) and any save repairs it. A method without params keeps its prose. Type methods
+  gain optional `params` too, and derive the same way.
+- **Signature types.** A new type kind, `signature`: params, returns and a description,
+  nothing else. It is a named function type, so a callback param can be typed by it, and
+  its text is `(a: T, b?: U): R`. A signature type carrying fields or methods, or lacking
+  its returns, and a data type carrying params or returns, is `SIGNATURE_TYPE_MEMBERS`
+  (error).
+- **`signatureFrom`.** A contract method may name one source instead of stating its
+  params and returns: a signature type, or a `component.method` its component reaches
+  through `dependsOn` or `owns`. The loader resolves it, so every consumer sees the
+  source's params. No chains. The findings:
+  - `SIGNATURE_SOURCE_UNRESOLVED`, `SIGNATURE_SOURCE_AMBIGUOUS` (the value names both a
+    method and a signature type; qualify it), `SIGNATURE_SOURCE_CHAINED`,
+    `SIGNATURE_SOURCE_OFF_EDGE` and `SIGNATURE_SOURCE_RESTATED` (a source beside params
+    or returns that differ from it) are errors.
+  - `SIGNATURE_SOURCE_AVAILABLE` (**notice**) points at a Repository facade's methods
+    that restate exactly the owned member method they forward to. Switch it off with
+    `rules.sddRuleSeverity`.
+- **Authoring.** `sdd_define_interface` takes `signatureFrom` (and `signature` becomes
+  optional when params derive it); `sdd_add_type` takes `kind: signature` with `params`
+  and `returns`, and type-method `params`. A write that states a source beside params or
+  returns is refused. To adopt a source on an existing method, the `sdd_update_spec`
+  delta sets `signatureFrom` and unsets the method's `params`, `returns` and
+  `signature`. `sdd_get_spec` answers a contract in its stored form, with each sourced
+  method's resolved params beside it as a read-only `resolvedSignatures` marker.
+  Renames and method moves carry `signatureFrom` with them.
+- **Everywhere it is shown.** The canvas draws a sourced method's source beside its
+  signature and a signature type with its text in place of a field list; the producers'
+  doc pages do the same; the web specs editor shows a derived signature read-only and
+  edits `signatureFrom`.
+- **Snapshots and OpenAPI.** A surface snapshot carries every method's params inline and
+  never a `signatureFrom`. A signature type travels in the type closure complete (its
+  params and returns), the closure follows them, and the digests include its shape, so
+  changing a named signature moves the digest of every member that names it. The OpenAPI
+  codec renders a signature type as a component with no `type` constraint, a description
+  saying it is a function type with no JSON form, and an `x-wairon-signature` extension
+  holding its params and returns; `fromOpenApi` decodes it back.
+- **`WAIRON_QUOTA_POLICY`** sets the hosted quota policy the way `WAIRON_AUDIT_POLICY`
+  sets the audit policy: a JSON object of any of its fields (`enabled`, `mode`, and the
+  non-negative integer limits) laid over the disabled default, refused at startup when
+  invalid.
+- wairon's own tree adopts `signatureFrom` on its Repository facades: 164 methods across
+  25 facades now name the member method they forward to.
+
+**Upgrading.** Run `wairon doctor --fix` once: it rewrites every stored signature text
+that differs from the text its params derive (plain `wairon doctor` lists them first),
+and drops a sourced method's restatement when it equals its source. A restatement that
+differs is never repaired, since only its author knows which contract was meant. The
+rewritten specs make the lock stale, so re-lock afterwards.
+
 ### The undecided debt is decided
 
 The conformance debt register carried 229 findings marked *undecided*: places where the
