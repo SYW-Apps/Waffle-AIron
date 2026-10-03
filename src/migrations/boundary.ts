@@ -93,6 +93,9 @@ export function planInternalize(family: ProjectFamily, bound: string, request: M
   // Stage 8: a part is a storage move only — its specs are already the project's own.
   const part = familyNode(family, bound)?.parts.find((p) => p.alias === alias);
   if (part) return planPartInternalize(plan, family, bound, alias, part);
+  // Stage 8: a project in a `../` sibling checkout — demoted in place, then moved in as the part it became.
+  const sibling = familyNode(family, bound)?.externals.find((e) => e.role === 'member' && e.sourceKind === 'path' && e.alias === alias);
+  if (sibling) return planSiblingInternalize(plan, family, bound, request);
   // Step 1.
   const member = memberUnder(family, bound, alias, plan);
   // Steps 2-3.
@@ -121,13 +124,68 @@ export function planInternalize(family: ProjectFamily, bound: string, request: M
 function planPartInternalize(plan: MigrationPlan, family: ProjectFamily, bound: string, alias: string, part: ProjectNode['parts'][number]): MigrationPlan {
   if (part.storage === 'git') refuse(plan, 'read-only', bound, `the part "${alias}" is fetched from git (${part.commit ?? 'its pinned commit'}): its files are the fetch cache's — internalize it in a checkout of its repository`);
   else if (part.directory === undefined) refuse(plan, 'member-absent', bound, `${label(bound)}'s part "${alias}" cannot be read: ${part.reason ?? 'its directory is absent'}`);
-  else if (!insideFamily(plan, part.directory)) refuse(plan, 'not-contained', bound, `the part "${alias}" is stored outside the family root (${part.directory}), where one transaction cannot write it`);
+  else siblingRefused(plan, bound, alias, part.directory);
   if (plan.refusals.length > 0) return plan;
   const node = familyNode(family, bound)!;
   edit(plan, bound, 'move', `internalize ${alias}: the part's subsystems (${part.subsystems.join(', ') || 'none'}) move into ${label(bound)}'s own specs folder — a storage move, no reference changes`,
     { root: node.directory, call: 'internalizeMember', args: [alias, { home: '' }] });
   plan.edits.push({ project: bound, kind: 'delete', detail: `what remains of ${alias}'s .wai (its PartOf, its pin of the parent): deleted, each listed` });
   return plan;
+}
+
+/**
+ * planInternalize for a PROJECT stored in a `../` sibling checkout (stage 8):
+ * planDemote's refusals, notes and named export removals, then the core's
+ * internalize — which demotes it in place and moves the part it became in —
+ * and the bound project's pin of it removed, all in the one transaction.
+ */
+function planSiblingInternalize(plan: MigrationPlan, family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan {
+  const demoted = planDemote(family, bound, { ...request, verb: 'demote' });
+  plan.refusals.push(...demoted.refusals);
+  plan.notes.push(...demoted.notes);
+  if (plan.refusals.length > 0) return plan;
+  const alias = request.alias ?? '';
+  const node = familyNode(family, bound)!;
+  for (const e of demoted.edits.filter((x) => x.kind === 'export')) plan.edits.push(e);
+  edit(plan, bound, 'move', `internalize ${alias}: demoted in place, then its subsystems moved into ${label(bound)}'s own specs folder`,
+    { root: node.directory, call: 'internalizeMember', args: [alias, request.destination ?? { home: '' }] });
+  edit(plan, bound, 'pin', `pin ${alias} removed`, { root: node.directory, call: 'unpin', args: [alias] });
+  plan.edits.push({ project: alias, kind: 'delete', detail: `${alias}'s L0, lock, pins and derived outputs end with its boundary, and its folder's .wai with the move: deleted, each listed` });
+  return plan;
+}
+
+/**
+ * The bound project's L0 export entries a demote of the member at `dir`
+ * removes, each as it reads (`patient-portal (from frontdesk)`): an entry at
+ * audience project, renaming nothing, naming a target the member uses through
+ * its alias for the bound project or imports from it by `use`, that no other
+ * family project uses — read from the member's own references and the bound
+ * project's export table, exactly as the core retires them.
+ */
+function retiredExports(family: ProjectFamily, bound: string, memberKey: string | undefined, dir: string): string[] {
+  const boundNode = familyNode(family, bound)!;
+  const parentId = boundNode.id;
+  const memberConfig = configAt(dir);
+  const aliases = new Set(Object.entries(memberConfig?.externals ?? {}).filter(([a, d]) => (d?.project ?? a) === parentId).map(([a]) => a));
+  if (aliases.size === 0) return [];
+  const table = runWithProjectRoot(boundNode.directory, () => core.resolveProjectExports());
+  const targetOf = (name: string): string | undefined => {
+    const e = table.entries.find((x) => x.publicName === name);
+    return e?.component ?? e?.typeDef;
+  };
+  const used = new Set<string>();
+  const ownRefs = runWithProjectRoot(dir, () => core.projectFamily().authoredReferences);
+  for (const ref of ownRefs) {
+    const [first, name, ...rest] = ref.authored.split('::');
+    if (rest.length === 0 && name !== undefined && aliases.has(first)) used.add(targetOf(name) ?? name);
+  }
+  for (const a of aliases) for (const name of memberConfig?.externals?.[a]?.use ?? []) if (name !== '*') used.add(targetOf(name) ?? name);
+  const elsewhere = new Set(family.references.filter((r) => r.producer === bound && r.consumer !== bound && r.consumer !== memberKey).map((r) => r.target));
+  const system = runWithProjectRoot(boundNode.directory, () => core.loadSpec('system', 'system')) as SystemSpec | null;
+  return ((system?.publicInterfaces ?? []) as { from?: string; as?: string; component?: string; typeDef?: string; audience?: string }[])
+    .filter((e) => e.audience === 'project' && e.as === undefined)
+    .filter((e) => { const t = e.component ?? e.typeDef; return t !== undefined && used.has(t) && !elsewhere.has(t); })
+    .map((e) => `${e.component ?? e.typeDef}${e.from ? ` (from ${e.from})` : ''}`);
 }
 
 /** Every family project other than the bound one that names the member, by the alias it uses. */
@@ -356,10 +414,27 @@ export function plan(family: ProjectFamily, bound: string, request: MigrationReq
   }
 }
 
-/** A directory strictly inside the plan's family root, where a rehearsal can copy it. */
+/** A directory strictly inside the plan's family root. */
 function insideFamily(plan: MigrationPlan, dir: string): boolean {
   const rel = path.relative(plan.familyRoot, dir);
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/**
+ * Stage 8: a member stored in a sibling checkout outside the family root joins
+ * the family transaction when it shares the family root's volume — its files
+ * change all-or-nothing with the rest, while each repository still gets its own
+ * commit, which the plan says plainly. One on another volume is refused: a
+ * rename across volumes is not atomic. Answers whether it was refused.
+ */
+function siblingRefused(plan: MigrationPlan, bound: string, alias: string, dir: string): boolean {
+  if (insideFamily(plan, dir)) return false;
+  if (!files.sameVolume(plan.familyRoot, dir)) {
+    refuse(plan, 'cross-volume', bound, `"${alias}" is stored at ${dir}, on another volume than the family root ${plan.familyRoot}: one transaction cannot move files across volumes atomically`);
+    return true;
+  }
+  plan.notes.push(`"${alias}" lives in a sibling checkout (${dir}): files: all-or-nothing across ${plan.familyRoot} and ${dir}; commits: one per repository — commit each repository yourself. No commit across repositories is ever atomic.`);
+  return false;
 }
 
 /**
@@ -381,7 +456,7 @@ export function planPromote(family: ProjectFamily, bound: string, request: Migra
   }
   if (part.storage === 'git') refuse(plan, 'read-only', bound, `the part "${alias}" is fetched from git (${part.commit ?? 'its pinned commit'}): promote it in a checkout of its repository — a cross-repository migration is not planned as one change`);
   else if (part.directory === undefined) refuse(plan, 'member-absent', bound, `the part "${alias}" cannot be read: ${part.reason ?? 'its directory is absent'}`);
-  else if (!insideFamily(plan, part.directory)) refuse(plan, 'not-contained', bound, `the part "${alias}" is stored outside the family root (${part.directory}), where one transaction cannot write it — promote it from a root that contains both`);
+  else siblingRefused(plan, bound, alias, part.directory);
   // Step 2: the bound project's export table, for what other family projects use of it.
   const table = core.resolveProjectExports(bound || undefined);
   // Step 3: what crosses the would-be boundary.
@@ -452,9 +527,7 @@ export function planDemote(family: ProjectFamily, bound: string, request: Migrat
   if (referenced?.sourceKind === 'git') refuse(plan, 'read-only', bound, `the member "${alias}" is fetched from git: demote it in a checkout of its repository`);
   if (referenced?.sourceKind === 'hosted') refuse(plan, 'read-only', bound, `the member "${alias}" is a hosted record: a part lives in its parent's tree`);
   const dir = member?.directory ?? referenced?.directory;
-  if (!member && referenced?.sourceKind === 'path' && dir !== undefined && !insideFamily(plan, dir)) {
-    refuse(plan, 'not-contained', bound, `the member "${alias}" is stored outside the family root (${dir}), where one transaction cannot write it — demote it from a root that contains both`);
-  }
+  if (!member && referenced?.sourceKind === 'path' && dir !== undefined) siblingRefused(plan, bound, alias, dir);
   // Step 2: every family project OTHER than the bound one that consumes it — a part has no exports.
   if (member) {
     const users = new Map<string, Set<string>>();
@@ -475,6 +548,12 @@ export function planDemote(family: ProjectFamily, bound: string, request: Migrat
   const destination: InternalizeDestination = request.destination ?? { home: '' };
   edit(plan, bound, 'demote', `demote ${alias}: its project content removed in place${destination.home ? `, its L0 vision to ${destination.home}` : ''}${destination.packs ? `, its packs ${destination.packs === 'adopt' ? 'adopted' : 'dropped'}` : ''}; references across the old boundary become local ids`,
     { root: node.directory, call: 'demoteMember', args: [alias, destination] });
+  // Every L0 export entry the demote removes, named for confirmation — hand-written ones included.
+  if (dir !== undefined) {
+    for (const name of retiredExports(family, bound, member?.namespace, dir)) {
+      plan.edits.push({ project: bound, kind: 'export', detail: `${label(bound)}'s L0 export ${name} removed: only "${alias}" used it, and a part has no boundary to export across` });
+    }
+  }
   edit(plan, bound, 'pin', `pin ${alias} removed (a part is not pinned: its specs are ${label(bound)}'s own)`, { root: node.directory, call: 'unpin', args: [alias] });
   plan.edits.push({ project: member?.namespace ?? alias, kind: 'delete', detail: `${alias}'s L0, lock, pins and derived outputs end with its boundary: deleted, each listed` });
   if (dir !== undefined && core.approvalRecord(dir)) plan.notes.push(`"${alias}"'s own approval ends with it: its lock is deleted, and ${label(bound)} is re-locked instead.`);

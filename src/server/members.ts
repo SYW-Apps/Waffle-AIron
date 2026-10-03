@@ -473,7 +473,7 @@ export function reconcile(dataDir: string, principal: Principal, projectId: stri
   // Steps 15-16: a record whose member the family no longer declares as a project is disabled,
   // never deleted — departed, or retired because its member is now a part of its parent (stage 8).
   for (const m of declared.filter((d) => d.action === 'retire')) {
-    setProjectRecordStatus(dataDir, m.record.id, 'disabled');
+    setProjectRecordStatus(dataDir, m.record.id, 'disabled', `part of ${m.record.parentProjectId}`);
     changes.push({ kind: 'retired', id: m.record.id, detail: { parent: m.record.parentProjectId, memberPath: m.record.memberPath, reason: `part of ${m.record.parentProjectId}` } });
   }
   for (const r of departedRecords(family, declared, changes)) {
@@ -493,7 +493,8 @@ export function reconcile(dataDir: string, principal: Principal, projectId: stri
     returned: changes.filter((c) => c.kind === 'returned').map((c) => c.id),
     relocated: changes.filter((c) => c.kind === 'relocated').map((c) => c.id),
     renamed: changes.filter((c) => c.kind === 'renamed').map((c) => `${c.previousId}->${c.id}`),
-    departed: changes.filter((c) => c.kind === 'departed' || c.kind === 'retired').map((c) => c.id),
+    departed: changes.filter((c) => c.kind === 'departed').map((c) => c.id),
+    retired: changes.filter((c) => c.kind === 'retired').map((c) => c.id),
     reachChanges,
     ...(commit ? { commit } : {}),
   };

@@ -189,6 +189,8 @@ export interface MemberReconciliation {
   /** 'old->new' for every member record re-keyed by a project rename. */
   renamed: string[];
   departed: string[];
+  /** Stage 8: member records retired because their member is now a part of its parent. */
+  retired: string[];
   reachChanges: ReachComparison[];
   commit?: GitPublish;
 }
@@ -1196,6 +1198,9 @@ export interface HostedProjectRecord {
   /** The member's path relative to its parent's root, forward slashes; present
    *  iff parentProjectId is. */
   memberPath?: string;
+  /** Stage 8: why a disabled record is disabled — "part of <parent>" for a member
+   *  retired as a part; cleared when the record is active again. */
+  disabledReason?: string;
 }
 
 /** What a policy-governed hosted initialization created and applied: the

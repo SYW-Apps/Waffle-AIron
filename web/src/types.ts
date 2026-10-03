@@ -95,6 +95,8 @@ export interface ProjectRecord {
   parentProjectId?: string;
   /** Stage 7: a member's path inside its parent's tree. */
   memberPath?: string;
+  /** Stage 8: why a disabled record is disabled ("part of <parent>" for a member retired as a part). */
+  disabledReason?: string;
 }
 
 /** One used member of an external, against the live producer. */

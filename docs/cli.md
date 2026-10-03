@@ -383,7 +383,8 @@ On a hosted instance a project member is a project record of its own and
 inherits access from its parent, while a **part is part of its parent's record**:
 it gets no record, and a demote retires the member's record (disabled as "part of
 `<parent>`", audited `member.retired`, its own-scope settings kept) and a promote
-re-enables it. Hosted roots are isolated, so a member with a `../` or git source
+re-enables it; the record's `disabledReason` (shown in the web app and `host
+project list`) says why. Hosted roots are isolated, so a member with a `../` or git source
 is refused there; a `hosted:` project member is its own top-level record.
 `sdd_detach_member` also **moves** the member to an isolated root of its own
 (writing `source: { hosted: <id> }` for its consumers) and `sdd_adopt_member`
@@ -409,9 +410,14 @@ included); applying it stages every change with a backup under each project's
 `.wai/transactions/<id>/` (never committed) and swaps them in, restoring every
 backup on any failure. A crash mid-swap leaves a journal: `wairon status` and
 `wairon validate` show it as a notice, and `wairon doctor --fix` rolls it back.
-No verb ever locks — each names the projects to re-lock. A member stored outside
-the family root (a `../` sibling) cannot be written in one transaction, so a verb
-that would have to write one refuses `not-contained`.
+No verb ever locks — each names the projects to re-lock. A member stored in a
+`../` sibling checkout on the same volume joins the same transaction: its files
+change all-or-nothing with the family's, the coordinator's journal names every
+owner (so `wairon doctor --fix` recovers from either root), and the plan says
+plainly "files: all-or-nothing; commits: one per repository" — commit each
+repository yourself; no commit across repositories is ever atomic. A sibling on
+another volume is refused (`cross-volume`), and a git member always is (its files
+are a read-only cache). `member demote` names every L0 export entry it removes.
 
 **Required packs.** A project may require packs of the members below it with
 `composition.requirePolicies` (see

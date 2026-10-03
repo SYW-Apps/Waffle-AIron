@@ -182,11 +182,9 @@ describe('stage 6 — the membership verbs', () => {
     expect(report.plan.notes.some((n) => /Consumers outside the family/.test(n))).toBe(true);
     // No reference text changed.
     expect(report.plan.edits.some((e) => e.kind === 'reference')).toBe(false);
-    // The one expected difference is the one detach exists for: ledger is outside the family now, and a
-    // producer outside the family is never composed live in the family run (EXTERNAL_CHECK_UNAVAILABLE, a
-    // warning per consumer) — each consumer's own gate judges it against its pin, and is clean.
-    const outside = (i: { code: string; message: string }): boolean => i.code === 'EXTERNAL_CHECK_UNAVAILABLE' && /the producer is outside the family/.test(i.message);
-    expect(newFindings(before, familyFindings(f.top, outside)), familyLines(f.top).join('\n')).toEqual([]);
+    // Ledger is outside the family now; since stage 8 every producer is compared per use against its pin,
+    // so nothing new is found — and each consumer's own gate judges it against its pin, and is clean.
+    expect(newFindings(before, familyFindings(f.top)), familyLines(f.top).join('\n')).toEqual([]);
     for (const dir of [f.top, f.billing]) {
       expect(at(dir, () => validateProject()).issues.filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => i.code), dir).toEqual([]);
     }
@@ -297,8 +295,7 @@ describe('stage 6 — detach and adopt on the reference family (canonicalized by
       const configs = [r.top, r.core, r.shared, r.transpiler].map((d) => projectConfigRepositoryAt(d).load());
       const before = familyFindings(r.top);
       expect(migrate(r.top, { verb: 'detach', alias: 'core' }).applied).toBe(true);
-      const outside = (i: { code: string; message: string }): boolean => i.code === 'EXTERNAL_CHECK_UNAVAILABLE' && /the producer is outside the family/.test(i.message);
-      expect(newFindings(before, familyFindings(r.top, outside)), familyLines(r.top).join('\n')).toEqual([]);
+      expect(newFindings(before, familyFindings(r.top)), familyLines(r.top).join('\n')).toEqual([]);
       expect(migrate(r.top, { verb: 'adopt', alias: 'core' }).applied).toBe(true);
       expect(untouched()).toEqual(coreBytes);
       expect([r.top, r.core, r.shared, r.transpiler].map((d) => projectConfigRepositoryAt(d).load())).toEqual(configs);

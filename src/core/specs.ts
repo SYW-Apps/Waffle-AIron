@@ -581,6 +581,20 @@ function pinnedAsMember(dir: string, alias: string): boolean {
   }
 }
 
+/**
+ * The commit of a `../` sibling's work tree, only when it is another git
+ * repository than the declaring root's (stage 8): a contained or
+ * same-repository member records none and runs no git process.
+ */
+function headAcross(rootDir: string, dir: string): string | undefined {
+  const theirs = gitSource.repositoryRoot(dir);
+  if (theirs === null) return undefined;
+  const ours = gitSource.repositoryRoot(rootDir);
+  const key = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
+  if (ours !== null && key(ours) === key(theirs)) return undefined;
+  return gitSource.head(dir) ?? undefined;
+}
+
 /** The fields a part's configuration must not declare: they are a project's (stage 8). */
 const PART_FORBIDDEN_FIELDS = ['members', 'externals', 'rules', 'extensions', 'composition', 'targets'];
 
@@ -2834,7 +2848,7 @@ export class SpecWorkspace {
    * the externals plane to open; nothing of it is read into this root.
    */
   private recordReferenced(raw: RawRoot, decl: MemberDeclarationRead, dir: string, commit: string | undefined): void {
-    const provenance = commit ?? gitSource.head(dir);
+    const provenance = commit ?? (decl.storage === 'path' ? headAcross(raw.dir, dir) : undefined);
     raw.record.referenced.push({
       alias: decl.alias, storage: decl.storage, directory: dir, ...(provenance ? { commit: provenance } : {}),
       partOf: null, subsystems: [], specIds: [], availability: decl.storage === 'git' ? 'cache' : 'live',
@@ -2924,7 +2938,7 @@ export class SpecWorkspace {
       this.memberProblem(raw, 'kind-mismatch', decl.alias, `the member "${decl.alias}" is a part, and its \`use\` imports nothing: a part's names are already this project's own — drop the \`use\``);
     }
     const files = this.readSpecDocuments(raw, paths.specsDir(), null, dir);
-    const provenance = commit ?? gitSource.head(dir);
+    const provenance = commit ?? (decl.storage === 'path' ? headAcross(raw.dir, dir) : undefined);
     raw.record.parts.push({
       alias: decl.alias,
       storage: decl.storage,

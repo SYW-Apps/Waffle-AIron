@@ -118,6 +118,13 @@ export interface TransactionScope {
    * files leave as deletes, and its new root, whose files arrive as creates.
    */
   whole?: string[];
+  /**
+   * Stage 8: the directory every owner's image is laid out under — the nearest
+   * common ancestor of the coordinator and every owner, so a sibling checkout
+   * outside the family root keeps its place beside it; the coordinator when
+   * absent. Computed by the rehearsal, never by a caller.
+   */
+  base?: string;
 }
 
 /** rehearsal — a private copy of a family's .wai trees. */
@@ -133,6 +140,8 @@ export interface Rehearsal {
   areas?: string[];
   /** The scope's owners copied whole: every file under them is compared. */
   whole?: string[];
+  /** Stage 8: the directory the owners are laid out under (absent reads as the family root). */
+  base?: string;
 }
 
 /** The phases a journal passes through. */
@@ -211,11 +220,11 @@ export function isEmpty(plan: MigrationPlan): boolean {
 
 /** rehearsal behaviour — a project's rehearsal root: the rehearsal's image of its live directory. */
 export function rehearsalRoot(rehearsal: Rehearsal, directory: string): string {
-  return rehearsal.roots.get(path.resolve(directory)) ?? path.join(rehearsal.directory, path.relative(rehearsal.familyRoot, directory));
+  return rehearsal.roots.get(path.resolve(directory)) ?? path.join(rehearsal.directory, path.relative(rehearsal.base ?? rehearsal.familyRoot, directory));
 }
 
 /** rehearsal behaviour — a path written in the rehearsal, named by its live project; any other path unchanged. */
 export function liveName(rehearsal: Rehearsal, written: string): string {
   const rel = path.relative(rehearsal.directory, written);
-  return rel.startsWith('..') || path.isAbsolute(rel) ? written : path.join(rehearsal.familyRoot, rel);
+  return rel.startsWith('..') || path.isAbsolute(rel) ? written : path.join(rehearsal.base ?? rehearsal.familyRoot, rel);
 }

@@ -25,6 +25,7 @@ import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import { runWithProjectRoot, setProjectRoot } from '../../src/utils/fs.js';
 import * as transaction from '../../src/migrations/transaction.js';
+import * as migrationsPortal from '../../src/migrations/index.js';
 import { allow, mintUserToken, seedUnit, subjectOf } from './helpers.js';
 import { buildHostedFamily, writeProject, type HostedFamily } from './hosted-family.js';
 import type { HostConfig, HostedUserRecord, Principal, RoleBinding } from '../../src/server/types.js';
@@ -597,7 +598,7 @@ describe('stage 8 on hosted — a part is part of its parent\'s record', () => {
     const demoted = await call(dev, 'sdd_demote_member', { alias: 'payments' }, 'billing');
     expect(demoted.isError, demoted.text).toBe(false);
     // Disabled, never deleted; its own-scope settings kept for a later promote.
-    expect(recordOf('payments')).toMatchObject({ status: 'disabled', parentProjectId: 'billing' });
+    expect(recordOf('payments')).toMatchObject({ status: 'disabled', parentProjectId: 'billing', disabledReason: 'part of billing' });
     expect(listAssignments(dataDir).some((a) => a.scopeId === 'payments')).toBe(true);
     const retired = queryAuditEvents(dataDir, { action: 'member.retired' }).find((e) => e.projectId === 'payments');
     expect(JSON.parse(retired!.metadata!)).toMatchObject({ parent: 'billing', reason: 'part of billing' });
@@ -608,8 +609,26 @@ describe('stage 8 on hosted — a part is part of its parent\'s record', () => {
     const promoted = await call(dev, 'sdd_promote_member', { alias: 'payments' }, 'billing');
     expect(promoted.isError, promoted.text).toBe(false);
     expect(recordOf('payments')).toMatchObject({ status: 'active', parentProjectId: 'billing', memberPath: 'sub/payments' });
+    expect(recordOf('payments')!.disabledReason).toBeUndefined();
     expect(queryAuditEvents(dataDir, { action: 'member.returned' }).some((e) => e.projectId === 'payments')).toBe(true);
     // The member-own `no` applies again, exactly as before.
     expect(authorize(dataDir, principalOf('u-view'), 'project:read', 'project', 'payments').value).toBe('no');
+  });
+});
+
+describe('stage 8 on hosted — reconcile names what it retired', () => {
+  it('answers a retired record under `retired`, never `departed`, with its reason', () => {
+    fs.mkdirSync(path.join(fam.payments, '.wai', 'specs', 'settlement'), { recursive: true });
+    fs.writeFileSync(path.join(fam.payments, '.wai', 'specs', 'settlement', '.index.yaml'), ['id: settlement', 'name: settlement', 'description: Settles', 'parentSystem: payments', 'publicInterfaces: []', 'trustedLinks: []', 'status: complete', "createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'", ''].join('\n'));
+    // The member becomes a part on disk (as a demote leaves it), then the records follow.
+    setProjectRoot(fam.billing);
+    invalidateSpecCache();
+    const planned = migrationsPortal.plan({ verb: 'demote', alias: 'payments' });
+    expect(planned.refusals).toEqual([]);
+    expect(migrationsPortal.apply(planned).applied).toBe(true);
+    const all: Principal = { tokenId: 't', role: 'editor', projects: ['*'], authenticated: true };
+    const reconciled = memberRegistration.reconcile(dataDir, all, 'billing', ['billing']);
+    expect(reconciled).toMatchObject({ retired: ['payments'], departed: [] });
+    expect(recordOf('payments')).toMatchObject({ status: 'disabled', disabledReason: 'part of billing' });
   });
 });

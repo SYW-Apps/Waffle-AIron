@@ -976,7 +976,13 @@ from where its files live.
   an L0 exporting exactly what the parent uses of it, references respelled `alias::name`,
   pins on both sides — and `member demote` is its exact inverse
   (promote-then-demote is the identity: the part's files byte for byte). Both run on stage
-  6's all-or-nothing transaction, plan first, and refuse a member fetched from git.
+  6's all-or-nothing transaction, plan first, and refuse a member fetched from git. A member
+  in a `../` sibling checkout on the family root's volume joins the same transaction — its
+  files change all-or-nothing with the family's and either root recovers a crash — while
+  each repository still gets its own commit, as the plan says ("files: all-or-nothing;
+  commits: one per repository"); one on another volume is refused (`cross-volume`).
+  `member move` moves a sibling member to another sibling path. A demote names every L0
+  export entry it removes, hand-written ones included.
   `subsystem externalize` now moves a subsystem into a part (a storage move: no reference,
   export or pin changes, the same verdict); `--as project` composes it with a promote.
   `member internalize` of a part is a storage move too. `member update <alias>` moves a git
@@ -990,8 +996,10 @@ from where its files live.
   a sibling checkout, a git repository or a path external that breaks a used method is
   `EXTERNAL_INCOMPATIBLE` in the family run, not only drifted. A git external's live
   producer is its ref's head; a git member's is its pinned commit. One that cannot be
-  fetched is `EXTERNAL_CHECK_UNAVAILABLE` — never a pass. Pins record the producer's commit
-  and their role (`external`, `member`).
+  fetched is `EXTERNAL_CHECK_UNAVAILABLE` — never a pass. Pins record their role
+  (`external`, `member`) and the producer's commit only when it lives in another git
+  repository (a git source, or a sibling that is its own repository): a contained or
+  same-repository producer records none, so a monorepo re-pin never churns the lock.
 - **A part on its own.** A part stored outside its parent pins the excerpt of the parent it
   uses (`wairon externals pin` at the part), so its own repository's CI can validate it
   alone (`PART_JUDGED_ALONE`); unpinned, it says "validate from the parent".
@@ -1001,7 +1009,8 @@ from where its files live.
   members; `wairon status` prints a part's subsystems under their parent, and at a part's
   root one line naming its parent and its pin.
 - **Hosted.** A part is part of its parent's record. Demoting a member retires its record
-  (disabled as "part of `<parent>`", audited `member.retired`, its own-scope settings kept,
+  (disabled with `disabledReason: part of <parent>` — shown in the web app and `host
+  project list` — reconcile's `retired`, audited `member.retired`, its own-scope settings kept,
   the reach change listed — a member-own "no" stops applying); promoting it back re-enables
   it (`member.returned`). A `hosted:` project member is its own top-level record. Hosted
   roots are isolated: a member with a `../` or git source is refused there.

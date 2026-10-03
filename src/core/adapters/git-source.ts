@@ -166,3 +166,21 @@ export function head(directory: string): string | null {
     return null;
   }
 }
+
+/**
+ * igit_source_adapter.repositoryRoot — the root of the git work tree holding a
+ * directory: the nearest ancestor (the directory itself included) holding a
+ * `.git` entry, a directory or a worktree's file; null when none does. A
+ * filesystem walk, no git process: what tells a producer in another
+ * repository (whose commit a pin records) from a same-repository one.
+ */
+export function repositoryRoot(directory: string): string | null {
+  let at = path.resolve(directory);
+  for (;;) {
+    if (fs.existsSync(path.join(at, '.git'))) return at;
+    const up = path.dirname(at);
+    if (up === at) return null;
+    at = up;
+  }
+}
+

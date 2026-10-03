@@ -239,14 +239,16 @@ function descendsFrom(records: HostedProjectRecord[], record: HostedProjectRecor
 }
 
 /** Set a record's status (active | disabled). Touches no directory. */
-export function setProjectRecordStatus(dataDir: string, id: string, status: string): HostedProjectRecord {
+export function setProjectRecordStatus(dataDir: string, id: string, status: string, reason?: string): HostedProjectRecord {
   if (status !== 'active' && status !== 'disabled') {
     throw new Error(`Invalid project status "${status}" (allowed: active, disabled).`);
   }
   const records = load(dataDir);
   const existing = records.find((r) => r.id === id);
   if (!existing) throw new Error(`Unknown project "${id}".`);
-  const record: HostedProjectRecord = { ...existing, status };
+  // The reason a disabled record is disabled (stage 8); active again clears it.
+  const { disabledReason: _was, ...rest } = existing;
+  const record: HostedProjectRecord = { ...rest, status, ...(status === 'disabled' && reason ? { disabledReason: reason } : {}) };
   const next = records.map((r) => (r.id === id ? record : r));
   save(dataDir, next);
   return withDerivedRoot(next, record);

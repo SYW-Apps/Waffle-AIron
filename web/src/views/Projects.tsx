@@ -170,7 +170,16 @@ export function Projects() {
                   </div>
                 ),
               },
-              { key: 'status', header: 'Status', cell: ({ project: p }) => <Badge tone={statusTone(p.status)}>{p.status}</Badge> },
+              {
+                key: 'status',
+                header: 'Status',
+                cell: ({ project: p }) => (
+                  <>
+                    <Badge tone={statusTone(p.status)}>{p.status}</Badge>
+                    {p.status === 'disabled' && p.disabledReason ? <span className="hint"> {p.disabledReason}</span> : null}
+                  </>
+                ),
+              },
               {
                 key: 'unit',
                 header: 'Unit',

@@ -145,28 +145,43 @@ export function resolveDeclared(): ExternalBinding[] {
     // Step 7: each external, then each referenced project member.
     return node.externals.map((declared) => bindProducer(node, declared, config, whole));
   });
-  // Steps 18-19: the caller's binding is restored; the bindings in declaration order.
+  // Steps 19-20: the caller's binding is restored; the bindings in declaration order.
   return answer(top) ?? answer(bound) ?? [];
 }
 
-/** Steps 8-17 for one producer: the usage, and — outside the family — where its live table is. */
+/** Steps 8-18 for one producer: the usage, and — outside the family — where its live table is. */
 function bindProducer(node: ProjectNode, declared: ResolvedExternal, config: ProjectConfig | null, whole: boolean): ExternalBinding {
   // Steps 8-10: a family producer, its usage mapped onto its live table.
   if (declared.sourceKind === 'family' && declared.producer !== undefined) {
-    return { external: withHead(declared), usage: exportUsage(node.namespace, declared.producer), reachable: whole };
+    return { external: declared, usage: exportUsage(node.namespace, declared.producer), reachable: whole };
   }
   if (declared.sourceKind === 'unresolved') return { external: declared, reachable: whole };
   // Step 11: any other producer, its usage counted by the public name it spells.
   const usage = pinnedUsage(node.namespace, declared.alias);
   // Steps 12-16: git through the fetch cache; hosted through the record lookup.
-  const external = declared.sourceKind === 'git' ? resolveGit(declared, config) : withHead(resolveHosted(declared));
-  // Step 17.
+  const external = declared.sourceKind === 'git' ? resolveGit(declared, config) : headAcross(node.directory, resolveHosted(declared));
+  // Step 18.
   return { external, usage, reachable: whole };
 }
 
-/** A producer on disk with the commit of the work tree holding it, when it is in one — provenance a pin records. */
-function withHead(external: ResolvedExternal): ResolvedExternal {
-  if (external.commit !== undefined || external.directory === undefined) return external;
+/** A directory as git roots compare: resolved, and case-folded where the filesystem folds case. */
+const repoKey = (dir: string): string => (process.platform === 'win32' ? path.resolve(dir).toLowerCase() : path.resolve(dir));
+
+/**
+ * Step 17: a `../` sibling or path producer records the head of the work tree
+ * holding it only when that is another git repository than the consumer's —
+ * a same-repository producer records no commit (a monorepo re-pin never
+ * churns the lock) and runs no git process.
+ */
+function headAcross(consumerDir: string, external: ResolvedExternal): ResolvedExternal {
+  if (external.directory === undefined || external.sourceKind === 'git') return external;
+  const theirs = gitSource.repositoryRoot(external.directory);
+  const ours = gitSource.repositoryRoot(consumerDir);
+  if (theirs === null || (ours !== null && repoKey(ours) === repoKey(theirs))) {
+    const { commit: _same, ...rest } = external;
+    return rest;
+  }
+  if (external.commit !== undefined) return external;
   const head = gitSource.head(external.directory);
   return head ? { ...external, commit: head } : external;
 }

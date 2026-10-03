@@ -263,15 +263,24 @@ function pathProducers(plan: MigrationPlan, family: ProjectFamily): string[] {
 /**
  * Step 4 (stage 8): each family project's parts stored inside the family root
  * — the project's own subsystems in another folder, which a promote, demote,
- * internalize or externalize writes. A folder an externalize creates needs no
- * copy: the rehearsal finds every .wai tree it holds.
+ * internalize or externalize writes — and the sibling checkout (a part or a
+ * project member stored at `../`) the verb acts on: the family transaction
+ * lays it out beside the family, so its files change all-or-nothing with the
+ * rest (each repository still gets its own commit). A git member is never an
+ * owner: its files are the fetch cache's. A folder an externalize creates
+ * needs no copy: the rehearsal finds every .wai tree it holds.
  */
 function partDirectories(plan: MigrationPlan, family: ProjectFamily): string[] {
   const inside = (dir: string): boolean => {
     const rel = path.relative(plan.familyRoot, dir);
     return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
   };
-  return family.nodes.flatMap((n) => n.parts.filter((p) => p.directory !== undefined && inside(p.directory)).map((p) => p.directory!));
+  const subject = plan.request.alias;
+  const parts = family.nodes.flatMap((n) => n.parts.filter((p) => p.storage !== 'git' && p.directory !== undefined
+    && (inside(p.directory) || p.alias === subject)).map((p) => p.directory!));
+  const siblings = family.nodes.flatMap((n) => n.externals.filter((e) => e.role === 'member' && e.sourceKind === 'path'
+    && e.directory !== undefined && e.alias === subject).map((e) => e.directory!));
+  return [...parts, ...siblings];
 }
 
 /** Step 4: the roots a verb writes that the family graph does not hold yet — a project attached or adopted. */

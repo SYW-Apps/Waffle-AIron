@@ -601,15 +601,24 @@ export function rewriteReferences(kind: string, id: string, edits: ReferenceEdit
  * (moveMountToMembers), so wairon never rewrites the L1 form.
  */
 export function moveMember(alias: string, newPath: string): void {
-  // Step 1: the graph of the bound root — the member the alias declares (a
-  // contained project member, or — stage 8 — a contained part).
+  // Step 1: the graph of the bound root — the member the alias declares: a
+  // contained project member, or (stage 8) a part or a `../` sibling project member.
   const family = graph();
+  const bound = family.nodes.find((n) => n.namespace === '');
+  const declaredAs = declaredMembers(projectConfigRepository.load() ?? {}).find((m) => m.alias === alias);
+  if (declaredAs?.storage === 'git' || declaredAs?.storage === 'hosted') {
+    throw new WaironError(`Refusing to move the member "${alias}": it is ${declaredAs.storage === 'git' ? 'fetched from git — its files are the fetch cache\'s' : 'a hosted record'}; there is no directory of this project's to move.`);
+  }
   const member = family.nodes.find((n) => n.parent === '' && n.mountAlias === alias)
-    ?? (family.nodes.find((n) => n.namespace === '')?.parts.some((p) => p.alias === alias && p.storage === 'contained')
+    ?? (bound?.parts.some((p) => p.alias === alias) || bound?.externals.some((e) => e.role === 'member' && e.alias === alias)
       ? { mountForm: 'members' as const, legacyMount: null } : undefined);
   // Steps 2-3: guard that the alias declares a member.
   if (!member) {
     throw new WaironError(`no member is declared under that alias: the bound project declares no member "${alias}".`);
+  }
+  if (declaredAs?.storage === 'path') {
+    moveSibling(alias, declaredAs.source.path ?? '', newPath, bound?.parts.some((p) => p.alias === alias) ?? false);
+    return;
   }
   // Step 4: a legacy declaration moves into `members` first.
   if (member.mountForm === 'mount') {
@@ -642,6 +651,35 @@ export function moveMember(alias: string, newPath: string): void {
     fs.renameSync(oldDir, newDir);
   }
   // Step 10: point the `members` entry at the new path.
+  projectConfigRepository.setMemberPath(alias, nextPath);
+  invalidateSpecCache();
+}
+
+/**
+ * Steps 9-10 for a member in a `../` sibling checkout (stage 8): it stays a
+ * sibling — a contained target is externalize/internalize's — on the same
+ * volume, its directory renamed and its `members` entry pointed there; a part
+ * has its PartOf path re-expressed from its new place.
+ */
+function moveSibling(alias: string, currentPath: string, newPath: string, isPart: boolean): void {
+  const root = getProjectRoot();
+  const nextPath = toPosixPath(newPath);
+  if (parseMemberSource(nextPath).storage !== 'path') {
+    throw new WaironError(`Refusing to move the member "${alias}" to "${nextPath}": it is stored in a sibling checkout and a move keeps its storage — moving it inside this project is \`member internalize\` (a part) or a family migration.`);
+  }
+  const oldDir = path.resolve(root, currentPath);
+  const newDir = path.resolve(root, nextPath);
+  if (!fs.existsSync(oldDir)) throw new WaironError(`Member directory not found at its current path: ${oldDir}`);
+  if (fs.existsSync(newDir)) throw new WaironError(`Target directory already exists: ${newDir}`);
+  ensureDir(path.dirname(newDir));
+  if (fs.statSync(oldDir).dev !== fs.statSync(path.dirname(newDir)).dev) {
+    throw new WaironError(`Refusing to move the member "${alias}" to ${newDir}: it lies on another volume, and a rename across volumes is not atomic.`);
+  }
+  fs.renameSync(oldDir, newDir);
+  if (isPart) {
+    const parentId = effectiveProjectId(projectConfigRepository.load() ?? { name: loadSystemSpec()?.name ?? '' });
+    if (parentId !== null) runWithProjectRoot(newDir, () => projectConfigRepository.setPartOf({ project: parentId, path: toPosixPath(path.relative(newDir, root)) || '.' }));
+  }
   projectConfigRepository.setMemberPath(alias, nextPath);
   invalidateSpecCache();
 }
@@ -1195,6 +1233,14 @@ export function internalizeMember(alias: string, destination: InternalizeDestina
   // Step 13 (stage 8): a part's specs are already this project's own — its internalize is a storage move.
   const part = family.nodes.find((n) => n.namespace === '')?.parts.find((p) => p.alias === alias);
   if (part) return internalizePart(alias, part);
+  // A project in a `../` sibling checkout: demoted in place first, then moved in as the part it became.
+  if (family.nodes.find((n) => n.namespace === '')?.externals.some((e) => e.role === 'member' && e.sourceKind === 'path' && e.alias === alias)) {
+    const demoted = demoteMember(alias, destination);
+    const nowPart = graph().nodes.find((n) => n.namespace === '')?.parts.find((p) => p.alias === alias);
+    if (!nowPart) throw new WaironError(`cannot internalize "${alias}": demoted, it does not read as a part of this project.`);
+    const moved = internalizePart(alias, nowPart);
+    return { ...demoted, subsystems: moved.subsystems, types: moved.types, deleted: [...demoted.deleted, ...moved.deleted].sort() };
+  }
   const member = family.nodes.find((n) => n.parent === '' && n.mountAlias === alias);
   // Steps 2-3.
   if (!member) {
