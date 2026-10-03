@@ -61,7 +61,7 @@ methods:
     description: >-
       Imports a .waitree archive into a project root under an explicit import policy, backing up any
       tree it replaces
-    signature: 'importSpecTree(archive: bytes, options: TreeImportOptions): TreeImportResult'
+    signature: 'importSpecTree(archive: bytes, options: tree_import_options): TreeImportResult'
     returns: TreeImportResult
     params:
       - name: archive
@@ -315,4 +315,4 @@ methods:
         description: Write the repair; false plans without writing
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-03T19:36:05.708Z'
+updatedAt: '2026-10-03T20:54:08.671Z'

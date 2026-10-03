@@ -1148,9 +1148,11 @@ methods:
       gets the derived text (SIGNATURE_TEXT_STALE), and every sourced method that also restates
       params and returns EQUAL to its source's has them dropped. A sourced method restating
       DIFFERENT ones is left alone and keeps being reported (SIGNATURE_SOURCE_RESTATED): only its
-      author knows which contract was meant. Methods without params keep their prose. Every spec it
-      writes goes through the ordinary writer, so what it writes is exactly what any later save
-      would. Idempotent: after an applied run the plan is empty. Without apply nothing is written.
+      author knows which contract was meant — and so is the rest of the interface holding it, since
+      re-saving it would store that method with only its source. Methods without params keep their
+      prose. Every spec it writes goes through the ordinary writer, so what it writes is exactly
+      what any later save would. Only the bound project's own specs are repaired. Idempotent: after
+      an applied run the plan is empty. Without apply nothing is written.
     signature: 'repairSignatures(apply: boolean): SignatureTextRepair[]'
     returns: SignatureTextRepair[]
     params:
@@ -1159,4 +1161,4 @@ methods:
         description: Write the repair; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T19:37:47.357Z'
+updatedAt: '2026-10-03T20:46:22.651Z'

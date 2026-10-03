@@ -30,7 +30,7 @@ methods:
       or machine-wide configuration) is first copied beside itself as
       <file>.wairon-backup-<timestamp>, and the backup's path is printed, so the previous value can
       always be restored.
-    signature: 'installMcpServer(options?: McpInstallOptions): void'
+    signature: 'installMcpServer(options?: mcp_install_options): void'
     returns: void
     params:
       - name: options
@@ -58,7 +58,7 @@ methods:
       writing nothing: per resolved backend, the file, whether it lies outside the project root, the
       wairon entry it holds now and the one it would get, and whether it is already up to date. The
       plan a caller prints and confirms before it lets an install touch a machine-wide file.
-    signature: 'planInstall(options: McpInstallOptions): McpConfigWrite[]'
+    signature: 'planInstall(options: mcp_install_options): McpConfigWrite[]'
     returns: McpConfigWrite[]
     params:
       - name: options
@@ -87,4 +87,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-08-12T18:42:15.287Z'
-updatedAt: '2026-10-03T16:46:29.298Z'
+updatedAt: '2026-10-03T20:53:54.404Z'

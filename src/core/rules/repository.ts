@@ -8,6 +8,9 @@ import { roundtripRule } from './integrity/roundtrip-serialization.js';
 import { typeDeclarationsRule } from './integrity/type-declarations.js';
 import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
 import { signatureTypeReferencesRule } from './integrity/signature-type-references.js';
+import { signatureSourcesRule } from './integrity/signature-sources.js';
+import { signatureTypesRule } from './integrity/signature-types.js';
+import { signatureTextRule } from './integrity/signature-text.js';
 import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
 import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
@@ -103,6 +106,7 @@ import { complexityRule } from './heuristic/complexity-and-metadata.js';
 import { narrativeComplexityRule } from './heuristic/narrative-complexity.js';
 import { namingDisciplineRule } from './heuristic/naming-discipline.js';
 import { methodCohesionRule } from './heuristic/method-cohesion.js';
+import { signatureSourceSuggestionsRule } from './heuristic/signature-source-suggestions.js';
 
 // ---------------------------------------------------------------------------
 // Rule repository (rule_store + rule_registry + rule_index + rule_repository).
@@ -135,6 +139,9 @@ export const SDD_RULES: SddRule[] = [
   typeDeclarationsRule,
   fieldTypeReferencesRule,
   signatureTypeReferencesRule,
+  signatureSourcesRule,
+  signatureTypesRule,
+  signatureTextRule,
   // Contracts and the targets narratives name, in four questions with one
   // owner each: does the implementation mirror its contract, does a target
   // inside this tree resolve, does a target that leaves it pin to exactly one
@@ -320,6 +327,7 @@ export const SDD_RULES: SddRule[] = [
   narrativeComplexityRule,
   namingDisciplineRule,
   methodCohesionRule,
+  signatureSourceSuggestionsRule,
   // Pack resolution and reproducibility run late: they are about project
   // CONFIGURATION (does the declared pack set resolve, and can it be reproduced
   // elsewhere?) rather than spec content.

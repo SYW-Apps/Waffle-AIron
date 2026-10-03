@@ -31,7 +31,7 @@ methods:
       file, never the run.
     signature: >-
       buildCodeModel(implementations: ImplementationSpec[], types: TypeSpec[], projectRoot: string,
-      sourceRoots: string[], exclude: string[]): CodeModel
+      sourceRoots?: string[], exclude?: string[]): CodeModel
     returns: CodeModel
     params:
       - name: implementations
@@ -104,4 +104,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-09-26T11:01:14.905Z'
+updatedAt: '2026-10-03T20:54:08.290Z'

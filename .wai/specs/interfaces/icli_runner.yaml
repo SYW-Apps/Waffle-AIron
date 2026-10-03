@@ -248,7 +248,7 @@ methods:
       Resolves the instance, project and credential from flags, the environment, the recorded
       binding, or the agent's own MCP configuration, then routes to the remote orchestrator and
       reports exactly what happened — including any backup a replaced tree can be undone from.
-    signature: 'runRemote(action: string, options?: RemoteCommandOptions): Promise<void>'
+    signature: 'runRemote(action: string, options?: remote_command_options): Promise<void>'
     returns: Promise<void>
     params:
       - name: action
@@ -264,7 +264,7 @@ methods:
       Takes the token from --token or a prompt, verifies it against the instance before storing (a
       credential that does not work is a worse outcome than no credential), and never echoes it
       back.
-    signature: 'runLogin(url: string, options?: { token?: string; project?: string }): Promise<void>'
+    signature: 'runLogin(url: string, options?: remote_command_options): Promise<void>'
     returns: Promise<void>
     params:
       - name: url
@@ -300,7 +300,7 @@ methods:
       stdio server over this checkout by default, or a HOSTED http entry when --hosted names an
       instance, so the agent authors that instance's tree and `wairon remote` can read the same
       entry back.
-    signature: 'runMcpInstall(options: McpInstallOptions): Promise<void>'
+    signature: 'runMcpInstall(options: mcp_install_options): Promise<void>'
     returns: Promise<void>
     params:
       - name: options
@@ -317,7 +317,7 @@ methods:
       `wairon status` — print the spec tree's completeness dashboard. In an ATTACHED checkout there
       is no local tree, so it reports the hosted project's instead, naming the instance so the two
       are never confused.
-    signature: 'runStatus(options: StatusCommandOptions): Promise<void>'
+    signature: 'runStatus(options: status_command_options): Promise<void>'
     returns: Promise<void>
     params:
       - name: options
@@ -726,4 +726,4 @@ methods:
     returns: Promise<void>
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T17:11:29.511Z'
+updatedAt: '2026-10-03T20:53:55.264Z'

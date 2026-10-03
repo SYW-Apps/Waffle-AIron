@@ -190,6 +190,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: signatureFacts
+  - name: resolveSignatures
+    narrative:
+      - stepNumber: 1
+        description: Call resolveSignatures on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveSignatures
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T19:33:10.158Z'
+updatedAt: '2026-10-03T20:28:49.261Z'

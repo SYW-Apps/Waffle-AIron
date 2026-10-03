@@ -183,13 +183,13 @@ methods:
       - name: path
         type: string
         description: The part's root, relative to the bound project (a new directory, or an existing part's)
-      - name: dryRun
-        type: boolean
-        description: Answer the plan and write nothing
-        optional: true
       - name: as
         type: string
         description: part (default) or project
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
         optional: true
     endpoint:
       transport: Custom
@@ -713,13 +713,13 @@ methods:
       - name: alias
         type: string
         description: The member's alias
-      - name: dryRun
-        type: boolean
-        description: Answer the plan and write nothing
-        optional: true
       - name: widen
         type: boolean
         description: Widen the used family-only exports to instance instead of refusing
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
         optional: true
     endpoint:
       transport: Custom
@@ -736,15 +736,15 @@ methods:
       - name: alias
         type: string
         description: The external's alias
-      - name: dryRun
-        type: boolean
-        description: Answer the plan and write nothing
-        optional: true
       - name: path
         type: string
         description: >-
           Hosted: the member path to adopt a source.hosted external at, relative to the bound
           project; a source.path external is adopted where it is
+        optional: true
+      - name: dryRun
+        type: boolean
+        description: Answer the plan and write nothing
         optional: true
     endpoint:
       transport: Custom
@@ -807,4 +807,4 @@ methods:
       address: mcp tools/call sdd_demote_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T19:38:05.747Z'
+updatedAt: '2026-10-03T20:52:14.487Z'

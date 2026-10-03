@@ -2824,7 +2824,9 @@ export class SpecWorkspace {
     // Step 21: once every reference of the family is bound, its signatures —
     // sourced methods filled, every params-bearing method's text derived; the
     // facts kept on the index, the one place the stored form stays visible.
-    const signatures = resolveTree(index.interfaces, index.components, index.types);
+    // Every root's authored references go with them, so an `alias::` signature
+    // type lands where the scan bound it, as every other type reference does.
+    const signatures = resolveTree(index.interfaces, index.components, index.types, raws.flatMap((r) => r.record.authoredReferences));
     index.interfaces = signatures.interfaces;
     index.types = signatures.types;
     index.signatures = signatures.facts;

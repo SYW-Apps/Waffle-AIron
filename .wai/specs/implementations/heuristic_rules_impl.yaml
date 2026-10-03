@@ -1102,6 +1102,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: signatureSourceSuggestionsRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-03T19:43:51.559Z'
+updatedAt: '2026-10-03T20:54:43.586Z'

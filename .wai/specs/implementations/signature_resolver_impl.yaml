@@ -26,7 +26,11 @@ methods:
           key in the owning interface's namespace (local first, or an `alias::` key the scan already
           bound) and the tail a method on any of its contracts — and as a type reference matched
           against the types as every type reference is matched (type_spec.matchesRef), only a type
-          of kind signature counting
+          of kind signature counting; a value carrying `::` is first looked up among the references
+          handed in (the one recorded for the owning interface at a type position with this text),
+          and when the scan bound it, the type reading lands on that bound key — so an alias that
+          differs from the producer's project id resolves as every other `alias::` type reference
+          does
         type: local
       - stepNumber: 4
         description: Does exactly one reading resolve?
@@ -78,14 +82,15 @@ methods:
       - stepNumber: 13
         description: >-
           Derive the text of every contract method and type method with params through
-          method_signature.derivedSignature(), recording a stale text where the stored text differs,
-          and of every signature type through type_spec.derivedSignature()
+          method_signature.derivedSignature(), recording a stale text where the stored text differs.
+          A signature type is left as it is: its text is never stored, and is derived where it is
+          shown (type_spec.derivedSignature)
         type: local
       - stepNumber: 14
         description: Answer the resolved interfaces and types with the facts
         type: return
         outcome: SignatureResolution
     detail: full
-status: design
+status: complete
 createdAt: '2026-10-03T19:32:24.468Z'
-updatedAt: '2026-10-03T19:43:33.318Z'
+updatedAt: '2026-10-03T20:54:42.201Z'

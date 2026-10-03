@@ -209,6 +209,27 @@ methods:
     signature: 'signatureFacts(): SignatureFacts'
     returns: SignatureFacts
     params: []
+  - name: resolveSignatures
+    description: >-
+      Forward to the core portal: resolve the signatures of specs read outside the scan — a part's
+      own specs together with its pinned parent excerpt — as the scan resolves its own, answering
+      the resolved interfaces and types and the facts.
+    signature: >-
+      resolveSignatures(interfaces: InterfaceSpec[], components: ComponentSpec[], types:
+      TypeSpec[]): SignatureResolution
+    returns: SignatureResolution
+    params:
+      - name: interfaces
+        type: InterfaceSpec[]
+        description: The interfaces to resolve, stored or already resolved
+      - name: components
+        type: ComponentSpec[]
+        description: The components a method source's head is read against
+      - name: types
+        type: TypeSpec[]
+        description: The types, the signature types among them
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T19:33:09.026Z'
+updatedAt: '2026-10-03T20:28:48.133Z'

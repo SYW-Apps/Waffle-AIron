@@ -26,6 +26,7 @@ import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
 import type { ExportUsage, ResolvedExportTable } from '../../models/exports.js';
 import type { ProjectFamily } from '../../models/project-family.js';
+import type { SignatureFacts } from '../signature-sources.js';
 
 // ---------------------------------------------------------------------------
 // Rule registry contracts
@@ -461,6 +462,13 @@ export interface RuleContext {
    * unexported ones are EXTERNAL_NOT_EXPORTED's facts. Absent on a candidate run.
    */
   exportUsages?: ExportUsage[];
+  /**
+   * What the loader's signature resolution recorded — the sources it met and
+   * the stored texts their params contradict. The loaded interfaces and types
+   * are already resolved, so these facts are the only place the stored form is
+   * still visible. Absent on a candidate run.
+   */
+  signatureFacts?: SignatureFacts;
   /**
    * The pure source-code model (per-sourcePath declaration/export/import/
    * anchor facts) built by the source analysis adapter — what the

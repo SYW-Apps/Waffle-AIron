@@ -25,5 +25,6 @@ fields:
     description: Each sourced method whose restated params and returns are dropped
     optional: false
 methods: []
+sourcePath: src/core/signature-repair.ts
 createdAt: '2026-10-03T19:31:33.599Z'
-updatedAt: '2026-10-03T19:34:04.223Z'
+updatedAt: '2026-10-03T20:54:45.028Z'

@@ -1,6 +1,7 @@
 import {
   deriveMethodSignature,
   typeMatchesRef,
+  type AuthoredReference,
   type ComponentSpec,
   type InterfaceSpec,
   type MethodParam,
@@ -97,6 +98,8 @@ interface ResolutionTables {
   methodsOf: Map<string, MethodSignature[]>;
   componentKeys: Set<string>;
   types: TypeSpec[];
+  /** `<interface key>|<authored text>` → the key the scan bound that type reference to. */
+  boundTypes: Map<string, string>;
 }
 
 /** The namespace a keyed id sits in: everything before its last `::` ('' at the bound root). */
@@ -119,11 +122,25 @@ function sameParams(a: ReadonlyArray<MethodParam> | undefined, b: ReadonlyArray<
     && left.every((p, i) => p.name === right[i].name && p.type === right[i].type && !!p.optional === !!right[i].optional);
 }
 
-/** Step 1: index the copies — each component key to its contracts' methods, and the types. */
-function tablesOf(interfaces: InterfaceSpec[], components: ComponentSpec[], types: TypeSpec[]): ResolutionTables {
+/**
+ * Step 1: index the copies — each component key to its contracts' methods, the
+ * types, and every type reference the scan bound (an `alias::name` lands where
+ * the referring root's alias table sends it, whatever the producer's id is).
+ */
+function tablesOf(
+  interfaces: InterfaceSpec[],
+  components: ComponentSpec[],
+  types: TypeSpec[],
+  references: ReadonlyArray<AuthoredReference>,
+): ResolutionTables {
   const methodsOf = new Map<string, MethodSignature[]>();
   for (const intf of interfaces) methodsOf.set(intf.component, [...(methodsOf.get(intf.component) ?? []), ...intf.methods]);
-  return { methodsOf, componentKeys: new Set(components.map((c) => c.id)), types };
+  const boundTypes = new Map<string, string>();
+  for (const ref of references) {
+    if (ref.position !== 'type' || ref.binding === 'outside' || ref.binding === 'unresolved') continue;
+    boundTypes.set(`${ref.specId}|${ref.authored}`, ref.resolved);
+  }
+  return { methodsOf, componentKeys: new Set(components.map((c) => c.id)), types, boundTypes };
 }
 
 /** Step 3, the method reading: the head a component in the owning interface's namespace, the tail a method on its contracts. */
@@ -142,9 +159,16 @@ function methodReading(tables: ResolutionTables, intf: InterfaceSpec, value: str
   return null;
 }
 
-/** Step 3, the type reading: the types the value names as every type reference is matched, same project first. */
+/**
+ * Step 3, the type reading: the types the value names as every type reference
+ * is matched, same project first. A value the scan bound (an `alias::name`)
+ * lands on its bound key exactly, as every other bound type reference does.
+ */
 function typeReading(tables: ResolutionTables, intf: InterfaceSpec, value: string): { signature?: TypeSpec; other?: TypeSpec } {
-  const named = tables.types.filter((t) => t.id === value || typeMatchesRef(t, value));
+  const bound = value.includes('::') ? tables.boundTypes.get(`${intf.id}|${value}`) : undefined;
+  const named = bound !== undefined
+    ? tables.types.filter((t) => t.id === bound)
+    : tables.types.filter((t) => t.id === value || typeMatchesRef(t, value));
   const ns = namespaceOf(intf.id);
   const local = (t: TypeSpec): number => (namespaceOf(t.id) === ns ? 0 : 1);
   const ranked = [...named].sort((a, b) => local(a) - local(b));
@@ -224,25 +248,31 @@ function withDerivedText<M extends { name: string; signature?: string; params?: 
 /**
  * isignature_resolver.resolveTree — resolve every signature of one scan:
  * sourced methods bound and filled, every params-bearing contract method and
- * type method given its derived text, the facts beside them. The specs handed
- * in are never mutated.
+ * type method given its derived text, the facts beside them. A signature
+ * type's own text is never stored: it is derived where it is shown
+ * (deriveTypeSignature). The specs handed in are never mutated.
+ *
+ * `references` are the scan's authored references: an `alias::name` type
+ * reading lands on the key the scan bound it to.
  */
 export function resolveTree(
   interfaces: ReadonlyArray<InterfaceSpec | StoredInterfaceSpec>,
   components: ReadonlyArray<ComponentSpec>,
   types: ReadonlyArray<TypeSpec | StoredTypeSpec>,
+  references: ReadonlyArray<AuthoredReference> = [],
 ): SignatureResolution {
   // Step 1: copies, so nothing the caller holds is mutated, and the lookups over them.
   const intfs = interfaces.map((i) => ({ ...i, methods: i.methods.map((m) => ({ ...m })) })) as InterfaceSpec[];
   const typeCopies = types.map((t) => ({ ...t, methods: t.methods.map((m) => ({ ...m })) })) as TypeSpec[];
-  const tables = tablesOf(intfs, [...components], typeCopies);
+  const tables = tablesOf(intfs, [...components], typeCopies, references);
   const facts = emptySignatureFacts();
   // Steps 2-12: every contract method naming a signatureFrom.
   const sourced = intfs.map((intf) => ({
     ...intf,
     methods: intf.methods.map((m) => (m.signatureFrom !== undefined ? resolveSourced(tables, intf, m, facts) : m)),
   }));
-  // Step 13: the derived text of every params-bearing contract method and type method.
+  // Step 13: the derived text of every params-bearing contract method and type
+  // method. A signature type is answered as it is: its text is derived on display.
   const resolvedInterfaces = sourced.map((intf, i) => ({
     ...intf,
     methods: intf.methods.map((m, j) => withDerivedText(m, intfs[i].methods[j].signature, intf.id, 'interface', facts)),

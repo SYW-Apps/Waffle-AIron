@@ -72,7 +72,9 @@ export interface FixtureTree {
   /**
    * L3 interfaces. Ids must start with 'i' (loader schema). `component`
    * defaults to the tree's single component; each method gets description/
-   * signature/returns boilerplate unless provided (name stays required).
+   * signature/returns boilerplate unless provided (name stays required) — a
+   * method with a signatureFrom gets neither, and one with params no
+   * signature, since its text is derived.
    */
   interfaces?: FixtureSpecInput[];
   /** L4 implementations (with embedded L5 narratives). `contract` defaults to the tree's single interface. */
@@ -284,10 +286,15 @@ function normalizeInterfaceMethods(intfId: string, methods: unknown): MethodLike
     if (typeof method.name !== 'string' || method.name.length === 0) {
       throw new Error(`rule-matrix harness: a method on interface "${intfId}" is missing "name".`);
     }
+    // A sourced method states no signature or returns of its own (its source
+    // supplies both), and a params-bearing one derives its text — so neither
+    // is defaulted for them, or every such fixture would restate its source
+    // or store a stale text.
+    const sourced = method.signatureFrom !== undefined;
     return {
       description: `Contract method ${method.name} on ${intfId}.`,
-      signature: `${method.name}(): void`,
-      returns: 'void',
+      ...(sourced || method.params !== undefined ? {} : { signature: `${method.name}(): void` }),
+      ...(sourced ? {} : { returns: 'void' }),
       ...method,
     };
   });

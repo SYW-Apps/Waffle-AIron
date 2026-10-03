@@ -33,7 +33,7 @@ methods:
   - name: listAssignments
     description: 'Facade: list assignments through the index.'
     signature: >-
-      listAssignments(scopeIds: string[], subjectKind: string, subjectId: string, capability:
+      listAssignments(scopeIds?: string[], subjectKind?: string, subjectId?: string, capability?:
       string): PermissionAssignment[]
     returns: PermissionAssignment[]
     params:
@@ -67,4 +67,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-15T20:28:03.138Z'
-updatedAt: '2026-07-15T22:22:07.288Z'
+updatedAt: '2026-10-03T20:54:03.792Z'

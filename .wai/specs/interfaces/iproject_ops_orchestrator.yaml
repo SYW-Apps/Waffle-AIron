@@ -213,7 +213,7 @@ methods:
       Forward to admin_orchestrator.commitProject — the deliberate .wai/-scoped commit+push
       primitive (project:write over the project upstream).
     signature: >-
-      commitProject(credential: string, project: string, subsystem: string, message: string):
+      commitProject(credential: string, project: string, subsystem?: string, message?: string):
       GitPublish
     returns: GitPublish
     params:
@@ -230,8 +230,8 @@ methods:
   - name: configureGitSync
     description: Forward to admin_orchestrator.configureGitSync (project:admin over the project upstream).
     signature: >-
-      configureGitSync(credential: string, project: string, periodicSyncMinutes: number,
-      skipIfClean: boolean): void
+      configureGitSync(credential: string, project: string, periodicSyncMinutes?: number,
+      skipIfClean?: boolean): void
     returns: void
     params:
       - name: credential
@@ -505,4 +505,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-10-01T16:51:46.371Z'
+updatedAt: '2026-10-03T20:54:05.103Z'

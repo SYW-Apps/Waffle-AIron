@@ -1219,8 +1219,11 @@ methods:
         endStep: 16
       - stepNumber: 16
         description: >-
-          Write the contract with the method under newName: its name, and the method name inside its
-          signature string. Params, returns, description, guarantees and findings stay as they are
+          Write the contract with the method under newName: its name, and, for a prose method (no
+          params and no signatureFrom), the method name inside its signature string. A method with
+          params has its text derived from the new name by the writer, and a sourced method stores
+          no text at all. Params, returns, signatureFrom, description, guarantees and findings stay
+          as they are
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
@@ -2279,9 +2282,14 @@ methods:
         targetMethod: signatureFacts
       - stepNumber: 2
         description: >-
-          Group into one repair per interface or type: its stale texts as regenerated, and its
-          sourced methods with an equal restatement (a restated fact that does not differ) as
-          dropped; a differing restatement is not a repair
+          Group into one repair per interface or type of the bound project itself (a contained
+          member's specs are keyed under its namespace and are its own doctor's): its stale texts as
+          regenerated, and its sourced methods with an equal restatement (a restated fact that does
+          not differ) as dropped. A differing restatement is never a repair, and neither is any
+          other method of the interface holding one: the writer stores every sourced method with
+          only its source, so re-saving that interface would silently decide the contract only its
+          author can — it stays as it is, reported by SIGNATURE_SOURCE_RESTATED, until the author
+          settles it
         type: local
       - stepNumber: 3
         description: Was the write asked for?
@@ -2328,6 +2336,6 @@ methods:
         type: return
         outcome: SignatureTextRepair[]
     detail: full
-status: design
+status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T19:36:53.709Z'
+updatedAt: '2026-10-03T20:54:44.038Z'

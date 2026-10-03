@@ -26,7 +26,7 @@ methods:
       List cross-project relations by source project, target project, public interface, kind, or
       status.
     signature: >-
-      list(sourceProjectId: string, targetProjectId: string, status: string):
+      list(sourceProjectId?: string, targetProjectId?: string, status?: string):
       ProjectRelationRecord[]
     returns: ProjectRelationRecord[]
     params:
@@ -41,4 +41,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-08T21:13:16.884Z'
-updatedAt: '2026-07-09T22:13:23.028Z'
+updatedAt: '2026-10-03T20:54:06.012Z'

@@ -23,7 +23,7 @@ methods:
       Record the binding for a project root, replacing any previous one. Writes the instance URL and
       project id only — never a credential, because this file lives in the project and may be
       committed.
-    signature: 'write(root: string, binding: RemoteBinding): void'
+    signature: 'write(root: string, binding: remote_binding): void'
     returns: void
     params:
       - name: root
@@ -94,4 +94,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-08-12T18:41:53.798Z'
-updatedAt: '2026-09-17T20:37:27.413Z'
+updatedAt: '2026-10-03T20:54:06.464Z'

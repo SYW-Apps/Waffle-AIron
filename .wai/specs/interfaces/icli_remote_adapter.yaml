@@ -10,7 +10,7 @@ methods:
     description: >-
       Call sdd_host_export_tree on the bound hosted project and return the decoded .waitree archive
       bytes with the envelope facts that came with them. Requires project:read on the far side.
-    signature: 'exportRemoteTree(target: RemoteTarget, allowPartial?: boolean): TreeExportResult'
+    signature: 'exportRemoteTree(target: remote_target, allowPartial?: boolean): TreeExportResult'
     returns: TreeExportResult
     params:
       - name: target
@@ -26,7 +26,7 @@ methods:
       Call sdd_host_import_tree on the bound hosted project with the base64-encoded archive.
       Requires project:admin on the far side; executable content is refused there, not here.
     signature: >-
-      importRemoteTree(target: RemoteTarget, archive: bytes, replaceExisting: boolean):
+      importRemoteTree(target: remote_target, archive: bytes, replaceExisting: boolean):
       TreeImportResult
     returns: TreeImportResult
     params:
@@ -44,7 +44,7 @@ methods:
       Presents the same bearer credential and is gated on project:create over the owner unit by the
       same permission rules. Returns the instance's summary — an approval-gated instance may answer
       that a request was created, which is not a completed project.
-    signature: 'initializeRemoteProject(target: RemoteTarget, ownerUnitId: string): string'
+    signature: 'initializeRemoteProject(target: remote_target, ownerUnitId: string): string'
     returns: string
     params:
       - name: target
@@ -57,7 +57,7 @@ methods:
       `wairon validate` in an attached checkout gates on the tree that actually exists rather than
       on nothing. With family, the call asks for the family run; the instance composes within the
       credential's reach, and asking never widens it. Requires project:read.
-    signature: 'validateRemoteTree(target: RemoteTarget, subsystem?: string, family?: boolean): Json'
+    signature: 'validateRemoteTree(target: remote_target, subsystem?: string, family?: boolean): Json'
     returns: Json
     params:
       - name: target
@@ -73,7 +73,7 @@ methods:
     description: >-
       Call sdd_get_status against the bound hosted project and return the completeness dashboard.
       Requires project:read.
-    signature: 'getRemoteStatus(target: RemoteTarget, subsystem?: string): string'
+    signature: 'getRemoteStatus(target: remote_target, subsystem?: string): string'
     returns: string
     params:
       - name: target
@@ -86,11 +86,11 @@ methods:
       Call sdd_host_lock_project against the bound hosted project (or the chained child a qualified
       selector names). Execute-primary: an instance whose policy resolves to approval answers that a
       REQUEST was created, which the caller must report rather than treat as locked.
-    signature: 'lockRemoteProject(target: RemoteTarget): string'
+    signature: 'lockRemoteProject(target: remote_target): string'
     returns: string
     params:
       - name: target
         type: remote_target
 status: complete
 createdAt: '2026-08-12T18:31:37.284Z'
-updatedAt: '2026-09-29T13:54:58.491Z'
+updatedAt: '2026-10-03T20:53:54.841Z'

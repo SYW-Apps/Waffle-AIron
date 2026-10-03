@@ -12,6 +12,7 @@ import {
   projectConfigExists,
   retireSpecialists,
   repairForeignStepFields,
+  repairSignatures,
   readLockState,
   // Through the core adapter, never ../core/stamp.js or ../utils/ai-guide.js:
   // reading a stamp and refreshing the guides are sdd_core work, and doctor is
@@ -276,6 +277,24 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       }
     } catch (e) {
       line(tally, 'warn', `Could not plan the narrative-step repair: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // ── Signatures ─────────────────────────────────────────────────────────
+    // Stored signature texts their params contradict, and restatements equal
+    // to a method's signature source, dry-run: each interface or type named.
+    // Silent once every stored signature is in its stored form.
+    try {
+      const signatures = repairSignatures(false);
+      if (signatures.length > 0) {
+        console.log(chalk.bold('Signatures'));
+        for (const repair of signatures) {
+          line(tally, 'warn', `${repair.kind} ${repair.specId}: ${describeSignatureRepair(repair)}`);
+        }
+        line(tally, 'warn', 'Run `wairon doctor --fix` to write them in their stored form (any save of the spec does too).');
+        logger.blank();
+      }
+    } catch (e) {
+      line(tally, 'warn', `Could not plan the signature repair: ${e instanceof Error ? e.message : String(e)}`);
     }
 
     // ── Chaining ───────────────────────────────────────────────────────────
@@ -568,6 +587,22 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
     }
   } catch (e) {
     console.log(`  ${icon('error')} Narrative-step repair failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Regenerate every stored signature text its params contradict, and drop
+  // every restatement equal to its method's signature source. A mechanical
+  // repair like the one above: one project, idempotent, outside the family
+  // transaction, and exactly what any later save of the spec would write.
+  try {
+    const signatures = repairSignatures(true);
+    if (signatures.length > 0) {
+      console.log(`  ${icon('ok')} Rewrote ${signatures.length} spec(s) into their stored signature form:`);
+      for (const repair of signatures) {
+        console.log(`      ${repair.kind} ${repair.specId}: ${describeSignatureRepair(repair)}`);
+      }
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} Signature repair failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // The chaining migration — the last spec-touching fix: after the
@@ -877,6 +912,14 @@ function printApplied(report: FamilyMigrationReport): void {
 }
 
 /** How many writes the plan holds: ids, L0s, entries, externals, imports, pins, mounts, rewrites and family pins. */
+/** One signature repair in a line: the methods whose text is regenerated, and the restatements dropped. */
+function describeSignatureRepair(repair: { regenerated: { method: string }[]; dropped: string[] }): string {
+  const parts: string[] = [];
+  if (repair.regenerated.length > 0) parts.push(`regenerates the text of ${repair.regenerated.map((s) => s.method).join(', ')}`);
+  if (repair.dropped.length > 0) parts.push(`drops the restated signature of ${repair.dropped.join(', ')}`);
+  return parts.join('; ');
+}
+
 function pendingCount(migration: ChainingMigrationPlan): number {
   return migration.rewrites.length + migration.projects.reduce((n, p) => n + (p.idToWrite ? 1 : 0) + (p.createsSystem ? 1 : 0)
     + p.exports.length + p.externals.length + p.imports.length + p.pins.length + p.members.length + p.supersededPins.length + p.locations.length, 0);

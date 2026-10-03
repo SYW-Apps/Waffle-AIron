@@ -20,7 +20,7 @@ methods:
       - idempotent
   - name: serializeTreeManifest
     description: Serialize a TreeArchiveManifest to canonical wairon-tree.yaml text (used by export).
-    signature: 'serializeTreeManifest(manifest: TreeArchiveManifest): string'
+    signature: 'serializeTreeManifest(manifest: tree_archive_manifest): string'
     returns: string
     params:
       - name: manifest
@@ -42,7 +42,7 @@ methods:
       Decide which of a root's files are portable design state: keep authored spec state, drop
       regenerable artifacts (generated/, docs/) unless includeDerived is set. The one place the
       portability doctrine lives, so export and any future bundling can never disagree about it.
-    signature: 'selectTreeFiles(files: PackFile[], includeDerived: boolean): PackFile[]'
+    signature: 'selectTreeFiles(files: pack_file[], includeDerived: boolean): PackFile[]'
     returns: PackFile[]
     params:
       - name: files
@@ -58,7 +58,7 @@ methods:
       paths, symlinks and non-regular entries, and enforce entry-count / total-size / per-entry /
       compression-ratio / depth caps — all before anything is decompressed.
     signature: >-
-      planTreeExtraction(entries: ArchiveEntryMeta[], limits: PackExtractionLimits):
+      planTreeExtraction(entries: archive_entry_meta[], limits: pack_extraction_limits):
       PackExtractionPlan
     returns: PackExtractionPlan
     params:
@@ -87,7 +87,7 @@ methods:
       When the envelope carries integrity data, verify every entry's sha256 against entryDigests;
       returns true if integrity data was present and matched, false if the archive carried none.
       Throws on a digest mismatch.
-    signature: 'verifyTreeIntegrity(manifest: TreeArchiveManifest, files: PackFile[]): boolean'
+    signature: 'verifyTreeIntegrity(manifest: tree_archive_manifest, files: pack_file[]): boolean'
     returns: boolean
     params:
       - name: manifest
@@ -103,7 +103,7 @@ methods:
       caller-supplied values (time is passed in, keeping the codec pure), and return the sealed
       TreeArchiveManifest.
     signature: >-
-      sealTreeIntegrity(manifest: TreeArchiveManifest, files: PackFile[], generatedBy: string,
+      sealTreeIntegrity(manifest: tree_archive_manifest, files: pack_file[], generatedBy: string,
       generatedAt: string): TreeArchiveManifest
     returns: TreeArchiveManifest
     params:
@@ -121,7 +121,7 @@ methods:
     description: >-
       Return whether the archive's formatVersion and minWaironVersion are compatible with the
       running wairon version.
-    signature: 'checkTreeCompatibility(manifest: TreeArchiveManifest, waironVersion: string): boolean'
+    signature: 'checkTreeCompatibility(manifest: tree_archive_manifest, waironVersion: string): boolean'
     returns: boolean
     params:
       - name: manifest
@@ -132,4 +132,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-08-12T17:19:03.131Z'
-updatedAt: '2026-08-12T18:28:00.431Z'
+updatedAt: '2026-10-03T20:54:09.521Z'

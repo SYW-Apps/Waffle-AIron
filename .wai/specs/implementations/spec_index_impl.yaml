@@ -457,10 +457,12 @@ methods:
       - stepNumber: 21
         label: signatures
         description: >-
-          Once every reference of the family is bound, resolve the index's signatures: each
-          signatureFrom read with its source's params and returns, each params-bearing contract
-          method, type method and signature type given its derived text; the resolved interfaces and
-          types replace the index's, and the facts are kept on the index as its signatures
+          Once every reference of the family is bound, resolve the index's signatures, handing over
+          every root's authored references so an `alias::` signature type lands where the scan bound
+          it: each signatureFrom read with its source's params and returns, each params-bearing
+          contract method and type method given its derived text (a signature type's text is derived
+          on display, never stored); the resolved interfaces and types replace the index's, and the
+          facts are kept on the index as its signatures
         type: call
         targetComponent: signature_resolver
         targetMethod: resolveTree
@@ -528,4 +530,4 @@ methods:
         outcome: SignatureFacts
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-03T19:32:58.446Z'
+updatedAt: '2026-10-03T20:28:37.169Z'

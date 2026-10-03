@@ -90,8 +90,8 @@ methods:
       tree declares no such subsystem is kept and listed with scopeNote "subsystem not found", so a
       stale rule never sits there silently.
     signature: >-
-      listAssignments(credential: string, scopeKind: string, scopeId: string, subjectKind: string,
-      subjectId: string): PermissionAssignment[]
+      listAssignments(credential: string, scopeKind?: string, scopeId?: string, subjectKind?:
+      string, subjectId?: string): PermissionAssignment[]
     returns: PermissionAssignment[]
     params:
       - name: credential
@@ -115,7 +115,7 @@ methods:
       scope} binding to the target user's roleBindings (idempotent) through the user repository, and
       audit. A role bound at a subsystem confers only its project:write there.
     signature: >-
-      bindRole(credential: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      bindRole(credential: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
       string): HostedUserRecord
     returns: HostedUserRecord
     params:
@@ -138,7 +138,7 @@ methods:
       Authenticate, require project:admin over the binding's scope, remove the matching {roleId,
       scope} binding from the target user's roleBindings through the user repository, and audit.
     signature: >-
-      unbindRole(credential: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      unbindRole(credential: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
       string): HostedUserRecord
     returns: HostedUserRecord
     params:
@@ -183,4 +183,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-15T22:00:18.881Z'
-updatedAt: '2026-10-03T13:48:17.901Z'
+updatedAt: '2026-10-03T20:54:02.836Z'

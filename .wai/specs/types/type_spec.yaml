@@ -162,6 +162,13 @@ methods:
       or a value-object.
     sourcePath: src/models/specs.ts
     symbol: deriveTypeSignature
+  - name: signatureTypeRefs
+    signature: 'signatureTypeRefs(): string[]'
+    returns: string[]
+    description: >-
+      The type identifiers a signature type names in place of fields: every param type, then its
+      returns. None on an entity or a value-object, whose references are its fields'.
+    sourcePath: src/models/type-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-03T19:33:59.344Z'
+updatedAt: '2026-10-03T20:29:44.185Z'

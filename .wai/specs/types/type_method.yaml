@@ -50,6 +50,15 @@ methods:
       exact form; undefined for a type method without params, whose prose is its signature.
     sourcePath: src/models/specs.ts
     symbol: deriveMethodSignature
+  - name: typeRefs
+    signature: 'typeRefs(): string[]'
+    returns: string[]
+    description: >-
+      The type identifiers this type method names, read exactly as method_signature.typeRefs reads a
+      contract method's: from its structured params and returns when params are given, else parsed
+      from the prose signature and returns.
+    sourcePath: src/models/type-references.ts
+    symbol: methodTypeRefs
 sourcePath: src/models/specs.ts
 createdAt: '2026-10-03T19:31:10.963Z'
-updatedAt: '2026-10-03T19:34:00.250Z'
+updatedAt: '2026-10-03T20:29:45.739Z'

@@ -5,7 +5,7 @@ component: organization_repository
 methods:
   - name: listUnits
     description: List organization units, optionally below a parent unit.
-    signature: 'listUnits(parentId: string): OrganizationUnitRecord[]'
+    signature: 'listUnits(parentId?: string): OrganizationUnitRecord[]'
     returns: OrganizationUnitRecord[]
     params:
       - name: parentId
@@ -22,7 +22,7 @@ methods:
       - atomic
   - name: listPlacements
     description: List project placements by project id or organization unit id.
-    signature: 'listPlacements(projectId: string, unitId: string): ProjectPlacement[]'
+    signature: 'listPlacements(projectId?: string, unitId?: string): ProjectPlacement[]'
     returns: ProjectPlacement[]
     params:
       - name: projectId
@@ -90,4 +90,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T21:13:09.955Z'
-updatedAt: '2026-07-15T19:49:28.437Z'
+updatedAt: '2026-10-03T20:54:01.077Z'

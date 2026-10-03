@@ -26,6 +26,7 @@ export {
   readLockState,
   retireSpecialists,
   repairForeignStepFields,
+  repairSignatures,
   renderDiagram,
   generateAll,
   resolveExpectedOutputPaths,

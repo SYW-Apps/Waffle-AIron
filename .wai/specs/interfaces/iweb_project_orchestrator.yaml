@@ -30,7 +30,7 @@ methods:
       enforced there). Answers the GovernedProjectCreation: the record with the impact of every pack
       and of the governing-profile step the policy applied.
     signature: >-
-      create(sessionId: string, id: string, unitId: string, profileSelection:
+      create(sessionId: string, id: string, unitId: string, profileSelection?:
       ProjectProfileSelection): GovernedProjectCreation
     returns: GovernedProjectCreation
     params:
@@ -74,4 +74,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-10-01T16:59:50.260Z'
+updatedAt: '2026-10-03T20:54:12.343Z'

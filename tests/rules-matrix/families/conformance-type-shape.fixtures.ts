@@ -432,4 +432,65 @@ export type ColdChainConsignment = z.infer<typeof ColdChainConsignmentSchema>;
       },
     },
   }),
+
+  // -------------------------------------------------------------------------
+  // A DERIVED shape composed with `.extend` over a schema constant the same
+  // file declares: the base's keys with the extension's laid over them. The
+  // stored and resolved forms of a record are written exactly this way
+  // (`Resolved = Stored.extend({ signature: z.string() })`), and before the
+  // composition was followed the shape read as NOTHING — every such type spec
+  // went silently unjudged. Fire and control differ only in the spec.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'TYPE_FIELD_OPTIONALITY',
+    severity: 'warning',
+    anchoredTo: 'sealed-consignment',
+    expectFire: true,
+    scenario:
+      'The sealed consignment is inferred from the draft consignment schema extended so the seal timestamp is always set, but the entity still calls the seal timestamp optional.',
+    tree: extendedSealTree(true),
+  }),
+  defineRuleFixture({
+    code: 'TYPE_FIELD_OPTIONALITY',
+    expectFire: false,
+    reason:
+      'The extension makes the seal timestamp required over the base\'s optional one, and the entity models it required: the composed shape and the spec agree.',
+    scenario:
+      'The sealed consignment is inferred from the draft consignment schema extended so the seal timestamp is always set, and the entity calls it required.',
+    tree: extendedSealTree(false),
+  }),
 ];
+
+/** The draft → sealed composition: `sealedAt` optional on the base, required once extended; the spec says `sealedOptional`. */
+function extendedSealTree(sealedOptional: boolean): FixtureTree {
+  return {
+    ...plannerSpecs,
+    types: [{
+      id: 'sealed-consignment',
+      name: 'SealedConsignment',
+      subsystem: 'cold-chain',
+      sourcePath: 'src/cold-chain/consignment.ts',
+      fields: [
+        { name: 'id', type: 'string', key: 'primary', description: 'The consignment reference printed on the seal.' },
+        { name: 'sealedAt', type: 'string', optional: sealedOptional, description: 'When the box was sealed at the depot.' },
+      ],
+    }],
+    files: {
+      'src/cold-chain/planner.ts': PLANNER_MODULE,
+      'src/cold-chain/consignment.ts': `
+import { z } from 'zod';
+
+export const DraftConsignmentSchema = z.object({
+  id: z.string(),
+  sealedAt: z.string().optional(),
+});
+
+export const SealedConsignmentSchema = DraftConsignmentSchema.extend({
+  sealedAt: z.string(),
+});
+
+export type SealedConsignment = z.infer<typeof SealedConsignmentSchema>;
+`,
+    },
+  };
+}

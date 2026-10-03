@@ -159,7 +159,7 @@ methods:
     description: >-
       List hosted users in the caller's scope; forwards the session to
       web_admin_orchestrator.listUsers.
-    signature: 'adminListUsers(sessionId: string, project: string): HostedUserRecord[]'
+    signature: 'adminListUsers(sessionId: string, project?: string): HostedUserRecord[]'
     returns: HostedUserRecord[]
     params:
       - name: sessionId
@@ -348,7 +348,7 @@ methods:
       pack and of the governing-profile step the instance policy applied; the SPA shows them after
       creation, since the policy's packs are not the user's choice to confirm.
     signature: >-
-      projectCreate(sessionId: string, id: string, unitId: string, profileSelection:
+      projectCreate(sessionId: string, id: string, unitId: string, profileSelection?:
       ProjectProfileSelection): GovernedProjectCreation
     returns: GovernedProjectCreation
     params:
@@ -517,8 +517,8 @@ methods:
       <subsystem>`, set and cleared through the same set and remove endpoints; a rule whose
       subsystem its project no longer declares is kept and shown labelled "subsystem not found".
     signature: >-
-      adminListAssignments(sessionId: string, scopeKind: string, scopeId: string, subjectKind:
-      string, subjectId: string): PermissionAssignment[]
+      adminListAssignments(sessionId: string, scopeKind?: string, scopeId?: string, subjectKind?:
+      string, subjectId?: string): PermissionAssignment[]
     returns: PermissionAssignment[]
     params:
       - name: sessionId
@@ -568,7 +568,7 @@ methods:
   - name: adminBindRole
     description: Bind a role to a user at a scope; forwards to web_admin_orchestrator.bindRole.
     signature: >-
-      adminBindRole(sessionId: string, userId: string, roleId: string, scopeKind: string, scopeId:
+      adminBindRole(sessionId: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
       string): HostedUserRecord
     returns: HostedUserRecord
     params:
@@ -591,8 +591,8 @@ methods:
   - name: adminUnbindRole
     description: Unbind a role from a user at a scope; forwards to web_admin_orchestrator.unbindRole.
     signature: >-
-      adminUnbindRole(sessionId: string, userId: string, roleId: string, scopeKind: string, scopeId:
-      string): HostedUserRecord
+      adminUnbindRole(sessionId: string, userId: string, roleId: string, scopeKind?: string,
+      scopeId?: string): HostedUserRecord
     returns: HostedUserRecord
     params:
       - name: sessionId
@@ -906,7 +906,7 @@ methods:
       Publish a deliberate .wai/-scoped commit+push (optional subsystem subpath + message); forwards
       to project_ops_orchestrator.commitProject.
     signature: >-
-      projectGitCommit(sessionId: string, project: string, subsystem: string, message: string):
+      projectGitCommit(sessionId: string, project: string, subsystem?: string, message?: string):
       GitPublish
     returns: GitPublish
     params:
@@ -929,8 +929,8 @@ methods:
       Set a project's periodic-sync cadence (interval + skip-if-clean); forwards to
       project_ops_orchestrator.configureGitSync.
     signature: >-
-      projectGitSyncConfig(sessionId: string, project: string, periodicSyncMinutes: number,
-      skipIfClean: boolean): void
+      projectGitSyncConfig(sessionId: string, project: string, periodicSyncMinutes?: number,
+      skipIfClean?: boolean): void
     returns: void
     params:
       - name: sessionId
@@ -1554,7 +1554,7 @@ methods:
       beside the grant form, not a new screen.
     signature: >-
       adminExplainPermission(sessionId: string, userId: string, capability: string, scopeKind:
-      string, scopeId: string): EffectivePermission
+      string, scopeId?: string): EffectivePermission
     returns: EffectivePermission
     params:
       - name: sessionId
@@ -1574,4 +1574,4 @@ methods:
       path: /web/admin/permissions/explain
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-03T13:50:27.226Z'
+updatedAt: '2026-10-03T20:54:11.873Z'

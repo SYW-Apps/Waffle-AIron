@@ -104,7 +104,12 @@ export {
   signatureFacts,
 } from './specs.js';
 export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './specs.js';
-export type { SignatureFacts, SignatureSourceFact, StaleSignatureText } from './signature-sources.js';
+export type { SignatureFacts, SignatureResolution, SignatureSourceFact, StaleSignatureText } from './signature-sources.js';
+
+// spec_tree_portal resolveSignatures: specs read outside the scan — a part's
+// own with its pinned parent excerpt — resolved exactly as the scan resolves
+// its own, by the pure signature resolver.
+export { resolveTree as resolveSignatures } from './signature-sources.js';
 
 // spec_tree_portal resolveExternals: the bound project's declared externals,
 // each bound to its producer — a dispatch to the external-producers workflow.
@@ -346,6 +351,11 @@ export { retireSpecialists } from './stereotype-migration.js';
 export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
 export { repairForeignStepFields } from './narrative-repair.js';
 export type { ForeignFieldRepair } from './narrative-repair.js';
+// spec_maintenance_portal repairSignatures: the doctor's one-time regeneration
+// of stored signature texts into their stored form — a 1:1 forward to the core
+// orchestrator.
+export { repairSignatures } from './signature-repair.js';
+export type { SignatureTextRepair } from './signature-repair.js';
 
 // The approval (approval_portal captureApprovedSpecs … approvalVerdict) — the
 // per-spec digests a lock RECORDS instead of writing statuses into the tree.

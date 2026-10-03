@@ -964,8 +964,15 @@ export const InterfaceSpecSchema = z.object({
 
 /** An interface as a spec file holds it: each method in its stored form. */
 export type StoredInterfaceSpec = z.infer<typeof InterfaceSpecSchema>;
-/** An interface as the loader answers it: every method resolved (MethodSignature). */
-export type InterfaceSpec = Omit<StoredInterfaceSpec, 'methods'> & { methods: MethodSignature[] };
+/**
+ * An interface as the loader answers it: every method resolved
+ * (MethodSignature). A schema of its own so the shape is one this file writes
+ * out — and the type-shape check reads — rather than an Omit-and-intersect.
+ */
+export const ResolvedInterfaceSpecSchema = InterfaceSpecSchema.extend({
+  methods: z.array(ResolvedMethodSignatureSchema).default([]),
+});
+export type InterfaceSpec = z.infer<typeof ResolvedInterfaceSpecSchema>;
 
 // ---------------------------------------------------------------------------
 // Level 5: Method / Narrative Step (embedded in L4)
@@ -1486,7 +1493,10 @@ export const TypeMethodSchema = z.object({
 /** A type method as a spec file holds it. */
 export type StoredTypeMethod = z.infer<typeof TypeMethodSchema>;
 /** A type method as the loader answers it: its signature always filled (derived from params, or the prose). */
-export type TypeMethod = StoredTypeMethod & { signature: string };
+export const ResolvedTypeMethodSchema = TypeMethodSchema.extend({
+  signature: z.string(),
+});
+export type TypeMethod = z.infer<typeof ResolvedTypeMethodSchema>;
 
 /** The stored type method with its requirement: a prose signature unless params derive one. */
 export const StoredTypeMethodSchema = TypeMethodSchema.superRefine((method, ctx) => {
@@ -1581,7 +1591,10 @@ export const TypeSpecSchema = z.object({
 /** A type as a spec file holds it: each method in its stored form. */
 export type StoredTypeSpec = z.infer<typeof TypeSpecSchema>;
 /** A type as the loader answers it: every method's signature filled. */
-export type TypeSpec = Omit<StoredTypeSpec, 'methods'> & { methods: TypeMethod[] };
+export const ResolvedTypeSpecSchema = TypeSpecSchema.extend({
+  methods: z.array(ResolvedTypeMethodSchema).default([]),
+});
+export type TypeSpec = z.infer<typeof ResolvedTypeSpecSchema>;
 
 /**
  * type_spec.derivedSignature — a signature type's shown text, `(a: T, b?: U): R`,

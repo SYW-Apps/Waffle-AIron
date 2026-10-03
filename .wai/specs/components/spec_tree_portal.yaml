@@ -19,7 +19,8 @@ dependsOn:
   - spec_loader
   - external_producers
   - part_context
+  - signature_resolver
 portalType: Custom
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:24:05.629Z'
+updatedAt: '2026-10-03T20:28:44.281Z'

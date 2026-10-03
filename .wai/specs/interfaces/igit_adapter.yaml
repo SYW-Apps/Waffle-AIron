@@ -40,13 +40,14 @@ methods:
     signature: 'commitScoped(subpaths: string[], message: string): string | null'
     returns: string | null
     params:
-      - name: message
-        type: string
       - name: subpaths
         type: string[]
         description: >-
           Pathspecs relative to the repo root, e.g. ['.wai/'], ['.wai/specs/<subsystem>/'] or
           ['.wai/', 'services/billing/.wai/']; never empty
+      - name: message
+        type: string
+        description: The commit message
   - name: isClean
     description: >-
       True when the given subpath holds no uncommitted changes (scoped `status --porcelain --
@@ -69,4 +70,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-04T16:31:59.438Z'
-updatedAt: '2026-10-01T16:32:37.251Z'
+updatedAt: '2026-10-03T20:52:10.947Z'
