@@ -71,6 +71,12 @@ import {
   methodGenericParameters,
   interfaceGenericParameters,
   fieldTypeRefs,
+  signatureTypeRefs,
+  storedMethodSignature,
+  storedTypeMethod,
+  deriveMethodSignature,
+  type StoredInterfaceSpec,
+  type StoredTypeSpec,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -98,6 +104,9 @@ import { projectConfigRepositoryAt } from '../config/project-config.js';
 // forwards its graph 1:1 (spec_loader graph).
 import { projectFamilyGraph } from './project-family.js';
 import type { WebGraphModel } from '../server/types.js';
+// The pure signature resolver the scan runs last, once every reference of the
+// family is bound: sourced methods filled, every params-bearing method's text derived.
+import { resolveTree, type SignatureFacts } from './signature-sources.js';
 
 // ---------------------------------------------------------------------------
 // Spec workspace
@@ -128,6 +137,8 @@ export interface SpecIndex {
     type: Record<string, string>;
     group: Record<string, string>;
   };
+  /** What the scan's signature resolution recorded: each signatureFrom it met and how it resolved, and each stored text its params contradict. */
+  signatures: SignatureFacts;
 }
 
 /** spec_scan_options — how deep a scan reads into chained subprojects. */
@@ -328,6 +339,7 @@ function emptyIndex(): SpecIndex {
       type: {},
       group: {},
     },
+    signatures: { sources: [], staleTexts: [] },
   };
 }
 
@@ -887,6 +899,27 @@ type ReferenceKind = 'subsystem' | 'component' | 'interface' | 'implementation' 
 type ReferenceMapper = (position: string, value: string) => string;
 
 /**
+ * A signatureFrom read as a method source: the head before its last dot (the
+ * component) and the tail after it (the method); null when the value has no
+ * dot to split at, which only a type reference can be. Whether the head
+ * really names a component is the reader's question — the scan binds it as
+ * one when it does, and keeps the value as a type reference when it does not.
+ */
+export function signatureSourceParts(value: string): { head: string; tail: string } | null {
+  const dot = value.lastIndexOf('.');
+  if (dot <= 0 || dot === value.length - 1) return null;
+  return { head: value.slice(0, dot), tail: value.slice(dot + 1) };
+}
+
+/** A signatureFrom with its head passed through `map` at position `signatureFrom`; a value with no head is untouched. */
+function mapSignatureSource(value: string, map: ReferenceMapper): string {
+  const parts = signatureSourceParts(value);
+  if (!parts) return value;
+  const head = map('signatureFrom', parts.head);
+  return head === parts.head ? value : `${head}.${parts.tail}`;
+}
+
+/**
  * A spec with every bound reference passed through `map` (the spec's own id untouched).
  *
  * The write path calls this BEFORE the schema fills its defaults, so a list the
@@ -924,7 +957,17 @@ function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper
     }
     case 'interface': {
       const i = spec as unknown as InterfaceSpec;
-      return { ...i, component: map('contract', i.component) } as unknown as T;
+      return {
+        ...i,
+        component: map('contract', i.component),
+        // A method source's head is a component reference; a value with no
+        // head is a raw type position the mapper is never asked about.
+        ...(i.methods?.some((m) => m.signatureFrom !== undefined) ? {
+          methods: i.methods.map((m) => (m.signatureFrom !== undefined
+            ? { ...m, signatureFrom: mapSignatureSource(m.signatureFrom, map) }
+            : m)),
+        } : {}),
+      } as unknown as T;
     }
     case 'implementation': {
       const impl = spec as unknown as ImplementationSpec;
@@ -975,6 +1018,8 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
       for (const m of (spec as InterfaceSpec).methods) {
         qualifiedTypeNames(m.returns).forEach((t) => add('type', t));
         m.params?.forEach((p) => qualifiedTypeNames(p.type).forEach((t) => add('type', t)));
+        // A signatureFrom with no method head (`alias::change_listener`) is a type reference.
+        if (m.signatureFrom !== undefined && !signatureSourceParts(m.signatureFrom)) add('type', m.signatureFrom);
       }
       break;
     case 'implementation':
@@ -986,9 +1031,15 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
         }
       }
       break;
-    case 'type':
-      for (const f of (spec as TypeSpec).fields) qualifiedTypeNames(f.type).forEach((t) => add('type', t));
+    case 'type': {
+      const t = spec as TypeSpec;
+      for (const f of t.fields) qualifiedTypeNames(f.type).forEach((n) => add('type', n));
+      // A signature's params and returns, and a type method's params, are type positions too.
+      t.params?.forEach((p) => qualifiedTypeNames(p.type).forEach((n) => add('type', n)));
+      qualifiedTypeNames(t.returns).forEach((n) => add('type', n));
+      for (const m of t.methods ?? []) m.params?.forEach((p) => qualifiedTypeNames(p.type).forEach((n) => add('type', n)));
       break;
+    }
     default:
       break;
   }
@@ -1028,6 +1079,8 @@ function bareRawReferences(kind: ReferenceKind, spec: unknown): { position: stri
     case 'type': {
       const t = spec as TypeSpec;
       for (const f of t.fields) for (const ref of fieldTypeRefs(t, f.type)) add('type', ref);
+      for (const ref of signatureTypeRefs(t)) add('type', ref);
+      for (const m of t.methods ?? []) for (const p of m.params ?? []) for (const ref of fieldTypeRefs(t, p.type)) add('type', ref);
       break;
     }
     case 'implementation':
@@ -1116,6 +1169,11 @@ function respellStoredReferences(kind: string, doc: Record<string, unknown>, map
         typed(m, 'signature');
         typed(m, 'returns');
         for (const p of list(m.params)) typed(p, 'type');
+        if (typeof m.signatureFrom === 'string') {
+          m.signatureFrom = signatureSourceParts(m.signatureFrom)
+            ? mapSignatureSource(m.signatureFrom, map)
+            : mapTypeNames(m.signatureFrom, map);
+        }
       }
       break;
     case 'implementation':
@@ -1141,6 +1199,9 @@ function respellStoredReferences(kind: string, doc: Record<string, unknown>, map
       at(doc, 'subsystem', 'subsystem');
       at(doc, 'group', 'group');
       for (const f of list(doc.fields)) typed(f, 'type');
+      for (const p of list(doc.params)) typed(p, 'type');
+      typed(doc, 'returns');
+      for (const m of list(doc.methods)) for (const p of list(m.params)) typed(p, 'type');
       break;
     default:
       break;
@@ -1168,6 +1229,9 @@ function mapRawReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper)
           ...(m.signature !== undefined ? { signature: mapTypeNames(m.signature, map)! } : {}),
           ...(m.returns !== undefined ? { returns: mapTypeNames(m.returns, map)! } : {}),
           ...(m.params ? { params: m.params.map((p) => ({ ...p, type: mapTypeNames(p.type, map)! })) } : {}),
+          // A type source is a raw type position; a method source's head is bound, never raw.
+          ...(m.signatureFrom !== undefined && !signatureSourceParts(m.signatureFrom)
+            ? { signatureFrom: mapTypeNames(m.signatureFrom, map)! } : {}),
         })),
       } as unknown as T;
     }
@@ -1195,7 +1259,15 @@ function mapRawReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper)
     }
     case 'type': {
       const t = spec as unknown as TypeSpec;
-      return { ...t, fields: t.fields.map((f) => ({ ...f, type: mapTypeNames(f.type, map)! })) } as unknown as T;
+      const typedParams = <P extends { type: string }>(params: P[] | undefined): { params?: P[] } =>
+        (params ? { params: params.map((p) => ({ ...p, type: mapTypeNames(p.type, map)! })) } : {});
+      return {
+        ...t,
+        fields: t.fields.map((f) => ({ ...f, type: mapTypeNames(f.type, map)! })),
+        ...typedParams(t.params),
+        ...(t.returns !== undefined ? { returns: mapTypeNames(t.returns, map)! } : {}),
+        methods: (t.methods ?? []).map((m) => ({ ...m, ...typedParams(m.params) })),
+      } as unknown as T;
     }
     default:
       return spec;
@@ -1949,6 +2021,9 @@ export function specKind(raw: any): SpecRefKind | undefined {
   if ('component' in raw && Array.isArray(raw.methods)) return 'interface';
   if ('contract' in raw && Array.isArray(raw.methods)) return 'implementation';
   if ('kind' in raw && Array.isArray(raw.fields)) return 'type';
+  // A signature type carries params and returns instead of fields, and a file
+  // written by hand may leave its empty fields list out.
+  if (raw.kind === 'signature') return 'type';
   return undefined;
 }
 
@@ -2036,6 +2111,21 @@ export function rewriteSpecRefs(
     rewrite(raw, 'component', 'component');
     for (const method of entries(raw.methods)) {
       for (const param of entries(method?.params)) rewrite(param, 'type', 'type');
+      // A signatureFrom is read both ways, as its resolver reads it: as a
+      // `component.method` pair (a remap retargets the half it matches), and,
+      // when that leaves it alone, as a type reference.
+      const source = method?.signatureFrom;
+      if (typeof source !== 'string') continue;
+      const parts = signatureSourceParts(source);
+      const name = parts ? remap(parts.tail, 'method', parts.head) : undefined;
+      const component = parts ? remap(parts.head, 'component', parts.tail) : undefined;
+      const next = parts && (component !== parts.head || name !== parts.tail)
+        ? `${component}.${name}`
+        : remap(source, 'type');
+      if (next !== source) {
+        method.signatureFrom = next;
+        changed = true;
+      }
     }
   } else if (kind === 'implementation') {
     rewrite(raw, 'contract', 'interface');
@@ -2071,6 +2161,11 @@ export function rewriteSpecRefs(
   } else if (kind === 'type') {
     rewrite(raw, 'componentClass', 'entity-class');
     for (const field of entries(raw.fields)) rewrite(field, 'type', 'type');
+    for (const param of entries(raw.params)) rewrite(param, 'type', 'type');
+    rewrite(raw, 'returns', 'type');
+    for (const method of entries(raw.methods)) {
+      for (const param of entries(method?.params)) rewrite(param, 'type', 'type');
+    }
   }
 
   return changed;
@@ -2726,6 +2821,13 @@ export class SpecWorkspace {
       index.groups.push(...raw.index.groups);
       for (const kind of Object.keys(index.paths) as (keyof SpecIndex['paths'])[]) Object.assign(index.paths[kind], raw.index.paths[kind]);
     }
+    // Step 21: once every reference of the family is bound, its signatures —
+    // sourced methods filled, every params-bearing method's text derived; the
+    // facts kept on the index, the one place the stored form stays visible.
+    const signatures = resolveTree(index.interfaces, index.components, index.types);
+    index.interfaces = signatures.interfaces;
+    index.types = signatures.types;
+    index.signatures = signatures.facts;
     return { index, raws, readables };
   }
 
@@ -3182,7 +3284,12 @@ export class SpecWorkspace {
         specId: specKey, position, authored: value, form: 'path', binding: 'local', resolved: keyIn(key, local), producer: key, rewrite: local,
       });
     };
+    // A signatureFrom's head binds as a component only when it names one: local
+    // first, then `alias::component` through phase three. Anything else is a
+    // type reference (`billing.change_listener`), which stays as written.
+    const localComponents = new Set(index.components.map((c) => nameKey(c.id.split('::').pop()!)));
     const bindLocal = (kind: ReferenceKind, specKey: string): ReferenceMapper => (position, value) => {
+      if (position === 'signatureFrom' && !value.includes('::') && !localComponents.has(nameKey(value))) return value;
       if (value.includes('::')) {
         raw.pending.push({ kind, specKey, position, authored: value, raw: false });
         return value;
@@ -3540,7 +3647,12 @@ export class SpecWorkspace {
     this.scanAll();
     const from = this.getSubprojectPrefix(spec.id) ?? '';
     const carrying = carry && !this.carryDisabled ? new Map<string, number>() : null;
-    const mapped = mapSpecReferences(kind, spec, (position, value) => this.writeReference(from, spec.id, position, value, carrying));
+    // A signatureFrom's head is written back only when the scan bound it as a
+    // component; a type reference stays as it came, exactly as it was read.
+    const components = new Set(this.scanAll().components.map((c) => c.id));
+    const mapped = mapSpecReferences(kind, spec, (position, value) => (position === 'signatureFrom' && !components.has(value)
+      ? value
+      : this.writeReference(from, spec.id, position, value, carrying)));
     // A local id never carries `::`: a subsystem-qualified own id is written by its last segment.
     return { ...mapped, id: localOf(from, spec.id).split('::').pop()! };
   }
@@ -3885,8 +3997,15 @@ export class SpecWorkspace {
     return this.relativizeSpec('component', spec);
   }
 
-  prepareInterfaceForWrite(spec: InterfaceSpec): InterfaceSpec {
-    return this.relativizeSpec('interface', spec);
+  /**
+   * spec_registry.saveInterfaceSpec steps 1-2: every method in its stored form
+   * (method_signature.storedForm — the text a method's params derive, nothing
+   * a signatureFrom supplies), then every reference written back relative to
+   * the owning project.
+   */
+  prepareInterfaceForWrite(spec: InterfaceSpec | StoredInterfaceSpec): StoredInterfaceSpec {
+    const stored = { ...spec, methods: (spec.methods ?? []).map((m) => storedMethodSignature(m)) };
+    return this.relativizeSpec('interface', stored as InterfaceSpec) as StoredInterfaceSpec;
   }
 
   prepareImplementationForWrite(spec: ImplementationSpec, carry = true): ImplementationSpec {
@@ -3901,8 +4020,10 @@ export class SpecWorkspace {
     return partDir ? partRelativeFilePaths(relative, this.rootDir, partDir) : relative;
   }
 
-  prepareTypeForWrite(spec: TypeSpec): TypeSpec {
-    return this.relativizeSpec('type', spec);
+  /** A type written in its stored form — every params-bearing method's text derived — relative to the owning project. */
+  prepareTypeForWrite(spec: TypeSpec | StoredTypeSpec): StoredTypeSpec {
+    const stored = { ...spec, methods: (spec.methods ?? []).map((m) => storedTypeMethod(m)) };
+    return this.relativizeSpec('type', stored as TypeSpec) as StoredTypeSpec;
   }
 
   prepareGroupForWrite(spec: GroupSpec): GroupSpec {
@@ -4171,7 +4292,8 @@ export class SpecWorkspace {
     if (!pathExists(p)) return null;
     try {
       const raw = readSpecFile(p);
-      return InterfaceSpecSchema.parse(raw);
+      // A file the scan did not index is resolved alone, against the index's components and types.
+      return resolveTree([InterfaceSpecSchema.parse(raw)], index.components, index.types).interfaces[0];
     } catch (e: any) {
       this.loaderIssues.push({
         severity: 'error',
@@ -4772,6 +4894,21 @@ export class SpecWorkspace {
    * dry-run a promotion (write 'complete' → validate → restore) without leaving
    * any change behind if validation fails or the user cancels.
    */
+  /**
+   * ispec_index.signatureFacts — what the current scan's signature resolution
+   * recorded: every signatureFrom met and how it resolved, and every stored
+   * text its params contradict. Read from the cached scan, rescanning first
+   * when the tree changed.
+   */
+  signatureFacts(): SignatureFacts {
+    // Step 1: serve the workspace scan, rescanning when the file signature no
+    // longer holds (this index's own listProjectRoots, named as its type).
+    const index: SpecWorkspace = this;
+    index.listProjectRoots();
+    // Step 2: the facts the scan kept on the index.
+    return this.cachedIndex!.signatures;
+  }
+
   snapshotSpecFiles(): Map<string, string> {
     const index = this.scanAll();
     const snapshot = new Map<string, string>();
@@ -4883,8 +5020,11 @@ export class SpecWorkspace {
     dryRun = false,
   ): SpecChangeReport {
     const notices: string[] = [];
-    // The L0 is a singleton — its id is informational to the load.
-    const result = this.load(kind, id);
+    // The L0 is a singleton — its id is informational to the load. The delta
+    // merges onto the spec as STORED: a sourced method carries only its
+    // signatureFrom, never the params and returns the scan resolved into it,
+    // so a delta that leaves such a method alone cannot write them back.
+    const result = storedFormOf(kind, this.load(kind, id));
 
     if (!result) {
       throw new Error(`Spec of kind "${kind}" with ID "${id}" does not exist. Define it first.`);
@@ -5721,6 +5861,10 @@ export class SpecWorkspace {
     const qualifiedDelta = qualifyDeltaRefs(mergeableDelta);
     const mergedResult = mergeDelta(result, qualifiedDelta);
     for (const field of unsetFields) delete mergedResult[field];
+    // A method's text is derived from its params on the write, never taken
+    // from the delta. A sourced method is left as merged, so the caller's gate
+    // sees a restatement the delta made (the writer drops it either way).
+    deriveMergedTexts(kind, mergedResult);
     // A field the delta removed that the schema DEFAULTS (every top-level list
     // is one) is back at its default, which is what unsetting it means. Left
     // absent, the save path — which reads these lists before the schema runs —
@@ -6449,6 +6593,39 @@ interface MethodMovePlan {
  * field, and stripped before the merged narrative leaves the merge.
  */
 const DELTA_JUMP_PINS = Symbol('jumps written by this delta');
+
+/**
+ * A loaded spec in its STORED form, for a delta to merge onto: an interface's
+ * methods through method_signature.storedForm (a sourced method keeps only its
+ * source), a type's methods with their derived text. Other kinds, and a
+ * missing spec, as they came.
+ */
+function storedFormOf(kind: WritableSpecKind, spec: StoredSpec | null): StoredSpec | null {
+  if (!spec) return spec;
+  if (kind === 'interface') {
+    const intf = spec as InterfaceSpec;
+    return { ...intf, methods: intf.methods.map((m) => storedMethodSignature(m)) } as StoredSpec;
+  }
+  if (kind === 'type') {
+    const type = spec as TypeSpec;
+    return { ...type, methods: type.methods.map((m) => storedTypeMethod(m)) } as StoredSpec;
+  }
+  return spec;
+}
+
+/**
+ * A merged spec's method texts re-derived in place: every method with params
+ * and no signatureFrom shows the text its params derive, whatever text the
+ * delta carried. A sourced method is left as merged.
+ */
+function deriveMergedTexts(kind: WritableSpecKind, merged: Record<string, any>): void {
+  if ((kind !== 'interface' && kind !== 'type') || !Array.isArray(merged.methods)) return;
+  merged.methods = merged.methods.map((m: any) => {
+    if (!m || typeof m !== 'object' || m.signatureFrom !== undefined || !Array.isArray(m.params)) return m;
+    const derived = deriveMethodSignature(m);
+    return derived === undefined ? m : { ...m, signature: derived };
+  });
+}
 
 function cloneSpec<T>(spec: T): T {
   return JSON.parse(JSON.stringify(spec)) as T;
@@ -7213,6 +7390,11 @@ export function specPathsInScope(scopeSubsystem?: string): string[] {
 
 export function snapshotSpecFiles(): Map<string, string> {
   return current().snapshotSpecFiles();
+}
+
+/** ispec_loader.signatureFacts — forwarded 1:1 to the index read face. */
+export function signatureFacts(): SignatureFacts {
+  return current().signatureFacts();
 }
 
 /** Restore files captured by snapshotSpecFiles(). Caller invalidates the cache. */

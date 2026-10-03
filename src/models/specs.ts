@@ -749,15 +749,38 @@ export const FindingDeclarationSchema = z.object({
 });
 export type FindingDeclaration = z.infer<typeof FindingDeclarationSchema>;
 
+/**
+ * One contract method as a spec file STORES it (method_signature). The shape
+ * on disk differs from the resolved shape every consumer types against
+ * (MethodSignature below):
+ *
+ * - `signature` is DERIVED from name, params and returns whenever params are
+ *   present (deriveMethodSignature), so it is optional on disk then, and absent
+ *   from the stored form of a method naming a `signatureFrom`;
+ * - `returns` is absent from the stored form of a method naming a
+ *   `signatureFrom`, whose source supplies it on every load.
+ *
+ * The per-method requirements left are enforced where a stored method is
+ * parsed (StoredMethodSignatureSchema). This object stays a plain ZodObject so
+ * its shape can be read field by field (the MCP field-coverage suite does).
+ */
 export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
-  signature: z.string(), // e.g. "save(key: string, data: Buffer): Promise<void>"
+  signature: z.string().optional(), // e.g. "save(key: string, data: Buffer): Promise<void>"
   // e.g. "Promise<void>", or a union: "Invoice | null" — the commonest shape in
   // any real tree. See the grammar on src/models/type-references.ts.
-  returns: z.string(),
+  returns: z.string().optional(),
   /** Structured parameters (authoritative for type checking when present). */
   params: z.array(MethodParamSchema).optional(),
+  /**
+   * Where this method takes its params and returns from instead of stating
+   * them: a signature type (`billing.change_listener`, `alias::name`), or a
+   * contract method `component.method` its component reaches along a
+   * dependsOn/owns edge. Resolved both ways by the loader (signature_resolver);
+   * the writer stores a sourced method with only its source.
+   */
+  signatureFrom: z.string().min(1).optional(),
   /** Concrete wire binding for this method when its component is a Portal (set via sdd_set_endpoints). */
   endpoint: EndpointSchema.optional(),
   /**
@@ -811,7 +834,100 @@ export const MethodSignatureSchema = z.object({
   ext: ExtDataSchema.optional(),
 });
 
-export type MethodSignature = z.infer<typeof MethodSignatureSchema>;
+/** A method as a spec file holds it: what the writer writes and the loader parses. */
+export type StoredMethodSignature = z.infer<typeof MethodSignatureSchema>;
+
+/**
+ * The stored method's own requirements: a method naming no signatureFrom states
+ * its returns, and a prose signature unless params derive one. A method naming
+ * a signatureFrom needs nothing more — and one that ALSO states params or
+ * returns still parses, because the source wins at load and the validator
+ * reports the restatement (only an authored write is refused for it).
+ */
+function requireStoredSignature(
+  method: { signatureFrom?: string; params?: unknown; signature?: string; returns?: string },
+  ctx: z.RefinementCtx,
+): void {
+  if (method.signatureFrom !== undefined) return;
+  if (method.returns === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['returns'], message: 'Required: a method without a signatureFrom states its returns' });
+  }
+  if (method.params === undefined && method.signature === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['signature'], message: 'Required: a method without params or a signatureFrom states a prose signature' });
+  }
+}
+
+/** The stored method with its per-method requirements — what an interface's methods list parses through. */
+export const StoredMethodSignatureSchema = MethodSignatureSchema.superRefine(requireStoredSignature);
+
+/**
+ * The RESOLVED method every consumer reads: the loader always fills the
+ * signature (derived from params, or the prose) and the returns (the method's
+ * own, or its source's).
+ */
+export const ResolvedMethodSignatureSchema = MethodSignatureSchema.extend({
+  signature: z.string(),
+  returns: z.string(),
+});
+export type MethodSignature = z.infer<typeof ResolvedMethodSignatureSchema>;
+
+/** The text one param shows in a derived signature: `name: type`, `name?: type` when optional. */
+function paramText(p: Pick<MethodParam, 'name' | 'type' | 'optional'>): string {
+  return `${p.name}${p.optional ? '?' : ''}: ${p.type}`;
+}
+
+/** The generic parameter list a stored text opens with (`find<T>(` gives `<T>`), angle brackets balanced; '' when none. */
+function leadingGenericList(name: string, stored: string | undefined): string {
+  if (!stored) return '';
+  const text = stored.trimStart();
+  if (!text.startsWith(name)) return '';
+  let i = name.length;
+  while (text[i] === ' ') i++;
+  if (text[i] !== '<') return '';
+  let depth = 0;
+  for (let j = i; j < text.length; j++) {
+    if (text[j] === '<') depth++;
+    else if (text[j] === '>') depth--;
+    if (depth === 0) {
+      const rest = text.slice(j + 1).trimStart();
+      return rest.startsWith('(') ? text.slice(i, j + 1) : '';
+    }
+  }
+  return '';
+}
+
+/**
+ * method_signature.derivedSignature (and type_method.derivedSignature) — the
+ * signature text structured params determine: `name(a: T, b?: U): R`, each
+ * param `name: type` in declared order with `?` after an optional one's name,
+ * the types exactly as the params write them, then the returns. A generic list
+ * the stored text opens with (`find<T>(`) is carried over, since nothing
+ * structured declares it yet. Undefined for a method without params, whose
+ * prose is its signature.
+ */
+export function deriveMethodSignature(
+  method: { name: string; params?: ReadonlyArray<Pick<MethodParam, 'name' | 'type' | 'optional'>>; returns?: string; signature?: string },
+): string | undefined {
+  if (!method.params) return undefined;
+  const generics = leadingGenericList(method.name, method.signature);
+  return `${method.name}${generics}(${method.params.map(paramText).join(', ')}): ${method.returns ?? 'unknown'}`;
+}
+
+/**
+ * method_signature.storedForm — the method as a spec file holds it: a method
+ * naming a signatureFrom keeps the source and drops params, returns and
+ * signature, which the source supplies on every load; a method with params has
+ * its signature replaced by derivedSignature(); a prose method is returned as
+ * it is. What every save writes, whoever saves.
+ */
+export function storedMethodSignature<M extends StoredMethodSignature>(method: M): StoredMethodSignature {
+  if (method.signatureFrom !== undefined) {
+    const { params: _params, returns: _returns, signature: _signature, ...rest } = method;
+    return rest;
+  }
+  const derived = deriveMethodSignature(method);
+  return derived === undefined ? method : { ...method, signature: derived };
+}
 
 // The intent floor: prose short enough to be a placeholder cannot specify
 // behavior an implementer could be held to.
@@ -836,7 +952,7 @@ export const InterfaceSpecSchema = z.object({
   name: z.string(),
   description: z.string(),
   component: z.string(), // References L2 Component id
-  methods: z.array(MethodSignatureSchema).default([]),
+  methods: z.array(StoredMethodSignatureSchema).default([]),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
@@ -846,7 +962,10 @@ export const InterfaceSpecSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
-export type InterfaceSpec = z.infer<typeof InterfaceSpecSchema>;
+/** An interface as a spec file holds it: each method in its stored form. */
+export type StoredInterfaceSpec = z.infer<typeof InterfaceSpecSchema>;
+/** An interface as the loader answers it: every method resolved (MethodSignature). */
+export type InterfaceSpec = Omit<StoredInterfaceSpec, 'methods'> & { methods: MethodSignature[] };
 
 // ---------------------------------------------------------------------------
 // Level 5: Method / Narrative Step (embedded in L4)
@@ -1307,7 +1426,8 @@ export function implementationSourceFiles(
 // Types: entities and value objects (the data the components operate on).
 // Defined once by their owner; referenced — never redefined — elsewhere.
 // ---------------------------------------------------------------------------
-export const TypeKindSchema = z.enum(['entity', 'value-object']);
+/** entity | value-object (data) | signature (a named function type: params and returns, nothing else). */
+export const TypeKindSchema = z.enum(['entity', 'value-object', 'signature']);
 export type TypeKind = z.infer<typeof TypeKindSchema>;
 
 export const TypeFieldSchema = z.object({
@@ -1333,10 +1453,18 @@ export const TypeFieldSchema = z.object({
 });
 export type TypeField = z.infer<typeof TypeFieldSchema>;
 
-/** A pure, self-contained method on an entity (no external collaborators). */
+/**
+ * A pure, self-contained method on an entity (no external collaborators) —
+ * type_method. Like a contract method it may carry structured params, which
+ * then DERIVE its shown signature (deriveMethodSignature), so the signature is
+ * optional on disk when params are present. It takes no signatureFrom: it
+ * reaches no component, so it has no edge to take one along.
+ */
 export const TypeMethodSchema = z.object({
   name: z.string(),
-  signature: z.string(),
+  signature: z.string().optional(),
+  /** Structured parameters in the contract method's param shape — authoritative for type checking when present. */
+  params: z.array(MethodParamSchema).optional(),
   returns: z.string(),
   description: z.string().optional(),
   /**
@@ -1355,7 +1483,17 @@ export const TypeMethodSchema = z.object({
    */
   symbol: z.string().optional(),
 });
-export type TypeMethod = z.infer<typeof TypeMethodSchema>;
+/** A type method as a spec file holds it. */
+export type StoredTypeMethod = z.infer<typeof TypeMethodSchema>;
+/** A type method as the loader answers it: its signature always filled (derived from params, or the prose). */
+export type TypeMethod = StoredTypeMethod & { signature: string };
+
+/** The stored type method with its requirement: a prose signature unless params derive one. */
+export const StoredTypeMethodSchema = TypeMethodSchema.superRefine((method, ctx) => {
+  if (method.params === undefined && method.signature === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['signature'], message: 'Required: a type method without params states a prose signature' });
+  }
+});
 
 /**
  * A declared domain invariant on an entity — a property every write path must
@@ -1374,7 +1512,7 @@ export const InvariantSchema = z.object({
 export type Invariant = z.infer<typeof InvariantSchema>;
 
 export const TypeSpecSchema = z.object({
-  kind: TypeKindSchema, // discriminator — entity | value-object
+  kind: TypeKindSchema, // discriminator — entity | value-object | signature
   id: SpecIdSchema,
   name: z.string(),
   description: z.string().optional(),
@@ -1384,7 +1522,7 @@ export const TypeSpecSchema = z.object({
   group: z.string().optional(),
   fields: z.array(TypeFieldSchema).default([]),
   /** Pure intrinsic behaviour only — anything needing a collaborator belongs on a component. */
-  methods: z.array(TypeMethodSchema).default([]),
+  methods: z.array(StoredTypeMethodSchema).default([]),
   /**
    * Linked Component ID if this system entity is implemented as a class Component
    * (e.g., a Store or Registry that owns this entity's lifecycle and methods).
@@ -1430,10 +1568,36 @@ export const TypeSpecSchema = z.object({
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
   ext: ExtDataSchema.optional(),
+  /**
+   * A signature's parameters, in the contract method's param shape; only on
+   * kind signature (SIGNATURE_TYPE_MEMBERS otherwise).
+   */
+  params: z.array(MethodParamSchema).optional(),
+  /** A signature's one output type; required on kind signature and only there (SIGNATURE_TYPE_MEMBERS). */
+  returns: z.string().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
-export type TypeSpec = z.infer<typeof TypeSpecSchema>;
+/** A type as a spec file holds it: each method in its stored form. */
+export type StoredTypeSpec = z.infer<typeof TypeSpecSchema>;
+/** A type as the loader answers it: every method's signature filled. */
+export type TypeSpec = Omit<StoredTypeSpec, 'methods'> & { methods: TypeMethod[] };
+
+/**
+ * type_spec.derivedSignature — a signature type's shown text, `(a: T, b?: U): R`,
+ * derived from its params and returns the way a method's is, without a name;
+ * undefined on an entity or a value-object.
+ */
+export function deriveTypeSignature(type: Pick<StoredTypeSpec, 'kind' | 'params' | 'returns'>): string | undefined {
+  if (type.kind !== 'signature') return undefined;
+  return `(${(type.params ?? []).map(paramText).join(', ')}): ${type.returns ?? 'unknown'}`;
+}
+
+/** A type method's stored form: a method with params stores the text they derive; a prose method as it is. */
+export function storedTypeMethod<M extends StoredTypeMethod>(method: M): StoredTypeMethod {
+  const derived = deriveMethodSignature(method);
+  return derived === undefined ? method : { ...method, signature: derived };
+}
 
 /**
  * Every source file a type names — its own sourcePath, then each method's —
@@ -1496,8 +1660,8 @@ export const SurfaceContractEntrySchema = z.object({
   type: z.string().default('Custom'),
   /** Local name of the backing Portal in the producing project. */
   component: z.string(),
-  /** Full contract methods (params, returns, guarantees, effect, endpoint). */
-  methods: z.array(MethodSignatureSchema).default([]),
+  /** Full contract methods (params, returns, guarantees, effect, endpoint), resolved: a snapshot names no producer-internal source. */
+  methods: z.array(ResolvedMethodSignatureSchema).default([]),
   /** The backing portal's capability dispatch table, when generic-dispatch. */
   dispatch: z.array(DispatchBindingSchema).optional(),
   details: z.string().default(''),

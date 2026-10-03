@@ -20,5 +20,6 @@ fields:
     description: What the resolution found
     optional: false
 methods: []
+sourcePath: src/core/signature-sources.ts
 createdAt: '2026-10-03T19:31:30.104Z'
-updatedAt: '2026-10-03T19:34:01.749Z'
+updatedAt: '2026-10-03T19:51:57.474Z'

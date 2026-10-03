@@ -252,6 +252,26 @@ describe('MCP write-tool schema field coverage', () => {
     ).toEqual([]);
   });
 
+  // Stage 1 signatures: the new canonical fields are EXPRESSED by the create
+  // tools — none is update_spec-only (stage-1-signatures.md, "MCP tools and the
+  // re-authoring seam"). A sourced method states its source alone, so the
+  // signature and returns it may leave out are optional in the tool input too.
+  it('the signature fields are expressed by the create tools, never update_spec-only', () => {
+    const methodProps = toolProps['sdd_define_interface']?.methods?.items ?? {};
+    expect(Object.keys(methodProps.properties ?? {})).toContain('signatureFrom');
+    expect(methodProps.required ?? []).not.toContain('signature');
+    expect(methodProps.required ?? []).not.toContain('returns');
+    const typeProps = toolProps['sdd_add_type'] ?? {};
+    expect(Object.keys(typeProps)).toEqual(expect.arrayContaining(['params', 'returns']));
+    expect(typeProps.kind?.enum).toContain('signature');
+    const typeMethod = typeProps.methods?.items ?? {};
+    expect(Object.keys(typeMethod.properties ?? {})).toContain('params');
+    expect(typeMethod.required ?? []).not.toContain('signature');
+    for (const def of [KINDS.interface.method!, KINDS.type, KINDS.type.method!]) {
+      for (const field of ['signatureFrom', 'params', 'returns']) expect(def.updateSpecOnly[field]).toBeUndefined();
+    }
+  });
+
   // A subsystem's publicInterfaces entry is its export table's row: an own item
   // or a re-export (from / typeDef / as). The item schema is hand-copied into
   // both tools that write it, and a field missing there is stripped by the SDK

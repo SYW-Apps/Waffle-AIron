@@ -99,8 +99,12 @@ export {
   // spec_maintenance_portal findLegacySpecFiles: what `doctor` and `validate`
   // report before a migration.
   findLegacySpecFiles,
+  // spec_tree_portal signatureFacts: what the scan's signature resolution
+  // recorded — a passthrough read of the spec repository (spec_loader).
+  signatureFacts,
 } from './specs.js';
 export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './specs.js';
+export type { SignatureFacts, SignatureSourceFact, StaleSignatureText } from './signature-sources.js';
 
 // spec_tree_portal resolveExternals: the bound project's declared externals,
 // each bound to its producer — a dispatch to the external-producers workflow.

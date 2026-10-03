@@ -15,5 +15,6 @@ fields:
     description: One fact per contract or type method whose stored text differs from its derived text
     optional: false
 methods: []
+sourcePath: src/core/signature-sources.ts
 createdAt: '2026-10-03T19:31:27.045Z'
-updatedAt: '2026-10-03T19:34:01.310Z'
+updatedAt: '2026-10-03T19:51:56.793Z'
