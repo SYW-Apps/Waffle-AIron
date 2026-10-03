@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import type { MethodSignature, SurfaceContractEntry, SurfaceSnapshot, SurfaceTypeDef } from './specs.js';
-import { BUILTIN_TYPES, extractTypeIdentifiers, matchTypeRef, methodTypeRefs, nameKey } from './type-references.js';
+import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs, nameKey } from './type-references.js';
+import { canonicalTypeText, isTypeVocabulary, parseTypeExpression, type TypeExpression } from './type-grammar.js';
 import { canonicalize } from '../utils/canonical-json.js';
 
 // ---------------------------------------------------------------------------
@@ -82,24 +83,40 @@ function closureTypeOf(snapshot: SurfaceSnapshot, identifier: string): SurfaceTy
   return matches.find((def) => nameKey(def.id) === nameKey(ref));
 }
 
+/** The expression with every named reference rewritten through `rename`, the structure kept. */
+function renamedRefs(expr: TypeExpression, rename: (name: string) => string): TypeExpression {
+  const args = expr.args.map((a) => renamedRefs(a, rename));
+  return expr.form === 'named' || expr.form === 'applied' ? { ...expr, name: rename(expr.name!), args } : { ...expr, args };
+}
+
 /**
  * surface_snapshot.canonicalTypeRef — a type expression rewritten into the one
- * spelling a digest may see, identifier by identifier, generics and unions kept
- * in place: a builtin becomes its lower-cased builtin name; an identifier
- * naming a type of this snapshot's closure (bare, or prefixed with this
- * snapshot's own project id, compared by nameKey) becomes that type's id;
- * anything else — another project's name, which a snapshot cannot resolve on
- * its own — is kept as written. Pure: the snapshot is the whole input.
+ * spelling a digest may see: parsed under the type grammar and answered as its
+ * canonical text, so an alias and its canonical spelling digest alike, with
+ * every named reference rewritten in place — an identifier naming a type of
+ * this snapshot's closure (bare, or prefixed with this snapshot's own project
+ * id, compared by nameKey) becomes that type's id; anything else — another
+ * project's name, which a snapshot cannot resolve on its own — is kept as
+ * written. A text that does not parse (a prose signature) is kept as written,
+ * identifier by identifier, as before the grammar: wairon's own vocabulary
+ * lower-cased, closure types by id. Pure: the snapshot is the whole input.
  */
 export function canonicalTypeRef(snapshot: SurfaceSnapshot, typeExpr: string): string {
+  const rename = (identifier: string): string => closureTypeOf(snapshot, identifier)?.id ?? identifier;
+  const parse = parseTypeExpression(typeExpr, 'returns');
+  if (parse.expression) return canonicalTypeText(renamedRefs(parse.expression, rename));
   return typeExpr.replace(TYPE_IDENTIFIER, (identifier) => {
     if (!/[A-Za-z]/.test(identifier)) return identifier;
-    if (BUILTIN_TYPES.has(identifier.toLowerCase())) return identifier.toLowerCase();
-    return closureTypeOf(snapshot, identifier)?.id ?? identifier;
+    if (isTypeVocabulary(identifier)) return identifier.toLowerCase();
+    return rename(identifier);
   });
 }
 
-/** A type definition's shape: what a caller depends on, never its prose; every field type canonical. */
+/**
+ * A type definition's shape: what a caller depends on, never its prose; every
+ * field type canonical. An enum's shape is its kind and its value names in
+ * declared order, so adding, removing or reordering a value moves it.
+ */
 function typeShape(snapshot: SurfaceSnapshot, def: SurfaceTypeDef): unknown {
   return {
     id: def.id,
@@ -113,6 +130,7 @@ function typeShape(snapshot: SurfaceSnapshot, def: SurfaceTypeDef): unknown {
         returns: canonicalTypeRef(snapshot, def.returns ?? 'unknown'),
       }
       : {}),
+    ...(def.kind === 'enum' ? { values: (def.values ?? []).map((v) => v.name) } : {}),
   };
 }
 

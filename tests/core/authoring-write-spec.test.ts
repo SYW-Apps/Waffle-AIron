@@ -200,7 +200,7 @@ describe('writeSpec — the L0', () => {
   it('initializes a system and answers with a receipt carrying no status', () => {
     project({ system: false });
     const receipt = writeSpec({ kind: 'system', spec: { name: 'New', vision: 'v', boundaries: [], globalRequirements: [] } as unknown as SystemSpec, fields: SYSTEM_FIELDS });
-    expect(receipt).toEqual({ kind: 'system', id: 'system', name: 'New', replacedExisting: false, notices: [], testsToRevisit: [] });
+    expect(receipt).toEqual({ kind: 'system', id: 'system', name: 'New', replacedExisting: false, notices: [], respellings: [], testsToRevisit: [] });
     invalidateSpecCache();
     expect(loadSystemSpec()?.databases).toEqual([]);
   });
@@ -467,10 +467,10 @@ describe('writeSpec — a type', () => {
 
   it('needs no parent, carries no status, and names a removed member', () => {
     project();
-    const created = writeSpec(type({ fields: [{ name: 'amount', type: 'number', optional: false }, { name: 'legacy', type: 'string', optional: false }] }));
+    const created = writeSpec(type({ fields: [{ name: 'amount', type: 'float', optional: false }, { name: 'legacy', type: 'string', optional: false }] }));
     expect(created.status).toBeUndefined();
     invalidateSpecCache();
-    const receipt = writeSpec(type({ fields: [{ name: 'amount', type: 'number', optional: false }] }));
+    const receipt = writeSpec(type({ fields: [{ name: 'amount', type: 'float', optional: false }] }));
     expect(receipt.notices.some(n => n.startsWith('REMOVED by this restatement: member "field legacy"'))).toBe(true);
     invalidateSpecCache();
     expect(loadTypeSpec('money')?.fields.map(f => f.name)).toEqual(['amount']);

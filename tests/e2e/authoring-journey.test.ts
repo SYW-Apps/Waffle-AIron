@@ -84,7 +84,8 @@ describe('e2e authoring journey (built server, empty project)', () => {
     expect(workerIntf, 'worker interface not found on disk').not.toBeNull();
     const enrich = (workerIntf!['methods'] as Array<Record<string, unknown>>).find((m) => m['name'] === 'enrich');
     expect(enrich).toBeDefined();
-    expect(enrich!['returns']).toBe('Promise<string>');
+    // Stored canonical (stage 2): the journey writes Promise<string>, the store holds async string.
+    expect(enrich!['returns']).toBe('async string');
     expect(enrich!['params']).toEqual([
       { name: 'payload', type: 'string', description: 'The raw journey payload to enrich' },
     ]);

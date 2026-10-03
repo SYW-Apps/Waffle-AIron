@@ -74,6 +74,8 @@ methods:
       canonical recorded as a located problem and left as written. A method without params keeps its
       prose signature and only its returns is read; a sourced method states no params or returns and
       has none to read. Pure.
+    sourcePath: src/models/type-grammar.ts
+    symbol: interfaceCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T22:04:05.950Z'
+updatedAt: '2026-10-03T22:21:56.479Z'

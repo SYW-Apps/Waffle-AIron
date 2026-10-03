@@ -36,5 +36,6 @@ fields:
       proposal, a builtin with no neutral meaning, an expression that does not parse
     optional: false
 methods: []
+sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:03:25.363Z'
-updatedAt: '2026-10-03T22:03:25.364Z'
+updatedAt: '2026-10-03T22:21:53.674Z'

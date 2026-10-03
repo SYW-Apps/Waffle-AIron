@@ -19,5 +19,6 @@ fields:
       TYPE_FORM_UNSUPPORTED, TYPE_NOT_NEUTRAL)
     optional: false
 methods: []
+sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:03:20.274Z'
-updatedAt: '2026-10-03T22:03:20.275Z'
+updatedAt: '2026-10-03T22:21:53.211Z'

@@ -56,7 +56,7 @@ import type {
   SurfaceArtifact,
 } from './types.js';
 import type { SurfaceSnapshot, InterfaceSpec, MethodSignature, ResolvedExportTable } from '../models/index.js';
-import { BUILTIN_TYPES, methodTypeRefs } from '../models/index.js';
+import { isTypeVocabulary, methodTypeRefs } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Landscape Orchestrator + Surface Exchange Orchestrator + Landscape Graph
@@ -261,7 +261,7 @@ function referencedTypeNames(methods: MethodSignature[]): string[] {
   const names = new Set<string>();
   for (const m of methods) {
     for (const ref of methodTypeRefs(m)) {
-      if (!BUILTIN_TYPES.has(ref.toLowerCase())) names.add(ref.split(/::|\./).pop()!);
+      if (!isTypeVocabulary(ref)) names.add(ref.split(/::|\./).pop()!);
     }
   }
   return [...names];

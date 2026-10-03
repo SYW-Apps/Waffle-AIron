@@ -480,13 +480,23 @@ methods:
         targetComponent: signature_resolver
         targetMethod: resolveTree
       - stepNumber: 23
+        label: respelled-texts
+        description: >-
+          Drop each stale-text fact whose stored text equals the text the method's params derive as
+          the file spells them (the specs as read, before step 18): that text differs from the
+          derived one only because its params are still stored in alias spellings, which the
+          type-spelling facts already hold (TYPE_SPELLING_STALE) and the save that respells them
+          rewrites together with the text — one cause, reported once. A text that contradicts its
+          params as stored stays a stale-text fact
+        type: local
+      - stepNumber: 24
         description: >-
           Record per root its key, parent, alias and form, the description its parent's declaration
           gives it, legacy mount, L0, configuration, alias table, tables, spec keys, its parts, and
           authored references, and the family problems met (its members' part-unavailable and
           kind-mismatch problems included)
         type: local
-      - stepNumber: 24
+      - stepNumber: 25
         description: Answer the recorded roots, bound root first
         type: return
         outcome: ScannedProjectRoot[]
@@ -554,4 +564,4 @@ methods:
         outcome: TypeSpellingFacts
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-03T22:05:17.461Z'
+updatedAt: '2026-10-03T22:41:40.712Z'

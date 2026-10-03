@@ -55,7 +55,8 @@ describe('e2e signature sources (built server)', () => {
       name: 'enrichFor', description: 'Enrich a payload for a journey, as the worker does', signatureFrom: `${JOURNEY.worker}.enrich`,
     });
     // The server derived the text of a method stated with params and no text.
-    expect(methods.find((m) => m.name === 'runJourney')!.signature).toBe('runJourney(journeyId: string): Promise<void>');
+    // Derived from the canonical types (stage 2): Promise<void> is stored async void.
+    expect(methods.find((m) => m.name === 'runJourney')!.signature).toBe('runJourney(journeyId: string): async void');
   });
 
   it('sdd_get_spec answers the stored form, with the resolved signature beside it', async () => {
@@ -67,9 +68,9 @@ describe('e2e signature sources (built server)', () => {
     expect(answer.resolvedSignatures).toEqual([{
       method: 'enrichFor',
       signatureFrom: `${JOURNEY.worker}.enrich`,
-      signature: 'enrichFor(payload: string): Promise<string>',
+      signature: 'enrichFor(payload: string): async string',
       params: [{ name: 'payload', type: 'string', description: 'The raw journey payload to enrich' }],
-      returns: 'Promise<string>',
+      returns: 'async string',
     }]);
   });
 
@@ -147,6 +148,6 @@ describe('e2e signature sources (built server)', () => {
       methods: [{ name: 'sameAs', params: [{ name: 'other', type: 'string' }], returns: 'boolean', description: 'Whether another id names this journey' }],
     });
     const type = findSpecOnDisk(proj.dir, 'journey_ref') as { methods: DiskMethod[] };
-    expect(type.methods[0].signature).toBe('sameAs(other: string): boolean');
+    expect(type.methods[0].signature).toBe('sameAs(other: string): bool');
   });
 });

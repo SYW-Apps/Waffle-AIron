@@ -592,7 +592,8 @@ methods:
       const seams = issuesWith(res, 'UNTYPED_SEAM');
       expect(seams).toHaveLength(1);
       expect(seams[0].message).toMatch(/invoke/);
-      expect(seams[0].message).toMatch(/param "payload: Json".*return "Promise<Json>"|return "Promise<Json>"/);
+      // The loader reads every type position canonical: Json is `any`, Promise<Json> is `async any`.
+      expect(seams[0].message).toMatch(/param "payload: any".*return "async any"/);
       expect(seams.map(s => s.message).join('\n')).not.toMatch(/Method "(crunch|typed)"/);
     } finally { proj.cleanup(); }
   });

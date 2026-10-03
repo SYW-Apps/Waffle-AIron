@@ -46,5 +46,6 @@ fields:
       params.listener (a signature type's), once collected over a spec
     optional: true
 methods: []
+sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:56.994Z'
-updatedAt: '2026-10-03T22:12:24.327Z'
+updatedAt: '2026-10-03T22:21:50.652Z'

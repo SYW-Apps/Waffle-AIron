@@ -69,6 +69,7 @@ methods:
       parses but is not neutral (number) still answers its reading (number as float) beside the
       problem, so consumers never see an invented shape. Pure: the text and the position are the
       whole input.
+    symbol: parseTypeExpression
   - name: canonicalText
     signature: 'canonicalText(): string'
     params: []
@@ -79,6 +80,7 @@ methods:
       none, ` | ` between union members in written order, and `async ` before a returns. Named
       references are kept exactly as written, so binding and relativizing them stays the reference
       table's job.
+    symbol: canonicalTypeText
   - name: namedRefs
     signature: 'namedRefs(): string[]'
     params: []
@@ -88,6 +90,7 @@ methods:
       the reference rules, the surface closure, the ERD and unused-type detection resolve.
       Primitives and the collection forms name nothing; an applied generic names its head and its
       arguments' references.
+    symbol: typeNamedRefs
   - name: isMany
     signature: 'isMany(): boolean'
     params: []
@@ -95,5 +98,7 @@ methods:
     description: >-
       Whether a value of this type holds many: a list, a set or a map at the top, under `?` or under
       async. What the ERD draws as a `*` multiplicity.
+    symbol: typeIsMany
+sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:49.343Z'
-updatedAt: '2026-10-03T22:12:22.394Z'
+updatedAt: '2026-10-03T22:21:48.781Z'

@@ -45,9 +45,12 @@ const now = new Date().toISOString();
 // in the rename map. That is the case worth pinning: a rewrite that went
 // word-by-word would find the member and rewrite the string around it; the
 // whole-string rewrite finds nothing to match and leaves the union verbatim.
-const RETURN_UNION = 'invoice | null';
-const PARAM_UNION = 'Map<string, invoice> | undefined';
-const FIELD_UNION = 'invoice[] | null';
+// Stage 2: every save stores the canonical spelling, so the fixtures are
+// written canonical — `invoice | null` would be respelled `invoice?` by the
+// first save, which is the grammar at work, not a migration mangling it.
+const RETURN_UNION = 'invoice?';
+const PARAM_UNION = 'map<string, invoice>?';
+const FIELD_UNION = 'list<invoice>?';
 
 const sub = (id: string, over: Partial<SubsystemSpec> = {}): SubsystemSpec => ({
   id, name: id, description: `subsystem ${id}`, parentSystem: 'billing-sys',

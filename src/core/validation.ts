@@ -30,9 +30,11 @@ import {
   exportUsage,
   signatureFacts,
   resolveSignatures,
+  typeSpellingFacts,
   loadExtensionsFor,
 } from './adapters/validator-core.js';
 import type { SignatureFacts } from './signature-sources.js';
+import type { TypeSpellingFacts } from '../models/type-grammar.js';
 import { listSnapshots, listPinnedExternals, pinnedParent } from './adapters/validator-surfaces.js';
 // family_validator: the family run the portal forwards validateFamily to.
 import * as familyValidator from './family-validation.js';
@@ -632,9 +634,13 @@ function runOwnersGate(
       .map((n) => resolveProjectExports(n.namespace));
     const producers = new Set(family.references.filter((r) => r.consumer === '').map((r) => r.producer));
     const exportUsages = [...producers].map((producer) => exportUsage('', producer));
-    // Step 44: what the scan's signature resolution recorded — the loaded
+    // Step 45: what the scan's signature resolution recorded — the loaded
     // specs are already resolved, so the stored form is visible only here.
     const signatures = signatureFacts();
+    // Step 46: what the scan's type canonicalisation recorded — the loaded
+    // specs already hold canonical text, so the stored spellings are visible
+    // only here.
+    const typeSpellings = typeSpellingFacts();
 
     const ctx = buildRuleContext({
       system,
@@ -658,6 +664,7 @@ function runOwnersGate(
       projectFamily: family,
       exportUsages,
       signatureFacts: signatures,
+      typeSpellingFacts: typeSpellings,
       pinnedExternals,
       // By-name selections only: a legacy path ref pins nothing to check. A dry
       // run supplies its candidate's; otherwise the stored ones.
@@ -826,6 +833,13 @@ function judgePartAlone(config: ProjectConfig, scopeSubsystem: string | undefine
   // own. The facts are this resolution's on the part's own methods, with the
   // restatements and stale texts only the part's stored form shows.
   const ownSignatures = signatureFacts();
+  // Step 8: the part's own stored aliases and non-canonical positions — the
+  // excerpt's are the parent's, judged by the parent's gate.
+  const ownTypeSpellings = typeSpellingFacts();
+  const partTypeSpellings: TypeSpellingFacts = {
+    respellings: ownTypeSpellings.respellings.filter((r) => isOwn(r.specId)),
+    problems: ownTypeSpellings.problems.filter((p) => p.specId === undefined || isOwn(p.specId)),
+  };
   const resolved = resolveSignatures(
     [...own.interfaces, ...context.interfaces],
     [...own.components, ...context.components],
@@ -858,6 +872,7 @@ function judgePartAlone(config: ProjectConfig, scopeSubsystem: string | undefine
     projectFamily: projectFamily(),
     exportUsages: [],
     signatureFacts: partSignatures,
+    typeSpellingFacts: partTypeSpellings,
     pinnedExternals: [],
     packSelections: packs.filter((p): p is PackSelection => typeof p !== 'string'),
     packRequirements: [],

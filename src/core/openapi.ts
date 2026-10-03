@@ -39,7 +39,14 @@ const PRIMITIVES: Record<string, { type: string; format?: string }> = {
 
 /** Map a wairon type ref to a JSON-Schema fragment ($ref into components for closure types). */
 function schemaFor(typeRef: string, closureIds: Set<string>): Record<string, unknown> {
-  const trimmed = typeRef.trim().replace(/^promise\s*<(.+)>$/i, '$1').trim();
+  // The loader reads every type position canonical (stage 2): `async T` and
+  // `list<T>` are the spellings `Promise<T>` and `T[]` arrive in. The full
+  // grammar mapping is the codec's next revision; until then they read as before.
+  const trimmed = typeRef.trim().replace(/^promise\s*<(.+)>$/i, '$1').replace(/^async\s+/, '').trim();
+  const listMatch = /^list\s*<(.+)>$/.exec(trimmed);
+  if (listMatch) {
+    return { type: 'array', items: schemaFor(listMatch[1], closureIds) };
+  }
   const arrayMatch = /^(.+)\[\]$/.exec(trimmed);
   if (arrayMatch) {
     return { type: 'array', items: schemaFor(arrayMatch[1], closureIds) };
@@ -68,7 +75,7 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
     responses: {
       '200': {
         description: method.returns || 'Success',
-        ...(method.returns && method.returns.toLowerCase() !== 'void'
+        ...(method.returns && !/^(async\s+)?void$/i.test(method.returns.trim())
           ? { content: { 'application/json': { schema: schemaFor(method.returns, closureIds) } } }
           : {}),
       },

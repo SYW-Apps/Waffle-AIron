@@ -34,6 +34,7 @@ methods:
     description: >-
       The dialect shipped for a language, or none when no dialect reads it yet — a conformance check
       then stays silent rather than guess.
+    symbol: typeDialectFor
   - name: read
     signature: 'read(annotation: string): TypeExpression | null'
     params:
@@ -81,5 +82,6 @@ methods:
       The write table as lines an implementer brief carries (`list<T> → T[]`, `T? → T | null`,
       `async T → Promise<T>`, an enum → a string-literal union alias, ...), so an implementer maps a
       contract's types by rule rather than by guess.
+sourcePath: src/models/type-dialects.ts
 createdAt: '2026-10-03T22:03:39.838Z'
-updatedAt: '2026-10-03T22:03:39.839Z'
+updatedAt: '2026-10-03T22:21:54.992Z'

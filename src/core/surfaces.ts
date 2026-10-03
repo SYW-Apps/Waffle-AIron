@@ -20,7 +20,7 @@ import {
   extractTypeIdentifiers,
   matchTypeRef,
   methodTypeRefs,
-  BUILTIN_TYPES,
+  isTypeVocabulary,
   canonicalTypeRef,
   contentDigest,
   memberDigest,
@@ -117,7 +117,7 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], 
     queue.push(key);
   };
   const enqueueRef = (ref: string): void => {
-    if (BUILTIN_TYPES.has(ref.toLowerCase())) return;
+    if (isTypeVocabulary(ref)) return;
     for (const spec of types) {
       if (matchTypeRef(ref, qualifiedTypeId(spec))) include(spec);
     }

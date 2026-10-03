@@ -23,5 +23,6 @@ fields:
     description: Each position that is not canonical, located (specId, kind, path)
     optional: false
 methods: []
+sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:03:16.970Z'
-updatedAt: '2026-10-03T22:03:16.971Z'
+updatedAt: '2026-10-03T22:21:52.046Z'

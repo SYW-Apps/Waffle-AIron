@@ -133,15 +133,17 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
     } }));
 
     const intf = await getSpec('interface', 'iord-store');
+    // Stage 2: the returns are stored canonical (Promise<T> is async T) and a
+    // params-bearing method's text is derived from them; a prose text stays prose.
     expect(intf.methods).toEqual([
       {
-        name: 'put', description: 'Persist an order', signature: 'put(order: order): Promise<void>', returns: 'Promise<void>',
+        name: 'put', description: 'Persist an order', signature: 'put(order: order): async void', returns: 'async void',
         params: [{ name: 'order', type: 'order', description: 'The order to persist' }],
         guarantees: ['idempotent'],
         effect: 'write',
         ext: { 'mypack:op': 'upsert' },
       },
-      { name: 'get', description: 'Load an order', signature: 'get(id: string): Promise<order>', returns: 'Promise<order>', effect: 'read' },
+      { name: 'get', description: 'Load an order', signature: 'get(id: string): Promise<order>', returns: 'async order', effect: 'read' },
     ]);
   }, 120_000);
 
@@ -152,7 +154,7 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
       fields: [
         { name: 'id', type: 'string', key: 'primary' },
         { name: 'customerId', type: 'string', key: 'foreign', references: 'customer.id' },
-        { name: 'total', type: 'number' },
+        { name: 'total', type: 'float' },
       ],
       invariants: [{ id: 'total-non-negative', description: 'total must be >= 0' }],
     } }));
@@ -163,7 +165,7 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
     expect(t.fields).toEqual([
       { name: 'id', type: 'string', optional: false, key: 'primary' },
       { name: 'customerId', type: 'string', optional: false, key: 'foreign', references: 'customer.id' },
-      { name: 'total', type: 'number', optional: false },
+      { name: 'total', type: 'float', optional: false },
     ]);
   }, 120_000);
 
@@ -244,7 +246,7 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
 
     const intf = await getSpec('interface', 'iord-worker');
     expect(intf.methods).toEqual([{
-      name: 'tick', description: 'Drain the pending order queue once', signature: 'tick(): Promise<void>', returns: 'Promise<void>',
+      name: 'tick', description: 'Drain the pending order queue once', signature: 'tick(): Promise<void>', returns: 'async void',
       invokedBy: { kind: 'runtime', caller: 'The host scheduler fires this every 30 seconds once the service enters the running state.' },
     }]);
 

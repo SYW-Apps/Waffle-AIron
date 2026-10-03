@@ -55,7 +55,7 @@ function bind(root: string): void {
   setProjectRoot(root);
 }
 
-const RUN_PARAMS = [{ name: 'values', type: 'string[]' }, { name: 'mode', type: 'string', optional: true }];
+const RUN_PARAMS = [{ name: 'values', type: 'list<string>' }, { name: 'mode', type: 'string', optional: true }];
 
 /**
  * One project: `portal` depends on `engine`; engine's `run` carries params and
@@ -109,15 +109,15 @@ describe('the scan resolves sources and derives texts', () => {
     const execute = methodOf(loadInterfaceSpec('iportal'), 'execute')!;
     expect(execute.params).toEqual(RUN_PARAMS);
     expect(execute.returns).toBe('void');
-    expect(execute.signature).toBe('execute(values: string[], mode?: string): void');
+    expect(execute.signature).toBe('execute(values: list<string>, mode?: string): void');
     expect(methodOf(loadInterfaceSpec('iportal'), 'onChange')!.signature).toBe('onChange(event: string): void');
   });
 
   it('shows the derived text, never the stale stored one, and keeps the stale one as a fact', () => {
     bind(buildTree());
-    expect(methodOf(loadInterfaceSpec('iengine'), 'run')!.signature).toBe('run(values: string[], mode?: string): void');
+    expect(methodOf(loadInterfaceSpec('iengine'), 'run')!.signature).toBe('run(values: list<string>, mode?: string): void');
     expect(signatureFacts().staleTexts).toEqual([expect.objectContaining({
-      specId: 'iengine', method: 'run', stored: 'run(mode, values): void', derived: 'run(values: string[], mode?: string): void',
+      specId: 'iengine', method: 'run', stored: 'run(mode, values): void', derived: 'run(values: list<string>, mode?: string): void',
     })]);
     expect(signatureFacts().sources.map((f) => `${f.method}:${f.outcome}`)).toEqual(['execute:resolved', 'onChange:resolved']);
   });
@@ -142,7 +142,7 @@ describe('the writer stores the stored form', () => {
     const dir = buildTree();
     bind(dir);
     saveSpec('interface', loadInterfaceSpec('iengine')!);
-    expect(readYaml(specs(dir, 'core', 'engine', '.interface.yaml')).methods[0].signature).toBe('run(values: string[], mode?: string): void');
+    expect(readYaml(specs(dir, 'core', 'engine', '.interface.yaml')).methods[0].signature).toBe('run(values: list<string>, mode?: string): void');
     invalidateSpecCache();
     expect(signatureFacts().staleTexts).toEqual([]);
   });
@@ -164,7 +164,7 @@ describe('the writer stores the stored form', () => {
     const report = updateSpec('interface', 'iengine', { methods: [{ name: 'run', signature: 'run(whatever)', params: [{ name: 'extra', type: 'number' }] }] });
     expect(report.changes.map((c) => c.path)).toContain('methods.run.signature');
     expect(readYaml(specs(dir, 'core', 'engine', '.interface.yaml')).methods[0].signature)
-      .toBe('run(values: string[], mode?: string, extra: number): void');
+      .toBe('run(values: list<string>, mode?: string, extra: number): void');
   });
 
   it('writes nothing for a delta whose only edit is a text its params already derive', () => {
@@ -175,7 +175,7 @@ describe('the writer stores the stored form', () => {
   });
 
   it('adopts a source when the delta unsets the method\'s params and returns', () => {
-    const dir = buildTree([{ name: 'execute', description: 'Execute', signature: 'execute(values: string[], mode?: string): void', returns: 'void', params: RUN_PARAMS }]);
+    const dir = buildTree([{ name: 'execute', description: 'Execute', signature: 'execute(values: list<string>, mode?: string): void', returns: 'void', params: RUN_PARAMS }]);
     bind(dir);
     updateSpec('interface', 'iportal', { methods: [{ name: 'execute', signatureFrom: 'engine.run', unset: ['params', 'returns'] }] });
     const stored = readYaml(specs(dir, 'core', 'portal', '.interface.yaml')).methods[0];
@@ -193,9 +193,9 @@ describe('the writer stores the stored form', () => {
     const dir = buildTree();
     bind(dir);
     const type = loadSpec('type', 'change_listener')!;
-    saveSpec('type', { ...type, kind: 'value-object', params: undefined, returns: undefined, methods: [{ name: 'matches', signature: 'stale', params: [{ name: 'ref', type: 'string' }], returns: 'boolean' }] } as never);
+    saveSpec('type', { ...type, kind: 'value-object', params: undefined, returns: undefined, methods: [{ name: 'matches', signature: 'stale', params: [{ name: 'ref', type: 'string' }], returns: 'bool' }] } as never);
     const stored = readYaml(specs(dir, 'types', 'change_listener.yaml'));
-    expect(stored.methods[0].signature).toBe('matches(ref: string): boolean');
+    expect(stored.methods[0].signature).toBe('matches(ref: string): bool');
   });
 });
 

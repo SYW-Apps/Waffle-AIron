@@ -263,12 +263,15 @@ function errMessage(e: unknown): CallToolResult {
  * grammar, and the tests pinning it, live on src/models/type-references.ts.
  */
 const TYPE_REF_GRAMMAR = (what: string): string =>
-  `${what}: a primitive/builtin or a defined type id (qualified across subsystems, e.g. `
-  + '"billing.Invoice" or "billing::Invoice"). Generics, arrays and UNIONS are all read, at any depth: '
-  + '"Invoice | null" (the commonest shape there is), "Invoice | undefined", "Invoice | Receipt", '
-  + '"Promise<Invoice | null>", "Map<string, Invoice | null>", "Invoice[] | null", "(Invoice | null)[]". '
-  + 'Every identifier the string names must resolve — a union of two defined types means BOTH must exist. '
-  + 'A union of string literals ("read" | "write") names no type and resolves to nothing.';
+  `${what}, in the neutral type grammar: a primitive (string, int, float, bool, bytes, date, datetime, `
+  + 'duration, any; void only as a whole returns), a defined type id ("billing.Invoice", "alias::name"), '
+  + 'list<T>, set<T>, map<K, V> (K is string, int or an enum), T? (T or no value), a union of NAMED types '
+  + '("Invoice | Receipt"), and on a returns only, async T ("async void"). Every named type must resolve. '
+  + 'TypeScript spellings are accepted and respelled — "Invoice[]" → list<Invoice>, "Invoice | null" → Invoice?, '
+  + 'boolean → bool, Record<string, V> → map<string, V>, Promise<T> → async T — and the answer lists each '
+  + 'respelling. Refused, naming the replacement: number ("int or float?"), inline object or function types '
+  + '(name a value-object or a signature type), string-literal unions (name an enum), and unions mixing in a '
+  + 'primitive or a collection.';
 
 // ---------------------------------------------------------------------------
 // Structured results
@@ -429,6 +432,7 @@ function renderChangeReport(report: SpecChangeReport): string {
   // The tests this write just invalidated. A structured field nobody renders
   // is a field nobody reads, and the whole point is that the change which
   // creates the collision is the one that says so.
+  lines.push(...renderRespellings(report.respellings));
   lines.push(...renderTestsToRevisit(report.testsToRevisit));
   return lines.join('\n');
 }
@@ -476,6 +480,24 @@ function renderTestsToRevisit(entries: TestsToRevisit[]): string[] {
   return lines;
 }
 
+/** One type position a write respelled, field for field as the authoring seam reports it. */
+const typeRespellingOutput = z.object({
+  specId: z.string().describe('The interface or type holding the position.'),
+  kind: z.enum(['interface', 'type']).describe('interface | type.'),
+  path: z.string().describe('Where in the spec: methods.save.params.key, methods.save.returns, fields.createdAt, params.listener.'),
+  written: z.string().describe('The text the input (or the stored file) held.'),
+  stored: z.string().describe('The canonical spelling, which is what is stored and shown.'),
+});
+
+/**
+ * The respellings block of a text answer — each alias the write normalised,
+ * so the author learns the canonical form from the answer itself.
+ */
+function renderRespellings(entries: ReadonlyArray<{ path: string; written: string; stored: string }>): string[] {
+  if (!entries.length) return [];
+  return ['', 'RESPELLED (stored canonical):', ...entries.map((r) => `- ${r.path}: "${r.written}" → "${r.stored}"`)];
+}
+
 const specWriteReceiptOutput = {
   kind: z.enum(SPEC_KINDS).describe('The spec kind written.'),
   id: z.string().describe('The id the spec is stored under; "system" for the L0 singleton.'),
@@ -491,6 +513,11 @@ const specWriteReceiptOutput = {
     'The notice lines the text answer lists, one per entry: what was carried forward, what a restatement '
     + 'removed, what an omission cleared, and every gate warning the write raised. Empty for a clean create.',
   ),
+  respellings: z.array(typeRespellingOutput).describe(
+    'Each type position the write normalised: what the input wrote against the canonical spelling stored. '
+    + 'Aliases are accepted, never refused, and this list is how an author learns the canonical form. Empty when '
+    + 'every position was already canonical.',
+  ),
   testsToRevisit: testsToRevisitOutput,
   ...staleServerOutput,
 } satisfies Record<keyof SpecWriteReceipt | keyof typeof staleServerOutput, z.ZodTypeAny>;
@@ -503,8 +530,9 @@ const specWriteReceiptOutput = {
  */
 function writeReceipt(sentence: string, receipt: SpecWriteReceipt): CallToolResult {
   const noticeBlock = receipt.notices.length ? `\n\nNOTICE:\n- ${receipt.notices.join('\n- ')}` : '';
+  const respelledBlock = renderRespellings(receipt.respellings).join('\n');
   const testsBlock = renderTestsToRevisit(receipt.testsToRevisit).join('\n');
-  return structured(`${sentence}${noticeBlock}${testsBlock ? `\n${testsBlock}` : ''}`, receipt);
+  return structured(`${sentence}${noticeBlock}${respelledBlock ? `\n${respelledBlock}` : ''}${testsBlock ? `\n${testsBlock}` : ''}`, receipt);
 }
 
 /** What sdd_delete_spec answers with as data. */
@@ -544,6 +572,11 @@ const specChangeReportOutput = {
     + 'permissive delta cannot refuse shows up here and nowhere else.',
   ),
   notices: z.array(z.string()).describe('Store placement notices, gate warnings and delta notices.'),
+  respellings: z.array(typeRespellingOutput).describe(
+    'Each type position the write normalised (or, on a dry run, would): what the delta or the stored file wrote '
+    + 'against the canonical spelling stored. Aliases are accepted and respelled, never refused — this is how the '
+    + 'canonical form is taught. Empty when every position was already canonical.',
+  ),
   summary: z.string().describe('One line for people.'),
   testsToRevisit: testsToRevisitOutput,
   strippedKeys: z.array(z.string()).optional().describe(
@@ -2046,8 +2079,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     description: z.string().optional(),
     optional: z.boolean().optional().describe(
       'Whether the parameter may be OMITTED by a caller. It is not nullability: a parameter that must be '
-      + 'passed but may be passed as nothing is a required parameter whose type is a union — '
-      + '"ProjectConfig | null". Say whichever is true; they are different contracts.',
+      + 'passed but may be passed as nothing is a required parameter whose type says so — "ProjectConfig?". '
+      + 'Say whichever is true; they are different contracts (both together: may be left out, and may be none).',
     ),
   }).strict();
 
@@ -2324,7 +2357,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   );
 
   const typeInput = {
-        kind: z.enum(['entity', 'value-object', 'signature']).describe('entity (owned by a subsystem), value-object (often system-level shared), or signature — a named function type: params and returns, nothing else'),
+        kind: z.enum(['entity', 'value-object', 'signature', 'enum']).describe('entity (owned by a subsystem), value-object (often system-level shared), signature — a named function type: params and returns, nothing else — or enum: a closed, ordered set of named values'),
         id: z.string().describe('Lowercase identifier'),
         name: z.string().describe('Human-readable name'),
         description: z.string().optional(),
@@ -2359,18 +2392,22 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         symbol: z.string().optional().describe('Code-level name realizing the declaration when it differs from name, e.g. a type named "Invoice Line" declared as InvoiceLine'),
         params: z.array(methodParamItem).optional().describe('kind signature only: the function type\'s parameters, in declared order (SIGNATURE_TYPE_MEMBERS on any other kind)'),
         returns: z.string().optional().describe(TYPE_REF_GRAMMAR('kind signature only, and required there: the function type\'s one output')),
+        values: z.array(z.object({
+          name: z.string().min(1).describe('The value\'s name, exactly as data carries it ("stable", "local_only")'),
+          description: z.string().optional().describe('What the value means'),
+        }).strict()).optional().describe('kind enum only, and required there: the values in declared order — the order is part of the design (a narrowest-first track list means something). Unique by name ignoring case and separators; no ordinals and no separate wire value'),
   };
   const typeInputFields = Object.keys(typeInput);
 
   type ParamInput = { name: string; type: string; description?: string; optional?: boolean };
-  reg<{ kind: 'entity' | 'value-object' | 'signature'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature?: string; params?: ParamInput[]; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string; params?: ParamInput[]; returns?: string }>(server,
+  reg<{ kind: 'entity' | 'value-object' | 'signature' | 'enum'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature?: string; params?: ParamInput[]; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string; params?: ParamInput[]; returns?: string; values?: { name: string; description?: string }[] }>(server,
     'sdd_add_type',
     {
-      description: 'Define a type: an entity or value-object (the data components operate on), or a signature — a named function type. Entities are owned by a subsystem; shared value objects and signatures omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument — and a type method may carry structured params, which then derive its signature text as a contract method\'s do. A signature carries top-level params and returns and nothing else (no fields, methods or invariants — SIGNATURE_TYPE_MEMBERS); a contract method takes it by naming it as its signatureFrom, and a param may be typed by one (a callback). A type may also CLAIM code: sourcePath names the file holding its declaration (and each method may name its own), symbol binds the code-level name when it differs — the file must then resolve and the declaration must be anchored in it. An owning subsystem the tree does not have is refused, writing nothing, exactly as a component under an unknown subsystem is. Re-defining an existing id REPLACES fields/methods/invariants and restates sourcePath/symbol (an omitted list or path is CLEARED, and a dropped member is reported); lint/ext are carried forward. The answer carries a write receipt as structured content beside the sentence — whether a spec already held the id, and the notices a restatement raised, each as its own entry. A type carries no lifecycle status, so the receipt states none.',
+      description: 'Define a type: an entity or value-object (the data components operate on), a signature — a named function type — or an enum: a closed, ordered set of named `values` ({name, description?}, unique by name ignoring case and separators; the name is also the value as data carries it), with optional pure methods and nothing else (no fields, params or returns). Every type position (a field\'s type, a method\'s params and returns, a signature\'s params and returns) is written in the neutral type grammar; aliases are respelled and listed in the receipt. Entities are owned by a subsystem; shared value objects and signatures omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument — and a type method may carry structured params, which then derive its signature text as a contract method\'s do. A signature carries top-level params and returns and nothing else (no fields, methods or invariants — SIGNATURE_TYPE_MEMBERS); a contract method takes it by naming it as its signatureFrom, and a param may be typed by one (a callback). A type may also CLAIM code: sourcePath names the file holding its declaration (and each method may name its own), symbol binds the code-level name when it differs — the file must then resolve and the declaration must be anchored in it. An owning subsystem the tree does not have is refused, writing nothing, exactly as a component under an unknown subsystem is. Re-defining an existing id REPLACES fields/methods/invariants and restates sourcePath/symbol (an omitted list or path is CLEARED, and a dropped member is reported); lint/ext are carried forward. The answer carries a write receipt as structured content beside the sentence — whether a spec already held the id, and the notices a restatement raised, each as its own entry. A type carries no lifecycle status, so the receipt states none.',
       inputSchema: typeInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol, params, returns }) => {
+    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol, params, returns, values }) => {
       try {
         // mcp_orchestrator.addType step 1: the restatement, each field's
         // optional flag defaulted to false.
@@ -2399,6 +2436,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           ...(symbol ? { symbol } : {}),
           ...(params ? { params } : {}),
           ...(returns ? { returns } : {}),
+          ...(values ? { values } : {}),
         } as unknown as TypeSpec;
         // Step 2: through the seam, which names every field or method the
         // restatement removed. Step 3: the receipt — `kind` here is the type's
@@ -2593,7 +2631,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; delta: Record<string, any>; dryRun?: boolean }>(server,
     'sdd_update_spec',
     {
-      description: 'Update/patch an existing SDD specification (subsystem, component, interface, implementation, or type) using a granular delta. Updates fields, appends/merges array elements, or inserts/deletes narrative steps. Answers with exactly what changed, and with every path the delta named that the write did not act on. Pass dryRun to be told what it would do without writing it.',
+      description: 'Update/patch an existing SDD specification (subsystem, component, interface, implementation, or type) using a granular delta. Updates fields, appends/merges array elements, or inserts/deletes narrative steps. Answers with exactly what changed, and with every path the delta named that the write did not act on. Type positions (the type of a param, a returns, the type of a field, the params and returns of a signature) are written in the neutral type grammar: an alias the delta writes (string[], T | null, boolean, Promise<T>) is stored canonical and listed under `respellings`, and a stored alias at a position the write keeps is respelled with it; a position the delta writes that has no canonical spelling (number — int or float?, an inline object or function type, a literal union, a union mixing in a primitive) is refused, naming the replacement, while one the stored spec already held is left alone. Pass dryRun to be told what it would do without writing it.',
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update (system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project export table, each entry a re-export {from, component, interface, typeDef, as, name, type, details, audience: project|department|instance|partner|external} — from alone re-exports everything a subsystem exports, and a legacy {id, subsystem} reads as {as, from})'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),

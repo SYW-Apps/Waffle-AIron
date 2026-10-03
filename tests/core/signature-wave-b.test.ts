@@ -30,7 +30,7 @@ import {
 const STAMP = '2026-10-03T00:00:00.000Z';
 const specs = (dir: string, ...parts: string[]): string => path.join(dir, '.wai', 'specs', ...parts);
 const readYaml = (file: string): any => yaml.load(fs.readFileSync(file, 'utf8'));
-const RUN_PARAMS = [{ name: 'values', type: 'string[]' }, { name: 'mode', type: 'string', optional: true }];
+const RUN_PARAMS = [{ name: 'values', type: 'list<string>' }, { name: 'mode', type: 'string', optional: true }];
 
 let dirs: string[] = [];
 let saved: Record<string, string | undefined> = {};
@@ -145,7 +145,7 @@ describe('core_orchestrator.repairSignatures', () => {
     const before = [fs.readFileSync(meterFile, 'utf8'), fs.readFileSync(gateFile, 'utf8')];
     const plan = repairSignatures(false);
     expect(plan).toEqual(expect.arrayContaining([
-      expect.objectContaining({ specId: 'imeter', kind: 'interface', dropped: [], regenerated: [expect.objectContaining({ method: 'charge', derived: 'charge(values: string[], mode?: string): void' })] }),
+      expect.objectContaining({ specId: 'imeter', kind: 'interface', dropped: [], regenerated: [expect.objectContaining({ method: 'charge', derived: 'charge(values: list<string>, mode?: string): void' })] }),
       expect.objectContaining({ specId: 'igate', kind: 'interface', dropped: ['tap'] }),
       expect.objectContaining({ specId: 'itill', dropped: ['pay'], regenerated: [expect.objectContaining({ method: 'stamp' })] }),
     ]));
@@ -156,7 +156,7 @@ describe('core_orchestrator.repairSignatures', () => {
     const { root, meterFile, gateFile } = tollLine();
     bind(root);
     repairSignatures(true);
-    expect(readYaml(meterFile).methods[0].signature).toBe('charge(values: string[], mode?: string): void');
+    expect(readYaml(meterFile).methods[0].signature).toBe('charge(values: list<string>, mode?: string): void');
     expect(readYaml(gateFile).methods[0]).toEqual({ name: 'tap', description: 'Tap through', signatureFrom: 'meter.charge' });
     bind(root);
     expect(repairSignatures(false)).toEqual([]);

@@ -27,6 +27,7 @@ import type { ValidationIssue } from '../validation.js';
 import type { ExportUsage, ResolvedExportTable } from '../../models/exports.js';
 import type { ProjectFamily } from '../../models/project-family.js';
 import type { SignatureFacts } from '../signature-sources.js';
+import type { TypeSpellingFacts } from '../../models/type-grammar.js';
 
 // ---------------------------------------------------------------------------
 // Rule registry contracts
@@ -469,6 +470,14 @@ export interface RuleContext {
    * still visible. Absent on a candidate run.
    */
   signatureFacts?: SignatureFacts;
+  /**
+   * What the loader's type canonicalisation recorded — the stored positions
+   * that are aliases of their canonical spelling, and the ones that are not
+   * canonical at all. The loaded interfaces and types already hold canonical
+   * text, so these facts are the only place the stored spellings are still
+   * visible. Absent on a candidate run.
+   */
+  typeSpellingFacts?: TypeSpellingFacts;
   /**
    * The pure source-code model (per-sourcePath declaration/export/import/
    * anchor facts) built by the source analysis adapter — what the

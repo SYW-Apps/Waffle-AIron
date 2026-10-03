@@ -193,6 +193,8 @@ methods:
       position recorded as a respelling, and every position that is not canonical recorded as a
       located problem and left as written. A type method without params keeps its prose signature;
       only its returns is read. Pure.
+    sourcePath: src/models/type-grammar.ts
+    symbol: typeCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-03T22:03:54.242Z'
+updatedAt: '2026-10-03T22:21:57.737Z'

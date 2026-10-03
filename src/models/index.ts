@@ -5,6 +5,8 @@ export * from './registry.js';
 export * from './template.js';
 export * from './specs.js';
 export * from './type-references.js';
+export * from './type-grammar.js';
+export * from './type-dialects.js';
 export * from './step-graph.js';
 export * from './step-config.js';
 export * from './code-model.js';

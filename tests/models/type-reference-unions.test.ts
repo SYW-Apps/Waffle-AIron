@@ -10,8 +10,11 @@ import { extractTypeIdentifiers, methodTypeRefs } from '../../src/models/type-re
 // as not knowing whether the next one an author writes will. This file is that
 // statement, and it is what the schema's field descriptions point at.
 //
-// The rule underneath is simple and worth stating once: a type reference is
-// TOKENIZED, not parsed as a type expression. Every identifier a string names is
+// Since stage 2 a STRUCTURED position (params, returns, fields) is parsed under
+// the neutral type grammar (tests/models/type-grammar.test.ts pins it); what
+// this file pins is the lenient tokenizer a PROSE signature is still read with.
+// The rule underneath is simple and worth stating once: prose is TOKENIZED,
+// not parsed as a type expression. Every identifier a string names is
 // a reference that must resolve, and `|`, `<>`, `[]`, `,` and `()` are all just
 // separators. That is why a union needs no special handling — and why a union of
 // string LITERALS names no type at all.
@@ -60,12 +63,12 @@ describe('method_signature.typeRefs over unions', () => {
     expect(extractTypeIdentifiers('"read" | "write"')).toEqual([]);
   });
 
-  it('structured params carry a union through untouched, signature prose unread', () => {
+  it('structured params are parsed under the type grammar: a none is `?`, never a reference, and the prose is unread', () => {
     expect(methodTypeRefs({
       signature: 'getById(id: string): ApprovalRequest | null',
       returns: 'ApprovalRequest | null',
       params: [{ name: 'id', type: 'ApprovalId | undefined' }],
-    })).toEqual(['ApprovalId', 'undefined', 'ApprovalRequest', 'null']);
+    })).toEqual(['ApprovalId', 'ApprovalRequest']);
   });
 
   it('a prose signature is split on its own commas, so a union inside a generic stays whole', () => {

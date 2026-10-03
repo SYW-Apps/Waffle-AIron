@@ -1,66 +1,36 @@
 import type { InterfaceSpec, TypeSpec } from './specs.js';
+import { writtenTypeRefs } from './type-grammar.js';
 
 // ---------------------------------------------------------------------------
-// The type-reference grammar over free-form type strings and signatures, and
-// the type methods that read type references through it.
+// The type methods that read type references, and the lenient tokenizer prose
+// still needs.
 //
-// Signatures are prose-ish ("save(key: string, data: Buffer): Promise<void>"),
-// so extraction is heuristic. This module is the single home for that
-// heuristic — the validator's rules, the canvas and the surface projector all
-// read type references through it. Structured `params` on method signatures
-// replace the prose parsing wherever they are authored.
+// A STRUCTURED type position (a param's type, a returns, a field's type, a
+// signature type's params and returns) is read through the neutral type
+// grammar (src/models/type-grammar.ts): its references are the named types of
+// the parsed expression (type_expression.namedRefs). Primitives and the
+// collection forms name nothing; an applied generic `Page<T>` names its head
+// and its arguments' references. A position that does not parse names nothing
+// (TYPE_EXPRESSION_INVALID reports it); one using a form the grammar leaves out
+// still names the types it uses, so a reference never vanishes because its
+// spelling is unsupported.
 //
-// WHAT A TYPE REFERENCE MAY SAY
-//
-// A type string is TOKENIZED, not parsed as a type expression: every identifier
-// it names is a reference that has to resolve, and `|`, `<>`, `[]`, `,` and
-// `()` are separators. One rule, so nothing needs special-casing:
-//
-//   Invoice                          a defined type, or a builtin
-//   billing::Invoice, billing.Invoice   the same, qualified
-//   Invoice | null                   a union — every member is a reference
-//   Invoice | undefined              (`null` and `undefined` are builtins)
-//   Invoice | Receipt                a union of two defined types: BOTH resolve
-//   Promise<Invoice | null>          a union inside a generic
-//   Map<string, Invoice | null>      …at any depth, through any generic
-//   Invoice[] | null                 arrays, either side of the bar
-//   (Invoice | null)[]               a parenthesized union, then an array
-//   Result<Invoice, Error> | null    generic arguments and a union together
-//
-// Spacing around the bar is not part of the grammar (`A|null` reads the same).
-// A union of string LITERALS — `'read' | 'write'` — names no type at all, and
-// so resolves to nothing rather than to a missing type. Trailing prose after a
-// dash, an em-dash or a colon, and a trailing parenthesized aside, are stripped
-// before tokenizing, so `Invoice | null — absent when unknown` still reads as
-// the union.
-//
-// tests/models/type-reference-unions.test.ts pins each of these shapes; a
-// migration that rewrites reference fields leaves them verbatim (a whole-string
-// remap never matches a union), which
-// tests/core/type-ref-migration-unions.test.ts pins in turn.
+// A PROSE signature (a method without params) is explicitly the unstructured
+// form and stays prose: it is TOKENIZED leniently, every identifier a
+// reference candidate and the operators separators, with comments, trailing
+// prose and string literals stripped. Callers filter wairon's own vocabulary
+// out with isTypeVocabulary (the retired builtin set now lives in the
+// grammar's tables).
 // ---------------------------------------------------------------------------
-
-/** Language-agnostic builtin/primitive vocabulary accepted everywhere. */
-export const BUILTIN_TYPES = new Set([
-  'string', 'str', 'number', 'boolean', 'bool', 'float', 'double', 'int', 'integer',
-  'u8', 'u16', 'u32', 'u64', 'u128', 'usize',
-  'i8', 'i16', 'i32', 'i64', 'i128', 'isize',
-  'f32', 'f64', 'char', 'byte', 'bytes',
-  'any', 'void', 'null', 'undefined', 'object',
-  'date', 'datetime', 'time', 'timestamp', 'duration',
-  'uuid', 'decimal', 'json', 'true', 'false',
-  'list', 'vector', 'vec', 'array', 'map', 'set', 'dict', 'dictionary', 'hashmap', 'tuple',
-  'result', 'option', 'box', 'arc', 'rc', 'ref', 'cell', 'refcell', 'mutex', 'rwlock', 'std',
-  'promise', 'record', 'json', 'unknown', 'never', 'error', 'mcpserver',
-]);
 
 /**
  * The type identifiers a type string names, with comments, trailing prose and
  * string literals stripped. Duplicates are kept, in order of appearance.
  */
 export function extractTypeIdentifiers(typeStr: string): string[] {
-  // 1. Strip comments
+  // 1. Strip comments, and the grammar's `async` returns prefix (a keyword, never a type)
   let cleaned = typeStr
+    .replace(/^\s*async\s+(?=\S)/, '')
     .replace(/\/\/.*$/gm, '')
     .replace(/#.*$/gm, '')
     .replace(/\/\*[\s\S]*?\*\//g, '');
@@ -187,31 +157,36 @@ export interface MethodLike {
 }
 
 /**
- * method_signature.typeRefs — the type identifiers a method names. Structured
- * `params` are authoritative when present (no prose parsing): the identifiers
- * of every param type and of the returns. Otherwise the free-form signature and
- * returns are tokenized.
+ * method_signature.typeRefs — the named types a method references. Structured
+ * `params` are authoritative when present (no prose parsing): the named
+ * references of every param type and of the returns, each parsed under the
+ * grammar. Otherwise the prose signature and the returns are tokenized
+ * leniently, as the unstructured form always was.
  */
 export function methodTypeRefs(m: MethodLike): string[] {
   if (m.params && m.params.length > 0) {
     const refs: string[] = [];
     for (const p of m.params) {
-      refs.push(...extractTypeIdentifiers(p.type));
+      refs.push(...writtenTypeRefs(p.type, 'param'));
     }
-    refs.push(...extractTypeIdentifiers(m.returns ?? ''));
+    if (m.returns !== undefined) refs.push(...writtenTypeRefs(m.returns, 'returns'));
     return Array.from(new Set(refs));
   }
   return extractTypesFromSignature(m.signature ?? '', m.returns ?? '');
 }
 
 /**
- * The type identifiers a signature type names: every param type, then its
- * returns — the references a signature carries in place of fields. None for
- * an entity or a value-object, whose references are its fields'.
+ * type_spec.signatureTypeRefs — the named types a signature type references:
+ * every param type, then its returns, each parsed under the grammar — the
+ * references a signature carries in place of fields. None for any other kind,
+ * whose references are its fields'.
  */
 export function signatureTypeRefs(type: Pick<TypeSpec, 'kind' | 'params' | 'returns'>): string[] {
   if (type.kind !== 'signature') return [];
-  const refs = [...(type.params ?? []).flatMap((p) => extractTypeIdentifiers(p.type)), ...extractTypeIdentifiers(type.returns ?? '')];
+  const refs = [
+    ...(type.params ?? []).flatMap((p) => writtenTypeRefs(p.type, 'signature-param')),
+    ...(type.returns !== undefined ? writtenTypeRefs(type.returns, 'signature-returns') : []),
+  ];
   return Array.from(new Set(refs));
 }
 
@@ -284,15 +259,16 @@ export function typeGenericParameters(type: Pick<TypeSpec, 'name'>): Set<string>
 }
 
 /**
- * type_spec.fieldTypeRefs — the type identifiers one of this type's field types
- * names, with comments, trailing prose and string literals stripped and the
- * type's own generic parameters left out (compared ignoring case). It takes the
- * field's type rather than its name, because nothing makes field names unique
- * within a type.
+ * type_spec.fieldTypeRefs — the named types one of this type's field types
+ * references (type_expression.namedRefs of the field's parsed type), with the
+ * type's own generic parameters left out (compared ignoring case). A field
+ * type that does not parse names nothing: its problem is
+ * TYPE_EXPRESSION_INVALID's to report. It takes the field's type rather than
+ * its name, because nothing makes field names unique within a type.
  */
 export function fieldTypeRefs(type: Pick<TypeSpec, 'name'>, fieldType: string): string[] {
   const generics = new Set(Array.from(typeGenericParameters(type)).map(g => g.toLowerCase()));
-  return extractTypeIdentifiers(fieldType).filter(ref => !generics.has(ref.toLowerCase()));
+  return writtenTypeRefs(fieldType, 'field').filter(ref => !generics.has(ref.toLowerCase()));
 }
 
 /** interface_spec.genericParameters — the generic parameters declared in the interface's name. */

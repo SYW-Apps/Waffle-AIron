@@ -23,5 +23,6 @@ fields:
     description: Why the position is not canonical, when it is not
     optional: false
 methods: []
+sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:59.496Z'
-updatedAt: '2026-10-03T22:02:59.496Z'
+updatedAt: '2026-10-03T22:21:49.578Z'

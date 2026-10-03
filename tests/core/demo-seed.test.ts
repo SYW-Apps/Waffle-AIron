@@ -97,7 +97,7 @@ describe('demo-project seeder', () => {
     const place = portal.interfaces[0].methods.find((m) => m.name === 'placeOrder')!;
     expect(place.params).toEqual([
       { name: 'customerId', type: 'string' },
-      { name: 'items', type: 'OrderLine[]' },
+      { name: 'items', type: 'list<OrderLine>' },
     ]);
     expect(place.returns).toBe('Order');
     expect(place.endpoint).toMatchObject({ transport: 'HTTP', method: 'POST', path: '/orders' });
