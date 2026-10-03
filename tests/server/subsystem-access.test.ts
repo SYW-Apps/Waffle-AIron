@@ -11,7 +11,7 @@ import { authorize } from '../../src/server/authorization.js';
 import { setAssignment as repoSetAssignment } from '../../src/server/permissions.js';
 import { setAssignment, bindRole, explain, listAssignments } from '../../src/server/permissionadmin.js';
 import { generateDiagram, downloadDiagram } from '../../src/server/admin.js';
-import { upsertUser } from '../../src/server/users.js';
+import { listUsers, upsertUser } from '../../src/server/users.js';
 import { placeProject as storePlacement } from '../../src/server/organization.js';
 import { createWebSession } from '../../src/server/websessions.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
@@ -341,6 +341,14 @@ describe('a promote or an externalize never widens access', () => {
     expect((await call(dev, 'sdd_add_subsystem', { id: 'tooling', name: 'tooling', description: 'Build tooling' })).isError).toBe(false);
     expect((await call(dev, 'sdd_add_component', comp('tool_runner', 'tooling'))).isError).toBe(false);
     rule('u-deny', 'platform/tooling', 'no');
+    // The plan lists the carried rule before anything is written.
+    const tree = bytes(fam.platform);
+    const dry = await call(dev, 'sdd_externalize_subsystem', { subsystem: 'tooling', path: 'packages/tooling', as: 'project', dryRun: true });
+    expect(dry.isError, dry.text).toBe(false);
+    const listing = dry.texts.find((t) => t.startsWith('Subsystem rules carried'))!;
+    expect(listing).toContain('platform/tooling -> project tooling: u-deny project:write no (carried)');
+    expect(bytes(fam.platform)).toEqual(tree);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'tooling')).toBe(false);
     const ext = await call(dev, 'sdd_externalize_subsystem', { subsystem: 'tooling', path: 'packages/tooling', as: 'project' });
     expect(ext.isError, ext.text).toBe(false);
     expect(listProjectRecords(dataDir).find((r) => r.id === 'tooling')).toMatchObject({ parentProjectId: 'platform' });
@@ -358,18 +366,53 @@ describe('a promote or an externalize never widens access', () => {
     // payments (a member of billing) holds settlement; demoting it makes settlement billing's own.
     fs.mkdirSync(path.join(fam.payments, '.wai', 'specs', 'settlement'), { recursive: true });
     fs.writeFileSync(path.join(fam.payments, '.wai', 'specs', 'settlement', '.index.yaml'), ['id: settlement', 'name: settlement', 'description: Settles payments', 'parentSystem: payments', 'publicInterfaces: []', 'trustedLinks: []', 'status: complete', "createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'", ''].join('\n'));
+    fs.mkdirSync(path.join(fam.payments, '.wai', 'specs', 'refunds'), { recursive: true });
+    fs.writeFileSync(path.join(fam.payments, '.wai', 'specs', 'refunds', '.index.yaml'), ['id: refunds', 'name: refunds', 'description: Refunds payments', 'parentSystem: payments', 'publicInterfaces: []', 'trustedLinks: []', 'status: complete', "createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'", ''].join('\n'));
     const billingDev = dev;
-    const demoted = await call(billingDev, 'sdd_demote_member', { alias: 'payments' }, 'billing');
+    const demoted = await call(billingDev, 'sdd_demote_member', { alias: 'payments', destination: { home: 'settlement' } }, 'billing');
     expect(demoted.isError, demoted.text).toBe(false);
     user('u-deny');
     allow(dataDir, 'u-deny', 'project:write', 'project', 'platform');
     rule('u-deny', 'billing/settlement', 'no');
+    rule('u-deny', 'billing/refunds', 'yes');
+    rule('u-one', 'billing/refunds', 'yes');
+    user('u-role', [{ roleId: 'writer', scopeKind: 'subsystem', scopeId: 'billing/settlement' }]);
     // While a part, the rule decides settlement's writes through billing.
     expect(authorize(dataDir, principalOf('u-deny'), 'project:write', 'subsystem', 'billing/settlement').value).toBe('no');
+    // The plan lists every carried setting before anything is written: a carried
+    // rule, a collapse with the resulting value, and a role binding not carried.
+    const dry = await call(billingDev, 'sdd_promote_member', { alias: 'payments', dryRun: true }, 'billing');
+    expect(dry.isError, dry.text).toBe(false);
+    const listing = dry.texts.find((t) => t.startsWith('Subsystem rules carried'))!;
+    expect(listing).toContain('billing/refunds, billing/settlement -> project payments: u-deny project:write no (most restrictive wins)');
+    expect(listing).toContain('billing/refunds -> project payments: u-one project:write yes (carried)');
+    expect(listing).toContain('billing/settlement -> project payments: u-role role writer — not carried (can only narrow)');
+    expect(listProjectRecords(dataDir).find((r) => r.id === 'payments')).toMatchObject({ status: 'disabled' });
     const promoted = await call(billingDev, 'sdd_promote_member', { alias: 'payments' }, 'billing');
     expect(promoted.isError, promoted.text).toBe(false);
     expect(authorize(dataDir, principalOf('u-deny'), 'project:write', 'project', 'payments')).toMatchObject({ value: 'no', decidedScopeId: 'payments' });
     expect(authorize(dataDir, principalOf('u-deny'), 'project:write', 'project', 'billing').value).toBe('yes');
+  });
+});
+
+// ── a member rename re-keys its subsystem rules ─────────────────────────────
+
+describe('a member rename keeps its subsystem rules', () => {
+  it('a subject denied <old>/payments is still denied <new>/payments after the rename, role bindings included', async () => {
+    user('u-deny', [{ roleId: 'writer', scopeKind: 'subsystem', scopeId: 'billing/payments' }]);
+    allow(dataDir, 'u-deny', 'project:write', 'project', 'platform');
+    rule('u-deny', 'billing/payments', 'no');
+    expect(authorize(dataDir, principalOf('u-deny'), 'project:write', 'subsystem', 'billing/payments').value).toBe('no');
+    const renamed = await call(dev, 'sdd_rename_project', { newId: 'ledger', project: 'billing' });
+    expect(renamed.isError, renamed.text).toBe(false);
+    expect(listProjectRecords(dataDir).some((r) => r.id === 'ledger')).toBe(true);
+    // Still denied under the new id; nothing left behind under the old one.
+    expect(authorize(dataDir, principalOf('u-deny'), 'project:write', 'subsystem', 'ledger/payments')).toMatchObject({ value: 'no', decidedScopeKind: 'subsystem', decidedScopeId: 'ledger/payments' });
+    expect(listAssignments(cfg, MASTER, 'subsystem').map((a) => a.scopeId)).toEqual(['ledger/payments']);
+    const record = listUsers(dataDir).find((u) => u.id === 'u-deny')!;
+    expect(record.roleBindings).toEqual([{ roleId: 'writer', scopeKind: 'subsystem', scopeId: 'ledger/payments' }]);
+    const renamedEvent = queryAuditEvents(dataDir, { action: 'member.renamed' }).find((e) => e.projectId === 'ledger');
+    expect(JSON.parse(renamedEvent!.metadata!).subsystemRules).toEqual(['billing/payments -> ledger/payments']);
   });
 });
 

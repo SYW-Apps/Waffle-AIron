@@ -218,6 +218,28 @@ export interface PlannedMemberRecord {
 export interface MembershipScreen {
   refusal?: string;
   reachChanges: ReachComparison[];
+  /** Promote and an externalize as a project: every subsystem setting the move carries onto the new project. */
+  carried?: CarriedSubsystemRule[];
+}
+
+/**
+ * One subsystem setting a promote or an externalize moves out of its parent, as
+ * the plan lists it and reconcile carries it: carried with its value, collapsed
+ * with others onto one project rule (the most restrictive wins), or — a role
+ * binding — not carried, because a role only grants and leaving it out can only
+ * narrow.
+ */
+export interface CarriedSubsystemRule {
+  /** The subsystem scopes (`<parent>/<subsystem>`) it came from. */
+  from: string[];
+  /** The new project's id: the project scope it lands on. */
+  to: string;
+  /** The user id, or `everyone` for an everyone-default. */
+  subject: string;
+  kind: 'assignment' | 'role';
+  /** The project:write value carried (yes | no), or the role id for a role binding. */
+  value: string;
+  note: 'carried' | 'most restrictive wins' | 'not carried (can only narrow)';
 }
 
 /** What reconciling a hosted family's member records with the family on disk did. */

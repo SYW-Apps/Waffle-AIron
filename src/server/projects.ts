@@ -125,14 +125,38 @@ export function existingProjectRoot(dataDir: string, id: string): string | null 
  * the record's root; null for an id with no root on disk.
  */
 export function declaredSubsystemIds(dataDir: string, id: string): string[] | null {
+  const root = rootOnDisk(dataDir, id);
+  return root ? subsystemIdsAt(root) : null;
+}
+
+/** The root of a stored record that exists on disk, or null (a malformed id never traverses out). */
+function rootOnDisk(dataDir: string, id: string): string | null {
   if (!isValidProjectId(id)) return null;
   const records = load(dataDir);
   const rec = records.find((r) => r.id === id);
   const root = rec ? derivedRoot(records, rec) : null;
-  if (!root || !fs.existsSync(root)) return null;
-  return runWithProjectRoot(root, () => loadSubsystemSpecs())
+  return root && fs.existsSync(root) ? root : null;
+}
+
+/** The local ids of the subsystems the tree at a folder declares (a member's own are its record's, so left out). */
+function subsystemIdsAt(dir: string): string[] {
+  return runWithProjectRoot(dir, () => loadSubsystemSpecs())
     .map((s) => s.id)
     .filter((key) => !key.includes('::'));
+}
+
+/**
+ * project_index.partSubsystems — the subsystem ids a record's part (the
+ * contained member declared under the alias) holds now, each its local id,
+ * read in the part's folder; null when the record has no root or declares no
+ * contained member under the alias.
+ */
+export function partSubsystemIds(dataDir: string, id: string, alias: string): string[] | null {
+  const root = rootOnDisk(dataDir, id);
+  const decl = root ? memberDeclarationsOn(root).find((d) => d.alias === alias && d.path && !d.hosted && !d.refused) : undefined;
+  if (!root || !decl?.path) return null;
+  const dir = resolveContainedProjectPath(root, decl.path);
+  return fs.existsSync(dir) ? subsystemIdsAt(dir) : null;
 }
 
 /** Allocate an isolated root, create its directory, and persist the record. */

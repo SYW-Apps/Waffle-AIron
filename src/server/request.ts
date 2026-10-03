@@ -804,7 +804,13 @@ export async function handleMcpRequest(
 // ── Membership changes on hosted (steps 19–33 of handleRequest) ─────────────
 
 /** The membership-changing tools: on hosted, membership decides reach. */
-const MEMBERSHIP_TOOLS = new Set(['sdd_attach_member', 'sdd_adopt_member', 'sdd_detach_member', 'sdd_rename_project', 'sdd_promote_member', 'sdd_demote_member', 'sdd_add_member']);
+const MEMBERSHIP_TOOLS = new Set(['sdd_attach_member', 'sdd_adopt_member', 'sdd_detach_member', 'sdd_rename_project', 'sdd_promote_member', 'sdd_demote_member', 'sdd_add_member', 'sdd_externalize_subsystem']);
+
+/** Whether a call is membership-changing: an externalize only when it makes a project (as a part it stays in this record). */
+function isMembershipCall(call: { name: string; args: Record<string, unknown> }): boolean {
+  if (call.name === 'sdd_externalize_subsystem') return call.args.as === 'project';
+  return MEMBERSHIP_TOOLS.has(call.name);
+}
 
 /** The family-shape tools the scoped server runs whose applied success the hosted records must follow. */
 const FAMILY_SHAPE_TOOLS = new Set([
@@ -846,7 +852,7 @@ function serveMembershipTool(
 ): { response?: { jsonrpc: '2.0'; id: unknown; result: McpToolResult }; screen?: MembershipScreen } {
   const call = toolCall(body);
   // Step 20.
-  if (!call || !MEMBERSHIP_TOOLS.has(call.name)) return {};
+  if (!call || !isMembershipCall(call)) return {};
   const apply = call.args.dryRun !== true;
   const answer = (result: McpToolResult): { response: { jsonrpc: '2.0'; id: unknown; result: McpToolResult } } => ({ response: { jsonrpc: '2.0', id: call.id, result } });
   try {
@@ -858,10 +864,13 @@ function serveMembershipTool(
         // Steps 24–26.
         return answer(relocationResult('adopt', memberRegistration.adopt(cfg.dataDir, principal, binding, String(call.args.alias ?? ''), String(call.args.path ?? ''), apply), apply));
       default: {
-        // Steps 27–30: attach, promote, demote, a member's source and a project rename are screened.
-        const named = call.name === 'sdd_rename_project' ? String(call.args.project ?? '') : String(call.args.alias ?? '');
+        // Steps 27–30: attach, promote, demote, an externalize as a project, a
+        // member's source and a project rename are screened.
+        const named = call.name === 'sdd_rename_project' ? String(call.args.project ?? '')
+          : call.name === 'sdd_externalize_subsystem' ? String(call.args.subsystem ?? '') : String(call.args.alias ?? '');
         const located = typeof call.args.source === 'string' ? call.args.source : typeof call.args.path === 'string' ? call.args.path : undefined;
-        const screened = memberRegistration.screen(cfg.dataDir, binding, call.name, named, located);
+        const newId = call.name === 'sdd_promote_member' && typeof call.args.id === 'string' && call.args.id ? call.args.id : undefined;
+        const screened = memberRegistration.screen(cfg.dataDir, binding, call.name, named, located, newId);
         if (screened.refusal !== undefined) return answer({ content: [{ type: 'text', text: screened.refusal }], isError: true });
         return { screen: screened };
       }
@@ -910,6 +919,10 @@ function withReachListing(result: unknown, screened: MembershipScreen | undefine
   if (r.isError || !Array.isArray(r.content)) return;
   const lines = reachLines(screened.reachChanges);
   r.content.push({ type: 'text', text: lines.length > 0 ? `Reach changes — who gains access through the new parent:\n${lines.join('\n')}` : 'Reach changes: none — nobody gains or loses access.' });
+  if (!screened.carried) return;
+  const carried = screened.carried.map((c) => `${c.from.join(', ')} -> project ${c.to}: ${c.subject} `
+    + (c.kind === 'role' ? `role ${c.value} — ${c.note}` : `project:write ${c.value} (${c.note})`));
+  r.content.push({ type: 'text', text: carried.length > 0 ? `Subsystem rules carried onto the new project:\n${carried.join('\n')}` : 'Subsystem rules carried onto the new project: none.' });
 }
 
 /**
