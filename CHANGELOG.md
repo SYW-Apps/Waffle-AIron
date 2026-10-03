@@ -49,7 +49,8 @@ hosted detach or adopt moves the member's directory. Stage 8 makes a new member 
 by default (`--project` for a project) and `subsystem externalize` a storage move into a part
 (`--as project` for the old behaviour), renames `sdd_add_member`'s `path` to `source`, deprecates
 the long-form member `path` key, refuses `../` and git members on hosted, and compares path
-externals per use (re-pin once). Nothing here is purely
+externals per use (re-pin once). The debt triage makes a hosted token mint require its
+project list (`*` for the full reach) and drops `environment` from hosted project init. Nothing here is purely
 additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
@@ -1161,6 +1162,46 @@ from where its files live.
 - The admin plane's canvas diagram and its download carry it too, read with the
   master credential's whole-instance reach. Other formats are unchanged, and the
   signed view link still renders with health "not checked".
+
+### The undecided debt is decided
+
+The conformance debt register carried 229 findings marked *undecided*: places where the
+spec and the code disagreed and nobody had read which side was right. Every one has been
+read; the kind is now empty, and the register went from 303 findings over 406 units to 75
+over 103.
+
+- **Contracts and code agree on their arguments.** Most param findings were binding
+  errors, not disagreements: implementations that never declared their injected leading
+  config argument, and symbols bound to a wrapper instead of the body. The rest moved the
+  side that was wrong: contracts gained the inputs callers really pass (a git credential
+  reference, who placed a project), lost the ones nothing takes, and code was renamed to
+  say what its contract says.
+- **The ERD draws the records that exist.** Type specs describe the value a type finally
+  holds (a defaulted field is required), model the fields they were missing, and drop the
+  ones never built. The hosted project record keeps only what it stores.
+- **Every export is a promise or private.** A name another component imports is a contract
+  method, a realization handle, or a pure method of its modelled type; the rest stopped
+  being exported. A barrel's re-export of a modelled type's pure method counts as promised
+  surface.
+- **Portals take what their contracts say.** The share portal, the MCP resource reader and
+  the host request handler leave transport parsing to the dispatcher.
+- `FACADE_FORWARDING` names the facade method as its site, so a `lint.allow` for it must
+  name the method (`at:`).
+
+Behaviour changes:
+
+- **A hosted token mint requires its project list.** A mint with no list, or an empty one,
+  is refused; pass the project ids, or `*` for the owner's full reach (the CLI already did).
+- **Hosted project init writes the display name and description** into the new project's
+  `.wai/project.yaml`; `environment` is no longer part of the request (deployment is not
+  design).
+- **The server records who created a cross-project relation and when**, and keeps them on
+  update; the unused `sourceAdapter` leaves the relation record.
+- **Every sign-in start path enforces the provider's redirect allowlist.**
+- **`WAIRON_AUDIT_POLICY` sets the hosted audit policy**: JSON, any subset of its fields,
+  laid over the secure default and refused at startup when invalid. Member migrations
+  honour it too.
+- `aiGuide` leaves the project.yaml schema; nothing read or wrote it.
 
 ### Fixed: a delta's absent fields, and two tests that failed under load
 
