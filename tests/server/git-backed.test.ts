@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -147,6 +147,31 @@ function seedRemote(base: string): { remote: string; seed: string } {
   return { remote, seed };
 }
 
+/**
+ * A private copy of the seeded remote and its collaborator clone, made with
+ * file copies instead of git.
+ *
+ * Every test here needs the same starting state, and building it took six git
+ * processes (init, clone, add, commit, branch, push) per test, on top of the
+ * dozen or more the test itself runs — all synchronous, all inside the test's
+ * fixed wall-clock budget, and each one several times slower when the rest of
+ * the suite is saturating the machine. That is what made this file fail under
+ * full-suite load and pass alone. The template is built once; a copy costs no
+ * process at all. The clone's `origin` is the one absolute path inside it, so
+ * it is repointed at the copy's own remote — never the shared template.
+ */
+function copySeededRemote(template: string, base: string): { remote: string; seed: string } {
+  fs.cpSync(template, base, { recursive: true });
+  const remote = path.join(base, 'remote.git');
+  const seed = path.join(base, 'seed');
+  const configPath = path.join(seed, '.git', 'config');
+  const config = fs.readFileSync(configPath, 'utf8');
+  const repointed = config.replace(/^(\s*url\s*=\s*).*$/m, `$1${remote.replace(/\\/g, '/')}`);
+  if (repointed === config) throw new Error(`the seed clone has no origin url to repoint: ${configPath}`);
+  fs.writeFileSync(configPath, repointed);
+  return { remote, seed };
+}
+
 describe('git-backed projects (sdd_git)', () => {
   let base: string;
   let dataDir: string;
@@ -154,13 +179,27 @@ describe('git-backed projects (sdd_git)', () => {
   let seed: string;
   let cfg: HostConfig;
   const savedEnv = { ...process.env };
+  let template: string;
+
+  beforeAll(() => {
+    template = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-git-template-'));
+    seedRemote(template);
+  });
+
+  afterAll(() => {
+    try {
+      fs.rmSync(template, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
 
   beforeEach(() => {
     invalidateSpecCache();
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-git-it-'));
+    ({ remote, seed } = copySeededRemote(template, base));
     dataDir = path.join(base, 'data');
     fs.mkdirSync(dataDir, { recursive: true });
-    ({ remote, seed } = seedRemote(base));
     process.env.WAIRON_ADMIN_TOKEN = ADMIN;
     process.env.WAIRON_GIT_NAME = 'wairon-bot';
     process.env.WAIRON_GIT_EMAIL = 'bot@localhost';

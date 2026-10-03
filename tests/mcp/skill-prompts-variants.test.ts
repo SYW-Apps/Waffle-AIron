@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -38,7 +38,46 @@ afterEach(() => {
   }
 });
 
+/**
+ * A small project of its own, bound as the working directory: the subsystem
+ * `sub` and one Orchestrator per id (tagged with `variant` when given).
+ *
+ * Every suite here that creates a server binds one. A server created with no
+ * project reads whatever project the working directory is in — under the test
+ * runner, this repository's own tree of about 1,300 specs, whose agent
+ * topology resources/list composed on every call. That made the prompt suite
+ * slow and load-sensitive, and made its verdict depend on the live repository
+ * instead of on anything the test states.
+ */
+function fixtureProject(componentIds: string[] = ['flow'], variant?: string): string {
+  invalidateSpecCache();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-promptmcp-'));
+  created.push(dir);
+  const specs = path.join(dir, '.wai', 'specs');
+  for (const d of ['subsystems', 'components', 'interfaces', 'implementations', 'types']) {
+    fs.mkdirSync(path.join(specs, d), { recursive: true });
+  }
+  const stamp = "createdAt: '2026-07-03T10:00:00Z'\nupdatedAt: '2026-07-03T10:00:00Z'";
+  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
+    schemaVersion: '1.0.0', name: 'p', projectType: 'backend',
+    targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }], rules: {},
+    extensions: { useGlobalPacks: false, packs: [] },
+    createdAt: '2026-07-03T10:00:00Z', updatedAt: '2026-07-03T10:00:00Z',
+  }));
+  fs.writeFileSync(path.join(specs, '.index.yaml'), `schemaVersion: 1.0.0\nname: S\nvision: v\n${stamp}\n`);
+  fs.writeFileSync(path.join(specs, 'subsystems', 'sub.yaml'),
+    `schemaVersion: 1.0.0\nid: sub\nname: Sub\ndescription: d\nparentSystem: S\n${stamp}\n`);
+  for (const id of componentIds) {
+    fs.writeFileSync(path.join(specs, 'components', `${id}.yaml`),
+      `schemaVersion: 1.0.0\nid: ${id}\nname: ${id}\ndescription: d\nsubsystem: sub\ncomponentType: Orchestrator\ndependencyClass: pure\n${variant ? `variant: ${variant}\n` : ''}${stamp}\n`);
+  }
+  vi.spyOn(process, 'cwd').mockReturnValue(dir);
+  return dir;
+}
+
 describe('skills published as MCP prompts (7.4)', () => {
+  beforeEach(() => { fixtureProject(); });
+
   it('advertises a prompt per published skill, mirroring the resource set', async () => {
     const client = await connect(createMcpServer());
     const { prompts } = await client.listPrompts();
@@ -48,6 +87,7 @@ describe('skills published as MCP prompts (7.4)', () => {
     // built from the same descriptor list. (resources/list additionally carries
     // live wairon-agent:// brief entries, which have no prompt mirror.)
     const skillResources = resources.filter((r) => r.uri.startsWith('wairon-skill://'));
+    expect(resources.some((r) => r.uri.startsWith('wairon-agent://'))).toBe(true); // the fixture's own topology
     expect(prompts.length).toBe(skillResources.length);
     expect(prompts.map((p) => p.name).sort()).toEqual(
       skillResources.map((r) => r.uri.replace('wairon-skill://', '')).sort(),
@@ -125,33 +165,12 @@ describe('variant guidance resolution (7.5)', () => {
 describe('variant guidance reaches a hosted agent via sdd_get_spec (7.5)', () => {
   /** A project with two same-variant components and a variant registry. */
   function projectWithVariant(): string {
-    invalidateSpecCache();
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-variantmcp-'));
-    created.push(dir);
-    const specs = path.join(dir, '.wai', 'specs');
-    for (const d of ['subsystems', 'components', 'interfaces', 'implementations', 'types']) {
-      fs.mkdirSync(path.join(specs, d), { recursive: true });
-    }
-    const stamp = "createdAt: '2026-07-03T10:00:00Z'\nupdatedAt: '2026-07-03T10:00:00Z'";
-    fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
-      schemaVersion: '1.0.0', name: 'p', projectType: 'backend',
-      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }], rules: {},
-      extensions: { useGlobalPacks: false, packs: [] },
-      createdAt: '2026-07-03T10:00:00Z', updatedAt: '2026-07-03T10:00:00Z',
-    }));
-    fs.writeFileSync(path.join(specs, '.index.yaml'), `schemaVersion: 1.0.0\nname: S\nvision: v\n${stamp}\n`);
-    fs.writeFileSync(path.join(specs, 'subsystems', 'sub.yaml'),
-      `schemaVersion: 1.0.0\nid: sub\nname: Sub\ndescription: d\nparentSystem: S\n${stamp}\n`);
-    for (const id of ['a_pub', 'b_pub']) {
-      fs.writeFileSync(path.join(specs, 'components', `${id}.yaml`),
-        `schemaVersion: 1.0.0\nid: ${id}\nname: ${id}\ndescription: d\nsubsystem: sub\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: publisher\n${stamp}\n`);
-    }
+    const dir = fixtureProject(['a_pub', 'b_pub'], 'publisher');
     const variantsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-vardir-'));
     created.push(variantsDir);
     fs.writeFileSync(path.join(variantsDir, 'publisher.yaml'),
       'id: publisher\nbase: Orchestrator\nguidance: Reuse the shared publisher helper; do not reimplement dispatch.\n');
     process.env.WAIRON_VARIANTS_DIR = variantsDir;
-    vi.spyOn(process, 'cwd').mockReturnValue(dir);
     return dir;
   }
 

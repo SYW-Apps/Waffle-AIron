@@ -2424,6 +2424,24 @@ function identityFieldsOf(field: string): string[] {
   }
 }
 
+/**
+ * A delta with every null/undefined field removed from every object in it, at
+ * every depth (array elements kept, each cleaned). Null and undefined mean "no
+ * change" in a delta; removing them before the merge is what makes that true
+ * below the top level too, where the element merge spreads the delta over the
+ * stored element and a present-but-empty key would otherwise replace it.
+ */
+export function withoutAbsentFields(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutAbsentFields);
+  if (typeof value !== 'object' || value === null) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(value as Record<string, unknown>)) {
+    if (field === undefined || field === null) continue;
+    out[key] = withoutAbsentFields(field);
+  }
+  return out;
+}
+
 /** Whether a delta element carries an insert/delete marker — its paths do not compare. */
 function carriesEditMarker(item: unknown): boolean {
   if (item === null || typeof item !== 'object') return false;
@@ -5531,7 +5549,14 @@ export class SpecWorkspace {
     const unsetFields: string[] = Array.isArray((delta as Record<string, unknown>).unset)
       ? ((delta as Record<string, unknown>).unset as unknown[]).filter((f): f is string => typeof f === 'string')
       : [];
-    const { unset: _unset, ...mergeableDelta } = delta as Record<string, unknown>;
+    // A field an element leaves out — or passes as null/undefined — is NOT
+    // there to merge, at every depth, exactly as at the top level (F88). The
+    // element merge is a shallow spread, so a key present with no value
+    // overwrote the stored one: `{ name: 'run', params: undefined }` from an
+    // in-process caller erased the method's params, and `catches: null` on a
+    // step was refused by the schema instead of being the "no change" the
+    // tool promises. Only `[]` or an `unset` clears a stored value.
+    const { unset: _unset, ...mergeableDelta } = withoutAbsentFields(delta) as Record<string, unknown>;
 
     // The stored spec as it was BEFORE the merge. The merge shares nested
     // objects with it wherever the delta did not reach, so label resolution —

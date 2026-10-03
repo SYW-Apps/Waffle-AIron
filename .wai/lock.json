@@ -2,14 +2,14 @@
   "format": 2,
   "stateId": {
     "algorithm": "sha256+content+doctrine+inputs+members",
-    "digest": "04a8c541a832a41febc21f9522f0853848f95e2adb3e1c573bb3830f79431e1a"
+    "digest": "a226a7e4155f5afe70aa714f7daaba9ccf3ad07c335ed4b19fd364748f999386"
   },
-  "lockedAt": "2026-10-03T09:43:23.379Z",
+  "lockedAt": "2026-10-03T11:29:48.810Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "5.1.1-dev.89",
+  "validatorVersion": "5.1.1-dev.90",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -360,7 +360,7 @@
     ".wai/specs/implementations/conformance_rules_impl.yaml": "88fa2d78065912111d36ddad3ddeb67844d2aee62f0080fd11c825be99f8a234",
     ".wai/specs/implementations/context_composer_impl.yaml": "ae22b0ae9d29c48c042045fde5f97da0d63699106adaa6f5208de29f9f5b2dcb",
     ".wai/specs/implementations/context_store_impl.yaml": "6aab8bc88578fa6499a903e8d3df76ffccd5cbfee89e185d8dfd6d8e7343c2f5",
-    ".wai/specs/implementations/core_orchestrator_impl.yaml": "7544e15d220a603415faed5b1b85c9fab76ae19e985fae9c4dc08fca7eb66750",
+    ".wai/specs/implementations/core_orchestrator_impl.yaml": "7fb1d58242ee2eb819ffeba6b2a8e858d24a126113115af4bc8456dc31eecea9",
     ".wai/specs/implementations/credential_index_impl.yaml": "c1bc0bd3d3a5e4fe1e44542bddfec59bc6e96022373e750fa7dbc1e0360f8b93",
     ".wai/specs/implementations/credential_repository_impl.yaml": "00eb10e82b93f2ace62f9bd8cc09e46d33d68f01213fd37be3463ee402236e87",
     ".wai/specs/implementations/credential_store_impl.yaml": "33dedf3e930d65e4ad73fe4be94050909edfd585b78ba00dc450c6067cc880c8",
@@ -1312,7 +1312,7 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "5.1.1-dev.89",
+      "validatorVersion": "5.1.1-dev.90",
       "doctrineDigest": "9d37c775931cd1879833ed1e8cd53672822c04c5721c4caa02dd6e34415dd3b1",
       "grade": "exact"
     },

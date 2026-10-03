@@ -1043,6 +1043,30 @@ from where its files live.
 - **Hosted:** a member with a `../` or git source is refused; promote/demote change records
   through reconcile, as every family-shape tool does.
 
+### Fixed: a delta's absent fields, and two tests that failed under load
+
+- **A field a delta element leaves out keeps its stored value, at every depth.**
+  An element `sdd_update_spec` names merges field by field: a field it leaves
+  out, or passes as `null`/`undefined`, is "no change" below the top level as
+  it always was at it. The element merge was a shallow spread, so a key present
+  with no value replaced the stored one — `undefined` erased an interface
+  method's `params` or a try step's `catches` and `endStep`, and `null` was
+  refused by the schema instead. Only `[]` or an `unset` clears. The tool
+  description now says so, and that `narrative: []` on a method you are not
+  editing clears its steps. (F88)
+- **`tests/server/git-backed.test.ts` no longer fails under full-suite load.**
+  Each test rebuilt the same seeded remote with six synchronous git processes
+  before running its own dozen or more, all inside a fixed per-test budget that
+  a saturated machine stretches several-fold. The seeded remote is now built
+  once per file and copied per test, with the copy's clone repointed at its own
+  remote: the file runs in half the time alone and under load.
+- **`tests/mcp/skill-prompts-variants.test.ts` binds a fixture project.** Its
+  prompt suite created MCP servers with no project, so they read this
+  repository's own ~1,300-spec tree through the working directory and composed
+  its agent topology on every resources/list — a cold read that took seconds
+  under load, and a verdict that depended on the live tree. Every suite in the
+  file now binds a small project of its own.
+
 ### Fixed: technology tokens, context sync, global writes and two delta merges
 
 - **A technology can declare the tokens it is matched by.** An entry of
