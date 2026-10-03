@@ -1119,11 +1119,27 @@ from where its files live.
   the caller any subsystem of the project, naming each. A family migration that
   would reshape a project holding a subsystem the request may not change refuses
   `subsystem-denied`, one per subsystem.
+- **Behaviour change — teams must know.** Inside a hosted request, a spec write
+  into a family member the caller may not write at the project rung is now
+  refused. Before, nothing stopped it: the door checked only the bound project, so
+  a caller with write on a parent could change a member that explicitly denied
+  them. It is a fix, but a workflow that relied on it now fails with
+  `SubsystemWriteDenied`.
+- **A type group belongs to no subsystem**, so creating one needs project-wide
+  write; a caller who may write only some subsystems cannot.
 - **A promote or an externalize never widens access.** When a member project is
   registered from a parent's subsystem, each of the parent's rules on that
-  subsystem is carried onto the new project's own scope (per subject, the most
-  restrictive value), listed in the reconciliation's reach changes and audited; the
-  subsystem rule itself is kept.
+  subsystem is carried onto the new project's own scope, audited, and the
+  subsystem rule itself is kept. The plan lists every carried rule before anything
+  is written — a hosted externalize as a project is now screened like a promote,
+  so its dry run carries the listing too: from `<project>/<subsystem>` to the new
+  project, per subject and value; several subsystems naming one subject collapse
+  onto one rule with the resulting value ("most restrictive wins"); a role binding
+  at a moved subsystem is listed as "not carried (can only narrow)".
+- **A member rename keeps its subsystem rules.** The hosted re-key moves every
+  subsystem rule and role binding at `<old>/<subsystem>` to `<new>/<subsystem>`
+  with the member's own settings, audited, so nothing a rule denied comes back
+  after the rename. Detach and adopt keep the record's id and need no re-key.
 - **Administering a subsystem's rules is administering its project.** The grid,
   `setAssignment` and `bindRole` take a subsystem scope and refuse any capability
   other than `project:write`, and an approval value, there. A rule naming a subsystem
