@@ -650,8 +650,14 @@ export function getWebProjectCanvas(cfg: HostConfig, sessionId: string, projectI
     throw new ForbiddenError('project not authorized or unknown');
   }
 
-  // steps 3–5: bind the root and render the interactive canvas over the bound tree.
-  return runWithProjectRoot(root, () => hostCore.renderDiagram('canvas'));
+  // Steps 5-6: the family's relation health, read within the caller's reach —
+  // the listed projects, exactly as the canvas model and the Relations tab read,
+  // so a member or producer outside it is unavailable, never read and never ok.
+  const listed = webproject.listProjects(cfg, sessionId);
+  const relations = runWithProjectBinding(root, readReach(cfg, projectId, root, listed), () => hostValidator.familyRelations());
+  // Step 7: render the interactive canvas over the bound tree, each consumption
+  // edge carrying its relation's health.
+  return runWithProjectRoot(root, () => hostCore.renderDiagram('canvas', relations));
 }
 
 /**
