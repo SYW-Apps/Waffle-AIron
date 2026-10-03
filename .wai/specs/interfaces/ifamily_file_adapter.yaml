@@ -11,8 +11,11 @@ methods:
       Copy each scoped owner's areas (its .wai tree by default, everything under it except
       .wai/transactions/; the listed files when the scope names areas) and every owner the scope
       names whole (all its files except .wai/transactions/) into the target directory at the owner's
-      path relative to the coordinator root, so the layout is reproduced; answer each copied live
-      file's sha256 by its absolute path. Refuses an owner root outside the coordinator root.
+      path relative to the scope's base — the nearest common ancestor of the coordinator and every
+      owner, the coordinator when it names none — so the layout is reproduced, a sibling checkout
+      beside the family included (stage 8); answer each copied live file's sha256 by its absolute
+      path. Refuses an owner root outside the base, and an owner on another volume than the
+      coordinator: a rename across volumes is not atomic.
     signature: 'mirror(scope: TransactionScope, target: string): Map<string, string>'
     returns: Map<string, string>
     params:
@@ -168,4 +171,4 @@ methods:
         description: Where they go, absolute; created as needed
 status: complete
 createdAt: '2026-09-30T20:27:16.585Z'
-updatedAt: '2026-10-01T18:07:32.615Z'
+updatedAt: '2026-10-02T23:59:16.175Z'

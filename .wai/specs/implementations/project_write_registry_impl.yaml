@@ -52,11 +52,13 @@ methods:
     narrative: []
     intent: >-
       Refuses a status other than active or disabled and an unknown id; loads the persisted set,
-      sets the record's status and persists the set. Touches no directory.
+      sets the record's status — recording the reason as disabledReason when a disabled status comes
+      with one, and clearing it when the record is active again — and persists the set. Touches no
+      directory.
     calls:
       - project_store.read
       - project_store.write
     symbol: setProjectRecordStatus
 status: complete
 createdAt: '2026-07-19T09:00:09.975Z'
-updatedAt: '2026-10-01T16:29:24.117Z'
+updatedAt: '2026-10-02T23:58:12.807Z'

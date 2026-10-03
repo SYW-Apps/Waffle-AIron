@@ -76,11 +76,14 @@ fields:
   - name: commit
     type: string
     description: >-
-      git: the commit the directory holds — the member's pinned commit for role member; for an
-      external, the ref's head resolved when status or a pin asked (absent when it could not be
-      resolved, e.g. offline).
+      The producer's commit, only when it lives in another git repository than the consumer: git —
+      the commit the directory holds (the member's pinned commit for role member; for an external,
+      the ref's head resolved when status or a pin asked, absent when it could not be resolved, e.g.
+      offline); a `../` sibling or path producer that is its own repository — the head of that work
+      tree. A family, contained or same-repository producer records none, so a monorepo re-pin never
+      churns the lock.
     optional: true
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:40.205Z'
-updatedAt: '2026-10-02T20:48:17.047Z'
+updatedAt: '2026-10-02T23:58:42.421Z'

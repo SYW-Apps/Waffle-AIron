@@ -52,6 +52,18 @@ methods:
       - name: directory
         type: string
         description: An absolute directory
+  - name: repositoryRoot
+    description: >-
+      The root of the git work tree that holds a directory (the nearest ancestor holding a `.git`
+      entry), or null when it lies in none. No process and no network: a filesystem walk. What tells
+      a producer in another repository (whose commit a pin records) from a contained or
+      same-repository one (whose commit nothing records).
+    signature: 'repositoryRoot(directory: string): string | null'
+    returns: string | null
+    params:
+      - name: directory
+        type: string
+        description: An absolute directory
 status: complete
 createdAt: '2026-10-02T20:19:32.127Z'
-updatedAt: '2026-10-02T21:40:54.562Z'
+updatedAt: '2026-10-02T23:58:20.593Z'

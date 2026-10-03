@@ -290,8 +290,9 @@ methods:
         outcome: refused plan
       - stepNumber: 6
         description: >-
-          Plan the core's promote with the id, then the pins on both sides; the bound project to
-          re-lock and the new project to lock for the first time
+          Plan the core's promote with the id, then the pins on both sides; for a part in a sibling
+          checkout, note that files are all-or-nothing and commits one per repository; the bound
+          project to re-lock and the new project to lock for the first time
         type: local
       - stepNumber: 7
         description: Answer the plan
@@ -329,8 +330,13 @@ methods:
         outcome: refused plan
       - stepNumber: 6
         description: >-
-          Plan the core's demote with the destination and the removal of the bound project's pin of
-          the member; the bound project to re-lock, the member's lock listed as ended
+          Plan the core's demote with the destination; name, as an edit each for confirmation, every
+          L0 export entry of the bound project the demote removes (audience project, naming a target
+          only the member used — read from the member's references back into the bound project and
+          the bound project's export table — hand-written ones included); plan the removal of the
+          bound project's pin of the member; for a member in a sibling checkout, note that files are
+          all-or-nothing and commits one per repository; the bound project to re-lock, the member's
+          lock listed as ended
         type: local
       - stepNumber: 7
         description: Answer the plan
@@ -396,4 +402,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-10-02T23:25:34.471Z'
+updatedAt: '2026-10-03T00:00:17.170Z'

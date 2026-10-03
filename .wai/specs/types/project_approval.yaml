@@ -67,10 +67,11 @@ fields:
   - name: commit
     type: string
     description: >-
-      The commit a part or a referenced project member was read at, when known — provenance the lock
-      records.
+      The commit a part or a referenced project member was read at, recorded only when it lives in
+      another git repository than its declaring project (a git source, or a `../` sibling that is
+      its own repository) — provenance the lock records.
     optional: true
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-10-02T20:27:12.874Z'
+updatedAt: '2026-10-02T23:58:40.322Z'

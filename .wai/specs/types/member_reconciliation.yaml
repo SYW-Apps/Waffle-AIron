@@ -44,6 +44,13 @@ fields:
       Member record ids re-enabled because the family declares their member again after they were
       disabled as departed
     optional: false
+  - name: retired
+    type: string[]
+    description: >-
+      Member records retired because their member's content is now a part of its parent (stage 8:
+      demote) — disabled with the reason "part of <parent>", never deleted, their own-scope settings
+      kept for a later promote.
+    optional: false
 methods: []
 createdAt: '2026-10-01T16:27:33.167Z'
-updatedAt: '2026-10-01T19:51:27.802Z'
+updatedAt: '2026-10-02T23:58:01.979Z'

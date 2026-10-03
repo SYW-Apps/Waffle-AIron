@@ -110,15 +110,20 @@ methods:
         optional: true
   - name: moveMember
     description: >-
-      Relocate a member of the bound project: move its directory on disk from its current path to
-      the new one and point its `members` entry there. A member still declared in the legacy L1 form
-      is first moved into `members` (as moveMountToMembers does), so wairon never writes the L1
-      form. Throws if the alias declares no member, if a legacy mount carries a field beyond its
-      path and description (a non-empty publicInterfaces or trustedLinks, a lint allow, a lifecycle,
-      profile, targetLanguage, designDepth or ext) — a move never drops a field, and `wairon doctor
-      --fix` carries them plan-first — or if the new path does not resolve strictly within the
-      owning project root (absolute or ../-escaping targets are rejected) or already exists, each
-      before anything is written.
+      Relocate a member of the bound project — a contained or `../` sibling project member, or a
+      part (stage 8) — move its directory on disk from its current location to the new one and point
+      its `members` entry there; a part stored in a sibling checkout has its PartOf path
+      re-expressed from its new place. A member still declared in the legacy L1 form is first moved
+      into `members` (as moveMountToMembers does), so wairon never writes the L1 form. Throws, each
+      before anything is written, if the alias declares no member, if the member is fetched from git
+      (its files are the fetch cache's) or a hosted record, if a legacy mount carries a field beyond
+      its path and description (a non-empty publicInterfaces or trustedLinks, a lint allow, a
+      lifecycle, profile, targetLanguage, designDepth or ext) — a move never drops a field, and
+      `wairon doctor --fix` carries them plan-first — if the move would change its storage (a
+      contained member stays contained, a sibling stays a sibling: that is externalize/internalize),
+      if a contained target does not resolve strictly within the owning project root (absolute or
+      inner-`..` targets are rejected), if the target lies on another volume, or if it already
+      exists.
     signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
     params:
@@ -1076,4 +1081,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:50:37.458Z'
+updatedAt: '2026-10-02T23:59:53.046Z'

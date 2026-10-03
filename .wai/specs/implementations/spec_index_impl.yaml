@@ -340,10 +340,11 @@ methods:
           references as the root's own and the ordinary subsystem rules judge them
           (part-is-the-parents-subsystem). A key the root or another part already declares is
           duplicate-spec naming both files. Record the ScannedPart: alias, storage, the directory
-          read, the commit (the pinned one for git, else the head of the work tree holding it
-          through git_source_adapter.head), its PartOf (null for a contained part), its subsystem
-          keys and spec keys, and the content digest over its documents keyed by their path inside
-          the part
+          read, the commit (the pinned one for git; for a `../` sibling only when it is stored in
+          another git repository than this root — git_source_adapter.repositoryRoot compared, then
+          git_source_adapter.head; a contained or same-repository part records none and runs no git
+          process), its PartOf (null for a contained part), its subsystem keys and spec keys, and
+          the content digest over its documents keyed by their path inside the part
         type: local
       - stepNumber: 12
         description: >-
@@ -467,4 +468,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-02T22:32:13.439Z'
+updatedAt: '2026-10-02T23:58:57.405Z'

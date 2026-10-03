@@ -38,10 +38,12 @@ fields:
   - name: commit
     type: string
     description: >-
-      The producer's commit at pin time: the fetched commit of a git source (an external's ref head;
-      a referenced project's pinned commit), or the head of the work tree holding a path or family
-      producer when it is in one. Provenance for a reader and the base an `externals status` reports
-      `ahead` against; never compared by a verdict.
+      The producer's commit at pin time, recorded only when the producer lives in another git
+      repository than the consumer: the fetched commit of a git source (an external's ref head; a
+      referenced project's pinned commit), or the head of the work tree holding a `../` sibling or
+      path producer that is its own repository. A family, contained or same-repository producer
+      records none, so a monorepo re-pin never churns the lock. Provenance for a reader and the base
+      an `externals status` reports `ahead` against; never compared by a verdict.
     optional: true
   - name: role
     type: string
@@ -50,4 +52,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:46:57.120Z'
-updatedAt: '2026-10-02T20:48:05.065Z'
+updatedAt: '2026-10-02T23:58:44.061Z'

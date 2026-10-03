@@ -297,7 +297,8 @@ methods:
       - stepNumber: 1
         description: >-
           Read the project graph of the bound root: the member the alias declares, with its
-          declaration form and path — a contained project member, or (stage 8) a contained part
+          declaration form and path — a contained or `../` sibling project member, or (stage 8) a
+          part; one fetched from git or a hosted record is refused
         type: call
         targetComponent: spec_loader
         targetMethod: graph
@@ -348,8 +349,10 @@ methods:
       - stepNumber: 9
         label: relocate
         description: >-
-          Resolve the old and new member directories from the bound project root under the
-          containment guard; reject a target that already exists; relocate the directory on disk
+          Resolve the old and new member directories from the bound project root — a contained one
+          under the containment guard, a sibling's by its leading `../`; reject a move that changes
+          the storage, a target on another volume, and one that already exists; relocate the
+          directory on disk; a sibling part's PartOf path is re-expressed from its new place
         type: local
       - stepNumber: 10
         description: Point the `members` entry at the new path
@@ -2250,4 +2253,4 @@ methods:
         outcome: MemberAdvance
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T23:25:52.900Z'
+updatedAt: '2026-10-03T00:00:02.120Z'

@@ -29,9 +29,11 @@ fields:
   - name: commit
     type: string
     description: >-
-      git: the pinned commit it was loaded at. path or contained: the commit of the work tree that
-      holds it, when it is in one (git_source_adapter.head) — recorded by the parent's lock as
-      provenance, never compared by a verdict.
+      git: the pinned commit it was loaded at. A `../` sibling stored in a git repository other than
+      the declaring project's: the commit of that work tree (git_source_adapter.head). A contained
+      or same-repository part records none — its commit is the declaring project's own, so nothing
+      churns and no git process runs for it. Recorded by the parent's lock as provenance, never
+      compared by a verdict.
     optional: true
   - name: partOf
     type: PartOf | null
@@ -73,4 +75,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-10-02T20:17:18.690Z'
-updatedAt: '2026-10-02T20:45:11.740Z'
+updatedAt: '2026-10-02T23:58:37.427Z'

@@ -51,7 +51,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the consumer node's externals and referenced project members
-        endStep: 17
+        endStep: 18
       - stepNumber: 8
         description: Is the producer in the family?
         type: branch
@@ -65,7 +65,7 @@ methods:
       - stepNumber: 10
         description: A family producer is bound
         type: jump
-        toStep: 17
+        toStep: 18
       - stepNumber: 11
         label: outside
         description: >-
@@ -102,7 +102,7 @@ methods:
       - stepNumber: 15
         description: A git producer is bound
         type: jump
-        toStep: 17
+        toStep: 18
       - stepNumber: 16
         label: hosted
         description: >-
@@ -111,22 +111,34 @@ methods:
           the caller must gate on reach itself and this is where it does. Outside a hosted server
           there is no lookup: the external is unresolved with "hosted-only producer `<id>`:
           available only through the hosted server"; a record the lookup does not answer (unknown,
-          or out of reach) is unresolved too — unavailable, never a pass
+          or out of reach) is unresolved too — unavailable, never a pass. For a `../` sibling or
+          path producer, record the head of the work tree holding it only when that is another git
+          repository than the consumer's (git_source_adapter.repositoryRoot compared, then
+          git_source_adapter.head); a family, contained or same-repository producer records no
+          commit and runs no git process
         type: local
       - stepNumber: 17
+        description: >-
+          For a `../` sibling or path producer, find the git repository holding it and the
+          consumer's (no git process): only a producer in another repository has its work tree's
+          head recorded
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: repositoryRoot
+      - stepNumber: 18
         label: bound
         description: >-
           Record the binding: the external, its usage when one was mapped, and whether the family
           was read whole
         type: local
-      - stepNumber: 18
+      - stepNumber: 19
         description: Restore the caller's binding
         type: local
-      - stepNumber: 19
+      - stepNumber: 20
         description: Answer the bindings in declaration order
         type: return
         outcome: ExternalBinding[]
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-10-02T20:47:01.920Z'
+updatedAt: '2026-10-02T23:59:07.124Z'

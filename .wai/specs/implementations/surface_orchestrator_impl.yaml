@@ -212,12 +212,14 @@ methods:
         label: used
         description: >-
           Compute the lock entry: the producer id, the snapshot path, the content digest, the role
-          (external, or member for a referenced project member), the commit (the fetched commit of a
-          git producer, else the head of the work tree holding the producer when it is in one), and
-          `used` — each public name of the binding's usage mapped to each of its members'
-          SurfaceSnapshot.memberDigest (an empty map for a name only depended on; a member the
-          snapshot does not carry is reported missing and not pinned). Usage exists for every
-          producer since stage 8, so an outside producer's `used` is filled too
+          (external, or member for a referenced project member), the commit the binding carries
+          (only a producer in another git repository than the consumer has one: a git producer's
+          fetched commit, or the head of a `../` sibling that is its own repository — a family,
+          contained or same-repository producer records none), and `used` — each public name of the
+          binding's usage mapped to each of its members' SurfaceSnapshot.memberDigest (an empty map
+          for a name only depended on; a member the snapshot does not carry is reported missing and
+          not pinned). Usage exists for every producer since stage 8, so an outside producer's
+          `used` is filled too
         type: local
       - stepNumber: 19
         description: Next external
@@ -612,4 +614,4 @@ lint:
         replaced listExternalInterfaces, whose entry for it was retired with it.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-02T22:32:25.179Z'
+updatedAt: '2026-10-02T23:58:51.731Z'

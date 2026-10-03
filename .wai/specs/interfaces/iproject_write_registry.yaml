@@ -49,9 +49,11 @@ methods:
         description: 'The member record: id, parentProjectId, memberPath, status'
   - name: setStatus
     description: >-
-      Set a record's status (active | disabled). A member that left its family is disabled, never
-      deleted, so its grants and audit trail stay for an operator. Refuses an unknown id.
-    signature: 'setStatus(id: string, status: string): HostedProjectRecord'
+      Set a record's status (active | disabled), with the reason a disabled record is disabled when
+      one is given (stage 8: "part of <parent>" for a member retired as a part). A member that left
+      its family is disabled, never deleted, so its grants and audit trail stay for an operator.
+      Setting it active clears the reason. Refuses an unknown id.
+    signature: 'setStatus(id: string, status: string, reason?: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
       - name: id
@@ -59,6 +61,10 @@ methods:
       - name: status
         type: string
         description: active | disabled
+      - name: reason
+        type: string
+        description: Why it is disabled (recorded as disabledReason)
+        optional: true
 status: complete
 createdAt: '2026-07-19T09:00:02.108Z'
-updatedAt: '2026-10-01T17:08:58.399Z'
+updatedAt: '2026-10-02T23:58:09.766Z'

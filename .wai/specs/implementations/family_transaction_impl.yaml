@@ -31,16 +31,18 @@ methods:
         description: >-
           Mirror every scoped owner's areas (each project's .wai tree by default) and every owner
           the scope names whole (a relocated project's old directory and new root) into it at its
-          path from the coordinator root, recording each live file's digest. Only the scoped areas
-          and whole owners are copied: every writer run on the copy must read nothing outside them
-          (the rehearsal precondition)
+          path from the base — the nearest common ancestor of the coordinator and every owner, so a
+          sibling checkout outside the family root on the same volume is an owner like any other
+          (stage 8); an owner on another volume refuses, naming it — recording each live file's
+          digest. Only the scoped areas and whole owners are copied: every writer run on the copy
+          must read nothing outside them (the rehearsal precondition)
         type: call
         targetComponent: family_file_adapter
         targetMethod: mirror
       - stepNumber: 5
         description: >-
-          Answer the rehearsal: its id, directory, coordinator root, each owner's rehearsal root,
-          the base digests, and the areas and whole owners it compares
+          Answer the rehearsal: its id, directory, coordinator root, base, each owner's rehearsal
+          root, the base digests, and the areas and whole owners it compares
         type: return
         outcome: the Rehearsal
       - stepNumber: 6
@@ -465,4 +467,4 @@ methods:
         targetMethod: saveJournal
 status: complete
 createdAt: '2026-09-30T20:29:10.401Z'
-updatedAt: '2026-10-01T18:07:51.621Z'
+updatedAt: '2026-10-02T23:59:18.740Z'

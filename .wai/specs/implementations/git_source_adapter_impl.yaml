@@ -35,7 +35,14 @@ methods:
       run there). Answers null when the directory is in no work tree or git is not installed;
       uncommitted changes do not matter here, because the answer is provenance and the content
       digest is what a verdict compares.
+  - name: repositoryRoot
+    narrative: []
+    detail: intent
+    intent: >-
+      Walk up from the directory to the filesystem root and answer the first ancestor (the directory
+      itself included) holding a `.git` entry — a directory, or a file for a worktree or submodule;
+      null when none does. Runs no git process.
 detail: intent
 status: complete
 createdAt: '2026-10-02T20:19:38.761Z'
-updatedAt: '2026-10-02T21:40:55.816Z'
+updatedAt: '2026-10-02T23:58:22.017Z'

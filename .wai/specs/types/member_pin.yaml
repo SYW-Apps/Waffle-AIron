@@ -45,10 +45,11 @@ fields:
   - name: commit
     type: string
     description: >-
-      The commit the member was read at when the parent locked: a git member's pinned commit, or the
-      head of the work tree holding a contained or sibling member when it is in one. Provenance
-      only: the verdict and the gate identity never read it (content and subjects decide), so the
-      same content at another commit approves identically.
+      The commit the member was read at when the parent locked, recorded only when it lives in
+      another git repository than the parent: a git member's pinned commit, or the head of the work
+      tree holding a `../` sibling that is its own repository. A contained or same-repository member
+      records none. Provenance only: the verdict and the gate identity never read it (content and
+      subjects decide), so the same content at another commit approves identically.
     optional: true
   - name: contentDigest
     type: string
@@ -60,4 +61,4 @@ fields:
 methods: []
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-09-30T05:47:05.631Z'
-updatedAt: '2026-10-02T20:48:18.188Z'
+updatedAt: '2026-10-02T23:58:39.121Z'
