@@ -89,7 +89,7 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 285 files / 4704 tests |
+| `npx vitest run` | 286 files / 4716 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
 | `npm run build` | clean |
 | `npm run build:web` | clean (typechecks the SPA) |
