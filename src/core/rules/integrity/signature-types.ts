@@ -49,7 +49,9 @@ export const signatureTypesRule: SddRule = {
         );
         continue;
       }
-      // Step 4: a data type carrying params or returns.
+      // Step 4: a data type carrying params or returns. An enum's members are
+      // enum-types' question (ENUM_MEMBERS), never a second voice here.
+      if (t.kind === 'enum') continue;
       const stated = [...(t.params !== undefined ? ['params'] : []), ...(t.returns !== undefined ? ['returns'] : [])];
       if (stated.length === 0) continue;
       ctx.addIssue(

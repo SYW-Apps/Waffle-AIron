@@ -938,6 +938,31 @@ export function typeCanonicalTypes<S extends AnyType>(type: S): TypeCanonicaliza
   return { spec: out as S, respellings: reader.respellings, problems: reader.problems };
 }
 
+/**
+ * The words that plainly say a position holds a whole number: a count, a
+ * size, a length, a limit, a port, a step, an index, a depth, a level, a unit
+ * of time or of storage, a version. Fractional names (x, y, w, h, a score, a
+ * ratio) are deliberately absent.
+ */
+const INTEGER_WORDS = new Set([
+  'count', 'counts', 'size', 'sizes', 'length', 'len', 'limit', 'limits', 'port', 'step', 'steps', 'index', 'idx',
+  'depth', 'level', 'levels', 'days', 'day', 'hours', 'minutes', 'seconds', 'ms', 'millis', 'milliseconds', 'bytes',
+  'version', 'total', 'offset', 'page', 'pages', 'retries', 'attempts', 'number', 'num', 'line', 'lines',
+  'column', 'columns', 'max', 'min', 'width', 'height',
+]);
+
+/**
+ * Whether a position's NAME plainly says it holds an integer (a `count`, a
+ * `maxDepth`, a `stepNumber`, a `ttl_days`) — the one case in which the
+ * doctor's type-spelling repair PROPOSES int for a `number`, and the
+ * type-expressions rule says so. Read word by word over camelCase, snake_case
+ * and kebab-case; a proposal is never applied, an author confirms it.
+ */
+export function namesAnInteger(name: string): boolean {
+  const words = name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[\s_\-.]+/).filter(Boolean);
+  return words.some((word) => INTEGER_WORDS.has(word));
+}
+
 /** No facts at all: what a scan starts from. */
 export function emptyTypeSpellingFacts(): TypeSpellingFacts {
   return { respellings: [], problems: [] };

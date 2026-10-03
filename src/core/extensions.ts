@@ -83,13 +83,18 @@ export type ProfileDef = z.infer<typeof ProfileDefSchema>;
  * throw | jump | parallel | detach) to remodeling guidance — merged over the
  * built-in table, so a
  * pack can gate constructs for its platform (warning severity: "possible but
- * not clean" is guidance, not prohibition). `foreignBuiltins` are builtin-type
- * markers unambiguous to THIS language, enabling the foreign-builtin check
- * both ways.
+ * not clean" is guidance, not prohibition).
+ *
+ * `foreignBuiltins` is DEPRECATED, accepted and ignored for one release: the
+ * foreign-builtin check it fed is retired, because contracts are written in
+ * the neutral type grammar and a language is chosen at L4. It is still read so
+ * a pack declaring it loads, and the loader merges the language without it and
+ * records a deprecation (LoadedExtensions.deprecations) the pack-deprecations
+ * rule reports. Removed in the release after.
  */
 export const LanguagePackDefSchema = z.object({
   unsupportedFlow: z.record(z.string()).default({}),
-  foreignBuiltins: z.array(z.string()).default([]),
+  foreignBuiltins: z.array(z.string()).optional(),
 });
 export type LanguagePackDef = z.infer<typeof LanguagePackDefSchema>;
 
@@ -406,11 +411,23 @@ export interface LoadedExtensions {
    * instead of one undifferentiated load error. Every code is error severity.
    */
   selectionFailures: PackSelectionFailure[];
+  /**
+   * Each deprecated field a loaded pack still declares, as
+   * `<pack>: <path> — <what replaces it>` (today: a language's
+   * foreignBuiltins, whose check is retired). Accepted and ignored, and
+   * reported as a notice (PACK_FIELD_DEPRECATED) so a pack author learns it
+   * before the field is removed.
+   */
+  deprecations: string[];
 }
 
 export function emptyExtensions(): LoadedExtensions {
-  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], assertions: [], instructions: [], errors: [], selectionFailures: [] };
+  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], assertions: [], instructions: [], errors: [], selectionFailures: [], deprecations: [] };
 }
+
+/** What replaces a language's foreignBuiltins: nothing a pack declares. */
+const FOREIGN_BUILTINS_RETIRED =
+  'nothing replaces it: contracts are written in the neutral type grammar and a language is chosen at L4, so the foreign-builtin check it fed is retired';
 
 // ---------------------------------------------------------------------------
 // Global packs — machine-wide installs, auto-loaded for every project.
@@ -514,13 +531,13 @@ function mergePack(out: LoadedExtensions, pack: DeclarativePack, ref: string, sc
   Object.assign(out.profiles, pack.profiles);
   for (const [lang, def] of Object.entries(pack.languages)) {
     const key = lang.toLowerCase();
+    // The deprecated foreignBuiltins is merged away and recorded, never kept:
+    // nothing reads it any more, and the pack author is told so.
+    if (def.foreignBuiltins !== undefined) {
+      out.deprecations.push(`${pack.name}: languages.${lang}.foreignBuiltins — ${FOREIGN_BUILTINS_RETIRED}`);
+    }
     const existing = out.languages[key];
-    out.languages[key] = existing
-      ? {
-        unsupportedFlow: { ...existing.unsupportedFlow, ...def.unsupportedFlow },
-        foreignBuiltins: [...new Set([...existing.foreignBuiltins, ...def.foreignBuiltins])],
-      }
-      : def;
+    out.languages[key] = { unsupportedFlow: { ...existing?.unsupportedFlow, ...def.unsupportedFlow } };
   }
   // Skills and patterns are namespaced by pack id (skills at install time, pattern
   // ids by convention), so they accumulate across packs with their provenance.

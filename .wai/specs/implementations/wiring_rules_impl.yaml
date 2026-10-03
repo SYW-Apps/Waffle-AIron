@@ -155,12 +155,14 @@ methods:
         endStep: 6
       - stepNumber: 4
         description: >-
-          Collect the offenders, reading each type through the type-reference grammar m.typeRefs()
-          uses, a ref being bare when it is in the private BARE_SEAM_TYPES set (json, any, unknown,
-          object; ignoring case): with structured params, which m.typeRefs() reads when they are
-          authored, each param whose type names a bare ref and m.returns when it names one; without
-          them, the prose signature when m.typeRefs() (read from the prose signature and returns)
-          names a bare ref
+          Collect the offenders. With structured params, each param whose type, read under the
+          grammar (type_expression.parse), holds `any` anywhere — object, unknown, json and Json
+          being canonicalised to it — and m.returns when it does; a position that does not read
+          cleanly (a form the grammar leaves out, a legacy name read as any) is read leniently by
+          its tokens instead, any, object, unknown, json or Json counting ignoring case, so only an
+          untyped spelling actually written counts. Without structured params, the prose signature
+          when m.typeRefs() (its lenient tokens, read from the prose signature and returns) names
+          one of those spellings
         type: local
       - stepNumber: 5
         description: Only an untyped param or return crossing the boundary is reported
@@ -923,4 +925,4 @@ methods:
     exportedVia: portalMountsRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-03T20:29:58.004Z'
+updatedAt: '2026-10-03T23:40:38.917Z'

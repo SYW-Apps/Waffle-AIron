@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { typeDialectFor, type TypeDialect } from './type-dialects.js';
 
 // ---------------------------------------------------------------------------
 // The source-code model the validator's code↔spec rules read: pure analysis
@@ -352,6 +353,27 @@ export interface SourceFileFacts {
    */
   functionRoutes?: Record<string, RouteFact[]>;
   /**
+   * The named function-likes in the file that complete LATER — declared
+   * `async`, or annotated to return a Promise — listed once per such BODY, in
+   * the order the bodies are met, exactly as `functionParams` keeps one
+   * signature per body. A name with several bodies (a class member and the
+   * module-level facade forwarding to it) is therefore judged on what they ALL
+   * say: as many entries as signatures is every body, none is no body. What
+   * ASYNC_MISMATCH compares a contract method's `async` returns with. EXACT
+   * grade only: below it a body cannot be told from a call.
+   */
+  asyncFunctions?: string[];
+  /**
+   * The values of each ENUM-LIKE declaration in the file, by declaration name,
+   * in declared order: a string-literal union alias (`type E = 'a' | 'b'`),
+   * the string array a `z.enum([...])` constant holds — an alias
+   * `z.infer<typeof X>` followed one hop, as a derived shape is — or a string
+   * enum's member values. What UNREALIZED_ENUM_VALUE and UNDECLARED_ENUM_VALUE
+   * read. EXACT grade only; a union mixing in anything but string literals is
+   * not enum-like and is left out.
+   */
+  enumValues?: Record<string, string[]>;
+  /**
    * Module-scope mutable bindings (`let`/`var` at the top level of the file).
    * EXACT grade only. The static approximation of held state a logic
    * component may be hiding — fuel for the HIDDEN_STATE lint. (Mutation of
@@ -484,6 +506,17 @@ export function callSitesOf(facts: SourceFileFacts, fn: string): CallSiteFact[] 
  */
 export function hasFunctionBody(facts: SourceFileFacts, symbol: string): boolean {
   return callSitesOf(facts, symbol) !== undefined;
+}
+
+/**
+ * source_file_facts.dialect — the type dialect shipped for the language this
+ * file was analyzed as (type_dialect.forLanguage of its effective language),
+ * or null when the file has no language or no dialect reads it yet. What a
+ * conformance rule reads this file's type annotations through; a null answer
+ * is silence, never a finding.
+ */
+export function dialectOf(facts: SourceFileFacts): TypeDialect | null {
+  return facts.language ? typeDialectFor(facts.language) : null;
 }
 
 /**

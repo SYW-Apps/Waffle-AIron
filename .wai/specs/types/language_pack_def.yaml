@@ -7,20 +7,20 @@ description: >-
   to the language.
 fields:
   - name: unsupportedFlow
-    type: Json
+    type: any
     description: >-
       Map of narrative flow construct (branch|switch|forEach|...) to remodeling guidance shown to
       the author.
     optional: false
   - name: foreignBuiltins
-    type: string[]
+    type: list<string>
     description: >-
       DEPRECATED, accepted and ignored for one release: the foreign-builtin check it fed
       (LANGUAGE_FOREIGN_BUILTIN) is retired, because contracts are written in the neutral type
       grammar and a language is chosen at L4. A pack still declaring it is told so by the extension
       loader (a deprecation notice); the field is removed in the release after.
-    optional: false
+    optional: true
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:56:30.920Z'
-updatedAt: '2026-10-03T22:04:34.749Z'
+updatedAt: '2026-10-03T23:40:29.906Z'

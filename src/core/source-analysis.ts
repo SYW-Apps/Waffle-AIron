@@ -406,6 +406,19 @@ interface ExactFacts {
    * empty entry is never written.
    */
   functionRoutes: Map<string, Map<string, RouteFact>>;
+  /**
+   * One entry per BODY that completes later — declared `async`, or annotated
+   * to return a Promise — under its function's name, in the order the bodies
+   * are met: the same per-body count `functionParams` keeps, so a reader can
+   * tell every body of a name from some of them.
+   */
+  asyncFunctions: string[];
+  /**
+   * The values of each enum-like declaration, by declaration name, in
+   * declared order: a string-literal union alias, a `z.enum([...])` constant
+   * (and an alias inferring from it, one hop), a string enum.
+   */
+  enumValues: Map<string, string[]>;
   /** Module-scope mutable (`let`/`var`) binding names. */
   mutableBindings: Set<string>;
   /**
@@ -436,6 +449,8 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const typeShapes = new Map<string, TypeShapeFact>();
   const functionParams = new Map<string, ParameterFact[][]>();
   const functionRoutes = new Map<string, Map<string, RouteFact>>();
+  const asyncFunctions: string[] = [];
+  const enumValues = new Map<string, string[]>();
   const mutableBindings = new Set<string>();
   /**
    * The two halves of the DERIVED hop, collected as the walk meets them and
@@ -785,6 +800,61 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     return routes;
   };
 
+  // Whether a function-like completes LATER: declared `async`, or annotated
+  // to return a Promise. What it returns unannotated is inferred, not
+  // declared, and counts as completing now.
+  const completesLater = (fn: import('typescript').Node): boolean => {
+    const mods = (fn as { modifiers?: readonly import('typescript').ModifierLike[] }).modifiers;
+    if (mods?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)) return true;
+    const returned = (fn as import('typescript').SignatureDeclarationBase).type;
+    return !!returned && ts.isTypeReferenceNode(returned) && ts.isIdentifier(returned.typeName)
+      && returned.typeName.text === 'Promise';
+  };
+
+  // The values of a union of string literals, in written order; undefined
+  // when any member is something else.
+  const stringLiteralUnion = (type: import('typescript').TypeNode): string[] | undefined => {
+    const members = ts.isUnionTypeNode(type) ? [...type.types] : [type];
+    const values: string[] = [];
+    for (const member of members) {
+      if (!ts.isLiteralTypeNode(member) || !ts.isStringLiteral(member.literal)) return undefined;
+      values.push(member.literal.text);
+    }
+    return values;
+  };
+
+  // The strings a `z.enum([...])` schema holds, read off its own call chain
+  // (`z.enum([...]).default('a')` included): the array literal it is handed,
+  // or a const array this file declares, `as const` or not. Undefined when
+  // the chain holds no enum call or the array is not all string literals.
+  const zodEnumValues = (expression: import('typescript').Expression): string[] | undefined => {
+    const strings = (array: import('typescript').Expression | undefined, hops: number): string[] | undefined => {
+      let node = array;
+      while (node && (ts.isAsExpression(node) || ts.isParenthesizedExpression(node) || ts.isSatisfiesExpression(node))) node = node.expression;
+      if (node && ts.isIdentifier(node) && hops > 0) return strings(schemaConstants.get(node.text), hops - 1);
+      if (!node || !ts.isArrayLiteralExpression(node) || node.elements.length === 0) return undefined;
+      const values: string[] = [];
+      for (const element of node.elements) {
+        if (!ts.isStringLiteral(element) && !ts.isNoSubstitutionTemplateLiteral(element)) return undefined;
+        values.push(element.text);
+      }
+      return values;
+    };
+    let node: import('typescript').Node | undefined = expression;
+    const walked = new Set<import('typescript').Node>();
+    while (node && !walked.has(node)) {
+      walked.add(node);
+      if (ts.isCallExpression(node)) {
+        const callee: import('typescript').Expression = node.expression;
+        if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'enum') return strings(node.arguments[0], 1);
+        node = callee;
+      } else if (ts.isPropertyAccessExpression(node)) {
+        node = node.expression;
+      } else break;
+    }
+    return undefined;
+  };
+
   const visit = (node: import('typescript').Node): void => {
     const fnName = namedFunctionName(node);
     if (fnName && (node as { body?: import('typescript').Node }).body) {
@@ -802,6 +872,10 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       const signatures = functionParams.get(fnName) ?? [];
       signatures.push(declaredParameters(node));
       functionParams.set(fnName, signatures);
+      // Whether THIS body completes later: declared `async`, or annotated to
+      // return a Promise. One entry per body, beside the one signature per
+      // body above, so a name's bodies are judged on what they all say.
+      if (completesLater(node)) asyncFunctions.push(fnName);
       // The routes the body's guards serve. Only a name with at least one
       // gets an entry: "no entry" is how a reader tells a router it could not
       // read from one it read, so an empty map is never written.
@@ -845,7 +919,21 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       else {
         const constant = inferredSchemaConstant(node.type);
         if (constant) derivedAliases.push({ name: node.name.text, constant });
+        // An alias that IS a closed set of strings: the enum-like declaration
+        // TypeScript writes most often. A union mixing anything else in is
+        // not one, and records nothing.
+        const literals = stringLiteralUnion(node.type);
+        if (literals) enumValues.set(node.name.text, literals);
       }
+    }
+    // A string enum: every member initialised with a string literal. A
+    // numeric or computed member makes it something else, and nothing is
+    // recorded rather than a part of it.
+    if (ts.isEnumDeclaration(node)) {
+      const values = node.members.map((member) =>
+        member.initializer && (ts.isStringLiteral(member.initializer) || ts.isNoSubstitutionTemplateLiteral(member.initializer))
+          ? member.initializer.text : undefined);
+      if (values.length > 0 && values.every((v): v is string => v !== undefined)) enumValues.set(node.name.text, values);
     }
     // The value half of that hop, kept as the walk meets it. First binding
     // wins: a name rebound later is a different value, and the shape a spec
@@ -1008,13 +1096,26 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     typeShapes.set(alias.name, { origin: 'derived', fields, methods: [] });
   }
 
+  // The `z.enum([...])` constants the file declares, and the aliases that
+  // infer from one — the same ONE hop a derived shape takes. A constant whose
+  // array is not all string literals (or not written here) records nothing.
+  for (const [name, initializer] of schemaConstants) {
+    const values = zodEnumValues(initializer);
+    if (values) enumValues.set(name, values);
+  }
+  for (const alias of derivedAliases) {
+    if (enumValues.has(alias.name)) continue;
+    const values = enumValues.get(alias.constant);
+    if (values && schemaConstants.has(alias.constant)) enumValues.set(alias.name, values);
+  }
+
   // A pure re-export barrel, stated as what it IS: a file whose every
   // top-level statement re-exports another module. Nothing is declared here,
   // so there is nothing for a spec to claim.
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -1315,6 +1416,8 @@ export function buildCodeModel(
             typeShapes: Object.fromEntries(facts.typeShapes),
             functionParams: Object.fromEntries(facts.functionParams),
             functionRoutes: Object.fromEntries([...facts.functionRoutes].map(([k, v]) => [k, [...v.values()]])),
+            asyncFunctions: [...facts.asyncFunctions],
+            enumValues: Object.fromEntries(facts.enumValues),
             topLevelMutableBindings: [...facts.mutableBindings],
             reexportOnly: facts.reexportOnly,
           };

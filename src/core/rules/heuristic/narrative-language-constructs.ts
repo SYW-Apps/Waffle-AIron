@@ -66,8 +66,8 @@ function constructLabel(construct: string): string {
  * Language-aware narrative hygiene: when a system/subsystem declares a
  * targetLanguage, narrative flow steps using constructs the language lacks
  * (try/throw in Rust or Go, do-while in Python) are flagged, so the narrative
- * describes flows an implementer can write idiomatically. What a CONTRACT may
- * name in that language is signature-language-builtins' question.
+ * describes flows an implementer can write idiomatically. A CONTRACT names no
+ * language at all: its types are the neutral type grammar's (type-expressions).
  */
 export const narrativeLanguageConstructsRule: SddRule = {
   name: 'narrative-language-constructs',

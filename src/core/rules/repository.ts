@@ -11,6 +11,8 @@ import { signatureTypeReferencesRule } from './integrity/signature-type-referenc
 import { signatureSourcesRule } from './integrity/signature-sources.js';
 import { signatureTypesRule } from './integrity/signature-types.js';
 import { signatureTextRule } from './integrity/signature-text.js';
+import { typeExpressionsRule } from './integrity/type-expressions.js';
+import { enumTypesRule } from './integrity/enum-types.js';
 import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
 import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
@@ -63,6 +65,7 @@ import { assertionEndpointShapesRule } from './extension/assertion-endpoint-shap
 import { packResolutionRule } from './extension/pack-resolution.js';
 import { reproducibilityRule } from './extension/pack-reproducibility.js';
 import { packRequirementsRule } from './extension/pack-requirements.js';
+import { packDeprecationsRule } from './extension/pack-deprecations.js';
 import { cyclesRule } from './wiring/dependency-cycles.js';
 import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
 import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
@@ -91,13 +94,14 @@ import { integrationSimWiringRule } from './conformance/integration-sim-wiring.j
 import { integrationSimCoverageRule } from './conformance/integration-sim-coverage.js';
 import { typeRealizationRule } from './conformance/type-realization.js';
 import { typeShapeRule } from './conformance/type-shape.js';
+import { enumValuesRule } from './conformance/enum-values.js';
 import { paramConformanceRule } from './conformance/param-conformance.js';
+import { asyncConformanceRule } from './conformance/async-conformance.js';
 import { routeCoverageRule } from './conformance/route-coverage.js';
 import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
 import { exportConformanceRule } from './conformance/export-conformance.js';
 import { carriedDebtRule } from './conformance/carried-debt.js';
 import { couplingRule } from './heuristic/coupling-health.js';
-import { signatureLanguageBuiltinsRule } from './heuristic/signature-language-builtins.js';
 import { narrativeLanguageConstructsRule } from './heuristic/narrative-language-constructs.js';
 import { technologyBindingRule } from './heuristic/technology-binding.js';
 import { technologyRule } from './heuristic/technology-boundaries.js';
@@ -142,6 +146,10 @@ export const SDD_RULES: SddRule[] = [
   signatureSourcesRule,
   signatureTypesRule,
   signatureTextRule,
+  // The type grammar beside the signatures: how each stored type position is
+  // spelled, then what an enum may hold.
+  typeExpressionsRule,
+  enumTypesRule,
   // Contracts and the targets narratives name, in four questions with one
   // owner each: does the implementation mirror its contract, does a target
   // inside this tree resolve, does a target that leaves it pin to exactly one
@@ -306,14 +314,17 @@ export const SDD_RULES: SddRule[] = [
   // others named.
   typeRealizationRule,
   typeShapeRule,
+  // An enum's values beside the data shape, and whether the call completes
+  // later beside the signature: the same readings, of their own facts.
+  enumValuesRule,
   paramConformanceRule,
+  asyncConformanceRule,
   routeCoverageRule,
   unclaimedSourceRule,
   exportConformanceRule,
   couplingRule,
-  // Target-language fit in two questions: what a CONTRACT may name, and what
-  // a NARRATIVE may describe.
-  signatureLanguageBuiltinsRule,
+  // Target-language fit: what a NARRATIVE may describe. What a contract may
+  // name is the neutral type grammar's (type-expressions), not a language's.
   narrativeLanguageConstructsRule,
   // The declaration before the consequences: which stereotype may bind a
   // technology at all, then where its name may appear.
@@ -337,6 +348,9 @@ export const SDD_RULES: SddRule[] = [
   // stage): configuration too, and the family run cannot judge a member against
   // a requirement that does not parse.
   packRequirementsRule,
+  // The fields a loaded pack still declares that wairon has deprecated: about
+  // the packs' configuration too, and only ever a notice.
+  packDeprecationsRule,
   // MUST run last, in this order: each audits what the earlier rules did
   // with a declared exception. The debt register first (which carried
   // findings the conformance family actually matched), then the allows

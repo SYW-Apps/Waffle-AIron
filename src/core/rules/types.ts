@@ -600,6 +600,12 @@ export interface RuleContext {
      * parent's requirements reach a member only in the family run.
      */
     packRequirements: PackRequirement[];
+    /**
+     * Each deprecated field a loaded pack still declares, as the extension
+     * loader recorded it (LoadedExtensions.deprecations) — what the
+     * pack-deprecations rule reports as a notice.
+     */
+    deprecations: string[];
   };
 
   /**

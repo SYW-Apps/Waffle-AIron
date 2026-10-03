@@ -1,4 +1,4 @@
-import { pathKey, type MethodParam, type ParameterFact } from '../../../models/index.js';
+import { dialectOf, parseTypePosition, pathKey, type MethodParam, type ParameterFact, type TypeDialect } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -40,7 +40,12 @@ import { RuleContext, SddRule } from '../types.js';
 //     that differs is worth saying only where the type agrees; where the code
 //     annotates nothing, nothing is said about the name, because without it a
 //     rename cannot be told from a different argument altogether and a guess
-//     about somebody's signature is worse than silence.
+//     about somebody's signature is worse than silence. Agreement is read
+//     through the DIALECT of the language the file was analyzed as: the
+//     code's annotation read into the neutral grammar, compared with the
+//     contract's canonical type — so `string[]` agrees with `list<string>`,
+//     TypeScript's `number` with int and float alike. A file with no dialect,
+//     or an annotation the dialect cannot read, agrees with nothing.
 //
 //  4. A NAME WITH SEVERAL BODIES IS JUDGED ON THEIR AGREEMENT. A file holds a
 //     class member and the module-level facade that forwards to it under one
@@ -192,7 +197,7 @@ function agreed(judgements: Judgement[], reading: keyof Judgement): ParamFinding
 export const paramConformanceRule: SddRule = {
   name: 'param-conformance',
   judges: 'code',
-  description: 'Code-to-contract for the SIGNATURE, the last of the three readings a spec-driven gate never made: a contract declares `params`, and nothing ever compared them to the parameters of the function that realizes the method. A contract could promise an argument the code does not take, take one the contract never mentions — including a secret — or name the same argument two different things, and the brief handed to an implementer would carry the contract\'s version. Parameters are matched by POSITION against the tail of the realization\'s list, and the declared type is what tells a rename from a dropped argument: `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one parameter under two names, which anything matching on names alone reads as a parameter the code lost. What a realization takes BEFORE the contract\'s own parameters is wiring, and it is declared on the implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be told from a renamed first argument. A method the named file only CALLS is left to `methodRealization`, which already reports that the body is not here.',
+  description: 'Code-to-contract for the SIGNATURE, the last of the three readings a spec-driven gate never made: a contract declares `params`, and nothing ever compared them to the parameters of the function that realizes the method. A contract could promise an argument the code does not take, take one the contract never mentions — including a secret — or name the same argument two different things, and the brief handed to an implementer would carry the contract\'s version. Parameters are matched by POSITION against the tail of the realization\'s list, and the declared type is what tells a rename from a dropped argument: `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one parameter under two names, which anything matching on names alone reads as a parameter the code lost. Types agree when the code\'s annotation, read through the dialect of the language the file was analyzed as (type_dialect.agrees), is the contract\'s canonical type — so `string[]` in the code agrees with `list<string>` in the contract, TypeScript\'s `number` with int and float alike, and an annotation the dialect cannot read agrees with nothing. What a realization takes BEFORE the contract\'s own parameters is wiring, and it is declared on the implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be told from a renamed first argument. A method the named file only CALLS is left to `methodRealization`, which already reports that the body is not here.',
   codes: [
     {
       code: 'UNREALIZED_PARAM',
@@ -236,16 +241,21 @@ export const paramConformanceRule: SddRule = {
       codeNameOf.set(type.id, named);
       if (type.subsystem) codeNameOf.set(`${type.subsystem}.${type.id}`, named);
     }
-    const normalize = (text: string): string => text.replace(/\s+/g, ' ').trim();
     /**
-     * Whether the two sides are describing the same type. An annotation the
-     * code does not write is never agreement: it is the absence step 7 stays
-     * silent on.
+     * Whether the two sides are describing the same type, read through the
+     * file's dialect (type_dialect.agrees): the code's annotation in the
+     * neutral grammar against the contract's canonical expression, a named
+     * type agreeing through its code-level name. An annotation the code does
+     * not write, a file with no dialect, a contract type with no reading (a
+     * `number` still has one: float until an author says int), or an
+     * annotation the dialect cannot read is never agreement:
+     * it is the absence step 7 stays silent on.
      */
-    const typeAgrees = (declared: MethodParam, realized: ParameterFact): boolean => {
-      if (!realized.type) return false;
-      const stated = normalize(declared.type);
-      return stated === realized.type || codeNameOf.get(stated) === realized.type;
+    const typeAgreesIn = (dialect: TypeDialect | null) => (declared: MethodParam, realized: ParameterFact): boolean => {
+      if (!realized.type || !dialect) return false;
+      const stated = parseTypePosition(declared.type, 'param', !!declared.optional);
+      if (!stated.expression) return false;
+      return dialect.agrees(realized.type, stated.expression, codeNameOf);
     };
 
     for (const { implementation, method, sourceFile, draftContext } of ctx.implementationMethods()) {
@@ -279,6 +289,7 @@ export const paramConformanceRule: SddRule = {
       // only their agreement is reported; the messages then speak of every
       // function of that name, because that is what was read.
       const injected = new Set(implementation.injectedParams ?? []);
+      const typeAgrees = typeAgreesIn(dialectOf(facts));
       const judgements = candidates.map(realized => judge(declared, realized, injected, typeAgrees));
       const subject = candidates.length > 1
         ? `every function called "${symbol}" in "${file}"`

@@ -1,25 +1,48 @@
 import { SddRule } from '../types.js';
-import { extractTypeIdentifiers, methodTypeRefs } from '../../../models/index.js';
+import { extractTypeIdentifiers, methodTypeRefs, parseTypePosition, type TypeExpression, type TypePosition } from '../../../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Untyped seams — bare Json/any/unknown/object crossing a subsystem's public
-// surface. The seam is exactly where role-envelope mismatches hide; inside a
-// component a loose bag is a style choice, across a boundary it is an
-// unchecked contract.
+// Untyped seams — `any` crossing a subsystem's public surface. The seam is
+// exactly where role-envelope mismatches hide; inside a component a loose bag
+// is a style choice, across a boundary it is an unchecked contract.
+//
+// `any` is the one untyped type of the grammar: object, unknown, json and Json
+// are canonicalised to it, so a structured position is judged on its parsed
+// expression. A position that does not read cleanly, and a prose signature,
+// are read leniently by their tokens, where any of those spellings still
+// counts.
 // ---------------------------------------------------------------------------
 
-const BARE_SEAM_TYPES = new Set(['json', 'any', 'unknown', 'object']);
+/** The spellings a lenient reading counts as untyped, ignoring case: `any` and the aliases canonicalised to it. */
+const UNTYPED_SPELLINGS = new Set(['any', 'json', 'unknown', 'object']);
 
-/** Whether any of these type references is a bare seam type, ignoring case. */
-function namesBareType(refs: string[]): boolean {
-  return refs.some(ref => BARE_SEAM_TYPES.has(ref.toLowerCase()));
+/** Whether an expression holds `any` anywhere. */
+function holdsAny(expr: TypeExpression): boolean {
+  return (expr.form === 'primitive' && expr.name === 'any') || expr.args.some(holdsAny);
+}
+
+/** Whether lenient tokens name an untyped spelling. */
+function tokensUntyped(text: string): boolean {
+  return extractTypeIdentifiers(text).some(ref => UNTYPED_SPELLINGS.has(ref.toLowerCase()));
+}
+
+/**
+ * Whether one structured position is untyped: its parsed expression holds
+ * `any`; a position that does not read cleanly (a form the grammar leaves
+ * out, a legacy name read as any) is read leniently by its tokens instead, so
+ * only an untyped spelling actually written counts.
+ */
+function positionUntyped(text: string, position: TypePosition): boolean {
+  const parse = parseTypePosition(text, position);
+  if (parse.expression && !parse.problem) return holdsAny(parse.expression);
+  return tokensUntyped(text);
 }
 
 export const untypedSeamRule: SddRule = {
   name: 'untyped-seams',
   judges: 'design',
   description:
-    'Methods on a subsystem\'s published components (its public surface) should not take or return bare Json/any/unknown/object, judged through each method\'s type references so a prose signature is judged like structured params: cross-subsystem contracts are the swap seam and must be typed. Generic-dispatch portals carry per-capability types via their dispatch table instead.',
+    'Methods on a subsystem\'s published components (its public surface) should not take or return `any` — the one untyped type of the grammar, which object, unknown, json and Json are canonicalised to — judged through each method\'s named types and parsed expressions so a prose signature is judged like structured params (its tokens still read leniently): cross-subsystem contracts are the swap seam and must be typed. Generic-dispatch portals carry per-capability types via their dispatch table instead.',
   codes: [
     { code: 'UNTYPED_SEAM', defaultSeverity: 'warning', summary: 'Bare Json/any/unknown/object parameter or return crossing a subsystem public surface' },
   ],
@@ -39,21 +62,21 @@ export const untypedSeamRule: SddRule = {
         for (const intf of ctx.interfacesByComponent.get(compId) ?? []) {
           const isDraftCtx = ctx.isComponentDraft(compId) || intf.status === 'draft' || intf.status === 'design';
           for (const m of intf.methods) {
-            // Every type is read through the grammar m.typeRefs() uses, so a
-            // prose signature gets the verdict the same structured params would.
-            // Structured params, authoritative when authored, name their
-            // offenders one by one; a prose signature is the offender whole.
+            // Structured params, authoritative when authored, are read under
+            // the grammar and name their offenders one by one; a prose
+            // signature is read leniently by its type tokens and is the offender
+            // whole — the verdict the same structured params would get.
             const offenders: string[] = [];
             if (m.params && m.params.length > 0) {
               for (const p of m.params) {
-                if (namesBareType(extractTypeIdentifiers(p.type))) {
+                if (positionUntyped(p.type, 'param')) {
                   offenders.push(`param "${p.name}: ${p.type}"`);
                 }
               }
-              if (namesBareType(extractTypeIdentifiers(m.returns ?? ''))) {
+              if (m.returns && positionUntyped(m.returns, 'returns')) {
                 offenders.push(`return "${m.returns}"`);
               }
-            } else if (namesBareType(methodTypeRefs(m))) {
+            } else if (methodTypeRefs(m).some(ref => UNTYPED_SPELLINGS.has(ref.toLowerCase()))) {
               offenders.push(`signature "${m.signature}"`);
             }
             if (offenders.length) {
