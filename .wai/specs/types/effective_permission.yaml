@@ -25,7 +25,14 @@ fields:
     type: string
     description: The ancestor-chain scope whose setting won.
     optional: true
+  - name: scopeNote
+    type: string
+    description: >-
+      Set by the permission explanation only: "subsystem not found" when the explained scope is a
+      subsystem its project's tree does not declare (or whose project has no record) — the rules
+      stored there are kept and would apply again if the subsystem were re-created.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:33.560Z'
-updatedAt: '2026-10-03T13:35:48.667Z'
+updatedAt: '2026-10-03T13:47:57.509Z'

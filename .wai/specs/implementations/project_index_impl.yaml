@@ -234,6 +234,17 @@ methods:
       content (no `.wai/specs/.index.yaml`, no `.wai/lock.json`, no id in its `.wai/project.yaml`):
       a member retired as a part by a demote (stage 8). Any other record — active, top-level, or one
       whose folder still holds a project — is false. Reads the folder; writes nothing.
+  - name: declaredSubsystems
+    narrative: []
+    intent: >-
+      Loads the persisted set and derives the record's root (null when the id holds no record or its
+      root is missing on disk), then reads the subsystem specs of the tree at that root, bound for
+      the read, through the host core adapter — a part's subsystems are read as the root's own — and
+      answers each subsystem's local id (a key's namespace stripped). Writes nothing.
+    calls:
+      - project_store.read
+      - host_core_adapter.loadSubsystemSpecs
+    symbol: declaredSubsystemIds
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-10-02T23:20:04.223Z'
+updatedAt: '2026-10-03T13:49:59.980Z'

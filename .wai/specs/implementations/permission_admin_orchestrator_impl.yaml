@@ -9,6 +9,8 @@ description: >-
   instance-admin assignment — the bypass is env-anchored to the built-in admin).
 contract: ipermission_admin_orchestrator
 sourcePath: src/server/permissionadmin.ts
+injectedParams:
+  - cfg
 methods:
   - name: listRoles
     narrative:
@@ -225,6 +227,26 @@ methods:
         targetComponent: permission_repository
         targetMethod: listAssignments
       - stepNumber: 6
+        label: label
+        description: For each subsystem-scope assignment listed (one project read per project)
+        type: loop
+        loopKind: forEach
+        over: the subsystem-scope assignments listed
+        endStep: 8
+      - stepNumber: 7
+        description: >-
+          Read the subsystems the tree of the project the scope id names declares now (null when it
+          has no root)
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredSubsystems
+      - stepNumber: 8
+        description: >-
+          Label the assignment "subsystem not found" when the project has no root or its tree
+          declares no such subsystem — the rule is kept, never dropped, so it applies again if the
+          subsystem is re-created
+        type: local
+      - stepNumber: 9
         description: Return the assignments
         type: return
         outcome: the assignments
@@ -610,6 +632,25 @@ methods:
         targetComponent: authorization
         targetMethod: explain
       - stepNumber: 10
+        description: >-
+          Is the scope a subsystem? Only a subsystem scope can name something its project does not
+          declare
+        type: branch
+        condition: the scope kind is subsystem
+        onFalseStep: 13
+      - stepNumber: 11
+        description: >-
+          Read the subsystems the tree of the project the scope id names declares now (null when it
+          has no root)
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredSubsystems
+      - stepNumber: 12
+        description: >-
+          Label the explanation "subsystem not found" when the project has no root or its tree
+          declares no such subsystem — the rules stored there are kept and shown, never silent
+        type: local
+      - stepNumber: 13
         description: Return the value, its source and the rung that decided it
         type: return
         outcome: EffectivePermission
@@ -617,4 +658,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-15T22:01:26.906Z'
-updatedAt: '2026-10-03T13:37:33.766Z'
+updatedAt: '2026-10-03T14:12:12.332Z'

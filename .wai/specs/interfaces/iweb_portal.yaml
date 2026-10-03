@@ -514,7 +514,8 @@ methods:
       web_admin_orchestrator.listAssignments. A subsystem scope is one more scope kind (`subsystem`,
       scope id `<projectId>/<subsystemId>`): the /admin/permissions grid offers each project's
       subsystems in its scope picker and shows a subsystem rule as `Subsystem · <project> ›
-      <subsystem>`, set and cleared through the same set and remove endpoints.
+      <subsystem>`, set and cleared through the same set and remove endpoints; a rule whose
+      subsystem its project no longer declares is kept and shown labelled "subsystem not found".
     signature: >-
       adminListAssignments(sessionId: string, scopeKind: string, scopeId: string, subjectKind:
       string, subjectId: string): PermissionAssignment[]
@@ -1573,4 +1574,4 @@ methods:
       path: /web/admin/permissions/explain
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-03T13:37:51.215Z'
+updatedAt: '2026-10-03T13:50:27.226Z'

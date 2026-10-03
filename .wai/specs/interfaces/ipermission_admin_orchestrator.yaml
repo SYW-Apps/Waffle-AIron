@@ -86,7 +86,9 @@ methods:
   - name: listAssignments
     description: >-
       Authenticate, require project:admin over the queried scope, and list assignments filtered by
-      scope/subject through the permission repository.
+      scope/subject through the permission repository. A subsystem-scope assignment whose project's
+      tree declares no such subsystem is kept and listed with scopeNote "subsystem not found", so a
+      stale rule never sits there silently.
     signature: >-
       listAssignments(credential: string, scopeKind: string, scopeId: string, subjectKind: string,
       subjectId: string): PermissionAssignment[]
@@ -157,7 +159,8 @@ methods:
       Authenticate, require project:admin over the target scope, read the user, and answer that
       user's effective permission for a capability at the scope (unit, project or subsystem) with
       the source and the rung that decided it — why they can or cannot act, through the same walk
-      every gate takes. A read; not audited.
+      every gate takes. A subsystem scope its project's tree does not declare is labelled scopeNote
+      "subsystem not found". A read; not audited.
     signature: >-
       explain(credential: string, userId: string, capability: string, scopeKind: string, scopeId:
       string): EffectivePermission
@@ -180,4 +183,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-15T22:00:18.881Z'
-updatedAt: '2026-10-03T13:37:12.900Z'
+updatedAt: '2026-10-03T13:48:17.901Z'

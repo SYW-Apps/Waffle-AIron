@@ -3,11 +3,14 @@ name: Permission Admin Orchestrator
 description: >-
   Control-plane management workflows for the permission model: role definitions
   (create/update/delete/list), the assignment grid (set/remove/list one subject×scope×capability
-  value), and user role bindings (bind/unbind a role to a user at a scope). Every method
-  authenticates the caller and authorizes through the authorization component — role management
-  requires instance-level project:admin; assignment and binding management require project:admin
-  over the target scope — enforces the hard reservation (the '*' instance-admin marker is never
-  settable here), and audits at security level. Grant management (the legacy replaceUserGrants) is
+  value), user role bindings (bind/unbind a role to a user at a scope), and the explanation of one
+  user's effective permission. Every method authenticates the caller and authorizes through the
+  authorization component — role management requires instance-level project:admin; assignment and
+  binding management and the explanation require project:admin over the target scope — enforces the
+  hard reservation (the '*' instance-admin marker is never settable here), and audits writes at
+  security level. A subsystem-scope rule naming a subsystem its project's tree does not declare is
+  kept and labelled "subsystem not found" on a listing and an explanation — the project's subsystems
+  are read through the project repository. Grant management (the legacy replaceUserGrants) is
   superseded by setAssignment/bindRole here.
 subsystem: sdd_host
 componentType: Orchestrator
@@ -19,6 +22,7 @@ dependsOn:
   - permission_repository
   - user_repository
   - audit_repository
+  - project_repository
 status: complete
 createdAt: '2026-07-15T21:59:54.605Z'
-updatedAt: '2026-09-15T20:46:23.631Z'
+updatedAt: '2026-10-03T13:49:40.855Z'

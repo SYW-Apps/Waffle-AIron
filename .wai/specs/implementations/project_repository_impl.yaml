@@ -115,7 +115,15 @@ methods:
         type: call
         targetComponent: project_index
         targetMethod: isRetiredPart
+  - name: declaredSubsystems
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: declaredSubsystems
+    symbol: declaredSubsystemIds
 detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:36.287Z'
-updatedAt: '2026-10-02T23:20:02.284Z'
+updatedAt: '2026-10-03T13:50:01.117Z'

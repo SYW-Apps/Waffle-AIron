@@ -132,10 +132,15 @@ methods:
       served, permissioned and committed through the parent's record): the record is disabled with
       reason "part of <parent>", never deleted, its own-scope settings kept for a later promote;
       disable a record whose member the family no longer declares (never delete it). A part never
-      gets a record. List every principal whose reach changed through those membership changes — a
-      retirement included: a member-own `no` stops applying once its specs are reached through the
-      parent, so whoever it denied gains access, and a token narrowed to the retired record alone
-      loses its reach — and audit each, naming the member and the initiating tool. Writes no grant.
+      gets a record. A promote or an externalize must not widen access: each subsystem rule of the
+      parent (`<parent>/<subsystem>`) whose subsystem moved into a registered or returned member is
+      carried onto the member's own project scope (project:write, the same subject and value; per
+      subject the most restrictive wins) and the subsystem rule is kept. List every principal whose
+      reach changed through those membership changes — a retirement included: a member-own `no`
+      stops applying once its specs are reached through the parent, so whoever it denied gains
+      access, and a token narrowed to the retired record alone loses its reach — and every carried
+      rule, and audit each, naming the member and the initiating tool. Writes no grant beyond the
+      carried subsystem rules.
     signature: 'reconcile(principal: Principal, projectId: string, touched: string[]): MemberReconciliation'
     returns: MemberReconciliation
     params:
@@ -243,6 +248,22 @@ methods:
         description: Resolve (true) or only report (false)
     guarantees:
       - idempotent
+  - name: carrySubsystemRules
+    description: >-
+      Keep a promote or an externalize from widening access: for each given member and its parent,
+      every subsystem rule of the parent (an assignment at `<parent>/<subsystem>`) whose subsystem
+      the member's tree declares and the parent's tree no longer does — those specs moved into the
+      member, and the rules governed them — is set on the member's own project scope (project:write,
+      the same subject and value; per subject the most restrictive value wins, inherit carries
+      nothing, and a subject already holding a setting there keeps it). The subsystem rule itself is
+      kept. Answers one reach row per carried rule: before at the subsystem scope, after at the
+      member's project scope.
+    signature: 'carrySubsystemRules(members: ProjectParentLink[]): ReachComparison[]'
+    returns: ReachComparison[]
+    params:
+      - name: members
+        type: ProjectParentLink[]
+        description: The members registered or returned, each with its parent record
 status: complete
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-02T20:50:54.072Z'
+updatedAt: '2026-10-03T13:50:15.144Z'
