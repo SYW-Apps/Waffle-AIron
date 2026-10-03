@@ -27,7 +27,11 @@ methods:
         description: Resolve the granted project's isolated root and bind it
         type: local
       - stepNumber: 4
-        description: Render the canvas in scope
+        description: >-
+          Render the canvas in scope. It carries no relation health — the canvas says health was not
+          checked: a view token is a bearer capability for one record with no principal behind it,
+          so every member and producer beyond that record is out of its reach and could only be
+          reported unavailable
         type: call
         targetComponent: host_core_adapter
         targetMethod: renderDiagram
@@ -386,7 +390,9 @@ methods:
         description: >-
           Resolve the request's REACH into that family per record, each through its own chain (its
           own scope, its parents', the family root's units): which family projects the principal may
-          read and which it may write
+          read, which it may write at the project rung, and the subsystem rungs it meets in each (a
+          subsystem carrying a setting that applies to the principal, with project:write resolved at
+          it)
         type: call
         targetComponent: authorization
         targetMethod: reach
@@ -400,14 +406,22 @@ methods:
       - stepNumber: 12
         description: >-
           Bind the request-scoped project root together with the request's reach: the family root's
-          root and the readable and writable family roots. The reach never changes any project's own
-          verdict — validation's owner gate reads only the bound project's own files and pins (stage
-          4) — it bounds what a family run may compose, what a reach-gated read (externals status,
-          pinning) may open, and which members a family migration may write: a migration that would
-          have to write a project outside the writable set refuses family-partial, naming it. A
-          member record retired as a part (stage 8: disabled, its folder holding no project content)
-          is no project of its own any more: its folder is written under its parent's record's
-          reach. The caller must gate on reach itself.
+          root, the readable family roots, and the WRITE REACH — the family roots the request may
+          not write at the project rung, and each subsystem rung met in a family record as its root,
+          subsystem, writable or not, and the rung that decided it. The reach never changes any
+          project's own verdict — validation's owner gate reads only the bound project's own files
+          and pins (stage 4) — it bounds what a family run may compose, what a reach-gated read
+          (externals status, pinning) may open, which members a family migration may write (a
+          migration that would have to write a project outside the writable set refuses
+          family-partial, and one that would reshape a project holding a subsystem the request may
+          not change refuses subsystem-denied, each named), and which subsystems a spec write may
+          land in (the spec writers refuse a spec of a subsystem the request may not change, naming
+          every one the write would have touched, before anything is written; a spec of no subsystem
+          — the L0, a system-level type — follows the project rung). A member record retired as a
+          part (stage 8: disabled, its folder holding no project content) is no project of its own
+          any more: its folder is written under its parent's record's reach, and its subsystems are
+          its parent's, under the parent's subsystem rules. With no subsystem settings the write
+          reach is exactly the unwritable roots it always was. The caller must gate on reach itself.
         type: local
       - stepNumber: 13
         label: recover-migrations
@@ -442,15 +456,20 @@ methods:
           (sdd_get_externals_status among them), or when it is one of the explicitly listed read
           tools — the topology reads listAgents, getAgent, listDomains, validateTopology and
           getProjectConfig — requiring project:read; ANY other tool — the explicit write prefixes
-          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_/sdd_rename_/sdd_pin_/sdd_attach_/sdd_detach_/sdd_adopt_),
+          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_/sdd_rename_/sdd_pin_/sdd_attach_/sdd_detach_/sdd_adopt_/sdd_promote_/sdd_demote_),
           AND any unrecognized or newly added name — is treated as a write requiring project:write
           (fail closed: an unknown tool never falls through to read-level gating, and a tool added
           later is a write by its prefix rather than by a hand-kept list — sdd_add_member,
           sdd_move_member, sdd_internalize_member and the stage-6 family-migration tools among them,
-          a dryRun call included, since the tool's class is its name's and never its arguments').
-          Every explicit read and every explicit write prefix declares scope tree, so
-          sdd_pin_externals, sdd_get_externals_status and the family-migration tools act on the
-          bound (possibly narrowed) tree
+          a dryRun call included, since the tool's class is its name's and never its arguments'). A
+          write is SUBSYSTEM-SCOPED when every file it changes is a spec written through the core's
+          spec writers, which judge each spec against the write reach: sdd_add_subsystem,
+          sdd_add_component, sdd_add_type, sdd_define_interface, sdd_write_narrative,
+          sdd_set_endpoints, sdd_set_public_interfaces, sdd_update_spec, sdd_delete_spec,
+          sdd_rename_component, sdd_rename_method and sdd_move_methods, listed one by one; every
+          other write needs the project rung (fail closed). Every explicit read and every explicit
+          write prefix declares scope tree, so sdd_pin_externals, sdd_get_externals_status and the
+          family-migration tools act on the bound (possibly narrowed) tree
         type: local
       - stepNumber: 17
         description: >-
@@ -461,20 +480,24 @@ methods:
         targetMethod: authorize
       - stepNumber: 18
         description: >-
-          If the effective value is not yes, reject with a clear MCP error that the required
-          data-plane permission is missing for the bound project
+          Decide whether the call may proceed: the project rung's yes admits it; a subsystem-scoped
+          write is also admitted when the reach lists a subsystem of the bound record the principal
+          may write — where its specs then land is judged spec by spec by the core's writers against
+          the bound write reach
         type: branch
-        condition: the effective value is not yes
+        condition: >-
+          the effective value is not yes, and the call is not a subsystem-scoped write for which the
+          reach lists a writable subsystem of the bound record
         onTrueStep: 19
         onFalseStep: 20
       - stepNumber: 19
         description: >-
           Reject with a clear MCP error that the required data-plane permission is missing for the
-          bound project
+          bound project, naming the rung that decided it
         type: throw
         error: >-
           Forbidden — the caller lacks the required data-plane permission (project:read or
-          project:write) for this project
+          project:write) for this project, decided at <rung>
       - stepNumber: 20
         description: >-
           Is the call membership-changing — sdd_attach_member, sdd_adopt_member, sdd_detach_member,
@@ -611,4 +634,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-02T23:20:26.393Z'
+updatedAt: '2026-10-03T13:41:28.099Z'

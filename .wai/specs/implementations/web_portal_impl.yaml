@@ -1016,7 +1016,18 @@ methods:
         targetComponent: web_graph_orchestrator
         targetMethod: getProjectExternals
     symbol: getProjectExternals
+  - name: adminExplainPermission
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the arguments the router decoded from the request to
+          web_admin_orchestrator.explainPermission, and hand back its result for the router to
+          encode
+        type: call
+        targetComponent: web_admin_orchestrator
+        targetMethod: explainPermission
+    detail: calls-only
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-10-01T16:35:35.051Z'
+updatedAt: '2026-10-03T13:37:50.474Z'

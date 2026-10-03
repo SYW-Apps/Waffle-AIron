@@ -511,7 +511,10 @@ methods:
   - name: adminListAssignments
     description: >-
       List permission assignments filtered by scope/subject; forwards to
-      web_admin_orchestrator.listAssignments.
+      web_admin_orchestrator.listAssignments. A subsystem scope is one more scope kind (`subsystem`,
+      scope id `<projectId>/<subsystemId>`): the /admin/permissions grid offers each project's
+      subsystems in its scope picker and shows a subsystem rule as `Subsystem · <project> ›
+      <subsystem>`, set and cleared through the same set and remove endpoints.
     signature: >-
       adminListAssignments(sessionId: string, scopeKind: string, scopeId: string, subjectKind:
       string, subjectId: string): PermissionAssignment[]
@@ -1542,6 +1545,32 @@ methods:
       transport: HTTP
       method: GET
       path: /web/projects/externals
+  - name: adminExplainPermission
+    description: >-
+      Explain one user's effective permission for a capability at a unit, project or subsystem scope
+      — the value, its source and the rung that decided it ("why can or can't they"); forwards to
+      web_admin_orchestrator.explainPermission. Shown on the /admin/permissions grid as a check
+      beside the grant form, not a new screen.
+    signature: >-
+      adminExplainPermission(sessionId: string, userId: string, capability: string, scopeKind:
+      string, scopeId: string): EffectivePermission
+    returns: EffectivePermission
+    params:
+      - name: sessionId
+        type: string
+      - name: userId
+        type: string
+      - name: capability
+        type: string
+      - name: scopeKind
+        type: string
+      - name: scopeId
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/admin/permissions/explain
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-03T12:16:50.301Z'
+updatedAt: '2026-10-03T13:37:51.215Z'

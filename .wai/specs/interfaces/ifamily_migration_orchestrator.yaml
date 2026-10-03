@@ -15,7 +15,10 @@ methods:
       request does not ask otherwise, the rehearsal and its file changes, and the owners to re-lock.
       The request's reach is two sets of project roots: those it may READ (the climb stops where it
       may not read above a root) and those it may WRITE — a plan that must write a project outside
-      the writable set refuses (family-partial), naming it. Locally both sets are every root the
+      the writable set refuses (family-partial), naming it, and so does one that must change a
+      project holding a subsystem the request may not change (subsystem-denied, one per subsystem,
+      naming the rung that decided it) — a family migration reshapes its projects whole, so it needs
+      write on every subsystem of every project it changes. Locally both sets are every root the
       request can open; on the hosted data plane they are the family records the credential may read
       and write, each judged through its own permission chain. A request carrying a relocation
       (hosted detach) is rehearsed with the relocation's coordinator (the host data directory) as
@@ -90,4 +93,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:35:39.470Z'
-updatedAt: '2026-10-01T17:03:45.725Z'
+updatedAt: '2026-10-03T13:40:54.761Z'

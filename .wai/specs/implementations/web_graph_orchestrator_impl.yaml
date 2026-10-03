@@ -127,13 +127,28 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
+          Grant the read its reach: the listed projects from step 2 — every project the caller may
+          read, write or administer — exactly as the canvas model and the Relations tab read, so a
+          member or producer outside it is answered unavailable, never read and never ok
+        type: local
+      - stepNumber: 6
+        description: >-
+          Read the family's relation health over the bound root through the host validator adapter:
+          each project's externals status at its own root, per use, stamped with when it was
+          compared
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyRelations
+      - stepNumber: 7
+        description: >-
           Render the interactive architecture canvas ('canvas' format — the full Cytoscape canvas
           with edge routing, type-ERD/database views, search, and the details sidebar) over the
-          bound project's spec tree via the host core adapter
+          bound project's spec tree via the host core adapter, handing it the relations so each
+          consumption edge carries its health — the same health the canvas model carries
         type: call
         targetComponent: host_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 6
+      - stepNumber: 8
         description: Return the self-contained canvas HTML
         type: return
         outcome: project canvas html
@@ -310,4 +325,4 @@ methods:
     symbol: getWebProjectExternals
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-10-03T12:26:12.015Z'
+updatedAt: '2026-10-03T13:38:52.555Z'

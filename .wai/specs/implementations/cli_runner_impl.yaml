@@ -2347,7 +2347,10 @@ methods:
         defaultStep: 10
       - stepNumber: 3
         label: set
-        description: Validate the capability and value, and resolve the scope from the flags
+        description: >-
+          Validate the capability and value, and resolve the scope from the flags: --project with
+          --subsystem is the subsystem scope `<project>/<subsystem>` (--subsystem without --project
+          is refused), else --project, --unit or the instance
         type: local
       - stepNumber: 4
         description: Store the assignment via the host adapter
@@ -2360,7 +2363,9 @@ methods:
         outcome: assigned
       - stepNumber: 6
         label: list
-        description: List the assignments narrowed by scope and user via the host adapter
+        description: >-
+          List the assignments narrowed by scope (a subsystem scope included) and user via the host
+          adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: listAssignments
@@ -3208,4 +3213,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T12:36:10.297Z'
+updatedAt: '2026-10-03T13:37:59.378Z'

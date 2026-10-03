@@ -9,11 +9,13 @@ subsystem: sdd_host
 fields:
   - name: scopeKind
     type: string
-    description: unit | project.
+    description: >-
+      unit | project | subsystem (a subsystem appears only in a project:write view, and only when it
+      carries a setting of its own).
     optional: false
   - name: scopeId
     type: string
-    description: Qualified unit id or project id.
+    description: Qualified unit id, project id, or `<projectId>/<subsystemId>` for a subsystem.
     optional: false
   - name: value
     type: string
@@ -28,4 +30,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:37.511Z'
-updatedAt: '2026-09-19T11:07:20.871Z'
+updatedAt: '2026-10-03T13:35:49.969Z'

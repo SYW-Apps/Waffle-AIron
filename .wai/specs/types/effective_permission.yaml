@@ -3,7 +3,8 @@ id: effective_permission
 name: EffectivePermission
 description: >-
   The resolved effective permission for one (subject, capability, target scope): the decided value
-  plus which source/scope decided it, for explainability in the UI and audit.
+  plus which source and which rung decided it — the explanation of why someone can or cannot act,
+  shown by the permission explanation, quoted by a refused write, and kept in audit.
 subsystem: sdd_host
 fields:
   - name: value
@@ -18,7 +19,7 @@ fields:
     optional: false
   - name: decidedScopeKind
     type: string
-    description: Scope kind whose setting won (instance | unit | project).
+    description: Scope kind whose setting won (instance | unit | project | subsystem).
     optional: true
   - name: decidedScopeId
     type: string
@@ -27,4 +28,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:33.560Z'
-updatedAt: '2026-09-19T11:07:07.394Z'
+updatedAt: '2026-10-03T13:35:48.667Z'

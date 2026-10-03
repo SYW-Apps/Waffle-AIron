@@ -127,12 +127,30 @@ methods:
         type: throw
         error: PartReadOnly
       - stepNumber: 5
+        label: reach
+        description: >-
+          Inside a hosted request, may the request change this spec? Ask the request's write reach
+          (write_reach.permits) with the home's project root and the spec's owning subsystem — a
+          subsystem is its own, a component or type names its subsystem, an interface or
+          implementation follows its component, and a spec of no subsystem (the L0, a system-level
+          type) is judged at the project rung. Outside a hosted request there is no write reach and
+          nothing is judged
+        type: branch
+        condition: a hosted request's write reach does not permit the spec's root and owning subsystem
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Refuse before anything is written, naming the subsystem and the rung that decided it (or
+          the project, for a spec of no subsystem)
+        type: throw
+        error: SubsystemWriteDenied
+      - stepNumber: 7
         label: write
         description: The typed writer persists the serialized document at its home through the file store
         type: call
         targetComponent: spec_file_store
         targetMethod: write
-      - stepNumber: 6
+      - stepNumber: 8
         description: Answer with the writer's placement notices; none for the L0 and a subsystem
         type: return
         outcome: saved
@@ -145,11 +163,23 @@ methods:
           path
         type: local
       - stepNumber: 2
+        description: >-
+          Inside a hosted request, may the request change this spec? Ask the request's write reach
+          (write_reach.permits) with the document's project root and the owning subsystem the stored
+          spec names, exactly as save does
+        type: branch
+        condition: a hosted request's write reach does not permit the spec's root and owning subsystem
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse before anything is removed, naming the subsystem and the rung that decided it
+        type: throw
+        error: SubsystemWriteDenied
+      - stepNumber: 4
         description: The typed delete removes the document through the file store
         type: call
         targetComponent: spec_file_store
         targetMethod: remove
-      - stepNumber: 3
+      - stepNumber: 5
         description: Invalidate the index cache when something was removed, and answer whether it was
         type: return
         outcome: removed
@@ -217,4 +247,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-10-02T20:51:38.599Z'
+updatedAt: '2026-10-03T13:39:48.659Z'

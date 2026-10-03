@@ -150,11 +150,27 @@ methods:
         description: Bind the project's isolated root
         type: local
       - stepNumber: 5
-        description: Render the diagram in scope
+        description: Only the canvas draws relation health; the other formats carry no relation edges
+        type: branch
+        condition: the format is canvas
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Read the family's relation health over the bound root through the host validator adapter,
+          stamped with when it was compared, with the reach the master credential has — the whole
+          instance, so the project's whole family and every hosted producer its externals name are
+          in reach
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyRelations
+      - stepNumber: 7
+        description: >-
+          Render the diagram in scope, handing the canvas the relations so each consumption edge
+          carries its health
         type: call
         targetComponent: host_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 6
+      - stepNumber: 8
         description: Return the diagram artifact
         type: return
         outcome: diagram artifact
@@ -178,11 +194,27 @@ methods:
         description: Bind the project's isolated root
         type: local
       - stepNumber: 5
-        description: Render the diagram in scope
+        description: Only the canvas draws relation health; the other formats carry no relation edges
+        type: branch
+        condition: the format is canvas
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Read the family's relation health over the bound root through the host validator adapter,
+          stamped with when it was compared, with the reach the master credential has — the whole
+          instance, so the project's whole family and every hosted producer its externals name are
+          in reach
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyRelations
+      - stepNumber: 7
+        description: >-
+          Render the diagram in scope, handing the canvas the relations so each consumption edge
+          carries its health
         type: call
         targetComponent: host_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 6
+      - stepNumber: 8
         description: Return the diagram artifact as an attachment
         type: return
         outcome: diagram artifact
@@ -1173,4 +1205,4 @@ methods:
         outcome: gate identity
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-10-02T20:51:19.447Z'
+updatedAt: '2026-10-03T13:39:11.369Z'

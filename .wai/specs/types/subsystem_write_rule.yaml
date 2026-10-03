@@ -1,0 +1,30 @@
+kind: value-object
+id: subsystem_write_rule
+name: SubsystemWriteRule
+description: >-
+  One subsystem of a bound project root whose write permission for the current hosted request was
+  decided at its own rung, as the request scope carries it to the spec writers: the root, the
+  subsystem, whether the request may change its specs, and which rung decided it. Every subsystem
+  not listed is writable exactly when its root is.
+fields:
+  - name: root
+    type: string
+    description: The project root (a hosted record's root) the subsystem belongs to
+    optional: false
+  - name: subsystemId
+    type: string
+    description: The subsystem's local id in that root's tree, a part's subsystems included
+    optional: false
+  - name: writable
+    type: boolean
+    description: Whether the request may change this subsystem's specs
+    optional: false
+  - name: decidedBy
+    type: string
+    description: >-
+      The rung that decided it, in words a refusal can quote: the scope and the kind of setting (a
+      user setting, a role, the everyone-default)
+    optional: false
+methods: []
+createdAt: '2026-10-03T13:35:32.925Z'
+updatedAt: '2026-10-03T13:35:32.927Z'

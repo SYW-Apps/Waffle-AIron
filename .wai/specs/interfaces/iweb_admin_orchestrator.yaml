@@ -231,6 +231,26 @@ methods:
       - name: scopeId
         type: string
         optional: true
+  - name: explainPermission
+    description: >-
+      Forward to permission_admin_orchestrator.explain with the session as the credential
+      (project:admin over the scope upstream): one user's effective permission at a unit, project or
+      subsystem scope, with the rung that decided it.
+    signature: >-
+      explainPermission(sessionId: string, userId: string, capability: string, scopeKind: string,
+      scopeId: string): EffectivePermission
+    returns: EffectivePermission
+    params:
+      - name: sessionId
+        type: string
+      - name: userId
+        type: string
+      - name: capability
+        type: string
+      - name: scopeKind
+        type: string
+      - name: scopeId
+        type: string
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-09-18T16:57:45.238Z'
+updatedAt: '2026-10-03T13:37:42.931Z'

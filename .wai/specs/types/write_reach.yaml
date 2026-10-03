@@ -1,0 +1,44 @@
+kind: value-object
+id: write_reach
+name: WriteReach
+description: >-
+  What a hosted request may change, as its request scope carries it to every writer of the bound
+  tree and its family: the project roots it may not write at the project rung, and the subsystems
+  whose own rung decided otherwise. Absent outside a hosted request, where every writer writes as
+  before. With no subsystem rules it is exactly the family's unwritable roots, so it judges every
+  write as it was judged before subsystem rules existed.
+fields:
+  - name: unwritableRoots
+    type: string[]
+    description: Roots of family records whose project rung does not give the request project:write
+    optional: false
+  - name: subsystems
+    type: SubsystemWriteRule[]
+    description: The subsystems decided at their own rung, writable or not
+    optional: false
+methods:
+  - name: permits
+    signature: 'permits(root: string, subsystemId: string | null): boolean'
+    returns: boolean
+    description: >-
+      Whether a spec owned by this subsystem of this root (null for a spec that belongs to no
+      subsystem: the L0, a system-level type, project configuration) may be changed: a subsystem
+      decided at its own rung answers with its own writable; anything else is writable exactly when
+      its root is not unwritable.
+  - name: denials
+    signature: 'denials(root: string): SubsystemWriteRule[]'
+    returns: SubsystemWriteRule[]
+    description: >-
+      The subsystems of this root the request may not change — what a whole-tree write (a family
+      migration, a lock) must name when it refuses.
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        Carried by the hosted request binding (runWithProjectBinding in src/utils/fs.ts,
+        deliberately unclaimed shared infrastructure, like the family's unwritable roots it extends)
+        rather than passed as a parameter: the host request orchestrator binds it, and the spec
+        registry's save/delete and the family migration's rehearse read it through its permits and
+        denials methods, named in their narratives.
+createdAt: '2026-10-03T13:35:37.708Z'
+updatedAt: '2026-10-03T13:41:36.274Z'

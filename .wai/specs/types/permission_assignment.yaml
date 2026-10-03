@@ -26,11 +26,17 @@ fields:
     optional: true
   - name: scopeKind
     type: string
-    description: instance | unit | project.
+    description: >-
+      instance | unit | project | subsystem. A subsystem scope sits below its project: it carries
+      only project:write (changing that subsystem's specs), with the value yes or no (or inherit, to
+      defer to the project) — reading stays whole-project and nothing else applies per subsystem.
     optional: false
   - name: scopeId
     type: string
-    description: Qualified unit id or project id; absent when scopeKind is 'instance'.
+    description: >-
+      Qualified unit id, project id, or for a subsystem scope `<projectId>/<subsystemId>` — the
+      hosted record that owns the subsystem and the subsystem's local id in its tree (a part's
+      subsystems are the record's own, keyed the same way); absent when scopeKind is 'instance'.
     optional: true
   - name: capability
     type: string
@@ -54,4 +60,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:17.662Z'
-updatedAt: '2026-09-19T11:07:13.020Z'
+updatedAt: '2026-10-03T13:35:44.730Z'

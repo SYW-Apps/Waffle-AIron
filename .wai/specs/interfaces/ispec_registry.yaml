@@ -62,7 +62,11 @@ methods:
       follows its owning subsystem. A part fetched from git is read-only here — its files are the
       fetch cache's — so a write that would land in one is refused before anything is written
       (PartReadOnly), naming the repository and the commit: it is edited in its own repository and
-      taken in by `wairon member update`.
+      taken in by `wairon member update`. Inside a hosted request the request's write reach judges
+      the spec too: a spec of a subsystem the request may not change (a hosted subsystem rule), or
+      of no subsystem when the request may not write the project, is refused before anything is
+      written (SubsystemWriteDenied), naming the subsystem and the rung that decided it. Outside a
+      hosted request nothing more is judged.
     signature: >-
       save(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
       ImplementationSpec | TypeSpec): string[]
@@ -78,7 +82,9 @@ methods:
   - name: delete
     description: >-
       Delete one spec document of the named kind through the typed delete of that kind; false when
-      none existed. A kind of system is refused: the L0 cannot be deleted.
+      none existed. A kind of system is refused: the L0 cannot be deleted. Inside a hosted request a
+      spec of a subsystem the request may not change is refused before anything is removed
+      (SubsystemWriteDenied), as save refuses it.
     signature: 'delete(kind: string, id: string): boolean'
     returns: boolean
     params:
@@ -155,4 +161,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-10-02T20:21:47.388Z'
+updatedAt: '2026-10-03T13:39:58.936Z'
