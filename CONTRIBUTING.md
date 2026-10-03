@@ -89,11 +89,11 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 287 files / 4732 tests |
+| `npx vitest run` | 289 files / 4754 tests |
 | `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
 | `npm run build` | clean |
 | `npm run build:web` | clean (typechecks the SPA) |
-| `node dist/cli/index.js validate` | 0 errors, 0 warnings, 0 notices; register 318 findings / 423 units |
+| `node dist/cli/index.js validate` | 0 errors, 0 warnings, 0 notices; register 303 findings / 406 units |
 | `node dist/cli/index.js validate --ci` | passes |
 
 The counts are a floor, not a target — they move as the suite grows, so update
