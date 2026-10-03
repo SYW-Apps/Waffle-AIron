@@ -51,6 +51,7 @@ import { analyzerDigest, computeGateIdentity, type GateConfig } from './rules/ga
 import { BUILTIN_PROFILES, PROJECT_KINDS, judgesCode, type IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
 import type { AnalysisGradeLabel, CodeAnalysis, ProjectApproval } from '../models/lock.js';
+import type { ProjectRelations } from '../models/specs.js';
 import type { CodeModel } from '../models/code-model.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
@@ -1087,4 +1088,14 @@ function directMemberSubjects(): Record<string, string> {
  */
 export function familyApprovals(depth?: number): ProjectApproval[] {
   return familyValidator.projectApprovals(depth);
+}
+
+/**
+ * ivalidator_portal.familyRelations — the bound family's relation health: each
+ * project's externals status read at its own root, stamped with when, a project
+ * that could not be opened answered with its reason. What the canvas colours
+ * its consumption edges from. Writes nothing; callers grant the reach first.
+ */
+export function familyRelations(): ProjectRelations[] {
+  return familyValidator.familyRelations();
 }

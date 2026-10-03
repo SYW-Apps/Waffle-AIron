@@ -372,7 +372,7 @@ describe('stage 8 — overview follows composition: parts are the parent\'s subs
     bind(path.join(base, 'shop'));
     const shop = buildCanvasModel();
     expect(shop.subsystems.find((s) => s.id === 'ledger')).toMatchObject({ project: true, storage: '../ledger' });
-    expect(shop.edges).toContainEqual({ from: 'checkout', to: 'ledger', cross: true });
+    expect(shop.edges).toContainEqual({ from: 'checkout', to: 'ledger', cross: true, consumption: true });
   });
 
   it('status prints a part\'s subsystems under their parent, and at a part\'s root one line naming its parent', () => {

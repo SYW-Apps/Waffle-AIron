@@ -13,10 +13,11 @@ owns: []
 dependsOn:
   - host_core_adapter
   - host_surfaces_adapter
+  - host_validator_adapter
   - project_repository
 dependencyClass: read
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-17T22:09:44.091Z'
-updatedAt: '2026-09-17T20:37:06.054Z'
+updatedAt: '2026-10-03T12:16:58.410Z'

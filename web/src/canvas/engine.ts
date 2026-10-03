@@ -341,6 +341,7 @@ export function mountCanvas(host, model, opts = {}) {
         retired: { fill: '#ebe8e4', stroke: '#857b73', text: '#35302b' },
       },
       issue: '#b3261e', selGlow: '#3465b4', bgLabel: '#f2f5f8', png: '#f2f5f8',
+      relOk: '#2e7d4f', relDrift: '#8a6116', relBad: '#b3261e', relUnknown: '#5f6b78',
     },
     syw: {
       pageEdge: '#7c8ca3', edgeText: '#aebdd2', cross: '#ff6b81', ink: '#eef2f8',
@@ -362,6 +363,7 @@ export function mountCanvas(host, model, opts = {}) {
         retired: { fill: '#24211f', stroke: '#a8a29e', text: '#e7e5e4' },
       },
       issue: '#ff6b81', selGlow: '#22ddff', bgLabel: '#0a0a0f', png: '#0a0a0f',
+      relOk: '#34d399', relDrift: '#f59e0b', relBad: '#ff6b81', relUnknown: '#93a1b8',
     },
   };
 
@@ -424,6 +426,15 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: 'edge.bundle', style: { width: 4.5, opacity: 0.7 } },
       { selector: 'edge.toghost', style: { 'line-style': 'dashed', opacity: 0.75 } },
       { selector: 'edge.inneredge', style: { width: 1.1, 'arrow-scale': 0.6, opacity: 0.8 } },
+      // Relation health on consumption edges: the health colour replaces the
+      // boundary-hop colour, and unavailable is dotted as well as grey, so the
+      // state never rests on colour alone (the glyph is the edge's label).
+      { selector: 'edge.rel-unchecked', style: { 'line-color': t.pageEdge, 'target-arrow-color': t.pageEdge } },
+      { selector: 'edge.rel-ok', style: { 'line-color': t.relOk, 'target-arrow-color': t.relOk } },
+      { selector: 'edge.rel-drifted', style: { 'line-color': t.relDrift, 'target-arrow-color': t.relDrift } },
+      { selector: 'edge.rel-incompatible', style: { 'line-color': t.relBad, 'target-arrow-color': t.relBad } },
+      { selector: 'edge.rel-unavailable', style: { 'line-color': t.relUnknown, 'target-arrow-color': t.relUnknown, 'line-style': 'dotted' } },
+      { selector: '.extProject', style: { 'border-style': 'dashed' } },
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
@@ -460,6 +471,83 @@ export function mountCanvas(host, model, opts = {}) {
     ];
   }
 
+  // ---- relation health (consumption edges) ----------------------------------
+  // The model carries relations only when health was computed; without them a
+  // consumption edge is drawn neutral and the legend says it was not checked —
+  // never green for something nobody compared.
+  var HAS_RELATIONS = Array.isArray(MODEL.relations);
+  var REL_BY_ID = {};
+  (MODEL.relations || []).forEach(function (r) { REL_BY_ID[r.id] = r; });
+  var HEALTH_RANK = { ok: 1, drifted: 2, unavailable: 3, incompatible: 4 };
+  var HEALTH_GLYPH = { ok: '\u2713', drifted: '\u0394', incompatible: '\u2715', unavailable: '?' };
+  var HAS_CONSUMPTION = MODEL.edges.some(function (e) { return !!e.consumption; });
+  function edgeHealth(edge) {
+    var r = edge.relation ? REL_BY_ID[edge.relation] : null;
+    return r ? r.health : (HAS_RELATIONS ? 'unavailable' : null);
+  }
+  // Where edges fold into one, the worst health wins.
+  function worseHealth(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    return HEALTH_RANK[b] > HEALTH_RANK[a] ? b : a;
+  }
+  function relationsComparedAt() {
+    var at = null;
+    (MODEL.relations || []).forEach(function (r) { if (!at || r.comparedAt < at) at = r.comparedAt; });
+    return at;
+  }
+  function shortPin(r) {
+    if (r.pinnedCommit) return r.pinnedCommit.slice(0, 7);
+    return r.pinnedDigest ? r.pinnedDigest.replace(/^[a-z0-9-]+:/, '').slice(0, 12) : '';
+  }
+  function relationName(r) { return (r.consumer || 'this project') + ' \u2192 ' + r.producer; }
+  function relationText(r) {
+    var lines = [relationName(r) + ': ' + HEALTH_GLYPH[r.health] + ' ' + r.health];
+    r.uses.forEach(function (u) { lines.push('  ' + u.name + ' \u2014 ' + u.state + (u.detail ? ': ' + u.detail : '')); });
+    if (r.unchanged) lines.push('  ' + r.unchanged + ' use' + (r.unchanged === 1 ? '' : 's') + ' unchanged');
+    if (r.detail) lines.push('  ' + r.detail);
+    var pin = shortPin(r);
+    lines.push((pin ? 'pinned ' + pin + ' \u00B7 ' : '') + 'compared ' + r.comparedAt);
+    return lines.join('\n');
+  }
+  function relationHtml(r) {
+    var pin = shortPin(r);
+    return '<div class="method"><div class="mname">' + esc(relationName(r)) + '<span class="grow"></span><span class="chip">' + HEALTH_GLYPH[r.health] + ' ' + esc(r.health) + '</span></div>'
+      + r.uses.map(function (u) { return '<div class="mdesc">' + esc(u.name) + ' \u2014 ' + esc(u.state) + (u.detail ? ': ' + esc(u.detail) : '') + '</div>'; }).join('')
+      + (r.unchanged ? '<div class="mdesc">' + r.unchanged + ' use' + (r.unchanged === 1 ? '' : 's') + ' unchanged</div>' : '')
+      + (r.detail ? '<div class="mdesc">' + esc(r.detail) + '</div>' : '')
+      + '<div class="mdesc">' + (pin ? 'pinned ' + esc(pin) + ' \u00B7 ' : '') + 'compared ' + esc(r.comparedAt) + '</div></div>';
+  }
+  // The relations whose consumption edges start or land inside a node.
+  function relationsTouching(sid) {
+    var seen = {}, out = [];
+    var inside = function (x) {
+      var c = compById[x];
+      return x === sid || x.indexOf(sid + '::') === 0 || !!(c && (c.subsystem === sid || c.subsystem.indexOf(sid + '::') === 0));
+    };
+    MODEL.edges.forEach(function (e) {
+      if (!e.relation || seen[e.relation] || !(inside(e.to) || inside(e.from))) return;
+      seen[e.relation] = true;
+      if (REL_BY_ID[e.relation]) out.push(REL_BY_ID[e.relation]);
+    });
+    return out;
+  }
+  // The one legend row, only when the model has a consumption edge.
+  function relationLegend(t) {
+    if (!HAS_CONSUMPTION) return '';
+    if (!HAS_RELATIONS) return '<br>relations: <span style="color:' + t.pageEdge + '">health not checked</span>';
+    var at = relationsComparedAt();
+    return '<br>relations: <span style="color:' + t.relOk + '">\u2713 ok</span>&nbsp; <span style="color:' + t.relDrift + '">\u0394 drifted</span>&nbsp; '
+      + '<span style="color:' + t.relBad + '">\u2715 incompatible</span>&nbsp; <span style="color:' + t.relUnknown + '">? unavailable (dotted)</span>'
+      + (at ? '&nbsp; \u00B7 as of ' + esc(at) : '');
+  }
+  // A project's own page, only through the host's open-project hook (the web
+  // app): never in a standalone file or on a shared page, which have none.
+  function openProjectButton(s) {
+    if (!s.recordId || typeof opts === 'undefined' || !opts || typeof opts.onOpenProject !== 'function') return '';
+    return '<div class="openbtn"><button class="tbtn" data-openproject-id="' + esc(s.recordId) + '">Open project \u2197</button></div>';
+  }
+
   function renderLegend() {
     var t = THEMES[state.theme];
     var sw = function (c) { return '<span class="sw" style="background:' + c.fill + ';border-color:' + c.stroke + '"></span>'; };
@@ -473,7 +561,8 @@ export function mountCanvas(host, model, opts = {}) {
       sw(t.proxyIn) + '\u21E0 in-port&nbsp; ' + sw(t.proxyOut) + '\u21E2 out-port&nbsp; — bold border = published · ' +
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open<br>' +
       'on select: <span style="color:' + t.selGlow + '">\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\u2190 used by</span>' +
-      (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \u25B8 uses models</span>' : '');
+      (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \u25B8 uses models</span>' : '') +
+      relationLegend(t);
   }
 
   // ---- view layout ---------------------------------------------------------------
@@ -940,6 +1029,14 @@ export function mountCanvas(host, model, opts = {}) {
       if (!agg[key]) agg[key] = { src: src, tgt: tgt, n: 0, cross: false, ghost: ghost };
       agg[key].n++;
       if (edge.cross) agg[key].cross = true;
+      if (edge.consumption) {
+        agg[key].consumption = true;
+        agg[key].health = worseHealth(agg[key].health, edgeHealth(edge));
+        if (edge.relation) {
+          var rels = agg[key].rels || (agg[key].rels = []);
+          if (rels.indexOf(edge.relation) < 0) rels.push(edge.relation);
+        }
+      }
     });
     return { agg: agg, ghosts: ghosts };
   }
@@ -1500,7 +1597,7 @@ export function mountCanvas(host, model, opts = {}) {
       var classes, label;
       var isPub = e.kind === 'component' && compById[e.id] && compById[e.id].public;
       if (e.kind === 'subsystem') {
-        classes = 'subsysBox';
+        classes = 'subsysBox' + (subById[e.id] && subById[e.id].external ? ' extProject' : '');
         label = nameOf(e) + (e.hasKids && !inner ? '\n\u25B8 open' : '');
       } else {
         var c = compById[e.id];
@@ -1708,9 +1805,13 @@ export function mountCanvas(host, model, opts = {}) {
       var bundle = e.n > 1;
       var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
       var route = routeData(e.src, e.tgt, key);
+      // A consumption edge carries its relation's health: the glyph at its middle,
+      // its colour (and line, dotted when unavailable) by class.
+      var glyph = e.health ? HEALTH_GLYPH[e.health] : '';
+      var relCls = e.consumption ? 'rel rel-' + (e.health || 'unchecked') + ' ' : '';
       eles.push({
-        data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: bundle ? e.n + ' links' : '', cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
-        classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + (dim ? 'dimmed' : ''),
+        data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: (bundle ? e.n + ' links' : '') + (glyph ? (bundle ? ' ' : '') + glyph : ''), rels: (e.rels || []).join('|'), cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
+        classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + relCls + (dim ? 'dimmed' : ''),
       });
     });
 
@@ -2210,6 +2311,27 @@ export function mountCanvas(host, model, opts = {}) {
   cy.on('mouseover', 'node', function (ev) { setHover(ev.target); });
   cy.on('mouseout', 'node', function (ev) { if (hoveredNode && hoveredNode.id() === ev.target.id()) setHover(null); });
 
+  // Relation health: hovering a consumption edge shows its relation(s) — which
+  // uses changed or were removed, why one could not be compared, the pin and
+  // when it was compared; tapping it shows the same in the details panel.
+  function relationsOfEdge(edge) {
+    return (edge.data('rels') || '').split('|').filter(Boolean).map(function (rid) { return REL_BY_ID[rid]; }).filter(Boolean);
+  }
+  cy.on('mouseover', 'edge.rel', function (ev) {
+    var tip = ROOT.getElementById('relTip');
+    var rels = relationsOfEdge(ev.target);
+    tip.textContent = rels.length ? rels.map(relationText).join('\n\n') : 'relation health not checked';
+    var at = ev.renderedPosition || { x: 0, y: 0 };
+    tip.style.left = (at.x + 12) + 'px';
+    tip.style.top = (at.y + 12) + 'px';
+    tip.style.display = 'block';
+  });
+  cy.on('mouseout', 'edge.rel', function () { ROOT.getElementById('relTip').style.display = 'none'; });
+  cy.on('tap', 'edge.rel', function (ev) {
+    var ids = ev.target.data('rels') || '';
+    if (ids) select('relation', ids, false);
+  });
+
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.group) return;
@@ -2267,7 +2389,15 @@ export function mountCanvas(host, model, opts = {}) {
     var hasKids = t.kind === 'subsystem'
       ? (childSubsOf(t.id).length + childCompsOf(t.id).length) > 0
       : memberCompsOf(t.id).length > 0;
-    if (hasKids) navigateTo(t.kind, t.id);
+    if (hasKids) { navigateTo(t.kind, t.id); return; }
+    // A project node with nothing to drill into (a referenced or external one):
+    // its own page through the host's open-project hook when it carries a
+    // record id, else its details panel — its storage and its relations.
+    var ps = t.kind === 'subsystem' ? subById[t.id] : null;
+    if (ps && ps.project) {
+      if (ps.recordId && typeof opts !== 'undefined' && opts && typeof opts.onOpenProject === 'function') { opts.onOpenProject(ps.recordId); return; }
+      select('subsystem', t.id, false);
+    }
   });
   cy.on('dragfree', 'node', function () { harvestPositions(); });
 
@@ -3504,7 +3634,7 @@ export function mountCanvas(host, model, opts = {}) {
     cy.nodes().removeClass('sel');
     cy.edges().removeClass('fieldhl');
     if (id) {
-      var node = nodeForRef(kind, id);
+      var node = kind === 'relation' ? cy.collection() : nodeForRef(kind, id);
       if (node.length) {
         node.addClass('sel');
         applyFocus(node);
@@ -3674,6 +3804,10 @@ export function mountCanvas(host, model, opts = {}) {
             via.map(function (v) { return chip(v.label, v.kind, v.id); }).join(''), true);
         }
       }
+    } else if (focusKind === 'relation') {
+      var rl = String(focusId).split('|').map(function (rid) { return REL_BY_ID[rid]; }).filter(Boolean);
+      head = '<h2>' + esc(rl.length === 1 ? relationName(rl[0]) : rl.length + ' relations') + '</h2>' + staticChip('relation');
+      body += rl.map(relationHtml).join('');
     } else if (focusKind === 'type') {
       var ty = null;
       MODEL.types.forEach(function (t2) { if (t2.id === focusId) ty = t2; });
@@ -3757,8 +3891,14 @@ export function mountCanvas(host, model, opts = {}) {
         + (scopeFocus ? staticChip('current view') : '')
         + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0))
         + openApiButton(subsystemExposesApi(s.id), '')
-        + openSpecButton('subsystem', s.id);
+        + openSpecButton('subsystem', s.id)
+        + (s.project ? staticChip(s.external ? 'external project' : 'project') : '')
+        + (s.storage ? staticChip(s.storage) : '')
+        + openProjectButton(s);
       body += '<p class="desc">' + esc(s.description) + '</p>';
+      var nodeRels = relationsTouching(s.id);
+      if (nodeRels.length) body += section('Relations', nodeRels.length, nodeRels.map(relationHtml).join(''), true);
+      else if (s.project && HAS_CONSUMPTION && !HAS_RELATIONS) body += section('Relations', null, '<span class="desc">relation health was not checked</span>', true);
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
           return '<div class="method">' + chip(t2.subsystem, 'subsystem', t2.subsystem) + '<div class="mdesc">' + esc(t2.reason) + '</div></div>';
@@ -3824,6 +3964,14 @@ export function mountCanvas(host, model, opts = {}) {
           }
         });
       })(ospecs[si]);
+    }
+    var oprojs = panel.querySelectorAll('[data-openproject-id]');
+    for (var opi = 0; opi < oprojs.length; opi++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          if (typeof opts !== 'undefined' && opts && typeof opts.onOpenProject === 'function') opts.onOpenProject(b.getAttribute('data-openproject-id'));
+        });
+      })(oprojs[opi]);
     }
     var flows = panel.querySelectorAll('[data-flow-comp]');
     for (var j = 0; j < flows.length; j++) {

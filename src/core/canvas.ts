@@ -11,7 +11,7 @@ import {
   graph,
 } from './specs.js';
 import type { ValidationIssue } from './validation.js';
-import { extractTypeIdentifiers, isOwnComponentEntry, matchTypeRef, methodTypeRefs } from '../models/index.js';
+import { extractTypeIdentifiers, familyNode, isOwnComponentEntry, matchTypeRef, methodTypeRefs, relationHealth, type ExternalStatus, type ProjectNode, type ProjectRelations, type RelationHealth } from '../models/index.js';
 import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 
 // ---------------------------------------------------------------------------
@@ -65,6 +65,9 @@ export interface CanvasModel {
      *  project's own subsystem, stored elsewhere) — `part <alias> · contained`,
      *  `… · ../admin`, `… · git a1b2c3d` — or of a referenced project node. */
     storage?: string;
+    /** A declared external that is no project of the family, drawn as a
+     *  project node of its own (dashed) that its consumption edges land on. */
+    external?: boolean;
     /** Opt-in deep expansion: with Internals on, this subsystem's box renders
      *  its WHOLE subtree (nested boundary boxes + leaf tiles + direct relation
      *  lines) instead of one layer. Never set by buildCanvasModel — the hosted
@@ -135,7 +138,14 @@ export interface CanvasModel {
     /** Methods specified as intent prose instead of a narrative (the detail dial). */
     intents: { method: string; text: string }[];
   }[];
-  edges: { from: string; to: string; cross: boolean }[];
+  /** `consumption`: the edge's ends lie in different projects (or it lands on a
+   *  referenced or external project node); `relation`: the CanvasRelation it
+   *  takes its health from, present only when the model carries relations. */
+  edges: { from: string; to: string; cross: boolean; consumption?: boolean; relation?: string }[];
+  /** Relation health, one per consumer→producer pair the edges connect. PRESENT
+   *  only when health was computed (empty when nothing is consumed); ABSENT when
+   *  it was not — then consumption edges are drawn neutral, "not checked". */
+  relations?: CanvasRelation[];
   types: {
     id: string;
     name: string;
@@ -180,16 +190,25 @@ function memberProjectNodes(): CanvasModel['subsystems'] {
   // Stage 8: a referenced project member (a `../`, git or hosted source) is a
   // project node too — composition decides what is drawn, storage only how it
   // is labelled. Its specs are not read here: it is drawn from outside.
-  const referenced = (family.nodes.find((n) => n.namespace === '')?.externals ?? [])
+  const rootExternals = family.nodes.find((n) => n.namespace === '')?.externals ?? [];
+  const referenced = rootExternals
     .filter((e) => e.role === 'member')
     .map((e) => ({ id: e.alias, name: e.alias, description: '', trustedLinks: [], project: true, storage: storageBadge(e.sourceKind === 'family' ? 'contained' : e.sourceKind, e.directory, e.commit) }));
-  return [...contained, ...referenced];
+  // A declared external that is no project of the family (a `../` path outside
+  // it, git or hosted) is an external project node of its own, so peers that
+  // only consume each other still show their relations.
+  const taken = new Set([...contained, ...referenced].map((n) => n.id));
+  const external = rootExternals
+    .filter((e) => e.role !== 'member' && e.sourceKind !== 'family' && !taken.has(e.alias))
+    .map((e) => ({ id: e.alias, name: e.alias, description: e.project === e.alias ? '' : `project ${e.project}`, trustedLinks: [], project: true, external: true, storage: storageBadge(e.sourceKind, e.directory, e.commit) }));
+  return [...contained, ...referenced, ...external];
 }
 
 /** How a member's storage reads on its badge: contained, its sibling path, or git and its short commit. */
 function storageBadge(storage: string, directory: string | undefined, commit: string | undefined): string {
   if (storage === 'git') return `git ${commit ? commit.slice(0, 7) : ''}`.trim();
   if (storage === 'hosted') return 'hosted';
+  if (storage === 'unresolved') return 'unresolved';
   if (storage === 'path') return directory ? `../${directory.split(/[\\/]/).pop()}` : 'sibling';
   return 'contained';
 }
@@ -204,7 +223,91 @@ function partBadges(): Map<string, string> {
   return out;
 }
 
-export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
+/**
+ * canvas_relation — one consumer-project-to-producer-project relation as the
+ * canvas draws it: the health every consumption edge between the two takes,
+ * and the detail a reader sees on hover or in the details panel.
+ */
+export interface CanvasRelation {
+  /** `<consumer>→<producer>`: the key a consumption edge names in its `relation`. */
+  id: string;
+  /** The consuming project's key ('' for the bound root). */
+  consumer: string;
+  /** The alias the consumer reaches the producer under. */
+  producer: string;
+  health: RelationHealth;
+  /** The uses that are NOT unchanged, with their state and why. */
+  uses: { name: string; state: string; detail?: string }[];
+  /** How many uses compared unchanged. */
+  unchanged: number;
+  pinnedCommit?: string;
+  pinnedDigest?: string;
+  comparedAt: string;
+  /** Why the relation is unavailable, when it is. */
+  detail?: string;
+}
+
+/** What one use is called on the canvas: `publicName`, or `publicName.member`. */
+function useLabel(use: ExternalStatus['uses'][number]): string {
+  if (use.publicName === undefined) return use.member ?? '(the external)';
+  return use.member === undefined || use.member === 'type' ? use.publicName : `${use.publicName}.${use.member}`;
+}
+
+/** One consumer's status drawn as a CanvasRelation. */
+function relationFrom(id: string, consumer: string, producer: string, status: ExternalStatus, comparedAt: string): CanvasRelation {
+  const changed = status.uses.filter((u) => u.state !== 'unchanged');
+  const health = relationHealth(status);
+  return {
+    id, consumer, producer, health,
+    uses: changed.map((u) => ({ name: useLabel(u), state: u.state, ...(u.detail !== undefined ? { detail: u.detail } : {}) })),
+    unchanged: status.uses.length - changed.length,
+    ...(status.pinnedCommit !== undefined ? { pinnedCommit: status.pinnedCommit } : {}),
+    ...(status.pinnedDigest !== undefined ? { pinnedDigest: status.pinnedDigest } : {}),
+    comparedAt,
+    ...(health === 'unavailable' && status.detail !== undefined ? { detail: status.detail } : {}),
+  };
+}
+
+/** The consumer's status for one producer: by the alias it reaches it under, or — a family producer — by its project. */
+function statusFor(entry: ProjectRelations, consumer: string, producer: { alias?: string; node?: ProjectNode }): ExternalStatus | undefined {
+  const { alias, node } = producer;
+  return entry.externals.find((s) => (alias !== undefined && s.alias === alias)
+    || (node !== undefined && ((node.parent === consumer && s.alias === node.mountAlias) || (s.sourceKind === 'family' && node.id !== undefined && s.project === node.id))));
+}
+
+/**
+ * Step 6 of build: each consumer-to-producer pair the consumption edges connect
+ * becomes one CanvasRelation, and each consumption edge names it. A pair the
+ * relations do not answer is unavailable with the reason — never ok.
+ */
+function nameRelations(edges: CanvasModel['edges'], relations: ProjectRelations[], outsideIds: Set<string>, ownerOf: (id: string) => string): CanvasRelation[] {
+  const family = graph();
+  const now = new Date().toISOString();
+  const out = new Map<string, CanvasRelation>();
+  for (const edge of edges) {
+    if (!edge.consumption) continue;
+    const consumer = ownerOf(edge.from);
+    // The producer: a referenced or external node by its alias, else the project owning the target.
+    const node = outsideIds.has(edge.to) ? undefined : familyNode(family, ownerOf(edge.to)) ?? undefined;
+    const alias = outsideIds.has(edge.to) ? edge.to : undefined;
+    const entry = relations.find((r) => r.project === consumer);
+    const status = entry && !entry.detail ? statusFor(entry, consumer, { alias, node }) : undefined;
+    const producer = status?.alias ?? alias ?? (node?.parent === consumer ? node.mountAlias : undefined) ?? node?.id ?? ownerOf(edge.to);
+    const id = `${consumer}→${producer}`;
+    if (!out.has(id)) {
+      out.set(id, status
+        ? relationFrom(id, consumer, producer, status, entry!.comparedAt)
+        : {
+          id, consumer, producer, health: 'unavailable', uses: [], unchanged: 0, comparedAt: entry?.comparedAt ?? now,
+          detail: entry?.detail ?? (entry ? `the consumer's statuses name no producer "${producer}"` : 'the consumer\'s statuses were not read'),
+        });
+    }
+    edge.relation = id;
+  }
+  return [...out.values()];
+}
+
+export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: ProjectRelations[]): CanvasModel {
   const system = loadSystemSpec();
   const subsystems = loadSubsystemSpecs();
   const components = loadComponentSpecs();
@@ -335,13 +438,16 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
 
   const componentSub = new Map(components.map(c => [c.id, c.subsystem]));
   const edges: CanvasModel['edges'] = [];
-  const referencedIds = new Set(projectNodes.filter((p) => p.storage !== undefined).map((p) => p.id));
+  // Referenced and external project nodes: drawn from outside, their specs not in the model.
+  const outsideIds = new Set(projectNodes.filter((p) => p.storage !== undefined).map((p) => p.id));
+  const owners = graph().owners;
+  const ownerOfSpec = (id: string): string => owners.get(id) ?? '';
   for (const comp of components) {
     for (const depId of comp.dependsOn) {
-      // A consumption edge to a referenced project (stage 8): it lands on the project node.
+      // A consumption edge to a referenced or external project (stage 8): it lands on the project node.
       const alias = depId.includes('::') ? depId.split('::')[0] : '';
-      if (referencedIds.has(alias) && !componentIds.has(depId)) {
-        edges.push({ from: comp.id, to: alias, cross: true });
+      if (outsideIds.has(alias) && !componentIds.has(depId)) {
+        edges.push({ from: comp.id, to: alias, cross: true, consumption: true });
         continue;
       }
       if (!componentIds.has(depId)) continue;
@@ -349,9 +455,12 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
         from: comp.id,
         to: depId,
         cross: componentSub.get(depId) !== comp.subsystem,
+        ...(ownerOfSpec(depId) !== ownerOfSpec(comp.id) ? { consumption: true } : {}),
       });
     }
   }
+  // Step 6: the passed-in relation health, drawn without being judged here.
+  const canvasRelations = relations === undefined ? undefined : nameRelations(edges, relations, outsideIds, ownerOfSpec);
 
   // Types + ERD reference edges (field type strings → defined types)
   const typeSpecs = loadTypeSpecs();
@@ -485,6 +594,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = []): CanvasModel {
     ],
     components: modelComponents,
     edges,
+    ...(canvasRelations !== undefined ? { relations: canvasRelations } : {}),
     types: modelTypes,
     typeEdges,
     dataEdges,
@@ -672,6 +782,7 @@ body[data-theme="light"] .selectControl { color-scheme:light; }
 #cy { position:absolute; inset:0; }
 .legend { position:absolute; left:12px; bottom:12px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:10px; padding:8px 12px; font-size:11px; color:var(--dim); z-index:5; pointer-events:none; }
 .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; border:1.5px solid; }
+.reltip { position:absolute; display:none; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:8px; padding:6px 10px; font-size:11px; color:var(--dim); white-space:pre; z-index:6; pointer-events:none; max-width:520px; overflow:hidden; }
 /* Stage overlays clear the floating header (52px + 10px top + 10px gap). The
    header hides in presentation mode, where they return to the top edge. */
 .viewhint { position:absolute; top:72px; left:12px; color:var(--dim); font-size:11px; background:var(--chrome); border:1px solid var(--chrome-border); border-radius:9px; padding:5px 10px; z-index:5; pointer-events:none; }
@@ -857,6 +968,7 @@ body.presentation #exitPresent, body.presentation #presentDetails { display:bloc
     <div class="viewhint" id="viewHint"></div>
     <div id="typesWarn"></div>
     <div class="legend" id="legend"></div>
+    <div class="reltip" id="relTip"></div>
   </div>
   <div id="panelResizer" title="Drag to resize details sidebar"></div>
   <div id="panel"></div>
@@ -1184,6 +1296,7 @@ var MODEL = __MODEL_JSON__;
         retired: { fill: '#ebe8e4', stroke: '#857b73', text: '#35302b' },
       },
       issue: '#b3261e', selGlow: '#3465b4', bgLabel: '#f2f5f8', png: '#f2f5f8',
+      relOk: '#2e7d4f', relDrift: '#8a6116', relBad: '#b3261e', relUnknown: '#5f6b78',
     },
     syw: {
       pageEdge: '#7c8ca3', edgeText: '#aebdd2', cross: '#ff6b81', ink: '#eef2f8',
@@ -1205,6 +1318,7 @@ var MODEL = __MODEL_JSON__;
         retired: { fill: '#24211f', stroke: '#a8a29e', text: '#e7e5e4' },
       },
       issue: '#ff6b81', selGlow: '#22ddff', bgLabel: '#0a0a0f', png: '#0a0a0f',
+      relOk: '#34d399', relDrift: '#f59e0b', relBad: '#ff6b81', relUnknown: '#93a1b8',
     },
   };
 
@@ -1267,6 +1381,15 @@ var MODEL = __MODEL_JSON__;
       { selector: 'edge.bundle', style: { width: 4.5, opacity: 0.7 } },
       { selector: 'edge.toghost', style: { 'line-style': 'dashed', opacity: 0.75 } },
       { selector: 'edge.inneredge', style: { width: 1.1, 'arrow-scale': 0.6, opacity: 0.8 } },
+      // Relation health on consumption edges: the health colour replaces the
+      // boundary-hop colour, and unavailable is dotted as well as grey, so the
+      // state never rests on colour alone (the glyph is the edge's label).
+      { selector: 'edge.rel-unchecked', style: { 'line-color': t.pageEdge, 'target-arrow-color': t.pageEdge } },
+      { selector: 'edge.rel-ok', style: { 'line-color': t.relOk, 'target-arrow-color': t.relOk } },
+      { selector: 'edge.rel-drifted', style: { 'line-color': t.relDrift, 'target-arrow-color': t.relDrift } },
+      { selector: 'edge.rel-incompatible', style: { 'line-color': t.relBad, 'target-arrow-color': t.relBad } },
+      { selector: 'edge.rel-unavailable', style: { 'line-color': t.relUnknown, 'target-arrow-color': t.relUnknown, 'line-style': 'dotted' } },
+      { selector: '.extProject', style: { 'border-style': 'dashed' } },
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
@@ -1303,6 +1426,83 @@ var MODEL = __MODEL_JSON__;
     ];
   }
 
+  // ---- relation health (consumption edges) ----------------------------------
+  // The model carries relations only when health was computed; without them a
+  // consumption edge is drawn neutral and the legend says it was not checked —
+  // never green for something nobody compared.
+  var HAS_RELATIONS = Array.isArray(MODEL.relations);
+  var REL_BY_ID = {};
+  (MODEL.relations || []).forEach(function (r) { REL_BY_ID[r.id] = r; });
+  var HEALTH_RANK = { ok: 1, drifted: 2, unavailable: 3, incompatible: 4 };
+  var HEALTH_GLYPH = { ok: '\\u2713', drifted: '\\u0394', incompatible: '\\u2715', unavailable: '?' };
+  var HAS_CONSUMPTION = MODEL.edges.some(function (e) { return !!e.consumption; });
+  function edgeHealth(edge) {
+    var r = edge.relation ? REL_BY_ID[edge.relation] : null;
+    return r ? r.health : (HAS_RELATIONS ? 'unavailable' : null);
+  }
+  // Where edges fold into one, the worst health wins.
+  function worseHealth(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    return HEALTH_RANK[b] > HEALTH_RANK[a] ? b : a;
+  }
+  function relationsComparedAt() {
+    var at = null;
+    (MODEL.relations || []).forEach(function (r) { if (!at || r.comparedAt < at) at = r.comparedAt; });
+    return at;
+  }
+  function shortPin(r) {
+    if (r.pinnedCommit) return r.pinnedCommit.slice(0, 7);
+    return r.pinnedDigest ? r.pinnedDigest.replace(/^[a-z0-9-]+:/, '').slice(0, 12) : '';
+  }
+  function relationName(r) { return (r.consumer || 'this project') + ' \\u2192 ' + r.producer; }
+  function relationText(r) {
+    var lines = [relationName(r) + ': ' + HEALTH_GLYPH[r.health] + ' ' + r.health];
+    r.uses.forEach(function (u) { lines.push('  ' + u.name + ' \\u2014 ' + u.state + (u.detail ? ': ' + u.detail : '')); });
+    if (r.unchanged) lines.push('  ' + r.unchanged + ' use' + (r.unchanged === 1 ? '' : 's') + ' unchanged');
+    if (r.detail) lines.push('  ' + r.detail);
+    var pin = shortPin(r);
+    lines.push((pin ? 'pinned ' + pin + ' \\u00B7 ' : '') + 'compared ' + r.comparedAt);
+    return lines.join('\\n');
+  }
+  function relationHtml(r) {
+    var pin = shortPin(r);
+    return '<div class="method"><div class="mname">' + esc(relationName(r)) + '<span class="grow"></span><span class="chip">' + HEALTH_GLYPH[r.health] + ' ' + esc(r.health) + '</span></div>'
+      + r.uses.map(function (u) { return '<div class="mdesc">' + esc(u.name) + ' \\u2014 ' + esc(u.state) + (u.detail ? ': ' + esc(u.detail) : '') + '</div>'; }).join('')
+      + (r.unchanged ? '<div class="mdesc">' + r.unchanged + ' use' + (r.unchanged === 1 ? '' : 's') + ' unchanged</div>' : '')
+      + (r.detail ? '<div class="mdesc">' + esc(r.detail) + '</div>' : '')
+      + '<div class="mdesc">' + (pin ? 'pinned ' + esc(pin) + ' \\u00B7 ' : '') + 'compared ' + esc(r.comparedAt) + '</div></div>';
+  }
+  // The relations whose consumption edges start or land inside a node.
+  function relationsTouching(sid) {
+    var seen = {}, out = [];
+    var inside = function (x) {
+      var c = compById[x];
+      return x === sid || x.indexOf(sid + '::') === 0 || !!(c && (c.subsystem === sid || c.subsystem.indexOf(sid + '::') === 0));
+    };
+    MODEL.edges.forEach(function (e) {
+      if (!e.relation || seen[e.relation] || !(inside(e.to) || inside(e.from))) return;
+      seen[e.relation] = true;
+      if (REL_BY_ID[e.relation]) out.push(REL_BY_ID[e.relation]);
+    });
+    return out;
+  }
+  // The one legend row, only when the model has a consumption edge.
+  function relationLegend(t) {
+    if (!HAS_CONSUMPTION) return '';
+    if (!HAS_RELATIONS) return '<br>relations: <span style="color:' + t.pageEdge + '">health not checked</span>';
+    var at = relationsComparedAt();
+    return '<br>relations: <span style="color:' + t.relOk + '">\\u2713 ok</span>&nbsp; <span style="color:' + t.relDrift + '">\\u0394 drifted</span>&nbsp; '
+      + '<span style="color:' + t.relBad + '">\\u2715 incompatible</span>&nbsp; <span style="color:' + t.relUnknown + '">? unavailable (dotted)</span>'
+      + (at ? '&nbsp; \\u00B7 as of ' + esc(at) : '');
+  }
+  // A project's own page, only through the host's open-project hook (the web
+  // app): never in a standalone file or on a shared page, which have none.
+  function openProjectButton(s) {
+    if (!s.recordId || typeof opts === 'undefined' || !opts || typeof opts.onOpenProject !== 'function') return '';
+    return '<div class="openbtn"><button class="tbtn" data-openproject-id="' + esc(s.recordId) + '">Open project \\u2197</button></div>';
+  }
+
   function renderLegend() {
     var t = THEMES[state.theme];
     var sw = function (c) { return '<span class="sw" style="background:' + c.fill + ';border-color:' + c.stroke + '"></span>'; };
@@ -1316,7 +1516,8 @@ var MODEL = __MODEL_JSON__;
       sw(t.proxyIn) + '\\u21E0 in-port&nbsp; ' + sw(t.proxyOut) + '\\u21E2 out-port&nbsp; — bold border = published · ' +
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open<br>' +
       'on select: <span style="color:' + t.selGlow + '">\\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\\u2190 used by</span>' +
-      (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \\u25B8 uses models</span>' : '');
+      (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \\u25B8 uses models</span>' : '') +
+      relationLegend(t);
   }
 
   // ---- view layout ---------------------------------------------------------------
@@ -1783,6 +1984,14 @@ var MODEL = __MODEL_JSON__;
       if (!agg[key]) agg[key] = { src: src, tgt: tgt, n: 0, cross: false, ghost: ghost };
       agg[key].n++;
       if (edge.cross) agg[key].cross = true;
+      if (edge.consumption) {
+        agg[key].consumption = true;
+        agg[key].health = worseHealth(agg[key].health, edgeHealth(edge));
+        if (edge.relation) {
+          var rels = agg[key].rels || (agg[key].rels = []);
+          if (rels.indexOf(edge.relation) < 0) rels.push(edge.relation);
+        }
+      }
     });
     return { agg: agg, ghosts: ghosts };
   }
@@ -2343,7 +2552,7 @@ var MODEL = __MODEL_JSON__;
       var classes, label;
       var isPub = e.kind === 'component' && compById[e.id] && compById[e.id].public;
       if (e.kind === 'subsystem') {
-        classes = 'subsysBox';
+        classes = 'subsysBox' + (subById[e.id] && subById[e.id].external ? ' extProject' : '');
         label = nameOf(e) + (e.hasKids && !inner ? '\\n\\u25B8 open' : '');
       } else {
         var c = compById[e.id];
@@ -2551,9 +2760,13 @@ var MODEL = __MODEL_JSON__;
       var bundle = e.n > 1;
       var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
       var route = routeData(e.src, e.tgt, key);
+      // A consumption edge carries its relation's health: the glyph at its middle,
+      // its colour (and line, dotted when unavailable) by class.
+      var glyph = e.health ? HEALTH_GLYPH[e.health] : '';
+      var relCls = e.consumption ? 'rel rel-' + (e.health || 'unchecked') + ' ' : '';
       eles.push({
-        data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: bundle ? e.n + ' links' : '', cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
-        classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + (dim ? 'dimmed' : ''),
+        data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: (bundle ? e.n + ' links' : '') + (glyph ? (bundle ? ' ' : '') + glyph : ''), rels: (e.rels || []).join('|'), cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
+        classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + relCls + (dim ? 'dimmed' : ''),
       });
     });
 
@@ -3053,6 +3266,27 @@ var MODEL = __MODEL_JSON__;
   cy.on('mouseover', 'node', function (ev) { setHover(ev.target); });
   cy.on('mouseout', 'node', function (ev) { if (hoveredNode && hoveredNode.id() === ev.target.id()) setHover(null); });
 
+  // Relation health: hovering a consumption edge shows its relation(s) — which
+  // uses changed or were removed, why one could not be compared, the pin and
+  // when it was compared; tapping it shows the same in the details panel.
+  function relationsOfEdge(edge) {
+    return (edge.data('rels') || '').split('|').filter(Boolean).map(function (rid) { return REL_BY_ID[rid]; }).filter(Boolean);
+  }
+  cy.on('mouseover', 'edge.rel', function (ev) {
+    var tip = document.getElementById('relTip');
+    var rels = relationsOfEdge(ev.target);
+    tip.textContent = rels.length ? rels.map(relationText).join('\\n\\n') : 'relation health not checked';
+    var at = ev.renderedPosition || { x: 0, y: 0 };
+    tip.style.left = (at.x + 12) + 'px';
+    tip.style.top = (at.y + 12) + 'px';
+    tip.style.display = 'block';
+  });
+  cy.on('mouseout', 'edge.rel', function () { document.getElementById('relTip').style.display = 'none'; });
+  cy.on('tap', 'edge.rel', function (ev) {
+    var ids = ev.target.data('rels') || '';
+    if (ids) select('relation', ids, false);
+  });
+
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.group) return;
@@ -3110,7 +3344,15 @@ var MODEL = __MODEL_JSON__;
     var hasKids = t.kind === 'subsystem'
       ? (childSubsOf(t.id).length + childCompsOf(t.id).length) > 0
       : memberCompsOf(t.id).length > 0;
-    if (hasKids) navigateTo(t.kind, t.id);
+    if (hasKids) { navigateTo(t.kind, t.id); return; }
+    // A project node with nothing to drill into (a referenced or external one):
+    // its own page through the host's open-project hook when it carries a
+    // record id, else its details panel — its storage and its relations.
+    var ps = t.kind === 'subsystem' ? subById[t.id] : null;
+    if (ps && ps.project) {
+      if (ps.recordId && typeof opts !== 'undefined' && opts && typeof opts.onOpenProject === 'function') { opts.onOpenProject(ps.recordId); return; }
+      select('subsystem', t.id, false);
+    }
   });
   cy.on('dragfree', 'node', function () { harvestPositions(); });
 
@@ -4347,7 +4589,7 @@ var MODEL = __MODEL_JSON__;
     cy.nodes().removeClass('sel');
     cy.edges().removeClass('fieldhl');
     if (id) {
-      var node = nodeForRef(kind, id);
+      var node = kind === 'relation' ? cy.collection() : nodeForRef(kind, id);
       if (node.length) {
         node.addClass('sel');
         applyFocus(node);
@@ -4517,6 +4759,10 @@ var MODEL = __MODEL_JSON__;
             via.map(function (v) { return chip(v.label, v.kind, v.id); }).join(''), true);
         }
       }
+    } else if (focusKind === 'relation') {
+      var rl = String(focusId).split('|').map(function (rid) { return REL_BY_ID[rid]; }).filter(Boolean);
+      head = '<h2>' + esc(rl.length === 1 ? relationName(rl[0]) : rl.length + ' relations') + '</h2>' + staticChip('relation');
+      body += rl.map(relationHtml).join('');
     } else if (focusKind === 'type') {
       var ty = null;
       MODEL.types.forEach(function (t2) { if (t2.id === focusId) ty = t2; });
@@ -4600,8 +4846,14 @@ var MODEL = __MODEL_JSON__;
         + (scopeFocus ? staticChip('current view') : '')
         + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0))
         + openApiButton(subsystemExposesApi(s.id), '')
-        + openSpecButton('subsystem', s.id);
+        + openSpecButton('subsystem', s.id)
+        + (s.project ? staticChip(s.external ? 'external project' : 'project') : '')
+        + (s.storage ? staticChip(s.storage) : '')
+        + openProjectButton(s);
       body += '<p class="desc">' + esc(s.description) + '</p>';
+      var nodeRels = relationsTouching(s.id);
+      if (nodeRels.length) body += section('Relations', nodeRels.length, nodeRels.map(relationHtml).join(''), true);
+      else if (s.project && HAS_CONSUMPTION && !HAS_RELATIONS) body += section('Relations', null, '<span class="desc">relation health was not checked</span>', true);
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
           return '<div class="method">' + chip(t2.subsystem, 'subsystem', t2.subsystem) + '<div class="mdesc">' + esc(t2.reason) + '</div></div>';
@@ -4667,6 +4919,14 @@ var MODEL = __MODEL_JSON__;
           }
         });
       })(ospecs[si]);
+    }
+    var oprojs = panel.querySelectorAll('[data-openproject-id]');
+    for (var opi = 0; opi < oprojs.length; opi++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          if (typeof opts !== 'undefined' && opts && typeof opts.onOpenProject === 'function') opts.onOpenProject(b.getAttribute('data-openproject-id'));
+        });
+      })(oprojs[opi]);
     }
     var flows = panel.querySelectorAll('[data-flow-comp]');
     for (var j = 0; j < flows.length; j++) {

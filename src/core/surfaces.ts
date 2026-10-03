@@ -871,9 +871,14 @@ function unavailableUses(entry: ExternalLockEntry | undefined, reason: string): 
 function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): ExternalStatus {
   const { external } = binding;
   const entry = lock?.externals[external.alias];
-  // Step 4: its pinned snapshot, if any.
+  // Step 4: its pinned snapshot, if any — and the lock entry's digest and
+  // commit carried as provenance for a reader; neither is compared here.
   const pinned = entry !== undefined && externalsRepository.readSnapshot(external.alias) !== null;
-  const base = { alias: external.alias, project: external.project, sourceKind: external.sourceKind, pinned };
+  const base = {
+    alias: external.alias, project: external.project, sourceKind: external.sourceKind, pinned,
+    ...(entry !== undefined ? { pinnedDigest: entry.digest } : {}),
+    ...(entry?.commit !== undefined ? { pinnedCommit: entry.commit } : {}),
+  };
   // Step 5: can the live producer be read?
   const unreadable = external.sourceKind === 'unresolved'
     ? (hostedOnly(external) ? external.problem! : `the external does not resolve: ${external.problem}`)

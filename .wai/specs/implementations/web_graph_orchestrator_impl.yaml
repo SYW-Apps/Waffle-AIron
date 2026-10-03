@@ -165,25 +165,50 @@ methods:
         description: Bind that root for the build that follows
         type: local
       - stepNumber: 5
-        description: Build the canvas model over the bound spec tree through the host core adapter
+        description: >-
+          Grant the read its reach: the listed projects from step 2 — every project the caller may
+          read, write or administer — exactly as the Relations tab's read does, so a member or
+          producer outside it is answered unavailable, never read and never ok
+        type: local
+      - stepNumber: 6
+        description: >-
+          Read the family's relation health over the bound root through the host validator adapter:
+          each project's externals status at its own root, per use, stamped with when it was
+          compared — the same comparison the Relations tab shows
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyRelations
+      - stepNumber: 7
+        description: >-
+          Build the canvas model over the bound spec tree through the host core adapter, handing it
+          the relations so each consumption edge carries its health
         type: call
         targetComponent: host_core_adapter
         targetMethod: buildCanvasDataModel
-      - stepNumber: 6
+      - stepNumber: 8
         description: >-
           Read the project's hosted family — the member records the canvas's member project nodes
           stand for
         type: call
         targetComponent: project_repository
         targetMethod: family
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
-          Give each member project node its member's record id only when that record is in the
-          caller's listed projects from step 2 (read, write or administer); any other member stays a
-          node without one (no id leaks). The SPA links the ids from a strip above the canvas; the
-          nodes are not clickable yet
+          Read the project's configuration through the host core adapter: the hosted record each
+          declared external names (`source.hosted`), the record its external project node stands for
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 10
+        description: >-
+          Give each member project node its member's record id, and each external project node the
+          hosted record its external names, only when that record is in the caller's listed projects
+          from step 2 (read, write or administer); any other node stays one without one (no id
+          leaks). The engine opens that project's own page from exactly those nodes through the
+          app's open-project hook; a node without an id is drawn without a link (and an external out
+          of reach is already unavailable in the relations)
         type: local
-      - stepNumber: 8
+      - stepNumber: 11
         description: Return the model
         type: return
         outcome: project canvas model
@@ -285,4 +310,4 @@ methods:
     symbol: getWebProjectExternals
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-10-01T19:50:23.728Z'
+updatedAt: '2026-10-03T12:26:12.015Z'

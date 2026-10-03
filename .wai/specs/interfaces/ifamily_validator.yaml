@@ -233,6 +233,29 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: relations
+    description: >-
+      The family's relation health, for the canvas: the bound root and each PROJECT member at every
+      level — contained ones, and referenced ones (a `../`, git or hosted source) opened at their
+      sibling checkout or the fetch cache at the pinned commit — each with its externals status read
+      at its OWN root (exactly what compose turns into findings, so the canvas and a family run can
+      never disagree about a relation), stamped with when it was read. A project that references a
+      CONTAINED project member of its own (which is no external, so getExternalsStatus never names
+      it) also gets one status per such member under its alias, from that project's OWN gate
+      findings on those references: a use is removed — the relation incompatible — when
+      EXTERNAL_NOT_EXPORTED or another resolution failure lands on it, unchanged otherwise; a
+      contained member is read live, so it never drifts and carries no pin, and one whose hosted
+      record lies outside the request's reach is unavailable, never ok. A project whose root cannot
+      be opened, or lies outside the request's reach, is answered with no statuses and the reason,
+      so every edge from it reads unavailable — never ok. Parts are not answered: their subsystems
+      are the declaring project's own, so their consumption is in that project's statuses. Writes
+      nothing and judges nothing of its own (no findings, no severities); the caller grants the
+      reach before it asks, as for approvals.
+    signature: 'relations(): ProjectRelations[]'
+    returns: ProjectRelations[]
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-02T20:47:40.417Z'
+updatedAt: '2026-10-03T12:25:38.468Z'

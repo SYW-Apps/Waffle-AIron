@@ -59,9 +59,19 @@ methods:
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
   - name: renderDiagram
-    description: Delegate diagram rendering to architecture_diagrams.
-    signature: 'renderDiagram(format: string): string'
+    description: >-
+      Delegate diagram rendering to architecture_diagrams, with the relation health the canvas
+      draws.
+    signature: 'renderDiagram(format: string, relations?: ProjectRelations[]): string'
     returns: string
+    params:
+      - name: format
+        type: string
+        description: canvas | mermaid | drawio | excalidraw
+      - name: relations
+        type: ProjectRelations[]
+        description: The family's relation health for the canvas; omitted, none
+        optional: true
   - name: createMember
     description: >-
       Create a member of the bound project — a PART unless `as` is project (stage 8: boundaries are
@@ -1081,4 +1091,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T23:59:53.046Z'
+updatedAt: '2026-10-03T12:16:12.246Z'

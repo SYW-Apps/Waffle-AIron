@@ -90,6 +90,15 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: familyRelations
+    description: >-
+      Forward to validator_portal.familyRelations: the bound family's relation health, for `wairon
+      diagram` to colour the canvas's consumption edges.
+    signature: 'familyRelations(): ProjectRelations[]'
+    returns: ProjectRelations[]
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:54:06.814Z'
+updatedAt: '2026-10-03T12:15:23.460Z'

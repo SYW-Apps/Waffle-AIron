@@ -53,7 +53,33 @@ fields:
       family run that narrowed the reach to its selection reads it as an external it did not select
       — counted in its hint — rather than as a comparison that failed.
     optional: true
-methods: []
+  - name: pinnedDigest
+    type: string
+    description: >-
+      The content digest the lock recorded for this producer (ExternalLockEntry.digest); absent when
+      the alias is not pinned. Provenance a reader sees beside the verdict (the canvas shows it
+      shortened); never compared by a verdict here — drifted already says whether it moved.
+    optional: true
+  - name: pinnedCommit
+    type: string
+    description: >-
+      The producer's commit as the lock recorded it (ExternalLockEntry.commit) — only for a producer
+      in another git repository than the consumer; absent otherwise. Provenance only.
+    optional: true
+methods:
+  - name: health
+    signature: 'health(): string'
+    returns: string
+    description: >-
+      The relation's health in one word, the same on the canvas's edges and on the hosted Relations
+      tab: `incompatible` when a used member changed or was removed (stale); else `unavailable` when
+      anything could not be compared — the producer unreachable or out of reach, or any use
+      unavailable or unlocked (used now, not in the lock); else `drifted` when the producer's
+      content moved since the pin while nothing used changed; else `ok` — only when the producer was
+      read and every use compared unchanged. A known break outranks the unknown, and the unknown
+      outranks a benign change, so nothing that could not be checked ever reads as ok. Pure: over
+      the status's own fields.
+    symbol: relationHealth
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:47:16.586Z'
-updatedAt: '2026-09-28T06:04:26.091Z'
+updatedAt: '2026-10-03T12:25:13.594Z'

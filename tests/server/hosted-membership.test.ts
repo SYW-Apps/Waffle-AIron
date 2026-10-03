@@ -28,6 +28,8 @@ import * as transaction from '../../src/migrations/transaction.js';
 import * as migrationsPortal from '../../src/migrations/index.js';
 import { allow, mintUserToken, seedUnit, subjectOf } from './helpers.js';
 import { buildHostedFamily, writeProject, type HostedFamily } from './hosted-family.js';
+import { system, subsystem, component } from '../helpers/stage8-family.js';
+import { captureSnapshot } from '../../src/server/sharesnapshots.js';
 import type { HostConfig, HostedUserRecord, Principal, RoleBinding } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -544,6 +546,50 @@ describe('the UI routes', () => {
     expect(nodes.get('billing')?.recordId).toBe('billing');
     expect(nodes.has('docs')).toBe(true);
     expect(nodes.get('docs')?.recordId).toBeUndefined();
+  });
+
+  /** platform's gate component consumes billing's exported portal: a consumption edge into a contained member. */
+  function platformConsumesBilling(): void {
+    system(fam.billing, 'billing', [{ from: 'ops', component: 'billing-portal', audience: 'project' }]);
+    subsystem(fam.billing, 'billing', 'ops', { publicInterfaces: [{ type: 'Custom', details: 'Billing', component: 'billing-portal' }] });
+    component(fam.billing, 'ops', 'billing-portal', 'Portal');
+    system(fam.platform, 'platform');
+    subsystem(fam.platform, 'platform', 'core');
+    component(fam.platform, 'core', 'gate', 'Adapter', ['billing::billing-portal']);
+    invalidateSpecCache();
+  }
+
+  type RelModel = { subsystems: { id: string; project?: boolean; recordId?: string }[]; edges: { from: string; consumption?: boolean; relation?: string }[]; relations?: { id: string; health: string; comparedAt: string }[] };
+
+  it('GET /web/canvas-model: the contained member relation is ok within reach, and the node is linked', async () => {
+    seedPeople();
+    platformConsumesBilling();
+    const model = (await web(sessionFor('u-view'), '/web/canvas-model?projectId=platform')).body as RelModel;
+    const edge = model.edges.find((e) => e.from === 'gate' && e.consumption);
+    expect(edge?.relation).toBe('→billing');
+    expect(model.relations?.find((r) => r.id === edge!.relation)).toMatchObject({ health: 'ok', comparedAt: expect.stringMatching(/^\d{4}-/) });
+    expect(model.subsystems.find((s) => s.id === 'billing')?.recordId).toBe('billing');
+  });
+
+  it('GET /web/canvas-model: a producer out of the caller reach is unavailable, never ok, and carries no record id', async () => {
+    seedPeople();
+    platformConsumesBilling();
+    allow(dataDir, 'u-view', 'project:read', 'project', 'billing', 'no');
+    const model = (await web(sessionFor('u-view'), '/web/canvas-model?projectId=platform')).body as RelModel;
+    const edge = model.edges.find((e) => e.from === 'gate' && e.consumption);
+    expect(model.relations?.find((r) => r.id === edge!.relation)?.health).toBe('unavailable');
+    expect(model.subsystems.find((s) => s.id === 'billing')?.recordId).toBeUndefined();
+  });
+
+  it('a share snapshot freezes the relations with their compared-at time and links no project', () => {
+    seedPeople();
+    platformConsumesBilling();
+    const snapshot = captureSnapshot(dataDir, principalOf('u-view'), 'platform', 'canvas', ['html']);
+    const model = JSON.parse(snapshot.canvasModel) as RelModel;
+    expect(model.relations).toEqual([expect.objectContaining({ id: '→billing', health: 'ok', comparedAt: expect.stringMatching(/^\d{4}-/) })]);
+    expect(model.subsystems.some((s) => s.recordId !== undefined)).toBe(false);
+    expect(snapshot.html).toContain('"relations":[');
+    expect(snapshot.html).not.toContain('"recordId"');
   });
 
   it('GET /web/projects/externals: relation health per external; another project is Forbidden', async () => {

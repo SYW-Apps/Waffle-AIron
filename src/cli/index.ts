@@ -686,6 +686,7 @@ program
   .option('--excalidraw', 'emit an editable Excalidraw scene (same layout as the canvas)')
   .option('--format <fmt>', 'alias for the flags above: mermaid | canvas | drawio | excalidraw')
   .option('--out <path>', 'write to a file (or directory with --all; default .wai/docs/diagrams) instead of stdout')
+  .option('--no-health', 'skip comparing each consumption relation with its live producer: the canvas draws those edges as not checked')
   .action(async (opts) => {
     await runDiagram({
       subsystem: opts.subsystem,
@@ -697,6 +698,7 @@ program
       excalidraw: opts.excalidraw,
       format: opts.format,
       out: opts.out,
+      health: opts.health,
     });
   });
 

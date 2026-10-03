@@ -1,0 +1,40 @@
+kind: value-object
+id: project_relations
+name: ProjectRelations
+description: >-
+  One project of a family with its externals status, read at its own root: what the canvas colours
+  its consumption edges from. A project's relations are the statuses of everything it consumes (its
+  declared externals and its referenced project members), so the family's relations are one entry
+  per project that consumes anything.
+fields:
+  - name: project
+    type: string
+    description: >-
+      The consuming project's key in the bound family: '' for the bound root, a member's key
+      otherwise (the key its project node carries on the canvas).
+    optional: false
+    key: primary
+  - name: externals
+    type: ExternalStatus[]
+    description: >-
+      Its externals status (surface_orchestrator.getExternalsStatus at its root): one entry per
+      external and referenced project member, each per use — and one per CONTAINED project member it
+      references, built from its own gate's findings on those references (sourceKind family, never
+      drifted, no pin); empty when it consumes nothing.
+    optional: false
+  - name: comparedAt
+    type: string
+    description: >-
+      ISO-8601 time the statuses were read — what a reader of an exported canvas sees as 'as of',
+      since the producers may have moved since.
+    optional: false
+  - name: detail
+    type: string
+    description: >-
+      Why the project's statuses could not be read at all (its root could not be opened, or lies
+      outside the request's reach): then externals is empty and every consumption edge from it reads
+      unavailable with this reason — never ok.
+    optional: true
+methods: []
+createdAt: '2026-10-03T12:14:14.074Z'
+updatedAt: '2026-10-03T12:25:39.996Z'

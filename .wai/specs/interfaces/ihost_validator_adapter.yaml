@@ -75,6 +75,17 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: familyRelations
+    description: >-
+      Forward to validator_portal.familyRelations: the bound family's relation health for the web
+      canvas and share snapshots. The caller has already bound a root it is entitled to reach and
+      granted the request's reach (the caller's listed projects), so a producer or member outside it
+      is answered unavailable, never read.
+    signature: 'familyRelations(): ProjectRelations[]'
+    returns: ProjectRelations[]
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-09-30T05:53:11.027Z'
+updatedAt: '2026-10-03T12:15:25.317Z'

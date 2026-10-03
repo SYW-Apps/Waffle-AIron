@@ -184,6 +184,17 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: familyRelations
+    description: >-
+      Forward to family_validator.relations: the bound family's relation health — each project
+      member's externals status read at its own root, stamped with when, a project that could not be
+      opened answered with its reason — what the canvas colours its consumption edges from. Writes
+      nothing. Callers grant the reach first (a hosted request keeps its credential's).
+    signature: 'familyRelations(): ProjectRelations[]'
+    returns: ProjectRelations[]
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:52:33.272Z'
+updatedAt: '2026-10-03T12:15:21.922Z'

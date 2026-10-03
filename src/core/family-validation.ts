@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectBinding, runWithProjectRoot, type HostedRecordLookup } from '../utils/fs.js';
 // spec_validator: the owner's gate every selected project runs, and the gate
 // identity a member's lock is compared with.
 import {
@@ -27,7 +27,7 @@ import {
   loadTypeSpecs,
 } from './adapters/validator-core.js';
 import { getExternalsStatus } from './adapters/validator-surfaces.js';
-import { dependencyCycles, familyNode, keyIn, type ExternalStatus, type ProjectFamily, type ProjectNode } from '../models/index.js';
+import { dependencyCycles, familyNode, keyIn, type AuthoredReference, type ExternalStatus, type ProjectFamily, type ProjectNode, type ProjectRelations } from '../models/index.js';
 import { admits, rangeProblem, requiredPolicies, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 import { packSettings, type PackSettings } from '../models/pack-impact.js';
 import type { LoadedExtensions } from './extensions.js';
@@ -131,10 +131,16 @@ function reachCeiling(root: string, family: boolean | undefined): Ceiling {
   return { topRoot: root, narrowed: true };
 }
 
-/** Step 4: bind a project's root within the ceiling; the caller's binding is restored afterwards. */
+/**
+ * Step 4: bind a project's root within the ceiling; the caller's binding is
+ * restored afterwards. A hosted request's record lookup rides into the new
+ * scope, so a `source.hosted` producer resolves within the caller's reach (and
+ * one out of it stays unavailable) instead of being lost with the binding.
+ */
 function within<T>(dir: string, ceiling: Ceiling, fn: () => T): T {
   if (ceiling === null) return runWithProjectRoot(dir, fn);
-  return runWithProjectBinding(dir, { topRoot: ceiling.topRoot, parentReach: true, narrowed: ceiling.narrowed }, fn);
+  const lookup = getHostedLookup();
+  return runWithProjectBinding(dir, { topRoot: ceiling.topRoot, parentReach: true, narrowed: ceiling.narrowed, ...(lookup ? { hostedLookup: lookup } : {}) }, fn);
 }
 
 // ---- selection -------------------------------------------------------------
@@ -218,7 +224,8 @@ function referencedOf(nodes: ProjectNode[]): Referenced[] {
 
 /** A referenced member's root bound read-only, its own root its ceiling: nothing above it is read. */
 function atReferenced<T>(ref: Referenced, fn: () => T): T {
-  return runWithProjectBinding(ref.directory!, { topRoot: ref.directory!, parentReach: true, narrowed: true }, fn);
+  const lookup = getHostedLookup();
+  return runWithProjectBinding(ref.directory!, { topRoot: ref.directory!, parentReach: true, narrowed: true, ...(lookup ? { hostedLookup: lookup } : {}) }, fn);
 }
 
 /** The graph narrowed to the selection: its nodes, the references between them, and their problems. */
@@ -622,6 +629,147 @@ export function projectApprovals(depth?: number): ProjectApproval[] {
   }
   // Step 10: root first.
   return entries;
+}
+
+// ---- relation health -------------------------------------------------------
+//
+// What the canvas colours its consumption edges from: each project's externals
+// status read at its OWN root — the very comparison compose judges — and, for a
+// contained project member it references (no external, so no status names it),
+// its own gate's findings on those references. Writes nothing, judges nothing.
+
+/** The reach a relation read is bound with: the caller's grant, else the bound root; the request's record lookup kept. */
+type RelationReach = { topRoot: string; parentReach: boolean; narrowed?: boolean; hostedLookup?: HostedRecordLookup };
+
+/**
+ * Step 2: the reach the caller granted — a hosted request's credential reach,
+ * with its record lookup — or null when none was granted: a local caller reads
+ * with no ceiling, the explicit walk `validate --family` makes, so a `../`
+ * producer a project declares is compared rather than left out of reach.
+ */
+function relationReach(root: string): RelationReach | null {
+  const granted = getRequestParentReach();
+  if (!granted) return null;
+  const lookup = getHostedLookup();
+  const base = granted.parentReach
+    ? { topRoot: granted.topRoot ?? root, parentReach: true, ...(granted.narrowed ? { narrowed: true } : {}) }
+    : { topRoot: root, parentReach: true, narrowed: true };
+  return { ...base, ...(lookup ? { hostedLookup: lookup } : {}) };
+}
+
+/** Why a contained member cannot be read in this request; null when it can (a hosted record the lookup answers, or no hosted request at all). */
+function outsideReach(node: ProjectNode): string | null {
+  const lookup = getHostedLookup();
+  if (!lookup || node.namespace === '') return null;
+  return lookup(node.id ?? node.namespace) === null ? `the project "${node.id ?? node.namespace}" lies outside this request's reach` : null;
+}
+
+/** What a reference into a contained member is called as a use: the public name it bound to, else the name it reaches. */
+function referenceUse(ref: AuthoredReference): string {
+  return ref.publicName ?? ref.resolved.split('::').pop() ?? ref.authored;
+}
+
+/** The gate's resolution failure at one reference's call site, if any. */
+function failureAt(ref: AuthoredReference, failures: ValidationIssue[]): ValidationIssue | undefined {
+  const site = `${ref.specId} (${ref.position})`;
+  const last = ref.resolved.split('::').pop() ?? '';
+  return failures.find((i) => i.resolution!.callSite === site
+    && (i.resolution!.canonicalTarget === ref.authored || (i.resolution!.canonicalTarget ?? '').endsWith(`::${last}`)));
+}
+
+/** Step 11: one contained member's relation, from the consumer's own gate findings on its references into it. */
+function containedStatus(child: ProjectNode, refs: AuthoredReference[], failures: ValidationIssue[]): ExternalStatus {
+  const base = { alias: child.mountAlias!, project: child.id ?? child.namespace, sourceKind: 'family', pinned: false };
+  const unreachable = outsideReach(child);
+  if (unreachable) {
+    const uses = [...new Set(refs.map(referenceUse))].map((name) => ({ publicName: name, state: 'unavailable' as const, code: 'EXTERNAL_CHECK_UNAVAILABLE', detail: unreachable }));
+    return { ...base, reachable: false, stale: false, outOfReach: true, uses, detail: unreachable };
+  }
+  const uses: ExternalStatus['uses'] = [];
+  for (const ref of refs) {
+    const failed = failureAt(ref, failures);
+    const use: ExternalStatus['uses'][number] = failed
+      ? { publicName: referenceUse(ref), state: 'removed', code: failed.code, detail: failed.resolution!.reason }
+      : { publicName: referenceUse(ref), state: 'unchanged' };
+    if (!uses.some((u) => u.publicName === use.publicName && u.state === use.state)) uses.push(use);
+  }
+  return { ...base, reachable: true, stale: uses.some((u) => u.state === 'removed'), uses, detail: 'a contained member, read live — nothing is pinned' };
+}
+
+/** Steps 7-11: with one project's root bound, a status per contained project member it references that no status already answers. */
+function containedRelations(answered: ExternalStatus[]): ExternalStatus[] {
+  // Step 8: its own graph — the references it writes into its own members.
+  const own = projectFamily();
+  const consumed = own.nodes
+    .filter((n) => n.parent === '' && n.mountAlias !== undefined && !answered.some((s) => s.alias === n.mountAlias))
+    .map((child) => ({
+      child,
+      refs: own.authoredReferences.filter((r) => (own.owners.get(r.specId) ?? '') === '' && r.producer === child.namespace && r.binding !== 'local'),
+    }))
+    .filter((c) => c.refs.length > 0);
+  // Step 7: nothing contained is consumed.
+  if (consumed.length === 0) return [];
+  // Steps 9-10: its own gate under its own configuration, for the failures it raises on those references.
+  const config = configOrNull();
+  const failures = validateProject({ rules: config?.rules, projectType: config?.projectType })
+    .issues.filter((i) => i.resolution !== undefined && i.resolution.outcome !== 'resolved');
+  // Step 11.
+  return consumed.map(({ child, refs }) => containedStatus(child, refs, failures));
+}
+
+/** Steps 5-12: one project's relations, bound to its own root within the reach. */
+function relationsAt(key: string, dir: string, reach: RelationReach | null): ProjectRelations {
+  const bound = <T>(fn: () => T): T => (reach === null ? runWithProjectRoot(dir, fn) : runWithProjectBinding(dir, reach, fn));
+  return bound(() => {
+    // Step 6: everything it consumes as an external or a referenced member.
+    const statuses = getExternalsStatus();
+    // Steps 7-11: what it consumes of its own contained members.
+    const contained = containedRelations(statuses);
+    // Step 12.
+    return { project: key, externals: [...statuses, ...contained], comparedAt: new Date().toISOString() };
+  });
+}
+
+/** Step 14: a project whose statuses could not be read — every edge from it unavailable, never a pass. */
+function unopened(key: string, detail: string): ProjectRelations {
+  return { project: key, externals: [], comparedAt: new Date().toISOString(), detail };
+}
+
+/**
+ * ifamily_validator.relations — the family's relation health for the canvas:
+ * the bound root and each project member at every level, contained and
+ * referenced, each with its externals status read at its own root and stamped
+ * with when; one that cannot be opened within the reach is answered with its
+ * reason and no statuses. The caller grants the reach before it asks.
+ */
+export function familyRelations(): ProjectRelations[] {
+  // Step 1: the bound root's graph.
+  const family = projectFamily();
+  const root = path.resolve(getProjectRoot());
+  // Step 2: the projects to answer for, and the reach granted.
+  const reach = relationReach(root);
+  const out: ProjectRelations[] = [];
+  // Steps 3-15: each contained project, root first.
+  for (const node of family.nodes) {
+    // Step 4: can its root be opened within the reach?
+    const unreachable = outsideReach(node);
+    if (unreachable || !fs.existsSync(node.directory)) {
+      out.push(unopened(node.namespace, unreachable ?? `its root ${node.directory} does not exist`));
+      continue;
+    }
+    out.push(relationsAt(node.namespace, node.directory, reach));
+  }
+  // Then each referenced project member, at the root it is opened at — its own root its ceiling.
+  for (const ref of referencedOf(family.nodes)) {
+    if (ref.directory === undefined) {
+      out.push(unopened(ref.key, ref.problem ?? 'its root could not be located'));
+      continue;
+    }
+    const lookup = getHostedLookup();
+    out.push(relationsAt(ref.key, ref.directory, { topRoot: ref.directory, parentReach: true, narrowed: true, ...(lookup ? { hostedLookup: lookup } : {}) }));
+  }
+  // Step 16: root first.
+  return out;
 }
 
 // ---- the governance checks -------------------------------------------------

@@ -70,7 +70,7 @@ methods:
   - name: renderDiagram
     narrative:
       - stepNumber: 1
-        description: Forward to the core orchestrator
+        description: Forward to the core orchestrator, relation health included
         type: call
         targetComponent: core_orchestrator
         targetMethod: renderDiagram
@@ -197,7 +197,7 @@ methods:
   - name: buildCanvasDataModel
     narrative:
       - stepNumber: 1
-        description: Forward to the architecture diagrams
+        description: Forward to the architecture diagrams, relation health included
         type: call
         targetComponent: architecture_diagrams
         targetMethod: buildCanvasDataModel
@@ -245,4 +245,4 @@ methods:
         targetMethod: excerpt
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-02T20:24:09.972Z'
+updatedAt: '2026-10-03T12:16:29.861Z'
