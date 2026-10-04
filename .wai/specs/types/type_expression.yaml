@@ -14,12 +14,13 @@ description: >-
   the grammar leaves out (TYPE_FORM_UNSUPPORTED: model the choice as a named type, or as two
   params); `async T` is a call completing later with T. The position rules (TYPE_POSITION_INVALID):
   void only as a whole returns (or `async void`), never inside a collection or union and never
-  `void?`; async only at the top of a returns; a map key is string, int or an enum; `T??` is refused
-  and `any?` reads as any. Inline object shapes, inline function types, string-literal unions,
-  intersections, utility types and tuples are not in the grammar either: each has a named
-  replacement (a value-object, a signature type, an enum). Today's spellings are aliases the parser
-  accepts and normalises — TypeScript's (`T[]`, `Array<T>`, `ReadonlyArray<T>` → list; `Set`,
-  `ReadonlySet` → set; `Map`, `Record`, `ReadonlyMap` → map; `T | null`, `T | undefined`,
+  `void?`; async only at the top of a returns; a map key is string, int or an enum; a named scalar's
+  holds is one primitive other than void and any — never a named type, a collection, an optional or
+  a union; `T??` is refused and `any?` reads as any. Inline object shapes, inline function types,
+  string-literal unions, intersections, utility types and tuples are not in the grammar either: each
+  has a named replacement (a value-object, a signature type, an enum). Today's spellings are aliases
+  the parser accepts and normalises — TypeScript's (`T[]`, `Array<T>`, `ReadonlyArray<T>` → list;
+  `Set`, `ReadonlySet` → set; `Map`, `Record`, `ReadonlyMap` → map; `T | null`, `T | undefined`,
   `Option<T>`, `Optional<T>` → `T?`; `Promise<T>` at the top of a returns → `async T`; boolean →
   bool; integer, long and the sized integers → int; double, f32, f64 → float; Buffer, Uint8Array →
   bytes; Date, timestamp → datetime; object, unknown, json, Json → any) and the legacy builtin
@@ -101,4 +102,4 @@ methods:
     symbol: typeIsMany
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:49.343Z'
-updatedAt: '2026-10-04T10:21:21.875Z'
+updatedAt: '2026-10-04T10:51:48.792Z'

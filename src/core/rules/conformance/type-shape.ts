@@ -1,4 +1,4 @@
-import { pathKey, type TypeShapeFact } from '../../../models/index.js';
+import { dialectOf, parseTypePosition, pathKey, type SourceFileFacts, type TypeShapeFact, type TypeSpec } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -49,6 +49,13 @@ import { RuleContext, SddRule } from '../types.js';
 // its own spec at a site the finding names, and paying one means changing the
 // code or the spec. The units are field names, so a record cannot grow a
 // seventh field behind a register entry written for six.
+//
+// A NAMED SCALAR (a value-object declaring `holds`) has no field list: its
+// shape is the one primitive it holds, so it is compared with the right side
+// of the type alias the file declares under its name, read through the file's
+// dialect (`type PackPath = string` agrees with holds string). An object shape
+// declared under that name instead is a record where the design says one
+// value, and disagrees as plainly.
 // ---------------------------------------------------------------------------
 
 /** What a shape is, in the words a message uses for it. */
@@ -62,10 +69,48 @@ function absence(optional: boolean): string {
   return optional ? 'may be absent' : 'is always there';
 }
 
+/**
+ * Steps 11-14: a named scalar against the code. What the file declares under
+ * the type's code name — an alias's right side, or an object shape — is
+ * compared with the primitive the type holds, through the file's dialect.
+ * Silent below exact grade, without a dialect, or when the file declares
+ * neither: a missing declaration is typeRealization's finding.
+ */
+function judgeNamedScalar(ctx: RuleContext, type: TypeSpec, file: string, facts: SourceFileFacts | undefined): void {
+  if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') return;
+  const dialect = dialectOf(facts);
+  const holds = parseTypePosition(type.holds!, 'holds').expression;
+  if (!dialect || !holds) return;
+  const symbol = type.symbol ?? type.name;
+  const own = (record: Record<string, unknown> | undefined): boolean =>
+    !!record && Object.prototype.hasOwnProperty.call(record, symbol);
+  let declared: string | undefined;
+  if (own(facts.aliasTypes)) {
+    const annotation = facts.aliasTypes![symbol];
+    if (dialect.agrees(annotation, holds, new Map())) return;
+    declared = `an alias of \`${annotation}\``;
+  } else if (own(facts.typeShapes)) {
+    declared = 'a record (an object shape)';
+  } else {
+    return;
+  }
+  ctx.addIssue(
+    'warning',
+    'TYPE_HOLDS_MISMATCH',
+    `Named scalar "${type.id}" holds ${type.holds}, but "${file}" declares "${symbol}" as ${declared}. Every reader `
+    + 'of a named scalar is told what one value of it is, and the code says otherwise. Make the declaration an alias '
+    + `of the primitive (in TypeScript, \`type ${symbol} = ${dialect.write(holds)}\`), or change what the type holds.`,
+    type.id,
+    undefined,
+    undefined,
+    { at: symbol },
+  );
+}
+
 export const typeShapeRule: SddRule = {
   name: 'type-shape',
   judges: 'code',
-  description: 'Code-to-contract for the DATA: a type spec\'s `fields` are compared, name by name, against the shape its `sourcePath` actually declares. `typeRealization` asks whether a type EXISTS in code; nothing asked whether it is the shape the spec claims, so a type spec could describe two fields of a six-field record — and call the two that are optional required — straight through a lock and a CI gate, while the ERD, the agent briefs and every implementer read it as truth. That is the worst of the code-to-spec gaps, because a wrong signature eventually breaks at a call site and a type spec that lies is only ever read by humans and agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists, and a DERIVED one, an alias followed one hop to the object literal its schema is built from, where the keys are the members — and on through a composition the same file writes out (`Base.extend({…})` on a schema constant it declares), the extension\'s keys laid over the base\'s. A shape that extends another is judged on what it shows and never on what it omits, since its inherited members are not in this file to count.',
+  description: 'Code-to-contract for the DATA: a type spec\'s `fields` are compared, name by name, against the shape its `sourcePath` actually declares. `typeRealization` asks whether a type EXISTS in code; nothing asked whether it is the shape the spec claims, so a type spec could describe two fields of a six-field record — and call the two that are optional required — straight through a lock and a CI gate, while the ERD, the agent briefs and every implementer read it as truth. That is the worst of the code-to-spec gaps, because a wrong signature eventually breaks at a call site and a type spec that lies is only ever read by humans and agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists, and a DERIVED one, an alias followed one hop to the object literal its schema is built from, where the keys are the members — and on through a composition the same file writes out (`Base.extend({…})` on a schema constant it declares), the extension\'s keys laid over the base\'s. A shape that extends another is judged on what it shows and never on what it omits, since its inherited members are not in this file to count. A NAMED SCALAR (a value-object declaring `holds`) has no field list: its shape is the primitive it holds, compared with the right side of the type alias the file declares under its name, read through the file\'s dialect (`type PackPath = string` agrees with holds string); an object shape under that name, or an alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH.',
   codes: [
     {
       code: 'UNREALIZED_TYPE_FIELD',
@@ -79,6 +124,12 @@ export const typeShapeRule: SddRule = {
       code: 'UNDECLARED_TYPE_FIELD',
       defaultSeverity: 'warning',
       summary: 'The shape at a type\'s sourcePath carries a field the type spec does not declare — data the design never described, so no diagram draws it and no brief hands it to an implementer',
+      carryable: true,
+    },
+    {
+      code: 'TYPE_HOLDS_MISMATCH',
+      defaultSeverity: 'warning',
+      summary: 'A named scalar\'s holds disagrees with what its sourcePath declares under its name — an alias of another type, or a record — so every reader is told one value of it is something the code says it is not',
       carryable: true,
     },
     {
@@ -101,6 +152,12 @@ export const typeShapeRule: SddRule = {
       if (type.subsystem && ctx.isInChainedSubproject(type.subsystem)) continue;
       const file = pathKey(type.sourcePath);
       const facts = code.factsAt(file);
+
+      // ---- 2 / 11-14. a named scalar's shape is the primitive it holds ----
+      if (type.holds !== undefined) {
+        judgeNamedScalar(ctx, type, file, facts);
+        continue;
+      }
 
       // ---- 2 / 9. silent unless the shape can honestly be read at all ----
       if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;

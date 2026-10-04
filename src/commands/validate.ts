@@ -73,7 +73,7 @@ export function validateProjectConfig(config: ProjectConfig): ValidationResult {
 export interface ValidateOptions {
   ci?: boolean; // treat warnings as errors (for CI pipelines); notices never fail
   subsystem?: string; // validate only a specific subsystem
-  recursive?: boolean | number; // at a parent: the family run (true), its depth (a number), or the owner's gate alone (false)
+  recursive?: boolean; // at a parent: the family run (true, the default) or the owner's gate alone (false, a member depth of 0)
   family?: boolean; // ask for the family run explicitly (`validate --family` at a member)
 }
 
@@ -287,7 +287,8 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       rules: projectConfig.rules,
       projectType: projectConfig.projectType,
       scopeSubsystem: options.subsystem,
-      recursive: options.recursive ?? true,
+      // The flag at the edge: --no-recursive is a member depth of 0, the default every level.
+      ...(options.recursive === false ? { memberDepth: 0 } : {}),
       family: options.family,
     };
     // Step 6: which spec-tree check — validation_options.selectsFamily, the one

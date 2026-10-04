@@ -380,18 +380,18 @@ describe('recursive subproject loading and namespacing', () => {
     invalidateSpecCache();
     // Every level here is a legacy mount (a member declaration, never a
     // subsystem), and no member declares an id, so each is keyed by its alias path.
-    const index0 = scanAllSpecs({ recursive: false });
+    const index0 = scanAllSpecs({ memberDepth: 0 });
     expect(index0.subsystems.map(s => s.id)).toEqual([]);
 
     // Depth 1 (recursive up to depth 1): billing is read; its own mount of invoice declares a member.
     invalidateSpecCache();
-    const index1 = scanAllSpecs({ recursive: 1 });
+    const index1 = scanAllSpecs({ memberDepth: 1 });
     expect(index1.subsystems.find(s => s.id === 'billing::invoice')).toBeUndefined();
     expect(index1.subsystems.find(s => s.id === 'billing::invoice::tax')).toBeUndefined();
 
     // Depth 2 (recursive up to depth 2 / full)
     invalidateSpecCache();
-    const index2 = scanAllSpecs({ recursive: true });
+    const index2 = scanAllSpecs();
     expect(index2.subsystems.find(s => s.id === 'billing')).toBeUndefined();
     expect(index2.subsystems.find(s => s.id === 'billing::invoice')).toBeUndefined();
     expect(index2.subsystems.find(s => s.id === 'billing::invoice::tax')).toBeDefined();

@@ -115,7 +115,8 @@ export function canonicalTypeRef(snapshot: SurfaceSnapshot, typeExpr: string): s
 /**
  * A type definition's shape: what a caller depends on, never its prose; every
  * field type canonical. An enum's shape is its kind and its value names in
- * declared order, so adding, removing or reordering a value moves it.
+ * declared order, so adding, removing or reordering a value moves it. A
+ * named scalar's shape is its kind and the primitive it holds.
  */
 function typeShape(snapshot: SurfaceSnapshot, def: SurfaceTypeDef): unknown {
   return {
@@ -131,6 +132,7 @@ function typeShape(snapshot: SurfaceSnapshot, def: SurfaceTypeDef): unknown {
       }
       : {}),
     ...(def.kind === 'enum' ? { values: (def.values ?? []).map((v) => v.name) } : {}),
+    ...(def.holds !== undefined ? { holds: canonicalTypeRef(snapshot, def.holds) } : {}),
   };
 }
 

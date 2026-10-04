@@ -159,6 +159,8 @@ export interface CanvasModel {
     signature?: string;
     /** An enum's values in declared order — drawn in place of a field list. */
     values?: { name: string; description?: string }[];
+    /** A named scalar's primitive — drawn compactly beside its name, with no field rows and no edges. */
+    holds?: string;
     /** Interface methods whose params/returns reference this type (usage trace). */
     usedBy: { component: string; method: string }[];
     componentClass?: string;
@@ -506,6 +508,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
     ...(t.kind === 'enum'
       ? { values: (t.values ?? []).map(v => ({ name: v.name, ...(v.description ? { description: v.description } : {}) })) }
       : {}),
+    ...(t.holds !== undefined ? { holds: t.holds } : {}),
     usedBy: usedByFor(t),
     ...(t.componentClass ? { componentClass: t.componentClass } : {}),
     ...(t.database ? { database: t.database } : {}),
@@ -541,8 +544,8 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
             : other.id;
           return matchTypeRef(ref, qualified);
         });
-        // No edge to an enum: it is a value domain, not an entity relation.
-        if (target && target.id !== t.id && target.kind !== 'enum') {
+        // No edge to an enum or a named scalar: each is a value domain, not an entity relation.
+        if (target && target.id !== t.id && target.kind !== 'enum' && target.holds === undefined) {
           const card = multiplicity(field);
           if (!typeEdges.some(e => e.from === t.id && e.to === target.id && e.field === field.name)) {
             typeEdges.push({ from: t.id, to: target.id, field: field.name, card });
@@ -2228,7 +2231,7 @@ var MODEL = __MODEL_JSON__;
       return '';
     }
     function visibleFields(t) {
-      if (det === 'names' || t.values) return [];
+      if (det === 'names' || t.values || t.holds) return [];
       if (det === 'keys') return t.fields.filter(function (f) { return markerOf(t, f) !== ''; });
       return t.fields;
     }
@@ -2275,7 +2278,8 @@ var MODEL = __MODEL_JSON__;
       var sig = t.signature && det !== 'names' ? t.signature : '';
       // An enum is drawn with its values in place of a field list.
       var vals = t.values && det !== 'names' ? t.values : [];
-      var head = t.name + '  \\u00AB' + t.kind + '\\u00BB';
+      // A named scalar is drawn compactly: its name and the primitive it holds.
+      var head = t.name + (t.holds ? ' = ' + t.holds : '') + '  \\u00AB' + t.kind + '\\u00BB';
       var rows = (sig ? [sig] : []).concat(vals.map(function (v) { return '\\u2022 ' + v.name; }))
         .concat(fields.map(function (f) { return rowText(t, f); }))
         .concat(meths.map(function (m) { return '\\u0192 ' + m.name + '(): ' + m.returns; }));
@@ -4855,6 +4859,9 @@ var MODEL = __MODEL_JSON__;
           : '<span class="desc">no fields</span>';
         if (ty.signature) {
           body += section('Signature', 1, '<div class="method"><code>' + esc(ty.signature) + '</code></div>', true);
+        } else if (ty.holds) {
+          body += section('Holds', 1, '<div class="method"><code>' + esc(ty.holds) + '</code>'
+            + '<div class="mdesc">A named scalar: one ' + esc(ty.holds) + ' under this name.</div></div>', true);
         } else if (ty.values) {
           body += section('Values', ty.values.length, ty.values.length
             ? ty.values.map(function (v) {

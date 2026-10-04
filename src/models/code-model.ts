@@ -374,6 +374,13 @@ export interface SourceFileFacts {
    */
   enumValues?: Record<string, string[]>;
   /**
+   * The right side of each TYPE ALIAS the file declares, as written, by alias
+   * name — every alias whose right side is not an object shape
+   * (`type PackPath = string`). What a named scalar's holds is compared with
+   * through the file's dialect (TYPE_HOLDS_MISMATCH). EXACT grade only.
+   */
+  aliasTypes?: Record<string, string>;
+  /**
    * Module-scope mutable bindings (`let`/`var` at the top level of the file).
    * EXACT grade only. The static approximation of held state a logic
    * component may be hiding — fuel for the HIDDEN_STATE lint. (Mutation of

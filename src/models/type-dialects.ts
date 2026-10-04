@@ -128,6 +128,7 @@ const typescriptDialect: TypeDialect = {
       'A | B → A | B',
       'async T → Promise<T>',
       "an enum E → type E = 'a' | 'b' (a string-literal union alias)",
+      'a named scalar E holding P → type E = P (an alias of the primitive)',
     ];
   },
 };

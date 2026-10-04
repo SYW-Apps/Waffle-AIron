@@ -8,14 +8,21 @@ description: >-
   fields, no methods, no invariants, no inheritance — or an enum: a closed, ordered set of named
   values (EnumValue), with optional pure methods exactly as a value-object's, and nothing else (no
   fields, params, returns, componentClass, database, table or linkedEntity — ENUM_MEMBERS). A
-  contract method takes a signature by naming it in its signatureFrom; a param may also be typed by
-  one (a callback). An enum may type any position a named type may, a map key included. Every type
-  position it holds — a field's type, a type method's params and returns, a signature's params and
-  returns — is written in the neutral type grammar (type_expression). sourcePath and symbol make the
-  type a CLAIM on code — the file it names must resolve and its declaration must be anchored in it —
-  exactly as an implementation_spec's sourcePath claims the code realizing a contract; an enum's
-  declaration is a string-literal union alias, a z.enum schema or a string enum in TypeScript, and
-  its values are compared with the code's (UNREALIZED_ENUM_VALUE, UNDECLARED_ENUM_VALUE).
+  value-object may instead be a NAMED SCALAR: it declares `holds: <primitive>` (string, int, float,
+  bool, bytes, date, datetime or duration) in place of fields — a newtype or type alias in every
+  language (`type PackPath = string`), not a union, not a named type and not any. A named scalar
+  models its value, so it is not hollow; it carries no fields, componentClass, database, table or
+  linkedEntity, and holds on an entity, an enum or a signature means nothing (NAMED_SCALAR_MEMBERS).
+  A contract method takes a signature by naming it in its signatureFrom; a param may also be typed
+  by one (a callback). An enum may type any position a named type may, a map key included. Every
+  type position it holds — a field's type, a type method's params and returns, a signature's params
+  and returns, a named scalar's holds — is written in the neutral type grammar (type_expression).
+  sourcePath and symbol make the type a CLAIM on code — the file it names must resolve and its
+  declaration must be anchored in it — exactly as an implementation_spec's sourcePath claims the
+  code realizing a contract; an enum's declaration is a string-literal union alias, a z.enum schema
+  or a string enum in TypeScript, and its values are compared with the code's
+  (UNREALIZED_ENUM_VALUE, UNDECLARED_ENUM_VALUE); a named scalar's declaration is a type alias whose
+  right side must agree with holds through the file's dialect (TYPE_HOLDS_MISMATCH).
 fields:
   - name: kind
     type: string
@@ -128,6 +135,14 @@ fields:
       An enum's values, in declared order (the order is part of the design), unique by nameKey;
       required and non-empty on kind enum and only there (ENUM_MEMBERS)
     optional: true
+  - name: holds
+    type: string
+    description: >-
+      A named scalar's one primitive (string, int, float, bool, bytes, date, datetime or duration),
+      in place of fields; only on a value-object, and never beside fields (NAMED_SCALAR_MEMBERS).
+      Read as a type position: an alias is respelled, number is refused ("int or float?"), and
+      anything but one of those primitives is TYPE_POSITION_INVALID.
+    optional: true
 methods:
   - name: qualifiedId
     signature: 'qualifiedId(): string'
@@ -189,12 +204,12 @@ methods:
     description: >-
       This type with every type position read under the grammar (type_expression.parse, with the
       position each stands in: field, type-method-param, type-method-returns, signature-param,
-      signature-returns): each canonicalisable position respelled to its canonical text, every alias
-      position recorded as a respelling, and every position that is not canonical recorded as a
-      located problem and left as written. A type method without params keeps its prose signature;
-      only its returns is read. Pure.
+      signature-returns, holds): each canonicalisable position respelled to its canonical text,
+      every alias position recorded as a respelling, and every position that is not canonical
+      recorded as a located problem and left as written. A type method without params keeps its
+      prose signature; only its returns is read. Pure.
     sourcePath: src/models/type-grammar.ts
     symbol: typeCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-04T10:21:23.245Z'
+updatedAt: '2026-10-04T10:51:30.613Z'

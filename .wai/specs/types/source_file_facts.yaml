@@ -191,6 +191,13 @@ fields:
       UNDECLARED_ENUM_VALUE). EXACT grade only; a union mixing non-literals is not enum-like and is
       left out.
     optional: true
+  - name: aliasTypes
+    type: map<string, string>
+    description: >-
+      The right side of each type alias the file declares, as written, by alias name — every alias
+      whose right side is not an object shape (`type PackPath = string`). What a named scalar's
+      holds is compared with through the file's dialect (TYPE_HOLDS_MISMATCH). EXACT grade only.
+    optional: true
 methods:
   - name: resolveImport
     signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
@@ -256,4 +263,4 @@ methods:
     symbol: dialectOf
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-04T10:29:17.862Z'
+updatedAt: '2026-10-04T10:51:55.778Z'

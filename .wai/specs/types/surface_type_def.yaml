@@ -41,7 +41,11 @@ fields:
     type: list<EnumValue>
     description: An enum's values in declared order; only on kind enum
     optional: true
+  - name: holds
+    type: string
+    description: A named scalar's one primitive, in place of fields; only on a value-object that declares it
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:32.022Z'
-updatedAt: '2026-10-04T10:21:15.337Z'
+updatedAt: '2026-10-04T10:51:31.702Z'

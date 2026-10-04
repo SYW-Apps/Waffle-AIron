@@ -1256,7 +1256,7 @@ export function mountCanvas(host, model, opts = {}) {
       return '';
     }
     function visibleFields(t) {
-      if (det === 'names' || t.values) return [];
+      if (det === 'names' || t.values || t.holds) return [];
       if (det === 'keys') return t.fields.filter(function (f) { return markerOf(t, f) !== ''; });
       return t.fields;
     }
@@ -1303,7 +1303,8 @@ export function mountCanvas(host, model, opts = {}) {
       var sig = t.signature && det !== 'names' ? t.signature : '';
       // An enum is drawn with its values in place of a field list.
       var vals = t.values && det !== 'names' ? t.values : [];
-      var head = t.name + '  \u00AB' + t.kind + '\u00BB';
+      // A named scalar is drawn compactly: its name and the primitive it holds.
+      var head = t.name + (t.holds ? ' = ' + t.holds : '') + '  \u00AB' + t.kind + '\u00BB';
       var rows = (sig ? [sig] : []).concat(vals.map(function (v) { return '\u2022 ' + v.name; }))
         .concat(fields.map(function (f) { return rowText(t, f); }))
         .concat(meths.map(function (m) { return '\u0192 ' + m.name + '(): ' + m.returns; }));
@@ -3883,6 +3884,9 @@ export function mountCanvas(host, model, opts = {}) {
           : '<span class="desc">no fields</span>';
         if (ty.signature) {
           body += section('Signature', 1, '<div class="method"><code>' + esc(ty.signature) + '</code></div>', true);
+        } else if (ty.holds) {
+          body += section('Holds', 1, '<div class="method"><code>' + esc(ty.holds) + '</code>'
+            + '<div class="mdesc">A named scalar: one ' + esc(ty.holds) + ' under this name.</div></div>', true);
         } else if (ty.values) {
           body += section('Values', ty.values.length, ty.values.length
             ? ty.values.map(function (v) {

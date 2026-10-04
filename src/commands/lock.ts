@@ -53,7 +53,7 @@ export interface LockOptions {
    * this project only and never writes below it. Each member locks at its own
    * root.
    */
-  recursive?: boolean | number;
+  recursive?: boolean;
 }
 
 /** Flags of the `wairon lock-check` merge gate (cli_lock_adapter LockCheckOptions). */

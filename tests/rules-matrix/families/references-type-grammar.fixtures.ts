@@ -15,6 +15,9 @@
  *    (TypeScript's `string[]` for `list<string>`), which any save rewrites.
  *  - ENUM_MEMBERS (error): an enum with no values, two values one name apart,
  *    or a member an enum cannot carry; or values on a type of another kind.
+ *  - NAMED_SCALAR_MEMBERS (error, named-scalar-types.ts): a named scalar — a
+ *    value-object holding one primitive — carrying fields or a member it
+ *    cannot carry; or holds on a type of another kind.
  *
  * Every tree is written raw, the way a hand edit or a tree from before the
  * grammar lands on disk: the loader reads each position once and these rules
@@ -196,4 +199,39 @@ export default [
       values: [{ name: 'picked' }, { name: 'in-transit', description: 'Handed to the carrier.' }, { name: 'delivered' }],
     }),
   }),
+
+  // -------------------------------------------------------------------------
+  // NAMED_SCALAR_MEMBERS
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'NAMED_SCALAR_MEMBERS',
+    severity: 'error',
+    anchoredTo: 'tracking-number',
+    expectFire: true,
+    scenario:
+      'The tracking number is a value-object holding a string, and also carries a carrier field beside it.',
+    tree: trackingNumberTree({ fields: [{ name: 'carrier', type: 'string', description: 'The carrier that issued it.' }] }),
+  }),
+  defineRuleFixture({
+    code: 'NAMED_SCALAR_MEMBERS',
+    expectFire: false,
+    reason: 'A value-object holding one primitive, with nothing beside it, is exactly a named scalar.',
+    scenario: 'The tracking number is a value-object holding a string and nothing else.',
+    tree: trackingNumberTree({}),
+  }),
 ];
+
+/** One tracking-number named scalar, with whatever else the tree states beside its holds. */
+function trackingNumberTree(extra: Record<string, unknown>): FixtureTree {
+  return {
+    subsystems: [SHIPPING_SUB],
+    types: [{
+      id: 'tracking-number',
+      kind: 'value-object',
+      subsystem: 'parcel-shipping',
+      description: 'The number a carrier issues for one outbound parcel.',
+      holds: 'string',
+      ...extra,
+    }],
+  };
+}

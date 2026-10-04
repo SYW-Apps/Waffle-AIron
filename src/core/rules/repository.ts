@@ -13,6 +13,7 @@ import { signatureTypesRule } from './integrity/signature-types.js';
 import { signatureTextRule } from './integrity/signature-text.js';
 import { typeExpressionsRule } from './integrity/type-expressions.js';
 import { enumTypesRule } from './integrity/enum-types.js';
+import { namedScalarTypesRule } from './integrity/named-scalar-types.js';
 import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
 import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
@@ -147,9 +148,10 @@ export const SDD_RULES: SddRule[] = [
   signatureTypesRule,
   signatureTextRule,
   // The type grammar beside the signatures: how each stored type position is
-  // spelled, then what an enum may hold.
+  // spelled, then what an enum and a named scalar may hold.
   typeExpressionsRule,
   enumTypesRule,
+  namedScalarTypesRule,
   // Contracts and the targets narratives name, in four questions with one
   // owner each: does the implementation mirror its contract, does a target
   // inside this tree resolve, does a target that leaves it pin to exactly one

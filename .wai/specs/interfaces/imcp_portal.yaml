@@ -394,20 +394,23 @@ methods:
     description: >-
       Tool: define a type — an entity or value-object, the data the components operate on, a
       signature, a named function type, or an enum, a closed ordered set of named values (`values:
-      [{name, description?}]`, with optional pure methods and nothing else — ENUM_MEMBERS). Entities
-      are owned by a subsystem; a shared value object, signature or enum names none and is
-      system-level. Fields are data; methods are PURE intrinsic behaviour only, because anything
-      needing a collaborator belongs on a component that takes the entity as an argument, and a type
-      method may carry structured params, which then derive its signature text as a contract
-      method's do. A signature carries params and returns and nothing else (SIGNATURE_TYPE_MEMBERS);
-      a contract method takes it by naming it as its signatureFrom. Every type position is written
-      in the neutral type grammar (string, int, float, bool, bytes, date, datetime, duration, void,
-      any; list<T>, set<T>, map<K, V>; `T?`; `A | B` of named types; `async T` on a returns);
-      today's spellings are accepted and stored canonical, the receipt's respellings naming each,
-      and a position that is not canonical is refused with its replacement (`number`: int or
-      float?). A type may also CLAIM code: a sourcePath names the file holding its declaration and a
-      symbol binds the code-level name, and the file must then resolve with the declaration anchored
-      in it. The answer carries the write receipt as structured content beside the sentence.
+      [{name, description?}]`, with optional pure methods and nothing else — ENUM_MEMBERS). A
+      value-object may instead be a named scalar: `holds: <primitive>` (string, int, float, bool,
+      bytes, date, datetime or duration) in place of fields, a newtype or type alias in every
+      language (NAMED_SCALAR_MEMBERS beside fields or on another kind). Entities are owned by a
+      subsystem; a shared value object, signature or enum names none and is system-level. Fields are
+      data; methods are PURE intrinsic behaviour only, because anything needing a collaborator
+      belongs on a component that takes the entity as an argument, and a type method may carry
+      structured params, which then derive its signature text as a contract method's do. A signature
+      carries params and returns and nothing else (SIGNATURE_TYPE_MEMBERS); a contract method takes
+      it by naming it as its signatureFrom. Every type position is written in the neutral type
+      grammar (string, int, float, bool, bytes, date, datetime, duration, void, any; list<T>,
+      set<T>, map<K, V>; `T?`; `A | B` of named types; `async T` on a returns); today's spellings
+      are accepted and stored canonical, the receipt's respellings naming each, and a position that
+      is not canonical is refused with its replacement (`number`: int or float?). A type may also
+      CLAIM code: a sourcePath names the file holding its declaration and a symbol binds the
+      code-level name, and the file must then resolve with the declaration anchored in it. The
+      answer carries the write receipt as structured content beside the sentence.
     signature: 'sdd_add_type(spec: TypeSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -813,4 +816,4 @@ methods:
       address: mcp tools/call sdd_demote_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:27:37.393Z'
+updatedAt: '2026-10-04T10:53:44.849Z'

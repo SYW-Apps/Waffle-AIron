@@ -97,12 +97,6 @@ function withoutTrailingNewline(text: string): string {
   return text.endsWith('\n') ? text.slice(0, -1) : text;
 }
 
-/** The member levels the pin tree covers: as far as the report follows members. */
-function depthOf(recursive: boolean | number | undefined): number | undefined {
-  if (recursive === false) return 0;
-  return typeof recursive === 'number' ? recursive : undefined;
-}
-
 export async function runStatus(options: StatusOptions = {}): Promise<void> {
   // Step 1: refuse outside a wairon project — a dashboard of nothing would read
   // like an empty tree rather than like the wrong directory.
@@ -116,7 +110,7 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
   // A tree that will not load has no states to print: the report below says why.
   let approvals;
   try {
-    approvals = familyApprovals(depthOf(options.recursive));
+    approvals = familyApprovals(options.memberDepth);
   } catch {
     approvals = undefined;
   }

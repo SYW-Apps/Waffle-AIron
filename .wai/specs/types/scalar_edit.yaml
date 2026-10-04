@@ -8,8 +8,12 @@ description: >-
 subsystem: sdd_core
 fields:
   - name: path
-    type: list<ConfigPathSegment>
-    description: Keys and sequence indexes from the document root to the scalar
+    type: list<string>
+    description: >-
+      Keys and sequence indexes from the document root to the scalar, each a string: where the
+      document holds a block sequence the segment is the item's index in decimal digits, anywhere
+      else a mapping key — the document's own structure says which, so a mapping key that is all
+      digits stays a key
     optional: false
   - name: from
     type: string
@@ -22,4 +26,4 @@ fields:
 methods: []
 sourcePath: src/config/project-config.ts
 createdAt: '2026-09-26T10:58:42.146Z'
-updatedAt: '2026-10-04T10:27:34.856Z'
+updatedAt: '2026-10-04T10:54:03.208Z'

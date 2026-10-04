@@ -297,6 +297,17 @@ describe('type shape rules', () => {
       expect(res.issues.filter(i => i.code === 'HOLLOW_TYPE')).toEqual([]);
     } finally { proj.cleanup(); }
   });
+
+  it('a named scalar models the primitive it holds: it is not HOLLOW_TYPE', () => {
+    const proj = createTempProject();
+    proj.writeSpec('type', 'order-id', 'kind: value-object\nid: order-id\nname: OrderId\ndescription: the number of one order\nholds: string');
+    proj.activate();
+    try {
+      const res = validateProject();
+      expect(res.issues.filter(i => i.code === 'HOLLOW_TYPE')).toEqual([]);
+      expect(res.issues.filter(i => i.code === 'NAMED_SCALAR_MEMBERS')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
 });
 
 describe('per-spec lint allows (#[allow] for the conformance gate)', () => {

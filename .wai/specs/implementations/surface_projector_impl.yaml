@@ -59,7 +59,8 @@ methods:
           so two subsystems' types of one name both arrive — following the named types each parsed
           type expression references (type_expression.namedRefs) through a data type's fields and a
           signature type's params and returns, carrying a signature type into the closure with its
-          params and returns and an enum with its values in declared order
+          params and returns, an enum with its values in declared order and a named scalar with the
+          primitive it holds
         type: local
       - stepNumber: 10
         description: >-
@@ -84,4 +85,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-10-03T22:09:15.223Z'
+updatedAt: '2026-10-04T10:53:34.646Z'

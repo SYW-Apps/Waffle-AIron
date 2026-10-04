@@ -167,6 +167,8 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], 
       ...(t.kind === 'enum'
         ? { values: (t.values ?? []).map(v => ({ name: v.name, ...(v.description ? { description: v.description } : {}) })) }
         : {}),
+      // A named scalar travels with the primitive it holds.
+      ...(t.holds !== undefined ? { holds: t.holds } : {}),
     };
   });
 }

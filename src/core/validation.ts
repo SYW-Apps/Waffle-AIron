@@ -124,7 +124,6 @@ import {
   type ParentExcerpt,
   type SystemSpec,
   type TypeSpec,
-  type MemberDepth,
 } from '../models/index.js';
 import { declaredMembers, isPart, ProjectConfigSchema, RulesConfigSchema } from '../models/project.js';
 import type {
@@ -366,7 +365,12 @@ export interface ValidationOptions {
   rules?: RulesConfig;
   projectType?: string;
   scopeSubsystem?: string;
-  recursive?: MemberDepth;
+  /**
+   * At a project that declares members: how many member levels the run
+   * reaches. Absent, every level (the family run); 0, the owner's gate alone;
+   * n, the family run selecting that many levels.
+   */
+  memberDepth?: number;
   /**
    * Pre-loaded extension packs (the programmatic-wrapper path). When omitted,
    * the packs declared in the project's own config are loaded — so CLI and
@@ -463,7 +467,7 @@ function runOwnersGate(
   let treatAllAsComplete = false;
   let packSelections: PackSelection[] | undefined;
 
-  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'recursive' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions || 'family' in rulesOrOptions || 'packSelections' in rulesOrOptions)) {
+  if (rulesOrOptions && ('scopeSubsystem' in rulesOrOptions || 'memberDepth' in rulesOrOptions || 'rules' in rulesOrOptions || 'projectType' in rulesOrOptions || 'extensions' in rulesOrOptions || 'treatAllAsComplete' in rulesOrOptions || 'family' in rulesOrOptions || 'packSelections' in rulesOrOptions)) {
     const opts = rulesOrOptions as ValidationOptions;
     rules = opts.rules;
     projectType = opts.projectType ?? 'backend';
@@ -476,9 +480,9 @@ function runOwnersGate(
 
   // Step 1: the scan reads the bound project and the members it contains —
   // its own references into a contained member are judged against that
-  // member's L0 table, whatever `recursive` selects for a family run. Nothing
+  // member's L0 table, whatever `memberDepth` selects for a family run. Nothing
   // above the bound root is read.
-  scanAllSpecs({ recursive: true });
+  scanAllSpecs();
 
   const issues: ValidationIssue[] = [];
 
@@ -1068,7 +1072,7 @@ export function builtinProjectKinds(): string[] {
 export function computeGateStateId(): StateId {
   // The whole scan, so the graph names every direct member whatever an earlier
   // caller narrowed it to.
-  scanAllSpecs({ recursive: true });
+  scanAllSpecs();
   const content = computeOwnStateId();
   const extensions = loadProjectExtensions();
   // The project's governing configuration decides verdicts too: which profile

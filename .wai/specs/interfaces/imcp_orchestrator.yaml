@@ -227,12 +227,12 @@ methods:
     description: >-
       The sdd_add_type workflow: define an entity, a value-object, a signature or an enum through
       the core client adapter and answer with the receipt for it. The tool takes the kind signature
-      with top-level params and returns, the kind enum with its values, and a type method's optional
-      params. A define is an UPSERT, so re-defining an id REPLACES its fields, methods, invariants,
-      params, returns and values and restates its code claim — the notices name what was carried
-      forward, what a dropped member removed and what an omission cleared, and the respellings each
-      type position stored canonical. A type carries no lifecycle status, so the receipt states
-      none.
+      with top-level params and returns, the kind enum with its values, a named scalar's holds, and
+      a type method's optional params. A define is an UPSERT, so re-defining an id REPLACES its
+      fields, methods, invariants, params, returns, values and holds and restates its code claim —
+      the notices name what was carried forward, what a dropped member removed and what an omission
+      cleared, and the respellings each type position stored canonical. A type carries no lifecycle
+      status, so the receipt states none.
     signature: 'addType(spec: TypeSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -334,4 +334,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-04T10:19:01.841Z'
+updatedAt: '2026-10-04T10:53:46.812Z'

@@ -31,6 +31,8 @@ function snapshotOf(params: { name: string; type: string; optional?: boolean }[]
         id: 'channel', name: 'Channel', kind: 'enum', fields: [],
         values: [{ name: 'stable', description: 'Releases only.' }, { name: 'beta' }, { name: 'dev' }],
       },
+      { id: 'order_id', name: 'OrderId', kind: 'value-object', fields: [], holds: 'string' },
+      { id: 'issued_on', name: 'IssuedOn', kind: 'value-object', fields: [], holds: 'date' },
     ],
   } as SurfaceSnapshot;
 }
@@ -85,6 +87,12 @@ describe('toOpenApi — every form from its parsed expression', () => {
     expect(none.paths['/op'].post.responses['200'].content).toBeUndefined();
   });
 
+  it("renders a named scalar as its primitive's schema under the type's name", () => {
+    const doc = JSON.parse(toOpenApi(snapshotOf([])));
+    expect(doc.components.schemas.order_id).toEqual({ type: 'string', title: 'OrderId' });
+    expect(doc.components.schemas.issued_on).toEqual({ type: 'string', format: 'date', title: 'IssuedOn' });
+  });
+
   it('renders an enum as a string component with its values, their descriptions in its description', () => {
     const doc = JSON.parse(toOpenApi(snapshotOf([])));
     const channel = doc.components.schemas.channel;
@@ -108,6 +116,12 @@ describe('fromOpenApi — every schema read back canonical', () => {
   it('round-trips a returns', () => {
     const back = fromOpenApi(toOpenApi(snapshotOf([], 'async map<string, invoice>')), 'shop');
     expect(back.interfaces[0].methods[0].returns).toBe('map<string, invoice>');
+  });
+
+  it('decodes a named primitive component into a named scalar holding it', () => {
+    const back = fromOpenApi(toOpenApi(snapshotOf([])), 'shop');
+    expect(back.types.find((t) => t.id === 'order_id')).toEqual({ id: 'order_id', name: 'OrderId', kind: 'value-object', fields: [], holds: 'string' });
+    expect(back.types.find((t) => t.id === 'issued_on')).toEqual({ id: 'issued_on', name: 'IssuedOn', kind: 'value-object', fields: [], holds: 'date' });
   });
 
   it('decodes a named string component carrying enum into an enum type, descriptions kept', () => {

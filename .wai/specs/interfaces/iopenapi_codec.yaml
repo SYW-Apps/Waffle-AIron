@@ -14,7 +14,8 @@ methods:
       value's schema; `T?` the schema admitting null (type [X, "null"], or anyOf with {type: "null"}
       around a $ref); a union of named types oneOf their $refs; `async T` the schema of T; a named
       type a $ref into the components; an enum a component of type string with its values as `enum`,
-      their descriptions in its description. A position that is not canonical is documented as
+      their descriptions in its description; a named scalar a component carrying the schema of the
+      primitive it holds, titled with its name. A position that is not canonical is documented as
       unconstrained with a description naming it, never as an invented object. A signature type is a
       function type, which no JSON value can carry, so it gets no invented JSON-Schema shape: its
       component carries no `type` constraint, a description saying it is a function type with no
@@ -43,9 +44,10 @@ methods:
       a union, string formats date, date-time and duration their primitives, a contentEncoding
       base64 string bytes). A component carrying `x-wairon-signature` decodes back into a signature
       type with its params and returns, a named component of type string carrying `enum` into an
-      enum type, so a wairon-rendered document round-trips; an inline anonymous enum on a parameter
-      has no name to become a type and is read as string with a description listing its values; any
-      other component is a data type.
+      enum type, a named component whose schema is one primitive's (no properties) into a named
+      scalar holding it, so a wairon-rendered document round-trips; an inline anonymous enum on a
+      parameter has no name to become a type and is read as string with a description listing its
+      values; any other component is a data type.
     signature: 'fromOpenApi(document: string, projectName: string): SurfaceSnapshot'
     returns: SurfaceSnapshot
     params:
@@ -78,4 +80,4 @@ methods:
         description: The raw document body, JSON or YAML.
 status: complete
 createdAt: '2026-07-10T23:13:57.188Z'
-updatedAt: '2026-10-04T10:19:07.170Z'
+updatedAt: '2026-10-04T10:53:13.600Z'

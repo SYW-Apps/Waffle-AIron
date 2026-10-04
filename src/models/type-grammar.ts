@@ -48,7 +48,8 @@ export interface TypeExpression {
 export type TypePosition =
   | 'param' | 'returns' | 'field'
   | 'type-method-param' | 'type-method-returns'
-  | 'signature-param' | 'signature-returns';
+  | 'signature-param' | 'signature-returns'
+  | 'holds';
 
 /** The four codes a position that is not canonical is reported under. */
 export type TypeProblemCode = 'TYPE_EXPRESSION_INVALID' | 'TYPE_POSITION_INVALID' | 'TYPE_FORM_UNSUPPORTED' | 'TYPE_NOT_NEUTRAL';
@@ -119,6 +120,12 @@ export interface TypeSpellingRepair {
 /** The ten primitives, in their canonical spelling. */
 export const PRIMITIVE_TYPES: readonly string[] = ['string', 'int', 'float', 'bool', 'bytes', 'date', 'datetime', 'duration', 'void', 'any'];
 const PRIMITIVES = new Set(PRIMITIVE_TYPES);
+
+/**
+ * The primitives a named scalar may hold (type_spec.holds): every primitive
+ * but void, which is no value, and any, which is no domain.
+ */
+export const HOLDABLE_PRIMITIVES: readonly string[] = PRIMITIVE_TYPES.filter((p) => p !== 'void' && p !== 'any');
 
 /**
  * Bare aliases of a primitive, matched EXACTLY first (so `Date` is datetime and
@@ -674,6 +681,16 @@ function appliedName(name: string, args: Raw[], ctx: ReadContext, notes: ReadNot
   return { form: 'applied', name, args: args.map((a) => normalise(a, inner(ctx), notes)) };
 }
 
+/** A named scalar's holds is one primitive other than void and any: never a named type, a collection, an optional or a union. */
+function assertHoldable(expression: TypeExpression): void {
+  if (expression.form === 'primitive' && HOLDABLE_PRIMITIVES.includes(expression.name ?? '')) return;
+  throw new TypeProblemError(
+    'TYPE_POSITION_INVALID',
+    `a named scalar holds one primitive (${HOLDABLE_PRIMITIVES.join(', ')}), not ${canonicalTypeText(expression)}`,
+    'one of those primitives, or fields for a value-object that holds more than one value',
+  );
+}
+
 /** A map key is string, int or an enum (any named type: whether it is an enum is the tree's to say). */
 function assertMapKey(key: TypeExpression, written: Raw): void {
   if (key.form === 'named') return;
@@ -782,6 +799,7 @@ export function parseTypePosition(text: string, position: TypePosition, omittabl
   const notes: ReadNotes = {};
   try {
     const expression = normalise(raw, contextFor(position, omittable), notes);
+    if (position === 'holds') assertHoldable(expression);
     const problem: TypeExpressionProblem | null = notes.notNeutral
       ? { code: 'TYPE_NOT_NEUTRAL', written: text, detail: notes.notNeutral.detail, replacement: notes.notNeutral.replacement }
       : null;
@@ -916,7 +934,8 @@ export function interfaceCanonicalTypes<S extends AnyInterface>(intf: S): TypeCa
 /**
  * type_spec.canonicalTypes — this type with every type position read under the
  * grammar: its fields, its methods' params and returns, and a signature's
- * params and returns, each with the position it stands in. A type method
+ * params and returns, and a named scalar's holds, each with the position it
+ * stands in. A type method
  * without params keeps its prose; only its returns is read. Pure.
  */
 export function typeCanonicalTypes<S extends AnyType>(type: S): TypeCanonicalization<S> {
@@ -934,6 +953,7 @@ export function typeCanonicalTypes<S extends AnyType>(type: S): TypeCanonicaliza
     });
   }
   if (type.params !== undefined) out.params = reader.params(type.params, 'signature-param', 'params');
+  if (typeof type.holds === 'string') out.holds = reader.read(type.holds, 'holds', 'holds');
   if (typeof type.returns === 'string') out.returns = reader.read(type.returns, 'signature-returns', 'returns');
   return { spec: out as S, respellings: reader.respellings, problems: reader.problems };
 }

@@ -178,6 +178,21 @@ describe('optional flag and T? collapse', () => {
   });
 });
 
+describe('a named scalar holds one primitive (the holds position)', () => {
+  it.each(['string', 'int', 'float', 'bool', 'bytes', 'date', 'datetime', 'duration'])('holds %s', (text) => {
+    expect(parseTypePosition(text, 'holds')).toMatchObject({ canonical: text, problem: null });
+  });
+
+  it('an alias is respelled, and number asks int or float', () => {
+    expect(parseTypePosition('boolean', 'holds')).toMatchObject({ canonical: 'bool', problem: null });
+    expect(problemOf('number', 'holds')).toBe('TYPE_NOT_NEUTRAL');
+  });
+
+  it.each(['any', 'void', 'Invoice', 'string?', 'list<string>', 'map<string, int>', 'Invoice | Refund'])('%s is not a holdable primitive', (text) => {
+    expect(problemOf(text, 'holds')).toBe('TYPE_POSITION_INVALID');
+  });
+});
+
 describe('position rules (TYPE_POSITION_INVALID)', () => {
   it.each([
     ['void', 'param'],
@@ -417,6 +432,14 @@ describe('interface_spec.canonicalTypes and type_spec.canonicalTypes', () => {
     expect(sig.spec.params).toEqual([{ name: 'event', type: 'ChangeEvent?' }]);
     expect(sig.spec.returns).toBe('async void');
     expect(sig.respellings.map((r) => r.path)).toEqual(['params.event', 'returns']);
+  });
+
+  it("reads a named scalar's holds at its own position, respelling an alias", () => {
+    const scalar = { kind: 'value-object', id: 'pack_path', name: 'PackPath', ...stamp, fields: [], methods: [], holds: 'String' } as unknown as StoredTypeSpec;
+    const result = typeCanonicalTypes(scalar);
+    expect(result.spec.holds).toBe('string');
+    expect(result.respellings).toEqual([{ specId: 'pack_path', kind: 'type', path: 'holds', written: 'String', stored: 'string' }]);
+    expect(result.problems).toEqual([]);
   });
 
   it('an enum holds no type positions to read', () => {

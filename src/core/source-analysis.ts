@@ -412,6 +412,12 @@ interface ExactFacts {
    * (and an alias inferring from it, one hop), a string enum.
    */
   enumValues: Map<string, string[]>;
+  /**
+   * The right side of each type alias whose right side is not an object
+   * shape, as written, by alias name: what a named scalar's holds is compared
+   * with through the file's dialect.
+   */
+  aliasTypes: Map<string, string>;
   /** Module-scope mutable (`let`/`var`) binding names. */
   mutableBindings: Set<string>;
   /**
@@ -444,6 +450,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const functionRoutes = new Map<string, Map<string, RouteFact>>();
   const asyncFunctions: string[] = [];
   const enumValues = new Map<string, string[]>();
+  const aliasTypes = new Map<string, string>();
   const mutableBindings = new Set<string>();
   /**
    * The two halves of the DERIVED hop, collected as the walk meets them and
@@ -910,6 +917,10 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     } else if (ts.isTypeAliasDeclaration(node)) {
       if (ts.isTypeLiteralNode(node.type)) recordDeclaredShape(node.name.text, node.type.members, false);
       else {
+        // The alias's right side as written: a named scalar's realization
+        // (`type PackPath = string`) is judged on it through the dialect.
+        // First declaration wins, as for every other per-name fact.
+        if (!aliasTypes.has(node.name.text)) aliasTypes.set(node.name.text, node.type.getText(sf));
         const constant = inferredSchemaConstant(node.type);
         if (constant) derivedAliases.push({ name: node.name.text, constant });
         // An alias that IS a closed set of strings: the enum-like declaration
@@ -1108,7 +1119,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -1411,6 +1422,7 @@ export function buildCodeModel(
             functionRoutes: Object.fromEntries([...facts.functionRoutes].map(([k, v]) => [k, [...v.values()]])),
             asyncFunctions: [...facts.asyncFunctions],
             enumValues: Object.fromEntries(facts.enumValues),
+            aliasTypes: Object.fromEntries(facts.aliasTypes),
             topLevelMutableBindings: [...facts.mutableBindings],
             reexportOnly: facts.reexportOnly,
           };

@@ -84,7 +84,6 @@ import {
   type TypeSpellingFacts,
   type StoredInterfaceSpec,
   type StoredTypeSpec,
-  type MemberDepth,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -156,9 +155,13 @@ export interface SpecIndex {
   typeSpellings: TypeSpellingFacts;
 }
 
-/** spec_scan_options — how deep a scan reads into chained subprojects. */
+/**
+ * spec_scan_options — how deep a scan reads into chained subprojects:
+ * `memberDepth` absent reads every level, 0 the bound project alone, n that
+ * many levels.
+ */
 export interface SpecScanOptions {
-  recursive?: MemberDepth;
+  memberDepth?: number;
 }
 
 /** legacy_spec_file — a spec file stored under a legacy (undotted) name, and the name the current layout expects. */
@@ -2114,8 +2117,10 @@ export function specKind(raw: any): SpecRefKind | undefined {
   if ('contract' in raw && Array.isArray(raw.methods)) return 'implementation';
   if ('kind' in raw && Array.isArray(raw.fields)) return 'type';
   // A signature type carries params and returns instead of fields, and an enum
-  // values instead; a file written by hand may leave its empty fields list out.
+  // values instead, and a named scalar holds; a file written by hand may leave
+  // its empty fields list out.
   if (raw.kind === 'signature' || raw.kind === 'enum') return 'type';
+  if ('kind' in raw && typeof raw.holds === 'string') return 'type';
   return undefined;
 }
 
@@ -2788,7 +2793,7 @@ export class SpecWorkspace {
   readonly paths: WaiPaths;
 
   private cachedIndex: SpecIndex | null = null;
-  private cachedRecursive: boolean | number | null = null;
+  private cachedDepth: number | null = null;
   private cachedSpecDirs: string[] = [];
   private cachedSignature: string | null = null;
   private lastSignatureCheckMs = 0;
@@ -2821,7 +2826,7 @@ export class SpecWorkspace {
 
   invalidate(): void {
     this.cachedIndex = null;
-    this.cachedRecursive = null;
+    this.cachedDepth = null;
     this.cachedSpecDirs = [];
     this.cachedConfigFiles = [];
     this.cachedRoots = [];
@@ -2837,9 +2842,9 @@ export class SpecWorkspace {
   // Scanning
   // -------------------------------------------------------------------------
 
-  scanAll(options?: { recursive?: boolean | number }): SpecIndex {
-    const recursive = options?.recursive ?? true;
-    if (this.cachedIndex && this.cachedRecursive === recursive) {
+  scanAll(options?: SpecScanOptions): SpecIndex {
+    const maxDepth = options?.memberDepth ?? Infinity;
+    if (this.cachedIndex && this.cachedDepth === maxDepth) {
       // Cache hit — but the files may have been edited externally (hand edits,
       // another process) since we scanned. Re-verify via mtime signature at
       // most once per TTL.
@@ -2851,11 +2856,10 @@ export class SpecWorkspace {
     }
 
     this.loaderIssues = [];
-    this.cachedRecursive = recursive;
+    this.cachedDepth = maxDepth;
     this.scanVisitedSpecDirs = [];
     this.scanVisitedConfigFiles = [];
 
-    const maxDepth = typeof recursive === 'number' ? recursive : (recursive ? Infinity : 0);
     const scan = this.scanFamily(maxDepth);
     this.cachedIndex = scan.index;
     this.cachedRoots = scan.raws.map((raw) => raw.record);

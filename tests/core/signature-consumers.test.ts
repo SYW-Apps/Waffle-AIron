@@ -167,6 +167,30 @@ describe('surface snapshots carry an enum (stage 2)', () => {
   });
 });
 
+describe('surface snapshots carry a named scalar', () => {
+  /** change-event gains a field typed by a named scalar, reached through the signature type's param. */
+  function withScalar(holds: string): void {
+    saveTypeSpec({
+      kind: 'value-object', id: 'change-event', name: 'ChangeEvent',
+      fields: [{ name: 'path', type: 'entry-path', optional: false }],
+      methods: [], createdAt: now, updatedAt: now,
+    } as TypeSpec);
+    saveTypeSpec({ kind: 'value-object', id: 'entry-path', name: 'EntryPath', description: 'Where the entry lives.', fields: [], methods: [], holds, createdAt: now, updatedAt: now } as TypeSpec);
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+  }
+
+  it('follows a field into a named scalar, carries what it holds, and moves the digest when that changes', () => {
+    buildTree();
+    withScalar('string');
+    const surface = projectOwnSurface('external');
+    expect(surface.types.find((t) => t.id === 'entry-path')).toMatchObject({ kind: 'value-object', fields: [], holds: 'string' });
+    const base = memberDigest(surface, 'events', 'subscribe');
+    withScalar('bytes');
+    expect(memberDigest(projectOwnSurface('external'), 'events', 'subscribe')).not.toBe(base);
+  });
+});
+
 describe('OpenAPI codec — signature types', () => {
   it('renders a signature type with no type constraint, a function-type description and x-wairon-signature', () => {
     buildTree();

@@ -163,13 +163,13 @@ interface Selected {
 }
 
 /**
- * The run's selection: the root and its members, depth-bounded by a numeric
- * `recursive` (false selects the root alone). A scope naming a member — or a
+ * The run's selection: the root and its members, depth-bounded by
+ * `memberDepth` (absent, every level; 0 selects the root alone). A scope naming a member — or a
  * subsystem of one, `member::sub` — narrows the run to that member; any other
  * scope is the root's own.
  */
 function selectProjects(family: ProjectFamily, options: ValidationOptions): Selected[] {
-  const limit = typeof options.recursive === 'number' ? options.recursive : options.recursive === false ? 0 : Infinity;
+  const limit = options.memberDepth ?? Infinity;
   const nodes = family.nodes.filter((n) => depthOf(family, n) <= limit);
   const scope = options.scopeSubsystem;
   if (!scope) return nodes.map((node) => ({ node }));

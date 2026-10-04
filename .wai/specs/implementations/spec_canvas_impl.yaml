@@ -51,8 +51,10 @@ methods:
           references (type_expression.namedRefs, plus a foreign key's `references`), labelled with
           its multiplicity read from the expression and never by pattern — `*` when it holds many
           (type_expression.isMany), `0..1` when the field is optional or its type is `T?`, else `1`;
-          no edge to an enum, which is a value domain rather than an entity relation. An enum node
-          lists its values in place of fields; a signature type node shows its derived text
+          no edge to an enum or a named scalar, each a value domain rather than an entity relation.
+          An enum node lists its values in place of fields; a signature type node shows its derived
+          text; a named scalar node is drawn compactly, its name with the primitive it holds and no
+          field rows
         type: local
       - stepNumber: 6
         description: >-
@@ -110,4 +112,4 @@ methods:
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-10-03T22:09:02.502Z'
+updatedAt: '2026-10-04T10:53:32.916Z'

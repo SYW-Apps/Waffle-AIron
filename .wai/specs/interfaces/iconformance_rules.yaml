@@ -431,7 +431,11 @@ methods:
       the keys are the members — and on through a composition the same file writes out
       (`Base.extend({…})` on a schema constant it declares), the extension's keys laid over the
       base's. A shape that extends another is judged on what it shows and never on what it omits,
-      since its inherited members are not in this file to count.
+      since its inherited members are not in this file to count. A NAMED SCALAR (a value-object
+      declaring `holds`) has no field list: its shape is the primitive it holds, compared with the
+      right side of the type alias the file declares under its name, read through the file's dialect
+      (`type PackPath = string` agrees with holds string); an object shape under that name, or an
+      alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH.
     signature: 'typeShape(ctx: RuleContext): void'
     returns: void
     params:
@@ -455,6 +459,12 @@ methods:
         summary: >-
           A type spec and the shape at its sourcePath disagree about whether a field may be absent —
           one of them is telling a reader the data is guaranteed when it is not, or the reverse
+      - code: TYPE_HOLDS_MISMATCH
+        severity: warning
+        summary: >-
+          A named scalar's holds disagrees with what its sourcePath declares under its name — an
+          alias of another type, or a record — so every reader is told one value of it is something
+          the code says it is not
   - name: paramConformance
     description: >-
       Rule param-conformance. Code-to-contract for the SIGNATURE, the last of the three readings a
@@ -610,4 +620,4 @@ methods:
           returns does not say so
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-03T22:06:32.884Z'
+updatedAt: '2026-10-04T10:52:59.984Z'

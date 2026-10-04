@@ -2396,18 +2396,19 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           name: z.string().min(1).describe('The value\'s name, exactly as data carries it ("stable", "local_only")'),
           description: z.string().optional().describe('What the value means'),
         }).strict()).optional().describe('kind enum only, and required there: the values in declared order — the order is part of the design (a narrowest-first track list means something). Unique by name ignoring case and separators; no ordinals and no separate wire value'),
+        holds: z.string().optional().describe('kind value-object only: makes it a NAMED SCALAR — one primitive under a name (string, int, float, bool, bytes, date, datetime or duration), a newtype or type alias in every language (`type PackPath = string`), declared in place of fields. Not a union, not a named type, not any; fields beside it, or holds on another kind, is NAMED_SCALAR_MEMBERS. Aliases are respelled (boolean → bool) and number is refused ("int or float?")'),
   };
   const typeInputFields = Object.keys(typeInput);
 
   type ParamInput = { name: string; type: string; description?: string; optional?: boolean };
-  reg<{ kind: 'entity' | 'value-object' | 'signature' | 'enum'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature?: string; params?: ParamInput[]; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string; params?: ParamInput[]; returns?: string; values?: { name: string; description?: string }[] }>(server,
+  reg<{ kind: 'entity' | 'value-object' | 'signature' | 'enum'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature?: string; params?: ParamInput[]; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string; params?: ParamInput[]; returns?: string; values?: { name: string; description?: string }[]; holds?: string }>(server,
     'sdd_add_type',
     {
-      description: 'Define a type: an entity or value-object (the data components operate on), a signature — a named function type — or an enum: a closed, ordered set of named `values` ({name, description?}, unique by name ignoring case and separators; the name is also the value as data carries it), with optional pure methods and nothing else (no fields, params or returns). Every type position (a field\'s type, a method\'s params and returns, a signature\'s params and returns) is written in the neutral type grammar; aliases are respelled and listed in the receipt. Entities are owned by a subsystem; shared value objects and signatures omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument — and a type method may carry structured params, which then derive its signature text as a contract method\'s do. A signature carries top-level params and returns and nothing else (no fields, methods or invariants — SIGNATURE_TYPE_MEMBERS); a contract method takes it by naming it as its signatureFrom, and a param may be typed by one (a callback). A type may also CLAIM code: sourcePath names the file holding its declaration (and each method may name its own), symbol binds the code-level name when it differs — the file must then resolve and the declaration must be anchored in it. An owning subsystem the tree does not have is refused, writing nothing, exactly as a component under an unknown subsystem is. Re-defining an existing id REPLACES fields/methods/invariants and restates sourcePath/symbol (an omitted list or path is CLEARED, and a dropped member is reported); lint/ext are carried forward. The answer carries a write receipt as structured content beside the sentence — whether a spec already held the id, and the notices a restatement raised, each as its own entry. A type carries no lifecycle status, so the receipt states none.',
+      description: 'Define a type: an entity or value-object (the data components operate on), a signature — a named function type — or an enum: a closed, ordered set of named `values` ({name, description?}, unique by name ignoring case and separators; the name is also the value as data carries it), with optional pure methods and nothing else (no fields, params or returns). A value-object may instead be a NAMED SCALAR: it `holds` one primitive in place of fields (a newtype or type alias in every language). Every type position (a field\'s type, a method\'s params and returns, a signature\'s params and returns, a named scalar\'s holds) is written in the neutral type grammar; aliases are respelled and listed in the receipt. Entities are owned by a subsystem; shared value objects and signatures omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument — and a type method may carry structured params, which then derive its signature text as a contract method\'s do. A signature carries top-level params and returns and nothing else (no fields, methods or invariants — SIGNATURE_TYPE_MEMBERS); a contract method takes it by naming it as its signatureFrom, and a param may be typed by one (a callback). A type may also CLAIM code: sourcePath names the file holding its declaration (and each method may name its own), symbol binds the code-level name when it differs — the file must then resolve and the declaration must be anchored in it. An owning subsystem the tree does not have is refused, writing nothing, exactly as a component under an unknown subsystem is. Re-defining an existing id REPLACES fields/methods/invariants and restates sourcePath/symbol (an omitted list or path is CLEARED, and a dropped member is reported); lint/ext are carried forward. The answer carries a write receipt as structured content beside the sentence — whether a spec already held the id, and the notices a restatement raised, each as its own entry. A type carries no lifecycle status, so the receipt states none.',
       inputSchema: typeInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol, params, returns, values }) => {
+    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol, params, returns, values, holds }) => {
       try {
         // mcp_orchestrator.addType step 1: the restatement, each field's
         // optional flag defaulted to false.
@@ -2437,6 +2438,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           ...(params ? { params } : {}),
           ...(returns ? { returns } : {}),
           ...(values ? { values } : {}),
+          ...(holds ? { holds } : {}),
         } as unknown as TypeSpec;
         // Step 2: through the seam, which names every field or method the
         // restatement removed. Step 3: the receipt — `kind` here is the type's
@@ -2477,7 +2479,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           rules: config.rules,
           projectType: config.projectType,
           scopeSubsystem: subsystem,
-          recursive: recursive ?? true,
+          // The tool's flag at the edge: recursive false is a member depth of 0.
+          ...(recursive === false ? { memberDepth: 0 } : {}),
           family,
         };
         // Step 2: which run — the same reading `wairon validate` makes. Steps
@@ -2662,6 +2665,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
       },
     },
     ({ subsystem, recursive }) => {
+      // The tool's flag at the edge: recursive false is a member depth of 0, the default every level.
+      const memberDepth = recursive === false ? 0 : undefined;
       // Step 1: the pending-transaction banner, led in the answer so an agent
       // sees it before a tree a crash may have half-swapped.
       const banner = pendingBanner().map((line) => `⚠ TRANSACTION PENDING: ${line}
@@ -2682,13 +2687,13 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // root within the credential's reach.
         let approvals;
         try {
-          approvals = familyApprovals(recursive === false ? 0 : undefined);
+          approvals = familyApprovals(memberDepth);
         } catch {
           approvals = undefined; // a tree that will not load: the report says why
         }
         const report = getStatusReport({
           subsystem,
-          recursive: recursive ?? true,
+          memberDepth,
           approvals,
         });
         // The text goes out whether or not the tree loaded. A client asking

@@ -78,8 +78,9 @@ methods:
     returns: list<string>
     description: >-
       The write table as lines an implementer brief carries (`list<T> → T[]`, `T? → T | null`,
-      `async T → Promise<T>`, an enum → a string-literal union alias, ...), so an implementer maps a
-      contract's types by rule rather than by guess.
+      `async T → Promise<T>`, an enum → a string-literal union alias, a named scalar → a type alias
+      of its primitive, ...), so an implementer maps a contract's types by rule rather than by
+      guess.
 sourcePath: src/models/type-dialects.ts
 createdAt: '2026-10-03T22:03:39.838Z'
-updatedAt: '2026-10-04T10:21:21.559Z'
+updatedAt: '2026-10-04T10:53:52.746Z'

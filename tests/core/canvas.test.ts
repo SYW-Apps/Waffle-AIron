@@ -330,6 +330,26 @@ describe('interactive canvas generation', () => {
     expect(model.types.find(t => t.id === 'invoice')!.values).toBeUndefined();
   });
 
+  it("draws no edge to a named scalar and carries the primitive it holds", () => {
+    buildFixture();
+    saveTypeSpec({
+      kind: 'value-object', id: 'invoice-number', name: 'InvoiceNumber', description: 'the number printed on a bill',
+      fields: [], holds: 'string', methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    saveTypeSpec({
+      kind: 'entity', id: 'invoice', name: 'Invoice', description: 'a bill',
+      fields: [{ name: 'number', type: 'InvoiceNumber', optional: false }],
+      methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    const model = buildCanvasModel();
+    // A named scalar is a value domain, not an entity relation.
+    expect(model.typeEdges.some(e => e.to === 'invoice-number')).toBe(false);
+    expect(model.types.find(t => t.id === 'invoice-number')!.holds).toBe('string');
+    expect(model.types.find(t => t.id === 'invoice')!.holds).toBeUndefined();
+  });
+
   it('renders a self-contained HTML canvas with the embedded model and no external references', () => {
     buildFixture();
     const html = renderCanvasHtml(buildCanvasModel());

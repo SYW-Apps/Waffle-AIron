@@ -1605,6 +1605,14 @@ export const TypeSpecSchema = z.object({
    * (ENUM_MEMBERS).
    */
   values: z.array(EnumValueSchema).optional(),
+  /**
+   * A named scalar's one primitive (string, int, float, bool, bytes, date,
+   * datetime or duration), in place of fields: a value-object that is a
+   * newtype or type alias in every language. Read as a type position (the
+   * grammar's `holds` position); only on a value-object and never beside
+   * fields (NAMED_SCALAR_MEMBERS).
+   */
+  holds: z.string().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -1680,6 +1688,8 @@ export const SurfaceTypeDefSchema = z.object({
   returns: z.string().optional(),
   /** An enum's values in declared order; only on kind enum. */
   values: z.array(EnumValueSchema).optional(),
+  /** A named scalar's one primitive, in place of fields; only on a value-object that declares it. */
+  holds: z.string().optional(),
 });
 export type SurfaceTypeDef = z.infer<typeof SurfaceTypeDefSchema>;
 

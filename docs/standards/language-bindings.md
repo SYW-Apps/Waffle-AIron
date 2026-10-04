@@ -59,6 +59,7 @@ its `typeMapping`; the others are the idiomatic spellings to follow.
 | `A \| B` | `A \| B` | `enum` with payload | `A \| B` | an interface both implement | `sealed` hierarchy |
 | `async T` | `Promise<T>` | `async fn` → `T` | `async def` → `T` | a blocking call or a channel | `CompletableFuture<T>` / `suspend` / `Task<T>` |
 | enum `E` | `type E = 'a' \| 'b'` | `enum E` | `class E(StrEnum)` | typed `string` constants | `enum E` |
+| named scalar `E` holding `P` | `type E = P` | `struct E(P)` | `E = NewType('E', P)` | `type E P` | a value class / `@JvmInline value class E` / `record struct E(P)` |
 | `any` | `unknown` | `serde_json::Value` | `Any` | `any` | `Object` / `Any` / `object` |
 
 ---

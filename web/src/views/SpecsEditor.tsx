@@ -71,6 +71,8 @@ const AUTH_IN = ['header', 'query', 'cookie'];
 const OAUTH_FLOW = ['authorizationCode', 'clientCredentials', 'implicit', 'password'];
 const TYPE_KIND = ['entity', 'value-object', 'enum'];
 const TYPE_FIELD_KEY = ['primary', 'unique', 'foreign'];
+/** The primitives a named scalar may hold (type_spec.holds): every primitive but void and any. */
+const HOLDABLE_PRIMITIVES = ['string', 'int', 'float', 'bool', 'bytes', 'date', 'datetime', 'duration'];
 const BUILTIN_GUARANTEES = ['idempotent', 'atomic', 'transactional', 'exactly-once'];
 const PROJECT_KINDS = ['fullstack', 'system-of-systems', 'monorepo'];
 const BUILTIN_PROFILES = [
@@ -844,6 +846,11 @@ function buildDelta(kind: SpecKind, orig: any, draft: any): Record<string, unkno
     if (md.length) delta.methods = md;
   }
   if (kind === 'type') {
+    // A named scalar's holds: set, changed, or cleared (an unset, since '' would be a type position).
+    if ((draft.holds ?? '') !== (orig.holds ?? '')) {
+      if (draft.holds) delta.holds = draft.holds;
+      else delta.unset = ['holds'];
+    }
     const fd = typeFieldsDelta(orig, draft);
     if (fd.length) delta.fields = fd;
     const vd = enumValuesDelta(orig, draft);
@@ -1269,6 +1276,11 @@ function SpecForm(props: {
             </Field>
           )}
           <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          {draft.kind === 'value-object' && (draft.fields ?? []).length === 0 && (
+            <Field label="Holds" fieldKey="holds" highlight={flagFor('holds')} hint="A named scalar: one primitive under this name, in place of fields (a newtype or type alias in every language).">
+              <EnumSelect value={draft.holds} onChange={(v) => set('holds', v || undefined)} options={HOLDABLE_PRIMITIVES} allowNone noneLabel="(not a named scalar)" />
+            </Field>
+          )}
           {draft.kind === 'enum' && (draft.values ?? []).length > 0 && (
             <div className="stack-lg">
               <span className="field-label">Values (in declared order)</span>

@@ -377,6 +377,19 @@ An **enum** is a type of its own kind: a closed, ordered set of named values
 typed by an enum is a value domain, not a relation, so the ER diagram draws no
 edge to it, and OpenAPI renders it as a string `enum`.
 
+A **named scalar** is a value-object that declares `holds: <primitive>` in
+place of fields: one value under a name (`order_id` holds `string`), a newtype
+or type alias in every language (`type OrderId = string`). It holds one of
+`string`, `int`, `float`, `bool`, `bytes`, `date`, `datetime` or `duration` —
+not a union, not a named type, not `any` — and carries no fields beside it
+(`NAMED_SCALAR_MEMBERS`). It is how a value that needs its own meaning gets a
+name instead of staying a bare `string`, and how a choice that mixed in a
+primitive (`PackSelection | string`) becomes a union of named types
+(`PackSelection | PackPath`). Like an enum it is a value domain: the ER diagram
+draws it compactly with no edge to it, OpenAPI renders it as its primitive's
+schema under its name, and type-shape conformance compares it with the code's
+alias through the language's dialect (`TYPE_HOLDS_MISMATCH`).
+
 TypeScript spellings (`string[]`, `boolean`, `T | null`, `Promise<T>`,
 `Record<K, V>`) are accepted as input and stored in the canonical spelling; the
 write answers with each respelling. `number` is not accepted ("int or

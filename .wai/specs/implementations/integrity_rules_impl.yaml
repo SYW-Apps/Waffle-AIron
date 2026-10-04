@@ -266,12 +266,12 @@ methods:
       - stepNumber: 5
         label: checkHollow
         description: >-
-          Branch: does the type model nothing — no fields, no methods, no enum values and no
-          signature returns?
+          Branch: does the type model nothing — no fields, no methods, no enum values, no signature
+          returns and no named scalar holds?
         type: branch
         condition: >-
-          the type has no fields, no methods, no values and no returns (each absent or an empty
-          list)
+          the type has no fields, no methods, no values, no returns and no holds (each absent or an
+          empty list)
         onFalseStep: 1
       - stepNumber: 6
         label: typesEnd
@@ -1352,6 +1352,33 @@ methods:
     detail: full
     symbol: check
     exportedVia: enumTypesRule
-status: complete
+  - name: namedScalarTypes
+    sourcePath: src/core/rules/integrity/named-scalar-types.ts
+    narrative:
+      - stepNumber: 1
+        description: For each loaded type
+        type: loop
+        loopKind: forEach
+        over: ctx.types, in scope
+        endStep: 4
+      - stepNumber: 2
+        description: Does it declare holds?
+        type: branch
+        condition: the type's holds is set
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report NAMED_SCALAR_MEMBERS naming what is wrong: holds on a kind other than value-object
+          (an entity, an enum or a signature type, where it means nothing); each member a named
+          scalar cannot carry beside it — fields, componentClass, database, table, linkedEntity.
+          Whether holds names a primitive is left to type-expressions
+        type: local
+      - stepNumber: 4
+        description: Nothing to judge on a type without holds
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: namedScalarTypesRule
+status: design
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-04T10:34:17.204Z'
+updatedAt: '2026-10-04T10:54:25.985Z'

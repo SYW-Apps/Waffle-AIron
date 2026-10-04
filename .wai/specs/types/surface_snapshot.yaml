@@ -79,13 +79,13 @@ methods:
       sha256 over the snapshot's canonical CONTRACT, never over how its references or types are
       spelled: the public names with each entry's stereotype, transport, auth kind, dispatch
       bindings and method shapes, the exported types and the closure's type shapes — a data type's
-      shape is its kind and fields, a signature type's is its kind, its params' types and
-      optionality in order (never their names) and its returns, an enum's is its kind and its value
-      names in declared order — every type expression passed through canonicalTypeRef, every list in
-      a fixed order — with provenance (stateId, generatedAt, origin) and prose (descriptions,
-      groups, display names) left out. Because the type expressions are canonical, a producer
-      respelling `T[]` as `list<T>` moves the digest once (the day the grammar ships) and never
-      again.
+      shape is its kind and fields, a named scalar's its kind and the primitive it holds, a
+      signature type's is its kind, its params' types and optionality in order (never their names)
+      and its returns, an enum's is its kind and its value names in declared order — every type
+      expression passed through canonicalTypeRef, every list in a fixed order — with provenance
+      (stateId, generatedAt, origin) and prose (descriptions, groups, display names) left out.
+      Because the type expressions are canonical, a producer respelling `T[]` as `list<T>` moves the
+      digest once (the day the grammar ships) and never again.
     sourcePath: src/models/surface-references.ts
   - name: memberDigest
     signature: 'memberDigest(publicName: string, member: string): string | null'
@@ -120,4 +120,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-04T10:21:15.010Z'
+updatedAt: '2026-10-04T10:51:34.102Z'

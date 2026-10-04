@@ -1211,6 +1211,21 @@ same thing to every implementation language, and every consumer reads one spelli
   conformance compares the values with a string-literal union alias, a `z.enum([...])`
   or a string `enum` (`UNREALIZED_ENUM_VALUE` and `UNDECLARED_ENUM_VALUE`, carryable
   warnings at exact grade).
+- **Named scalars.** A value-object may declare `holds: <primitive>` (`string`, `int`,
+  `float`, `bool`, `bytes`, `date`, `datetime` or `duration`) in place of fields: one value
+  under a name, a newtype or type alias in every language (`type OrderId = string`). It is
+  not a union, not a named type and not `any`; anything else in `holds` is
+  `TYPE_POSITION_INVALID`, and an alias such as `boolean` is respelled. A named scalar is
+  not `HOLLOW_TYPE`. Fields beside `holds`, a table or component link on it, or `holds` on
+  an entity, an enum or a signature type is `NAMED_SCALAR_MEMBERS` (error). Type-shape
+  conformance compares it with the type alias the code declares under its name, read
+  through the dialect: `TYPE_HOLDS_MISMATCH` (carryable warning, exact grade) when the
+  alias's right side is another type, or the name is declared as a record. OpenAPI renders
+  it as its primitive's schema under the type's name and reads such a component back; the
+  ERD draws it compactly with no relation edges; the surface closure and digest carry what
+  it holds; the briefs' type mapping says how it is spelled. `sdd_add_type` takes `holds`,
+  and the web specs editor sets it on a fieldless value-object. This is how a mixed union
+  such as `PackSelection | string` becomes a union of named types: the string gets a name.
 - **`async` and `ASYNC_MISMATCH`.** `async` on a returns is checked against the realizing
   function: `ASYNC_MISMATCH` (carryable warning, exact grade) reports a contract and a
   function that disagree on whether the call completes later.
@@ -1228,9 +1243,9 @@ same thing to every implementation language, and every consumer reads one spelli
   schema back into its canonical type, and a named string component carrying `enum`
   becomes an enum type.
 - **ERD.** Multiplicity comes from the parsed expression: `*` for a list, set or map,
-  `0..1` for an optional field or a `T?` type. A field typed by an enum gets no relation
-  edge, because an enum is a value domain, and an enum node lists its values in place of
-  fields.
+  `0..1` for an optional field or a `T?` type. A field typed by an enum or a named scalar
+  gets no relation edge, because each is a value domain, and an enum node lists its values
+  in place of fields.
 - **Surface snapshots.** The type closure follows the named types each parsed expression
   references and carries an enum with its values in order. Digests hash the canonical
   expression, so an alias and its canonical spelling digest alike, and adding, removing or

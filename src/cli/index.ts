@@ -305,7 +305,8 @@ async function statusCommand(opts: { subsystem?: string; recursive?: boolean }):
     process.stdout.write(`${await statusAttached(target, opts.subsystem)}\n`);
     return;
   }
-  await runStatus({ subsystem: opts.subsystem, recursive: opts.recursive });
+  // The flag at the edge: --no-recursive is a member depth of 0, the default every level.
+  await runStatus({ subsystem: opts.subsystem, ...(opts.recursive === false ? { memberDepth: 0 } : {}) });
 }
 
 // ---------------------------------------------------------------------------

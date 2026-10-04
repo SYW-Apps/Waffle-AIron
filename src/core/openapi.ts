@@ -328,6 +328,11 @@ function renderDoc(
       schemas[t.id] = { type: 'string', title: t.name, enum: values.map(v => v.name), description: enumDescription(values) };
       continue;
     }
+    if (t.holds !== undefined) {
+      // A named scalar is its primitive's schema under the type's name.
+      schemas[t.id] = { ...schemaFor(t.holds, closureIds), title: t.name };
+      continue;
+    }
     schemas[t.id] = t.kind === 'signature'
       ? signatureComponent(t, closureIds)
       : {
@@ -473,6 +478,9 @@ function typeRefFromSchema(schema: Record<string, unknown> | undefined): string 
   return 'any';
 }
 
+/** The JSON-Schema types a primitive renders as: a component of one of them, without properties, is a named scalar. */
+const SCALAR_SCHEMA_TYPES = new Set(['string', 'integer', 'number', 'boolean']);
+
 /** An inline anonymous enum has no name to become a type: it reads as string, its values named in the description. */
 function inlineEnumNote(schema: Record<string, unknown> | undefined): string | undefined {
   if (!schema || schema.$ref !== undefined || !Array.isArray(schema.enum)) return undefined;
@@ -617,6 +625,11 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
     // A named string component carrying `enum` is an enum type.
     if (schema.type === 'string' && Array.isArray(schema.enum)) {
       types.push({ id, name: typeof schema.title === 'string' ? schema.title : id, kind: 'enum', fields: [], values: enumValuesFrom(schema) });
+      continue;
+    }
+    // A named component whose schema is one primitive's is a named scalar holding it.
+    if (typeof schema.type === 'string' && SCALAR_SCHEMA_TYPES.has(schema.type) && schema.properties === undefined) {
+      types.push({ id, name: typeof schema.title === 'string' ? schema.title : id, kind: 'value-object', fields: [], holds: typeRefFromSchema(schema) });
       continue;
     }
     const props = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
