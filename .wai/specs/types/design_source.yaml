@@ -1,0 +1,39 @@
+kind: value-object
+id: design_source
+name: DesignSource
+description: >-
+  Which tree a design export was projected from, and the approval verdict over it — the one verdict
+  `wairon lock-check` and `wairon status` give, decided against the GATE identity (the parsed own
+  tree, its governing doctrine, declared inputs, composition and direct members' approvals), never a
+  weaker per-spec digest comparison. The core cannot compute the gate identity, so the caller
+  decides the verdict and hands it in, exactly as status receives its approvals.
+subsystem: sdd_surfaces
+fields:
+  - name: projectId
+    type: string
+    description: The project's effective id
+    optional: false
+  - name: stateId
+    type: string
+    description: >-
+      `sha256:<digest>`, the content identity of the tree (the same StateId snapshots and archives
+      are stamped with): equal state ids mean equal documents, so it doubles as a consumer's cache
+      key
+    optional: false
+  - name: approved
+    type: bool
+    description: >-
+      True exactly when approval is locked: the design passed the gate and a human signed it off, by
+      the same verdict lock-check exits on. False for stale, unlocked and unjudged
+    optional: false
+  - name: approval
+    type: string
+    description: >-
+      The lock-check state the caller decided: locked (the approval still covers this design), stale
+      (the design or something it was approved under moved past it), unlocked (never approved) — or
+      unjudged when the caller passed no verdict (an in-process caller that did not obtain one),
+      which claims nothing either way
+    optional: false
+methods: []
+createdAt: '2026-10-04T13:52:58.934Z'
+updatedAt: '2026-10-04T14:02:22.012Z'

@@ -32,6 +32,15 @@ methods:
     params:
       - name: sourcePath
         type: string
+  - name: writeDesignTo
+    description: Write a design export to a target output path as JSON, returning the path written.
+    signature: 'writeDesignTo(targetPath: string, design: DesignExport): string'
+    returns: string
+    params:
+      - name: targetPath
+        type: string
+      - name: design
+        type: DesignExport
 status: complete
 createdAt: '2026-07-10T23:14:07.216Z'
-updatedAt: '2026-10-04T10:19:42.206Z'
+updatedAt: '2026-10-04T13:54:34.264Z'

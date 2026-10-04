@@ -136,6 +136,16 @@ fields:
       entry point. Declaring the field — even empty — is what marks a portal as a listener, the one
       kind of portal nothing else needs to mount.
     optional: true
+  - name: previousIds
+    type: list<string>
+    description: >-
+      The rename trace: every id this component held before, oldest first. Written only by the
+      rename tool (renameComponent), never by an author, and never rewritten or bound as a reference
+      — it names keys that no longer exist. The design export shows it as `formerly`, so a consumer
+      that generated from an earlier export can tell a rename from a delete plus an add. Another
+      component may not take an id listed here (id-retired at write, RENAME_TRACE_CONFLICT on a hand
+      edit); unsetting it releases those ids.
+    optional: true
 methods:
   - name: defaultConformanceTier
     signature: 'defaultConformanceTier(): string'
@@ -189,4 +199,4 @@ methods:
       diagrams, "cli_packs_adapter" about packs. Empty when every word names a block.
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T10:19:59.815Z'
+updatedAt: '2026-10-04T13:51:42.697Z'

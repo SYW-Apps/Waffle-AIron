@@ -97,6 +97,13 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: pinnedParent
+  - name: exportDesign
+    narrative:
+      - stepNumber: 1
+        description: Forward exportDesign to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: exportDesign
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-10-02T20:25:11.976Z'
+updatedAt: '2026-10-04T13:54:52.276Z'

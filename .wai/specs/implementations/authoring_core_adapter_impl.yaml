@@ -66,6 +66,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadImplementationSpecs
+  - name: scanAllSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call scanAllSpecs on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: scanAllSpecs
 status: complete
 createdAt: '2026-09-18T21:43:38.007Z'
-updatedAt: '2026-09-27T10:54:33.830Z'
+updatedAt: '2026-10-04T13:57:28.185Z'

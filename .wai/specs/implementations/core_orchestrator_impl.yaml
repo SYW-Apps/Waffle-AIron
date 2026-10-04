@@ -1047,17 +1047,23 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadImplementationSpecs
       - stepNumber: 11
-        description: 'Guard: nothing may already hold the new ids'
+        description: 'Guard: nothing may already hold the new ids, and no renamed spec may have retired them'
         type: branch
         condition: >-
           newId is already a component id, or i<newId> is an interface id, or <newId>_impl is an
-          implementation id
+          implementation id; or one of those ids is listed in the rename trace (previousIds) of a
+          spec of its kind (spec_index.retiredBy)
         onFalseStep: 13
       - stepNumber: 12
         label: id-taken
-        description: Refuse a new id already taken
+        description: >-
+          Refuse a new id already taken (id-taken), or one a renamed spec retired (id-retired,
+          naming the holder and saying that unsetting the holder's previousIds releases it — a
+          consumer holding the old key would read the new spec as the renamed one)
         type: throw
-        error: 'id-taken: the new id, or the interface or implementation id it implies, is already in use'
+        error: >-
+          id-taken or id-retired: the new id, or the interface or implementation id it implies, is
+          in use or retired
       - stepNumber: 13
         description: >-
           Collect what moves: the component's interface named i<componentId>, and the implementation
@@ -1087,9 +1093,13 @@ methods:
           components and its published interfaces' component and interface; the system's published
           interfaces' component and interface; narrative call, dispatch and register targets, and a
           step's auth.from component source; an interface's component; an implementation's contract;
-          and an entity's componentClass. Record the other specs it rewrote (the moved specs,
-          matched by their old ids, are not among them). References from chained subprojects are not
-          rewritten
+          and an entity's componentClass. Before an L1 or L0 export entry's component or interface
+          is respelled, an entry that states no `as` — whose public name was derived from the old id
+          — gets `as: <that public name>` written, so the published name and every consumer's pin
+          stay as they were; each such public name is recorded as kept. Rename traces (previousIds,
+          previousNames) are never rewritten: they name keys that no longer exist. Record the other
+          specs it rewrote (the moved specs, matched by their old ids, are not among them).
+          References from chained subprojects are not rewritten
         type: local
       - stepNumber: 17
         description: >-
@@ -1122,7 +1132,8 @@ methods:
       - stepNumber: 21
         description: >-
           Return renamed (each moved spec's kind with its old and new id), rewritten (the ids of the
-          other specs whose references or lint allows changed) and carried (each register edit)
+          other specs whose references or lint allows changed), keptPublicNames (each export entry
+          that got an `as`) and carried (each register edit)
         type: return
   - name: renameMethod
     sourcePath: src/core/provision.ts
@@ -1185,15 +1196,19 @@ methods:
         type: throw
         error: 'method-missing: no contract of this component declares that method'
       - stepNumber: 11
-        description: 'Guard: the new name must be free on every contract that moves'
+        description: 'Guard: the new name must be free on every contract that moves, and not retired there'
         type: branch
-        condition: one of those contracts already declares a method under newName
+        condition: >-
+          one of those contracts already declares a method under newName, or one of its methods
+          lists `<that contract>.<newName>` in its rename trace (previousNames)
         onFalseStep: 13
       - stepNumber: 12
         label: name-taken
-        description: Refuse a new name already declared on that interface
+        description: >-
+          Refuse a new name already declared on that interface (name-taken), or retired by one of
+          its methods (name-retired, naming the method whose previousNames holds it)
         type: throw
-        error: 'name-taken: that interface already declares a method under the new name'
+        error: 'name-taken or name-retired: that interface already declares, or retired, the new name'
       - stepNumber: 13
         description: >-
           Load every implementation spec, for the realizations of those contracts and the narratives
@@ -1219,7 +1234,8 @@ methods:
         endStep: 16
       - stepNumber: 16
         description: >-
-          Write the contract with the method under newName: its name, and, for a prose method (no
+          Write the contract with the method under newName: its name, its former key `<contract
+          id>.<old name>` appended to its rename trace (previousNames), and, for a prose method (no
           params and no signatureFrom), the method name inside its signature string. A method with
           params has its text derived from the new name by the writer, and a sourced method stores
           no text at all. Params, returns, signatureFrom, description, guarantees and findings stay
@@ -1274,7 +1290,8 @@ methods:
           Collect what names the method but is left alone: the specs whose description, intent or
           narrative text still carries the old name, and the gRPC endpoint bindings whose wire
           method still carries it. A rename never edits prose, and never changes a published wire
-          name
+          name. Collect too the public names of the L1 and L0 export entries whose contract carries
+          the method: a published member changed there, which is reported, never prevented
         type: local
       - stepNumber: 24
         description: >-
@@ -1287,8 +1304,9 @@ methods:
       - stepNumber: 25
         description: >-
           Return the report: the component, from and to, the specs the method moved in, the specs
-          whose references or lint allows were retargeted, the mentions left alone, the pinned
-          symbol when one was set, and carried (each register edit)
+          whose references or lint allows were retargeted, the mentions left alone, the export
+          entries it is published in, the pinned symbol when one was set, and carried (each register
+          edit)
         type: return
         outcome: renamed
   - name: moveRenamedSpecs
@@ -1321,8 +1339,8 @@ methods:
         targetMethod: loadImplementationSpec
       - stepNumber: 6
         description: >-
-          Write the component under newId, its own id rewritten; the loader nests a member of a
-          pattern under its owner
+          Write the component under newId, its own id rewritten and its old id appended to its
+          rename trace (previousIds); the loader nests a member of a pattern under its owner
         type: call
         targetComponent: spec_loader
         targetMethod: saveComponentSpec
@@ -1332,7 +1350,9 @@ methods:
         condition: the component's interface moves
         onFalseStep: 9
       - stepNumber: 8
-        description: Write the interface under i<newId>, its id and component rewritten
+        description: >-
+          Write the interface under i<newId>, its id and component rewritten and its old id appended
+          to its previousIds
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
@@ -1353,8 +1373,8 @@ methods:
         type: local
       - stepNumber: 12
         description: >-
-          Write the implementation under <newId>_impl, its id rewritten and its contract following a
-          renamed interface
+          Write the implementation under <newId>_impl, its id rewritten, its contract following a
+          renamed interface, and its old id appended to its previousIds
         type: call
         targetComponent: spec_loader
         targetMethod: saveImplementationSpec
@@ -1581,10 +1601,11 @@ methods:
       - stepNumber: 2
         description: >-
           Check what the caller named: the source and target both exist and differ, every named
-          method is declared on the source contract, no name is already declared on the target, the
-          target's receiving contract is decidable (none yet, one, or one named i<target>), no other
-          spec already holds the id of a contract or implementation the move would create, and
-          neither component sits inside a chained subproject
+          method is declared on the source contract, no name is already declared on the target or
+          retired there (listed as `<receiving contract>.<name>` in a target method's
+          previousNames), the target's receiving contract is decidable (none yet, one, or one named
+          i<target>), no other spec already holds the id of a contract or implementation the move
+          would create, and neither component sits inside a chained subproject
         type: local
       - stepNumber: 3
         description: Decide whether the request itself is answerable
@@ -1609,11 +1630,13 @@ methods:
         description: >-
           Build the plan in memory: the contract entries that leave the source interface and arrive
           on the target's — on i<target>, created at the source contract's status, when the target
-          declares no contract yet — the implementation entries that travel with them carrying
-          narrative, sourcePath, symbol, detail, intent, calls and findings — into <target>_impl,
-          created inheriting the source implementation's sourcePath, when no implementation realizes
-          the receiving contract — the specs it creates named for the report, and the dependencies
-          the moved narratives call that the target does not have yet
+          declares no contract yet — each arriving entry appending its former key `<source
+          contract>.<name>` to its rename trace (previousNames); the implementation entries that
+          travel with them carrying narrative, sourcePath, symbol, detail, intent, calls and
+          findings — into <target>_impl, created inheriting the source implementation's sourcePath,
+          when no implementation realizes the receiving contract — the specs it creates named for
+          the report, and the dependencies the moved narratives call that the target does not have
+          yet
         type: local
       - stepNumber: 7
         description: >-
@@ -2411,6 +2434,114 @@ methods:
         type: return
         outcome: TypeSpellingRepair[]
     detail: full
+  - name: renameType
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the type to rename
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpec
+      - stepNumber: 2
+        description: 'Guard: the type must exist'
+        type: branch
+        condition: the type does not exist
+        onFalseStep: 4
+      - stepNumber: 3
+        label: type-missing
+        description: Refuse a type that does not exist
+        type: throw
+        error: 'type-missing: no type has this id'
+      - stepNumber: 4
+        description: 'Guard: the type must belong to the bound project itself'
+        type: branch
+        condition: 'typeId is namespaced into a member project (it carries an alias:: prefix)'
+        onFalseStep: 6
+      - stepNumber: 5
+        label: chained-type
+        description: Refuse a type inside another project
+        type: throw
+        error: 'chained-type: the type lives in another project; rename it from that project''s own root'
+      - stepNumber: 6
+        description: 'Guard: the new id must be a plain lowercase identifier'
+        type: branch
+        condition: >-
+          newId is outside the id grammar: not a lowercase identifier, or carrying a namespace
+          separator
+        onFalseStep: 8
+      - stepNumber: 7
+        label: invalid-id
+        description: Refuse a new id outside the grammar
+        type: throw
+        error: 'invalid-id: the new id must be a lowercase identifier with no namespace separator'
+      - stepNumber: 8
+        description: Load every type spec, for the ids its owner already holds and the trace that retired any
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 9
+        description: 'Guard: no type of the same owner may hold or have retired the new id'
+        type: branch
+        condition: >-
+          a type of the same owner (the same subsystem, or system-level) has the id newId, or lists
+          it in its previousIds (spec_index.retiredBy)
+        onFalseStep: 11
+      - stepNumber: 10
+        label: id-taken
+        description: >-
+          Refuse a taken id (id-taken) or a retired one (id-retired, naming the holder and saying
+          that unsetting its previousIds releases it)
+        type: throw
+        error: 'id-taken or id-retired: another type of this owner holds or retired the new id'
+      - stepNumber: 11
+        description: >-
+          Describe the move as the debt register and lint allows key findings by it
+          (identity_rename: the type spec from its old id to its new one) and rekey the debt
+          register as a DRY RUN, before the first write: a register that cannot be rewritten that
+          precisely refuses the rename here
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 12
+        description: >-
+          Rewrite every reference to the type across the bound tree with the provisioning rewriter,
+          at every type position of the reference-field table: contract method params and returns,
+          type fields, type-method params and returns, signature-type params and returns, a
+          signatureFrom read as a type reference, and an L1 or L0 export entry's typeDef — an entry
+          that states no `as` first getting `as: <its public name>`, recorded as kept. Rename traces
+          are never rewritten. Then rekey every lint allow naming the type
+          (identity_rename.rekeyAnchor). Record the specs either changed
+        type: local
+      - stepNumber: 13
+        description: Drop the cached spec index, so the save below reads the rewritten tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 14
+        description: >-
+          Write the type, reloaded as the rewrite left it, under newId with the same owner and its
+          old id appended to its rename trace (previousIds)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 15
+        description: Remove the file it left behind under its old id
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteSpec
+      - stepNumber: 16
+        description: >-
+          Rekey the debt register for real: every carried entry anchored on the type, rewritten in
+          place with every comment and all other formatting kept
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 17
+        description: >-
+          Return from and to, rewritten (the other specs whose references or lint allows changed),
+          keptPublicNames and carried
+        type: return
+        outcome: renamed
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:34:16.501Z'
+updatedAt: '2026-10-04T13:56:28.584Z'

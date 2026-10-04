@@ -162,7 +162,14 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: listDirectChainedSubprojects
+  - name: renameType
+    narrative:
+      - stepNumber: 1
+        description: Call renameType on core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: renameType
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T20:40:11.943Z'
+updatedAt: '2026-10-04T13:57:08.481Z'

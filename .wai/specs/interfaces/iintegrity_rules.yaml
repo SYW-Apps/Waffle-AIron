@@ -607,6 +607,29 @@ methods:
         summary: >-
           A named scalar (a value-object holding a primitive) carries fields or a member it cannot
           carry; or a type of another kind declares holds
+  - name: renameTraces
+    description: >-
+      Rule rename-traces. A rename trace (a spec's previousIds, a contract method's previousNames)
+      names keys that no longer exist, and is what lets a consumer of the design export tell a
+      rename from a delete plus an add; it must therefore be unambiguous. Reported: a trace entry
+      equal to a live key of the same kind (a component, interface or implementation id; a type id
+      within the same owner; `<interface>.<method>` of a declared method), and one former key
+      claimed by two elements of the same kind. The rename tools and the gated write refuse both
+      (id-retired, name-retired), so a finding means a hand edit; the message names both holders and
+      the way out — rename the newcomer, or unset the trace entry and accept the delete plus an add
+      a consumer will read.
+    signature: 'renameTraces(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: RENAME_TRACE_CONFLICT
+        severity: warning
+        summary: >-
+          A rename-trace entry equals a live key of the same kind, or two elements claim one former
+          key
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-04T11:53:46.176Z'
+updatedAt: '2026-10-04T13:58:08.588Z'

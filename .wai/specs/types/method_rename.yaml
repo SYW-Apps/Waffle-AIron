@@ -49,7 +49,15 @@ fields:
       an entry anchored at the method on a spec it moved in, or naming <component>.<method> in a
       covered unit. Empty when the register names it nowhere
     optional: false
+  - name: publishedIn
+    type: list<string>
+    description: >-
+      The public names of the export entries (L0 and L1) whose contract carries the renamed method:
+      the rename changed a published member there, which consumers pinning that entry see as one
+      member removed and one added. Reported, never prevented — no mainstream export mechanism
+      aliases a single member. Empty when the contract is not exported.
+    optional: false
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-17T19:21:55.866Z'
-updatedAt: '2026-10-04T10:20:31.471Z'
+updatedAt: '2026-10-04T13:52:04.769Z'

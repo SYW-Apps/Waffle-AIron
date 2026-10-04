@@ -1,0 +1,79 @@
+kind: value-object
+id: design_component
+name: DesignComponent
+description: One exported component with its stereotype and edges, every reference a key in the same document.
+subsystem: sdd_surfaces
+fields:
+  - name: key
+    type: string
+    description: The component's id (unique in the project)
+    optional: false
+  - name: name
+    type: string
+    optional: false
+  - name: description
+    type: string
+    optional: false
+  - name: status
+    type: string
+    optional: false
+  - name: subsystem
+    type: string
+    description: Its subsystem's key
+    optional: false
+  - name: stereotype
+    type: string
+    description: The building block or pattern (componentType)
+    optional: false
+  - name: variant
+    type: string
+    optional: true
+  - name: dependencyClass
+    type: string
+    description: pure or read, on an Orchestrator
+    optional: true
+  - name: durability
+    type: string
+    description: On a Store
+    optional: true
+  - name: portalType
+    type: string
+    description: On a Portal
+    optional: true
+  - name: owns
+    type: list<string>
+    description: Keys of its private member blocks
+    optional: false
+  - name: dependsOn
+    type: list<string>
+    description: Keys of its collaborators; `alias::publicName` across projects
+    optional: false
+  - name: emits
+    type: list<string>
+    description: The topics it publishes
+    optional: false
+  - name: subscribesTo
+    type: list<string>
+    description: The topics it consumes
+    optional: false
+  - name: auth
+    type: PortalAuth
+    description: A Portal's inbound auth
+    optional: true
+  - name: basePath
+    type: string
+    optional: true
+  - name: dispatch
+    type: list<DispatchBinding>
+    description: A generic Portal's capability table, targets as keys; empty elsewhere
+    optional: false
+  - name: formerly
+    type: list<string>
+    description: Its rename trace (previousIds), oldest first
+    optional: false
+  - name: ext
+    type: map<string, any>
+    optional: true
+methods: []
+createdAt: '2026-10-04T13:53:13.764Z'
+updatedAt: '2026-10-04T13:53:13.765Z'

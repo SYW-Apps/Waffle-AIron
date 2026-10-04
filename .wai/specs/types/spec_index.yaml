@@ -48,7 +48,23 @@ fields:
       its canonical spelling, and each that is not canonical at all. The loaded interfaces and types
       hold canonical text, so this is the only place the stored spellings are still visible
     optional: false
-methods: []
+methods:
+  - name: retiredBy
+    signature: 'retiredBy(kind: string, id: string): string?'
+    params:
+      - name: kind
+        type: string
+        description: component, interface, implementation or type
+      - name: id
+        type: string
+        description: The id about to be taken, qualified for a subsystem-owned type
+    returns: string?
+    description: >-
+      The spec of this kind whose rename trace (previousIds) lists the id, or none: the holder that
+      retired it. A type is matched within its owner (the same subsystem, or system-level). The
+      writer and the rename tools ask it before giving an id to a new spec, and refuse with
+      id-retired naming the holder — a consumer holding the old key would otherwise read the new
+      spec as the renamed one.
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-10-04T10:21:08.990Z'
+updatedAt: '2026-10-04T13:52:20.345Z'

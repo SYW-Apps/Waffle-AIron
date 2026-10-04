@@ -1,0 +1,33 @@
+kind: value-object
+id: design_export_entry
+name: DesignExportEntry
+description: >-
+  One entry of a resolved export table (L0 for the project, L1 for a subsystem): a public name bound
+  to the canonical target its re-export chain ends at.
+subsystem: sdd_surfaces
+fields:
+  - name: publicName
+    type: string
+    description: The name a consumer uses (`alias::publicName` from another project)
+    optional: false
+  - name: targetKind
+    type: string
+    description: component, interface or type
+    optional: false
+  - name: target
+    type: string
+    description: The key of the canonical target in this document
+    optional: false
+  - name: audience
+    type: string
+    description: 'The exposure ceiling: project, department, instance, partner or external (L0 entries)'
+    optional: true
+  - name: version
+    type: string
+    optional: true
+  - name: stability
+    type: string
+    optional: true
+methods: []
+createdAt: '2026-10-04T13:52:52.929Z'
+updatedAt: '2026-10-04T13:52:52.930Z'

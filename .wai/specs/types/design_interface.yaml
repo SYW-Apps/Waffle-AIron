@@ -1,0 +1,36 @@
+kind: value-object
+id: design_interface
+name: DesignInterface
+description: One exported contract with its methods resolved.
+subsystem: sdd_surfaces
+fields:
+  - name: key
+    type: string
+    description: The interface's id
+    optional: false
+  - name: component
+    type: string
+    description: The key of the component it belongs to
+    optional: false
+  - name: name
+    type: string
+    optional: false
+  - name: description
+    type: string
+    optional: false
+  - name: status
+    type: string
+    optional: false
+  - name: methods
+    type: list<DesignMethod>
+    description: In declared order
+    optional: false
+  - name: formerly
+    type: list<string>
+    optional: false
+  - name: ext
+    type: map<string, any>
+    optional: true
+methods: []
+createdAt: '2026-10-04T13:53:16.152Z'
+updatedAt: '2026-10-04T13:53:16.153Z'

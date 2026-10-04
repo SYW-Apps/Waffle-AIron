@@ -332,6 +332,19 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: renameType
+    description: >-
+      Resolve the type id, qualified by its owner if needed, against the bound tree, then rename it
+      through the core adapter
+    signature: 'renameType(id: string, newId: string): TypeRename'
+    returns: TypeRename
+    params:
+      - name: id
+        type: string
+        description: The type to rename
+      - name: newId
+        type: string
+        description: Its new id
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-04T10:53:46.812Z'
+updatedAt: '2026-10-04T13:57:02.875Z'

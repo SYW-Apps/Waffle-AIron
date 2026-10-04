@@ -325,6 +325,9 @@ methods:
       - name: apply
         type: bool
         description: Write the rewrite; false plans without writing
+  - name: renameType
+    description: 'Forward to core_orchestrator.renameType: rename a type and every reference to it'
+    signatureFrom: core_orchestrator.renameType
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-04T10:19:37.903Z'
+updatedAt: '2026-10-04T13:56:56.513Z'

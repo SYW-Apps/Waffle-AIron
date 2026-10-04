@@ -62,6 +62,24 @@ methods:
     signature: 'excerptParent(): ParentExcerpt'
     returns: ParentExcerpt
     params: []
+  - name: loadSubsystemSpecs
+    description: >-
+      Forward to spec_tree_portal.loadSubsystemSpecs: every loaded subsystem, a part's included, for
+      the design export
+    signature: 'loadSubsystemSpecs(): list<SubsystemSpec>'
+    returns: list<SubsystemSpec>
+    params: []
+    guarantees:
+      - idempotent
+  - name: loadImplementationSpecs
+    description: >-
+      Forward to spec_tree_portal.loadImplementationSpecs: every loaded implementation with its
+      narratives, for the design export
+    signature: 'loadImplementationSpecs(): list<ImplementationSpec>'
+    returns: list<ImplementationSpec>
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-04T10:19:39.565Z'
+updatedAt: '2026-10-04T14:02:37.257Z'

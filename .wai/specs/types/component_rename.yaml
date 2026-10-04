@@ -24,7 +24,15 @@ fields:
       an entry anchored on a renamed spec, or naming the component in its site or covered units.
       Empty when the register names none of them
     optional: false
+  - name: keptPublicNames
+    type: list<string>
+    description: >-
+      The export entries (L0 and L1) whose public name was derived from the renamed component or its
+      moving interface (no `as`), each named by its public name: the rename wrote `as: <that name>`
+      on them, so the published surface and every consumer's pin stay as they were. Empty when no
+      entry derived its name from the rename.
+    optional: false
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-15T10:51:05.887Z'
-updatedAt: '2026-10-04T10:19:59.492Z'
+updatedAt: '2026-10-04T13:52:02.920Z'

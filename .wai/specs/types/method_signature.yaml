@@ -104,6 +104,17 @@ fields:
       signatureFrom (no chains). A method naming one states no params or returns of its own — a
       write restating them is refused (SIGNATURE_SOURCE_RESTATED)
     optional: true
+  - name: previousNames
+    type: list<string>
+    description: >-
+      The method's rename trace: every key it held before, oldest first, each written `<interface
+      id>.<method name>` — a rename keeps the interface and changes the name, a move (moveMethods)
+      changes the interface. Written only by renameMethod and moveMethods, never by an author, never
+      rewritten or bound as a reference, and never followed when its interface is itself renamed (a
+      consumer resolves the interface through the interface's own trace first). The design export
+      shows it as `formerly`. A method on the same contract may not take a name listed here (refused
+      at write); any other conflict is RENAME_TRACE_CONFLICT. Unsetting it releases those names.
+    optional: true
 methods:
   - name: typeRefs
     signature: 'typeRefs(): string[]'
@@ -154,4 +165,4 @@ methods:
     symbol: storedMethodSignature
 sourcePath: src/models/specs.ts
 createdAt: '2026-08-11T15:28:28.921Z'
-updatedAt: '2026-10-04T11:53:33.093Z'
+updatedAt: '2026-10-04T13:51:55.073Z'

@@ -1,0 +1,30 @@
+kind: value-object
+id: design_dependency
+name: DesignDependency
+description: >-
+  A project the exported project references: named, never inlined. A consumer that needs its design
+  reads that project's own export.
+subsystem: sdd_surfaces
+fields:
+  - name: alias
+    type: string
+    description: The alias references use (`alias::publicName`)
+    optional: false
+  - name: projectId
+    type: string
+    description: The producing project's id
+    optional: false
+  - name: role
+    type: DesignDependencyRole
+    optional: false
+  - name: digest
+    type: string
+    description: The content digest of the snapshot pinned for it, when it is pinned
+    optional: true
+  - name: uses
+    type: list<string>
+    description: The public names this project's references use, sorted
+    optional: false
+methods: []
+createdAt: '2026-10-04T13:52:55.779Z'
+updatedAt: '2026-10-04T13:52:55.781Z'

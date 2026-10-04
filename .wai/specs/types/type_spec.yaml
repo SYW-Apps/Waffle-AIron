@@ -143,6 +143,14 @@ fields:
       Read as a type position: an alias is respelled, number is refused ("int or float?"), and
       anything but one of those primitives is TYPE_POSITION_INVALID.
     optional: true
+  - name: previousIds
+    type: list<string>
+    description: >-
+      The rename trace: every id this type held before, oldest first. Written only by the rename
+      tool (renameType), never by an author, and never rewritten or bound as a reference. The design
+      export shows it as `formerly`. Another type of the same owner may not take an id listed here
+      (id-retired at write, RENAME_TRACE_CONFLICT on a hand edit); unsetting it releases those ids.
+    optional: true
 methods:
   - name: qualifiedId
     signature: 'qualifiedId(): string'
@@ -212,4 +220,4 @@ methods:
     symbol: typeCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-04T10:51:30.613Z'
+updatedAt: '2026-10-04T13:51:52.524Z'

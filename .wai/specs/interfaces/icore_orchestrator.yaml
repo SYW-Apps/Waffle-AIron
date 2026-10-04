@@ -407,27 +407,32 @@ methods:
     description: >-
       Rename a component and every reference to it. The component, and each interface and
       implementation named after it (i<id>, <id>_impl), move to the new id and file, a member of a
-      pattern staying under its owner; every reference in the bound tree is rewritten: dependsOn,
+      pattern staying under its owner, each with its old id appended to its rename trace
+      (previousIds) — the record the design export shows as `formerly`, so a consumer can tell the
+      rename from a delete plus an add. Every reference in the bound tree is rewritten: dependsOn,
       owns, dispatch and lifecycle entries, published interfaces at L1 and L0 (their component and
       interface), narrative targets, auth sources naming a component, an entity's componentClass, an
       interface's component, an interface method's signatureFrom naming one of its methods
-      (`component.method`), and an implementation's contract. Findings keyed on the component follow
-      it too, because they are keyed by exactly the ids a rename exists to rewrite and left alone
-      would read as debt both paid and new: every lint allow naming it on an edge site or in a
-      covered unit, and every entry of the debt register (.wai/project.yaml
-      rules.conformance.carried) anchored on a renamed spec or naming the component in its site or
-      covered units — rewritten in place, every comment and all other formatting of the register
-      kept, and each register edit reported. References from chained subprojects (super::) are not
-      rewritten: validate each child after renaming. Refuses a component that does not exist, a new
-      id already taken or outside the id grammar, a component inside a chained subproject (rename it
-      from that project's root), and a register that cannot be rewritten that precisely; every
-      refusal happens before the first write, and a failure after it leaves the rename half-applied.
-      Human-readable names are left to the author, and a lock goes stale as with any edit. Inside a
-      hosted request every spec the rename would write — the moved specs and every spec whose
-      references it rewrites — is judged against the request's write reach before the first write: a
-      rename that would change a spec of a subsystem the request may not change is refused
-      (SubsystemWriteDenied), naming every such subsystem and the rung that decided each, and
-      nothing is written.
+      (`component.method`), and an implementation's contract; rename traces are never rewritten. A
+      published name survives: an L1 or L0 export entry whose public name was derived from the old
+      id (it states no `as`) gets `as: <that name>` written before its target is respelled, and the
+      report lists it as kept. Findings keyed on the component follow it too, because they are keyed
+      by exactly the ids a rename exists to rewrite and left alone would read as debt both paid and
+      new: every lint allow naming it on an edge site or in a covered unit, and every entry of the
+      debt register (.wai/project.yaml rules.conformance.carried) anchored on a renamed spec or
+      naming the component in its site or covered units — rewritten in place, every comment and all
+      other formatting of the register kept, and each register edit reported. References from
+      chained subprojects (super::) are not rewritten: validate each child after renaming. Refuses a
+      component that does not exist, a new id already taken or outside the id grammar, a new id (or
+      the interface or implementation id it implies) that a spec of its kind retired (id-retired,
+      naming the holder), a component inside a chained subproject (rename it from that project's
+      root), and a register that cannot be rewritten that precisely; every refusal happens before
+      the first write, and a failure after it leaves the rename half-applied. Human-readable names
+      are left to the author, and a lock goes stale as with any edit. Inside a hosted request every
+      spec the rename would write — the moved specs and every spec whose references it rewrites — is
+      judged against the request's write reach before the first write: a rename that would change a
+      spec of a subsystem the request may not change is refused (SubsystemWriteDenied), naming every
+      such subsystem and the rung that decided each, and nothing is written.
     signature: 'renameComponent(componentId: string, newId: string): ComponentRename'
     returns: ComponentRename
     params:
@@ -454,26 +459,30 @@ methods:
   - name: renameMethod
     description: >-
       Rename a contract method and every reference to it. The method moves on every interface of the
-      component that declares it — its name, and its signature: a method with params is re-saved
-      with the text they derive under the new name, a prose method has the name inside its prose
-      renamed — and on the implementations of those contracts, carrying narrative, sourcePath,
-      symbol, detail, intent and findings unchanged. Narrative call, register and dispatch steps
-      naming it, dispatch-table bindings, lifecycle entrypoints and every interface method whose
-      signatureFrom names it (`component.method`) are retargeted, and so are the findings keyed on
-      it: a lint allow at the method on a spec it moved in or covering <component>.<method>, and
-      every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way,
-      rewritten in place with every comment and all other formatting kept and each edit reported. An
-      implementation that declared no symbol is pinned to the old name unless pinSymbol is false, so
-      the function it already binds to keeps binding. Prose is never rewritten and a gRPC endpoint
-      binding keeps its wire method — renaming a contract method must not silently rename an RPC;
-      both are reported as mentions. Refuses, before the first write: a component or method that
-      does not exist, a name already declared on that interface, a name outside the identifier
-      grammar, a component inside a chained subproject (rename it from that project's root), and a
-      register that cannot be rewritten that precisely. A lock goes stale as with any edit. Inside a
-      hosted request every spec the rename would write is judged against the request's write reach
-      before the first write: a rename that would change a spec of a subsystem the request may not
-      change is refused (SubsystemWriteDenied), naming every such subsystem and the rung that
-      decided each, and nothing is written.
+      component that declares it — its name, its former key `<contract>.<old name>` appended to its
+      rename trace (previousNames, shown as `formerly` in the design export), and its signature: a
+      method with params is re-saved with the text they derive under the new name, a prose method
+      has the name inside its prose renamed — and on the implementations of those contracts,
+      carrying narrative, sourcePath, symbol, detail, intent and findings unchanged. Narrative call,
+      register and dispatch steps naming it, dispatch-table bindings, lifecycle entrypoints and
+      every interface method whose signatureFrom names it (`component.method`) are retargeted, and
+      so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering
+      <component>.<method>, and every debt-register entry (.wai/project.yaml
+      rules.conformance.carried) keyed the same way, rewritten in place with every comment and all
+      other formatting kept and each edit reported. An implementation that declared no symbol is
+      pinned to the old name unless pinSymbol is false, so the function it already binds to keeps
+      binding. Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming
+      a contract method must not silently rename an RPC; both are reported as mentions. When the
+      contract is exported (an L1 or L0 entry), the rename changes a published member: the report
+      names those entries (publishedIn), and nothing prevents it. Refuses, before the first write: a
+      component or method that does not exist, a name already declared on that interface or retired
+      there by one of its methods (name-retired), a name outside the identifier grammar, a component
+      inside a chained subproject (rename it from that project's root), and a register that cannot
+      be rewritten that precisely. A lock goes stale as with any edit. Inside a hosted request every
+      spec the rename would write is judged against the request's write reach before the first
+      write: a rename that would change a spec of a subsystem the request may not change is refused
+      (SubsystemWriteDenied), naming every such subsystem and the rung that decided each, and
+      nothing is written.
     signature: >-
       renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool):
       MethodRename
@@ -604,7 +613,8 @@ methods:
     description: >-
       Move contract methods from one component to another, and every reference with them. Each
       method leaves the source component's interface and arrives on the target's, carrying its
-      signature, params, returns, signatureFrom, guarantees and endpoint binding unchanged; its
+      signature, params, returns, signatureFrom, guarantees and endpoint binding unchanged and
+      appending its former key `<source contract>.<name>` to its rename trace (previousNames); its
       implementation entry moves with it, carrying narrative, sourcePath, symbol, detail, intent,
       calls and findings. An entry with no sourcePath of its own is realized in its old
       implementation's default file, so when the receiving implementation names a different file the
@@ -630,16 +640,17 @@ methods:
       half-moved method leaves callers naming a home it no longer has. The caller's judgement runs
       as a write hook on the resulting components at the last point before anything reaches disk,
       which is where a move that breaks a dependency rule is refused. Refuses, before the first
-      write: a component or method that does not exist, a method name already declared on the
-      target, a source and target that are the same component, a target with several contracts none
-      of which is named i<target>, a contract or implementation to create whose id another spec
-      already holds, a component inside a chained subproject (move it from that project's root), and
-      a register that cannot be rewritten without disturbing its formatting. A lock goes stale as
-      with any edit. Inside a hosted request every spec the move would write — the source, the
-      target, what it creates and every referrer it retargets — is judged against the request's
-      write reach with the rest of its edits, before the first write: a move that would change a
-      spec of a subsystem the request may not change is refused (SubsystemWriteDenied), naming every
-      such subsystem and the rung that decided each, and nothing is written.
+      write: a component or method that does not exist, a method name already declared on the target
+      or retired on the receiving contract, a source and target that are the same component, a
+      target with several contracts none of which is named i<target>, a contract or implementation
+      to create whose id another spec already holds, a component inside a chained subproject (move
+      it from that project's root), and a register that cannot be rewritten without disturbing its
+      formatting. A lock goes stale as with any edit. Inside a hosted request every spec the move
+      would write — the source, the target, what it creates and every referrer it retargets — is
+      judged against the request's write reach with the rest of its edits, before the first write: a
+      move that would change a spec of a subsystem the request may not change is refused
+      (SubsystemWriteDenied), naming every such subsystem and the rung that decided each, and
+      nothing is written.
     signature: >-
       moveMethods(from: string, to: string, methods: list<string>, hooks?: SpecWriteHooks, dryRun?:
       bool): MethodMoveReport
@@ -1180,6 +1191,32 @@ methods:
       - name: apply
         type: bool
         description: Write the rewrite; false plans without writing
+  - name: renameType
+    description: >-
+      Rename a type and every reference to it. The type moves to the new id and file under the same
+      owner, its old id appended to its rename trace (previousIds); every type position in the bound
+      tree naming it is respelled — contract and type-method params and returns, fields,
+      signature-type params and returns — and so is a signatureFrom naming it as a signature type
+      and an L1 or L0 export entry's typeDef. An export entry that exported it without `as` gets
+      `as: <the old public name>` first, so the published name stays. Rename traces are never
+      rewritten. Findings keyed on the type follow it: lint allows naming it, and debt-register
+      entries anchored on it, rewritten in place with every comment and all other formatting kept
+      and each edit reported. Refuses a type that does not exist, one inside a chained subproject, a
+      new id outside the id grammar, a new id another type of the same owner holds or retired
+      (id-taken, id-retired naming the holder), and a register that cannot be rewritten that
+      precisely; every refusal happens before the first write. Display names are the author's to
+      change, and a lock goes stale as with any edit. Inside a hosted request every spec it would
+      write is judged against the request's write reach before the first write
+      (SubsystemWriteDenied), and nothing is written on a refusal.
+    signature: 'renameType(typeId: string, newId: string): TypeRename'
+    returns: TypeRename
+    params:
+      - name: typeId
+        type: string
+        description: The type to rename, qualified by its owning subsystem when two subsystems own that id
+      - name: newId
+        type: string
+        description: Its new id, under the same owner
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:28:18.111Z'
+updatedAt: '2026-10-04T13:56:52.350Z'

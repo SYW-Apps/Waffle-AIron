@@ -724,6 +724,21 @@ methods:
       runMemberUpdate(alias: string, options: { ref?: string, commit?: string, report?: boolean }):
       Promise<void>
     returns: async void
+  - name: runExport
+    description: >-
+      `wairon export [--out <file>]` — the bound project's design export as JSON: to the file when
+      --out names one (and the path written is reported), else to stdout, so it pipes into a
+      generator. Its approval verdict is the one `wairon lock-check` exits on, decided first against
+      the gate identity and handed to the export; a tree that is not approved still exports,
+      carrying its state (stale, unlocked) for the consumer to judge. Read-only: a tree without an
+      L0 is refused with the reason.
+    signature: 'runExport(out?: string): async void'
+    returns: async void
+    params:
+      - name: out
+        type: string
+        description: The file to write; stdout without it
+        optional: true
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T10:32:02.218Z'
+updatedAt: '2026-10-04T14:02:40.294Z'

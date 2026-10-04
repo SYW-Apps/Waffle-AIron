@@ -1,0 +1,66 @@
+kind: value-object
+id: design_method
+name: DesignMethod
+description: >-
+  One exported method: a contract method, or a type's pure method (which carries only name,
+  description, params, returns and signature). Its signature is resolved: a method that took it from
+  another method carries that method's params and returns inline and never names it; one that took
+  it from a named signature type carries the params and names the type in signatureType, so a
+  generator can emit the function type once and use it.
+subsystem: sdd_surfaces
+fields:
+  - name: key
+    type: string
+    description: '`<interface key>.<name>` for a contract method, `<type key>.<name>` for a type method'
+    optional: false
+  - name: name
+    type: string
+    optional: false
+  - name: description
+    type: string
+    optional: true
+  - name: params
+    type: list<DesignParam>
+    description: In declared order; empty for a method without structured params
+    optional: false
+  - name: returns
+    type: DesignTypeRef
+    description: What it answers with; `async T` when it completes later
+    optional: false
+  - name: signature
+    type: string
+    description: The derived signature text, or the prose of a method without params
+    optional: false
+  - name: signatureType
+    type: string
+    description: The key of the named signature type it takes its signature from, when it does
+    optional: true
+  - name: effect
+    type: string
+    description: read, write or lifecycle
+    optional: true
+  - name: guarantees
+    type: list<string>
+    description: Its semantic guarantee tokens
+    optional: false
+  - name: invokedBy
+    type: DeclaredInvocation
+    description: A caller outside the modelled graph, as declared
+    optional: true
+  - name: endpoint
+    type: map<string, string>
+    description: >-
+      Its wire binding exactly as declared: `transport` plus that transport's address fields (method
+      and path for HTTP, topic, event and direction for MessageBus, command for CLI, and so on)
+    optional: true
+  - name: formerly
+    type: list<string>
+    description: Its rename trace (previousNames), oldest first; empty when never renamed
+    optional: false
+  - name: ext
+    type: map<string, any>
+    description: Pack extension data, passed through untouched under each pack's key
+    optional: true
+methods: []
+createdAt: '2026-10-04T13:52:48.585Z'
+updatedAt: '2026-10-04T13:52:48.586Z'

@@ -168,6 +168,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: repairTypeSpellings
+  - name: renameType
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameType
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-10-03T22:07:20.474Z'
+updatedAt: '2026-10-04T13:57:07.122Z'

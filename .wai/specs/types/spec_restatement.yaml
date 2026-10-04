@@ -63,25 +63,30 @@ methods:
       createdAt kept, the fields derived from the parent (a subsystem's parentSystem is the L0's
       name), every narrative *Label reference resolved to its step number
       (method_implementation.resolveLabels), and the notices naming what was carried, removed and
-      cleared. The candidate is then parsed through its kind's canonical schema, so a NEW spec
-      arrives with the schema's defaults for every list and flag the door did not state — a door
-      that states only the fields it owns (the CLI adding a chained subsystem) gets the same spec a
-      door that states everything does, and nothing downstream sees a half-formed spec. A method's
-      signature text is never taken from the door when the method states params: the writer stores
-      the text they derive, and a stated text that differs is named in a notice. An interface or a
-      type candidate has its type positions read under the grammar (interface_spec.canonicalTypes,
-      type_spec.canonicalTypes): every alias is respelled to its canonical text and recorded as a
-      respelling the receipt reports — an alias is accepted, never refused. It REFUSES instead, with
-      the sentence that says why and how to proceed, when the parent the restatement needs is
-      absent, when the stated status would lower the stored one (a restatement never reopens a
-      frozen spec), when a narrative label does not resolve, when an interface method names a
-      signatureFrom and also states params or returns (SIGNATURE_SOURCE_RESTATED — the source
-      supplies them; state one or the other), when a method states neither params, a signatureFrom
-      nor a prose signature, when a type position is not canonical (TYPE_EXPRESSION_INVALID,
+      cleared. The rename traces are unexpressed fields like any other: a spec's previousIds, and
+      the previousNames of every method the restatement states again under its name, are carried,
+      never dropped by a re-authoring. The candidate is then parsed through its kind's canonical
+      schema, so a NEW spec arrives with the schema's defaults for every list and flag the door did
+      not state — a door that states only the fields it owns (the CLI adding a chained subsystem)
+      gets the same spec a door that states everything does, and nothing downstream sees a
+      half-formed spec. A method's signature text is never taken from the door when the method
+      states params: the writer stores the text they derive, and a stated text that differs is named
+      in a notice. An interface or a type candidate has its type positions read under the grammar
+      (interface_spec.canonicalTypes, type_spec.canonicalTypes): every alias is respelled to its
+      canonical text and recorded as a respelling the receipt reports — an alias is accepted, never
+      refused. It REFUSES instead, with the sentence that says why and how to proceed, when the
+      parent the restatement needs is absent, when the stated status would lower the stored one (a
+      restatement never reopens a frozen spec), when a narrative label does not resolve, when an
+      interface method names a signatureFrom and also states params or returns
+      (SIGNATURE_SOURCE_RESTATED — the source supplies them; state one or the other), when a method
+      states neither params, a signatureFrom nor a prose signature, when an interface states a NEW
+      method under a name one of its own methods retired (listed as `<this interface>.<name>` in
+      that method's previousNames: name-retired, naming the holder; unsetting its previousNames
+      releases the name), when a type position is not canonical (TYPE_EXPRESSION_INVALID,
       TYPE_POSITION_INVALID, TYPE_FORM_UNSUPPORTED or TYPE_NOT_NEUTRAL, each naming its replacement
       — `number` asks "int or float?"), or when the candidate does not parse (a new spec missing a
       field its kind requires). A new spec carries nothing and raises no notices.
     symbol: applyRestatement
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:24.425Z'
-updatedAt: '2026-10-04T10:21:09.666Z'
+updatedAt: '2026-10-04T13:57:53.144Z'

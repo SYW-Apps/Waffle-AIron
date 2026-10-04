@@ -1,0 +1,24 @@
+kind: value-object
+id: design_param
+name: DesignParam
+description: One parameter of an exported method or signature type, in declared order.
+subsystem: sdd_surfaces
+fields:
+  - name: name
+    type: string
+    description: The parameter's name, its key inside its method
+    optional: false
+  - name: type
+    type: DesignTypeRef
+    description: Its type
+    optional: false
+  - name: optional
+    type: bool
+    description: Whether a caller may leave it out (not nullability, which the type's `?` says)
+    optional: false
+  - name: description
+    type: string
+    optional: true
+methods: []
+createdAt: '2026-10-04T13:52:39.596Z'
+updatedAt: '2026-10-04T13:52:39.597Z'

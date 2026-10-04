@@ -327,6 +327,13 @@ methods:
         type: call
         targetComponent: mcp_migration_orchestrator
         targetMethod: run
+  - name: sdd_rename_type
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameType workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameType
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T17:55:14.389Z'
+updatedAt: '2026-10-04T13:57:12.568Z'

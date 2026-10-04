@@ -1,0 +1,38 @@
+kind: value-object
+id: type_rename
+name: TypeRename
+description: >-
+  What renaming a type changed: the type moved to its new id (its old id appended to its rename
+  trace), the specs whose type positions were respelled, and the debt-register entries rekeyed.
+fields:
+  - name: from
+    type: string
+    description: The type's id before the rename, qualified by its owning subsystem when it has one
+    optional: false
+  - name: to
+    type: string
+    description: The type's id after the rename, qualified the same way
+    optional: false
+  - name: rewritten
+    type: list<string>
+    description: >-
+      Ids of the other specs whose type positions (params, returns, fields, signature params and
+      returns, type-method params and returns) or signatureFrom naming the type were respelled to
+      the new id
+    optional: false
+  - name: keptPublicNames
+    type: list<string>
+    description: >-
+      The export entries (L0 and L1) that export the type without an `as`: the rename wrote `as:
+      <old name>` on them so the published name stays. Empty when none
+    optional: false
+  - name: carried
+    type: list<CarriedRekey>
+    description: >-
+      Every edit the rename made to the debt register: an entry anchored on the type. Empty when the
+      register names none
+    optional: false
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-10-04T13:52:12.770Z'
+updatedAt: '2026-10-04T13:52:15.792Z'

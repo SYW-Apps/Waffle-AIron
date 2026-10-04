@@ -143,6 +143,25 @@ methods:
     signature: 'pinnedParent(): PinnedParent?'
     returns: PinnedParent?
     params: []
+  - name: exportDesign
+    description: >-
+      Published: the bound project's design export — the whole design resolved, as the one
+      integration point a generator consumes — written as JSON to outPath when given. The approval
+      verdict is the caller's to decide against the gate identity (the validator's, which this
+      subsystem cannot compute) and is handed in, exactly as status receives its approvals; without
+      one the export says unjudged and claims nothing. The package's library entry (src/index.ts)
+      re-exports it as `exportDesign`, so an in-process consumer calls it without the CLI.
+    signature: 'exportDesign(outPath?: string, approval?: string): DesignExport'
+    returns: DesignExport
+    params:
+      - name: outPath
+        type: string
+        description: Where to write the JSON; nothing is written without it
+        optional: true
+      - name: approval
+        type: string
+        description: The lock-check state (locked, stale, unlocked) the caller decided; omitted, unjudged
+        optional: true
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-04T10:19:41.201Z'
+updatedAt: '2026-10-04T14:02:28.861Z'

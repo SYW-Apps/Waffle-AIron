@@ -1,0 +1,34 @@
+kind: value-object
+id: design_method_body
+name: DesignMethodBody
+description: >-
+  One method's body as the design states it: a flat numbered step list (the L5 narrative), or an
+  intent paragraph at a lower detail level. A generator emits one node per step, in order, with the
+  branches and loops in place; steps are keyed by number inside their method, and a step's label is
+  the anchor that survives an edit where the author set one.
+subsystem: sdd_surfaces
+fields:
+  - name: method
+    type: string
+    description: The key of the contract method it realizes
+    optional: false
+  - name: detail
+    type: string
+    description: full, calls-only or intent, after the stereotype default is applied
+    optional: false
+  - name: intent
+    type: string
+    optional: true
+  - name: calls
+    type: list<string>
+    description: The method keys it declares it calls when its narrative does not show them; empty otherwise
+    optional: false
+  - name: narrative
+    type: list<NarrativeStep>
+    description: >-
+      The steps as stored, with targetComponent and targetMethod resolved to keys; empty for an
+      intent-level method
+    optional: false
+methods: []
+createdAt: '2026-10-04T13:53:19.761Z'
+updatedAt: '2026-10-04T13:53:19.762Z'

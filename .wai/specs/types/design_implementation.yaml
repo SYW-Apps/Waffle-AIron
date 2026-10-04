@@ -1,0 +1,49 @@
+kind: value-object
+id: design_implementation
+name: DesignImplementation
+description: >-
+  One exported L4 realization of a contract: where language and vendor are chosen, and the method
+  bodies.
+subsystem: sdd_surfaces
+fields:
+  - name: key
+    type: string
+    description: The implementation's id
+    optional: false
+  - name: contract
+    type: string
+    description: The key of the interface it realizes
+    optional: false
+  - name: component
+    type: string
+    description: The key of that interface's component
+    optional: false
+  - name: name
+    type: string
+    optional: false
+  - name: description
+    type: string
+    optional: false
+  - name: status
+    type: string
+    optional: false
+  - name: technologies
+    type: list<string>
+    description: The technologies it binds to, by name
+    optional: false
+  - name: sourcePath
+    type: string
+    description: Where this repository realizes it, when it does
+    optional: true
+  - name: methods
+    type: list<DesignMethodBody>
+    optional: false
+  - name: formerly
+    type: list<string>
+    optional: false
+  - name: ext
+    type: map<string, any>
+    optional: true
+methods: []
+createdAt: '2026-10-04T13:53:22.867Z'
+updatedAt: '2026-10-04T13:53:22.869Z'

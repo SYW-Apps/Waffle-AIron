@@ -1,0 +1,32 @@
+kind: value-object
+id: design_field
+name: DesignField
+description: One field of an exported entity or value-object, in declared order.
+subsystem: sdd_surfaces
+fields:
+  - name: name
+    type: string
+    description: The field's name, its key inside its type
+    optional: false
+  - name: type
+    type: DesignTypeRef
+    description: Its type
+    optional: false
+  - name: optional
+    type: bool
+    description: Whether the field may be left out
+    optional: false
+  - name: description
+    type: string
+    optional: true
+  - name: key
+    type: string
+    description: primary, unique or foreign, when the field is an identity marker
+    optional: true
+  - name: references
+    type: string
+    description: For a foreign key, the referenced type key and optional field
+    optional: true
+methods: []
+createdAt: '2026-10-04T13:52:42.091Z'
+updatedAt: '2026-10-04T13:52:42.092Z'
