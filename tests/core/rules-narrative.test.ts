@@ -334,7 +334,7 @@ lint:
     } finally { proj.cleanup(); }
   });
 
-  it('never suppresses error-severity findings, but the matching allow is not flagged stale', () => {
+  it('never suppresses error-severity findings, and says the allow cannot cover an error', () => {
     const proj = createTempProject();
     proj.writeSpec('type', 'broken', `kind: value-object
 id: broken
@@ -352,7 +352,10 @@ lint:
     try {
       const res = validateProject();
       expect(res.issues.filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toHaveLength(1); // error survives
-      expect(res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW')).toHaveLength(0); // but the allow matched
+      const audit = res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW');
+      expect(audit).toHaveLength(1); // the allow covers nothing, and says why
+      expect(audit[0].message).toContain('an error cannot be allowed');
+      expect(audit[0].message).not.toContain('no such finding fired');
       expect(res.valid).toBe(false);
     } finally { proj.cleanup(); }
   });

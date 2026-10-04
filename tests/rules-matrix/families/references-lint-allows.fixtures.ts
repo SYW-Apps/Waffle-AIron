@@ -322,4 +322,30 @@ export default [
       reason: WHY_BATCH,
     }]),
   }),
+  // -------------------------------------------------------------------------
+  // An allow naming an ERROR — errors are never allowed, and the audit says so
+  // instead of claiming the finding never fired.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNUSED_LINT_ALLOW',
+    severity: 'warning',
+    anchoredTo: 'pick-route-orchestrator',
+    expectFire: true,
+    scenario:
+      'The pick route workflow tries to allow ACTOR_REACHED_WITHOUT_SUPERVISOR for the picker robot actor it reaches directly — an error, which no allow can cover.',
+    tree: {
+      subsystems: [{ id: 'picking', description: 'Warehouse order picking with robot pickers.' }],
+      components: [
+        {
+          id: 'pick-route-orchestrator',
+          componentType: 'Orchestrator',
+          subsystem: 'picking',
+          description: 'Routes each pick list to a picker robot.',
+          dependsOn: ['picker-robot-actor'],
+          lint: { allow: [{ code: 'ACTOR_REACHED_WITHOUT_SUPERVISOR', reason: 'The robot fleet supervisor is modelled next sprint.' }] },
+        },
+        { id: 'picker-robot-actor', componentType: 'Actor', subsystem: 'picking', description: 'One live picker robot session.' },
+      ],
+    },
+  }),
 ];

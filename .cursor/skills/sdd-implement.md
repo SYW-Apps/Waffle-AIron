@@ -170,7 +170,7 @@ All implementation work must strictly adhere to these rules:
      - `Portal` (inbound entrypoint composed of standard building blocks; dispatches to Orchestrators and never does domain work directly; with the `gateway` variant it authenticates, authorizes, validates or rate-limits before it dispatches).
      - `Orchestrator` (logic as a flowchart over injected collaborators; with no `dependencyClass` it is a workflow that coordinates multi-step work and owns its transactions, never doing simple CUD directly).
      - pure/read `Orchestrator` (`dependencyClass: pure` holds narrow deterministic rules over supplied values, e.g. Scanner, Router, Evaluator, Compiler, and depends only on pure Orchestrators; `dependencyClass: read` also reads through Repositories, Indexes and Adapters, and never writes).
-     - `Supervisor` (owns the set of live Actors and their lifecycle; reaches data only through workflows).
+     - `Supervisor` (owns the set of live Actors and their lifecycle, and may own its supervision state — a Store or Registry of its own; reaches shared data only through read- and lifecycle-effect methods, and writes it through a workflow).
      - `Store` (authoritative in-memory/backend state boundary for one aggregate; returns references/pointers directly without copying).
      - `Registry` (manages registration/CUD write paths).
      - `Index` (handles read-path lookups, optimized query maps).

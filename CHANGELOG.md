@@ -53,7 +53,9 @@ externals per use (re-pin once). The debt triage makes a hosted token mint requi
 project list (`*` for the full reach) and drops `environment` from hosted project init. The type
 grammar respells every stored type position once (`doctor --fix`, then a re-lock), refuses `number`
 and the forms it leaves out at write, retires `LANGUAGE_FOREIGN_BUILTIN` and moves every surface
-digest once (re-pin). Nothing here is purely additive, so `[minor]` would understate it.
+digest once (re-pin). The Supervisor doctrine judges a Supervisor's data calls by their
+declared effect and reports a `lint.allow` that names an error, so a tree can newly fail on
+either. Nothing here is purely additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
 
@@ -1265,6 +1267,49 @@ specs make the lock stale, so re-lock afterwards. Surface digests now hash canon
 types, so a consumer that pinned a snapshot whose members changed spelling sees
 `EXTERNAL_DRIFTED` once and re-pins (`wairon surface pin`). A pack declaring
 `foreignBuiltins` can drop the field.
+
+### Supervisors keep their own state, and Actors are found where callers really look
+
+A Supervisor had nowhere to keep its bookkeeping: held state belongs in a data
+component, but a Supervisor could not depend on one at all. And the remedy for an Actor
+reached without supervision pointed at a ceremonial edge to the Supervisor instead of the
+lookup a caller really performs. Both are replaced.
+
+- **Supervision state.** A Supervisor may `owns` a Store or Registry of its own — restart
+  counts, live sets, run brackets — one hop, private, read and written in full. It owns
+  nothing else (`SUPERVISOR_CONTAINMENT`, error), a block has one owner whether patterns
+  or Supervisors claim it (`SHARED_OWNED_MEMBER`), and nobody else depends on that state:
+  a component that does is reported, as the intruder, naming the Supervisor and the state
+  (`SUPERVISION_STATE_INTRUSION`, error).
+- **Shared data, per call.** A Supervisor may depend on a data component it does not own,
+  and calls it only through `read`- and `lifecycle`-effect methods; a call to a write, or to
+  a method that declares no effect, is `SUPERVISOR_WRITE_SHORTCUT` (error) — the write goes
+  through the Orchestrator that does it. `ARCHITECTURE_VIOLATION_SUPERVISOR_DEP` now covers
+  only a Supervisor depending on a presentation block.
+- **A third method effect: `lifecycle`.** `effect: lifecycle` marks a method that creates,
+  destroys, or (un)registers an entity's existence or membership without modifying its
+  domain fields. It is closed under composition: a lifecycle method that calls a
+  write-effect method is `LIFECYCLE_CALLS_WRITE` (error). The existing effect readers treat
+  it as a mutation: `PORTAL_WRITE_SHORTCUT` refuses a Portal's direct lifecycle call as it
+  refuses a write, and a durable Store's lifecycle methods need the hydration read-back as
+  its writes do. `sdd_define_interface`, `sdd_update_spec`, the OpenAPI codec and the web
+  specs editor accept it.
+- **An Actor is found through its supervision.** A component depending on a live Actor is
+  supervised reach when it also depends on a Supervisor that supervises the Actor — as
+  before — or on a Registry such a Supervisor maintains, by owning it or by calling it with
+  lifecycle-effect methods: the lookup hop the code really takes.
+  `ACTOR_REACHED_WITHOUT_SUPERVISOR`'s remedy now names that Registry, or says to model one.
+- **An allow cannot cover an error, and now says so.** A `lint.allow` naming a code that is
+  an error on its spec silenced nothing (correct) but was then reported as an allow whose
+  finding never fired — or, when the error did fire, not reported at all. Either way
+  `UNUSED_LINT_ALLOW` now says plainly that an error cannot be allowed.
+
+**Upgrading.** A tree whose Supervisor depended on a Store, Registry, Repository, Index or
+Query used to fail on the edge; it now passes the edge and is judged on what its narratives
+call there. A Supervisor narrative calling a write — or an untagged method — on data it does
+not own newly fails, as does a component depending on state a Supervisor now owns. Tag the
+shared methods a Supervisor calls `read` or `lifecycle`, move each write into an
+Orchestrator, and remove any `lint.allow` naming an error code. No spec is rewritten.
 
 ### Signatures: one source, named when shared
 

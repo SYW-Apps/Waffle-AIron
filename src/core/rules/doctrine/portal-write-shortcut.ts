@@ -12,9 +12,9 @@ export const portalWriteShortcutRule: SddRule = {
   name: 'portal-write-shortcut',
   judges: 'design',
   description:
-    'A Portal narrative call step or dispatch-table binding that reaches a write-effect method on a Repository or Index directly is the write shortcut: the Portal→data-facade edge is licensed for reads only, and a write routes through an Orchestrator that owns the workflow. A dispatch step reaches its server only through a table binding, so judging every binding judges each dispatch step that takes it, once, where the route is declared. Methods that carry no effect tag are not judged.',
+    'A Portal narrative call step or dispatch-table binding that reaches a write- or lifecycle-effect method on a Repository or Index directly is the write shortcut: the Portal→data-facade edge is licensed for reads only, and a mutation — a write, or a lifecycle change to what exists — routes through an Orchestrator that owns the workflow. A dispatch step reaches its server only through a table binding, so judging every binding judges each dispatch step that takes it, once, where the route is declared. Methods that carry no effect tag are not judged.',
   codes: [
-    { code: 'PORTAL_WRITE_SHORTCUT', defaultSeverity: 'error', summary: 'Portal narrative call or dispatch-table binding reaches a write-effect method on a Repository/Index directly — reads may shortcut, writes route through an Orchestrator (judged on effect-tagged facade methods; untagged methods are not yet judged)' },
+    { code: 'PORTAL_WRITE_SHORTCUT', defaultSeverity: 'error', summary: 'Portal narrative call or dispatch-table binding reaches a write- or lifecycle-effect method on a Repository/Index directly — reads may shortcut, mutations route through an Orchestrator (judged on effect-tagged facade methods; untagged methods are not yet judged)' },
   ],
   check(ctx) {
     for (const impl of ctx.implementations) {
@@ -30,11 +30,11 @@ export const portalWriteShortcutRule: SddRule = {
           if (!target || (target.componentType !== 'Repository' && target.componentType !== 'Index')) continue;
           const targetMethod = ctx.interfaceMethodsOf(target.id)
             .find(m => m.name === step.targetMethod);
-          if (targetMethod?.effect !== 'write') continue;
+          if (targetMethod?.effect !== 'write' && targetMethod?.effect !== 'lifecycle') continue;
           ctx.addIssue(
             'error',
             'PORTAL_WRITE_SHORTCUT',
-            `Portal "${component.id}": step ${step.stepNumber} of "${implMethod.name}" calls write-effect method ${target.id}.${step.targetMethod} directly. The Portal→${target.componentType} shortcut is licensed for READS only — route the write through an Orchestrator that owns the workflow.`,
+            `Portal "${component.id}": step ${step.stepNumber} of "${implMethod.name}" calls ${targetMethod.effect}-effect method ${target.id}.${step.targetMethod} directly. The Portal→${target.componentType} shortcut is licensed for READS only — route the ${targetMethod.effect === 'write' ? 'write' : 'lifecycle change'} through an Orchestrator that owns the workflow.`,
             impl.id,
             isDraftCtx || ctx.isComponentDraft(target.id),
           );
@@ -56,11 +56,11 @@ export const portalWriteShortcutRule: SddRule = {
         if (!target || (target.componentType !== 'Repository' && target.componentType !== 'Index')) continue;
         const targetMethod = ctx.interfaceMethodsOf(target.id)
           .find(m => m.name === binding.method);
-        if (targetMethod?.effect !== 'write') continue;
+        if (targetMethod?.effect !== 'write' && targetMethod?.effect !== 'lifecycle') continue;
         ctx.addIssue(
           'error',
           'PORTAL_WRITE_SHORTCUT',
-          `Portal "${comp.id}": dispatch binding "${binding.capability}" routes to write-effect method ${target.id}.${binding.method} directly. The Portal→${target.componentType} shortcut is licensed for READS only — route the write through an Orchestrator that owns the workflow.`,
+          `Portal "${comp.id}": dispatch binding "${binding.capability}" routes to ${targetMethod.effect}-effect method ${target.id}.${binding.method} directly. The Portal→${target.componentType} shortcut is licensed for READS only — route the ${targetMethod.effect === 'write' ? 'write' : 'lifecycle change'} through an Orchestrator that owns the workflow.`,
           comp.id,
           isDraftCtx || ctx.isComponentDraft(target.id),
         );

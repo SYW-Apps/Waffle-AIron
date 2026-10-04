@@ -2,14 +2,15 @@ kind: value-object
 id: ownership_index
 name: OwnershipIndex
 description: >-
-  Which pattern privately owns each member block — the tree's one ownership reading, derived once
-  per run behind rule_context.ownershipIndex. The skips are semantics that decide findings, not
-  shortcuts: a retired claimant records nothing (its migration decides what its owns becomes), a
-  building block's claim records nothing (BLOCK_OWNS_MEMBERS is the whole finding, so the member it
-  named stays standalone and its dependants are judged as if the claim were absent), an unresolved
-  member records nothing (INVALID_OWNED_MEMBER), an inner pattern records nothing
-  (PATTERN_OWNS_PATTERN — patterns compose at L1), and where two patterns claim one block the first
-  claimant stays the owner so every later claim is reported against it.
+  Which owner privately owns each member block — a pattern, or a Supervisor owning its supervision
+  state — the tree's one ownership reading, derived once per run behind rule_context.ownershipIndex.
+  The skips are semantics that decide findings, not shortcuts: a retired claimant records nothing
+  (its migration decides what its owns becomes), a claim by a building block other than a Supervisor
+  records nothing (BLOCK_OWNS_MEMBERS is the whole finding, so the member it named stays standalone
+  and its dependants are judged as if the claim were absent), an unresolved member records nothing
+  (INVALID_OWNED_MEMBER), an inner pattern records nothing (PATTERN_OWNS_PATTERN, or
+  SUPERVISOR_CONTAINMENT for a Supervisor claimant — patterns compose at L1), and where two owners
+  claim one block the first claimant stays the owner so every later claim is reported against it.
 subsystem: sdd_validator
 fields:
   - name: ownedMembers
@@ -22,7 +23,7 @@ methods:
   - name: ownerOf
     signature: 'ownerOf(memberId: string): string | undefined'
     returns: string?
-    description: The pattern that owns a member block, or none when no legal claim was made on it
+    description: The pattern or Supervisor that owns a member block, or none when no legal claim was made on it
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:32.070Z'
-updatedAt: '2026-10-04T10:20:36.029Z'
+updatedAt: '2026-10-04T11:53:36.089Z'

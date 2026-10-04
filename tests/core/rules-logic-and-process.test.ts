@@ -173,16 +173,23 @@ describe('logic-dependency-class: an Orchestrator\'s dependencyClass bounds its 
 });
 
 describe('entrypoint-dependencies: the process layer', () => {
-  it('a Supervisor depending on a Store is ARCHITECTURE_VIOLATION_SUPERVISOR_DEP', () => {
+  it('a Supervisor depending on a View is ARCHITECTURE_VIOLATION_SUPERVISOR_DEP', () => {
+    const proj = createTempProject();
+    proj.subsystem('pharmacy');
+    proj.component('dispensing-supervisor', 'pharmacy', 'Supervisor', 'dependsOn: [dispense-board-view]');
+    proj.component('dispense-board-view', 'pharmacy', 'View');
+    const found = byCode(proj.validate(), 'ARCHITECTURE_VIOLATION_SUPERVISOR_DEP');
+    expect(found.map(i => i.specId)).toEqual(['dispensing-supervisor']);
+    expect(found[0].severity).toBe('error');
+    expect(found[0].message).toContain('stays out of presentation');
+  });
+
+  it('a Supervisor depending on a data component is no edge finding: what it calls there is judged', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
     proj.component('dispensing-supervisor', 'pharmacy', 'Supervisor', 'dependsOn: [dispense-queue-store]');
     proj.component('dispense-queue-store', 'pharmacy', 'Store', 'durability: ram-projection');
-    const found = byCode(proj.validate(), 'ARCHITECTURE_VIOLATION_SUPERVISOR_DEP');
-    expect(found.map(i => i.specId)).toEqual(['dispensing-supervisor']);
-    expect(found[0].severity).toBe('error');
-    expect(found[0].message).toContain('reaches data only through workflows');
-    expect(found[0].message).toContain('Repository');
+    expect(byCode(proj.validate(), 'ARCHITECTURE_VIOLATION_SUPERVISOR_DEP')).toEqual([]);
   });
 
   it('a Supervisor may depend on Actors, Orchestrators, Adapters and other Supervisors', () => {
@@ -219,6 +226,19 @@ describe('entrypoint-dependencies: the process layer', () => {
     const found = byCode(proj.validate(), 'ACTOR_REACHED_WITHOUT_SUPERVISOR');
     expect(found.map(i => i.specId)).toEqual(['refill-workflow']);
     expect(found[0].message).toContain('"printer-supervisor"');
+  });
+
+  it('points the remedy at the Registry the Supervisor maintains — the real lookup hop', () => {
+    const proj = createTempProject();
+    proj.subsystem('pharmacy');
+    proj.component('refill-workflow', 'pharmacy', 'Orchestrator', 'dependsOn: [label-printer-actor]');
+    proj.component('label-printer-actor', 'pharmacy', 'Actor');
+    proj.component('printer-supervisor', 'pharmacy', 'Supervisor', 'dependsOn: [label-printer-actor]\nowns: [printer-handle-registry]');
+    proj.component('printer-handle-registry', 'pharmacy', 'Registry');
+    const found = byCode(proj.validate(), 'ACTOR_REACHED_WITHOUT_SUPERVISOR');
+    expect(found.map(i => i.specId)).toEqual(['refill-workflow']);
+    expect(found[0].message).toContain('"printer-handle-registry", kept by "printer-supervisor"');
+    expect(found[0].message).toContain('look the Actor up by id');
   });
 
   it('passes when the consumer also depends on a Supervisor that supervises the Actor', () => {

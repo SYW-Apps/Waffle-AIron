@@ -158,10 +158,11 @@ methods:
   - name: durabilityRoundTrip
     description: >-
       Rule durability-round-trip. A durable Store (persisted RAM projection) must carry
-      effect-tagged contract methods, and its writes require a hydration read-back reachable from a
-      lifecycle init entrypoint. read-through is exempt (every read IS the read-back), as are
-      ram-projection (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic
-      check is opt-out by declaration, never silently absent — the declaration itself is enforced by
+      effect-tagged contract methods, and its mutations — write-effect methods, and lifecycle-effect
+      methods, which change what exists — require a hydration read-back reachable from a lifecycle
+      init entrypoint. read-through is exempt (every read IS the read-back), as are ram-projection
+      (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic check is
+      opt-out by declaration, never silently absent — the declaration itself is enforced by
       durability-declaration.
     signature: 'durabilityRoundTrip(ctx: RuleContext): void'
     returns: void
@@ -172,7 +173,7 @@ methods:
     findings:
       - code: MISSING_EFFECT_TAG
         severity: warning
-        summary: 'Durable Store contract method lacks an effect: read | write tag'
+        summary: 'Durable Store contract method lacks an effect: read | write | lifecycle tag'
       - code: MISSING_HYDRATION
         severity: error
         summary: Durable Store is written but no read-back is reachable from any lifecycle init entrypoint
@@ -328,4 +329,4 @@ methods:
           its own — a whole surface nothing serves
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-03T22:10:17.356Z'
+updatedAt: '2026-10-04T11:53:18.096Z'

@@ -50,6 +50,8 @@ import { logicDependencyClassRule } from './doctrine/logic-dependency-class.js';
 import { dataBlockDepsRule } from './doctrine/data-block-dependencies.js';
 import { entrypointDepsRule } from './doctrine/entrypoint-dependencies.js';
 import { portalWriteShortcutRule } from './doctrine/portal-write-shortcut.js';
+import { supervisorSharedDataRule } from './doctrine/supervisor-shared-data.js';
+import { lifecycleEffectClosureRule } from './doctrine/lifecycle-effect-closure.js';
 import { patternMembershipRule } from './doctrine/pattern-membership.js';
 import { patternContainmentRule } from './doctrine/pattern-containment.js';
 import { unownedBlocksRule } from './doctrine/unowned-blocks.js';
@@ -205,6 +207,10 @@ export const SDD_RULES: SddRule[] = [
   dataBlockDepsRule,
   entrypointDepsRule,
   portalWriteShortcutRule,
+  // The process layer's data reach and the lifecycle effect's closure, both
+  // read from narratives against the callee's declared effect.
+  supervisorSharedDataRule,
+  lifecycleEffectClosureRule,
   // Patterns in four questions: who may own and what a claim must name,
   // what each pattern must contain, which data blocks are left standing
   // alone, and who may see a private member.

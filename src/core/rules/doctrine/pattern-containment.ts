@@ -4,8 +4,12 @@ import { isRetired } from '../../../models/index.js';
 /** What a Repository may own: its Store, the Registry that writes it, its read faces, and optionally the Adapter serving it. */
 const REPOSITORY_MEMBERS: ReadonlySet<string> = new Set(['Store', 'Registry', 'Index', 'Query', 'Adapter']);
 
+/** What a Supervisor may own: its supervision state — the Stores and Registries that are its own. */
+const SUPERVISION_STATE: ReadonlySet<string> = new Set(['Store', 'Registry']);
+
 /**
- * What each pattern must contain. A Repository is judged member by member; a
+ * What each owner must contain. A Repository and a Supervisor are judged
+ * member by member; a
  * FeatureComponent and a RouterComponent are judged by counting, because their
  * shape is about how many of each face they have. Who may own at all, and
  * whether a claim resolves, is pattern-membership's question.
@@ -14,10 +18,11 @@ export const patternContainmentRule: SddRule = {
   name: 'pattern-containment',
   judges: 'design',
   description:
-    'Holds each pattern to the containment its definition prescribes. A Repository may own only Store, Registry, Index, Query and (optionally) Adapter, judged member by member. A FeatureComponent owns exactly one Orchestrator (the logic side) and one or more Views (its faces — list, detail, form — sharing the one logic component), and nothing else. A RouterComponent owns exactly one Portal as its facade and at least one other child to route to. A counting pattern that still owns a retired member is not judged until that member is migrated: its counts change with the migration, and STEREOTYPE_RETIRED is the one finding.',
+    'Holds each owner to the containment its definition prescribes. A Repository may own only Store, Registry, Index, Query and (optionally) Adapter, judged member by member. A Supervisor may own only its supervision state — Stores and Registries that are its own, one hop — judged member by member too. A FeatureComponent owns exactly one Orchestrator (the logic side) and one or more Views (its faces — list, detail, form — sharing the one logic component), and nothing else. A RouterComponent owns exactly one Portal as its facade and at least one other child to route to. A counting pattern that still owns a retired member is not judged until that member is migrated: its counts change with the migration, and STEREOTYPE_RETIRED is the one finding.',
   codes: [
     { code: 'REPOSITORY_CONTAINMENT', defaultSeverity: 'error', summary: 'Repository owning a non Store/Registry/Index/Query/Adapter member' },
     { code: 'FEATURE_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'FeatureComponent not owning exactly one Orchestrator + one or more Views' },
+    { code: 'SUPERVISOR_CONTAINMENT', defaultSeverity: 'error', summary: 'Supervisor owning anything but a Store or Registry — a Supervisor owns only its supervision state' },
     { code: 'ROUTER_COMPONENT_CONTAINMENT', defaultSeverity: 'error', summary: 'RouterComponent not owning exactly one Portal facade, or owning no children to route to' },
   ],
   check(ctx) {
@@ -84,6 +89,19 @@ export const patternContainmentRule: SddRule = {
         if (!hasChildren) {
           ctx.addIssue('error', 'ROUTER_COMPONENT_CONTAINMENT', `RouterComponent "${comp.id}" must own at least one child component/View to route to.`, comp.id, isDraftCtx);
         }
+      }
+    }
+
+    // 3. Supervisor containment, member by member like a Repository: a
+    //    Supervisor owns only its supervision state, and works with anything
+    //    else as a collaborator in dependsOn.
+    for (const comp of ctx.components) {
+      if (comp.componentType !== 'Supervisor' || isRetired(comp)) continue;
+      const isDraftCtx = ctx.isComponentDraft(comp.id);
+      for (const memberId of comp.owns) {
+        const member = ctx.componentMap.get(memberId);
+        if (!member || isRetired(member) || SUPERVISION_STATE.has(member.componentType)) continue;
+        ctx.addIssue('error', 'SUPERVISOR_CONTAINMENT', `Supervisor "${comp.id}" owns "${memberId}" of type ${member.componentType}; a Supervisor owns only its supervision state — Stores and Registries that are its own. Depend on "${memberId}" as a collaborator instead.`, comp.id, isDraftCtx);
       }
     }
   },

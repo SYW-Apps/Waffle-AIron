@@ -103,10 +103,11 @@ methods:
       - stepNumber: 7
         label: checkWrites
         description: >-
-          Split the methods into writes and reads by effect; a store with no write keeps nothing to
-          hydrate
+          Split the methods into mutations (effect write or lifecycle — a lifecycle change alters
+          what is persisted, so it needs the read-back too) and reads by effect; a store with no
+          mutation keeps nothing to hydrate
         type: branch
-        condition: some method has effect write
+        condition: some method has effect write or lifecycle
         onFalseStep: 4
       - stepNumber: 8
         description: The store is hydrated when a lifecycle init flow reaches one of its reads
@@ -119,10 +120,10 @@ methods:
         label: storesEnd
         description: >-
           Report MISSING_HYDRATION (error; draft context from ctx.isComponentDraft(comp.id)) on
-          comp.id, naming the write methods and the reason: no subsystem declares a lifecycle init
-          entrypoint at all when initReach is absent, else the store declares no read-effect method,
-          else none of its listed read-effect methods is reachable from a declared lifecycle init
-          flow
+          comp.id, naming the mutating methods and the reason: no subsystem declares a lifecycle
+          init entrypoint at all when initReach is absent, else the store declares no read-effect
+          method, else none of its listed read-effect methods is reachable from a declared lifecycle
+          init flow
         type: local
     symbol: check
     exportedVia: durabilityRule
@@ -925,4 +926,4 @@ methods:
     exportedVia: portalMountsRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-03T23:40:38.917Z'
+updatedAt: '2026-10-04T11:53:20.684Z'

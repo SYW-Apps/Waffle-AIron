@@ -14,9 +14,9 @@ export const durabilityRule: SddRule = {
   needsWholeTree: true,
   judges: 'design',
   description:
-    'A durable Store (persisted RAM projection) must carry effect-tagged contract methods, and its writes require a hydration read-back reachable from a lifecycle init entrypoint. read-through is exempt (every read IS the read-back), as are ram-projection (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic check is opt-out by declaration, never silently absent — the declaration itself is enforced by durability-declaration.',
+    'A durable Store (persisted RAM projection) must carry effect-tagged contract methods, and its mutations — write-effect methods, and lifecycle-effect methods, which change what exists — require a hydration read-back reachable from a lifecycle init entrypoint. read-through is exempt (every read IS the read-back), as are ram-projection (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic check is opt-out by declaration, never silently absent — the declaration itself is enforced by durability-declaration.',
   codes: [
-    { code: 'MISSING_EFFECT_TAG', defaultSeverity: 'warning', summary: 'Durable Store contract method lacks an effect: read | write tag' },
+    { code: 'MISSING_EFFECT_TAG', defaultSeverity: 'warning', summary: 'Durable Store contract method lacks an effect: read | write | lifecycle tag' },
     { code: 'MISSING_HYDRATION', defaultSeverity: 'error', summary: 'Durable Store is written but no read-back is reachable from any lifecycle init entrypoint' },
   ],
   check(ctx) {
@@ -59,7 +59,9 @@ export const durabilityRule: SddRule = {
         );
       }
 
-      const writes = methods.filter(method => method.effect === 'write');
+      // A lifecycle change alters what is persisted as surely as a write does,
+      // so both need the read-back.
+      const writes = methods.filter(method => method.effect === 'write' || method.effect === 'lifecycle');
       const reads = methods.filter(method => method.effect === 'read');
       if (writes.length === 0) continue; // nothing persisted, nothing to hydrate
 
