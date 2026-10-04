@@ -593,7 +593,7 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
         ? rawGuarantees.filter((g): g is string => typeof g === 'string' && g.length > 0)
         : [];
       const rawEffect = op['x-wairon-effect'];
-      const effect = rawEffect === 'read' || rawEffect === 'write' ? rawEffect : undefined;
+      const effect = rawEffect === 'read' || rawEffect === 'write' || rawEffect === 'lifecycle' ? rawEffect : undefined;
       // Opaque by doctrine — preserved verbatim, never validated beyond "is a map".
       const rawExt = op['x-wairon-ext'];
       const ext = rawExt && typeof rawExt === 'object' && !Array.isArray(rawExt)

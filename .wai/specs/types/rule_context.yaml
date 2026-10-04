@@ -254,10 +254,11 @@ methods:
       Record a finding in the run's issue sink, the context's one effectful method. It drops a
       finding on a spec a contained member owns — that member's own gate judges it, under its own
       configuration — then drops findings outside the scope, applies the project's severity
-      overrides (off drops the finding), downgrades completeness findings in draft context, lets a
-      matching lint allow silence a warning, lets a matching debt-register entry carry a warning
-      whose every unit it lists (naming back any unit it does not), and attaches the reference
-      resolution a cross-project finding carries.
+      overrides (off drops the finding), downgrades completeness findings in draft context, records
+      where the finding landed and whether it landed as an error (what the lint-allows audit reads),
+      lets a matching lint allow silence a warning, lets a matching debt-register entry carry a
+      warning whose every unit it lists (naming back any unit it does not), and attaches the
+      reference resolution a cross-project finding carries.
   - name: isInChainedSubproject
     signature: 'isInChainedSubproject(subsystemId: string): boolean'
     returns: bool
@@ -387,6 +388,15 @@ methods:
       [waffler-error]`. Null when no declared dependency exports it: the lookup never leaves the
       project's own alias table. The unresolved-reference rules (UNDEFINED_TYPE_REFERENCE,
       INVALID_DEPENDENCY_REFERENCE, INVALID_TARGET_COMPONENT_REFERENCE) append it to their message.
+  - name: severityOf
+    signature: 'severityOf(code: string, specId: string): string | undefined'
+    returns: string?
+    description: >-
+      The severity a finding of this code on this spec would be reported at outside draft context:
+      the project's override, else the governing pack profile's, else the code's default as the
+      validator gathered it from the registered rules and loaded assertions. None for a code the run
+      does not know. The lint-allows audit reads it to tell an allow that names an error — which no
+      allow can cover — from a stale one
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-04T10:21:01.098Z'
+updatedAt: '2026-10-04T11:53:42.021Z'

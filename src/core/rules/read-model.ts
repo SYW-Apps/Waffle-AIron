@@ -405,26 +405,29 @@ export function buildImportGraph(index: CodeIndex, universe: Set<string>): Impor
 }
 
 /**
- * ownership_index — which pattern privately owns each member block, the tree's
- * ONE ownership reading.
+ * ownership_index — which owner privately owns each member block — a pattern,
+ * or a Supervisor owning its supervision state — the tree's ONE ownership
+ * reading.
  *
  * A claim records an owner only when it is a legal one, and each skip is a
  * finding somewhere else rather than a silent default:
  *  - a RETIRED component records nothing (its migration decides what its owns
  *    becomes, and retired-stereotypes reports it once);
- *  - a BLOCK's claim records nothing (BLOCK_OWNS_MEMBERS is the whole finding,
+ *  - a claim by a BLOCK other than a Supervisor records nothing
+ *    (BLOCK_OWNS_MEMBERS is the whole finding,
  *    so the member it named stays standalone and its dependants are judged as
  *    if the claim were absent);
  *  - an UNRESOLVED member records nothing (INVALID_OWNED_MEMBER);
- *  - an INNER PATTERN records nothing (PATTERN_OWNS_PATTERN — patterns compose
- *    at L1, so its dependants get no visibility finding on top);
- *  - and where two patterns claim one block the FIRST claimant stays the
+ *  - an INNER PATTERN records nothing (PATTERN_OWNS_PATTERN, or
+ *    SUPERVISOR_CONTAINMENT for a Supervisor claimant — patterns compose at
+ *    L1, so its dependants get no visibility finding on top);
+ *  - and where two owners claim one block the FIRST claimant stays the
  *    owner, so every later claim is reported against that first owner.
  */
 export function buildOwnershipIndex(ctx: RuleContext): OwnershipIndex {
   const ownedBy = new Map<string, string>();
   for (const comp of ctx.components) {
-    if (isRetired(comp) || !isPattern(comp)) continue;
+    if (isRetired(comp) || !(isPattern(comp) || comp.componentType === 'Supervisor')) continue;
     for (const memberId of comp.owns) {
       const member = ctx.componentMap.get(memberId);
       if (!member || isPattern(member)) continue;

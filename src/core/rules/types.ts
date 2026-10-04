@@ -644,7 +644,16 @@ export interface RuleContext {
    * lint-allows audit reads it to tell a stale allow from a merely coarse one
    * and to say, in the finding, which sites an allow could name instead.
    */
-  sitesReported(specId: string, code: string): { sites: string[]; unsited: boolean };
+  sitesReported(specId: string, code: string): { sites: string[]; unsited: boolean; errored: boolean };
+
+  /**
+   * The severity a finding of this code on this spec would be reported at
+   * outside draft context: the project's override, else the governing pack
+   * profile's, else the code's default as the validator gathered it. Undefined
+   * for a code the run does not know. The lint-allows audit reads it to tell
+   * an allow naming an error — which no allow can cover — from a stale one.
+   */
+  severityOf(code: string, specId: string): IssueSeverity | 'off' | undefined;
 
   /**
    * The conformance debt register (`rules.conformance.carried`), flattened to

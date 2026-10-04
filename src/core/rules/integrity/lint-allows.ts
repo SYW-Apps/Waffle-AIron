@@ -20,16 +20,19 @@ import { SddRule } from '../types.js';
  *
  * By design, allows silence WARNING- and NOTICE-severity findings only. Error findings
  * are architecture violations and always surface; a human can still re-tune
- * a code globally via rules.sddRuleSeverity in project.yaml.
+ * a code globally via rules.sddRuleSeverity in project.yaml. So an allow naming
+ * a code that is an error on its spec covers nothing — whether or not it
+ * matched a finding — and the audit says exactly that, instead of claiming
+ * the finding never fired.
  */
 export const lintAllowsRule: SddRule = {
   name: 'lint-allows',
   judges: 'design',
   description:
-    'Per-spec lint suppressions (lint.allow) must name real issue codes and actually suppress a finding — unknown codes and stale allows are flagged. An allow covers exactly the occurrence it names: a finding that reports a site is silenced only by an allow whose `at` is that site, a finding that reports none only by an allow that names none, and an aggregating finding only by an allow whose `covers` lists every unit it reports — a unit nobody listed is named back as new instead of inheriting a decision taken about its neighbours. So a coarse allow left on a rule that names sites, and an allow whose site the run no longer reports, are both UNUSED_LINT_ALLOW, and the finding names the sites that did fire. Allows silence warnings and notices; errors always surface.',
+    'Per-spec lint suppressions (lint.allow) must name real issue codes and actually suppress a finding — unknown codes and stale allows are flagged. An allow covers exactly the occurrence it names: a finding that reports a site is silenced only by an allow whose `at` is that site, a finding that reports none only by an allow that names none, and an aggregating finding only by an allow whose `covers` lists every unit it reports — a unit nobody listed is named back as new instead of inheriting a decision taken about its neighbours. So a coarse allow left on a rule that names sites, and an allow whose site the run no longer reports, are both UNUSED_LINT_ALLOW, and the finding names the sites that did fire. Allows silence warnings and notices; errors always surface — so an allow naming a code that is an error on its spec (it fired there as one, or its resolved severity is error) covers nothing, and the finding says plainly that an error cannot be allowed rather than that the code never fired.',
   codes: [
     { code: 'UNKNOWN_LINT_ALLOW_CODE', defaultSeverity: 'warning', summary: 'lint.allow names an issue code no registered rule emits' },
-    { code: 'UNUSED_LINT_ALLOW', defaultSeverity: 'warning', summary: 'lint.allow entry matched no finding this run — the code never fired, or it fired at sites this allow does not name' },
+    { code: 'UNUSED_LINT_ALLOW', defaultSeverity: 'warning', summary: 'lint.allow entry covers nothing this run — the code never fired, it fired at sites this allow does not name, or it is an error, which no allow can cover' },
   ],
   check(ctx) {
     for (const a of ctx.lintAllows) {
@@ -42,12 +45,24 @@ export const lintAllowsRule: SddRule = {
         );
         continue;
       }
-      if (a.used) continue;
-
       // What the run DID report for this code on this spec, so the finding can
-      // tell "the debt is paid" from "you named the wrong occurrence".
+      // tell "the debt is paid" from "you named the wrong occurrence" — and
+      // from "this is an error, which nothing can allow".
       const reported = ctx.sitesReported(a.specId, a.code);
       const at = a.at ? ` at "${a.at}"` : '';
+      const fired = reported.unsited || reported.sites.length > 0;
+      const isError = reported.errored || (!fired && ctx.severityOf(a.code, a.specId) === 'error');
+      if (isError) {
+        ctx.addIssue(
+          'warning',
+          'UNUSED_LINT_ALLOW',
+          `Spec "${a.specId}" allows "${a.code}"${at} (reason: ${a.reason}), but "${a.code}" is an error${fired ? ' and fired here as one' : ''}, and an error cannot be allowed — lint.allow silences warnings and notices only. Fix what the finding names, or remove the allow (a project may re-tune the code's severity in rules.sddRuleSeverity).`,
+          a.specId,
+        );
+        continue;
+      }
+      if (a.used) continue;
+
       let why: string;
       if (a.at && reported.unsited && reported.sites.length === 0) {
         why = `findings of "${a.code}" on this spec name no site at all, so this allow must not name one — drop the \`at\``;

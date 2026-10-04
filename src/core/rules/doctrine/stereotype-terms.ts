@@ -20,7 +20,7 @@ export const storeResolutionHint = (consumerType: string, storeId: string): stri
   if (consumerType === 'Orchestrator') {
     return ` Resolution: wrap "${storeId}" in a Repository pattern (owns: Store + Registry + Index) and depend on that Repository facade instead.${NEVER_INLINE_STATE}`;
   }
-  // Any other consumer (a Portal, Observer, View or Supervisor): even the
+  // Any other consumer (a Portal, Observer or View): even the
   // Repository facade is out of its reach — the hop goes through the logic side.
   return ` Resolution: wrap "${storeId}" in a Repository pattern and reach it through an Orchestrator that uses the Repository facade.${NEVER_INLINE_STATE}`;
 };

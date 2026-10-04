@@ -628,6 +628,10 @@ function runOwnersGate(
     const carryableCodes = new Set(
       knownIssueCodes().filter((rc) => rc.carryable).map((rc) => rc.code),
     );
+    // Each code's default severity, so the lint-allows audit can tell an allow
+    // naming an error (which no allow covers) from a stale one; the context
+    // adds each loaded assertion's own.
+    const codeSeverities = new Map(knownIssueCodes().map((rc) => [rc.code, rc.defaultSeverity] as const));
 
     // Steps 29-33: the project graph of this scan — the bound project's own
     // from every root, nothing above it — every contained member's L0 table,
@@ -683,6 +687,7 @@ function runOwnersGate(
       codeModel,
       roundTripIssues,
       knownIssueCodes: knownCodes,
+      issueCodeSeverities: codeSeverities,
       carryableIssueCodes: carryableCodes,
       issues,
     });

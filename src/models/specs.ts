@@ -791,11 +791,16 @@ export const MethodSignatureSchema = z.object({
    */
   guarantees: z.array(GuaranteeSchema).optional(),
   /**
-   * State-effect direction of this method on its component's held state. Required on a
-   * durable Store's contract methods so the durability round-trip rule can pair external
-   * writes with hydration read-backs (MISSING_HYDRATION); optional elsewhere.
+   * What this method does to its component's held state: `read` observes it, `write`
+   * modifies an entity's domain fields, and `lifecycle` creates, destroys, or
+   * (un)registers an entity's existence or membership without modifying its fields —
+   * closed under composition (a lifecycle method calls only read and lifecycle methods,
+   * LIFECYCLE_CALLS_WRITE). Required on a durable Store's contract methods so the
+   * durability round-trip rule can pair mutations with hydration read-backs
+   * (MISSING_HYDRATION); a Supervisor may call a data component it does not own only
+   * through read and lifecycle methods (SUPERVISOR_WRITE_SHORTCUT). Optional elsewhere.
    */
-  effect: z.enum(['read', 'write']).optional(),
+  effect: z.enum(['read', 'write', 'lifecycle']).optional(),
   /**
    * Typed acknowledgment of a real caller OUTSIDE the modeled narrative graph
    * (runtime timer/hook, external system, sibling subsystem). Unused-detection

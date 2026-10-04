@@ -42,14 +42,17 @@
  *    (ARCHITECTURE_VIOLATION_INDEX_DEP / ARCHITECTURE_VIOLATION_QUERY_DEP).
  *  - A View is a passive presenter: persistence, boundary and non-pure logic
  *    blocks are all forbidden (ARCHITECTURE_VIOLATION_VIEW_DEP).
- *  - A Supervisor reaches data only through workflows: Store/Registry/
- *    Repository/Index/Query/View are forbidden
- *    (ARCHITECTURE_VIOLATION_SUPERVISOR_DEP).
- *  - A live Actor is reached through a Supervisor that supervises it: any
- *    non-Supervisor depending on an Actor without also depending on such a
- *    Supervisor is ACTOR_REACHED_WITHOUT_SUPERVISOR. No pair tree carries a
- *    Supervisor of the target Actor, so every non-Supervisor → Actor pair fires;
- *    the quiet shape is pinned by the explicit control after the sweep.
+ *  - A Supervisor stays out of presentation: a View target is forbidden
+ *    (ARCHITECTURE_VIOLATION_SUPERVISOR_DEP). Its edges to data components
+ *    are no edge finding — what it calls there is judged per call by
+ *    supervisor-shared-data (read and lifecycle methods only on data it does
+ *    not own), which a bare pair carries no narrative for.
+ *  - A live Actor is reached through its supervision: any non-Supervisor
+ *    depending on an Actor without also depending on a Supervisor that
+ *    supervises it, or on a Registry such a Supervisor maintains, is
+ *    ACTOR_REACHED_WITHOUT_SUPERVISOR. No pair tree carries a Supervisor of
+ *    the target Actor, so every non-Supervisor → Actor pair fires; the quiet
+ *    shapes are pinned by the explicit controls after the sweep.
  *  - A workflow Orchestrator, an Actor and the Repository facade carry no
  *    consumer-side restriction of their own.
  *
@@ -238,7 +241,7 @@ function verdictFor(consumer: MatrixType, target: MatrixType): Verdict | null {
   if (consumer === 'View' && within(target, ['Store', 'Registry', 'Index', 'Query', 'Adapter', 'Repository', 'Workflow', 'ReadLogic'])) {
     return err(VIEW_DEP);
   }
-  if (consumer === 'Supervisor' && within(target, ['Store', 'Registry', 'Repository', 'Index', 'Query', 'View'])) {
+  if (consumer === 'Supervisor' && within(target, ['View'])) {
     return err(SUPERVISOR_DEP);
   }
   // A live Actor is reached through a Supervisor that supervises it; no pair
@@ -303,6 +306,11 @@ const LEGAL_NOTES: Record<string, string> = {
   'Supervisor->Workflow': 'A Supervisor reaches data only through workflows — the documented shape.',
   'Supervisor->Adapter': 'A Supervisor may depend on Adapters (documented explicitly).',
   'Supervisor->Supervisor': 'A Supervisor may depend on other Supervisors (documented explicitly).',
+  'Supervisor->Store': 'A Supervisor may reach shared data; what it calls there is judged per call (read and lifecycle methods only), never the edge.',
+  'Supervisor->Registry': 'A Supervisor may reach shared data; what it calls there is judged per call (read and lifecycle methods only), never the edge.',
+  'Supervisor->Repository': 'A Supervisor may reach shared data through a Repository facade; what it calls there is judged per call (read and lifecycle methods only), never the edge.',
+  'Supervisor->Index': 'A Supervisor may read through an Index; what it calls there is judged per call, never the edge.',
+  'Supervisor->Query': 'A Supervisor may read a computed Query; what it calls there is judged per call, never the edge.',
   'View->PureLogic': 'A View may use pure logic — all the logic a passive presenter is allowed.',
   'View->View': 'A composite View embedding another View stays inside the presentation layer, which is all the View rule demands.',
 };

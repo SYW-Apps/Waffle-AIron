@@ -417,6 +417,15 @@ methods:
     sourcePath: src/core/rules/doctrine/entrypoint-dependencies.ts
     narrative:
       - stepNumber: 1
+        label: lookups
+        description: >-
+          lookups = for each Supervisor of ctx.components that is not retired, the Registries it
+          maintains: the Registries in its owns, and every Registry a narrative call step of one of
+          its implementations reaches with a method that declares effect lifecycle
+          (ctx.interfaceMethodsOf). A live Actor's callers look it up by id through such a Registry
+          — the hop the code really takes
+        type: local
+      - stepNumber: 2
         label: edge
         description: >-
           For each edge of ctx.dependencyEdges().matrix — the edges the intra-subsystem stereotype
@@ -425,8 +434,8 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.dependencyEdges().matrix
-        endStep: 13
-      - stepNumber: 2
+        endStep: 15
+      - stepNumber: 3
         label: entrypointTerms
         description: >-
           storeHint = storeResolutionHint(edge.from.componentType, edge.to.id) when edge.to is a
@@ -435,40 +444,40 @@ methods:
           other consumer to reach it through an Orchestrator on that facade, and both never to merge
           the state into the consumer
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         label: portalDep
         description: Does the edge target a Portal or an Observer?
         type: branch
         condition: edge.to.componentType is Portal or Observer
-        onFalseStep: 6
-      - stepNumber: 4
+        onFalseStep: 7
+      - stepNumber: 5
         description: >-
           Report ARCHITECTURE_VIOLATION_PORTAL_DEP (error, on edge.from.id; draft context
           edge.draftContext) naming both components: Portals and Observers are top-level entry
           points and subscribers, never dependencies
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           A Portal or Observer target is this edge's one finding: continue with the next edge, so
           neither the checks below nor the other matrix rules report the same edge
         type: jump
-        toStep: 1
-      - stepNumber: 6
+        toStep: 2
+      - stepNumber: 7
         label: portalForbidden
         description: Does a Portal or Observer reach the data layer directly?
         type: branch
         condition: >-
           edge.from is a Portal and edge.to is a Store, Registry, Adapter or Query, or edge.from is
           an Observer and edge.to is a Store, Registry, Repository, Index or Query
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 9
+      - stepNumber: 8
         description: >-
           Report ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP (error, on edge.from.id; draft context
           edge.draftContext) naming both components and stereotypes: they coordinate through
           Orchestrators and Supervisors, and do not reach the data layer directly. The message ends
           with storeHint
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         label: viewDep
         description: >-
           Does a View, a passive presenter, depend on a persistence or boundary block, or on logic
@@ -477,51 +486,58 @@ methods:
         condition: >-
           edge.from is a View and edge.to is a Store, Registry, Index, Query, Adapter or Repository,
           or an Orchestrator that is not pure logic
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 11
+      - stepNumber: 10
         description: >-
           Report ARCHITECTURE_VIOLATION_VIEW_DEP (error, on edge.from.id; draft context
           edge.draftContext) naming both components: Views stay passive UI blocks that use pure
           logic at most. The message ends with storeHint
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         label: supervisorDep
         description: >-
-          Does a Supervisor reach data or presentation directly instead of through workflows? It may
-          depend on Actors, Orchestrators, Adapters and other Supervisors; a Portal or Observer
+          Does a Supervisor depend on presentation? The data blocks it reaches are judged per call
+          by supervisor-shared-data, and what it owns by the ownership rules; a Portal or Observer
           target was reported above, once
         type: branch
-        condition: >-
-          edge.from is a Supervisor and edge.to is a Store, Registry, Repository, Index, Query,
-          View, FeatureComponent or RouterComponent
-        onFalseStep: 12
-      - stepNumber: 11
+        condition: edge.from is a Supervisor and edge.to is a View, FeatureComponent or RouterComponent
+        onFalseStep: 13
+      - stepNumber: 12
         description: >-
           Report ARCHITECTURE_VIOLATION_SUPERVISOR_DEP (error, on edge.from.id; draft context
-          edge.draftContext) naming edge.from as a Supervisor and edge.to with its componentType and
-          its dependencyClass when it has one: a Supervisor reaches data only through workflows, so
-          depend on the Orchestrator, Actor or Adapter that does that work instead. The message ends
-          with storeHint
+          edge.draftContext) naming edge.from as a Supervisor and edge.to with its stereotype: a
+          Supervisor manages live processes and stays out of presentation — the UI reaches the
+          system through its Portals and workflows, never through a Supervisor's dependencies
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         label: actorCheck
         description: >-
-          Is a live Actor reached by a component that does not supervise it and depends on no
-          Supervisor that does? A Supervisor depending on the Actor supervises it
+          Is a live Actor reached by a component that does not supervise it, outside the Actor's
+          supervision — through neither a Supervisor that supervises it nor a Registry such a
+          Supervisor maintains?
         type: branch
         condition: >-
-          edge.to is an Actor, edge.from is not a Supervisor, and no id in edge.from.dependsOn
-          resolves through ctx.componentMap to a Supervisor whose dependsOn includes edge.to.id
-        onFalseStep: 1
-      - stepNumber: 13
+          edge.to is an Actor, edge.from is not a Supervisor, supervisors = the Supervisors of
+          ctx.components whose dependsOn includes edge.to.id, and edge.from.dependsOn names none of
+          supervisors and none of the Registries lookups holds for them
+        onFalseStep: 2
+      - stepNumber: 14
+        label: actorRemedy
+        description: >-
+          remedy = when some of supervisors maintain Registries, to depend on one of them (named,
+          with the Supervisor that maintains it) and look the Actor up by id there; when supervisors
+          exist but maintain none, to model that lookup as a Registry of live handles the Supervisor
+          keeps through lifecycle-effect methods and depend on it; when there is no Supervisor, to
+          give the Actor a Supervisor that depends on it and maintains such a Registry, and depend
+          on that Registry
+        type: local
+      - stepNumber: 15
         label: actorReport
         description: >-
           Report ACTOR_REACHED_WITHOUT_SUPERVISOR (error, on edge.from.id; draft context
-          edge.draftContext) naming edge.from with its componentType and its dependencyClass when it
-          has one, the Actor edge.to, and the Supervisors in ctx.components whose dependsOn includes
-          edge.to.id, or that none does: a live Actor is reached by id through a Supervisor that
-          supervises it, so also depend on one of those Supervisors, or give the Actor a Supervisor
-          that depends on it
+          edge.draftContext) naming edge.from with its stereotype and the Actor edge.to: a live
+          Actor is found by id through a Registry its Supervisor maintains, or messaged through that
+          Supervisor. The message ends with remedy
         type: local
     symbol: check
     exportedVia: entrypointDepsRule
@@ -550,21 +566,21 @@ methods:
       - stepNumber: 3
         label: writeCall
         description: >-
-          Does the step call a write-effect method on a Repository or Index directly? Methods
-          without an effect tag are not judged
+          Does the step call a write- or lifecycle-effect method on a Repository or Index directly?
+          Methods without an effect tag are not judged
         type: branch
         condition: >-
           step.type is call with targetComponent and targetMethod set, ctx.componentMap resolves the
           target to a Repository or an Index, and the method named step.targetMethod among
-          ctx.interfaceMethodsOf(target.id) declares effect write
+          ctx.interfaceMethodsOf(target.id) declares effect write or lifecycle
         onFalseStep: 1
       - stepNumber: 4
         label: writeShortcut
         description: >-
           Report PORTAL_WRITE_SHORTCUT (error, on impl.id; draft context isDraftCtx ||
           ctx.isComponentDraft(target.id)) naming the Portal, the step number, the method, the
-          called target.id and targetMethod, and the target's componentType: the shortcut is
-          licensed for reads only, so route the write through an Orchestrator
+          called target.id and targetMethod with its effect, and the target's componentType: the
+          shortcut is licensed for reads only, so route the mutation through an Orchestrator
         type: local
       - stepNumber: 5
         label: binding
@@ -586,21 +602,21 @@ methods:
       - stepNumber: 7
         label: writeRoute
         description: >-
-          Does the binding route its capability to a write-effect method on a Repository or Index
-          directly? Methods without an effect tag are not judged
+          Does the binding route its capability to a write- or lifecycle-effect method on a
+          Repository or Index directly? Methods without an effect tag are not judged
         type: branch
         condition: >-
           ctx.componentMap resolves binding.component to a target that is a Repository or an Index,
           and the method named binding.method among ctx.interfaceMethodsOf(target.id) declares
-          effect write
+          effect write or lifecycle
         onFalseStep: 5
       - stepNumber: 8
         label: tableWriteShortcut
         description: >-
           Report PORTAL_WRITE_SHORTCUT (error, on comp.id; draft context isDraftCtx ||
           ctx.isComponentDraft(target.id)) naming the Portal, the binding's capability, target.id
-          and binding.method, and the target's componentType: the shortcut is licensed for reads
-          only, so route the write through an Orchestrator
+          and binding.method with its effect, and the target's componentType: the shortcut is
+          licensed for reads only, so route the mutation through an Orchestrator
         type: local
     symbol: check
     exportedVia: portalWriteShortcutRule
@@ -622,7 +638,9 @@ methods:
         label: shapeTerms
         description: >-
           isDraftCtx = ctx.isComponentDraft(comp.id); isPattern = comp.isPattern() (the models'
-          pattern stereotypes: Repository, FeatureComponent, RouterComponent)
+          pattern stereotypes: Repository, FeatureComponent, RouterComponent); isSupervisor =
+          comp.componentType is Supervisor, the one building block that may own (its supervision
+          state)
         type: local
       - stepNumber: 3
         label: emptyPattern
@@ -637,24 +655,25 @@ methods:
         type: local
       - stepNumber: 5
         label: blockOwns
-        description: Is it a building block that owns members?
+        description: Is it a building block other than a Supervisor that owns members?
         type: branch
-        condition: not isPattern and comp.owns is non-empty
+        condition: not isPattern, not isSupervisor, and comp.owns is non-empty
         onFalseStep: 1
       - stepNumber: 6
         description: >-
           Report BLOCK_OWNS_MEMBERS (error, on comp.id; draft context isDraftCtx) naming the block
-          and its componentType, and listing the pattern stereotypes (Repository, FeatureComponent,
-          RouterComponent) joined by / as the only ones that use owns
+          and its componentType, listing the pattern stereotypes (Repository, FeatureComponent,
+          RouterComponent) joined by / as the ones that use owns, beside a Supervisor owning its
+          supervision state
         type: local
       - stepNumber: 7
         label: ownershipReading
         description: >-
-          ownership = ctx.ownershipIndex(): which pattern privately owns each member block, derived
-          once per run and shared with every rule that needs it. Its skips are the semantics this
-          pass reports on — a retired or building-block claimant records nothing, so do an
-          unresolved member and an inner pattern, and where two patterns claim one block the first
-          claimant stays the owner
+          ownership = ctx.ownershipIndex(): which owner — a pattern, or a Supervisor — privately
+          owns each member block, derived once per run and shared with every rule that needs it. Its
+          skips are the semantics this pass reports on — a retired claimant or a building block
+          other than a Supervisor records nothing, so do an unresolved member and an inner pattern,
+          and where two owners claim one block the first claimant stays the owner
         type: local
       - stepNumber: 8
         label: claim
@@ -685,12 +704,12 @@ methods:
       - stepNumber: 12
         label: patternOwner
         description: >-
-          Is the claimant a pattern? A building block's owns is wholly the BLOCK_OWNS_MEMBERS
-          finding above: the block records no owner, so a Store or Registry it claims stays
-          standalone and its dependants are judged as if the claim were absent. Otherwise continue
-          with the next member
+          Is the claimant an owner — a pattern, or a Supervisor claiming its supervision state? Any
+          other building block's owns is wholly the BLOCK_OWNS_MEMBERS finding above: the block
+          records no owner, so a Store or Registry it claims stays standalone and its dependants are
+          judged as if the claim were absent. Otherwise continue with the next member
         type: branch
-        condition: comp.isPattern()
+        condition: comp.isPattern() or comp is a Supervisor
         onFalseStep: 8
       - stepNumber: 13
         label: patternMember
@@ -701,8 +720,9 @@ methods:
       - stepNumber: 14
         description: >-
           Report PATTERN_OWNS_PATTERN (error, on comp.id; draft context
-          ctx.isComponentDraft(comp.id)) naming the owning pattern and the member: patterns own only
-          building blocks and are composed at the subsystem level
+          ctx.isComponentDraft(comp.id)) when comp is a pattern, naming the owning pattern and the
+          member: patterns own only building blocks and are composed at the subsystem level. A
+          Supervisor owning a pattern is pattern-containment's SUPERVISOR_CONTAINMENT, not this
         type: local
       - stepNumber: 15
         description: >-
@@ -712,7 +732,7 @@ methods:
         toStep: 8
       - stepNumber: 16
         label: sharedMember
-        description: Has another pattern already claimed this member?
+        description: Has another owner already claimed this member?
         type: branch
         condition: 'ownership.ownerOf(memberId) is a component other than comp.id: the member''s first owner'
         onFalseStep: 8
@@ -817,6 +837,33 @@ methods:
           ctx.isComponentDraft(comp.id)) naming the RouterComponent: it must own at least one child
           component or View to route to
         type: local
+      - stepNumber: 11
+        label: supervisorClaim
+        description: >-
+          Supervisor pass: for each owned member id memberId in comp.owns of each Supervisor comp of
+          ctx.components that is not retired, judged member by member like a Repository
+        type: loop
+        loopKind: forEach
+        over: >-
+          each member id memberId in comp.owns of each Supervisor comp of ctx.components that is not
+          retired
+        endStep: 13
+      - stepNumber: 12
+        label: supervisorMember
+        description: Does the Supervisor own something other than its supervision state?
+        type: branch
+        condition: >-
+          ctx.componentMap resolves the member, the member is not retired, and its componentType is
+          not in SUPERVISION_STATE, a private constant of this file holding Store and Registry
+        onFalseStep: 11
+      - stepNumber: 13
+        label: supervisorViolation
+        description: >-
+          Report SUPERVISOR_CONTAINMENT (error, on comp.id; draft context
+          ctx.isComponentDraft(comp.id)) naming the Supervisor, the member and its type: a
+          Supervisor owns only its supervision state — Stores and Registries that are its own — and
+          works with everything else as a collaborator in dependsOn
+        type: local
     symbol: check
     exportedVia: patternContainmentRule
   - name: unownedBlocks
@@ -825,13 +872,14 @@ methods:
       - stepNumber: 1
         label: ownershipReading
         description: >-
-          ownership = ctx.ownershipIndex(): which pattern privately owns each member block, and
-          therefore which blocks stand alone. A retired component is never a Store, Registry or
-          Query, so this pass needs no retirement skip
+          ownership = ctx.ownershipIndex(): which owner — a pattern, or a Supervisor keeping its
+          supervision state — privately owns each member block, and therefore which blocks stand
+          alone. A retired component is never a Store, Registry or Query, so this pass needs no
+          retirement skip
         type: local
       - stepNumber: 2
         label: standalone
-        description: For each component of ctx.components that no pattern owns
+        description: For each component of ctx.components that no owner owns
         type: loop
         loopKind: forEach
         over: the components of ctx.components whose id ownership.ownedMembers lacks
@@ -892,10 +940,11 @@ methods:
       - stepNumber: 1
         label: ownershipReading
         description: >-
-          ownership = ctx.ownershipIndex(): which pattern privately owns each member block. This
-          rule judges the dependency id as AUTHORED — an id no pattern owns is nobody's private
-          member, whether it names a facade, a standalone block or nothing at all — so it reads
-          dependsOn directly rather than the resolved dependency edges
+          ownership = ctx.ownershipIndex(): which owner — a pattern, or a Supervisor keeping its
+          supervision state — privately owns each member block. This rule judges the dependency id
+          as AUTHORED — an id nobody owns is nobody's private member, whether it names a facade, a
+          standalone block or nothing at all — so it reads dependsOn directly rather than the
+          resolved dependency edges
         type: local
       - stepNumber: 2
         label: dependency
@@ -905,7 +954,7 @@ methods:
         type: loop
         loopKind: forEach
         over: each dependency id depId of each component comp of ctx.components that is not retired
-        endStep: 4
+        endStep: 7
       - stepNumber: 3
         label: privateMember
         description: >-
@@ -917,11 +966,31 @@ methods:
           ownership.ownerOf(comp.id) is not owner
         onFalseStep: 2
       - stepNumber: 4
+        label: supervisionState
+        description: Is the owner a Supervisor, the block its supervision state?
+        type: branch
+        condition: ctx.componentMap resolves owner to a Supervisor
+        onFalseStep: 7
+      - stepNumber: 5
+        label: intrusionReport
+        description: >-
+          Report SUPERVISION_STATE_INTRUSION (error, on comp.id — the intruder; draft context
+          ctx.isComponentDraft(comp.id) || ctx.isComponentDraft(depId)) saying comp.id depends on
+          depId, which Supervisor owner owns as its supervision state: supervision state is private,
+          so if comp.id needs the data it is shared data — move depId out of the Supervisor's owns
+          into a data component both depend on (the Supervisor keeping it through read and lifecycle
+          calls), or reach what comp.id needs through the Supervisor
+        type: local
+      - stepNumber: 6
+        description: 'The intrusion is this dependency''s one finding: continue with the next dependency'
+        type: jump
+        toStep: 2
+      - stepNumber: 7
         label: visibilityReport
         description: >-
           Report VISIBILITY_VIOLATION (error, on comp.id; draft context
           ctx.isComponentDraft(comp.id) || ctx.isComponentDraft(depId)) naming the component, depId
-          and its owner: depend on the facade instead
+          and its owning pattern: depend on the facade instead
         type: local
     symbol: check
     exportedVia: memberVisibilityRule
@@ -1303,6 +1372,104 @@ methods:
     detail: full
     symbol: check
     exportedVia: projectBoundariesRule
+  - name: supervisorSharedData
+    sourcePath: src/core/rules/doctrine/supervisor-shared-data.ts
+    narrative:
+      - stepNumber: 1
+        label: ownershipReading
+        description: >-
+          ownership = ctx.ownershipIndex(): which Stores and Registries each Supervisor owns as its
+          supervision state — data it keeps with full read and write
+        type: local
+      - stepNumber: 2
+        label: supervisorStep
+        description: For each narrative step of each method of each implementation in ctx.implementations
+        type: loop
+        loopKind: forEach
+        over: each narrative step of each method of each implementation in ctx.implementations
+        endStep: 6
+      - stepNumber: 3
+        label: supervisorImpl
+        description: >-
+          Does the implementation realize a Supervisor's contract? (supervisor = that component;
+          isDraftCtx = ctx.isImplementationDraft(impl))
+        type: branch
+        condition: >-
+          ctx.interfaceMap resolves impl.contract, ctx.componentMap resolves its component, and that
+          component is a Supervisor that is not retired
+        onFalseStep: 2
+      - stepNumber: 4
+        label: sharedData
+        description: Does the step call a data component the Supervisor does not own — shared data?
+        type: branch
+        condition: >-
+          step.type is call with targetComponent and targetMethod set, ctx.componentMap resolves the
+          target to a Store, Registry, Repository, Index or Query, and ownership.ownerOf(target.id)
+          is not supervisor.id
+        onFalseStep: 2
+      - stepNumber: 5
+        label: sharedEffect
+        description: >-
+          Is the called method anything but a read or a lifecycle change? An unresolved method is
+          narrative-target-references' finding
+        type: branch
+        condition: >-
+          called = the method named step.targetMethod among ctx.interfaceMethodsOf(target.id)
+          exists, and its effect is neither read nor lifecycle
+        onFalseStep: 2
+      - stepNumber: 6
+        label: writeShortcut
+        description: >-
+          Report SUPERVISOR_WRITE_SHORTCUT (error, on impl.id; draft context isDraftCtx ||
+          ctx.isComponentDraft(target.id)) naming the Supervisor, the step number, the method,
+          target.id and step.targetMethod, whether it is a write or declares no effect, and the
+          target's componentType: a Supervisor reads shared data and changes what exists in it,
+          while a write to its fields goes through a workflow — depend on the Orchestrator that does
+          it; an untagged method is told to declare its effect if it is a read or a lifecycle change
+        type: local
+    symbol: check
+    exportedVia: supervisorSharedDataRule
+  - name: lifecycleEffectClosure
+    sourcePath: src/core/rules/doctrine/lifecycle-effect-closure.ts
+    narrative:
+      - stepNumber: 1
+        label: closureStep
+        description: For each narrative step of each method of each implementation in ctx.implementations
+        type: loop
+        loopKind: forEach
+        over: >-
+          each narrative step of each method implMethod of each implementation impl in
+          ctx.implementations
+        endStep: 4
+      - stepNumber: 2
+        label: lifecycleMethod
+        description: Does the method declare the lifecycle effect?
+        type: branch
+        condition: >-
+          ctx.interfaceMap resolves impl.contract to a contract, and the method named
+          implMethod.name among ctx.interfaceMethodsOf(contract.component) declares effect lifecycle
+        onFalseStep: 1
+      - stepNumber: 3
+        label: writeCall
+        description: >-
+          Does the step call a write-effect method? Read, lifecycle and untagged callees are not
+          judged
+        type: branch
+        condition: >-
+          step.type is call with targetComponent and targetMethod set, and the method named
+          step.targetMethod among ctx.interfaceMethodsOf(step.targetComponent) declares effect write
+        onFalseStep: 1
+      - stepNumber: 4
+        label: closureReport
+        description: >-
+          Report LIFECYCLE_CALLS_WRITE (error, on impl.id; draft context
+          ctx.isImplementationDraft(impl)) naming the component and method, the step number and the
+          called write method: a lifecycle method creates, destroys or (un)registers what exists and
+          never modifies domain fields, and the effect is closed under composition — declare the
+          method a write, or move the write to a workflow beside it
+        type: local
+    symbol: check
+    exportedVia: lifecycleEffectClosureRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-09-28T17:16:44.452Z'
+updatedAt: '2026-10-04T11:53:08.623Z'

@@ -110,7 +110,8 @@ standard.
 - **Portal** is the inbound boundary; no *local* component may depend on it. It
   dispatches to Orchestrators and may consult Repository and Index **read** faces
   for passthrough reads; a write reached from a Portal's narrative or dispatch
-  table routes through an Orchestrator (`PORTAL_WRITE_SHORTCUT`). It never depends
+  table — or a lifecycle change — routes through an Orchestrator
+  (`PORTAL_WRITE_SHORTCUT`). It never depends
   on a Store, Registry, Adapter or Query. A Portal may **message a Supervisor by
   id** to reach a live Actor (below).
   The **one** exception to "no component depends on a Portal" is a
@@ -126,15 +127,39 @@ standard.
     and never calls their write methods (judged once facade methods carry effect tags);
   - unset, it is a **workflow**: it may depend on whatever the other rules allow —
     Repositories, other Orchestrators, Adapters, and Supervisors to reach live Actors.
-- **Supervisor** reaches data **only through workflows**: it depends on its
-  Actors, Orchestrators, Adapters and other Supervisors — never on a Store,
-  Registry, Repository, Index, Query or presentation block.
-- **Actor** — a live Actor is **reached by id through a Supervisor that
-  supervises it**. Whoever depends on an Actor also depends on a Supervisor whose
-  `dependsOn` lists that Actor, so its own `dependsOn` lists both
-  (`ACTOR_REACHED_WITHOUT_SUPERVISOR`); a Supervisor depending on the Actor
-  supervises it. The Actor itself may use Repository facades, Indexes, Adapters
-  and Orchestrators, and never depends on its own Supervisor.
+- **Supervisor** depends on its Actors, Orchestrators, Adapters and other
+  Supervisors, and never on a presentation block
+  (`ARCHITECTURE_VIOLATION_SUPERVISOR_DEP`). Its held state has two homes:
+  - its **supervision state** — restart counts, live sets, run brackets — is a
+    Store or Registry it **owns** (`owns`, one hop): private, read and written in
+    full. A Supervisor owns nothing else (`SUPERVISOR_CONTAINMENT`), and nobody
+    else depends on that state: a component that does is the intruder, and the
+    finding is reported on it, naming the Supervisor and the state
+    (`SUPERVISION_STATE_INTRUSION`);
+  - **shared data** — a data component it does not own — it reaches only through
+    `read`- and `lifecycle`-effect methods. A write to an entity's fields goes
+    through a workflow: the Supervisor depends on the Orchestrator that does it
+    (`SUPERVISOR_WRITE_SHORTCUT`, judged from its narrative call steps against the
+    callee's declared effect; a callee that declares no effect is refused too).
+    A read made on behalf of a request still passes; in practice the paired write
+    forces the workflow out, and the read moves with it.
+- **Actor** — a live Actor is **reached through its supervision**. A caller finds
+  it by id through a **Registry its Supervisor maintains** — owns, or keeps
+  through lifecycle calls (register and unregister a live handle) — so the
+  caller's `dependsOn` lists that Registry and the Actor: the lookup hop the code
+  really takes. Depending on a Supervisor that supervises the Actor (messaging it
+  by id) is reach too; anything else is `ACTOR_REACHED_WITHOUT_SUPERVISOR`. A
+  Supervisor depending on the Actor supervises it. The Actor itself may use
+  Repository facades, Indexes, Adapters and Orchestrators, and never depends on
+  its own Supervisor.
+- **Method effects.** A contract method's `effect` says what it does to held
+  state: `read` observes it; `write` modifies an entity's domain fields;
+  `lifecycle` creates, destroys, or (un)registers an entity's existence or
+  membership and never modifies its domain fields. The lifecycle effect is
+  **closed under composition**: a lifecycle method calls only read and lifecycle
+  methods besides its construction and local steps (`LIFECYCLE_CALLS_WRITE`).
+  Both `write` and `lifecycle` are mutations: a Portal's read shortcut covers
+  neither, and a durable Store needs a hydration read-back for both.
 - **Store** may depend on an **Adapter** (its backend), another Store, or pure
   logic. It is depended *upon* by Registries, Indexes and Queries — never the reverse.
 - **Index** is a read-only **projection over a Store**: it shares the Store's
@@ -216,7 +241,10 @@ also triggers it, or when it is too big to read in place. An Actor never passes
 itself to an Orchestrator; it passes values from its state and applies the result.
 The **Supervisor** owns the *set* of Actors and their lifecycle (find-or-start by
 id, stop, restart with backoff, unload idle instances) and may supervise other
-Supervisors, so a runtime is a **tree** under one root Supervisor.
+Supervisors, so a runtime is a **tree** under one root Supervisor. The state that
+bookkeeping needs is the Supervisor's own supervision state — a Store or Registry
+it owns — and the live handles callers look Actors up by are a Registry it
+maintains.
 
 | Need | Modeled as |
 |---|---|
@@ -845,7 +873,8 @@ tell apart components that share a noun, and it matches the block:
 2. Ten building blocks only; dependency rules fixed; the **Adapter** is the single
    external-I/O boundary.
 3. A pattern owns **only blocks**, **one hop**, **never a pattern**; compose
-   patterns at L1.
+   patterns at L1. The one block that owns is a Supervisor, owning its
+   supervision state (its own Stores and Registries), private to it.
 4. `owns` ≠ `dependsOn`; cross-group access is via facades only.
 5. A Repository facade forwards 1:1 with no logic (single-`call`-to-owned-member
    narratives; enforced as `FACADE_FORWARDING`).
@@ -862,10 +891,14 @@ tell apart components that share a noun, and it matches the block:
 9. Entities are first-class types, defined once by their owner; referenced, never
    redefined, elsewhere. Interfaces are method contracts; fields are implementation.
 10. The Actor owns one live thing and its methods are full flowcharts; the
-    Supervisor owns the set of Actors, may supervise Supervisors, and reaches data
-    only through workflows. A live Actor is reached by id through a Supervisor that
-    supervises it and is the only writer of its aggregate; the method that owns a
-    workflow owns its transaction, and in-memory state changes only after commit.
+    Supervisor owns the set of Actors, may supervise Supervisors, owns its
+    supervision state, and reaches shared data only through read and lifecycle
+    methods — writes go through a workflow. A live Actor is reached through its
+    supervision — looked up by id in a Registry its Supervisor maintains — and is
+    the only writer of its aggregate; the method that owns a workflow owns its
+    transaction, and in-memory state changes only after commit. A lifecycle
+    method changes what exists, never domain fields, and calls only read and
+    lifecycle methods.
 11. Structure is L2/L3; the concurrency variant is L4 (neutral strategy here,
     primitives in the language-bindings appendix). The bus client, composition root,
     and cross-cutting concerns are infrastructure, not blocks.

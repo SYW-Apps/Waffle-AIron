@@ -24,13 +24,13 @@ fields:
     type: list<MethodSignature>
     description: >-
       Method signatures (see method_signature): name, params, returns, guarantees, endpoint, effect
-      (read | write — required on a durable Store's contract methods so the durability round-trip
-      rule can pair external writes with hydration read-backs), and an optional invokedBy
-      declared-invocation ({kind: runtime | external | sibling-subsystem, caller} — see
-      declared_invocation) acknowledging a real caller outside the modeled narrative graph:
-      unused-detection seeds the method as a reachability entrypoint, with mandatory caller prose
-      (INVOKED_BY_UNDESCRIBED) and a staleness flag when the internal walk reaches the method anyway
-      (INVOKED_BY_REDUNDANT)
+      (read | write | lifecycle — required on a durable Store's contract methods so the durability
+      round-trip rule can pair mutations with hydration read-backs, and what the Supervisor and
+      lifecycle-closure doctrine judge calls by), and an optional invokedBy declared-invocation
+      ({kind: runtime | external | sibling-subsystem, caller} — see declared_invocation)
+      acknowledging a real caller outside the modeled narrative graph: unused-detection seeds the
+      method as a reachability entrypoint, with mandatory caller prose (INVOKED_BY_UNDESCRIBED) and
+      a staleness flag when the internal walk reaches the method anyway (INVOKED_BY_REDUNDANT)
     optional: false
   - name: status
     type: string
@@ -78,4 +78,4 @@ methods:
     symbol: interfaceCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T10:20:20.256Z'
+updatedAt: '2026-10-04T11:53:27.796Z'

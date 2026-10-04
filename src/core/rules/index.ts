@@ -268,6 +268,8 @@ export interface BuildContextOptions {
   roundTripIssues: ValidationIssue[];
   /** Every code the registered rules and loaded declarative assertions can report, gathered by the caller (see RuleContext.knownIssueCodes). */
   knownIssueCodes: Set<string>;
+  /** Each known code's default severity, gathered by the caller beside knownIssueCodes (see RuleContext.severityOf); a loaded assertion's own severity is added here. */
+  issueCodeSeverities?: Map<string, Severity>;
   /** Every code a registered rule declares CARRYABLE, gathered by the caller (see RuleContext.carryableIssueCodes). */
   carryableIssueCodes?: Set<string>;
   /** Collector the context's addIssue pushes into. */
@@ -793,10 +795,22 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   };
   // Where this run's findings landed, per spec and code — filled by addIssue
   // before any suppression, read by the lint-allows audit.
-  const sitesSeen = new Map<string, { sites: Set<string>; unsited: boolean }>();
-  const sitesReported = (specId: string, code: string): { sites: string[]; unsited: boolean } => {
+  const sitesSeen = new Map<string, { sites: Set<string>; unsited: boolean; errored: boolean }>();
+  const sitesReported = (specId: string, code: string): { sites: string[]; unsited: boolean; errored: boolean } => {
     const seen = sitesSeen.get(`${specId}\u0000${code}`);
-    return { sites: [...(seen?.sites ?? [])], unsited: seen?.unsited ?? false };
+    return { sites: [...(seen?.sites ?? [])], unsited: seen?.unsited ?? false, errored: seen?.errored ?? false };
+  };
+  // Each known code's default severity — the caller's gathering, with every
+  // loaded assertion's own — resolved the way addIssue resolves a finding
+  // outside draft context.
+  const codeDefaults = new Map<string, Severity>(opts.issueCodeSeverities ?? []);
+  for (const a of opts.extensions?.assertions ?? []) {
+    if (!codeDefaults.has(a.fullCode)) codeDefaults.set(a.fullCode, a.severity);
+  }
+  const severityOf = (code: string, specId: string): IssueSeverity | 'off' | undefined => {
+    const defaultSeverity = codeDefaults.get(code);
+    if (!defaultSeverity) return undefined;
+    return getRuleSeverity(code, defaultSeverity, false, subsystemOfSpec.get(specId));
   };
 
   for (const s of subsystems) collectAllows(s.id, s.lint);
@@ -866,9 +880,10 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     if (specId) {
       const key = `${specId}\u0000${code}`;
       let seen = sitesSeen.get(key);
-      if (!seen) sitesSeen.set(key, (seen = { sites: new Set<string>(), unsited: false }));
+      if (!seen) sitesSeen.set(key, (seen = { sites: new Set<string>(), unsited: false, errored: false }));
       if (parts) seen.sites.add(parts.at);
       else seen.unsited = true;
+      if (severity === 'error') seen.errored = true;
     }
     // The allow, matched on the finding's IDENTITY rather than its code alone.
     // An allow covers one occurrence: the site it names, and — where the
@@ -1017,6 +1032,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     roundTripIssues: opts.roundTripIssues,
     lintAllows,
     sitesReported,
+    severityOf,
     knownIssueCodes: opts.knownIssueCodes,
     carriedFindings,
     carryableIssueCodes: opts.carryableIssueCodes ?? new Set<string>(),
