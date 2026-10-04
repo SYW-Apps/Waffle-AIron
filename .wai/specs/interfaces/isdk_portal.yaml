@@ -109,6 +109,20 @@ methods:
     endpoint:
       transport: Custom
       address: '@wairon/sdk#extractTreeArchive'
+  - name: defineRule
+    description: >-
+      Published: author a code-pack conformance rule with full type inference. Returns the rule
+      unchanged — the identity is the point, so a code pack gets typed authoring against @wairon/sdk
+      without importing anything from wairon core.
+    signature: 'defineRule(rule: pack_rule): pack_rule'
+    returns: pack_rule
+    params:
+      - name: rule
+        type: pack_rule
+        description: The rule as authored
+    endpoint:
+      transport: Custom
+      address: '@wairon/sdk#defineRule'
 status: complete
 createdAt: '2026-07-21T18:13:58.018Z'
-updatedAt: '2026-10-04T10:19:28.147Z'
+updatedAt: '2026-10-04T18:23:30.661Z'

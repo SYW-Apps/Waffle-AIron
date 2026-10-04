@@ -34,11 +34,17 @@ publicInterfaces:
   - type: Custom
     details: >-
       The @wairon/sdk library API (in-process facade + published package surface): scaffoldPack,
-      buildPack, inspectArchive, and safe extractPack. Also the home of the re-exported
-      pack-authoring types and the SddRule/RuleContext/Finding rule-authoring contract that code
-      packs compile against. Audience: external (third-party pack authors).
+      buildPack, inspectArchive, safe extractPack, the .waitree tree archive operations, and
+      defineRule. Also the home of the re-exported pack-authoring types and the
+      SddRule/RuleContext/Finding rule-authoring contract that code packs compile against. Audience:
+      external (third-party pack authors).
     component: sdk_portal
+  - typeDef: pack_rule
+  - typeDef: pack_rule_context
+  - typeDef: pack_rule_spec_node
+  - typeDef: pack_rule_finding
+  - typeDef: pack_rule_severity
 trustedLinks: []
 status: complete
 createdAt: '2026-07-21T17:21:22.034Z'
-updatedAt: '2026-07-21T19:26:04.522Z'
+updatedAt: '2026-10-04T18:23:49.000Z'

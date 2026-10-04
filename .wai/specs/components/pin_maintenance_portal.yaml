@@ -1,0 +1,18 @@
+id: pin_maintenance_portal
+name: Pin Maintenance Portal
+description: >-
+  Internal front door of sdd_surfaces for the family migrations: the pin writes and reads that are
+  steps of a planned, all-or-nothing migration rather than operations in their own right — carry a
+  pin to a new alias or producer id without re-pinning, remove a pin, and list the stage-1 family
+  pins the chaining migration converts. Published to sdd_migrations only, never on the package's
+  library entry: a pin carried outside a migration's transaction would let the externals lock claim
+  a producer nobody verified. One-to-one forwards to the surface orchestrator.
+subsystem: sdd_surfaces
+componentType: Portal
+owns: []
+dependsOn:
+  - surface_orchestrator
+portalType: Custom
+status: complete
+createdAt: '2026-10-04T18:29:12.140Z'
+updatedAt: '2026-10-04T18:29:47.789Z'

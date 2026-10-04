@@ -62,13 +62,6 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: listExternals
-  - name: listFamilyPins
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the orchestrator
-        type: call
-        targetComponent: surface_orchestrator
-        targetMethod: listFamilyPins
   - name: listPinnedExternals
     narrative:
       - stepNumber: 1
@@ -76,20 +69,6 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: listPinnedExternals
-  - name: renamePin
-    narrative:
-      - stepNumber: 1
-        description: Forward renamePin to the surface orchestrator
-        type: call
-        targetComponent: surface_orchestrator
-        targetMethod: renamePin
-  - name: unpin
-    narrative:
-      - stepNumber: 1
-        description: Forward unpin to the surface orchestrator
-        type: call
-        targetComponent: surface_orchestrator
-        targetMethod: unpin
   - name: pinnedParent
     narrative:
       - stepNumber: 1
@@ -106,4 +85,4 @@ methods:
         targetMethod: exportDesign
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-10-04T13:54:52.276Z'
+updatedAt: '2026-10-04T18:29:31.630Z'

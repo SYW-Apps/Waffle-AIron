@@ -11,8 +11,15 @@ publicInterfaces:
   - type: Custom
     details: >-
       Surface export/import/query front door consumed in-process by the CLI, validator, and core
-      flows.
+      flows, and published on the package's library entry.
     component: surface_portal
+  - type: Custom
+    details: >-
+      The family migrations' internal seam: carry a pin without re-pinning, remove a pin, list the
+      stage-1 family pins. Published to sdd_migrations only, never on the library entry.
+    component: pin_maintenance_portal
+    consumers:
+      - sdd_migrations
 lifecycle:
   - phase: init
     component: surface_repository
@@ -21,4 +28,4 @@ lifecycle:
 trustedLinks: []
 status: complete
 createdAt: '2026-07-10T23:11:28.081Z'
-updatedAt: '2026-07-11T09:04:01.924Z'
+updatedAt: '2026-10-04T18:29:47.217Z'

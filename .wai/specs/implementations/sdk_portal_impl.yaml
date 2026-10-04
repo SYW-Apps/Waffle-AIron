@@ -56,7 +56,14 @@ methods:
         type: call
         targetComponent: sdk_orchestrator
         targetMethod: extractTreeArchive
+  - name: defineRule
+    sourcePath: sdk/src/authoring.ts
+    narrative:
+      - stepNumber: 1
+        description: 'Return the rule as given: an identity that only lends the author type inference.'
+        type: return
+        outcome: the rule, unchanged
 conformance: declared
 status: complete
 createdAt: '2026-07-21T18:23:33.249Z'
-updatedAt: '2026-08-12T17:21:42.732Z'
+updatedAt: '2026-10-04T18:23:32.067Z'

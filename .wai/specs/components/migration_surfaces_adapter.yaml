@@ -10,6 +10,7 @@ componentType: Adapter
 owns: []
 dependsOn:
   - surface_portal
+  - pin_maintenance_portal
 status: complete
 createdAt: '2026-09-30T20:31:50.580Z'
-updatedAt: '2026-09-30T22:58:28.164Z'
+updatedAt: '2026-10-04T18:29:38.759Z'

@@ -1,0 +1,414 @@
+id: icli_portal
+name: CLI Portal Interface
+description: >-
+  The `wairon` binary's command surface. Each method is one command (or one command group the runner
+  serves with a single workflow), bound to its CLI endpoint, and takes its arguments and flags in
+  the shape of the cli_runner workflow it dispatches to — so every signature comes from that
+  workflow. Exit codes and output are the workflow's; the portal adds only argv parsing, the global
+  --verbose/--silent log level, and printing a WaironError with exit 1.
+component: cli_portal
+methods:
+  - name: init
+    description: >-
+      `wairon init [--yes] [--pack <source>…]`: initialize wairon and bootstrap the spec tree, then
+      add each named pack through the runner's `pack add`.
+    signatureFrom: cli_runner.runInit
+    endpoint:
+      transport: CLI
+      command: wairon init
+  - name: generate
+    description: '`wairon generate`: generate agent output files from the spec tree.'
+    signatureFrom: cli_runner.runGenerate
+    endpoint:
+      transport: CLI
+      command: wairon generate
+  - name: lockCheck
+    description: '`wairon lock-check`: the merge gate — is the design in this working tree the approved one.'
+    signatureFrom: cli_runner.runLockCheck
+    endpoint:
+      transport: CLI
+      command: wairon lock-check
+  - name: lock
+    description: >-
+      `wairon lock`: validate as complete, freeze and regenerate (the hosted lock in an attached
+      checkout).
+    signatureFrom: cli_runner.runLock
+    endpoint:
+      transport: CLI
+      command: wairon lock
+  - name: validate
+    description: '`wairon validate`: validate the project configuration and the spec tree.'
+    signatureFrom: cli_runner.runValidate
+    endpoint:
+      transport: CLI
+      command: wairon validate
+  - name: status
+    description: '`wairon status`: the spec tree''s completeness dashboard.'
+    signatureFrom: cli_runner.runStatus
+    endpoint:
+      transport: CLI
+      command: wairon status
+  - name: doctor
+    description: '`wairon doctor`: health check, and with --fix the repairs and migrations it names.'
+    signatureFrom: cli_runner.runDoctor
+    endpoint:
+      transport: CLI
+      command: wairon doctor
+  - name: executionShow
+    description: '`wairon execution show`: the budget tier and every agent''s derived allowance.'
+    signatureFrom: cli_runner.runExecutionShow
+    endpoint:
+      transport: CLI
+      command: wairon execution show
+  - name: executionSetTier
+    description: '`wairon execution set-tier <tier>`: set the execution-budget dial.'
+    signatureFrom: cli_runner.runExecutionSetTier
+    endpoint:
+      transport: CLI
+      command: wairon execution set-tier <tier>
+  - name: rulesList
+    description: '`wairon rules list`: every conformance rule, its codes and severities.'
+    signatureFrom: cli_runner.runRules
+    endpoint:
+      transport: CLI
+      command: wairon rules list
+  - name: pack
+    description: >-
+      `wairon pack <action>`: author, build, install, select and manage extension packs (init |
+      build | install | uninstall | which | use | unuse | impact | bundle | sync | add | list |
+      remove).
+    signatureFrom: cli_runner.runPack
+    endpoint:
+      transport: CLI
+      command: wairon pack <action>
+  - name: packs
+    description: >-
+      `wairon packs <action>`: the deprecated alias of `wairon pack` (add | list | remove); the
+      portal prints the deprecation notice before dispatching.
+    signatureFrom: cli_runner.runPacks
+    endpoint:
+      transport: CLI
+      command: wairon packs <action>
+  - name: patternsList
+    description: '`wairon patterns list`: the pattern definitions loaded packs declare.'
+    signatureFrom: cli_runner.runPatterns
+    endpoint:
+      transport: CLI
+      command: wairon patterns list
+  - name: variantsList
+    description: '`wairon variants list`: the component variants in the registry.'
+    signatureFrom: cli_runner.runVariants
+    endpoint:
+      transport: CLI
+      command: wairon variants list
+  - name: diagram
+    description: >-
+      `wairon diagram`: architecture diagrams from the spec tree (canvas, Mermaid, draw.io,
+      Excalidraw).
+    signatureFrom: cli_runner.runDiagram
+    endpoint:
+      transport: CLI
+      command: wairon diagram
+  - name: list
+    description: '`wairon list`: every agent resolved from the spec tree.'
+    signatureFrom: cli_runner.runList
+    endpoint:
+      transport: CLI
+      command: wairon list
+  - name: show
+    description: '`wairon show <id>`: one resolved agent''s details.'
+    signatureFrom: cli_runner.runShow
+    endpoint:
+      transport: CLI
+      command: wairon show <id>
+  - name: agent
+    description: >-
+      `wairon agent <action> <id>`: print an agent's live brief, or scaffold its user-owned guidance
+      file.
+    signatureFrom: cli_runner.runAgent
+    endpoint:
+      transport: CLI
+      command: wairon agent <action> <id>
+  - name: aliasesList
+    description: '`wairon aliases list`: the supported command aliases and their state.'
+    signatureFrom: cli_runner.runAliasesList
+    endpoint:
+      transport: CLI
+      command: wairon aliases list
+  - name: aliasesEnable
+    description: '`wairon aliases enable <name>`: create an alias.'
+    signatureFrom: cli_runner.runAliasesEnable
+    endpoint:
+      transport: CLI
+      command: wairon aliases enable <name>
+  - name: aliasesDisable
+    description: '`wairon aliases disable <name>`: remove an alias and opt out of re-creation.'
+    signatureFrom: cli_runner.runAliasesDisable
+    endpoint:
+      transport: CLI
+      command: wairon aliases disable <name>
+  - name: mcpServe
+    description: '`wairon mcp serve`: start the wairon MCP server on stdio.'
+    signatureFrom: cli_runner.runMcpServe
+    endpoint:
+      transport: CLI
+      command: wairon mcp serve
+  - name: mcpInstall
+    description: '`wairon mcp install`: register the wairon MCP server with an AI assistant, local or hosted.'
+    signatureFrom: cli_runner.runMcpInstall
+    endpoint:
+      transport: CLI
+      command: wairon mcp install
+  - name: mcpStatus
+    description: '`wairon mcp status`: whether the MCP server is registered.'
+    signatureFrom: cli_runner.runMcpStatus
+    endpoint:
+      transport: CLI
+      command: wairon mcp status
+  - name: produce
+    description: '`wairon produce <target>`: project the local specs to a producer target.'
+    signatureFrom: cli_runner.runProduce
+    endpoint:
+      transport: CLI
+      command: wairon produce <target>
+  - name: surface
+    description: '`wairon surface <action>`: public surface exchange (export | import | list).'
+    signatureFrom: cli_runner.runSurface
+    endpoint:
+      transport: CLI
+      command: wairon surface <action>
+  - name: exportDesign
+    description: >-
+      `wairon export`: the whole design, resolved, as one wairon-design JSON document stamped with
+      the approval verdict.
+    signatureFrom: cli_runner.runExport
+    endpoint:
+      transport: CLI
+      command: wairon export
+  - name: externals
+    description: '`wairon externals <action> [aliases…]`: pin, status or list the declared externals.'
+    signatureFrom: cli_runner.runExternals
+    endpoint:
+      transport: CLI
+      command: wairon externals <action> [aliases...]
+  - name: login
+    description: '`wairon login <url>`: store a bearer credential for a hosted instance.'
+    signatureFrom: cli_runner.runLogin
+    endpoint:
+      transport: CLI
+      command: wairon login <url>
+  - name: logout
+    description: '`wairon logout [url]`: forget a stored credential, or list what is stored.'
+    signatureFrom: cli_runner.runLogout
+    endpoint:
+      transport: CLI
+      command: wairon logout [url]
+  - name: remote
+    description: >-
+      `wairon remote <action>`: push or pull a spec tree, or attach, detach and report this
+      checkout's hosted binding.
+    signatureFrom: cli_runner.runRemote
+    endpoint:
+      transport: CLI
+      command: wairon remote <action>
+  - name: serve
+    description: '`wairon serve`: run the hosting server.'
+    signatureFrom: cli_runner.runServe
+    endpoint:
+      transport: CLI
+      command: wairon serve
+  - name: dev
+    description: '`wairon dev`: the local single-project developer server.'
+    signatureFrom: cli_runner.runDev
+    endpoint:
+      transport: CLI
+      command: wairon dev
+  - name: hostProject
+    description: '`wairon host project <action>`: create, list or destroy a hosted project.'
+    signatureFrom: cli_runner.runHostProject
+    endpoint:
+      transport: CLI
+      command: wairon host project <action>
+  - name: hostDemo
+    description: '`wairon host demo`: provision a project seeded with an example spec tree.'
+    signatureFrom: cli_runner.runHostDemo
+    endpoint:
+      transport: CLI
+      command: wairon host demo
+  - name: hostUnit
+    description: '`wairon host unit <action>`: administer organization units.'
+    signatureFrom: cli_runner.runHostUnit
+    endpoint:
+      transport: CLI
+      command: wairon host unit <action>
+  - name: hostDoctor
+    description: '`wairon host doctor`: check, and with --fix migrate, a hosting data directory.'
+    signatureFrom: cli_runner.runHostDoctor
+    endpoint:
+      transport: CLI
+      command: wairon host doctor
+  - name: hostPermission
+    description: '`wairon host permission <action>`: set, list or remove a permission assignment.'
+    signatureFrom: cli_runner.runHostPermission
+    endpoint:
+      transport: CLI
+      command: wairon host permission <action>
+  - name: hostKey
+    description: '`wairon host key <action>`: mint, list or revoke an API key.'
+    signatureFrom: cli_runner.runHostKey
+    endpoint:
+      transport: CLI
+      command: wairon host key <action>
+  - name: hostLock
+    description: '`wairon host lock`: the state-scoped lock of a hosted project.'
+    signatureFrom: cli_runner.runHostLock
+    endpoint:
+      transport: CLI
+      command: wairon host lock
+  - name: hostGit
+    description: '`wairon host git <action>`: a hosted project''s git backing.'
+    signatureFrom: cli_runner.runHostGit
+    endpoint:
+      transport: CLI
+      command: wairon host git <action>
+  - name: hostProducer
+    description: '`wairon host producer <action>`: a hosted project''s producers.'
+    signatureFrom: cli_runner.runHostProducer
+    endpoint:
+      transport: CLI
+      command: wairon host producer <action>
+  - name: hostPacks
+    description: '`wairon host packs <action>`: extension packs on the server or a hosted project.'
+    signatureFrom: cli_runner.runHostPacks
+    endpoint:
+      transport: CLI
+      command: wairon host packs <action>
+  - name: hostSecret
+    description: '`wairon host secret <action>`: integration secrets at runtime.'
+    signatureFrom: cli_runner.runHostSecret
+    endpoint:
+      transport: CLI
+      command: wairon host secret <action>
+  - name: memberAdd
+    description: '`wairon member add <alias> <source>`: create a member.'
+    signatureFrom: cli_runner.runMemberAdd
+    endpoint:
+      transport: CLI
+      command: wairon member add <alias> <source>
+  - name: memberUpdate
+    description: '`wairon member update <alias>`: move a git member''s pinned commit.'
+    signatureFrom: cli_runner.runMemberUpdate
+    endpoint:
+      transport: CLI
+      command: wairon member update <alias>
+  - name: memberMove
+    description: '`wairon member move <alias> <path>`: relocate a member.'
+    signatureFrom: cli_runner.runMemberMove
+    endpoint:
+      transport: CLI
+      command: wairon member move <alias> <path>
+  - name: memberAttach
+    description: '`wairon member attach <alias> <path>`: make an existing project a member (a family migration).'
+    signatureFrom: cli_runner.runMemberAttach
+    endpoint:
+      transport: CLI
+      command: wairon member attach <alias> <path>
+  - name: memberDetach
+    description: '`wairon member detach <alias>`: take a member out of the family (a family migration).'
+    signatureFrom: cli_runner.runMemberDetach
+    endpoint:
+      transport: CLI
+      command: wairon member detach <alias>
+  - name: memberAdopt
+    description: >-
+      `wairon member adopt <alias>`: make an external inside this project a member again (a family
+      migration).
+    signatureFrom: cli_runner.runMemberAdopt
+    endpoint:
+      transport: CLI
+      command: wairon member adopt <alias>
+  - name: memberRenameAlias
+    description: '`wairon member rename-alias <old> <new>`: rename one alias family-wide (a family migration).'
+    signatureFrom: cli_runner.runMemberRenameAlias
+    endpoint:
+      transport: CLI
+      command: wairon member rename-alias <old> <new>
+  - name: memberInternalize
+    description: >-
+      `wairon member internalize <alias>`: fold a member back into this project (a family
+      migration).
+    signatureFrom: cli_runner.runMemberInternalize
+    endpoint:
+      transport: CLI
+      command: wairon member internalize <alias>
+  - name: memberPromote
+    description: '`wairon member promote <alias>`: make a part an independent project (a family migration).'
+    signatureFrom: cli_runner.runMemberPromote
+    endpoint:
+      transport: CLI
+      command: wairon member promote <alias>
+  - name: memberDemote
+    description: '`wairon member demote <alias>`: make a project member a part (a family migration).'
+    signatureFrom: cli_runner.runMemberDemote
+    endpoint:
+      transport: CLI
+      command: wairon member demote <alias>
+  - name: projectRename
+    description: '`wairon project rename <new-id>`: move a project''s id family-wide (a family migration).'
+    signatureFrom: cli_runner.runProjectRename
+    endpoint:
+      transport: CLI
+      command: wairon project rename <new-id>
+  - name: subsystemExternalize
+    description: >-
+      `wairon subsystem externalize <id>`: move an internal subsystem into a part (a family
+      migration).
+    signatureFrom: cli_runner.runSubsystemExternalize
+    endpoint:
+      transport: CLI
+      command: wairon subsystem externalize <id>
+  - name: update
+    description: '`wairon update`: check for and install the latest release.'
+    signatureFrom: cli_runner.runUpdate
+    endpoint:
+      transport: CLI
+      command: wairon update
+  - name: domainsList
+    description: '`wairon domains list`: the project''s domains.'
+    signatureFrom: cli_runner.runDomainsList
+    endpoint:
+      transport: CLI
+      command: wairon domains list
+  - name: domainsScan
+    description: '`wairon domains scan`: detect new domain candidates.'
+    signatureFrom: cli_runner.runDomainsScan
+    endpoint:
+      transport: CLI
+      command: wairon domains scan
+  - name: domainsAdd
+    description: '`wairon domains add`: register a domain by hand.'
+    signatureFrom: cli_runner.runDomainsAdd
+    endpoint:
+      transport: CLI
+      command: wairon domains add
+  - name: domainsRemove
+    description: '`wairon domains remove <id>`: remove a free-standing domain.'
+    signatureFrom: cli_runner.runDomainsRemove
+    endpoint:
+      transport: CLI
+      command: wairon domains remove <id>
+  - name: skillsList
+    description: '`wairon skills list`: the workflow skills and their install state.'
+    signatureFrom: cli_runner.runSkillsList
+    endpoint:
+      transport: CLI
+      command: wairon skills list
+  - name: skillsInstall
+    description: '`wairon skills install`: install or sync the workflow skills.'
+    signatureFrom: cli_runner.runSkillsInstall
+    endpoint:
+      transport: CLI
+      command: wairon skills install
+status: complete
+createdAt: '2026-10-04T18:13:03.017Z'
+updatedAt: '2026-10-04T18:16:36.040Z'

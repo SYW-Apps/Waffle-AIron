@@ -1,6 +1,9 @@
 id: cli_runner
 name: CLI Runner
-description: Coordinates terminal subcommand actions and flags, mapping CLI input to core engine execution.
+description: >-
+  The terminal's workflows: one method per command (or per command group served by one workflow),
+  each reached from a cli_portal endpoint, mapping the parsed command onto the core engine through
+  per-concern command adapters — plus the startup cleanup the binary runs before it parses argv.
 subsystem: sdd_cli
 componentType: Orchestrator
 owns: []
@@ -25,28 +28,29 @@ lint:
   allow:
     - code: GOD_COMPONENT
       reason: >-
-        The runner IS the terminal dispatch hub by design: almost every dependency is a thin
-        per-concern CLI adapter, one per subsystem or command family, with no domain logic of its
-        own. The three that are not — `remote_orchestrator`, `verdict_changes` and
-        `user_config_store` — are sdd_cli's own workflows and its own held state, which belong to
-        this subsystem rather than behind an adapter onto another (the chaining migration moved to
-        sdd_migrations in stage 6 and is reached through `cli_migration_adapter`). Splitting the
-        dispatcher, or hiding adapters behind a synthetic facade, would add a hop without separating
-        any real responsibility.
+        The runner is the terminal's workflow layer behind the one CLI portal, by design: almost
+        every dependency is a thin per-concern CLI adapter, one per subsystem or command family,
+        with no domain logic of its own. The three that are not — `remote_orchestrator`,
+        `verdict_changes` and `user_config_store` — are sdd_cli's own workflows and its own held
+        state, which belong to this subsystem rather than behind an adapter onto another (the
+        chaining migration moved to sdd_migrations in stage 6 and is reached through
+        `cli_migration_adapter`). Splitting the workflows by command family, or hiding adapters
+        behind a synthetic facade, would add a hop without separating any real responsibility.
     - code: EXCESSIVE_DEPENDENCIES
       reason: >-
-        Same deliberate hub shape as the GOD_COMPONENT allow: sixteen dependencies fanned out from
-        the one CLI entry orchestrator, of which thirteen are thin command adapters and three are
-        sdd_cli's own workflows and held state. The count tracks how many command families and
-        subsystem hops the terminal exposes, not how much this component knows.
+        Same deliberate shape as the GOD_COMPONENT allow: sixteen dependencies fanned out from the
+        one workflow layer cli_portal dispatches to, of which thirteen are thin command adapters and
+        three are sdd_cli's own workflows and held state. The count tracks how many command families
+        and subsystem hops the terminal exposes, not how much this component knows.
     - code: INCOHESIVE_METHODS
       reason: >-
         NOT the pure forwarder the rule now exempts, and this allow does not claim to be one: most
         of the runner's narrated methods hold flow of their own — flag branching, argument shaping,
         output formatting — so only a minority are single hand-offs. The allow stands on different
-        ground, and stands permanently: the runner IS the terminal's one entry point, and its
-        dependencies are thin per-concern command adapters. Splitting it along the call groups would
-        mint one dispatcher per command family and separate no responsibility.
+        ground, and stands permanently: the runner is the one workflow layer behind the terminal's
+        one portal, and its dependencies are thin per-concern command adapters. Splitting it along
+        the call groups would mint one workflow component per command family and separate no
+        responsibility.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-30T20:50:29.251Z'
+updatedAt: '2026-10-04T18:15:39.805Z'

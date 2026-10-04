@@ -9,8 +9,7 @@
 export {
   pinExternals,
   listExternals,
-  listFamilyPins,
   removeSnapshot,
-  renamePin,
-  unpin,
 } from '../../core/surface-portal.js';
+// The migrations' pin maintenance comes through sdd_surfaces' internal portal.
+export { listFamilyPins, renamePin, unpin } from '../../core/pin-maintenance-portal.js';

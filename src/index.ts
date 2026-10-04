@@ -55,6 +55,26 @@ export { activeTargetTypes } from './core/skills.js';
 // stopped starring a module is not.
 // ---------------------------------------------------------------------------
 export { validateProject, validateFamily } from './core/validation.js';
+
+// The rest of the validator portal's contract (validator_portal), whole: the
+// project's L0 export table publishes that portal as the library's validation
+// surface (`wairon-library-validation`), so the package publishes every method
+// of it — each the portal's own forward, re-exported by name, no logic here.
+export {
+  validateAsComplete,
+  validateRegistry,
+  validateProjectConfig,
+  validateComponentCandidate,
+  listRules,
+  computeGateStateId,
+  findTestsReferencing,
+  builtinProfileIds,
+  builtinProjectKinds,
+  measurePackImpact,
+  measurePackDoctrine,
+  familyApprovals,
+  familyRelations,
+} from './core/validation.js';
 export {
   loadExtensions,
   loadExtensionPacks,
@@ -64,12 +84,27 @@ export {
 } from './core/extensions.js';
 export type { LoadedExtensions, DeclarativePack } from './core/extensions.js';
 
-// The design export (surface_portal.exportDesign): the bound project's whole
-// design, resolved, as one DesignExport — the library twin of `wairon export`.
-// Named here, as the embedding API above is, because the surfaces portal is
-// not on the core barrel. Pass the approval state you decided (for instance
-// from `wairon lock-check`); omitted, the export is stamped unjudged.
-export { exportDesign } from './core/surface-portal.js';
+// The surface portal's contract (surface_portal), whole — the project's L0
+// export table publishes it as the library's surfaces surface
+// (`wairon-library-surfaces`). Among it the design export, exportDesign: the
+// bound project's whole design, resolved, as one DesignExport — the library
+// twin of `wairon export`. Pass the approval state you decided (for instance
+// from `wairon lock-check`); omitted, the export is stamped unjudged. Named
+// here because the surfaces portal is not on the core barrel. The family
+// migrations' pin maintenance is a separate internal portal and is not here.
+export {
+  exportDesign,
+  exportSurface,
+  importSurface,
+  listSnapshots,
+  getSnapshot,
+  removeSnapshot,
+  pinExternals,
+  getExternalsStatus,
+  listExternals,
+  listPinnedExternals,
+  pinnedParent,
+} from './core/surface-portal.js';
 
 // The running MCP server asks the build ON DISK for its schema fingerprint by
 // requiring this entry in a child process (src/mcp/build.ts): a server whose

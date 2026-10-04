@@ -1,0 +1,15 @@
+kind: enum
+id: pack_rule_severity
+name: RuleSeverity
+description: How severe a finding a code-pack rule emits is — published by @wairon/sdk for pack authors.
+subsystem: sdd_sdk
+fields: []
+methods: []
+sourcePath: sdk/src/authoring.ts
+values:
+  - name: error
+    description: Fails the gate
+  - name: warning
+    description: Reported; fails only `validate --ci`
+createdAt: '2026-10-04T18:23:06.634Z'
+updatedAt: '2026-10-04T18:24:02.530Z'

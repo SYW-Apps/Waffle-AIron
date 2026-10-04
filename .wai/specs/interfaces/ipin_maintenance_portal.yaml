@@ -1,0 +1,57 @@
+id: ipin_maintenance_portal
+name: Pin Maintenance Portal Interface
+description: >-
+  The family migrations' seam into sdd_surfaces: the pin writes and the stage-1 family-pin read that
+  only a planned migration performs, each a step of its all-or-nothing transaction. The caller gates
+  on reach itself. Kept off surface_portal so the package's public surface never offers a pin
+  carried without re-pinning.
+component: pin_maintenance_portal
+methods:
+  - name: listFamilyPins
+    description: >-
+      The stage-1 family pins (generated family and sibling snapshots) the bound root still holds,
+      for the chaining migration to convert and delete. Pure 1:1 forward to the orchestrator.
+    signature: 'listFamilyPins(): list<FamilyPin>'
+    returns: list<FamilyPin>
+    params: []
+    guarantees:
+      - idempotent
+    previousNames:
+      - isurface_portal.listFamilyPins
+  - name: renamePin
+    description: >-
+      Carry the bound project's pin of one external to its new alias or producer id without
+      re-pinning (digest and used map unchanged). The caller must gate on reach itself.
+    signature: 'renamePin(alias: string, newAlias: string, project: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The pinned alias as declared now
+      - name: newAlias
+        type: string
+        description: The alias to keep the pin under
+      - name: project
+        type: string
+        description: The producer id the pin records from now on
+    guarantees:
+      - idempotent
+    previousNames:
+      - isurface_portal.renamePin
+  - name: unpin
+    description: >-
+      Remove the bound project's pin of one alias — lock entry and snapshot. The caller must gate on
+      reach itself.
+    signature: 'unpin(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias whose pin goes
+    guarantees:
+      - idempotent
+    previousNames:
+      - isurface_portal.unpin
+status: complete
+createdAt: '2026-10-04T18:29:31.085Z'
+updatedAt: '2026-10-04T18:29:36.267Z'

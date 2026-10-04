@@ -32,7 +32,7 @@ import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/mode
 //      lockTree): freeze every in-scope spec through the core barrel and
 //      persist the commit-scoped lock record; a declined confirmation changes
 //      nothing.
-//   2. The cli_runner workflow (runLock in src/cli/index.ts), driven through
+//   2. The cli_runner workflow (runLock in src/cli/runner.ts), driven through
 //      the REAL CLI: the as-complete gate refuses an invalid tree, and a
 //      successful lock regenerates the family/sibling surfaces into every
 //      chained child — and only then.

@@ -48,7 +48,76 @@ publicInterfaces:
     audience: instance
     authPolicy: master credential or scoped admin grants; disabled over HTTP by default
     stability: stable
+  - name: wairon command line
+    component: cli_portal
+    from: sdd_cli
+    as: wairon-cli
+    type: Custom
+    details: >-
+      The `wairon` (and `wai`) binary of the @wairon/cli package (package.json bin): one CLI
+      endpoint per command.
+    audience: external
+    stability: stable
+  - name: '@wairon/sdk'
+    component: sdk_portal
+    from: sdd_sdk
+    as: wairon-sdk
+    type: Custom
+    details: >-
+      The @wairon/sdk package (sdk/, main dist/index.js): scaffold, build, inspect and safely
+      extract .wpack pack archives and .waitree spec-tree archives.
+    audience: external
+    stability: stable
+  - name: '@wairon/cli library: core'
+    from: sdd_core
+    details: >-
+      The @wairon/cli package's library entry (main dist/index.js, src/index.ts) re-exports the core
+      barrel, which publishes exactly sdd_core's portal contracts — each under its own public name.
+    audience: external
+    stability: stable
+  - name: '@wairon/cli library: validation'
+    component: validator_portal
+    from: sdd_validator
+    as: wairon-library-validation
+    details: >-
+      The library entry re-exports the validator portal's whole contract — validateProject (the
+      owner's gate), validateFamily (the family run), validateAsComplete, the pack-impact
+      measurements, the gate identity and the rest — the embedding API a wrapper compiles its gate
+      from.
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule_context
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule_spec_node
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule_finding
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule_severity
+    audience: external
+    stability: stable
+  - name: '@wairon/cli library: surfaces'
+    component: surface_portal
+    from: sdd_surfaces
+    as: wairon-library-surfaces
+    details: >-
+      The library entry re-exports the surface portal's whole contract: exportDesign (the in-process
+      twin of `wairon export`), surface export and import, the stored snapshots, and pinning and
+      reading the declared externals. The family migrations' pin maintenance is a separate internal
+      portal and is not published here.
+    audience: external
+    stability: stable
 databases: []
 targetLanguage: typescript
 createdAt: '2026-06-10T20:23:00.000Z'
-updatedAt: '2026-09-15T21:07:21.080Z'
+updatedAt: '2026-10-04T18:29:49.777Z'

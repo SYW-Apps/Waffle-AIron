@@ -1,10 +1,12 @@
 id: cli_runner_impl
 name: CLI Runner Implementation
 description: >-
-  Concrete implementation of the CLI Runner Interface mapping commander subcommands to core engine
-  logic.
+  Concrete implementation of the CLI Runner Interface: the workflows cli_portal (src/cli/index.ts)
+  dispatches each command to — those with no command module of their own in src/cli/runner.ts, the
+  rest in the src/commands/ module named per method — mapping each parsed command onto the core
+  engine.
 contract: icli_runner
-sourcePath: src/cli/index.ts
+sourcePath: src/cli/runner.ts
 methods:
   - name: runValidate
     narrative:
@@ -1272,7 +1274,7 @@ methods:
         targetComponent: cli_mcp_adapter
         targetMethod: serveMcpStdio
   - name: runMcpInstall
-    sourcePath: src/cli/index.ts
+    sourcePath: src/cli/runner.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -3265,19 +3267,41 @@ methods:
         description: Print the export's deterministic JSON to stdout, and nothing else, so it pipes cleanly
         type: return
         outcome: printed
+  - name: cleanStaleBinary
+    sourcePath: src/commands/update.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the leftover: the oldPath given, else — only when running as a packaged executable
+          — the executable's own path with `.old` appended, else nothing.
+        type: local
+      - stepNumber: 2
+        description: Only an existing leftover is removed.
+        type: branch
+        condition: a leftover resolved and it exists on disk
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Unlink it, swallowing the error a file the OS still holds raises, so the next start
+          retries.
+        type: local
+      - stepNumber: 4
+        description: Return; the cleanup never throws.
+        type: return
+        outcome: done
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
       reason: >-
         runPack is the `wairon pack` family's action dispatcher: a flat twelve-arm if-chain in
-        src/cli/index.ts, one adapter call per subcommand, cognitive score 1. Its 26 steps are two
+        src/cli/runner.ts, one adapter call per subcommand, cognitive score 1. Its 26 steps are two
         per subcommand (the call and its return) plus the switch and the unknown-action refusal, so
         the count tracks how many subcommands `pack` has, not what the method does — the same shape
         sits at every size in this runner: runPacks (8), runAgent (9), runSurface (12), runRemote
         (14). There is no seam to split on: all twelve arms call one module (src/commands/packs.ts),
-        and every `pack` subcommand's action calls runPack directly, so scope-based sub-dispatchers
-        would be invented here rather than named in the code. Adding a pack subcommand adds two
-        steps, which is the point.
+        and every `pack` subcommand's endpoint dispatches to runPack directly, so scope-based
+        sub-dispatchers would be invented here rather than named in the code. Adding a pack
+        subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T14:02:42.109Z'
+updatedAt: '2026-10-04T18:16:32.700Z'

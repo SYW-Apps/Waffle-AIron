@@ -15,7 +15,9 @@ methods:
         description: The aliases to pin
         optional: true
   - name: renamePin
-    description: 'Forward to surface_portal.renamePin: carry a pin to a new alias or producer id, digest kept.'
+    description: >-
+      Forward to pin_maintenance_portal.renamePin: carry a pin to a new alias or producer id, digest
+      kept.
     signature: 'renamePin(alias: string, newAlias: string, project: string): bool'
     returns: bool
     params:
@@ -29,7 +31,7 @@ methods:
         type: string
         description: The producer id from now on
   - name: unpin
-    description: 'Forward to surface_portal.unpin: remove a pin.'
+    description: 'Forward to pin_maintenance_portal.unpin: remove a pin.'
     signature: 'unpin(alias: string): bool'
     returns: bool
     params:
@@ -42,7 +44,9 @@ methods:
     returns: list<ExternalListing>
     params: []
   - name: listFamilyPins
-    description: 'Forward to surface_portal.listFamilyPins: the stage-1 family pins the bound root still holds.'
+    description: >-
+      Forward to pin_maintenance_portal.listFamilyPins: the stage-1 family pins the bound root still
+      holds.
     signature: 'listFamilyPins(): list<FamilyPin>'
     returns: list<FamilyPin>
     params: []
@@ -58,4 +62,4 @@ methods:
         description: The snapshot's storage key
 status: complete
 createdAt: '2026-09-30T20:31:55.432Z'
-updatedAt: '2026-10-04T10:19:06.367Z'
+updatedAt: '2026-10-04T18:29:42.781Z'

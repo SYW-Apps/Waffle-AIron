@@ -88,15 +88,6 @@ methods:
     signature: 'listExternals(): list<ExternalListing>'
     returns: list<ExternalListing>
     params: []
-  - name: listFamilyPins
-    description: >-
-      The stage-1 family pins (generated family and sibling snapshots) the bound root still holds,
-      for the chaining migration to convert and delete. Pure 1:1 forward to the orchestrator.
-    signature: 'listFamilyPins(): list<FamilyPin>'
-    returns: list<FamilyPin>
-    params: []
-    guarantees:
-      - idempotent
   - name: listPinnedExternals
     description: >-
       The bound project's declared externals, each with its lock entry and pinned snapshot, read
@@ -105,36 +96,6 @@ methods:
     signature: 'listPinnedExternals(): list<PinnedExternal>'
     returns: list<PinnedExternal>
     params: []
-  - name: renamePin
-    description: >-
-      Carry the bound project's pin of one external to its new alias or producer id without
-      re-pinning (digest and used map unchanged). The caller must gate on reach itself.
-    signature: 'renamePin(alias: string, newAlias: string, project: string): bool'
-    returns: bool
-    params:
-      - name: alias
-        type: string
-        description: The pinned alias as declared now
-      - name: newAlias
-        type: string
-        description: The alias to keep the pin under
-      - name: project
-        type: string
-        description: The producer id the pin records from now on
-    guarantees:
-      - idempotent
-  - name: unpin
-    description: >-
-      Remove the bound project's pin of one alias — lock entry and snapshot. The caller must gate on
-      reach itself.
-    signature: 'unpin(alias: string): bool'
-    returns: bool
-    params:
-      - name: alias
-        type: string
-        description: The alias whose pin goes
-    guarantees:
-      - idempotent
   - name: pinnedParent
     description: >-
       A part's pinned parent — its lock's parent entry and the excerpt it names, read from its own
@@ -164,4 +125,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-04T14:04:58.842Z'
+updatedAt: '2026-10-04T18:29:31.130Z'
