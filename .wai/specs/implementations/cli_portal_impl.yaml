@@ -1,0 +1,613 @@
+id: cli_portal_impl
+name: CLI Portal Implementation
+description: >-
+  The commander program in src/cli/index.ts — the `wairon` (and `wai`) bin entry. Each command
+  registration is one endpoint: its `.command('…')` literal is the method's anchor (the anchored
+  conformance tier, a route registration), and its action hands the parsed arguments and flags to
+  one cli_runner workflow, either in ./runner.ts or in the command module that realizes it. A
+  preAction hook sets the log level from --verbose/--silent, and main() parses argv and turns a
+  WaironError into its message and exit 1. The file reaches no adapter and holds no workflow.
+contract: icli_portal
+sourcePath: src/cli/index.ts
+methods:
+  - name: init
+    narrative:
+      - stepNumber: 1
+        description: Run cli_runner.runInit with the parsed --yes flag.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runInit
+      - stepNumber: 2
+        description: For each --pack source named on the command line.
+        type: loop
+        loopKind: forEach
+        over: each --pack source, in the order given
+        endStep: 3
+      - stepNumber: 3
+        description: Add the pack through the runner's pack add (project scope, --yes passed through).
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runPack
+  - name: generate
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon generate` with its parsed arguments and flags to cli_runner.runGenerate.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runGenerate
+  - name: lockCheck
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon lock-check` with its parsed arguments and flags to
+          cli_runner.runLockCheck.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runLockCheck
+    symbol: lock-check
+  - name: lock
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon lock` with its parsed arguments and flags to cli_runner.runLock.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runLock
+  - name: validate
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon validate` with its parsed arguments and flags to cli_runner.runValidate.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runValidate
+  - name: status
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon status` with its parsed arguments and flags to cli_runner.runStatus.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runStatus
+  - name: doctor
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon doctor` with its parsed arguments and flags to cli_runner.runDoctor.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runDoctor
+  - name: executionShow
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon execution show` with its parsed arguments and flags to
+          cli_runner.runExecutionShow.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runExecutionShow
+    symbol: show
+  - name: executionSetTier
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon execution set-tier <tier>` with its parsed arguments and flags to
+          cli_runner.runExecutionSetTier.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runExecutionSetTier
+    symbol: set-tier <tier>
+  - name: rulesList
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon rules list` with its parsed arguments and flags to cli_runner.runRules.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runRules
+    symbol: rules
+  - name: pack
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon pack <action>` with its parsed arguments and flags to cli_runner.runPack.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runPack
+  - name: packs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Print the one-line deprecation notice naming the wairon pack subcommand that replaces this
+          one.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Dispatch `wairon packs <action>` with its parsed arguments and flags to
+          cli_runner.runPacks.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runPacks
+    symbol: >-
+      [deprecated] alias of `wairon pack` — extension packs: profiles, language tables, and
+      conformance rules
+  - name: patternsList
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon patterns list` with its parsed arguments and flags to
+          cli_runner.runPatterns.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runPatterns
+    symbol: patterns
+  - name: variantsList
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon variants list` with its parsed arguments and flags to
+          cli_runner.runVariants.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runVariants
+    symbol: variants
+  - name: diagram
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon diagram` with its parsed arguments and flags to cli_runner.runDiagram.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runDiagram
+  - name: list
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon list` with its parsed arguments and flags to cli_runner.runList.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runList
+  - name: show
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon show <id>` with its parsed arguments and flags to cli_runner.runShow.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runShow
+    symbol: show <id>
+  - name: agent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon agent <action> <id>` with its parsed arguments and flags to
+          cli_runner.runAgent.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runAgent
+    symbol: agent <action> <id>
+  - name: aliasesList
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon aliases list` with its parsed arguments and flags to
+          cli_runner.runAliasesList.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runAliasesList
+    symbol: aliases
+  - name: aliasesEnable
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon aliases enable <name>` with its parsed arguments and flags to
+          cli_runner.runAliasesEnable.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runAliasesEnable
+    symbol: enable <name>
+  - name: aliasesDisable
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon aliases disable <name>` with its parsed arguments and flags to
+          cli_runner.runAliasesDisable.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runAliasesDisable
+    symbol: disable <name>
+  - name: mcpServe
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon mcp serve` with its parsed arguments and flags to cli_runner.runMcpServe.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMcpServe
+    symbol: serve
+  - name: mcpInstall
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon mcp install` with its parsed arguments and flags to
+          cli_runner.runMcpInstall.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMcpInstall
+    symbol: install
+  - name: mcpStatus
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon mcp status` with its parsed arguments and flags to
+          cli_runner.runMcpStatus.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMcpStatus
+    symbol: status
+  - name: produce
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon produce <target>` with its parsed arguments and flags to
+          cli_runner.runProduce.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runProduce
+    symbol: produce <target>
+  - name: surface
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon surface <action>` with its parsed arguments and flags to
+          cli_runner.runSurface.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runSurface
+    symbol: surface <action>
+  - name: exportDesign
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon export` with its parsed arguments and flags to cli_runner.runExport.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runExport
+    symbol: export
+  - name: externals
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon externals <action> [aliases...]` with its parsed arguments and flags to
+          cli_runner.runExternals.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runExternals
+    symbol: externals <action> [aliases...]
+  - name: login
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon login <url>` with its parsed arguments and flags to cli_runner.runLogin.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runLogin
+    symbol: login <url>
+  - name: logout
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon logout [url]` with its parsed arguments and flags to
+          cli_runner.runLogout.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runLogout
+    symbol: logout [url]
+  - name: remote
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon remote <action>` with its parsed arguments and flags to
+          cli_runner.runRemote.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runRemote
+    symbol: remote <action>
+  - name: serve
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon serve` with its parsed arguments and flags to cli_runner.runServe.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runServe
+  - name: dev
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon dev` with its parsed arguments and flags to cli_runner.runDev.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runDev
+  - name: hostProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host project <action>` with its parsed arguments and flags to
+          cli_runner.runHostProject.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostProject
+    symbol: project <action>
+  - name: hostDemo
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon host demo` with its parsed arguments and flags to cli_runner.runHostDemo.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostDemo
+    symbol: demo
+  - name: hostUnit
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host unit <action>` with its parsed arguments and flags to
+          cli_runner.runHostUnit.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostUnit
+    symbol: unit <action>
+  - name: hostDoctor
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host doctor` with its parsed arguments and flags to
+          cli_runner.runHostDoctor.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostDoctor
+    symbol: doctor
+  - name: hostPermission
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host permission <action>` with its parsed arguments and flags to
+          cli_runner.runHostPermission.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostPermission
+    symbol: permission <action>
+  - name: hostKey
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host key <action>` with its parsed arguments and flags to
+          cli_runner.runHostKey.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostKey
+    symbol: key <action>
+  - name: hostLock
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon host lock` with its parsed arguments and flags to cli_runner.runHostLock.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostLock
+    symbol: lock
+  - name: hostGit
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host git <action>` with its parsed arguments and flags to
+          cli_runner.runHostGit.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostGit
+    symbol: git <action>
+  - name: hostProducer
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host producer <action>` with its parsed arguments and flags to
+          cli_runner.runHostProducer.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostProducer
+    symbol: producer <action>
+  - name: hostPacks
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host packs <action>` with its parsed arguments and flags to
+          cli_runner.runHostPacks.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostPacks
+    symbol: packs <action>
+  - name: hostSecret
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host secret <action>` with its parsed arguments and flags to
+          cli_runner.runHostSecret.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostSecret
+    symbol: secret <action>
+  - name: memberAdd
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member add <alias> <source>` with its parsed arguments and flags to
+          cli_runner.runMemberAdd.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberAdd
+    symbol: add <alias> <source>
+  - name: memberUpdate
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member update <alias>` with its parsed arguments and flags to
+          cli_runner.runMemberUpdate.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberUpdate
+    symbol: update <alias>
+  - name: memberMove
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member move <alias> <path>` with its parsed arguments and flags to
+          cli_runner.runMemberMove.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberMove
+    symbol: move <alias> <path>
+  - name: memberAttach
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member attach <alias> <path>` with its parsed arguments and flags to
+          cli_runner.runMemberAttach.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberAttach
+    symbol: attach <alias> <path>
+  - name: memberDetach
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member detach <alias>` with its parsed arguments and flags to
+          cli_runner.runMemberDetach.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberDetach
+    symbol: detach <alias>
+  - name: memberAdopt
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member adopt <alias>` with its parsed arguments and flags to
+          cli_runner.runMemberAdopt.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberAdopt
+    symbol: adopt <alias>
+  - name: memberRenameAlias
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member rename-alias <old> <new>` with its parsed arguments and flags to
+          cli_runner.runMemberRenameAlias.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberRenameAlias
+    symbol: rename-alias <old> <new>
+  - name: memberInternalize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member internalize <alias>` with its parsed arguments and flags to
+          cli_runner.runMemberInternalize.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberInternalize
+    symbol: internalize <alias>
+  - name: memberPromote
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member promote <alias>` with its parsed arguments and flags to
+          cli_runner.runMemberPromote.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberPromote
+    symbol: promote <alias>
+  - name: memberDemote
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon member demote <alias>` with its parsed arguments and flags to
+          cli_runner.runMemberDemote.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMemberDemote
+    symbol: demote <alias>
+  - name: projectRename
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon project rename <new-id>` with its parsed arguments and flags to
+          cli_runner.runProjectRename.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runProjectRename
+    symbol: rename <new-id>
+  - name: subsystemExternalize
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon subsystem externalize <id>` with its parsed arguments and flags to
+          cli_runner.runSubsystemExternalize.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runSubsystemExternalize
+    symbol: externalize <id>
+  - name: update
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon update` with its parsed arguments and flags to cli_runner.runUpdate.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runUpdate
+  - name: domainsList
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon domains list` with its parsed arguments and flags to
+          cli_runner.runDomainsList.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runDomainsList
+    symbol: list
+  - name: domainsScan
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon domains scan` with its parsed arguments and flags to
+          cli_runner.runDomainsScan.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runDomainsScan
+    symbol: scan
+  - name: domainsAdd
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon domains add` with its parsed arguments and flags to
+          cli_runner.runDomainsAdd.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runDomainsAdd
+    symbol: Manually register a new domain
+  - name: domainsRemove
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon domains remove <id>` with its parsed arguments and flags to
+          cli_runner.runDomainsRemove.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runDomainsRemove
+    symbol: remove <id>
+  - name: skillsList
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon skills list` with its parsed arguments and flags to
+          cli_runner.runSkillsList.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runSkillsList
+    symbol: skills
+  - name: skillsInstall
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon skills install` with its parsed arguments and flags to
+          cli_runner.runSkillsInstall.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runSkillsInstall
+    symbol: install
+status: complete
+createdAt: '2026-10-04T18:14:22.930Z'
+updatedAt: '2026-10-04T18:16:37.034Z'

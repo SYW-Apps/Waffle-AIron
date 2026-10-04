@@ -16,14 +16,14 @@ methods:
       - stepNumber: 1
         description: Forward to the surface portal
         type: call
-        targetComponent: surface_portal
+        targetComponent: pin_maintenance_portal
         targetMethod: renamePin
   - name: unpin
     narrative:
       - stepNumber: 1
         description: Forward to the surface portal
         type: call
-        targetComponent: surface_portal
+        targetComponent: pin_maintenance_portal
         targetMethod: unpin
   - name: listExternals
     narrative:
@@ -37,7 +37,7 @@ methods:
       - stepNumber: 1
         description: Forward to the surface portal
         type: call
-        targetComponent: surface_portal
+        targetComponent: pin_maintenance_portal
         targetMethod: listFamilyPins
   - name: removeSnapshot
     narrative:
@@ -48,4 +48,4 @@ methods:
         targetMethod: removeSnapshot
 status: complete
 createdAt: '2026-09-30T20:31:58.977Z'
-updatedAt: '2026-09-30T22:58:41.825Z'
+updatedAt: '2026-10-04T18:29:33.239Z'

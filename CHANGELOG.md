@@ -1197,6 +1197,19 @@ document, and a rename no longer reads as a delete plus an add.
   entry without `as` now writes `as: <old name>`, so consumers' pins keep resolving;
   `renameComponent` and `renameType` report each kept name, and `renameMethod` reports the
   export entries publishing the method it renamed.
+- **wairon's own export states how it is entered and what it ships.** The `wairon` binary is
+  now a CLI Portal (`cli_portal`, src/cli/index.ts) with one `CLI` endpoint per command, dispatching
+  to the `cli_runner` workflows (moved out of the entry into src/cli/runner.ts), and the binary's
+  startup cleanup is an `init` lifecycle root. The L0 export table names the binary, the
+  `@wairon/sdk` package (now including `defineRule` and its rule-authoring types) and the
+  `@wairon/cli` library entry's surfaces (core, validation, surfaces), so `wairon export` on
+  this repository lists them. The library entry now re-exports the validator portal's and the
+  surface portal's whole contracts (`validateAsComplete`, `measurePackImpact`,
+  `computeGateStateId`, `exportSurface`, `pinExternals`, `getExternalsStatus` and the rest)
+  beside `validateProject`, `validateFamily` and `exportDesign`. The family migrations' pin
+  maintenance (`renamePin`, `unpin`, `listFamilyPins`) moved off the surface portal onto an
+  internal `pin_maintenance_portal` published to sdd_migrations only, so the library never
+  offers a pin carried without re-pinning.
 
 ### Types speak one language
 

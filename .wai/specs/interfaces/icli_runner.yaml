@@ -739,6 +739,19 @@ methods:
         type: string
         description: The file to write; stdout without it
         optional: true
+  - name: cleanStaleBinary
+    description: >-
+      Remove the `.old` binary a previous self-update left beside a packaged (pkg) executable, or
+      the one named — once when the binary starts, and before each rename during `wairon update`. A
+      file still locked by the OS is left for the next start; a non-packaged install has nothing to
+      clean.
+    signature: 'cleanStaleBinary(oldPath?: string): void'
+    returns: void
+    params:
+      - name: oldPath
+        type: string
+        description: The leftover to remove; omitted, the running packaged executable's `.old` sibling
+        optional: true
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T14:02:40.294Z'
+updatedAt: '2026-10-04T18:15:22.008Z'

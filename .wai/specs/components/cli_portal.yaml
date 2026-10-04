@@ -1,0 +1,19 @@
+id: cli_portal
+name: CLI Portal
+description: >-
+  The `wairon` binary's inbound surface (package.json bin `wairon` and `wai`, src/cli/index.ts): it
+  parses argv — the command, its arguments and its flags, the global --verbose/--silent log level —
+  and dispatches each command to the cli_runner workflow that serves it, one endpoint per runner
+  workflow (a command group the runner serves with one workflow, such as `pack <action>` or `host
+  key <action>`, is one endpoint). It holds no workflow of its own and reaches no adapter: a pack
+  named on `init --pack` is the runner's `pack add`, and a WaironError a workflow throws is printed
+  and exits 1 here, at the edge.
+subsystem: sdd_cli
+componentType: Portal
+owns: []
+dependsOn:
+  - cli_runner
+portalType: CLI
+status: complete
+createdAt: '2026-10-04T18:11:38.132Z'
+updatedAt: '2026-10-04T18:16:35.495Z'

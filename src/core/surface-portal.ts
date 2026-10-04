@@ -6,12 +6,14 @@
 // When the portal's methods were the orchestrator's own functions, every
 // collaborator those functions reached counted as an undeclared hop of the
 // portal. Client adapters import from here, never from ./surfaces.ts.
+//
+// The family migrations' pin maintenance (renamePin, unpin, listFamilyPins) is
+// NOT here: it is pin_maintenance_portal (./pin-maintenance-portal.ts), an
+// internal portal published to sdd_migrations only, so this one — published on
+// the package's library entry — never offers a pin carried without re-pinning.
 // ---------------------------------------------------------------------------
 import * as surfaceOrchestrator from './surfaces.js';
-// The two pin writes of the family migrations live beside the externals
-// repository they edit (surface_orchestrator's renamePin and unpin).
-import * as pinWrites from './externals.js';
-import type { FamilyPin, SurfaceExportResult } from './surfaces.js';
+import type { SurfaceExportResult } from './surfaces.js';
 import type {
   DesignApproval,
   DesignExport,
@@ -54,10 +56,6 @@ export function removeSnapshot(projectName: string): boolean {
   return surfaceOrchestrator.removeSnapshot(projectName);
 }
 
-export function listFamilyPins(): FamilyPin[] {
-  return surfaceOrchestrator.listFamilyPins();
-}
-
 export function pinExternals(aliases?: string[]): ExternalPin[] {
   return surfaceOrchestrator.pinExternals(aliases);
 }
@@ -72,16 +70,6 @@ export function listExternals(): ExternalListing[] {
 
 export function listPinnedExternals(): PinnedExternal[] {
   return surfaceOrchestrator.listPinnedExternals();
-}
-
-/** isurface_portal.renamePin — carry the bound project's pin of one external to a new alias or producer id, digest unchanged. */
-export function renamePin(alias: string, newAlias: string, project: string): boolean {
-  return pinWrites.renamePin(alias, newAlias, project);
-}
-
-/** isurface_portal.unpin — remove the bound project's pin of one alias. */
-export function unpin(alias: string): boolean {
-  return pinWrites.unpin(alias);
 }
 
 /** isurface_portal.pinnedParent — a part's pinned parent, from its own .wai/externals files only (stage 8); null at a project. */

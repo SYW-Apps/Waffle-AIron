@@ -202,7 +202,7 @@ describe('wairon execution reaches the resource axis through cli_core_adapter, n
     // budget's own, neither has a reason to name a core module at all — and
     // `src/models/execution.ts` is a type spec's file, not a component's, so
     // naming it is shared vocabulary rather than a crossing.
-    for (const file of ['src/cli/index.ts', 'src/mcp/server.ts']) {
+    for (const file of ['src/cli/runner.ts', 'src/mcp/server.ts']) {
       const source = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
       expect(source, file).not.toContain("from '../core/budget_policy.js'");
       expect(source, file).not.toContain('describeBudget');

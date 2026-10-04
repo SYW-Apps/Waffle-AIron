@@ -1,10 +1,25 @@
-id: "sdd_cli"
-name: "Wairon CLI Interfaces"
-description: "Terminal entry points for initializing, validating, generating, and listing spec-driven topology."
-parentSystem: "Waffle-AIron"
+id: sdd_cli
+name: Wairon CLI Interfaces
+description: >-
+  The `wairon` binary: cli_portal parses argv and dispatches each command to cli_runner, the
+  terminal's workflows over per-concern command adapters onto the other subsystems.
+parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: "Custom"
-    component: "cli_runner"
-    details: "Terminal command interfaces: wairon init, generate, validate, list, show."
-createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-06-10T19:28:00.000Z"
+  - type: Custom
+    details: >-
+      The `wairon` (and `wai`) binary: one CLI endpoint per command, or per command group the runner
+      serves with one workflow.
+    component: cli_portal
+    interface: icli_portal
+    as: wairon-cli
+lifecycle:
+  - phase: init
+    component: cli_runner
+    method: cleanStaleBinary
+    description: >-
+      When the binary starts, before argv is parsed: remove the .old executable a previous
+      self-update left behind.
+trustedLinks: []
+status: complete
+createdAt: '2026-06-10T19:28:00.000Z'
+updatedAt: '2026-10-04T18:15:31.651Z'

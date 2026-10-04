@@ -8,7 +8,7 @@ import { storeCredential } from '../../src/commands/remote.js';
 
 // ---------------------------------------------------------------------------
 // `wairon mcp install --hosted <url>` without --token (cli_runner.runMcpInstall,
-// realized by mcpInstallCommand in src/cli/index.ts): the CLI resolves the bearer
+// realized by mcpInstallCommand in src/cli/runner.ts): the CLI resolves the bearer
 // from this machine's credential store, and the MCP adapter embeds it. The
 // adapter never reads the store itself, so without the CLI's fallback the
 // install refuses with "No credential".
