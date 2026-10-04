@@ -6,39 +6,39 @@ methods:
   - name: loadSystemSpec
     description: Delegate loading system spec to spec loader
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: loadSubsystemSpecs
     description: Delegate loading subsystem specs to spec loader
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadComponentSpecs
     description: Delegate loading component specs to spec loader
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadInterfaceSpecs
     description: Delegate loading interface specs to spec loader
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadImplementationSpecs
     description: Delegate loading implementation specs to spec loader
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: loadSubsystemSpec
     description: Delegate loading a single subsystem spec to spec loader
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
+    returns: SubsystemSpec?
   - name: loadComponentSpec
     description: Delegate loading a single component spec to spec loader
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
-    returns: ComponentSpec | null
+    returns: ComponentSpec?
   - name: loadInterfaceSpec
     description: Delegate loading a single interface spec to spec loader
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
-    returns: InterfaceSpec | null
+    returns: InterfaceSpec?
   - name: loadImplementationSpec
     description: Delegate loading a single implementation spec to spec loader
     signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
-    returns: ImplementationSpec | null
+    returns: ImplementationSpec?
   - name: provisionProject
     description: >-
       Bootstrap a fresh isolated project at the bound root: default project.yaml plus an L0 system
@@ -53,7 +53,7 @@ methods:
   - name: readLockRecord
     description: Read the current commit-scoped lock record, or null if the project is unlocked.
     signature: 'readLockRecord(): LockRecord | null'
-    returns: LockRecord | null
+    returns: LockRecord?
   - name: writeLockRecord
     description: Persist a commit-scoped lock record.
     signature: 'writeLockRecord(record: LockRecord): void'
@@ -62,14 +62,14 @@ methods:
     description: >-
       Delegate diagram rendering to architecture_diagrams, with the relation health the canvas
       draws.
-    signature: 'renderDiagram(format: string, relations?: ProjectRelations[]): string'
+    signature: 'renderDiagram(format: string, relations?: list<ProjectRelations>): string'
     returns: string
     params:
       - name: format
         type: string
         description: canvas | mermaid | drawio | excalidraw
       - name: relations
-        type: ProjectRelations[]
+        type: list<ProjectRelations>
         description: The family's relation health for the canvas; omitted, none
         optional: true
   - name: createMember
@@ -204,13 +204,13 @@ methods:
   - name: loadTypeSpecs
     description: Delegate loading type specs to spec loader
     signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    returns: list<TypeSpec>
   - name: dryRunSerializeSpecs
     description: >-
       Delegate the in-memory round-trip serialization check to spec loader (optionally
       scope-filtered)
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
-    returns: ValidationIssue[]
+    returns: list<ValidationIssue>
   - name: buildProjectGraph
     description: >-
       Project the current project's spec tree into a level-filtered WebGraphModel for the web UI,
@@ -227,15 +227,15 @@ methods:
       request may not read above its root: a hosted credential narrowed to the child, or a parent
       that lies above the request's top project root. Read-only detection through the spec loader.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    returns: ChainingParentRef?
   - name: computeStateIdAt
     description: >-
       Compute the CURRENT spec-tree state hash of the project at the given root, binding that root
       strictly read-only for the duration and restoring the previous binding afterwards. Serves
       freshness comparisons of vendored surface snapshots against what the (parent) tree looks like
       now; returns null when the root holds no loadable spec tree.
-    signature: 'computeStateIdAt(root: string): string | null'
-    returns: string | null
+    signature: 'computeStateIdAt(root: string): string?'
+    returns: string?
     params:
       - name: root
         type: string
@@ -255,8 +255,8 @@ methods:
       Resolve a chained mount's qualified namespace to its project root (containment-checked against
       the bound root), or null when the namespace names no mount. Read-only lookup through the spec
       loader.
-    signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
-    returns: string | null
+    signature: 'resolveSubprojectForNamespace(namespace: string): string?'
+    returns: string?
     params:
       - name: namespace
         type: string
@@ -273,8 +273,8 @@ methods:
     description: >-
       Select a pack by name in the bound project's configuration, moving a re-selected pack last,
       through the project config Repository. Returns whether an earlier selection was replaced.
-    signature: 'upsertPackSelection(selection: PackSelection): boolean'
-    returns: boolean
+    signature: 'upsertPackSelection(selection: PackSelection): bool'
+    returns: bool
     params:
       - name: selection
         type: PackSelection
@@ -284,8 +284,8 @@ methods:
     description: >-
       Deselect a pack by name, leaving path references alone, through the project config Repository.
       Returns whether anything was dropped.
-    signature: 'removePackSelection(packName: string): boolean'
-    returns: boolean
+    signature: 'removePackSelection(packName: string): bool'
+    returns: bool
     params:
       - name: packName
         type: string
@@ -322,8 +322,8 @@ methods:
     description: >-
       Register a legacy pack path reference when it is absent, through the project config
       Repository. Returns whether it was added.
-    signature: 'registerPackRef(ref: string): boolean'
-    returns: boolean
+    signature: 'registerPackRef(ref: string): bool'
+    returns: bool
     params:
       - name: ref
         type: string
@@ -333,8 +333,8 @@ methods:
     description: >-
       Drop a legacy pack path reference that matches exactly, through the project config Repository.
       Returns whether anything was dropped.
-    signature: 'deregisterPackRef(ref: string): boolean'
-    returns: boolean
+    signature: 'deregisterPackRef(ref: string): bool'
+    returns: bool
     params:
       - name: ref
         type: string
@@ -344,11 +344,11 @@ methods:
     description: >-
       Record bundled packs on their selections in place, in one write, through the project config
       Repository.
-    signature: 'markSelectionsBundled(bundled: PackSelection[]): void'
+    signature: 'markSelectionsBundled(bundled: list<PackSelection>): void'
     returns: void
     params:
       - name: bundled
-        type: PackSelection[]
+        type: list<PackSelection>
     guarantees:
       - idempotent
   - name: ensureProjectInitialized
@@ -384,8 +384,8 @@ methods:
       through that root's binding) and, for one release, its legacy L1 mounts, each resolved inside
       the project root, as the member's directory, alias and form. An absolute or escaping path is
       skipped.
-    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
-    returns: ChainedSubprojectDir[]
+    signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
+    returns: list<ChainedSubprojectDir>
     params:
       - name: projectRoot
         type: string
@@ -400,8 +400,8 @@ methods:
       since stage 5: they are that member's own gate's, and reach this project's gate identity
       through the member's composition subject. The gate identity covers them, so swapping a pinned
       contract or re-pinning a changed `used` map invalidates a lock.
-    signature: 'consumedContractInputs(): string[]'
-    returns: string[]
+    signature: 'consumedContractInputs(): list<string>'
+    returns: list<string>
     params: []
   - name: renameComponent
     description: >-
@@ -445,11 +445,11 @@ methods:
       Adapters or read logic, unset when a dependency fits neither. Classes are decided over the
       whole graph, so a Specialist is classified after those it depends on. Every project variant
       based on Specialist is rebased onto Orchestrator. Without apply nothing is written.
-    signature: 'retireSpecialists(apply: boolean): SpecialistRetirement'
+    signature: 'retireSpecialists(apply: bool): SpecialistRetirement'
     returns: SpecialistRetirement
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the plan; false plans without writing
   - name: renameMethod
     description: >-
@@ -475,7 +475,7 @@ methods:
       change is refused (SubsystemWriteDenied), naming every such subsystem and the rung that
       decided each, and nothing is written.
     signature: >-
-      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean):
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool):
       MethodRename
     returns: MethodRename
     params:
@@ -489,7 +489,7 @@ methods:
         type: string
         description: Its new name, a camel-case identifier
       - name: pinSymbol
-        type: boolean
+        type: bool
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name so its
           function still binds; true when omitted
@@ -552,8 +552,8 @@ methods:
       caller's hooks, when given, judge the merged spec at the last point before anything reaches
       disk.
     signature: >-
-      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?:
-      boolean): SpecChangeReport
+      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -574,7 +574,7 @@ methods:
           collectors)
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Report what the delta would do and write nothing
         optional: true
   - name: repairForeignStepFields
@@ -586,16 +586,16 @@ methods:
       about the step changes — a step's type is never guessed at from the fields, because only its
       author knows whether a local carrying a target was meant to be a call. Without apply nothing
       is written.
-    signature: 'repairForeignStepFields(apply: boolean): ForeignFieldRepair[]'
-    returns: ForeignFieldRepair[]
+    signature: 'repairForeignStepFields(apply: bool): list<ForeignFieldRepair>'
+    returns: list<ForeignFieldRepair>
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the repair; false plans without writing
   - name: loadTypeSpec
     description: Read one type specification by id through the spec repository.
-    signature: 'loadTypeSpec(id: string): TypeSpec | null'
-    returns: TypeSpec | null
+    signature: 'loadTypeSpec(id: string): TypeSpec?'
+    returns: TypeSpec?
     params:
       - name: id
         type: string
@@ -641,8 +641,8 @@ methods:
       spec of a subsystem the request may not change is refused (SubsystemWriteDenied), naming every
       such subsystem and the rung that decided each, and nothing is written.
     signature: >-
-      moveMethods(from: string, to: string, methods: string[], hooks?: SpecWriteHooks, dryRun?:
-      boolean): MethodMoveReport
+      moveMethods(from: string, to: string, methods: list<string>, hooks?: SpecWriteHooks, dryRun?:
+      bool): MethodMoveReport
     returns: MethodMoveReport
     params:
       - name: from
@@ -652,14 +652,14 @@ methods:
         type: string
         description: The component id that should receive them
       - name: methods
-        type: string[]
+        type: list<string>
         description: The method names to move; every one must be declared on the source component's contract
       - name: hooks
         type: SpecWriteHooks
         description: The judgement to run on the resulting components at the write boundary
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: >-
           Run the whole move, hook included, and answer with the report it would have produced
           without writing
@@ -669,8 +669,8 @@ methods:
       Every spec file path inside a scope, or the whole tree when no subsystem is named. Used when
       an approval is taken over part of a tree rather than all of it, so the record says exactly
       which files it covers.
-    signature: 'specPathsInScope(scopeSubsystem?: string): string[]'
-    returns: string[]
+    signature: 'specPathsInScope(scopeSubsystem?: string): list<string>'
+    returns: list<string>
     params:
       - name: scopeSubsystem
         type: string
@@ -681,11 +681,9 @@ methods:
   - name: loadSpec
     description: Delegate loading one spec of the named kind to the spec loader; null when none is stored.
     signature: >-
-      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
-      | ImplementationSpec | TypeSpec | null
-    returns: >-
-      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
-      null
+      loadSpec(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec)?
+    returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
         type: string
@@ -699,8 +697,8 @@ methods:
       placement notices.
     signature: >-
       saveSpec(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
-      ImplementationSpec | TypeSpec): string[]
-    returns: string[]
+      ImplementationSpec | TypeSpec): list<string>
+    returns: list<string>
     params:
       - name: kind
         type: string
@@ -710,8 +708,8 @@ methods:
         description: The spec to persist, of that kind
   - name: deleteSpec
     description: Delete one spec document of the named kind through the loader. False when it was not there.
-    signature: 'deleteSpec(kind: string, id: string): boolean'
-    returns: boolean
+    signature: 'deleteSpec(kind: string, id: string): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -725,8 +723,8 @@ methods:
       stopping at an optional ceiling. Pure detection that is NOT gated on any request's reach: a
       caller that must not read above a bound root passes that root as the ceiling and gates on its
       own reach before calling.
-    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef?'
+    returns: ChainingParentRef?
     params:
       - name: childRoot
         type: string
@@ -750,8 +748,8 @@ methods:
     description: >-
       The issues the loader recorded while reading the bound tree: files that failed their schema or
       could not be parsed.
-    signature: 'getLoaderIssues(): ValidationIssue[]'
-    returns: ValidationIssue[]
+    signature: 'getLoaderIssues(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
     params: []
   - name: clearLoaderIssues
     description: >-
@@ -764,16 +762,16 @@ methods:
     description: >-
       The bound tree's spec files stored under a legacy (undotted) name, each with the name the
       current layout expects. Pure read.
-    signature: 'findLegacySpecFiles(): LegacySpecFile[]'
-    returns: LegacySpecFile[]
+    signature: 'findLegacySpecFiles(): list<LegacySpecFile>'
+    returns: list<LegacySpecFile>
     params: []
   - name: findChainingSubprojectsMissingConfig
     description: >-
       The member directories, found recursively from a root through each project's members (either
       declaration form), that hold a spec tree but no project configuration — the state that leaves
       one unrunnable standalone. Pure read.
-    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): string[]'
-    returns: string[]
+    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): list<string>'
+    returns: list<string>
     params:
       - name: projectRoot
         type: string
@@ -782,8 +780,8 @@ methods:
       Write a project configuration for every member found recursively from a root (either
       declaration form) that has a spec tree but none, declaring its alias as its project id;
       existing specs are never touched. Returns the directories repaired.
-    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): string[]'
-    returns: string[]
+    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): list<string>'
+    returns: list<string>
     params:
       - name: projectRoot
         type: string
@@ -802,31 +800,31 @@ methods:
     description: >-
       The component-variant registry governing the current project, forwarded from the variant
       registry.
-    signature: 'loadProjectVariants(): VariantDef[]'
-    returns: VariantDef[]
+    signature: 'loadProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
     params: []
   - name: resolveVariantGuidance
     description: >-
       One component's variant guidance and its same-variant siblings, forwarded from the variant
       registry; null when the component declares no variant or one that does not resolve.
     signature: >-
-      resolveVariantGuidance(component: ComponentSpec, allComponents: ComponentSpec[], variantsById:
-      VariantDef[]): VariantDef
+      resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
+      variantsById: list<VariantDef>): VariantDef
     returns: VariantDef
     params:
       - name: component
         type: ComponentSpec
       - name: allComponents
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
       - name: variantsById
-        type: VariantDef[]
+        type: list<VariantDef>
   - name: setProjectId
     description: >-
       Declare the bound project's id through the project config Repository: refused for a malformed
       id or when a different id is already declared, a no-op when the same one is. Returns whether
       it wrote.
-    signature: 'setProjectId(id: string): boolean'
-    returns: boolean
+    signature: 'setProjectId(id: string): bool'
+    returns: bool
     params:
       - name: id
         type: string
@@ -838,8 +836,8 @@ methods:
       Declare one external of the bound project under an alias through the project config
       Repository: refused for a malformed alias or producer id, or when the alias holds a different
       declaration, a no-op when it holds the same one. Returns whether it wrote.
-    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): boolean'
-    returns: boolean
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -859,8 +857,8 @@ methods:
       project and no equal member, or when the alias already holds a different member declaration.
       Idempotent: a mount already moved (an equal member, no L1 document) writes nothing. Returns
       whether it wrote.
-    signature: 'moveMountToMembers(alias: string): boolean'
-    returns: boolean
+    signature: 'moveMountToMembers(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -872,8 +870,8 @@ methods:
       Re-save one spec of the family with every reference in its canonical stage-3 form (a bare
       local id, or `alias::publicName`) through the spec repository; targets never change. Returns
       whether the stored text changed.
-    signature: 'normalizeReferences(kind: string, id: string): boolean'
-    returns: boolean
+    signature: 'normalizeReferences(kind: string, id: string): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -888,14 +886,14 @@ methods:
       Add public names to the `use` of the bound project's external or member under an alias,
       through the project config Repository: refused for a malformed name or an undeclared alias, a
       no-op for names already imported. Returns whether it wrote.
-    signature: 'importNames(alias: string, names: string[]): boolean'
-    returns: boolean
+    signature: 'importNames(alias: string, names: list<string>): bool'
+    returns: bool
     params:
       - name: alias
         type: string
         description: The external or member alias
       - name: names
-        type: string[]
+        type: list<string>
         description: The public names to import, or `*`
     guarantees:
       - idempotent
@@ -905,8 +903,8 @@ methods:
       previousIds: refused for a malformed new id or when the project no longer answers to the old
       one, a no-op once done. The rename migration's write; it touches no reference and no lock.
       Returns whether it wrote.
-    signature: 'renameProjectId(from: string, to: string): boolean'
-    returns: boolean
+    signature: 'renameProjectId(from: string, to: string): bool'
+    returns: bool
     params:
       - name: from
         type: string
@@ -921,8 +919,8 @@ methods:
       Rekey one member or external alias of the bound project through the project config Repository,
       keeping its value and place. It touches no reference: the family migration respells them.
       Returns whether it wrote.
-    signature: 'renameAlias(from: string, to: string): boolean'
-    returns: boolean
+    signature: 'renameAlias(from: string, to: string): bool'
+    returns: bool
     params:
       - name: from
         type: string
@@ -936,17 +934,17 @@ methods:
     description: >-
       Revise one external of the bound project — its producer id and explicit source — through the
       project config Repository, keeping its `use` and description. Returns whether it wrote.
-    signature: 'repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean'
-    returns: boolean
+    signature: 'repointExternal(alias: string, project: string?, source: ExternalSource?): bool'
+    returns: bool
     params:
       - name: alias
         type: string
         description: The external's alias
       - name: project
-        type: string | null
+        type: string?
         description: The producer id, or null when the alias is the id
       - name: source
-        type: ExternalSource | null
+        type: ExternalSource?
         description: The explicit place, or null to find it through the family
     guarantees:
       - idempotent
@@ -954,8 +952,8 @@ methods:
     description: >-
       Remove one external declaration of the bound project through the project config Repository.
       Returns whether it wrote.
-    signature: 'removeExternal(alias: string): boolean'
-    returns: boolean
+    signature: 'removeExternal(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -971,8 +969,8 @@ methods:
       within the bound root (the containment guard createMember applies; a leading `../` is the
       explicit way out), an alias `externals` holds, or an alias already holding a different member;
       a no-op when it holds the same one. Returns whether it wrote.
-    signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
-    returns: boolean
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -987,8 +985,8 @@ methods:
       Remove one member declaration of the bound project through the project config Repository — the
       write behind `member detach`; the member's directory and project are left exactly as they are.
       Returns whether it wrote.
-    signature: 'removeMember(alias: string): boolean'
-    returns: boolean
+    signature: 'removeMember(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -1002,8 +1000,8 @@ methods:
       reference write, for spellings the canonical writer cannot derive because the alias table they
       bind through is changing in the same migration. Refuses the whole spec, writing nothing, when
       an edit's text is not at its position. Returns whether the stored text changed.
-    signature: 'rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean'
-    returns: boolean
+    signature: 'rewriteReferences(kind: string, id: string, edits: list<ReferenceEdit>): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -1012,7 +1010,7 @@ methods:
         type: string
         description: The spec's in-memory key, from the family's top root
       - name: edits
-        type: ReferenceEdit[]
+        type: list<ReferenceEdit>
         description: The edits for this spec
     guarantees:
       - idempotent
@@ -1023,8 +1021,8 @@ methods:
       deprecated long-form `path` to the one location key. A contained source in the changes is held
       to the containment guard. Never writes a kind: what a member is follows from its content.
       Returns whether it wrote.
-    signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
-    returns: boolean
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -1107,7 +1105,7 @@ methods:
       or reads as a moved subject (a project). Throws for an alias that names no git member, or a
       ref or commit that cannot be resolved or fetched (offline included), before anything is
       written.
-    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: boolean): MemberAdvance'
+    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: bool): MemberAdvance'
     returns: MemberAdvance
     params:
       - name: alias
@@ -1124,7 +1122,7 @@ methods:
         description: An exact commit to pin instead of resolving a ref
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer what would change and write nothing
         optional: true
   - name: describeProject
@@ -1153,11 +1151,11 @@ methods:
       prose. Every spec it writes goes through the ordinary writer, so what it writes is exactly
       what any later save would. Only the bound project's own specs are repaired. Idempotent: after
       an applied run the plan is empty. Without apply nothing is written.
-    signature: 'repairSignatures(apply: boolean): SignatureTextRepair[]'
-    returns: SignatureTextRepair[]
+    signature: 'repairSignatures(apply: bool): list<SignatureTextRepair>'
+    returns: list<SignatureTextRepair>
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the repair; false plans without writing
   - name: repairTypeSpellings
     description: >-
@@ -1167,18 +1165,21 @@ methods:
       writes is exactly what any later save would, and the derived signature texts follow. It never
       guesses: a `number` position whose name plainly says an integer (count, size, length, limit,
       port, step, index, depth, level, days, minutes, seconds, bytes, version, ...) gets int
-      PROPOSED and is left as written for an author to confirm, and every position no rewrite can
-      settle (an inline function type, a literal union, a union mixing a primitive, a number with no
-      proposal, a builtin with no neutral meaning, an expression that does not parse) is listed as
-      needing an author. Re-saving a spec holding such a position leaves that position as written.
-      Only the bound project's own specs are repaired. Idempotent: after an applied run nothing is
-      left to rewrite. Without apply nothing is written.
-    signature: 'repairTypeSpellings(apply: boolean): TypeSpellingRepair[]'
-    returns: TypeSpellingRepair[]
+      PROPOSED (type_expression_problem.intProposal) and is left as written for an author to
+      confirm, and every position no rewrite can settle (an inline function type, a literal union, a
+      union mixing a primitive, a number with no proposal, a builtin with no neutral meaning, an
+      expression that does not parse) is listed as needing an author. Re-saving a spec holding such
+      a position leaves that position as written. An interface holding a sourced method whose
+      restatement differs from its source is never re-saved — the writer would store that method
+      with only its source and decide the contract for its author — so its aliases wait until
+      SIGNATURE_SOURCE_RESTATED is settled. Only the bound project's own specs are repaired.
+      Idempotent: after an applied run nothing is left to rewrite. Without apply nothing is written.
+    signature: 'repairTypeSpellings(apply: bool): list<TypeSpellingRepair>'
+    returns: list<TypeSpellingRepair>
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the rewrite; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T22:07:15.332Z'
+updatedAt: '2026-10-04T00:10:31.407Z'

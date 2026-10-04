@@ -350,6 +350,42 @@ anti-corruption view) — they do not share or redefine the owning aggregate. An
 interface references types by id, so signatures stay structured (which also makes
 data-model/ER diagrams derivable — see §14).
 
+### Type expressions: one neutral grammar
+
+Every structured type position — a param's `type`, a method's `returns`, a
+field's `type`, a type method's and a signature type's params and returns — is
+written in one language-neutral grammar, so a contract means the same thing to
+every implementation language:
+
+| Form | Meaning |
+|---|---|
+| `string`, `int`, `float`, `bool`, `bytes` | the scalar primitives (`int` and `float` are distinct; width is an L4 concern) |
+| `date`, `datetime`, `duration` | a calendar day, an instant, an elapsed time |
+| `void`, `any` | no value (a whole returns only), and an unconstrained value |
+| `list<T>`, `set<T>`, `map<K, V>` | ordered, unique, keyed; a map key is `string`, `int` or an enum |
+| `T?` | T, or no value |
+| `A \| B` | exactly one of the named types (a primitive or collection never joins a union) |
+| `async T` | completes later with T — at the top of a returns only (`async void`) |
+| `Invoice`, `billing::invoice`, `Page<T>` | a named type: an entity, value-object, enum or signature type |
+
+"No value" (`T?`) belongs to a type; "may be left out" belongs to a position
+and stays the `optional` flag on a param or field. Both together mean "may be
+left out, and may be explicitly none".
+
+An **enum** is a type of its own kind: a closed, ordered set of named values
+(`values: [{ name, description? }]`), optionally with pure methods. A field
+typed by an enum is a value domain, not a relation, so the ER diagram draws no
+edge to it, and OpenAPI renders it as a string `enum`.
+
+TypeScript spellings (`string[]`, `boolean`, `T | null`, `Promise<T>`,
+`Record<K, V>`) are accepted as input and stored in the canonical spelling; the
+write answers with each respelling. `number` is not accepted ("int or
+float?"). Inline object shapes, inline function types, string-literal unions,
+intersections, utility types and unions mixing in a primitive are not in the
+grammar: each has a named replacement (a value-object, a signature type, an
+enum). How each form is written in a given language is in
+[Language bindings](language-bindings.md#type-mapping).
+
 ---
 
 ## 7. Patterns (named compositions)

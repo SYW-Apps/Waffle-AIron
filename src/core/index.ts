@@ -383,6 +383,11 @@ export type { ForeignFieldRepair } from './narrative-repair.js';
 // orchestrator.
 export { repairSignatures } from './signature-repair.js';
 export type { SignatureTextRepair } from './signature-repair.js';
+// spec_maintenance_portal repairTypeSpellings: the doctor's one-time rewrite of
+// stored type positions into their canonical spelling, with int proposed for
+// the number positions whose name says so and the positions only an author can
+// settle listed — a 1:1 forward to the core orchestrator.
+export { repairTypeSpellings } from './type-spelling-repair.js';
 
 // The approval (approval_portal captureApprovedSpecs … approvalVerdict) — the
 // per-spec digests a lock RECORDS instead of writing statuses into the tree.

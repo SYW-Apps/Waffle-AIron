@@ -45,7 +45,22 @@ fields:
       Where in the spec, e.g. methods.save.params.key, methods.save.returns, fields.createdAt,
       params.listener (a signature type's), once collected over a spec
     optional: true
-methods: []
+methods:
+  - name: intProposal
+    signature: 'intProposal(): TypeRespelling?'
+    params: []
+    returns: TypeRespelling?
+    description: >-
+      The int this problem's position may take, PROPOSED and never applied: for a `number` position
+      (TYPE_NOT_NEUTRAL, "int or float?") collected over a spec, whose name — the param or field, or
+      for a returns the method whose returns it is — plainly says a whole number (a count, size,
+      length, limit, port, step, index, depth, level, days, minutes, seconds, bytes, version, ...;
+      read word by word over camelCase, snake_case and kebab-case), the respelling of its written
+      text with int for number, in canonical spelling. None for any other problem, for a name that
+      does not say so, or when the respelled text would still not be canonical. What the doctor's
+      type-spelling repair lists and the type-expressions rule mentions; an author confirms it by
+      writing int, or writes float. Pure.
+    symbol: typeProblemIntProposal
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:56.994Z'
-updatedAt: '2026-10-03T22:21:50.652Z'
+updatedAt: '2026-10-04T00:09:50.884Z'

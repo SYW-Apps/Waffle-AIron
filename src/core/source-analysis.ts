@@ -16,6 +16,7 @@ import {
   type SourceFileFacts,
   type TypeShapeFact,
   type TypeSpec,
+  languageOfSourcePath,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -43,14 +44,6 @@ export function emptyCodeModel(): CodeModel {
 // ---------------------------------------------------------------------------
 // Language detection + declarative pattern tables
 // ---------------------------------------------------------------------------
-
-const EXTENSION_LANGUAGE: Record<string, string> = {
-  '.ts': 'typescript', '.tsx': 'typescript', '.mts': 'typescript', '.cts': 'typescript',
-  '.js': 'javascript', '.jsx': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript',
-  '.py': 'python', '.rs': 'rust', '.go': 'go', '.cs': 'csharp', '.java': 'java',
-  '.c': 'c', '.h': 'c', '.cpp': 'cpp', '.cc': 'cpp', '.hpp': 'cpp',
-  '.rb': 'ruby', '.php': 'php', '.kt': 'kotlin', '.swift': 'swift',
-};
 
 interface LanguagePatterns {
   lineComments: string[];
@@ -1269,7 +1262,7 @@ function walkDeclaredRoots(
   const record = (absolute: string): void => {
     const key = pathKey(path.relative(projectRoot, absolute));
     if (seen.has(key) || isExcluded(key)) return;
-    if (!EXTENSION_LANGUAGE[path.extname(key).toLowerCase()]) return;
+    if (!languageOfSourcePath(key)) return;
     seen.add(key);
     found.push(key);
   };
@@ -1387,7 +1380,7 @@ export function buildCodeModel(
     }
 
     const text = buffer.toString('utf8');
-    const language = EXTENSION_LANGUAGE[path.extname(sourcePath).toLowerCase()];
+    const language = languageOfSourcePath(sourcePath);
 
     let analyzed: Omit<SourceFileFacts, 'path' | 'status' | 'language'>;
     if (language === 'typescript' || language === 'javascript') {

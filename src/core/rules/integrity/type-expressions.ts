@@ -1,4 +1,4 @@
-import { namesAnInteger, type TypeExpressionProblem } from '../../../models/index.js';
+import { typeProblemIntProposal, type TypeExpressionProblem } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -33,13 +33,6 @@ function siteOf(path: string): string {
   return (head === 'methods' || head === 'fields') && name ? name : path;
 }
 
-/** The name a position answers to: its param or field, or the method whose returns it is. */
-function positionName(path: string): string {
-  const segments = path.split('.');
-  const last = segments[segments.length - 1];
-  return last === 'returns' && segments.length >= 3 ? segments[segments.length - 2] : last;
-}
-
 /** Where a position stands, in the words a message uses. */
 function located(kind: string | undefined, specId: string, path: string | undefined): string {
   return `${path ? `"${path}" of ` : ''}${kind ?? 'spec'} "${specId}"`;
@@ -58,7 +51,7 @@ function problemMessage(problem: TypeExpressionProblem, specId: string): string 
       return `The type at ${where} uses a form the type grammar leaves out: ${problem.detail}.${replacement} Every reader treats the position as opaque any until it is remodelled; the writer refuses it in a new write.`;
     case 'TYPE_NOT_NEUTRAL': {
       if (problem.replacement === 'int or float') {
-        const proposal = problem.path && namesAnInteger(positionName(problem.path))
+        const proposal = typeProblemIntProposal({ ...problem, specId })
           ? ` Its name says a whole number, so \`wairon doctor\` proposes int here — confirm it by writing int, or write float.`
           : ' Write int or float.';
         return `The type at ${where} is "${problem.written}": number does not say whether it holds an integer — int or float?${proposal} Until then it is read as float.`;

@@ -963,6 +963,33 @@ export function namesAnInteger(name: string): boolean {
   return words.some((word) => INTEGER_WORDS.has(word));
 }
 
+/** The name a position answers to: its param or field, or the method whose returns it is. */
+function positionNameOf(path: string): string {
+  const segments = path.split('.');
+  const last = segments[segments.length - 1];
+  return last === 'returns' && segments.length >= 3 ? segments[segments.length - 2] : last;
+}
+
+/** `number` as a whole name in a written type, never inside another name (`number-range`, `a.number`). */
+const NUMBER_NAME = /(?<![\w:.-])number(?![\w:.-])/g;
+
+/**
+ * type_expression_problem.intProposal — the int a `number` position may take,
+ * PROPOSED and never applied: for a TYPE_NOT_NEUTRAL problem on `number`
+ * collected over a spec whose position name plainly says a whole number
+ * (namesAnInteger), the respelling of its written text with int for number,
+ * in canonical spelling. Null for any other problem, for a name that does not
+ * say so, or when the respelled text would still not be canonical. Pure.
+ */
+export function typeProblemIntProposal(problem: TypeExpressionProblem): TypeRespelling | null {
+  if (problem.code !== 'TYPE_NOT_NEUTRAL' || problem.replacement !== 'int or float') return null;
+  if (problem.specId === undefined || problem.kind === undefined || problem.path === undefined) return null;
+  if (!namesAnInteger(positionNameOf(problem.path))) return null;
+  const parse = parseTypePosition(problem.written.replace(NUMBER_NAME, 'int'), 'returns');
+  if (!parse.expression || parse.problem) return null;
+  return { specId: problem.specId, kind: problem.kind, path: problem.path, written: problem.written, stored: parse.canonical };
+}
+
 /** No facts at all: what a scan starts from. */
 export function emptyTypeSpellingFacts(): TypeSpellingFacts {
   return { respellings: [], problems: [] };

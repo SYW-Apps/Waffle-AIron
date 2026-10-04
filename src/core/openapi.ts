@@ -1,5 +1,6 @@
 import * as yaml from 'js-yaml';
 import {
+  EnumValue,
   MethodSignature,
   NamedOpenApiSpec,
   PortalAuth,
@@ -7,6 +8,8 @@ import {
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
   SurfaceTypeDef,
+  TypeExpression,
+  parseTypeExpression,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -18,49 +21,105 @@ import {
 // being trusted as prose.
 // ---------------------------------------------------------------------------
 
-const PRIMITIVES: Record<string, { type: string; format?: string }> = {
+/** Each primitive's JSON-Schema fragment: bytes base64, date/datetime/duration their string formats. */
+const PRIMITIVE_SCHEMAS: Record<string, Record<string, unknown>> = {
   string: { type: 'string' },
-  number: { type: 'number' },
-  float: { type: 'number' },
-  decimal: { type: 'number' },
   int: { type: 'integer' },
-  integer: { type: 'integer' },
-  boolean: { type: 'boolean' },
+  float: { type: 'number' },
   bool: { type: 'boolean' },
-  date: { type: 'string', format: 'date-time' },
+  bytes: { type: 'string', contentEncoding: 'base64' },
+  date: { type: 'string', format: 'date' },
   datetime: { type: 'string', format: 'date-time' },
-  uuid: { type: 'string', format: 'uuid' },
-  json: { type: 'object' },
-  object: { type: 'object' },
-  any: {} as { type: string },
-  unknown: {} as { type: string },
-  void: {} as { type: string },
+  duration: { type: 'string', format: 'duration' },
+  any: {},
+  void: {},
 };
 
-/** Map a wairon type ref to a JSON-Schema fragment ($ref into components for closure types). */
+/** A type position read under the grammar (as a returns may stand, so `async` and `void` read too); null when it has no reading. */
+function expressionOf(typeRef: string): TypeExpression | null {
+  return parseTypeExpression(typeRef.trim(), 'returns').expression;
+}
+
+/** The closure type a named reference names, matched by local segment (billing.Invoice / billing::invoice → invoice). */
+function closureHit(name: string, closureIds: Set<string>): string | undefined {
+  const local = name.split(/::|\./).pop()!.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  return [...closureIds].find(id => id.toLowerCase() === local);
+}
+
+/** The schema of one canonical expression. */
+function schemaOfExpression(expr: TypeExpression, closureIds: Set<string>): Record<string, unknown> {
+  switch (expr.form) {
+    case 'primitive':
+      return { ...(PRIMITIVE_SCHEMAS[expr.name ?? ''] ?? {}) };
+    case 'named':
+    case 'applied': {
+      // An applied generic (Page<T>) is documented as its head: JSON Schema has no type parameters.
+      const hit = closureHit(expr.name ?? '', closureIds);
+      return hit ? { $ref: `#/components/schemas/${hit}` } : { description: `Unresolved type: ${expr.name}` };
+    }
+    case 'list':
+      return { type: 'array', items: schemaOfExpression(expr.args[0], closureIds) };
+    case 'set':
+      return { type: 'array', uniqueItems: true, items: schemaOfExpression(expr.args[0], closureIds) };
+    case 'map': {
+      const key = expr.args[0];
+      // A key is string, int or an enum: an enum key names its component, an int key its digits.
+      const keyHit = key.form === 'named' ? closureHit(key.name ?? '', closureIds) : undefined;
+      const propertyNames = keyHit
+        ? { propertyNames: { $ref: `#/components/schemas/${keyHit}` } }
+        : key.form === 'primitive' && key.name === 'int' ? { propertyNames: { pattern: '^-?[0-9]+$' } } : {};
+      return { type: 'object', ...propertyNames, additionalProperties: schemaOfExpression(expr.args[1], closureIds) };
+    }
+    case 'optional': {
+      const inner = schemaOfExpression(expr.args[0], closureIds);
+      if (Object.keys(inner).length === 0) return inner;
+      // A plain typed schema admits null beside its type; a $ref or a oneOf is wrapped.
+      if (typeof inner.type === 'string') return { ...inner, type: [inner.type, 'null'] };
+      return { anyOf: [inner, { type: 'null' }] };
+    }
+    case 'union':
+      return { oneOf: expr.args.map(member => schemaOfExpression(member, closureIds)) };
+    case 'async':
+      return schemaOfExpression(expr.args[0], closureIds);
+  }
+}
+
+/**
+ * Map a wairon type position to a JSON-Schema fragment, from its parsed
+ * canonical expression — never by pattern. A position that is not canonical
+ * is documented as unconstrained, with a description naming it; it never
+ * becomes an invented object.
+ */
 function schemaFor(typeRef: string, closureIds: Set<string>): Record<string, unknown> {
-  // The loader reads every type position canonical (stage 2): `async T` and
-  // `list<T>` are the spellings `Promise<T>` and `T[]` arrive in. The full
-  // grammar mapping is the codec's next revision; until then they read as before.
-  const trimmed = typeRef.trim().replace(/^promise\s*<(.+)>$/i, '$1').replace(/^async\s+/, '').trim();
-  const listMatch = /^list\s*<(.+)>$/.exec(trimmed);
-  if (listMatch) {
-    return { type: 'array', items: schemaFor(listMatch[1], closureIds) };
+  const expr = expressionOf(typeRef);
+  if (!expr) return { description: `Not a canonical type expression: ${typeRef.trim()}` };
+  return schemaOfExpression(expr, closureIds);
+}
+
+/** Whether a returns completes with no value: `void` or `async void`. */
+function returnsNothing(returns: string): boolean {
+  const expr = expressionOf(returns);
+  const inner = expr?.form === 'async' ? expr.args[0] : expr;
+  return inner?.form === 'primitive' && inner.name === 'void';
+}
+
+/** The description an enum component carries: one line per value, its description beside it. */
+function enumDescription(values: EnumValue[]): string {
+  return ['Values:', ...values.map(v => `- \`${v.name}\`${v.description ? `: ${v.description}` : ''}`)].join('\n');
+}
+
+/** An enum component's values read back: the names from `enum`, each description from the lines enumDescription writes. */
+function enumValuesFrom(schema: Record<string, unknown>): EnumValue[] {
+  const described = new Map<string, string>();
+  if (typeof schema.description === 'string') {
+    for (const line of schema.description.split('\n')) {
+      const m = /^- `([^`]+)`: (.+)$/.exec(line.trim());
+      if (m) described.set(m[1], m[2]);
+    }
   }
-  const arrayMatch = /^(.+)\[\]$/.exec(trimmed);
-  if (arrayMatch) {
-    return { type: 'array', items: schemaFor(arrayMatch[1], closureIds) };
-  }
-  const lower = trimmed.toLowerCase();
-  if (lower in PRIMITIVES) {
-    const p = PRIMITIVES[lower];
-    return p.type ? { ...p } : {};
-  }
-  // Closure types match by local segment (billing.Invoice / billing::invoice → invoice).
-  const local = trimmed.split(/::|\./).pop()!.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-  const hit = [...closureIds].find(id => id.toLowerCase() === local);
-  if (hit) return { $ref: `#/components/schemas/${hit}` };
-  return { type: 'object', description: `Unresolved type: ${trimmed}` };
+  return (schema.enum as unknown[])
+    .filter((v): v is string => typeof v === 'string' && v.length > 0)
+    .map(name => ({ name, ...(described.has(name) ? { description: described.get(name)! } : {}) }));
 }
 
 function operationFor(method: MethodSignature, closureIds: Set<string>): Record<string, unknown> {
@@ -75,7 +134,7 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
     responses: {
       '200': {
         description: method.returns || 'Success',
-        ...(method.returns && !/^(async\s+)?void$/i.test(method.returns.trim())
+        ...(method.returns && !returnsNothing(method.returns)
           ? { content: { 'application/json': { schema: schemaFor(method.returns, closureIds) } } }
           : {}),
       },
@@ -125,7 +184,7 @@ const SIGNATURE_EXTENSION = 'x-wairon-signature';
  */
 function signatureComponent(t: SurfaceTypeDef, closureIds: Set<string>): Record<string, unknown> {
   const params = t.params ?? [];
-  const returns = t.returns ?? 'unknown';
+  const returns = t.returns ?? 'any';
   const text = `(${params.map(p => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${returns}`;
   return {
     title: t.name,
@@ -151,12 +210,10 @@ function signatureFromComponent(id: string, schema: Record<string, unknown>): Su
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const ext = raw as Record<string, unknown>;
   // The wairon type text when the entry carries one; else read back from its schema
-  // (an empty schema is what any/unknown/void render as, so it decodes to unknown).
+  // (an empty schema is what any and void render as, so it decodes to any).
   const typeOf = (entry: Record<string, unknown>): string => {
     if (typeof entry.type === 'string' && entry.type.trim()) return entry.type;
-    const schema = entry.schema;
-    if (schema && typeof schema === 'object' && Object.keys(schema).length === 0) return 'unknown';
-    return typeRefFromSchema(schema as Record<string, unknown> | undefined);
+    return typeRefFromSchema(entry.schema as Record<string, unknown> | undefined);
   };
   const params = (Array.isArray(ext.params) ? ext.params : [])
     .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object' && typeof (p as { name?: unknown }).name === 'string')
@@ -168,7 +225,7 @@ function signatureFromComponent(id: string, schema: Record<string, unknown>): Su
     }));
   const returns = ext.returns && typeof ext.returns === 'object' && !Array.isArray(ext.returns)
     ? typeOf(ext.returns as Record<string, unknown>)
-    : 'unknown';
+    : 'any';
   return { id, name: typeof schema.title === 'string' ? schema.title : id, kind: 'signature', fields: [], params, returns };
 }
 
@@ -265,6 +322,12 @@ function renderDoc(
 
   const schemas: Record<string, unknown> = {};
   for (const t of snapshot.types) {
+    if (t.kind === 'enum') {
+      // An enum is a value domain: a string component with its values as `enum`.
+      const values = t.values ?? [];
+      schemas[t.id] = { type: 'string', title: t.name, enum: values.map(v => v.name), description: enumDescription(values) };
+      continue;
+    }
     schemas[t.id] = t.kind === 'signature'
       ? signatureComponent(t, closureIds)
       : {
@@ -337,17 +400,90 @@ export function isOpenApiDocument(body: string): boolean {
   }
 }
 
+/** Whether a schema is the `{type: "null"}` member of a null-admitting anyOf / oneOf. */
+function isNullSchema(schema: unknown): boolean {
+  return !!schema && typeof schema === 'object' && (schema as Record<string, unknown>).type === 'null';
+}
+
+/** Whether a canonical text is a union at its top level (a `|` outside every `<...>` and `(...)`). */
+function isTopLevelUnion(text: string): boolean {
+  let depth = 0;
+  for (const ch of text) {
+    if (ch === '<' || ch === '(') depth++;
+    else if (ch === '>' || ch === ')') depth--;
+    else if (ch === '|' && depth === 0) return true;
+  }
+  return false;
+}
+
+/**
+ * A JSON-Schema fragment read back into its canonical type expression's text:
+ * integer int, number float, boolean bool; a string of format date, date-time
+ * or duration its primitive, a base64 string bytes; an array list, or with
+ * uniqueItems set; additionalProperties map; a null-admitting schema `T?`; a
+ * oneOf of $refs a union; a $ref its component; anything else any.
+ */
 function typeRefFromSchema(schema: Record<string, unknown> | undefined): string {
-  if (!schema) return 'json';
+  if (!schema || typeof schema !== 'object') return 'any';
   const ref = schema.$ref;
-  if (typeof ref === 'string') return ref.split('/').pop() ?? 'json';
-  if (schema.type === 'array') {
-    return `${typeRefFromSchema(schema.items as Record<string, unknown>)}[]`;
+  if (typeof ref === 'string') return ref.split('/').pop() ?? 'any';
+  for (const key of ['anyOf', 'oneOf'] as const) {
+    const members = schema[key];
+    if (!Array.isArray(members) || members.length === 0) continue;
+    const nullable = members.some(isNullSchema);
+    const texts = members.filter(m => !isNullSchema(m)).map(m => typeRefFromSchema(m as Record<string, unknown>));
+    if (texts.length === 0 || texts.includes('any')) return 'any';
+    const text = texts.join(' | ');
+    if (!nullable) return text;
+    // A union (several members here, or one member that is itself a oneOf) wears its parentheses under `?`.
+    return isTopLevelUnion(text) ? `(${text})?` : `${text}?`;
   }
   const t = schema.type;
+  if (Array.isArray(t)) {
+    const types = t.filter((x): x is string => typeof x === 'string');
+    const nonNull = types.filter(x => x !== 'null');
+    if (nonNull.length !== 1) return 'any';
+    const inner = typeRefFromSchema({ ...schema, type: nonNull[0] });
+    return types.includes('null') && inner !== 'any' ? `${inner}?` : inner;
+  }
+  if (t === 'array') {
+    const elem = typeRefFromSchema(schema.items as Record<string, unknown> | undefined);
+    return schema.uniqueItems === true ? `set<${elem}>` : `list<${elem}>`;
+  }
   if (t === 'integer') return 'int';
-  if (typeof t === 'string' && t !== 'object') return t;
-  return 'json';
+  if (t === 'number') return 'float';
+  if (t === 'boolean') return 'bool';
+  if (t === 'string') {
+    if (schema.format === 'date') return 'date';
+    if (schema.format === 'date-time') return 'datetime';
+    if (schema.format === 'duration') return 'duration';
+    if (schema.contentEncoding === 'base64' || schema.format === 'byte' || schema.format === 'binary') return 'bytes';
+    return 'string';
+  }
+  if (t === 'object' || t === undefined) {
+    const additional = schema.additionalProperties;
+    if (additional && typeof additional === 'object') {
+      const names = schema.propertyNames as Record<string, unknown> | undefined;
+      const key = names && typeof names.$ref === 'string' ? typeRefFromSchema(names)
+        : names && typeof names.pattern === 'string' && names.pattern.includes('[0-9]') ? 'int' : 'string';
+      return `map<${key}, ${typeRefFromSchema(additional as Record<string, unknown>)}>`;
+    }
+    if (additional === true) return 'map<string, any>';
+  }
+  return 'any';
+}
+
+/** An inline anonymous enum has no name to become a type: it reads as string, its values named in the description. */
+function inlineEnumNote(schema: Record<string, unknown> | undefined): string | undefined {
+  if (!schema || schema.$ref !== undefined || !Array.isArray(schema.enum)) return undefined;
+  const values = schema.enum.filter((v): v is string | number => typeof v === 'string' || typeof v === 'number');
+  return values.length ? `One of: ${values.join(', ')}.` : undefined;
+}
+
+/** A description and an inline-enum note, joined. */
+function describedWith(description: string | undefined, note: string | undefined): { description?: string } {
+  const text = [description, note].filter((x): x is string => !!x).join(' ');
+  return text ? { description: text } : {};
 }
 
 /** Reconstruct a PortalAuth from an OpenAPI securityScheme (round-trips toOpenApi). */
@@ -409,11 +545,12 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
       const params: { name: string; type: string; optional?: boolean; description?: string }[] = [];
       for (const p of (op.parameters as Record<string, unknown>[] | undefined) ?? []) {
         if (typeof p.name !== 'string') continue;
+        const schema = p.schema as Record<string, unknown> | undefined;
         params.push({
           name: p.name,
-          type: typeRefFromSchema(p.schema as Record<string, unknown>),
+          type: typeRefFromSchema(schema),
           ...(p.required === true ? {} : { optional: true }),
-          ...(typeof p.description === 'string' ? { description: p.description } : {}),
+          ...describedWith(typeof p.description === 'string' ? p.description : undefined, inlineEnumNote(schema)),
         });
       }
       const bodySchema = ((op.requestBody as Record<string, unknown>)?.content as Record<string, Record<string, unknown>>)?.['application/json']?.schema as Record<string, unknown> | undefined;
@@ -422,7 +559,12 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
         const required = new Set((bodySchema.required as string[] | undefined) ?? []);
         if (Object.keys(props).length) {
           for (const [pname, pschema] of Object.entries(props)) {
-            params.push({ name: pname, type: typeRefFromSchema(pschema), ...(required.has(pname) ? {} : { optional: true }) });
+            params.push({
+              name: pname,
+              type: typeRefFromSchema(pschema),
+              ...(required.has(pname) ? {} : { optional: true }),
+              ...describedWith(typeof pschema.description === 'string' ? pschema.description : undefined, inlineEnumNote(pschema)),
+            });
           }
         } else {
           params.push({ name: 'body', type: typeRefFromSchema(bodySchema) });
@@ -470,6 +612,11 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
     const signature = signatureFromComponent(id, schema);
     if (signature) {
       types.push(signature);
+      continue;
+    }
+    // A named string component carrying `enum` is an enum type.
+    if (schema.type === 'string' && Array.isArray(schema.enum)) {
+      types.push({ id, name: typeof schema.title === 'string' ? schema.title : id, kind: 'enum', fields: [], values: enumValuesFrom(schema) });
       continue;
     }
     const props = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;

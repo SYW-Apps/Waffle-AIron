@@ -33,7 +33,6 @@ const DECLARATIVE_PACK = [
   'languages:',
   '  rust:',
   '    unsupportedFlow: {}',
-  '    foreignBuiltins: []',
   '',
 ].join('\n');
 

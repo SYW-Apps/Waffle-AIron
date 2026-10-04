@@ -3,7 +3,7 @@ import { load as yamlLoad } from 'js-yaml';
 import * as codec from './codec.js';
 import * as treecodec from './treecodec.js';
 import * as scaffold from './scaffold.js';
-import * as archive from './archive.js';
+import * as packArchive from './archive.js';
 import { SDK_VERSION } from './version.js';
 import type {
   PackArchiveInfo,
@@ -38,7 +38,7 @@ export function scaffoldPack(request: PackScaffoldRequest): string[] {
   // Step 1: render the scaffold file map for the requested pack.
   const files = scaffold.render(request);
   // Step 2: write the rendered files as a directory tree under targetDir.
-  archive.writeTree(request.targetDir, files);
+  packArchive.writeTree(request.targetDir, files);
   // Step 3: return the created file paths (targetDir-joined).
   return files.map((file) => path.join(request.targetDir, file.path));
 }
@@ -46,7 +46,7 @@ export function scaffoldPack(request: PackScaffoldRequest): string[] {
 /** Build an installable .wpack archive from a pack directory. */
 export function buildPack(sourceDir: string): PackBuildResult {
   // Step 1: read the source pack directory into a file map.
-  const files = archive.readPackDir(sourceDir);
+  const files = packArchive.readPackDir(sourceDir);
   // Step 2: require an envelope.
   const envelope = files.find((file) => file.path === codec.ENVELOPE_FILENAME);
   if (!envelope) {
@@ -66,7 +66,7 @@ export function buildPack(sourceDir: string): PackBuildResult {
   // Step 9: upsert wairon-pack.yaml (sealed envelope text) into the file map.
   const finalFiles = upsertEnvelope(files, sealedText);
   // Step 10: deflate the files + envelope into .wpack archive bytes.
-  const archiveBytes = archive.assembleArchive(finalFiles);
+  const archiveBytes = packArchive.assembleArchive(finalFiles);
   // Step 11: assemble PackArchiveInfo + suggestedFileName.
   const info = buildInfo(sealed, finalFiles);
   const suggestedFileName = `${sealed.name}-${sealed.version}.wpack`;
@@ -75,16 +75,16 @@ export function buildPack(sourceDir: string): PackBuildResult {
 }
 
 /** Inspect + verify a .wpack archive without extracting it. */
-export function inspectArchive(archiveBytes: Uint8Array): PackArchiveInfo {
+export function inspectArchive(archive: Uint8Array): PackArchiveInfo {
   // Step 1: enumerate archive entries without inflating.
-  const entries = archive.listEntries(archiveBytes);
+  const entries = packArchive.listEntries(archive);
   // Step 2: is there no wairon-pack.yaml entry?
   if (!entries.some((entry) => entry.path === codec.ENVELOPE_FILENAME)) {
     // Step 3: reject a non-.wpack archive.
     throw new Error('not a .wpack archive (missing wairon-pack.yaml envelope)');
   }
   // Step 4 (readEnv): inflate just the envelope entry.
-  const envelopeBytes = archive.inflateEntry(archiveBytes, codec.ENVELOPE_FILENAME);
+  const envelopeBytes = packArchive.inflateEntry(archive, codec.ENVELOPE_FILENAME);
   // Step 5: parse + version-check the envelope text.
   const manifest = codec.parseManifest(decode(envelopeBytes));
   // Step 6: compute compatibility against the running wairon version.
@@ -109,7 +109,7 @@ export function inspectArchive(archiveBytes: Uint8Array): PackArchiveInfo {
 
 /** Safely extract a .wpack archive into a destination directory under enforced limits. */
 export function extractPack(
-  archiveBytes: Uint8Array,
+  archive: Uint8Array,
   destDir: string,
   limits?: PackExtractionLimits,
 ): PackExtractionResult {
@@ -119,7 +119,7 @@ export function extractPack(
     ? codec.defaultLimits()
     : limits;
   // Step 3 (list): enumerate archive entries without inflating (caps run pre-decompress).
-  const entries = archive.listEntries(archiveBytes);
+  const entries = packArchive.listEntries(archive);
   // Step 4: compute the safe extraction plan (throws on any unsafe/oversized entry).
   const plan = codec.planExtraction(entries, effectiveLimits);
   // Step 5: initialize an empty file list.
@@ -127,7 +127,7 @@ export function extractPack(
   // Step 6: inflate each approved path from the plan.
   for (const approvedPath of plan.paths) {
     // Step 7: inflate one approved entry.
-    const contents = archive.inflateEntry(archiveBytes, approvedPath);
+    const contents = packArchive.inflateEntry(archive, approvedPath);
     // Step 8 (inflateEnd): append { path, contents } to the file list.
     files.push({ path: approvedPath, contents });
   }
@@ -142,7 +142,7 @@ export function extractPack(
   codec.verifyIntegrity(manifest, files);
   // Step 12: write the approved, integrity-checked files as a directory tree.
   const directory = path.resolve(destDir);
-  archive.writeTree(directory, files);
+  packArchive.writeTree(directory, files);
   // Step 13: assemble PackExtractionResult.
   const result: PackExtractionResult = {
     directory,
@@ -171,7 +171,7 @@ export function buildTreeArchive(
   // Step 2: pack each supplied root.
   for (const root of roots) {
     // Step 3: read this root's .wai directory recursively into a file map.
-    const rootFiles = archive.readPackDir(root.waiDir);
+    const rootFiles = packArchive.readPackDir(root.waiDir);
     // Step 4: keep only portable design state.
     const portable = treecodec.selectTreeFiles(rootFiles, includeDerived === true);
     // Step 5 (packEnd): prefix with this root's project-relative path + '.wai/'.
@@ -208,7 +208,7 @@ export function buildTreeArchive(
     { path: treecodec.TREE_ENVELOPE_FILENAME, contents: encode(sealedText) },
   ];
   // Step 12: deflate the files + envelope into .waitree archive bytes.
-  const archiveBytes = archive.assembleArchive(finalFiles);
+  const archiveBytes = packArchive.assembleArchive(finalFiles);
   // Step 13: derive the suggested file name from the project name.
   const suggestedFileName = `${slugify(projectName)}.waitree`;
   // Step 14: return the build result.
@@ -216,16 +216,16 @@ export function buildTreeArchive(
 }
 
 /** Inspect a .waitree archive without extracting it. */
-export function inspectTreeArchive(archiveBytes: Uint8Array): TreeArchiveInfo {
+export function inspectTreeArchive(archive: Uint8Array): TreeArchiveInfo {
   // Step 1: enumerate archive entries without inflating.
-  const entries = archive.listEntries(archiveBytes);
+  const entries = packArchive.listEntries(archive);
   // Step 2: is there no wairon-tree.yaml entry?
   if (!entries.some((entry) => entry.path === treecodec.TREE_ENVELOPE_FILENAME)) {
     // Step 3: reject a non-.waitree archive.
     throw new Error('not a .waitree archive (missing wairon-tree.yaml envelope)');
   }
   // Step 4 (readEnv): inflate just the envelope entry.
-  const envelopeBytes = archive.inflateEntry(archiveBytes, treecodec.TREE_ENVELOPE_FILENAME);
+  const envelopeBytes = packArchive.inflateEntry(archive, treecodec.TREE_ENVELOPE_FILENAME);
   // Step 5: parse + version-check the envelope text.
   const manifest = treecodec.parseTreeManifest(decode(envelopeBytes));
   // Step 6: compute compatibility against the running wairon version.
@@ -239,7 +239,7 @@ export function inspectTreeArchive(archiveBytes: Uint8Array): TreeArchiveInfo {
 
 /** Safely extract a .waitree archive into a destination project root under enforced limits. */
 export function extractTreeArchive(
-  archiveBytes: Uint8Array,
+  archive: Uint8Array,
   destDir: string,
   limits?: PackExtractionLimits,
   refuseExecutableEntries?: boolean,
@@ -250,7 +250,7 @@ export function extractTreeArchive(
     ? treecodec.defaultTreeLimits()
     : limits;
   // Step 3 (list): enumerate archive entries without inflating (caps run pre-decompress).
-  const entries = archive.listEntries(archiveBytes);
+  const entries = packArchive.listEntries(archive);
   // Step 4: compute the safe extraction plan (throws on any unsafe/oversized entry).
   const plan = treecodec.planTreeExtraction(entries, effectiveLimits);
   // Step 5: did the caller ask for the over-the-wire portability guard?
@@ -263,7 +263,7 @@ export function extractTreeArchive(
   // Step 8: inflate each approved path from the plan.
   for (const approvedPath of plan.paths) {
     // Step 9: inflate one approved entry.
-    const contents = archive.inflateEntry(archiveBytes, approvedPath);
+    const contents = packArchive.inflateEntry(archive, approvedPath);
     // Step 10 (inflateEnd): append { path, contents } to the file list.
     files.push({ path: approvedPath, contents });
   }
@@ -279,7 +279,7 @@ export function extractTreeArchive(
   treecodec.verifyTreeIntegrity(manifest, files);
   // Step 15: write the approved, integrity-checked files as a directory tree.
   const directory = path.resolve(destDir);
-  archive.writeTree(directory, files);
+  packArchive.writeTree(directory, files);
   // Step 16: assemble TreeExtractionResult.
   const result: TreeExtractionResult = {
     destDir: directory,

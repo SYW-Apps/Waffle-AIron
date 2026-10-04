@@ -55,7 +55,6 @@ const ACME_PACK = [
   'languages:',
   '  rust:',
   '    unsupportedFlow: {}',
-  '    foreignBuiltins: []',
   '',
 ].join('\n');
 

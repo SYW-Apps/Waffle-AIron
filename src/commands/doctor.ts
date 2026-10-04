@@ -13,6 +13,7 @@ import {
   retireSpecialists,
   repairForeignStepFields,
   repairSignatures,
+  repairTypeSpellings,
   readLockState,
   // Through the core adapter, never ../core/stamp.js or ../utils/ai-guide.js:
   // reading a stamp and refreshing the guides are sdd_core work, and doctor is
@@ -295,6 +296,40 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       }
     } catch (e) {
       line(tally, 'warn', `Could not plan the signature repair: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // ── Type spellings ─────────────────────────────────────────────────────
+    // Stored type positions that are an alias of their canonical spelling,
+    // dry-run: each interface or type named; then, apart, the int proposals
+    // and the positions only an author can settle. Silent once every stored
+    // type position is canonical.
+    try {
+      const spellings = repairTypeSpellings(false);
+      const rewriting = spellings.filter((repair) => repair.rewritten.length > 0);
+      const proposals = spellings.flatMap((repair) => repair.proposals);
+      const authorNeeded = spellings.flatMap((repair) => repair.authorNeeded);
+      if (spellings.length > 0) console.log(chalk.bold('Type spellings'));
+      if (rewriting.length > 0) {
+        for (const repair of rewriting) {
+          line(tally, 'warn', `${repair.kind} ${repair.specId}: ${repair.rewritten.length} position(s) to respell (${describeRespellings(repair.rewritten)})`);
+        }
+        line(tally, 'warn', 'Run `wairon doctor --fix` to write them in their canonical spelling (any save of the spec does too).');
+      }
+      if (proposals.length > 0) {
+        console.log(`  ${chalk.gray('int proposed — never written: confirm by writing int, or write float')}`);
+        for (const proposal of proposals) {
+          line(tally, 'warn', `${proposal.kind} ${proposal.specId} ${proposal.path}: "${proposal.written}" → ${proposal.stored} (proposed)`);
+        }
+      }
+      if (authorNeeded.length > 0) {
+        console.log(`  ${chalk.gray('needs an author — no rewrite can settle these')}`);
+        for (const problem of authorNeeded) {
+          line(tally, 'warn', `${problem.kind} ${problem.specId} ${problem.path ?? ''}: "${problem.written}" — ${problem.replacement ? `write ${problem.replacement}` : problem.detail}`);
+        }
+      }
+      if (spellings.length > 0) logger.blank();
+    } catch (e) {
+      line(tally, 'warn', `Could not plan the type-spelling repair: ${e instanceof Error ? e.message : String(e)}`);
     }
 
     // ── Chaining ───────────────────────────────────────────────────────────
@@ -603,6 +638,34 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
     }
   } catch (e) {
     console.log(`  ${icon('error')} Signature repair failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Rewrite every stored type position that is an alias into its canonical
+  // spelling. A mechanical repair like the one above: one project, idempotent,
+  // outside the family transaction, and exactly what any later save of the
+  // spec would write. The int proposals and the positions needing an author
+  // are printed, never written.
+  try {
+    const spellings = repairTypeSpellings(true);
+    const rewritten = spellings.filter((repair) => repair.rewritten.length > 0);
+    if (rewritten.length > 0) {
+      const positions = rewritten.reduce((n, repair) => n + repair.rewritten.length, 0);
+      console.log(`  ${icon('ok')} Rewrote ${positions} type position(s) in ${rewritten.length} spec(s) into their canonical spelling.`);
+    }
+    const proposals = spellings.flatMap((repair) => repair.proposals);
+    if (proposals.length > 0) {
+      console.log(`  ${icon('warn')} ${proposals.length} number position(s) with int proposed — not written; confirm by writing int, or write float:`);
+      for (const proposal of proposals) console.log(`      ${proposal.kind} ${proposal.specId} ${proposal.path}: "${proposal.written}" → ${proposal.stored} (proposed)`);
+    }
+    const authorNeeded = spellings.flatMap((repair) => repair.authorNeeded);
+    if (authorNeeded.length > 0) {
+      console.log(`  ${icon('warn')} ${authorNeeded.length} type position(s) need an author — no rewrite can settle them:`);
+      for (const problem of authorNeeded) {
+        console.log(`      ${problem.kind} ${problem.specId} ${problem.path ?? ''}: "${problem.written}" — ${problem.replacement ? `write ${problem.replacement}` : problem.detail}`);
+      }
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} Type-spelling repair failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // The chaining migration — the last spec-touching fix: after the
@@ -918,6 +981,13 @@ function describeSignatureRepair(repair: { regenerated: { method: string }[]; dr
   if (repair.regenerated.length > 0) parts.push(`regenerates the text of ${repair.regenerated.map((s) => s.method).join(', ')}`);
   if (repair.dropped.length > 0) parts.push(`drops the restated signature of ${repair.dropped.join(', ')}`);
   return parts.join('; ');
+}
+
+/** A spec's planned respellings in a few words: the first ones, `written → stored`, and how many more. */
+function describeRespellings(respellings: { written: string; stored: string }[]): string {
+  const shown = respellings.slice(0, 3).map((r) => `${r.written} → ${r.stored}`);
+  const more = respellings.length - shown.length;
+  return more > 0 ? `${shown.join('; ')}; and ${more} more` : shown.join('; ');
 }
 
 function pendingCount(migration: ChainingMigrationPlan): number {

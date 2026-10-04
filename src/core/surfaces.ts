@@ -17,7 +17,7 @@ import {
   InterfaceSpec,
   ResolvedExport,
   effectiveProjectId,
-  extractTypeIdentifiers,
+  writtenTypeRefs,
   matchTypeRef,
   methodTypeRefs,
   isTypeVocabulary,
@@ -131,15 +131,16 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], 
   }
   while (queue.length) {
     const spec = included.get(queue.shift()!)!;
+    // The named types each parsed type expression references (type_expression.namedRefs).
     for (const field of spec.fields) {
-      for (const ref of extractTypeIdentifiers(field.type)) enqueueRef(ref);
+      for (const ref of writtenTypeRefs(field.type, 'field')) enqueueRef(ref);
     }
     // A signature type's closure runs through its params and returns, as a data type's runs through its fields.
     for (const param of spec.params ?? []) {
-      for (const ref of extractTypeIdentifiers(param.type)) enqueueRef(ref);
+      for (const ref of writtenTypeRefs(param.type, 'signature-param')) enqueueRef(ref);
     }
     if (spec.returns) {
-      for (const ref of extractTypeIdentifiers(spec.returns)) enqueueRef(ref);
+      for (const ref of writtenTypeRefs(spec.returns, 'signature-returns')) enqueueRef(ref);
     }
   }
 
@@ -160,7 +161,11 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], 
       fields: t.fields.map(describe),
       // A signature type travels complete: its params and returns with it.
       ...(t.kind === 'signature'
-        ? { params: (t.params ?? []).map(describe), returns: t.returns ?? 'unknown' }
+        ? { params: (t.params ?? []).map(describe), returns: t.returns ?? 'any' }
+        : {}),
+      // An enum travels with its values, in declared order.
+      ...(t.kind === 'enum'
+        ? { values: (t.values ?? []).map(v => ({ name: v.name, ...(v.description ? { description: v.description } : {}) })) }
         : {}),
     };
   });

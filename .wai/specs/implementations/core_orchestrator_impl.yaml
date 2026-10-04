@@ -2348,50 +2348,62 @@ methods:
         targetMethod: typeSpellingFacts
       - stepNumber: 2
         description: >-
+          Read what the scan's signature resolution recorded, for the interfaces holding a sourced
+          method whose restatement differs from its source: the writer stores every sourced method
+          with only its source, so re-saving such an interface would silently decide the contract
+          only its author can
+        type: call
+        targetComponent: spec_loader
+        targetMethod: signatureFacts
+      - stepNumber: 3
+        description: >-
           Group into one repair per interface or type of the bound project itself (a contained
           member's specs are keyed under its namespace and are its own doctor's): its respellings as
-          rewritten; each of its TYPE_NOT_NEUTRAL problems on `number` whose position name (the
-          param or field name, or for a returns the method name) plainly says an integer as a
-          proposal of int, never applied; and every other problem as needing an author
+          rewritten — except on an interface holding a differing restatement, whose aliases stay as
+          they are (reported by TYPE_SPELLING_STALE beside SIGNATURE_SOURCE_RESTATED) until its
+          author settles the restatement; each of its problems for which
+          type_expression_problem.intProposal answers a proposal (a `number` position whose name
+          plainly says an integer) as that proposal, never applied; and every other problem as
+          needing an author
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         description: Was the write asked for?
         type: branch
         condition: apply, and at least one repair rewrites a position
-        onFalseStep: 10
-      - stepNumber: 4
+        onFalseStep: 11
+      - stepNumber: 5
         description: For each repair that rewrites a position
         type: loop
         loopKind: forEach
         over: the planned repairs with rewritten positions
-        endStep: 9
-      - stepNumber: 5
+        endStep: 10
+      - stepNumber: 6
         description: Is it an interface?
         type: branch
         condition: the repair's kind is interface
-        onFalseStep: 8
-      - stepNumber: 6
+        onFalseStep: 9
+      - stepNumber: 7
         description: >-
           Re-save the loaded interface: the writer stores every type position canonical, and every
           params-bearing method's derived text follows
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
-      - stepNumber: 7
+      - stepNumber: 8
         description: Done with this spec
         type: jump
-        toStep: 9
-      - stepNumber: 8
+        toStep: 10
+      - stepNumber: 9
         label: type
         description: Re-save the loaded type, whose writer stores every type position canonical
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 9
+      - stepNumber: 10
         label: next
         description: On to the next repair
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         label: report
         description: >-
           Answer the planned repairs, written or not, with their proposals and the positions needing
@@ -2401,4 +2413,4 @@ methods:
     detail: full
 status: design
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T22:07:28.345Z'
+updatedAt: '2026-10-04T00:10:16.186Z'

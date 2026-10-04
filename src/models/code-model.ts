@@ -508,6 +508,24 @@ export function hasFunctionBody(facts: SourceFileFacts, symbol: string): boolean
   return callSitesOf(facts, symbol) !== undefined;
 }
 
+/** The language each source extension is analyzed as — the analyzer's language keys. */
+const EXTENSION_LANGUAGE: Readonly<Record<string, string>> = {
+  '.ts': 'typescript', '.tsx': 'typescript', '.mts': 'typescript', '.cts': 'typescript',
+  '.js': 'javascript', '.jsx': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript',
+  '.py': 'python', '.rs': 'rust', '.go': 'go', '.cs': 'csharp', '.java': 'java',
+  '.c': 'c', '.h': 'c', '.cpp': 'cpp', '.cc': 'cpp', '.hpp': 'cpp',
+  '.rb': 'ruby', '.php': 'php', '.kt': 'kotlin', '.swift': 'swift',
+};
+
+/**
+ * The language a source file is analyzed as, read from its extension; undefined
+ * for a file no analyzer reads. The one table the analyzer and the implementer
+ * briefs share, so a brief's type mapping is the dialect its code is judged by.
+ */
+export function languageOfSourcePath(sourcePath: string): string | undefined {
+  return EXTENSION_LANGUAGE[path.extname(sourcePath).toLowerCase()];
+}
+
 /**
  * source_file_facts.dialect — the type dialect shipped for the language this
  * file was analyzed as (type_dialect.forLanguage of its effective language),
