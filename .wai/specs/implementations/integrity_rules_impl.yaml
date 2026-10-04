@@ -1379,6 +1379,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: namedScalarTypesRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-04T10:54:25.985Z'
+updatedAt: '2026-10-04T11:21:55.725Z'

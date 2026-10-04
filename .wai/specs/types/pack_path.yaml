@@ -8,13 +8,6 @@ description: >-
 fields: []
 methods: []
 sourcePath: src/models/project.ts
-lint:
-  allow:
-    - code: HOLLOW_TYPE
-      reason: >-
-        A named scalar domain, not a placeholder: a pack file path held as a string (realized as
-        `type PackPath = string` in src/models/project.ts). It exists so `PackSelection | PackPath`
-        is a union of named types (M3); the type grammar has no form for saying which primitive a
-        named value-object holds.
+holds: string
 createdAt: '2026-10-04T10:27:19.546Z'
-updatedAt: '2026-10-04T10:34:08.173Z'
+updatedAt: '2026-10-04T11:22:01.474Z'

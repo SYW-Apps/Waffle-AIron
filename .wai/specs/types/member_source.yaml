@@ -11,13 +11,6 @@ subsystem: sdd_core
 fields: []
 methods: []
 sourcePath: src/models/project.ts
-lint:
-  allow:
-    - code: HOLLOW_TYPE
-      reason: >-
-        A named scalar domain, not a placeholder: a member location held as a string (realized as
-        `type MemberSource = string` in src/models/project.ts). It exists so a members entry is
-        `MemberDeclaration | MemberSource`, a union of named types (M3); the type grammar has no
-        form for saying which primitive a named value-object holds.
+holds: string
 createdAt: '2026-10-04T10:27:21.889Z'
-updatedAt: '2026-10-04T10:34:09.815Z'
+updatedAt: '2026-10-04T11:22:02.009Z'
