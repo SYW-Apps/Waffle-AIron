@@ -8,8 +8,8 @@ description: >-
   replaced a tree must always name the backup it can be undone from.
 fields:
   - name: direction
-    type: string
-    description: '"push" (local → hosted) or "pull" (hosted → local)'
+    type: TransferDirection
+    description: Which way the tree moved.
     optional: false
   - name: url
     type: string
@@ -59,4 +59,4 @@ methods: []
 componentClass: remote_orchestrator
 sourcePath: src/commands/remote.ts
 createdAt: '2026-08-12T18:31:17.450Z'
-updatedAt: '2026-10-04T10:29:12.805Z'
+updatedAt: '2026-10-04T23:40:27.505Z'

@@ -7,6 +7,7 @@ import {
   declaredExternals,
   declaredMembers,
   effectiveProjectId,
+  type MemberKind,
   type MemberStorage,
   type PartOf,
   type ProjectConfig,
@@ -110,6 +111,7 @@ import { projectConfigRepositoryAt } from '../config/project-config.js';
 // The project family index is an owned face of this Repository: the facade
 // forwards its graph 1:1 (spec_loader graph).
 import { projectFamilyGraph } from './project-family.js';
+import type { ImportSection, MountForm } from '../models/project-family.js';
 import type { WebGraphModel } from '../server/types.js';
 // The pure signature resolver the scan runs last, once every reference of the
 // family is bound: sourced methods filled, every params-bearing method's text derived.
@@ -190,8 +192,8 @@ export interface ScannedProjectRoot {
   parent?: string;
   /** The alias its parent declares it under. */
   mountAlias?: string;
-  /** members | mount: how the parent declares it; absent for the bound root. */
-  mountForm?: 'members' | 'mount';
+  /** How the parent declares it; absent for the bound root. */
+  mountForm?: MountForm;
   /** The legacy L1 mount subsystem as the parent wrote it; null for a members-declared root and the bound root. */
   legacyMount: SubsystemSpec | null;
   /** What its parent's declaration says the member is (the `members` description, or a legacy mount's). */
@@ -225,6 +227,9 @@ export interface ScannedProjectRoot {
   referenced: ScannedPart[];
 }
 
+/** Whether, and from where, a part's files could be read. */
+export type PartAvailability = 'live' | 'cache' | 'unavailable';
+
 /**
  * scanned_part — one part of a project as the scan read it (stage 8): where
  * its files came from and which of the declaring project's specs they hold. A
@@ -250,8 +255,7 @@ export interface ScannedPart {
   specIds: string[];
   /** sha256:… over its spec documents in canonical form, keyed by their path inside the part (storage-independent). */
   contentDigest?: string;
-  /** live | cache | unavailable. */
-  availability: 'live' | 'cache' | 'unavailable';
+  availability: PartAvailability;
   /** Why it is unavailable. */
   reason?: string;
 }
@@ -596,8 +600,8 @@ export interface ChainingParentRef {
   parentRoot: string;
   /** The alias the parent declares this project under: its `members` key, or the legacy mount subsystem's id. */
   alias: string;
-  /** members | mount: which form the parent declares it in. */
-  form: 'members' | 'mount';
+  /** Which form the parent declares it in. */
+  form: MountForm;
 }
 
 /** One member a project declares, in either form, as read before its directory is looked at. */
@@ -605,7 +609,7 @@ interface MemberDeclarationRead {
   alias: string;
   /** The location as written, relative to the declaring root (a git source's URL for git). */
   path: string;
-  form: 'members' | 'mount';
+  form: MountForm;
   /** contained | path | git | hosted (stage 8); a legacy mount is contained. */
   storage: MemberStorage;
   /** The source parsed (members form). */
@@ -616,8 +620,8 @@ interface MemberDeclarationRead {
   use: string[];
   /** Whether the entry used the deprecated long-form `path` key. */
   deprecatedPath?: boolean;
-  /** part | project, decided from the member's content by the scan (stage 8). */
-  kind?: 'part' | 'project';
+  /** Decided from the member's content by the scan (stage 8). */
+  kind?: MemberKind;
   description?: string;
   /** The legacy L1 mount subsystem as written, for the mount form (and a mount a `members` entry shadows). */
   legacyMount?: SubsystemSpec;
@@ -1553,8 +1557,8 @@ function bindAuthored(
 /** One `use` import of a root: the alias, the producer the scan read (absent for one it did not), and what it imports. */
 interface ImportSupplier {
   alias: string;
-  /** externals | members: where the alias is declared, for the `use` line a hint names. */
-  section: 'externals' | 'members';
+  /** Where the alias is declared, for the `use` line a hint names. */
+  section: ImportSection;
   producer?: RawRoot;
   /** Whether it imports every public name (`*`). */
   star: boolean;
@@ -1896,6 +1900,9 @@ export type WritableSpecKind =
 /** One stored spec of any level — what the kind-generic load answers and save takes. */
 type StoredSpec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec;
 
+/** What a write did at one path of a stored spec. */
+export type SpecChangeKind = 'set' | 'added' | 'removed' | 'cleared' | 'renumbered' | 'relocated';
+
 /**
  * ONE change a write made to a stored spec, addressed by a dotted path with
  * names and indexes: `methods.createMember.narrative.step 7.type`,
@@ -1909,7 +1916,7 @@ export interface SpecChange {
    * a run of unchanged steps an insert or delete shifted (before and after name
    * the ranges), and `relocated`, a jump field that followed its target.
    */
-  change: 'set' | 'added' | 'removed' | 'cleared' | 'renumbered' | 'relocated';
+  change: SpecChangeKind;
   /** The previous value, summarized; absent when there was none. */
   before?: string;
   /** The new value, summarized; absent when there is none. */
@@ -7653,12 +7660,12 @@ export function deleteMount(alias: string): boolean {
 }
 
 /** spec_loader.normalizeReferences — forwarded 1:1 to the registry write face. */
-export function normalizeReferences(kind: string, id: string): boolean {
+export function normalizeReferences(kind: WritableSpecKind, id: string): boolean {
   return current().writeCanonicalReferences(kind, id);
 }
 
 /** spec_loader.rewriteReferences — forwarded 1:1 to the registry write face. */
-export function rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean {
+export function rewriteReferences(kind: WritableSpecKind, id: string, edits: ReferenceEdit[]): boolean {
   return current().respellReferences(kind, id, edits);
 }
 

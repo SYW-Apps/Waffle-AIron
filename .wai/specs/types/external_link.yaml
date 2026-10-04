@@ -12,9 +12,9 @@ fields:
     description: The referenced location
     optional: false
   - name: type
-    type: string
+    type: ExternalLinkType
     description: >-
-      implementation | informative; defaults to informative, so an untyped link never satisfies the
+      What the link stands for; defaults to informative, so an untyped link never satisfies the
       source requirement
     optional: false
   - name: label
@@ -24,4 +24,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-14T23:23:20.293Z'
-updatedAt: '2026-09-19T11:07:07.593Z'
+updatedAt: '2026-10-04T23:39:36.480Z'

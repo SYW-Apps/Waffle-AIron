@@ -9,8 +9,8 @@ description: >-
 subsystem: sdd_cli
 fields:
   - name: backend
-    type: string
-    description: claude | gemini — the backend this write registers the server for
+    type: McpBackend
+    description: The backend this write registers the server for
     optional: false
   - name: path
     type: string
@@ -38,4 +38,4 @@ methods: []
 componentClass: cli_mcp_adapter
 sourcePath: src/commands/mcp.ts
 createdAt: '2026-10-01T23:45:59.829Z'
-updatedAt: '2026-10-04T10:20:25.670Z'
+updatedAt: '2026-10-04T23:39:53.401Z'

@@ -33,6 +33,7 @@ import { SSO_ADMIN_ROLE_ID } from './types.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
+  AuditLevel,
   AuditQuery,
   HostConfig,
   HostedUserRecord,
@@ -176,7 +177,7 @@ function auditActor(principal: Principal): PrincipalSubject {
 function buildAuditEvent(
   principal: Principal,
   action: string,
-  level: string,
+  level: AuditLevel,
   category: string,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {
@@ -205,7 +206,7 @@ const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'serv
 function buildSsoAuditEvent(
   actor: PrincipalSubject,
   action: string,
-  level: string,
+  level: AuditLevel,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {
   return {
@@ -230,7 +231,7 @@ export function auditSignIn(
   cfg: HostConfig,
   actor: PrincipalSubject | null,
   action: string,
-  level: string,
+  level: AuditLevel,
   over: Partial<AuditEvent> = {},
 ): void {
   tryAppendAudit(cfg, buildSsoAuditEvent(actor ?? ANONYMOUS_SSO_ACTOR, action, level, over));

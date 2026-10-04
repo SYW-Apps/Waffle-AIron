@@ -14,9 +14,9 @@ fields:
     description: 'The alias it is declared under: the `members` key, or the legacy mount subsystem''s id'
     optional: false
   - name: form
-    type: string
-    description: members | mount
+    type: MountForm
+    description: How the parent declares it.
     optional: false
 methods: []
 createdAt: '2026-09-13T22:56:07.350Z'
-updatedAt: '2026-09-27T10:56:53.412Z'
+updatedAt: '2026-10-04T23:38:58.105Z'

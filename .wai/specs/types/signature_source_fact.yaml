@@ -24,8 +24,8 @@ fields:
     description: The signatureFrom as the file wrote it
     optional: false
   - name: form
-    type: string
-    description: method | signature — which reading resolved; absent when neither or both did
+    type: SignatureSourceForm
+    description: Which reading resolved; absent when neither or both did
     optional: true
   - name: target
     type: string
@@ -34,13 +34,8 @@ fields:
       id for a signature source
     optional: true
   - name: outcome
-    type: string
-    description: >-
-      resolved | unresolved (neither reading finds a contract method or a signature type; a type of
-      another kind is named in detail) | ambiguous (the value resolves both as a contract method and
-      as a signature type; both are named in candidates) | chained (the source names a signatureFrom
-      of its own) | restated (the stored method also states params or returns; the source's are in
-      force either way)
+    type: SignatureSourceOutcome
+    description: What resolving the signatureFrom found.
     optional: false
   - name: detail
     type: string
@@ -64,4 +59,4 @@ fields:
 methods: []
 sourcePath: src/core/signature-sources.ts
 createdAt: '2026-10-03T19:31:17.009Z'
-updatedAt: '2026-10-04T10:21:05.700Z'
+updatedAt: '2026-10-04T23:40:37.214Z'

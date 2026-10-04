@@ -1,0 +1,19 @@
+kind: enum
+id: external_pin_outcome
+name: ExternalPinOutcome
+description: What pinning did for one external alias.
+subsystem: sdd_surfaces
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: pinned
+    description: The snapshot or the lock entry changed
+  - name: unchanged
+    description: Nothing to change
+  - name: unresolved
+    description: 'No producer: see the detail'
+  - name: unreachable
+    description: The producer's root could not be read, or is out of the request's reach
+createdAt: '2026-10-04T23:33:06.666Z'
+updatedAt: '2026-10-04T23:33:07.150Z'

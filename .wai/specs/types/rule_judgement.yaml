@@ -1,0 +1,16 @@
+kind: enum
+id: rule_judgement
+name: RuleJudgement
+description: >-
+  What a validation rule's verdict is about. Code-judging codes are left out of the gate identity,
+  so an approval certifies the design and an analyzer upgrade never stales it.
+fields: []
+methods: []
+sourcePath: src/core/rules/types.ts
+values:
+  - name: design
+    description: The spec tree (the default; a pack rule declares none and counts as design)
+  - name: code
+    description: 'The source code model: conformance rules and detail sufficiency'
+createdAt: '2026-10-04T23:13:27.765Z'
+updatedAt: '2026-10-04T23:13:28.147Z'

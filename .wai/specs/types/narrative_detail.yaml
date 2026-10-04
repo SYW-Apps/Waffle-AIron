@@ -1,0 +1,19 @@
+kind: enum
+id: narrative_detail
+name: NarrativeDetail
+description: >-
+  The narrative detail dial, declared per method or per implementation as a default. Absent, the
+  stereotype's default applies (Portal, Observer, Adapter: calls-only; Store, Index, Query,
+  Registry: intent; everything else: full). Levels are floors, not ceilings.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: full
+    description: Every step, control flow included
+  - name: calls-only
+    description: The calls to collaborators, in order
+  - name: intent
+    description: The method's purpose only; no steps required
+createdAt: '2026-10-04T23:12:00.067Z'
+updatedAt: '2026-10-04T23:12:00.466Z'

@@ -1,0 +1,18 @@
+kind: enum
+id: loop_kind
+name: LoopKind
+description: The form a loop narrative step takes.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: forEach
+    description: Over each element of a collection
+  - name: for
+    description: A counted loop
+  - name: while
+    description: Tests its condition before each pass
+  - name: doWhile
+    description: Tests its condition after each pass, so the body runs at least once
+createdAt: '2026-10-04T23:12:09.054Z'
+updatedAt: '2026-10-04T23:12:09.460Z'

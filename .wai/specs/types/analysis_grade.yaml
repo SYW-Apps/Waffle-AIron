@@ -1,0 +1,17 @@
+kind: enum
+id: analysis_grade
+name: AnalysisGrade
+description: How a source file was analyzed, strongest first; carried onto finding messages.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/code-model.ts
+values:
+  - name: exact
+    description: Parsed into an AST
+  - name: pattern
+    description: Read through the language's declarative pattern table
+  - name: generic
+    description: A word-boundary scan
+createdAt: '2026-10-04T23:13:19.315Z'
+updatedAt: '2026-10-04T23:13:19.711Z'

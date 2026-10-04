@@ -1,0 +1,22 @@
+kind: enum
+id: invocation_kind
+name: InvocationKind
+description: >-
+  Who invokes a method from outside the modeled narrative graph. Declaring it seeds the method as an
+  entrypoint, so reachability propagates through its narrative.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: runtime
+    description: >-
+      A composition root, scheduler or process host outside the modeled call chains (bootstrap start
+      and stop, signal handlers)
+  - name: external
+    description: A caller outside the system entirely (library embedders, third-party integrations)
+  - name: sibling-subsystem
+    description: >-
+      A caller in this tree across a boundary that licenses no modeled component edge (a published
+      code barrel onto an internal component)
+createdAt: '2026-10-04T23:33:04.251Z'
+updatedAt: '2026-10-04T23:33:04.687Z'

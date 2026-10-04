@@ -7,6 +7,7 @@ import {
   signatureFacts,
 } from './specs.js';
 import type { StaleSignatureText } from './signature-sources.js';
+import type { TypedSpecKind } from '../models/type-grammar.js';
 
 // ---------------------------------------------------------------------------
 // Signature repair (sdd_core, behind `wairon doctor`)
@@ -29,8 +30,7 @@ import type { StaleSignatureText } from './signature-sources.js';
 export interface SignatureTextRepair {
   /** The interface or type the repair rewrites. */
   specId: string;
-  /** interface | type. */
-  kind: 'interface' | 'type';
+  kind: TypedSpecKind;
   /** Each method whose stored text is replaced by its derived text. */
   regenerated: StaleSignatureText[];
   /** Each sourced method whose restated params and returns — equal to the source's — are dropped. */

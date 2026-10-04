@@ -1,0 +1,17 @@
+kind: enum
+id: project_id_source
+name: ProjectIdSource
+description: Where a project's effective id came from.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+values:
+  - name: declared
+    description: Its configuration declares one
+  - name: defaulted
+    description: Its name, slugified
+  - name: none
+    description: No declared id, and the name yields no slug
+createdAt: '2026-10-04T23:33:29.811Z'
+updatedAt: '2026-10-04T23:33:30.274Z'

@@ -9,8 +9,8 @@ description: >-
   never types a credential twice.
 fields:
   - name: kind
-    type: string
-    description: '"local" (stdio server over this checkout) or "hosted" (http server on an instance)'
+    type: McpSourceKind
+    description: What kind of wairon server the entry attaches to.
     optional: false
   - name: configPath
     type: string
@@ -32,4 +32,4 @@ methods: []
 componentClass: cli_mcp_adapter
 sourcePath: src/commands/mcp.ts
 createdAt: '2026-08-12T18:41:27.528Z'
-updatedAt: '2026-09-19T11:07:06.878Z'
+updatedAt: '2026-10-04T23:39:26.045Z'

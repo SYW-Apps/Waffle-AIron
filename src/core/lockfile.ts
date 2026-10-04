@@ -5,6 +5,7 @@ import type { StateId } from './statehash.js';
 // The approver is shared vocabulary, not this store's private shape: a command
 // that only wants to RENDER one must not have to reach a Store to do it.
 import type { ApproverIdentity, CodeAnalysis, ProjectApprovalState } from '../models/lock.js';
+import type { MemberKind } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
 // Lock Registry (sdd_host / sdd_core)
@@ -33,7 +34,7 @@ export interface MemberPin {
   /** approved | drifted | never, as it stood when the parent locked (a part records approved). Recorded, never hashed. */
   state: ProjectApprovalState;
   /** part | project, as the member's content made it when the parent locked; absent in a record written before stage 8. */
-  as?: 'part' | 'project';
+  as?: MemberKind;
   /** The commit the member was read at when the parent locked. Provenance only: never read by a verdict. */
   commit?: string;
   /** Part only: its content digest (ScannedPart.contentDigest) when the parent locked. */

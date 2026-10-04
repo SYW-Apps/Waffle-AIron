@@ -15,10 +15,8 @@ fields:
     optional: false
     key: primary
   - name: severity
-    type: string
-    description: >-
-      error | warning | notice: the default before project severity overrides and draft-context
-      downgrades
+    type: IssueSeverity
+    description: The default before project severity overrides and draft-context downgrades
     optional: false
   - name: summary
     type: string
@@ -27,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T18:36:53.603Z'
-updatedAt: '2026-09-26T15:26:12.756Z'
+updatedAt: '2026-10-04T23:39:44.774Z'

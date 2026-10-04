@@ -1,0 +1,29 @@
+kind: enum
+id: edge_reach
+name: EdgeReach
+description: Where a dependency edge's reference lands.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/core/rules/types.ts
+values:
+  - name: internal
+    description: A component of this tree in the source's subsystem
+  - name: cross-subsystem
+    description: A component of this tree in another subsystem
+  - name: surface
+    description: >-
+      It leaves the project and resolves to a declared contract entry: a declared external's pin or
+      a foreign surface snapshot
+  - name: ambiguous
+    description: >-
+      Foreign snapshots of several providers expose the name with different contracts, so none of
+      them may judge the edge
+  - name: cross-project
+    description: >-
+      It leaves the project and does not resolve (forbidden, missing, unavailable or an ambiguous
+      import): project-boundaries' single finding
+  - name: missing
+    description: A local id that names nothing
+createdAt: '2026-10-04T23:13:45.977Z'
+updatedAt: '2026-10-04T23:13:46.461Z'

@@ -10,8 +10,8 @@ description: >-
 subsystem: sdd_authoring
 fields:
   - name: kind
-    type: string
-    description: 'The spec kind written: system, subsystem, component, interface, implementation or type.'
+    type: WritableSpecKind
+    description: The spec kind written.
     optional: false
   - name: id
     type: string
@@ -28,10 +28,8 @@ fields:
       one.
     optional: false
   - name: status
-    type: string
-    description: >-
-      The lifecycle status written — draft, design or complete. Absent for the L0 and for a type,
-      neither of which carries one.
+    type: SpecStatus
+    description: The lifecycle status written. Absent for the L0 and for a type, neither of which carries one.
     optional: true
   - name: notices
     type: list<string>
@@ -57,4 +55,4 @@ fields:
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-19T07:48:15.465Z'
-updatedAt: '2026-10-04T10:21:10.663Z'
+updatedAt: '2026-10-04T23:37:58.341Z'

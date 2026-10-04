@@ -9,13 +9,8 @@ description: >-
   any, and is told what to change.
 fields:
   - name: code
-    type: string
-    description: >-
-      TYPE_EXPRESSION_INVALID (does not parse) | TYPE_POSITION_INVALID (breaks a position rule:
-      misplaced void or async, a non-scalar map key, T??) | TYPE_FORM_UNSUPPORTED (an inline object,
-      inline function type, string-literal union, union mixing in a primitive or collection,
-      intersection, utility type or tuple) | TYPE_NOT_NEUTRAL (number, or a legacy builtin with no
-      neutral meaning)
+    type: TypeProblemCode
+    description: The finding code the problem is reported under.
     optional: false
   - name: written
     type: string
@@ -36,8 +31,8 @@ fields:
     description: The interface or type holding the position, once collected over a spec
     optional: true
   - name: kind
-    type: string
-    description: interface | type, once collected over a spec
+    type: TypedSpecKind
+    description: The kind of the spec holding the position, once collected over a spec.
     optional: true
   - name: path
     type: string
@@ -63,4 +58,4 @@ methods:
     symbol: typeProblemIntProposal
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:56.994Z'
-updatedAt: '2026-10-04T00:09:50.884Z'
+updatedAt: '2026-10-04T23:40:40.101Z'

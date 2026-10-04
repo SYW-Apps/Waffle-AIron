@@ -23,13 +23,13 @@ fields:
       half the gate identity leaves out.
     optional: false
   - name: grade
-    type: string
+    type: AnalysisGradeLabel
     description: >-
-      The weakest analysis grade the run applied to any source file it analyzed — exact (AST) |
-      pattern (language table) | generic (scan) — or none when no source file was analyzed. The
-      weakest, because a clean result is only as strong as the least exact file it read.
+      The weakest analysis grade the run applied to any source file it analyzed, or none when it
+      analyzed no source file. The weakest, because a clean result is only as strong as the least
+      exact file it read.
     optional: false
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:11.385Z'
-updatedAt: '2026-09-30T06:12:19.304Z'
+updatedAt: '2026-10-04T23:40:44.211Z'

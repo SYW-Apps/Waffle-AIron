@@ -6,8 +6,8 @@ description: >-
   storage, auth, policy, and quota checks without leaking private project specs or secrets.
 fields:
   - name: status
-    type: string
-    description: 'Overall status: "ok", "degraded", or "unhealthy".'
+    type: InstanceHealthStatus
+    description: Overall status.
     optional: false
   - name: generatedAt
     type: string
@@ -24,4 +24,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T09:08:32.204Z'
-updatedAt: '2026-10-04T10:20:19.593Z'
+updatedAt: '2026-10-04T23:39:49.571Z'

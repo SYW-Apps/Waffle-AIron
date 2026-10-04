@@ -9,12 +9,10 @@ description: >-
   no longer held.
 fields:
   - name: state
-    type: string
+    type: LockState
     description: >-
-      unlocked (no record) | locked (a record whose gate identity still matches) | stale (a record
-      the design, its governing doctrine, its declared inputs, its `composition` or a direct
-      member's composition subject have moved past, or one taken under an earlier gate identity
-      algorithm — see upgraded()).
+      Whether the lock record still covers the design (see upgraded() for a record taken under an
+      earlier gate identity algorithm).
     optional: false
   - name: record
     type: LockRecord?
@@ -43,4 +41,4 @@ methods:
     symbol: lockUpgraded
 sourcePath: src/core/specs.ts
 createdAt: '2026-07-30T15:58:52.007Z'
-updatedAt: '2026-10-04T10:20:25.337Z'
+updatedAt: '2026-10-04T23:39:51.728Z'

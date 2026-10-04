@@ -1,0 +1,20 @@
+kind: enum
+id: external_link_type
+name: ExternalLinkType
+description: >-
+  What an opaque external reference on a component stands for. wairon never fetches, resolves or
+  validates the URL.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: implementation
+    description: >-
+      The external source of record (a cloud console, a scenario, a file in another repository);
+      stands in for a local sourcePath
+  - name: informative
+    description: >-
+      Context only (docs, dashboards); the default, so an untyped link never satisfies the source
+      requirement
+createdAt: '2026-10-04T23:12:11.101Z'
+updatedAt: '2026-10-04T23:12:11.475Z'

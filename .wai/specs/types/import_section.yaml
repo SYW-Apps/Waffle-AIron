@@ -1,0 +1,13 @@
+kind: enum
+id: import_section
+name: ImportSection
+description: Which section of a project's configuration declares an alias, for the use line a hint names.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/project-family.ts
+values:
+  - name: externals
+  - name: members
+createdAt: '2026-10-04T23:33:24.429Z'
+updatedAt: '2026-10-04T23:33:24.937Z'

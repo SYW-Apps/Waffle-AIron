@@ -16,8 +16,8 @@ fields:
     description: Initial version (default 0.1.0)
     optional: true
   - name: kind
-    type: string
-    description: '"declarative" | "code"'
+    type: PackKind
+    description: The pack variant.
     optional: false
   - name: targetDir
     type: string
@@ -30,4 +30,4 @@ fields:
 methods: []
 componentClass: pack_scaffold
 createdAt: '2026-07-21T18:12:50.242Z'
-updatedAt: '2026-10-04T10:20:40.350Z'
+updatedAt: '2026-10-04T23:39:59.009Z'

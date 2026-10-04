@@ -59,10 +59,16 @@ export interface DoctrineBaseline {
   designDepth: string;
 }
 
+/** What a doctrine change is about: a rule's codes, or a concept the vocabulary holds. */
+export type DoctrineAxis = 'rule' | 'concept';
+
+/** How a pack changes doctrine against wairon's defaults. */
+export type DoctrineChangeKind = 'loosened' | 'raised' | 'off' | 'added' | 'depth' | 'inert' | 'redefined' | 'removed' | 'discouraged' | 'licensed' | 'gated';
+
 /** doctrine_change — one thing a pack changes against wairon's defaults, stated neutrally. */
 export interface DoctrineChange {
-  axis: 'rule' | 'concept';
-  change: 'loosened' | 'raised' | 'off' | 'added' | 'depth' | 'inert' | 'redefined' | 'removed' | 'discouraged' | 'licensed' | 'gated';
+  axis: DoctrineAxis;
+  change: DoctrineChangeKind;
   subject: string;
   profile?: string;
   from?: string;
@@ -73,7 +79,7 @@ export interface DoctrineChange {
 /** regraded_finding — one finding both runs report, at a different severity in each. */
 export interface RegradedFinding {
   finding: ValidationIssue;
-  from: string;
+  from: ValidationIssue['severity'];
 }
 
 /** finding_changes — how one project's findings differ between two runs. */
@@ -83,12 +89,15 @@ export interface FindingChanges {
   regraded: RegradedFinding[];
 }
 
+/** Whether a pack write adds (or replaces) a pack, or drops it. */
+export type PackImpactDirection = 'apply' | 'remove';
+
 /** pack_impact — what one pack write would change, measured before it happens. */
 export interface PackImpact {
   pack: string;
   version?: string;
   replaces?: string;
-  direction: 'apply' | 'remove';
+  direction: PackImpactDirection;
   doctrine: DoctrineChange[];
   previousDoctrine?: DoctrineChange[];
   governing: string[];

@@ -17,11 +17,11 @@ fields:
     description: Salted hash of the bearer token; compared in constant time
     optional: false
   - name: role
-    type: string
+    type: DisplayRole
     description: >-
-      Legacy coarse display role ('editor'/'admin'), optional and display-only — NOT an authority
-      source (authorization resolves from the owner's permissionSubject). Set by the legacy
-      master-only mintKey path; unset by the user-bound mint flows.
+      Legacy coarse display role, optional and display-only — NOT an authority source (authorization
+      resolves from the owner's permissionSubject). Set by the legacy master-only mintKey path;
+      unset by the user-bound mint flows.
     optional: true
   - name: projects
     type: list<string>
@@ -71,4 +71,4 @@ methods:
     symbol: hashToken
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-10-04T10:19:51.163Z'
+updatedAt: '2026-10-04T23:40:19.839Z'

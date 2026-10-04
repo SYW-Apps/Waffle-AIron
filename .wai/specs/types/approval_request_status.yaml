@@ -1,0 +1,25 @@
+kind: enum
+id: approval_request_status
+name: ApprovalRequestStatus
+description: Where an approval request for a privileged hosted action stands.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: pending
+    description: Awaiting a decision
+  - name: approved
+    description: Approved; the action runs
+  - name: denied
+    description: Refused by a decider
+  - name: expired
+    description: Not decided before it expired
+  - name: completed
+    description: Approved and executed
+  - name: cancelled
+    description: >-
+      Approved, but its execution refused because the request no longer describes what would be done
+      (a project:lock whose gate state moved); the requester asks again
+createdAt: '2026-10-04T23:18:27.626Z'
+updatedAt: '2026-10-04T23:18:28.071Z'

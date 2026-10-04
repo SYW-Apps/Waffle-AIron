@@ -14,13 +14,13 @@ methods:
       disk. A dry run is forwarded too: the store runs the whole write and answers with the report
       it would have produced, writing nothing. Forwarded to the core portal.
     signature: >-
-      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?: bool):
-      SpecChangeReport
+      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, hooks?: SpecWriteHooks,
+      dryRun?: bool): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The stored spec's id
@@ -83,13 +83,13 @@ methods:
       it cannot be written without, or the spec a delete is about to remove. Forwarded to the core
       portal.
     signature: >-
-      loadSpec(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      loadSpec(kind: WritableSpecKind, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
       InterfaceSpec | ImplementationSpec | TypeSpec)?
     returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The spec id; informational for the L0
@@ -100,13 +100,13 @@ methods:
       Persist one judged spec of the named kind, returning the store's placement notices. Forwarded
       to the core portal.
     signature: >-
-      saveSpec(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
-      ImplementationSpec | TypeSpec): list<string>
+      saveSpec(kind: WritableSpecKind, spec: SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec): list<string>
     returns: list<string>
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: spec
         type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
         description: The spec to persist, already judged
@@ -114,12 +114,12 @@ methods:
     description: >-
       Delete one spec document of the named kind; false when none was stored. Forwarded to the core
       portal.
-    signature: 'deleteSpec(kind: string, id: string): bool'
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string): bool'
     returns: bool
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
       - name: id
         type: string
         description: The spec id
@@ -138,4 +138,4 @@ methods:
     signatureFrom: spec_tree_portal.scanAllSpecs
 status: complete
 createdAt: '2026-09-18T21:41:49.125Z'
-updatedAt: '2026-10-04T13:57:26.796Z'
+updatedAt: '2026-10-04T23:37:21.447Z'

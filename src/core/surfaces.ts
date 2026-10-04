@@ -695,6 +695,9 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
 // them all.
 // ---------------------------------------------------------------------------
 
+/** Whose surface a stage-1 family pin holds: the parent's family surface, or one sibling's published surface. */
+export type FamilyPinRole = 'parent' | 'sibling';
+
 /**
  * family_pin — one stage-1 family pin a project root still holds in
  * .wai/surfaces/: its storage key, whether it pins the parent's family surface
@@ -703,8 +706,7 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
 export interface FamilyPin {
   /** The snapshot's storage key: the parent's system name, or `<system>::<subsystem>` for a sibling pin. */
   key: string;
-  /** parent | sibling */
-  role: 'parent' | 'sibling';
+  role: FamilyPinRole;
   /** When the pin was written. */
   generatedAt?: string;
 }

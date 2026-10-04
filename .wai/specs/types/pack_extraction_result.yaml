@@ -23,8 +23,8 @@ fields:
     description: Pack name (convenience mirror of manifest.name)
     optional: false
   - name: kind
-    type: string
-    description: '"declarative" | "code"'
+    type: PackKind
+    description: The pack variant.
     optional: false
   - name: entryCount
     type: int
@@ -33,4 +33,4 @@ fields:
 methods: []
 componentClass: sdk_orchestrator
 createdAt: '2026-07-21T18:12:40.241Z'
-updatedAt: '2026-10-04T10:29:09.820Z'
+updatedAt: '2026-10-04T23:39:58.018Z'

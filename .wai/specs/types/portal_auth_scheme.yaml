@@ -1,0 +1,26 @@
+kind: enum
+id: portal_auth_scheme
+name: PortalAuthScheme
+description: >-
+  A Portal's authentication scheme kind, OpenAPI securityScheme-shaped; drives the generated
+  securitySchemes and security. wairon never contacts the scheme's URLs.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: none
+    description: No security required, and none emitted (the same as an omitted PortalAuth)
+  - name: apiKey
+    description: A key carried in a header, query or cookie (in, name)
+  - name: bearer
+    description: A bearer token (bearerFormat)
+  - name: basic
+    description: HTTP basic authentication
+  - name: oauth2
+    description: An OAuth2 flow (flow, URLs, scopes)
+  - name: openIdConnect
+    description: OpenID Connect discovery (openIdConnectUrl)
+  - name: custom
+    description: Free-form, carried through description and name
+createdAt: '2026-10-04T23:12:14.420Z'
+updatedAt: '2026-10-04T23:12:14.804Z'

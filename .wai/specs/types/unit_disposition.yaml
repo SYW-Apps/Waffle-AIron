@@ -14,8 +14,8 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: kind
-    type: string
-    description: 'Disposition selector: "migrate" | "alternative" | "absorb" | "cascade".'
+    type: UnitDispositionKind
+    description: Disposition selector.
     optional: false
   - name: targetUnitId
     type: string
@@ -39,4 +39,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T19:39:37.500Z'
-updatedAt: '2026-09-19T11:07:20.160Z'
+updatedAt: '2026-10-04T23:40:51.628Z'

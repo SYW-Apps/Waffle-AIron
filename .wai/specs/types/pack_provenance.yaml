@@ -14,9 +14,9 @@ fields:
     description: The resolved ref/path the pack loaded from.
     optional: false
   - name: scope
-    type: string
-    description: global | project (project packs win on collision).
+    type: PackScope
+    description: Which layer the pack loaded from (project packs win on collision).
     optional: false
 methods: []
 createdAt: '2026-07-14T18:56:28.020Z'
-updatedAt: '2026-07-14T18:56:28.061Z'
+updatedAt: '2026-10-04T23:40:00.917Z'

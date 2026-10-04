@@ -11,12 +11,14 @@ methods:
       Forward the sdd_update_spec patch to the authoring portal's gate: the intrinsic rules judge
       the merged candidate and refuse it before anything reaches disk, and a dry run runs that whole
       write and answers with the report it would have produced without touching a file.
-    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
+    signature: >-
+      updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The stored spec's id
@@ -62,15 +64,15 @@ methods:
     description: >-
       Forward the sdd_delete_spec request to the authoring portal, which deletes the spec and
       reports the tests a removed method invalidated.
-    signature: 'deleteSpec(kind: string, id: string): SpecDeletion'
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion'
     returns: SpecDeletion
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
       - name: id
         type: string
         description: The spec id
 status: complete
 createdAt: '2026-09-18T21:42:03.998Z'
-updatedAt: '2026-10-04T10:18:59.362Z'
+updatedAt: '2026-10-04T23:37:36.993Z'

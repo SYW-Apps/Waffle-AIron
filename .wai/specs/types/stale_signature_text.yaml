@@ -13,8 +13,8 @@ fields:
     description: The interface or type holding the method
     optional: false
   - name: kind
-    type: string
-    description: interface | type
+    type: TypedSpecKind
+    description: The kind of the spec holding it.
     optional: false
   - name: method
     type: string
@@ -31,4 +31,4 @@ fields:
 methods: []
 sourcePath: src/core/signature-sources.ts
 createdAt: '2026-10-03T19:31:20.376Z'
-updatedAt: '2026-10-03T19:51:55.833Z'
+updatedAt: '2026-10-04T23:40:39.006Z'

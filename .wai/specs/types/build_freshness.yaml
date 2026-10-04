@@ -9,11 +9,8 @@ description: >-
 subsystem: sdd_mcp
 fields:
   - name: state
-    type: string
-    description: >-
-      fresh (the build on disk is the one running), build-changed (rebuilt, schemas unchanged),
-      schema-changed (rebuilt with different spec or tool schemas) or unreadable (rebuilt, and the
-      new build's schema fingerprint could not be read, so a schema change cannot be ruled out).
+    type: BuildFreshnessState
+    description: Whether the build on disk is still the one this server runs, and whether its schemas moved.
     optional: false
   - name: writesRefused
     type: bool
@@ -30,4 +27,4 @@ fields:
 methods: []
 sourcePath: src/mcp/server.ts
 createdAt: '2026-09-26T00:24:02.946Z'
-updatedAt: '2026-10-04T10:19:53.839Z'
+updatedAt: '2026-10-04T23:38:51.517Z'

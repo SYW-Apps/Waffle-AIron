@@ -8,34 +8,8 @@ description: >-
 subsystem: sdd_migrations
 fields:
   - name: kind
-    type: string
-    description: >-
-      id-ambiguous (no usable id, a planned id outside the grammar, or one that collides with
-      another project's) | id-locked (a member keeps the id its lock approved, which differs from
-      its alias — changing it is the stage-6 rename) | declaration-orphaned (an existing external
-      finds its producer by an id the producer is about to leave) | target-unpublished (a
-      subsystem-owned item is not in its subsystem's L1 table, so no L0 re-export can follow it) |
-      target-missing (the reference names nothing the producer declares: no component, no
-      subsystem-owned type, no project-level type — the reference is wrong) | name-taken (the item's
-      default public name already binds another target in the producer) | narrowed (the item is
-      exported, but under a narrowing that does not declare the member reached) |
-      subsystem-reference (an L1 re-export that names another project's subsystem wholesale) |
-      alias-invalid | alias-taken | project-absent (a project the plan must write has no
-      configuration) | member-absent (a member the family declares has no directory — blocking,
-      since references into it cannot be rewritten) | family-partial (the climb stopped at a hop out
-      of reach) | mount-field-conflict (a legacy mount's published entry names a public name the
-      member's table binds to another target — blocking) | mount-field-unhomed (a legacy mount
-      carries a field no member can hold: a non-empty trustedLinks, which cannot cross a project, or
-      lifecycle, profile, targetLanguage, designDepth or ext — blocking until a person moves or
-      drops it) | rewrite-unavailable (a deprecated reference with no canonical text: its target
-      lies outside the family's scan, or nothing names its first segment) | positional-ambiguous (a
-      bare name keys onto several projects of the family and neither tie-break — a declared
-      producer, then one already exporting the name — leaves exactly one: a person writes
-      `alias::name` or picks the import; never guessed) | import-collision (two planned imports
-      would supply one bare name to one consumer — the reference is left for a person to qualify) |
-      import-shadowed (the name a positional import would bring shares its nameKey with a spec of
-      the consumer itself, so a named import would be IMPORT_SHADOWED_BY_LOCAL: it is not written,
-      and the references are left for a person to qualify as `alias::name`).
+    type: ChainingFindingKind
+    description: What the finding is about.
     optional: false
   - name: project
     type: string
@@ -59,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/migrations/chaining-migration.ts
 createdAt: '2026-09-26T21:11:50.175Z'
-updatedAt: '2026-10-04T10:19:57.182Z'
+updatedAt: '2026-10-04T23:39:01.775Z'

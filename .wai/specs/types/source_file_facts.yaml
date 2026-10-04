@@ -16,20 +16,16 @@ fields:
       N:1)
     optional: false
   - name: status
-    type: string
-    description: >-
-      analyzed | missing (the path resolves to no file) | escaped (absolute or parent-escaping path,
-      refused by containment) | unreadable (binary or read failure)
+    type: SourceFileStatus
+    description: Whether the file could be read for analysis.
     optional: false
   - name: language
     type: string
     description: Effective language the file was analyzed as (from extension + language tables)
     optional: true
   - name: analysisGrade
-    type: string
-    description: >-
-      exact (AST) | pattern (declarative per-language pattern table) | generic (word-boundary scan)
-      — carried onto finding messages
+    type: AnalysisGrade
+    description: How the file was analyzed; carried onto finding messages
     optional: true
   - name: declaredNames
     type: list<string>
@@ -298,4 +294,4 @@ methods:
       else every body under the name, unioned, as callSitesOf answers
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-04T22:32:29.968Z'
+updatedAt: '2026-10-04T23:40:43.276Z'

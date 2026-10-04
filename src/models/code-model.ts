@@ -193,6 +193,9 @@ export interface RouteFact {
   exactLength: boolean;
 }
 
+/** How a type shape's members were read: listed by the shape itself, or followed one hop from an alias to the value its shape comes from. */
+export type ShapeOrigin = 'declared' | 'derived';
+
 /**
  * The members of one named shape a file declares — what a data type IS, read
  * off the code so a type spec's claim about it can be checked.
@@ -211,8 +214,8 @@ export interface RouteFact {
  * carrying undeclared state.
  */
 export interface TypeShapeFact {
-  /** How the members were read: the shape listed them itself, or an alias was followed one hop to the value its shape comes from. */
-  origin: 'declared' | 'derived';
+  /** How the members were read. */
+  origin: ShapeOrigin;
   /** The data members, each with whether the code lets it be absent. */
   fields: ShapeMemberFact[];
   /** The method-style members, kept on the axis a spec models them on. */

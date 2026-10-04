@@ -1,0 +1,17 @@
+kind: enum
+id: assignment_subject_kind
+name: AssignmentSubjectKind
+description: >-
+  Who a permission assignment is for. Roles are not assignment subjects: a role's values live on the
+  role and apply through the user's role bindings.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: user
+    description: One user, named by subjectId
+  - name: everyone
+    description: A scope-wide default for every subject
+createdAt: '2026-10-04T23:18:00.337Z'
+updatedAt: '2026-10-04T23:18:00.749Z'

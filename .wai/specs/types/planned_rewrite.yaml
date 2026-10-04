@@ -12,8 +12,8 @@ fields:
     description: The key of the project whose file holds the reference.
     optional: false
   - name: kind
-    type: string
-    description: 'The kind of the spec holding it: subsystem, component, interface, implementation or type.'
+    type: WritableSpecKind
+    description: The kind of the spec holding it (never the L0).
     optional: false
   - name: specId
     type: string
@@ -33,13 +33,10 @@ fields:
     description: 'What apply writes instead: a bare local id, or `alias::publicName`.'
     optional: false
   - name: form
-    type: string
-    description: >-
-      leading | super | path | self-prefix: the deprecated form rewritten. self-prefix is the
-      referring project's own id used as a prefix (`registry.advisory-channel` inside registry),
-      rewritten to the bare local id by stage 4's positional step.
+    type: RewrittenForm
+    description: The deprecated form rewritten.
     optional: false
 methods: []
 sourcePath: src/migrations/position-migration.ts
 createdAt: '2026-09-27T10:44:27.609Z'
-updatedAt: '2026-09-30T21:05:11.180Z'
+updatedAt: '2026-10-04T23:37:59.602Z'

@@ -25,13 +25,8 @@ fields:
     description: The reference as written
     optional: false
   - name: kind
-    type: string
-    description: >-
-      import (a bare name another project supplies: plan the import, and the export and the external
-      when missing) | self-prefix (the consumer's own id used as a prefix,
-      `registry.advisory-channel` or `registry::x`: rewrite to the bare local id) | ambiguous (the
-      name keys onto public names or types of several projects: a person picks, reported, never
-      guessed) | none (nothing in the family matches: a genuine dangling reference)
+    type: PositionalMatchKind
+    description: What the bare reference matched.
     optional: false
   - name: producer
     type: string
@@ -62,4 +57,4 @@ fields:
 methods: []
 sourcePath: src/migrations/position-reader.ts
 createdAt: '2026-09-28T16:09:03.266Z'
-updatedAt: '2026-10-04T10:20:46.606Z'
+updatedAt: '2026-10-04T23:40:16.941Z'

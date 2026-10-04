@@ -11,8 +11,8 @@ fields:
     description: The pack's declared name (or its ref basename if unnamed)
     optional: false
   - name: scope
-    type: string
-    description: '"global" (server-wide) | "project" (a hosted project''s committed packs)'
+    type: PackScope
+    description: 'Which layer the pack belongs to: server-wide, or a hosted project''s committed packs.'
     optional: false
   - name: ref
     type: string
@@ -67,4 +67,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T18:42:23.978Z'
-updatedAt: '2026-10-04T10:29:06.916Z'
+updatedAt: '2026-10-04T23:40:00.088Z'

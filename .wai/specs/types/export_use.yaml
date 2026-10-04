@@ -12,8 +12,8 @@ fields:
     optional: false
     key: primary
   - name: kind
-    type: string
-    description: component | type.
+    type: ExportKind
+    description: What the public name binds.
     optional: false
   - name: members
     type: list<string>
@@ -25,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/models/exports.ts
 createdAt: '2026-09-26T17:40:30.206Z'
-updatedAt: '2026-10-04T10:20:08.296Z'
+updatedAt: '2026-10-04T23:39:34.984Z'

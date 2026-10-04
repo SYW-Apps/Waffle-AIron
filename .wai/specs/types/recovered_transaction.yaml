@@ -21,11 +21,8 @@ fields:
     description: The coordinator's phase as found.
     optional: false
   - name: action
-    type: string
-    description: >-
-      pending (reported, --fix not given) | rolled-back | cleaned (it had committed; only its
-      directories remained) | refused (an owner or the coordinator is out of reach, or a backup is
-      missing).
+    type: RecoveryAction
+    description: What doctor did about it.
     optional: false
   - name: detail
     type: string
@@ -34,4 +31,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:39.241Z'
-updatedAt: '2026-10-04T10:20:55.151Z'
+updatedAt: '2026-10-04T23:39:54.446Z'

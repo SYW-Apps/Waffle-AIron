@@ -4,8 +4,8 @@ name: SpecRename
 description: One spec a component rename moved to a new id
 fields:
   - name: kind
-    type: string
-    description: component | interface | implementation
+    type: RenamedSpecKind
+    description: The kind of spec moved.
     optional: false
   - name: from
     type: string
@@ -18,4 +18,4 @@ fields:
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-15T10:51:03.580Z'
-updatedAt: '2026-09-19T11:07:18.080Z'
+updatedAt: '2026-10-04T23:40:47.205Z'

@@ -14,22 +14,22 @@ fields:
     optional: false
     key: primary
   - name: subjectKind
-    type: string
+    type: AssignmentSubjectKind
     description: >-
-      user | everyone. (Roles are NOT assignment subjects — a role's capability values live on the
-      Role entity and apply through the user's RoleBindings, anchored at the binding's scope. This
-      keeps a single authoritative source for role permissions.)
+      Who the assignment is for. Roles are NOT assignment subjects: a role's capability values live
+      on the Role entity and apply through the user's RoleBindings, anchored at the binding's scope,
+      which keeps a single authoritative source for role permissions.
     optional: false
   - name: subjectId
     type: string
     description: The user id; absent when subjectKind is 'everyone' (a scope-wide default).
     optional: true
   - name: scopeKind
-    type: string
+    type: ScopeKind
     description: >-
-      instance | unit | project | subsystem. A subsystem scope sits below its project: it carries
-      only project:write (changing that subsystem's specs), with the value yes or no (or inherit, to
-      defer to the project) — reading stays whole-project and nothing else applies per subsystem.
+      The kind of scope the assignment is anchored at. A subsystem scope carries only project:write
+      (changing that subsystem's specs), with the value yes or no (or inherit, to defer to the
+      project); reading stays whole-project and nothing else applies per subsystem.
     optional: false
   - name: scopeId
     type: string
@@ -39,15 +39,12 @@ fields:
       subsystems are the record's own, keyed the same way); absent when scopeKind is 'instance'.
     optional: true
   - name: capability
-    type: string
-    description: >-
-      project:read | project:create | project:write | project:admin | approval:decide. There is NO
-      '*' capability and no instance-admin assignment — the instance-admin bypass is env-anchored to
-      the built-in super-admin/master, never granted through the assignment grid.
+    type: Capability
+    description: The capability the assignment sets.
     optional: false
   - name: value
-    type: string
-    description: yes | approval | no | inherit.
+    type: PermissionValue
+    description: The capability's setting at this scope.
     optional: false
   - name: createdAt
     type: string
@@ -68,4 +65,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:17.662Z'
-updatedAt: '2026-10-03T13:47:56.162Z'
+updatedAt: '2026-10-04T23:38:31.072Z'

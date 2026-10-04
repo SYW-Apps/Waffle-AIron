@@ -16,13 +16,8 @@ description: >-
 subsystem: sdd_cli
 fields:
   - name: state
-    type: string
-    description: >-
-      no-tree (no .wai/specs in this repository) | unlocked (a tree nobody ever approved) | locked
-      (the approval still covers this design) | stale (the design, or something it was approved
-      under — doctrine, declared inputs, composition, a direct member's approval — moved past the
-      approval, or the approval predates the stage-5 gate identity; the message tells the two
-      apart).
+    type: ApprovalState
+    description: What the check found about the approval.
     optional: false
   - name: approved
     type: bool
@@ -40,4 +35,4 @@ fields:
 methods: []
 sourcePath: src/commands/lock.ts
 createdAt: '2026-09-19T12:23:49.978Z'
-updatedAt: '2026-10-04T10:19:51.493Z'
+updatedAt: '2026-10-04T23:39:52.380Z'

@@ -34,12 +34,8 @@ fields:
     description: 'Coordinator only: every owner''s root relative to the coordinator.'
     optional: false
   - name: phase
-    type: string
-    description: >-
-      staging | staged | swapping | committed | rolled-back. staging: backups and staged copies are
-      being written, nothing live has moved; staged: all of them are on disk and synced; swapping:
-      live files are being replaced; committed: final (coordinator: the commit point); rolled-back:
-      every live file is back.
+    type: TransactionPhase
+    description: How far the transaction has got.
     optional: false
   - name: entries
     type: list<FileChange>
@@ -68,4 +64,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:30.949Z'
-updatedAt: '2026-10-04T10:21:18.292Z'
+updatedAt: '2026-10-04T23:40:49.058Z'

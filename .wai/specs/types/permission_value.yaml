@@ -1,0 +1,19 @@
+kind: enum
+id: permission_value
+name: PermissionValue
+description: A capability's setting on an assignment or a role.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: 'yes'
+    description: Allowed
+  - name: approval
+    description: Allowed through an approval request
+  - name: 'no'
+    description: Denied
+  - name: inherit
+    description: Defers to the enclosing scope; consumed during the walk
+createdAt: '2026-10-04T23:13:52.923Z'
+updatedAt: '2026-10-04T23:13:53.311Z'

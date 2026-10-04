@@ -107,7 +107,9 @@ methods:
       the required actor is always present. Every data-plane outcome flows through this one path — a
       permission refusal, a tool the data plane served itself, and a tool the scoped MCP server
       served.
-    signature: 'auditToolCall(principal: Principal, binding: ProjectBinding, body: any, outcome: string): void'
+    signature: >-
+      auditToolCall(principal: Principal, binding: ProjectBinding, body: any, outcome:
+      AuditOutcome): void
     returns: void
     params:
       - name: principal
@@ -120,10 +122,10 @@ methods:
         type: any
         description: The decoded JSON-RPC message of the handled call, which names the tool the event targets
       - name: outcome
-        type: string
+        type: AuditOutcome
         description: The outcome derived from the response the call produced
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-10-04T10:32:03.543Z'
+updatedAt: '2026-10-04T23:41:16.377Z'

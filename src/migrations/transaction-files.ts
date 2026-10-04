@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as nodePath from 'path';
 import * as yaml from 'js-yaml';
-import type { TransactionJournal } from './types.js';
+import type { TransactionArea, TransactionJournal } from './types.js';
 
 // ---------------------------------------------------------------------------
 // transaction_file_adapter — file I/O for the transaction aggregate and nothing
@@ -129,12 +129,12 @@ export function listJournals(owner: string): TransactionJournal[] {
 }
 
 /** itransaction_file_adapter.putFile — bytes into <owner>/.wai/transactions/<id>/<area>/<path>, durably. */
-export function putFile(owner: string, id: string, area: string, path: string, bytes: Uint8Array): void {
+export function putFile(owner: string, id: string, area: TransactionArea, path: string, bytes: Uint8Array): void {
   writeDurably(locate(owner, id, area, path), bytes);
 }
 
 /** itransaction_file_adapter.readFile — the bytes held in an area, or null. */
-export function readFile(owner: string, id: string, area: string, path: string): Buffer | null {
+export function readFile(owner: string, id: string, area: TransactionArea, path: string): Buffer | null {
   try {
     return fs.readFileSync(locate(owner, id, area, path));
   } catch (e) {
@@ -144,7 +144,7 @@ export function readFile(owner: string, id: string, area: string, path: string):
 }
 
 /** itransaction_file_adapter.locate — the absolute path of a file in an area; touches nothing. */
-export function locate(owner: string, id: string, area: string, path: string): string {
+export function locate(owner: string, id: string, area: TransactionArea, path: string): string {
   return nodePath.join(transactionDir(owner, id), area, ...path.split('/'));
 }
 

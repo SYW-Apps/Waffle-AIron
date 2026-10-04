@@ -13,12 +13,8 @@ fields:
     description: The owner project's key in the family graph ('' is the family's top root).
     optional: false
   - name: kind
-    type: string
-    description: >-
-      id | member | external | reference | export | pin | move | delete: an id moved, a member
-      declared/rekeyed/removed, an external declared/rekeyed/repointed/removed, a reference
-      respelled, an L0 export added or re-pointed, a pin carried/taken/removed, specs moved between
-      projects, files deleted with no home.
+    type: PlannedEditKind
+    description: What kind of change the edit makes.
     optional: false
   - name: detail
     type: string
@@ -41,4 +37,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:08.010Z'
-updatedAt: '2026-09-30T22:12:08.414Z'
+updatedAt: '2026-10-04T23:40:12.483Z'

@@ -517,20 +517,20 @@ methods:
       <subsystem>`, set and cleared through the same set and remove endpoints; a rule whose
       subsystem its project no longer declares is kept and shown labelled "subsystem not found".
     signature: >-
-      adminListAssignments(sessionId: string, scopeKind?: string, scopeId?: string, subjectKind?:
-      string, subjectId?: string): list<PermissionAssignment>
+      adminListAssignments(sessionId: string, scopeKind?: ScopeKind, scopeId?: string, subjectKind?:
+      AssignmentSubjectKind, subjectId?: string): list<PermissionAssignment>
     returns: list<PermissionAssignment>
     params:
       - name: sessionId
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
         optional: true
       - name: scopeId
         type: string
         optional: true
       - name: subjectKind
-        type: string
+        type: AssignmentSubjectKind
         optional: true
       - name: subjectId
         type: string
@@ -568,8 +568,8 @@ methods:
   - name: adminBindRole
     description: Bind a role to a user at a scope; forwards to web_admin_orchestrator.bindRole.
     signature: >-
-      adminBindRole(sessionId: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
-      string): HostedUserRecord
+      adminBindRole(sessionId: string, userId: string, roleId: string, scopeKind?: ScopeKind,
+      scopeId?: string): HostedUserRecord
     returns: HostedUserRecord
     params:
       - name: sessionId
@@ -579,7 +579,7 @@ methods:
       - name: roleId
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
         optional: true
       - name: scopeId
         type: string
@@ -591,7 +591,7 @@ methods:
   - name: adminUnbindRole
     description: Unbind a role from a user at a scope; forwards to web_admin_orchestrator.unbindRole.
     signature: >-
-      adminUnbindRole(sessionId: string, userId: string, roleId: string, scopeKind?: string,
+      adminUnbindRole(sessionId: string, userId: string, roleId: string, scopeKind?: ScopeKind,
       scopeId?: string): HostedUserRecord
     returns: HostedUserRecord
     params:
@@ -602,7 +602,7 @@ methods:
       - name: roleId
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
         optional: true
       - name: scopeId
         type: string
@@ -1554,7 +1554,7 @@ methods:
       beside the grant form, not a new screen.
     signature: >-
       adminExplainPermission(sessionId: string, userId: string, capability: string, scopeKind:
-      string, scopeId?: string): EffectivePermission
+      ScopeKind, scopeId?: string): EffectivePermission
     returns: EffectivePermission
     params:
       - name: sessionId
@@ -1564,7 +1564,7 @@ methods:
       - name: capability
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
       - name: scopeId
         type: string
         optional: true
@@ -1574,4 +1574,4 @@ methods:
       path: /web/admin/permissions/explain
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-04T10:32:14.252Z'
+updatedAt: '2026-10-04T23:38:27.130Z'

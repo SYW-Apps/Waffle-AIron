@@ -8,12 +8,12 @@ methods:
       Render the current project's spec tree into the requested format (canvas | mermaid | drawio |
       excalidraw) and return the artifact as a string. Self-contained (the canvas embeds everything,
       offline).
-    signature: 'render(format: string, relations?: list<ProjectRelations>): string'
+    signature: 'render(format: DiagramFormat, relations?: list<ProjectRelations>): string'
     returns: string
     params:
       - name: format
-        type: string
-        description: canvas | mermaid | drawio | excalidraw
+        type: DiagramFormat
+        description: The format to render
       - name: relations
         type: list<ProjectRelations>
         description: >-
@@ -50,4 +50,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-10-04T10:28:13.607Z'
+updatedAt: '2026-10-04T23:38:09.195Z'

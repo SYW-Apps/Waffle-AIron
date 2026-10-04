@@ -14,7 +14,7 @@ fields:
       parent-derived fields set and the resolved status written
     optional: false
   - name: status
-    type: string
+    type: SpecStatus
     description: >-
       The status the candidate is written at; absent for the L0 and for a type, neither of which
       carries a lifecycle status
@@ -51,4 +51,4 @@ fields:
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:29.854Z'
-updatedAt: '2026-10-04T10:21:09.989Z'
+updatedAt: '2026-10-04T23:41:19.742Z'

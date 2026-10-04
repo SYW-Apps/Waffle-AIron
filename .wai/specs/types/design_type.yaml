@@ -13,8 +13,8 @@ fields:
       qualified by owner, so a same-named type elsewhere never re-keys this one
     optional: false
   - name: kind
-    type: string
-    description: entity, value-object, signature or enum
+    type: TypeKind
+    description: What the type declares
     optional: false
   - name: name
     type: string
@@ -74,4 +74,4 @@ fields:
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:30.105Z'
-updatedAt: '2026-10-04T15:39:15.829Z'
+updatedAt: '2026-10-04T23:39:20.064Z'

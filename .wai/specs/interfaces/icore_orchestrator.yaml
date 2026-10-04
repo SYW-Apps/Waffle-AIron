@@ -62,12 +62,12 @@ methods:
     description: >-
       Delegate diagram rendering to architecture_diagrams, with the relation health the canvas
       draws.
-    signature: 'renderDiagram(format: string, relations?: list<ProjectRelations>): string'
+    signature: 'renderDiagram(format: DiagramFormat, relations?: list<ProjectRelations>): string'
     returns: string
     params:
       - name: format
-        type: string
-        description: canvas | mermaid | drawio | excalidraw
+        type: DiagramFormat
+        description: The format to render
       - name: relations
         type: list<ProjectRelations>
         description: The family's relation health for the canvas; omitted, none
@@ -561,15 +561,13 @@ methods:
       caller's hooks, when given, judge the merged spec at the last point before anything reaches
       disk.
     signature: >-
-      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?: bool):
-      SpecChangeReport
+      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, hooks?: SpecWriteHooks,
+      dryRun?: bool): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
-        type: string
-        description: >-
-          The writable spec kind the id names (subsystem, component, interface, implementation, type
-          or system)
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The id of the spec to change
@@ -692,13 +690,13 @@ methods:
   - name: loadSpec
     description: Delegate loading one spec of the named kind to the spec loader; null when none is stored.
     signature: >-
-      loadSpec(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      loadSpec(kind: WritableSpecKind, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
       InterfaceSpec | ImplementationSpec | TypeSpec)?
     returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The spec id; informational for the L0
@@ -707,24 +705,24 @@ methods:
       Delegate persisting one spec of the named kind to the spec loader, answering with its
       placement notices.
     signature: >-
-      saveSpec(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
-      ImplementationSpec | TypeSpec): list<string>
+      saveSpec(kind: WritableSpecKind, spec: SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec): list<string>
     returns: list<string>
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: spec
         type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
         description: The spec to persist, of that kind
   - name: deleteSpec
     description: Delete one spec document of the named kind through the loader. False when it was not there.
-    signature: 'deleteSpec(kind: string, id: string): bool'
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string): bool'
     returns: bool
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
       - name: id
         type: string
         description: The spec id
@@ -881,12 +879,12 @@ methods:
       Re-save one spec of the family with every reference in its canonical stage-3 form (a bare
       local id, or `alias::publicName`) through the spec repository; targets never change. Returns
       whether the stored text changed.
-    signature: 'normalizeReferences(kind: string, id: string): bool'
+    signature: 'normalizeReferences(kind: WritableSpecKind, id: string): bool'
     returns: bool
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names (the L0 holds no references to normalize)
       - name: id
         type: string
         description: The spec's in-memory key, from the family's top root
@@ -1011,12 +1009,12 @@ methods:
       reference write, for spellings the canonical writer cannot derive because the alias table they
       bind through is changing in the same migration. Refuses the whole spec, writing nothing, when
       an edit's text is not at its position. Returns whether the stored text changed.
-    signature: 'rewriteReferences(kind: string, id: string, edits: list<ReferenceEdit>): bool'
+    signature: 'rewriteReferences(kind: WritableSpecKind, id: string, edits: list<ReferenceEdit>): bool'
     returns: bool
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The spec's in-memory key, from the family's top root
@@ -1219,4 +1217,4 @@ methods:
         description: Its new id, under the same owner
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T13:56:52.350Z'
+updatedAt: '2026-10-04T23:37:35.357Z'

@@ -1,0 +1,16 @@
+kind: enum
+id: model_tier
+name: ModelTier
+description: >-
+  A capability tier, never a model id. Exporters map it onto what their host tool understands; a
+  target that cannot express model selection drops it. Smallest first.
+fields: []
+methods: []
+sourcePath: src/models/execution.ts
+values:
+  - name: small
+  - name: standard
+  - name: large
+  - name: frontier
+createdAt: '2026-10-04T23:12:32.644Z'
+updatedAt: '2026-10-04T23:12:33.065Z'

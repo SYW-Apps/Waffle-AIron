@@ -15,8 +15,8 @@ fields:
     description: The interface or type the repair concerns
     optional: false
   - name: kind
-    type: string
-    description: interface | type
+    type: TypedSpecKind
+    description: The kind of the spec holding it.
     optional: false
   - name: rewritten
     type: list<TypeRespelling>
@@ -38,4 +38,4 @@ fields:
 methods: []
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:03:25.363Z'
-updatedAt: '2026-10-04T10:21:23.910Z'
+updatedAt: '2026-10-04T23:40:42.113Z'

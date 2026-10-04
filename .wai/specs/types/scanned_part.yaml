@@ -17,8 +17,8 @@ fields:
     optional: false
     key: primary
   - name: storage
-    type: string
-    description: 'contained | path | git: where its files live (a part is never a hosted record).'
+    type: MemberStorage
+    description: 'Where its files live (never hosted: a part is never a hosted record).'
     optional: false
   - name: directory
     type: string
@@ -59,10 +59,8 @@ fields:
       (storage-independent). What the parent's lock records for it beside the commit.
     optional: true
   - name: availability
-    type: string
-    description: >-
-      live | cache | unavailable: read from a directory on disk, read from the git cache at the
-      pinned commit, or not read at all.
+    type: PartAvailability
+    description: Whether, and from where, its files were read.
     optional: false
   - name: reason
     type: string
@@ -75,4 +73,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-10-02T20:17:18.690Z'
-updatedAt: '2026-10-04T10:21:01.417Z'
+updatedAt: '2026-10-04T23:39:06.299Z'

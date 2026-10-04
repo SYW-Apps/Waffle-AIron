@@ -13,8 +13,8 @@ fields:
     description: The interface or type the repair rewrites
     optional: false
   - name: kind
-    type: string
-    description: interface | type
+    type: TypedSpecKind
+    description: The kind of the spec holding it.
     optional: false
   - name: regenerated
     type: list<StaleSignatureText>
@@ -27,4 +27,4 @@ fields:
 methods: []
 sourcePath: src/core/signature-repair.ts
 createdAt: '2026-10-03T19:31:33.599Z'
-updatedAt: '2026-10-04T10:21:06.040Z'
+updatedAt: '2026-10-04T23:40:38.243Z'

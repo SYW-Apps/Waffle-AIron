@@ -11,8 +11,8 @@ fields:
     description: Whether durable audit storage is enabled for the hosted instance.
     optional: false
   - name: minimumLevel
-    type: string
-    description: 'Lowest event level persisted: "debug", "info", "warning", "error", or "security".'
+    type: AuditLevel
+    description: Lowest event level persisted.
     optional: false
   - name: retentionDays
     type: int
@@ -39,4 +39,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:42.339Z'
-updatedAt: '2026-10-04T10:28:47.297Z'
+updatedAt: '2026-10-04T23:38:47.694Z'

@@ -28,8 +28,8 @@ fields:
       subproject's implementation, that subproject's own root.
     optional: true
   - name: detail
-    type: string
-    description: 'Narrative detail default: full | calls-only | intent'
+    type: NarrativeDetail
+    description: Narrative detail default for its methods
     optional: true
   - name: methods
     type: list<MethodImplementation>
@@ -48,15 +48,15 @@ fields:
       (code-level name) for intent-language renames — e.g. a store's put realized by saveSnapshot.
     optional: false
   - name: status
-    type: string
-    description: draft | design | complete (an omitted status is parsed as complete)
+    type: SpecStatus
+    description: How far it is through design (an omitted status is parsed as complete)
     optional: false
   - name: conformance
-    type: string
+    type: ConformanceTier
     description: >-
-      Structural-conformance tier default for all contract methods: declared | anchored | off
-      (omitted = stereotype default: Portal → anchored, else declared). off skips method realization
-      checks; the existence check of every named source file always applies.
+      Structural-conformance tier default for all contract methods (omitted = stereotype default:
+      Portal anchored, else declared). The existence check of every named source file always
+      applies.
     optional: true
   - name: simPath
     type: string
@@ -124,4 +124,4 @@ methods:
     symbol: implementationSourceFiles
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T13:51:50.830Z'
+updatedAt: '2026-10-04T23:38:04.344Z'

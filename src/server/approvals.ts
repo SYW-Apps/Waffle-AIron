@@ -255,7 +255,7 @@ class ApprovalRegistry {
     const next = this.store.all().map((r) => {
       if (r.status === 'pending' && r.expiresAt !== undefined && Date.parse(r.expiresAt) <= nowMs) {
         changed++;
-        return { ...r, status: 'expired' };
+        return { ...r, status: 'expired' as const };
       }
       return r;
     });

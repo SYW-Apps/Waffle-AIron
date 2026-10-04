@@ -18,8 +18,8 @@ fields:
     type: string
     optional: false
   - name: status
-    type: string
-    description: draft, design or complete
+    type: SpecStatus
+    description: The subsystem's lifecycle status
     optional: false
   - name: profile
     type: string
@@ -49,4 +49,4 @@ fields:
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:08.217Z'
-updatedAt: '2026-10-04T15:39:09.150Z'
+updatedAt: '2026-10-04T23:38:08.073Z'

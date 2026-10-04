@@ -346,6 +346,9 @@ export interface OwnershipIndex {
   ownerOf(memberId: string): string | undefined;
 }
 
+/** The kind label a finding names a spec by. */
+export type SpecIdKind = 'Subsystem' | 'Component' | 'Interface' | 'Implementation' | 'Type';
+
 /**
  * spec_id — one spec id in the tree, carrying the kind label its findings name
  * it by. The id hygiene rules judge ids and nothing else, so walking five
@@ -359,8 +362,8 @@ export interface OwnershipIndex {
 export interface SpecId {
   /** The qualified spec id, exactly as the tree holds it. */
   id: string;
-  /** The kind label a finding names it by: Subsystem, Component, Interface, Implementation or Type. */
-  kind: 'Subsystem' | 'Component' | 'Interface' | 'Implementation' | 'Type';
+  /** The kind label a finding names it by. */
+  kind: SpecIdKind;
 }
 
 /**

@@ -31,9 +31,9 @@ fields:
     type: string
     optional: true
   - name: outcome
-    type: string
-    description: served | denied-disabled | denied-expired | not-found | denied-download.
+    type: ShareAccessOutcome
+    description: How the access ended.
     optional: false
 methods: []
 createdAt: '2026-07-17T22:32:36.503Z'
-updatedAt: '2026-07-17T22:32:36.561Z'
+updatedAt: '2026-10-04T23:40:35.007Z'

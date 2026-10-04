@@ -24,18 +24,18 @@ fields:
     description: The user id, or everyone for an everyone-default
     optional: false
   - name: kind
-    type: string
-    description: assignment | role (a role binding anchored at the subsystem)
+    type: CarriedRuleKind
+    description: What the carried setting was.
     optional: false
   - name: value
     type: string
     description: The project:write value carried (yes | no), or the role id for a role binding
     optional: false
   - name: note
-    type: string
-    description: carried | most restrictive wins | not carried (can only narrow)
+    type: CarriedRuleNote
+    description: What became of the setting on the new project.
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-10-03T14:20:03.847Z'
-updatedAt: '2026-10-04T10:19:56.507Z'
+updatedAt: '2026-10-04T23:38:57.119Z'

@@ -18,14 +18,8 @@ description: >-
   passthrough); it must never be used to dodge an edge that could legally exist.
 fields:
   - name: kind
-    type: string
-    description: >-
-      runtime | external | sibling-subsystem. runtime = a composition root, scheduler, or process
-      host outside the modeled call chains invokes it (bootstrap start/stop, signal handlers).
-      external = the caller is outside the system entirely (library embedders, third-party
-      integrations). sibling-subsystem = the caller lives in this tree but crosses a boundary that
-      licenses no modeled component edge (e.g. through a published code barrel onto an internal
-      component).
+    type: InvocationKind
+    description: Who invokes the method from outside the modeled narrative graph.
     optional: false
   - name: caller
     type: string
@@ -36,4 +30,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-08-11T15:25:27.922Z'
-updatedAt: '2026-08-11T15:25:27.932Z'
+updatedAt: '2026-10-04T23:39:03.167Z'

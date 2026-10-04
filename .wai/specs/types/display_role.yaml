@@ -1,0 +1,16 @@
+kind: enum
+id: display_role
+name: DisplayRole
+description: >-
+  The legacy coarse role, projected for display only. It is never an authorization source:
+  authorization resolves from the permission subject.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: editor
+    description: Shown as an editor
+  - name: admin
+    description: Shown as an administrator
+createdAt: '2026-10-04T23:13:47.668Z'
+updatedAt: '2026-10-04T23:13:48.080Z'

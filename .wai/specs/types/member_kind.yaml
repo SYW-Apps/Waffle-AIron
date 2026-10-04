@@ -1,0 +1,16 @@
+kind: enum
+id: member_kind
+name: MemberKind
+description: >-
+  What a member is, as its content makes it: a project declares an id, holds an L0 or carries a
+  lock; anything else is a part.
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+values:
+  - name: part
+    description: 'Part of its parent: its subsystems are the parent''s own, under the parent''s ids and lock'
+  - name: project
+    description: 'A project of its own: its own id, exports and lock, reached as alias::name'
+createdAt: '2026-10-04T23:24:17.377Z'
+updatedAt: '2026-10-04T23:24:17.797Z'

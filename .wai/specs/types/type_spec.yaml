@@ -25,8 +25,8 @@ description: >-
   right side must agree with holds through the file's dialect (TYPE_HOLDS_MISMATCH).
 fields:
   - name: kind
-    type: string
-    description: 'Type category: entity, value-object, signature or enum'
+    type: TypeKind
+    description: Type category
     optional: false
   - name: id
     type: string
@@ -220,4 +220,4 @@ methods:
     symbol: typeCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-04T13:51:52.524Z'
+updatedAt: '2026-10-04T23:39:21.881Z'

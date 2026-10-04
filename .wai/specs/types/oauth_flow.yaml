@@ -1,0 +1,14 @@
+kind: enum
+id: oauth_flow
+name: OAuthFlow
+description: The OAuth2 flow an oauth2 security scheme uses, as OpenAPI names it.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: authorizationCode
+  - name: clientCredentials
+  - name: implicit
+  - name: password
+createdAt: '2026-10-04T23:32:59.056Z'
+updatedAt: '2026-10-04T23:32:59.483Z'

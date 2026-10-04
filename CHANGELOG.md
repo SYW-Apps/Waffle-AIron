@@ -1301,6 +1301,10 @@ same thing to every implementation language, and every consumer reads one spelli
   `languages.<id>.foreignBuiltins` is accepted and ignored for one release: a pack that
   still declares it gets `PACK_FIELD_DEPRECATED` (notice), and the field goes in the
   release after.
+- **wairon's own tree uses enums.** The fields and params of wairon's own specs whose closed
+  set of values was listed only in prose are now typed by enums, each bound to the code's
+  literal union or `z.enum`, so the enum-values check guards them. Its design export,
+  surface snapshots and briefs show those positions as enums instead of `string`.
 
 **Upgrading.** Run `wairon doctor --fix` once: it rewrites every stored type position that
 is an alias into its canonical spelling (plain `wairon doctor` prints the plan first). Then

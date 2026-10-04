@@ -27,20 +27,19 @@ fields:
       member's owner actually made.
     optional: true
   - name: state
-    type: string
+    type: ProjectApprovalState
     description: >-
-      Project only: approved | drifted | never, as it stood when the parent locked: approved = the
-      member's lock matches the member's own gate identity recomputed at its own root (the sibling
-      checkout or the git cache at its pinned commit, for a referenced project); drifted = it has a
-      lock and its gate identity moved since; never = no lock (including a declared member with no
-      project on disk). Recorded beside the subject, never hashed into the parent's identity. A part
-      records `approved` (it has no lock of its own: the parent's approval is its approval).
+      Project only: its approval as it stood when the parent locked, judged against the member's own
+      gate identity recomputed at its own root (the sibling checkout, or the git cache at its pinned
+      commit for a referenced project); a declared member with no project on disk is never. Recorded
+      beside the subject, never hashed into the parent's identity. A part records approved (it has
+      no lock of its own: the parent's approval is its approval).
     optional: false
   - name: as
-    type: string
+    type: MemberKind
     description: >-
-      part | project, as the member's content made it when the parent locked. Absent in a record
-      written before stage 8, which pinned projects only.
+      What the member's content made it when the parent locked. Absent in a record written before
+      stage 8, which pinned projects only.
     optional: true
   - name: commit
     type: string
@@ -61,4 +60,4 @@ fields:
 methods: []
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-09-30T05:47:05.631Z'
-updatedAt: '2026-10-02T23:58:39.121Z'
+updatedAt: '2026-10-04T23:39:08.002Z'

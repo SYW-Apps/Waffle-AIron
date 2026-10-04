@@ -1,0 +1,16 @@
+kind: enum
+id: doctrine_axis
+name: DoctrineAxis
+description: What a doctrine change is about.
+fields: []
+methods: []
+sourcePath: src/models/pack-impact.ts
+values:
+  - name: rule
+    description: A rule's codes and their severities
+  - name: concept
+    description: >-
+      A concept of the vocabulary: a profile, pattern, guarantee, language, stereotype or dependency
+      edge
+createdAt: '2026-10-04T23:33:49.944Z'
+updatedAt: '2026-10-04T23:33:50.366Z'

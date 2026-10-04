@@ -1,5 +1,5 @@
 import * as files from './transaction-files.js';
-import type { TransactionJournal } from './types.js';
+import type { TransactionArea, TransactionJournal } from './types.js';
 
 // ---------------------------------------------------------------------------
 // The transaction aggregate — a family migration's rehearsal, each owner's
@@ -24,9 +24,9 @@ export interface TransactionAccess {
   saveJournal(journal: TransactionJournal): void;
   readJournal(owner: string, id: string): TransactionJournal | null;
   listJournals(owner: string): TransactionJournal[];
-  putFile(owner: string, id: string, area: string, path: string, bytes: Uint8Array): void;
-  readFile(owner: string, id: string, area: string, path: string): Buffer | null;
-  locate(owner: string, id: string, area: string, path: string): string;
+  putFile(owner: string, id: string, area: TransactionArea, path: string, bytes: Uint8Array): void;
+  readFile(owner: string, id: string, area: TransactionArea, path: string): Buffer | null;
+  locate(owner: string, id: string, area: TransactionArea, path: string): string;
   close(owner: string, id: string): void;
 }
 

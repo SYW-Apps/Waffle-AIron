@@ -15,10 +15,8 @@ fields:
     optional: false
     key: primary
   - name: role
-    type: string
-    description: >-
-      parent | sibling: whether it pins the parent's family surface or one sibling's published
-      surface.
+    type: FamilyPinRole
+    description: Whose surface the pin holds.
     optional: false
   - name: generatedAt
     type: string
@@ -27,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/core/surfaces.ts
 createdAt: '2026-09-27T10:42:52.668Z'
-updatedAt: '2026-09-27T10:42:52.670Z'
+updatedAt: '2026-10-04T23:39:42.983Z'

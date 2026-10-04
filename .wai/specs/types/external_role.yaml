@@ -1,0 +1,19 @@
+kind: enum
+id: external_role
+name: ExternalRole
+description: >-
+  How a resolved external is declared. Both are judged by the owner's gate against their pins; a
+  member is also part of the family's composition, an external only consumed.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/project-family.ts
+values:
+  - name: external
+    description: Declared under externals
+  - name: member
+    description: >-
+      A referenced project member: declared under members with a ../, git or hosted source, its
+      content a project's
+createdAt: '2026-10-04T23:33:19.300Z'
+updatedAt: '2026-10-04T23:33:19.824Z'

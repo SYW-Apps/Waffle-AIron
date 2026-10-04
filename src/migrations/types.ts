@@ -10,10 +10,12 @@ import type { ReferenceEdit } from '../models/project-family.js';
 // functions at the bottom.
 // ---------------------------------------------------------------------------
 
+/** The family migrations a request can ask for. */
+export type MigrationVerb = 'attach' | 'rename' | 'rename-alias' | 'detach' | 'adopt' | 'internalize' | 'externalize' | 'promote' | 'demote' | 'chaining';
+
 /** migration_request — one family migration as a person or an agent asks for it. */
 export interface MigrationRequest {
-  /** attach | rename | rename-alias | detach | adopt | internalize | externalize | promote | demote | chaining */
-  verb: string;
+  verb: MigrationVerb;
   alias?: string;
   path?: string;
   project?: string;
@@ -54,12 +56,14 @@ export interface MemberRelocation {
   from?: string;
 }
 
+/** What kind of semantic change a planned edit makes. */
+export type PlannedEditKind = 'id' | 'member' | 'external' | 'reference' | 'export' | 'pin' | 'move' | 'delete' | 'promote' | 'demote';
+
 /** planned_edit — one semantic change a migration makes in one owner project. */
 export interface PlannedEdit {
   /** The owner project's key in the family graph ('' is the family's top root). */
   project: string;
-  /** id | member | external | reference | export | pin | move | delete */
-  kind: string;
+  kind: PlannedEditKind;
   /** One line naming the edit as the report prints it. */
   detail: string;
   reference?: ReferenceEdit;
@@ -88,14 +92,19 @@ export interface MigrationRefusal {
   detail: string;
 }
 
+/** The two areas a transaction keeps files in: staged copies to swap in, and backups to roll back to. */
+export type TransactionArea = 'staged' | 'backup';
+
+/** What a migration does to one file. */
+export type FileChangeAction = 'write' | 'create' | 'delete';
+
 /** file_change — one file a migration replaces, creates or deletes in one owner project. */
 export interface FileChange {
   /** The owner project's root directory, absolute. */
   project: string;
   /** The file, relative to the owner's root, forward slashes (under .wai/, or anywhere in a whole owner). */
   path: string;
-  /** write | create | delete */
-  action: 'write' | 'create' | 'delete';
+  action: FileChangeAction;
   /** sha256 of the live file when the rehearsal copied it; absent for create. */
   baseDigest?: string;
   /** sha256 of the bytes the swap puts in place; absent for delete. */
@@ -175,14 +184,16 @@ export interface TransactionOutcome {
   unrestored: string[];
 }
 
+/** What doctor did about one unfinished transaction. */
+export type RecoveryAction = 'pending' | 'rolled-back' | 'cleaned' | 'refused';
+
 /** recovered_transaction — what doctor found and did about one unfinished transaction. */
 export interface RecoveredTransaction {
   id: string;
   verb: string;
   owners: string[];
   phase: string;
-  /** pending | rolled-back | cleaned | refused */
-  action: string;
+  action: RecoveryAction;
   detail: string;
 }
 

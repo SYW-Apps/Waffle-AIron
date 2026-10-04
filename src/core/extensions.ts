@@ -49,6 +49,10 @@ export { listInstalledPacks };
 // load becomes an EXTENSION_LOAD_ERROR issue — never a silent skip.
 // ---------------------------------------------------------------------------
 
+/** A profile's doctrine family, which opts it into the built-in stereotype fencing. */
+export const ProfileFamilySchema = z.enum(['backend-like', 'frontend-like', 'neutral']);
+export type ProfileFamily = z.infer<typeof ProfileFamilySchema>;
+
 /**
  * A pack-defined architectural profile. `family` opts into the built-in
  * stereotype fencing (backend-like ⇒ frontend stereotypes are violations,
@@ -56,7 +60,7 @@ export { listInstalledPacks };
  * stereotype lists carry the profile's own doctrine with a stated reason.
  */
 export const ProfileDefSchema = z.object({
-  family: z.enum(['backend-like', 'frontend-like', 'neutral']).default('neutral'),
+  family: ProfileFamilySchema.default('neutral'),
   forbiddenStereotypes: z.array(z.object({ types: z.array(z.string()).min(1), reason: z.string().min(1) })).default([]),
   discouragedStereotypes: z.array(z.object({ types: z.array(z.string()).min(1), reason: z.string().min(1) })).default([]),
   /**

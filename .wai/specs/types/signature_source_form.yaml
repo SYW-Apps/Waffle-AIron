@@ -1,0 +1,15 @@
+kind: enum
+id: signature_source_form
+name: SignatureSourceForm
+description: Which reading of a signatureFrom resolved.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/core/signature-sources.ts
+values:
+  - name: method
+    description: A contract method component.method
+  - name: signature
+    description: A signature type
+createdAt: '2026-10-04T23:33:37.758Z'
+updatedAt: '2026-10-04T23:33:38.226Z'

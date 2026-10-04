@@ -1,0 +1,14 @@
+kind: enum
+id: pack_scope
+name: PackScope
+description: Which layer an extension pack loads into. Project packs win on collision.
+fields: []
+methods: []
+sourcePath: src/core/extensions.ts
+values:
+  - name: global
+    description: Machine- or server-wide
+  - name: project
+    description: The project's own committed packs
+createdAt: '2026-10-04T23:13:12.370Z'
+updatedAt: '2026-10-04T23:13:12.771Z'

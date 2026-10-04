@@ -37,6 +37,7 @@ import { safeFilenamePart } from '../utils/filenames.js';
 import { openApiIndexDocument } from './openapiindex.js';
 import type {
   AuditEvent,
+  AuditLevel,
   HostConfig,
   HostedProjectRecord,
   LandscapeEdge,
@@ -206,7 +207,7 @@ function principalSubject(principal: Principal): PrincipalSubject {
 function buildAuditEvent(
   principal: Principal,
   action: string,
-  level: string,
+  level: AuditLevel,
   category: string,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {

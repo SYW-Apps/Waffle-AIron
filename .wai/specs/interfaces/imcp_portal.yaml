@@ -294,12 +294,14 @@ methods:
       at its depth is named back under NO EFFECT instead of being silently dropped. The answer
       carries the change report as structured content beside the rendered sentence, from the one
       report, so the prose can never disagree with the data.
-    signature: 'sdd_update_spec(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
+    signature: >-
+      sdd_update_spec(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
-        type: string
-        description: 'The spec kind to patch: system, subsystem, component, interface, implementation or type'
+        type: WritableSpecKind
+        description: The spec kind to patch
       - name: id
         type: string
         description: The stored spec's id, namespaced if needed
@@ -372,12 +374,12 @@ methods:
       returns and text, and the source they came from). The structured content keeps every derived
       marker SEPARATE from the stored spec, so nothing derived can be written back by accident; the
       text block folds them in as it always has.
-    signature: 'sdd_get_spec(kind: string, id: string, methods?: list<string>): SpecReadResult'
+    signature: 'sdd_get_spec(kind: WritableSpecKind, id: string, methods?: list<string>): SpecReadResult'
     returns: SpecReadResult
     params:
       - name: kind
-        type: string
-        description: 'The kind of spec to read: system, subsystem, component, interface, implementation or type'
+        type: WritableSpecKind
+        description: The kind of spec to read
       - name: id
         type: string
         description: >-
@@ -460,12 +462,12 @@ methods:
       there is reported as such rather than as a failure. Deleting a spec other specs still
       reference leaves the tree invalid by design: the validator is what says so, and this tool does
       not refuse on its behalf.
-    signature: 'sdd_delete_spec(kind: string, id: string): SpecDeletion'
+    signature: 'sdd_delete_spec(kind: WritableSpecKind, id: string): SpecDeletion'
     returns: SpecDeletion
     params:
       - name: kind
-        type: string
-        description: 'The kind of spec to delete: subsystem, component, interface, implementation or type'
+        type: WritableSpecKind
+        description: 'The kind of spec to delete (never system: the L0 is not deleted)'
       - name: id
         type: string
         description: The id of the spec to delete (namespaced if needed)
@@ -835,4 +837,4 @@ methods:
       address: mcp tools/call sdd_rename_type
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T13:57:05.817Z'
+updatedAt: '2026-10-04T23:37:40.543Z'

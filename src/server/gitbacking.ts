@@ -15,6 +15,7 @@ import { listProjectRecords, listFamilyRecords } from './projects.js';
 import { resolveGitToken, setSecret } from '../utils/secrets.js';
 import type {
   AuditEvent,
+  AuditLevel,
   GitBackingBinding,
   HostConfig,
   OrganizationUnitRecord,
@@ -315,7 +316,7 @@ function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   }
 }
 
-function buildAuditEvent(principal: Principal, action: string, level: string, target: string): AuditEvent {
+function buildAuditEvent(principal: Principal, action: string, level: AuditLevel, target: string): AuditEvent {
   const event: AuditEvent = {
     id: '',
     timestamp: '',

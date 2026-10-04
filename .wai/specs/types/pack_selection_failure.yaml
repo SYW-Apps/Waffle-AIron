@@ -10,12 +10,8 @@ description: >-
   disagree about whether a pack applies.
 fields:
   - name: code
-    type: string
-    description: >-
-      PACK_NOT_INSTALLED (absent from both the bundle and the store) | PACK_VERSION_UNSATISFIED
-      (installed, but no version satisfies the pin) | PACK_INTEGRITY_MISMATCH (resolved content does
-      not match the pinned digest) | PACK_STORE_DRIFT (the store copy differs from the committed
-      bundle; a warning, and the pack still applies).
+    type: PackFailureCode
+    description: Why the selected pack could not be applied as pinned.
     optional: false
   - name: name
     type: string
@@ -28,12 +24,12 @@ fields:
       which versions ARE installed.
     optional: false
   - name: severity
-    type: string
+    type: pack_rule_severity
     description: >-
-      error | warning. Every code is an error except PACK_STORE_DRIFT, a warning under which the
-      pack still applies, so the severity travels with the finding.
+      Every code is an error except PACK_STORE_DRIFT, a warning under which the pack still applies,
+      so the severity travels with the finding.
     optional: false
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-30T11:24:59.575Z'
-updatedAt: '2026-10-03T17:04:34.972Z'
+updatedAt: '2026-10-04T23:41:41.797Z'

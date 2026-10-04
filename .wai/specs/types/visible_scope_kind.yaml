@@ -1,0 +1,17 @@
+kind: enum
+id: visible_scope_kind
+name: VisibleScopeKind
+description: The scope kinds a subject's visibility view lists; the instance is never one of them.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: unit
+    description: An organization unit
+  - name: project
+    description: A project
+  - name: subsystem
+    description: 'A subsystem: only in a project:write view, and only when it carries a setting of its own'
+createdAt: '2026-10-04T23:18:09.203Z'
+updatedAt: '2026-10-04T23:18:09.606Z'

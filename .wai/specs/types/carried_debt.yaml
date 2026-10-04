@@ -9,12 +9,10 @@ description: >-
   the reason are both required.
 fields:
   - name: kind
-    type: string
+    type: CarriedDebtKind
     description: >-
-      drift (the spec and the code genuinely disagree, and an author fixes one of them), undecided
-      (the finding is right and the fix waits on a modelling decision nobody has taken), or
-      unreadable (the analysis cannot follow the shape the code is written in, so nothing in this
-      tree is wrong). Drift and undecided are owed; unreadable is a limit to live with.
+      Why the reason group carries its findings. drift and undecided are owed; unreadable is a limit
+      to live with.
     optional: false
   - name: why
     type: string
@@ -42,4 +40,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-19T19:04:02.008Z'
-updatedAt: '2026-10-04T10:19:55.502Z'
+updatedAt: '2026-10-04T23:38:54.028Z'

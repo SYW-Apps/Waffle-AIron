@@ -12,6 +12,10 @@
 
 import type { ValidationResult } from '../core/validation.js';
 import type { MemberPin } from '../core/lockfile.js';
+import type { MemberKind } from './project.js';
+
+/** How an approver's identity was established. */
+export type ApproverSource = 'git' | 'hosted' | 'os' | 'legacy';
 
 /**
  * Who approved, and HOW that identity was established — because the two are
@@ -30,7 +34,7 @@ export interface ApproverIdentity {
   /** Display name when the source carries one separately from the id. */
   name?: string;
   /** 'legacy' is a record written before this field existed: an opaque string. */
-  source: 'git' | 'hosted' | 'os' | 'legacy';
+  source: ApproverSource;
 }
 
 /**
@@ -111,7 +115,7 @@ export interface ProjectApproval {
   /** How the parent's lock pinned it; absent on the root. */
   pinned?: PinState;
   /** part | project (stage 8). A part's state is its declaring project's, and it has no subject of its own. */
-  as?: 'part' | 'project';
+  as?: MemberKind;
   /** A part's content digest (ScannedPart.contentDigest), recorded by the lock as its MemberPin. */
   contentDigest?: string;
   /** The commit a part or a referenced project member was read at, when known — provenance the lock records. */

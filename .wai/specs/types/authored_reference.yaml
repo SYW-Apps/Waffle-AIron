@@ -31,30 +31,14 @@ fields:
     description: The reference exactly as written.
     optional: false
   - name: form
-    type: string
+    type: ReferenceForm
     description: >-
-      alias | import | leading | super | path. alias: the first segment is one of the referring
-      project's aliases (a `members` or `externals` key), the only `::` form stage 3 writes. import:
-      a bare name (no `::`) that names no spec of the referring project, looked up among the names
-      its `use` imports supply. leading: a leading `::`, read from the bound root. super: each
-      `super::` climbs one containing project. path: a first segment the referring project does not
-      declare, read the stage-2 way as a member path from the bound root. leading, super and path
-      are deprecated and still bind for one release.
+      How the reference is spelled. leading, super and path are deprecated and still bind for one
+      release.
     optional: false
   - name: binding
-    type: string
-    description: >-
-      exported | unexported | undeclared | outside | unresolved | local | ambiguous. exported: it
-      bound to a public name of the producer's resolved L0 table whose audience covers the referrer
-      (for an import: the one import that supplies the name). unexported: the producer is known, but
-      the name is none of its public names; bound leniently to the producer's spec of that local id
-      (EXTERNAL_NOT_EXPORTED). undeclared: the producer was found only by a deprecated form or by
-      its project id, and the referring project declares no alias for it (EXTERNAL_UNDECLARED).
-      outside: the alias — or, for an import, some import that may supply the name — is a declared
-      external whose producer the scan did not read, so it is kept as written and the owner's gate
-      resolves it against that external's pin. unresolved: nothing names the first segment, or no
-      import supplies the bare name. local: a deprecated form that lands in the referring project
-      itself. ambiguous: two imports supply the bare name (IMPORT_AMBIGUOUS).
+    type: ReferenceBinding
+    description: What the reference bound to when the family was scanned.
     optional: false
   - name: resolved
     type: string
@@ -95,4 +79,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:34.152Z'
-updatedAt: '2026-09-28T16:09:15.506Z'
+updatedAt: '2026-10-04T23:38:48.990Z'

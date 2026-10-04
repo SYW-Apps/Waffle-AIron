@@ -224,13 +224,13 @@ methods:
   - name: loadSpec
     description: 'Forward to spec_tree_portal.loadSpec: one spec of the named kind by id, or null.'
     signature: >-
-      loadSpec(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      loadSpec(kind: WritableSpecKind, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
       InterfaceSpec | ImplementationSpec | TypeSpec)?
     returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The spec id (namespaced if needed)
@@ -263,12 +263,12 @@ methods:
     description: >-
       Forward to spec_maintenance_portal.normalizeReferences: re-save one spec with every reference
       in its canonical stage-3 form.
-    signature: 'normalizeReferences(kind: string, id: string): bool'
+    signature: 'normalizeReferences(kind: WritableSpecKind, id: string): bool'
     returns: bool
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names (the L0 holds no references to normalize)
       - name: id
         type: string
         description: The spec's in-memory key, from the family's top root
@@ -311,4 +311,4 @@ methods:
         description: The fields to set
 status: complete
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-10-04T10:19:05.547Z'
+updatedAt: '2026-10-04T23:37:43.141Z'

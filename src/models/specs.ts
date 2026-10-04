@@ -48,9 +48,17 @@ export const DatabaseSpecSchema = z.object({
 });
 export type DatabaseSpec = z.infer<typeof DatabaseSpecSchema>;
 
+/** How the canvas routes its edges. */
+export const DiagramLineStyleSchema = z.enum(['bezier', 'straight', 'taxi']);
+export type DiagramLineStyle = z.infer<typeof DiagramLineStyleSchema>;
+
+/** Which view the canvas opens on (and the view a share link captures). */
+export const DiagramViewSchema = z.enum(['architecture', 'types', 'databases']);
+export type DiagramView = z.infer<typeof DiagramViewSchema>;
+
 export const DiagramConfigSchema = z.object({
-  lineStyle: z.enum(['bezier', 'straight', 'taxi']).optional(),
-  defaultView: z.enum(['architecture', 'types', 'databases']).optional(),
+  lineStyle: DiagramLineStyleSchema.optional(),
+  defaultView: DiagramViewSchema.optional(),
   showDatabases: z.boolean().optional(),
 });
 export type DiagramConfig = z.infer<typeof DiagramConfigSchema>;
@@ -257,6 +265,10 @@ export type LintConfig = z.infer<typeof LintConfigSchema>;
 export const ExtDataSchema = z.record(z.unknown());
 export type ExtData = z.infer<typeof ExtDataSchema>;
 
+/** The flow a declared lifecycle entrypoint roots. */
+export const LifecyclePhaseSchema = z.enum(['init', 'shutdown', 'cyclic', 'interrupt', 'scheduled']);
+export type LifecyclePhase = z.infer<typeof LifecyclePhaseSchema>;
+
 /**
  * A declared lifecycle flow root: a component.method the runtime invokes at a
  * lifecycle phase. Reachability analysis (unused-detection, durability
@@ -271,7 +283,7 @@ export type ExtData = z.infer<typeof ExtDataSchema>;
  */
 export const LifecycleEntrypointSchema = z.object({
   /** Which lifecycle/execution flow this roots. */
-  phase: z.enum(['init', 'shutdown', 'cyclic', 'interrupt', 'scheduled']),
+  phase: LifecyclePhaseSchema,
   /** Component id whose method the runtime invokes at this phase. */
   component: z.string(),
   /** Method name on that component's interface. */
@@ -469,16 +481,24 @@ export type ExternalLink = z.infer<typeof ExternalLinkSchema>;
 export const PortalAuthSchemeSchema = z.enum(['none', 'apiKey', 'bearer', 'basic', 'oauth2', 'openIdConnect', 'custom']);
 export type PortalAuthScheme = z.infer<typeof PortalAuthSchemeSchema>;
 
+/** Where an apiKey scheme's key travels. */
+export const ApiKeyLocationSchema = z.enum(['header', 'query', 'cookie']);
+export type ApiKeyLocation = z.infer<typeof ApiKeyLocationSchema>;
+
+/** The OAuth2 flow an oauth2 scheme uses. */
+export const OAuthFlowSchema = z.enum(['authorizationCode', 'clientCredentials', 'implicit', 'password']);
+export type OAuthFlow = z.infer<typeof OAuthFlowSchema>;
+
 export const PortalAuthSchema = z.object({
   scheme: PortalAuthSchemeSchema,
-  in: z.enum(['header', 'query', 'cookie']).optional(),
+  in: ApiKeyLocationSchema.optional(),
   name: z.string().optional(),
   bearerFormat: z.string().optional(),
   authorizationUrl: z.string().optional(),
   tokenUrl: z.string().optional(),
   refreshUrl: z.string().optional(),
   scopes: z.array(z.object({ name: z.string(), description: z.string() })).optional(),
-  flow: z.enum(['authorizationCode', 'clientCredentials', 'implicit', 'password']).optional(),
+  flow: OAuthFlowSchema.optional(),
   openIdConnectUrl: z.string().optional(),
   description: z.string().optional(),
   example: z.string().optional(),
@@ -809,6 +829,14 @@ export const FindingDeclarationSchema = z.object({
 });
 export type FindingDeclaration = z.infer<typeof FindingDeclarationSchema>;
 
+/** Who invokes a method from outside the modeled narrative graph. */
+export const InvocationKindSchema = z.enum(['runtime', 'external', 'sibling-subsystem']);
+export type InvocationKind = z.infer<typeof InvocationKindSchema>;
+
+/** What a contract method does to its component's held state. */
+export const MethodEffectSchema = z.enum(['read', 'write', 'lifecycle']);
+export type MethodEffect = z.infer<typeof MethodEffectSchema>;
+
 /**
  * One contract method as a spec file STORES it (method_signature). The shape
  * on disk differs from the resolved shape every consumer types against
@@ -861,7 +889,7 @@ export const MethodSignatureSchema = z.object({
    * (MISSING_HYDRATION); a Supervisor may call a data component it does not own only
    * through read and lifecycle methods (SUPERVISOR_WRITE_SHORTCUT). Optional elsewhere.
    */
-  effect: z.enum(['read', 'write', 'lifecycle']).optional(),
+  effect: MethodEffectSchema.optional(),
   /**
    * Typed acknowledgment of a real caller OUTSIDE the modeled narrative graph
    * (runtime timer/hook, external system, sibling subsystem). Unused-detection
@@ -873,7 +901,7 @@ export const MethodSignatureSchema = z.object({
    * registration itself is then a modeled, checkable edge.
    */
   invokedBy: z.object({
-    kind: z.enum(['runtime', 'external', 'sibling-subsystem']),
+    kind: InvocationKindSchema,
     caller: z.string().optional(),
   }).optional(),
   /**
@@ -1924,11 +1952,13 @@ export interface PinnedExternal {
   problem?: string;
 }
 
+/** What pinning did for one alias. */
+export type ExternalPinOutcome = 'pinned' | 'unchanged' | 'unresolved' | 'unreachable';
+
 /** external_pin — what pinning did for one alias. */
 export interface ExternalPin {
   alias: string;
-  /** pinned | unchanged | unresolved | unreachable */
-  outcome: 'pinned' | 'unchanged' | 'unresolved' | 'unreachable';
+  outcome: ExternalPinOutcome;
   project?: string;
   snapshot?: string;
   digest?: string;
@@ -1940,12 +1970,14 @@ export interface ExternalPin {
   detail?: string;
 }
 
+/** The verdict on one used member of a pinned external. */
+export type ExternalUseState = 'unchanged' | 'changed' | 'removed' | 'unlocked' | 'unavailable';
+
 /** external_use_status — the verdict on one used member of one pinned external. */
 export interface ExternalUseStatus {
   publicName?: string;
   member?: string;
-  /** unchanged | changed | removed | unlocked | unavailable */
-  state: 'unchanged' | 'changed' | 'removed' | 'unlocked' | 'unavailable';
+  state: ExternalUseState;
   /** EXTERNAL_CHECK_UNAVAILABLE on an unavailable entry — never a pass. */
   code?: string;
   detail?: string;
@@ -1955,8 +1987,7 @@ export interface ExternalUseStatus {
 export interface ExternalStatus {
   alias: string;
   project: string;
-  /** family | path | unresolved */
-  sourceKind: string;
+  sourceKind: import('./project-family.js').ExternalSourceKind;
   pinned: boolean;
   reachable: boolean;
   stale: boolean;
@@ -2010,9 +2041,8 @@ export interface ProjectRelations {
 export interface ExternalListing {
   alias: string;
   project: string;
-  /** family | path | unresolved */
-  sourceKind: string;
-  relation?: string;
+  sourceKind: import('./project-family.js').ExternalSourceKind;
+  relation?: import('./project-family.js').ExternalRelation;
   directory?: string;
   audience: string;
   lock?: ExternalLockEntry;

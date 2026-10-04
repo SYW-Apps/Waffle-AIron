@@ -1,0 +1,20 @@
+kind: enum
+id: pack_failure_code
+name: PackFailureCode
+description: >-
+  Why a selected extension pack could not be applied as pinned. Every code is an error except
+  PACK_STORE_DRIFT.
+fields: []
+methods: []
+sourcePath: src/core/extensions.ts
+values:
+  - name: PACK_NOT_INSTALLED
+    description: Absent from both the bundle and the store
+  - name: PACK_VERSION_UNSATISFIED
+    description: Installed, but no version satisfies the pin
+  - name: PACK_INTEGRITY_MISMATCH
+    description: The resolved content does not match the pinned digest
+  - name: PACK_STORE_DRIFT
+    description: The store copy differs from the committed bundle; a warning, and the pack still applies
+createdAt: '2026-10-04T23:13:14.964Z'
+updatedAt: '2026-10-04T23:13:15.357Z'

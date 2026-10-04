@@ -43,12 +43,12 @@ methods:
     description: >-
       Render the current project's spec tree into the requested diagram format and return the
       artifact string; the canvas draws the relation health passed in.
-    signature: 'renderDiagram(format: string, relations?: list<ProjectRelations>): string'
+    signature: 'renderDiagram(format: DiagramFormat, relations?: list<ProjectRelations>): string'
     returns: string
     params:
       - name: format
-        type: string
-        description: canvas | mermaid | drawio | excalidraw
+        type: DiagramFormat
+        description: The format to render
       - name: relations
         type: list<ProjectRelations>
         description: The family's relation health for the canvas; omitted, the canvas says it was not checked
@@ -153,13 +153,13 @@ methods:
       Load one spec of the named kind by id, or null when none is stored — for a caller that holds
       the kind as data. Routed through the core orchestrator.
     signature: >-
-      loadSpec(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      loadSpec(kind: WritableSpecKind, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
       InterfaceSpec | ImplementationSpec | TypeSpec)?
     returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The spec id (namespaced if needed); informational for the L0
@@ -342,4 +342,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:28:37.325Z'
+updatedAt: '2026-10-04T23:37:51.093Z'

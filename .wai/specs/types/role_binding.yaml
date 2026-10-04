@@ -13,8 +13,8 @@ fields:
     description: The bound role's id.
     optional: false
   - name: scopeKind
-    type: string
-    description: instance | unit | project | subsystem; absent = instance-wide.
+    type: ScopeKind
+    description: The kind of scope the binding is anchored at; absent = instance-wide.
     optional: true
   - name: scopeId
     type: string
@@ -25,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:21.004Z'
-updatedAt: '2026-10-03T13:35:46.916Z'
+updatedAt: '2026-10-04T23:38:32.073Z'

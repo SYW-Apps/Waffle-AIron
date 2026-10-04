@@ -1,0 +1,45 @@
+kind: enum
+id: component_type
+name: ComponentType
+description: >-
+  A component's stereotype: a building block, a pattern that owns blocks, or a UI block or pattern.
+  Each carries enforced dependency rules. Specialist and Gateway are still parsed so old trees load,
+  and refused by STEREOTYPE_RETIRED.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: Portal
+    description: 'The entry point: a wire boundary callers reach (HTTP, CLI, MCP, ...)'
+  - name: Orchestrator
+    description: 'Logic: a workflow, or bounded by its dependencyClass (pure or read)'
+  - name: Supervisor
+    description: Starts, watches and restarts long-running parts
+  - name: Actor
+    description: An independently running unit that owns its own loop
+  - name: Store
+    description: Holds domain state
+  - name: Index
+    description: A lookup structure over held state
+  - name: Query
+    description: A read projection over held state
+  - name: Registry
+    description: Membership of entities by identity
+  - name: Adapter
+    description: The seam to an outside system, vendor or file format
+  - name: Observer
+    description: Reacts to events it subscribes to
+  - name: View
+    description: 'UI block: renders state'
+  - name: Repository
+    description: Pattern that owns one Store with its Registry, Indexes and Queries, and optionally an Adapter
+  - name: FeatureComponent
+    description: 'UI pattern: a feature''s composed views and state'
+  - name: RouterComponent
+    description: 'UI pattern: routes between features'
+  - name: Specialist
+    description: 'Retired: an Orchestrator with a dependencyClass'
+  - name: Gateway
+    description: 'Retired: a Portal with the gateway variant'
+createdAt: '2026-10-04T23:11:43.328Z'
+updatedAt: '2026-10-04T23:11:43.729Z'

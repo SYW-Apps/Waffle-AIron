@@ -9,14 +9,12 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: status
-    type: string
-    description: >-
-      completed (the action executed) | pending-approval (an approval request was created and awaits
-      a decision).
+    type: ProjectActionStatus
+    description: Whether the action ran, or waits on an approval request.
     optional: false
   - name: action
-    type: string
-    description: project:init | project:lock.
+    type: ProjectAction
+    description: The lifecycle action.
     optional: false
   - name: summary
     type: string
@@ -42,4 +40,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-16T00:08:34.090Z'
-updatedAt: '2026-09-29T16:14:36.360Z'
+updatedAt: '2026-10-04T23:40:20.475Z'

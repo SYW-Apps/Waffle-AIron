@@ -1,0 +1,16 @@
+kind: enum
+id: diagram_view
+name: DiagramView
+description: Which view of the tree the canvas shows.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: architecture
+    description: Subsystems, components and their relations
+  - name: types
+    description: The types and their relations (the ERD)
+  - name: databases
+    description: The declared databases and their tables
+createdAt: '2026-10-04T23:32:53.412Z'
+updatedAt: '2026-10-04T23:32:53.861Z'

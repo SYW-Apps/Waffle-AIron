@@ -7,20 +7,18 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: capability
-    type: string
-    description: >-
-      One capability: project:read | project:create | project:write | project:admin |
-      approval:decide.
+    type: Capability
+    description: One capability.
     optional: false
   - name: value
-    type: string
+    type: PermissionValue
     description: >-
-      yes | approval | inherit. Roles GRANT only — they are combined most-permissively (yes >
-      approval) with the subject's other roles anchored at the same scope; a role never denies, so a
-      'no' (or 'inherit') value is non-deciding during resolution. Denial is expressed via a
-      scope-default ('everyone') or a direct-user assignment, not a role.
+      yes or approval grant; roles are combined most-permissively (yes > approval) with the
+      subject's other roles anchored at the same scope. A role never denies, so no (or inherit) is
+      non-deciding during resolution: denial is expressed via a scope default (everyone) or a
+      direct-user assignment, not a role.
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:06.030Z'
-updatedAt: '2026-09-19T11:07:16.661Z'
+updatedAt: '2026-10-04T23:40:11.529Z'

@@ -18,10 +18,8 @@ fields:
     description: Display label.
     optional: false
   - name: kind
-    type: string
-    description: >-
-      Node kind: "unit" | "project" | "subsystem" | "component" | "interface" | "implementation" |
-      "type".
+    type: WebGraphNodeKind
+    description: What the node stands for.
     optional: false
   - name: level
     type: int
@@ -71,4 +69,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:08.145Z'
-updatedAt: '2026-10-04T10:29:26.153Z'
+updatedAt: '2026-10-04T23:40:54.978Z'

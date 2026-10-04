@@ -1,5 +1,8 @@
 import type { MethodImplementation, NarrativeStep } from './specs.js';
 
+/** The finding codes a narrative step-configuration problem maps to. */
+export type StepConfigCode = 'DUPLICATE_STEP_LABEL' | 'MALFORMED_FLOW_STEP' | 'INVALID_STEP_JUMP' | 'FOREIGN_STEP_FIELD';
+
 /**
  * One thing wrong with a narrative's step configuration (step_config_problem):
  * the step it sits on, the finding code it maps to, and the detail a rule
@@ -11,7 +14,7 @@ export interface StepConfigProblem {
   /** The step the problem sits on; a duplicate label names the earlier step in its detail. */
   stepNumber: number;
   /** The finding code this problem maps to. */
-  code: 'DUPLICATE_STEP_LABEL' | 'MALFORMED_FLOW_STEP' | 'INVALID_STEP_JUMP' | 'FOREIGN_STEP_FIELD';
+  code: StepConfigCode;
   /** The problem stated in full, ready to follow a rule's own location prefix. */
   detail: string;
 }

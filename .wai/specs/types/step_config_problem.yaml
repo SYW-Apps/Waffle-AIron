@@ -12,10 +12,8 @@ fields:
     description: The step the problem sits on; a duplicate label names the earlier step in its detail.
     optional: false
   - name: code
-    type: string
-    description: >-
-      The finding code this problem maps to: DUPLICATE_STEP_LABEL, MALFORMED_FLOW_STEP,
-      INVALID_STEP_JUMP or FOREIGN_STEP_FIELD.
+    type: StepConfigCode
+    description: The finding code this problem maps to.
     optional: false
   - name: detail
     type: string
@@ -24,4 +22,4 @@ fields:
 methods: []
 sourcePath: src/models/step-config.ts
 createdAt: '2026-09-17T22:21:25.211Z'
-updatedAt: '2026-10-04T10:29:18.310Z'
+updatedAt: '2026-10-04T23:40:47.677Z'

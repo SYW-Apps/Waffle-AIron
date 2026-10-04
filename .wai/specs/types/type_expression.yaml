@@ -32,10 +32,8 @@ description: >-
   `Page<T>` stays a named type applied to arguments.
 fields:
   - name: form
-    type: string
-    description: >-
-      primitive | named | list | set | map | optional | union | async | applied (a named generic
-      applied to arguments)
+    type: TypeForm
+    description: The expression's node kind.
     optional: false
   - name: name
     type: string
@@ -51,16 +49,14 @@ fields:
     optional: false
 methods:
   - name: parse
-    signature: 'parse(text: string, position: string): TypeParse'
+    signature: 'parse(text: string, position: TypePosition): TypeParse'
     params:
       - name: text
         type: string
         description: The type position as written
       - name: position
-        type: string
-        description: >-
-          param | returns | field | type-method-param | type-method-returns | signature-param |
-          signature-returns: what the position rules judge
+        type: TypePosition
+        description: What the position rules judge
     returns: TypeParse
     description: >-
       Read one written type position under the grammar, normalising every alias, and judge it for
@@ -102,4 +98,4 @@ methods:
     symbol: typeIsMany
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:49.343Z'
-updatedAt: '2026-10-04T10:51:48.792Z'
+updatedAt: '2026-10-04T23:40:50.140Z'

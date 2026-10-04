@@ -23,10 +23,8 @@ fields:
     description: The version currently applied under the same name, when the write replaces one (an update).
     optional: true
   - name: direction
-    type: string
-    description: >-
-      apply (the write adds or replaces the pack) | remove (it drops the pack; the findings read as
-      what the pack accounts for).
+    type: PackImpactDirection
+    description: Which way the write goes.
     optional: false
   - name: doctrine
     type: list<DoctrineChange>
@@ -72,4 +70,4 @@ methods:
     symbol: impactHeadline
 sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:59.377Z'
-updatedAt: '2026-10-04T10:20:39.025Z'
+updatedAt: '2026-10-04T23:40:08.532Z'

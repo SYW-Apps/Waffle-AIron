@@ -8,8 +8,8 @@ description: >-
   says what the shape is.
 fields:
   - name: breadth
-    type: string
-    description: 'How much of the tree the agent must read: narrow, moderate or wide.'
+    type: WorkBreadth
+    description: How much of the tree the agent must read.
     optional: false
   - name: writes
     type: bool
@@ -19,8 +19,8 @@ fields:
       could not implement.
     optional: false
   - name: reasoningDepth
-    type: string
-    description: 'How much judgment the work carries: mechanical, standard or deep.'
+    type: ReasoningDepth
+    description: How much judgment the work carries.
     optional: false
   - name: delegates
     type: bool
@@ -38,4 +38,4 @@ fields:
 methods: []
 sourcePath: src/models/execution.ts
 createdAt: '2026-09-20T23:50:42.878Z'
-updatedAt: '2026-10-04T10:20:06.233Z'
+updatedAt: '2026-10-04T23:39:33.208Z'

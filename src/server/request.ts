@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import type { DiagramFormat } from '../core/diagram.js';
 import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { runWithProjectRoot, runWithProjectBinding, type HostedRecordLookup, type WriteReach } from '../utils/fs.js';
@@ -34,6 +35,7 @@ import {
 } from './landscape.js';
 import type {
   AuditEvent,
+  AuditOutcome,
   FamilyReach,
   HostConfig,
   Principal,
@@ -121,7 +123,7 @@ export function auditToolCall(
   principal: Principal,
   binding: Pick<ProjectBinding, 'projectId' | 'via'>,
   body: unknown,
-  outcome: string,
+  outcome: AuditOutcome,
 ): void {
   const projectId = binding.projectId;
   const composition = binding.via?.split(SUBPROJECT_SEPARATOR)[0];
@@ -1045,7 +1047,8 @@ export function handleViewDiagram(cfg: HostConfig, req: IncomingMessage, res: Se
     sendJson(res, 404, { error: 'project not found' });
     return;
   }
-  const html = runWithProjectRoot(root, () => hostCore.renderDiagram(grant.format));
+  // renderDiagram refuses a format outside the set, so the granted string is handed on as is.
+  const html = runWithProjectRoot(root, () => hostCore.renderDiagram(grant.format as DiagramFormat));
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
   res.end(html);
 }

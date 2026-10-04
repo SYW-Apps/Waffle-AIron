@@ -21,10 +21,8 @@ fields:
       by step number. Empty when the method is specified by intent.
     optional: false
   - name: detail
-    type: string
-    description: >-
-      Narrative detail for this method: full | calls-only | intent (overrides the spec-level
-      default)
+    type: NarrativeDetail
+    description: Narrative detail for this method (overrides the spec-level default)
     optional: true
   - name: intent
     type: string
@@ -33,8 +31,8 @@ fields:
       failure behaviour here or in the contract's guarantees (INTENT_FLOOR)
     optional: true
   - name: conformance
-    type: string
-    description: 'Conformance tier for this method: declared | anchored | off (overrides the spec-level default)'
+    type: ConformanceTier
+    description: Conformance tier for this method (overrides the spec-level default)
     optional: true
   - name: symbol
     type: string
@@ -142,4 +140,4 @@ methods:
     symbol: resolveNarrativeLabels
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T16:59:08.774Z'
-updatedAt: '2026-10-04T10:20:30.399Z'
+updatedAt: '2026-10-04T23:39:24.080Z'

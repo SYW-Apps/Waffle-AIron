@@ -6,11 +6,10 @@ description: >-
   `.wai/project.yaml`, so turning the dial is a reviewable change rather than a per-run flag.
 fields:
   - name: tier
-    type: string
+    type: BudgetTier
     description: >-
-      How hard to optimize: off, free, default, trade or aggressive. Defaults to `off`, which
-      preserves pre-feature output exactly — enabling budgets can never silently change an existing
-      project's generated files.
+      How hard to optimize. Defaults to `off`, which preserves pre-feature output exactly — enabling
+      budgets can never silently change an existing project's generated files.
     optional: false
   - name: overrides
     type: any
@@ -22,4 +21,4 @@ fields:
 methods: []
 sourcePath: src/models/execution.ts
 createdAt: '2026-09-20T23:50:46.626Z'
-updatedAt: '2026-10-04T10:20:05.895Z'
+updatedAt: '2026-10-04T23:39:31.752Z'

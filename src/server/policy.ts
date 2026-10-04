@@ -16,6 +16,7 @@ import * as hostValidator from './adapters/validator.js';
 import { computeGateStateId } from './adapters/validator.js';
 import type {
   AuditEvent,
+  AuditLevel,
   AvailableProfile,
   GovernedProjectCreation,
   HostConfig,
@@ -378,7 +379,7 @@ const SYSTEM_SUBJECT: PrincipalSubject = { userId: 'system', kind: 'service', is
 function buildAuditEvent(
   actor: PrincipalSubject,
   action: string,
-  level: string,
+  level: AuditLevel,
   category: string,
   over: Partial<AuditEvent> = {},
   tokenId?: string,

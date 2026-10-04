@@ -18,8 +18,8 @@ fields:
     description: Human-readable type name.
     optional: false
   - name: kind
-    type: string
-    description: entity | value-object | signature | enum
+    type: TypeKind
+    description: What the type declares
     optional: false
   - name: fields
     type: list<any>
@@ -48,4 +48,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:32.022Z'
-updatedAt: '2026-10-04T10:51:31.702Z'
+updatedAt: '2026-10-04T23:39:20.591Z'

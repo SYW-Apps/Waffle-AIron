@@ -18,12 +18,11 @@ fields:
       or "policy:change".
     optional: false
   - name: status
-    type: string
+    type: ApprovalRequestStatus
     description: >-
-      Lifecycle status: "pending", "approved", "denied", "expired", "completed", or "cancelled". An
-      approved request is cancelled when its execution refused because the request no longer
-      describes what would be done (a project:lock whose gateStateId no longer matches the tree);
-      executionSummary then says why, and the requester asks again.
+      Lifecycle status. An approved request is cancelled when its execution refused because the
+      request no longer describes what would be done (a project:lock whose gateStateId no longer
+      matches the tree); executionSummary then says why, and the requester asks again.
     optional: false
   - name: requestedBy
     type: PrincipalSubject
@@ -102,4 +101,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:44.031Z'
-updatedAt: '2026-10-01T16:52:07.595Z'
+updatedAt: '2026-10-04T23:38:43.387Z'

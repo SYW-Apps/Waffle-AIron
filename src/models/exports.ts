@@ -11,6 +11,9 @@
 
 import type { CrossProjectReference } from './project-family.js';
 
+/** What an export binds a public name to: a component (with its contract), or a type. */
+export type ExportKind = 'component' | 'type';
+
 /**
  * One resolved entry of an export table: a public name bound to its canonical
  * target after every re-export has been followed.
@@ -18,8 +21,7 @@ import type { CrossProjectReference } from './project-family.js';
 export interface ResolvedExport {
   /** The name consumers use. */
   publicName: string;
-  /** component | type */
-  kind: 'component' | 'type';
+  kind: ExportKind;
   /** The subsystem that declares the exported item — where the chain ends. */
   source: string;
   /** The exported component's qualified id, for kind component. */
@@ -64,12 +66,14 @@ export interface ExportProblem {
   detail: string;
 }
 
+/** Whose export table: one subsystem's L1 table, or a project's L0 table. */
+export type ExportTableLevel = 'subsystem' | 'project';
+
 /** An export table after resolution, flattened, with the problems met on the way. */
 export interface ResolvedExportTable {
   /** A subsystem id; for a project table, the bound root's system name or a member project's mount namespace. */
   owner: string;
-  /** subsystem | project */
-  level: 'subsystem' | 'project';
+  level: ExportTableLevel;
   entries: ResolvedExport[];
   problems: ExportProblem[];
 }
@@ -89,8 +93,7 @@ export function exportTargetKey(e: Pick<ResolvedExport, 'kind' | 'component' | '
  */
 export interface ExportUse {
   publicName: string;
-  /** component | type */
-  kind: 'component' | 'type';
+  kind: ExportKind;
   /** Contract method names, `capability:<name>`, or `type`; sorted, empty for a bare dependency. */
   members: string[];
 }

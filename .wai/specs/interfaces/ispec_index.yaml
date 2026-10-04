@@ -91,13 +91,13 @@ methods:
       Load one spec of the named kind by id through the typed loader of that kind, or null when none
       is stored. The L0 is a singleton: its id is informational.
     signature: >-
-      load(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
-      ImplementationSpec | TypeSpec)?
+      load(kind: WritableSpecKind, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec)?
     returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The spec id (namespaced if needed)
@@ -193,4 +193,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-04T10:19:37.241Z'
+updatedAt: '2026-10-04T23:37:44.140Z'

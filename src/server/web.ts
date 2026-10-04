@@ -80,6 +80,7 @@ import type {
   WebContext,
   WebGraphModel,
   WebGraphNode,
+  WebGraphNodeKind,
   WebLoginOptions,
   WebSession,
 } from './types.js';
@@ -821,7 +822,7 @@ function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGr
 
   const nodes: WebGraphNode[] = [];
   for (const n of model.nodes) {
-    let kind: string;
+    let kind: WebGraphNodeKind;
     let nodeLevel: number;
     if (n.nodeKind === 'orgUnit') {
       kind = 'unit';

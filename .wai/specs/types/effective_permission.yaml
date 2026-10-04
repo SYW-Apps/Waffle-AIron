@@ -8,18 +8,16 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: value
-    type: string
-    description: >-
-      yes | approval | no — the resolved effective permission (never 'inherit'; inherit is consumed
-      during the walk).
+    type: EffectiveValue
+    description: 'The resolved effective permission (never inherit: inherit is consumed during the walk).'
     optional: false
   - name: source
-    type: string
-    description: 'Which source decided it: instance-admin | user | role | everyone-default | instance-default.'
+    type: PermissionSource
+    description: Which source decided it.
     optional: false
   - name: decidedScopeKind
-    type: string
-    description: Scope kind whose setting won (instance | unit | project | subsystem).
+    type: ScopeKind
+    description: Scope kind whose setting won.
     optional: true
   - name: decidedScopeId
     type: string
@@ -35,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:33.560Z'
-updatedAt: '2026-10-03T13:47:57.509Z'
+updatedAt: '2026-10-04T23:38:28.650Z'

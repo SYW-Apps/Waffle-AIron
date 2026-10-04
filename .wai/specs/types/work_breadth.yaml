@@ -1,0 +1,18 @@
+kind: enum
+id: work_breadth
+name: WorkBreadth
+description: >-
+  How much of the tree an agent must read to do its job, derived from its owned-path breadth and
+  whether its role is inherently surveying.
+fields: []
+methods: []
+sourcePath: src/models/execution.ts
+values:
+  - name: narrow
+    description: Its own few files
+  - name: moderate
+    description: A subsystem's worth
+  - name: wide
+    description: Across the tree
+createdAt: '2026-10-04T23:12:28.685Z'
+updatedAt: '2026-10-04T23:12:29.081Z'

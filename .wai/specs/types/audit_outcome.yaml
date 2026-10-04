@@ -1,0 +1,18 @@
+kind: enum
+id: audit_outcome
+name: AuditOutcome
+description: How an audited action ended.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: success
+  - name: denied
+    description: Refused by authorization
+  - name: failed
+    description: Attempted, and failed
+  - name: skipped
+    description: Not attempted
+createdAt: '2026-10-04T23:18:23.018Z'
+updatedAt: '2026-10-04T23:18:23.444Z'

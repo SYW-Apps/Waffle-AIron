@@ -157,20 +157,20 @@ methods:
       Forward to permission_admin_orchestrator.listAssignments with the session as the credential
       (project:admin over the scope upstream).
     signature: >-
-      listAssignments(sessionId: string, scopeKind?: string, scopeId?: string, subjectKind?: string,
-      subjectId?: string): list<PermissionAssignment>
+      listAssignments(sessionId: string, scopeKind?: ScopeKind, scopeId?: string, subjectKind?:
+      AssignmentSubjectKind, subjectId?: string): list<PermissionAssignment>
     returns: list<PermissionAssignment>
     params:
       - name: sessionId
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
         optional: true
       - name: scopeId
         type: string
         optional: true
       - name: subjectKind
-        type: string
+        type: AssignmentSubjectKind
         optional: true
       - name: subjectId
         type: string
@@ -196,7 +196,7 @@ methods:
   - name: bindRole
     description: Forward to permission_admin_orchestrator.bindRole with the session as the credential.
     signature: >-
-      bindRole(sessionId: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
+      bindRole(sessionId: string, userId: string, roleId: string, scopeKind?: ScopeKind, scopeId?:
       string): HostedUserRecord
     returns: HostedUserRecord
     params:
@@ -207,7 +207,7 @@ methods:
       - name: roleId
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
         optional: true
       - name: scopeId
         type: string
@@ -215,7 +215,7 @@ methods:
   - name: unbindRole
     description: Forward to permission_admin_orchestrator.unbindRole with the session as the credential.
     signature: >-
-      unbindRole(sessionId: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
+      unbindRole(sessionId: string, userId: string, roleId: string, scopeKind?: ScopeKind, scopeId?:
       string): HostedUserRecord
     returns: HostedUserRecord
     params:
@@ -226,7 +226,7 @@ methods:
       - name: roleId
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
         optional: true
       - name: scopeId
         type: string
@@ -237,7 +237,7 @@ methods:
       (project:admin over the scope upstream): one user's effective permission at a unit, project or
       subsystem scope, with the rung that decided it.
     signature: >-
-      explainPermission(sessionId: string, userId: string, capability: string, scopeKind: string,
+      explainPermission(sessionId: string, userId: string, capability: string, scopeKind: ScopeKind,
       scopeId: string): EffectivePermission
     returns: EffectivePermission
     params:
@@ -248,9 +248,9 @@ methods:
       - name: capability
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
       - name: scopeId
         type: string
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-10-04T10:19:47.812Z'
+updatedAt: '2026-10-04T23:38:25.122Z'

@@ -180,12 +180,12 @@ methods:
       the artifact as a string. The CLI reaches diagram rendering through here rather than importing
       the canvas and exporter modules directly — those live in another subsystem, and an adapter is
       what a subsystem boundary is crossed with.
-    signature: 'renderDiagram(format: string, relations?: list<ProjectRelations>): string'
+    signature: 'renderDiagram(format: DiagramFormat, relations?: list<ProjectRelations>): string'
     returns: string
     params:
       - name: format
-        type: string
-        description: canvas, mermaid, drawio or excalidraw
+        type: DiagramFormat
+        description: The format to render
       - name: relations
         type: list<ProjectRelations>
         description: >-
@@ -331,15 +331,15 @@ methods:
     description: >-
       Put the wairon guide into a tool's configuration file, for `wairon init`. Forwarded to the
       core portal.
-    signature: 'injectGuide(filePath: string, scope: string): void'
+    signature: 'injectGuide(filePath: string, scope: GuideScope): void'
     returns: void
     params:
       - name: filePath
         type: string
         description: The configuration file
       - name: scope
-        type: string
-        description: '`global` or `local`'
+        type: GuideScope
+        description: 'Which kind of guide file it is: a user-level one or a project''s own'
     effect: write
   - name: writeRootGuideDelegator
     description: >-
@@ -578,4 +578,4 @@ methods:
         description: Write the rewrite; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:18:35.212Z'
+updatedAt: '2026-10-04T23:38:10.074Z'

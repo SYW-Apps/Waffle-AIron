@@ -1,0 +1,21 @@
+kind: enum
+id: external_use_state
+name: ExternalUseState
+description: The verdict on one used member of a pinned external.
+subsystem: sdd_surfaces
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: unchanged
+    description: The live digest equals the locked one
+  - name: changed
+    description: It differs
+  - name: removed
+    description: The live table no longer has the name or the member
+  - name: unlocked
+    description: 'Used now, but not in the lock: re-pin'
+  - name: unavailable
+    description: Cannot be compared
+createdAt: '2026-10-04T23:33:08.967Z'
+updatedAt: '2026-10-04T23:33:09.514Z'
