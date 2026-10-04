@@ -15,15 +15,6 @@ description: >-
   on its descriptor).
 component: pack_store
 methods:
-  - name: listGlobalPacks
-    description: >-
-      Probe every pack across both server-global tiers — the immutable image-layer directory and the
-      mutable instance directory — and return their union as descriptors, each tagged with its tier;
-      an image pack shadowed by a same-named instance pack is marked shadowed (the instance copy is
-      the effective one), so drift is visible in the listing.
-    signature: 'listGlobalPacks(): list<PackDescriptor>'
-    returns: list<PackDescriptor>
-    params: []
   - name: installGlobalPack
     description: >-
       Validate the content as a declarative pack and write it as <name>.yaml into the MUTABLE
@@ -96,9 +87,12 @@ methods:
         optional: true
   - name: storeListGlobalPacks
     description: >-
-      List the server-global declarative packs straight from the store layer — the PRE-AUTHORIZED
-      read used by internal health and policy flows (no credential: the caller has already enforced
-      authorization).
+      Probe every pack across both server-global tiers — the immutable image-layer directory and the
+      mutable instance directory — and return their union as descriptors, each tagged with its tier;
+      an image pack shadowed by a same-named instance pack is marked shadowed (the instance copy is
+      the effective one), so drift is visible in the listing. The PRE-AUTHORIZED read: no
+      credential, every caller (the gated admin listing, health and policy flows) has already
+      enforced its own authorization.
     signature: 'storeListGlobalPacks(): PackDescriptor[]'
     returns: list<PackDescriptor>
   - name: executeApprovedListProjectPacks
@@ -261,4 +255,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-10-04T10:19:11.725Z'
+updatedAt: '2026-10-04T19:55:05.914Z'

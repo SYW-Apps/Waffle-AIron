@@ -4060,7 +4060,7 @@ export class SpecWorkspace {
     this.assertHomeInReach(p, 'system', spec);
     ensureDir(path.dirname(p));
     writeSpecFile(p, parseOrThrow(SystemSpecSchema, spec, 'system', spec.name));
-    invalidateSpecCache();
+    registryInvalidateCache();
   }
 
   // -------------------------------------------------------------------------
@@ -4262,13 +4262,13 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     this.writeHome(p, parseOrThrow(SubsystemSpecSchema, specToWrite, 'subsystem', spec.id), 'subsystem');
-    invalidateSpecCache();
+    registryInvalidateCache();
   }
 
   deleteSubsystemSpec(id: string): boolean {
     const p = this.getSubsystemPath(id);
     if (!this.removeHome(p, 'subsystem')) return false;
-    invalidateSpecCache();
+    registryInvalidateCache();
     return true;
   }
 
@@ -4345,7 +4345,7 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     this.writeHome(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id), 'component');
-    invalidateSpecCache();
+    registryInvalidateCache();
     // Keep the physical layout in sync with ownership: nest owned members under
     // their pattern, and move anything an `owns` change has displaced.
     this.normalizeComponentLayout();
@@ -4355,7 +4355,7 @@ export class SpecWorkspace {
   deleteComponentSpec(id: string): boolean {
     const p = this.getComponentPath(id);
     if (!this.removeHome(p, 'component')) return false;
-    invalidateSpecCache();
+    registryInvalidateCache();
     return true;
   }
 
@@ -4398,7 +4398,7 @@ export class SpecWorkspace {
       if (!desiredDir) continue;
       if (moveComponentFolder(path.dirname(currentPath), desiredDir)) moved.push(comp.id);
     }
-    if (moved.length) invalidateSpecCache();
+    if (moved.length) registryInvalidateCache();
     return moved;
   }
 
@@ -4499,14 +4499,14 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     this.writeHome(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id), 'interface');
-    invalidateSpecCache();
+    registryInvalidateCache();
     return notices;
   }
 
   deleteInterfaceSpec(id: string): boolean {
     const p = this.getInterfacePath(id);
     if (!this.removeHome(p, 'interface')) return false;
-    invalidateSpecCache();
+    registryInvalidateCache();
     return true;
   }
 
@@ -4565,14 +4565,14 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     this.writeHome(p, parseOrThrow(ImplementationSpecSchema, specToWrite, 'implementation', spec.id), 'implementation');
-    invalidateSpecCache();
+    registryInvalidateCache();
     return notices;
   }
 
   deleteImplementationSpec(id: string): boolean {
     const p = this.getImplementationPath(id);
     if (!this.removeHome(p, 'implementation')) return false;
-    invalidateSpecCache();
+    registryInvalidateCache();
     return true;
   }
 
@@ -4631,7 +4631,7 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     this.writeHome(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id), 'type');
-    invalidateSpecCache();
+    registryInvalidateCache();
     return notices;
   }
 
@@ -4639,7 +4639,7 @@ export class SpecWorkspace {
     const spec = this.loadTypeSpec(id);
     const p = this.getTypePath(id, spec?.subsystem, spec?.group);
     if (!this.removeHome(p, 'type')) return false;
-    invalidateSpecCache();
+    registryInvalidateCache();
     return true;
   }
 
@@ -4668,13 +4668,13 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     this.writeHome(p, parseOrThrow(GroupSpecSchema, specToWrite, 'group', spec.id), 'group');
-    invalidateSpecCache();
+    registryInvalidateCache();
   }
 
   deleteGroupSpec(id: string): boolean {
     const p = this.getGroupPath(id);
     if (!this.removeHome(p, 'group')) return false;
-    invalidateSpecCache();
+    registryInvalidateCache();
     return true;
   }
 
@@ -4782,7 +4782,7 @@ export class SpecWorkspace {
       return false;
     }
     if (!removeSpecFile(mount.file, this.paths.specsDir())) return false;
-    invalidateSpecCache();
+    registryInvalidateCache();
     return true;
   }
 
@@ -4876,7 +4876,7 @@ export class SpecWorkspace {
     }
     if (JSON.stringify(document) === JSON.stringify(stored)) return false;
     this.writeHome(file, document, kind as SpecDocumentKind);
-    invalidateSpecCache();
+    registryInvalidateCache();
     return true;
   }
 
@@ -7074,19 +7074,24 @@ function current(): SpecWorkspace {
 }
 
 /**
- * Invalidate every workspace's cache and drop the instances. Invalidation must
+ * spec_registry.invalidateCache — invalidate every workspace's cache and drop the instances. Invalidation must
  * hit the instances themselves (not just the map) because a workspace method
  * may still be mid-flight holding `this` — e.g. saveComponentSpec invalidates
  * globally and then runs normalizeComponentLayout on the same instance, which
  * must rescan rather than serve its stale index.
  */
-export function invalidateSpecCache(): void {
+function registryInvalidateCache(): void {
   // Invalidate IN PLACE — never clear the registry. A caller holding a
   // workspaceFor() reference (tests, the hosted server's per-project scopes)
   // must keep receiving invalidations; evicting the instance orphaned such
   // references on a permanently-stale index whose path lookups then
   // mis-routed writes into specs/default fallbacks.
   for (const ws of workspaces.values()) ws.invalidate();
+}
+
+/** spec_loader.invalidateCache — forwarded 1:1 to the registry write face. */
+export function invalidateSpecCache(): void {
+  registryInvalidateCache();
 }
 
 export function getLoaderIssues(): ValidationIssue[] {

@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { IncomingMessage, ServerResponse } from 'http';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { parseYaml } from '../utils/yaml.js';
 import type { ProjectConfig } from '../models/project.js';
@@ -11,7 +10,6 @@ import { executeApprovedCreate } from './admin.js';
 import { resolveProjectRoot } from './projects.js';
 import { authorize } from './authorization.js';
 import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
-import { sendJson } from './httpio.js';
 import * as packs from './packs.js';
 import * as hostCore from './adapters/core.js';
 import * as hostValidator from './adapters/validator.js';
@@ -66,13 +64,12 @@ function packPolicyPath(dataDir: string): string {
 }
 
 /**
- * policy_store.load → policy_index.getPackPolicy → policy_repository.getPackPolicy.
- * Read the single persisted active policy record. A missing file yields null (no
- * policy ever configured — the orchestrator substitutes the permissive default);
- * an unreadable file or structurally invalid JSON fails with a storage error
- * naming the path.
+ * policy_store.load. Read the single persisted active policy record. A missing
+ * file yields null (no policy ever configured — the orchestrator substitutes the
+ * permissive default); an unreadable file or structurally invalid JSON fails with
+ * a storage error naming the path.
  */
-export function getPackPolicyRecord(dataDir: string): InstancePackPolicy | null {
+function storeLoadPackPolicy(dataDir: string): InstancePackPolicy | null {
   const p = packPolicyPath(dataDir);
   let raw: string;
   try {
@@ -89,20 +86,42 @@ export function getPackPolicyRecord(dataDir: string): InstancePackPolicy | null 
 }
 
 /**
- * policy_registry.setPackPolicy → policy_repository.setPackPolicy. Persist the
- * supplied policy as the replacement active record: stamp updatedAt server-side
- * (preserving the orchestrator-supplied updatedBy and the caller's lists/posture
- * verbatim), write the single record via write-temp-then-rename, and return the
- * stored policy. A persistence failure leaves the previous record intact.
+ * policy_store.replaceActive. Write the single active record via
+ * write-temp-then-rename, so a persistence failure leaves the previous record
+ * intact.
  */
-export function setPackPolicyRecord(dataDir: string, policy: InstancePackPolicy): InstancePackPolicy {
-  const stored: InstancePackPolicy = { ...policy, updatedAt: new Date().toISOString() };
+function storeReplaceActivePackPolicy(dataDir: string, policy: InstancePackPolicy): void {
   const p = packPolicyPath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(stored, null, 2) + '\n');
+  fs.writeFileSync(tmp, JSON.stringify(policy, null, 2) + '\n');
   fs.renameSync(tmp, p);
+}
+
+/** policy_index.getPackPolicy: the active record as stored, or null. */
+function indexGetPackPolicy(dataDir: string): InstancePackPolicy | null {
+  return storeLoadPackPolicy(dataDir);
+}
+
+/**
+ * policy_registry.setPackPolicy. Stamp updatedAt server-side (preserving the
+ * orchestrator-supplied updatedBy and the caller's lists/posture verbatim),
+ * replace the active record, and return the stored policy.
+ */
+function registrySetPackPolicy(dataDir: string, policy: InstancePackPolicy): InstancePackPolicy {
+  const stored: InstancePackPolicy = { ...policy, updatedAt: new Date().toISOString() };
+  storeReplaceActivePackPolicy(dataDir, stored);
   return stored;
+}
+
+/** policy_repository.getPackPolicy: forwards to the policy index. */
+export function getPackPolicyRecord(dataDir: string): InstancePackPolicy | null {
+  return indexGetPackPolicy(dataDir);
+}
+
+/** policy_repository.setPackPolicy: forwards to the policy registry. */
+export function setPackPolicyRecord(dataDir: string, policy: InstancePackPolicy): InstancePackPolicy {
+  return registrySetPackPolicy(dataDir, policy);
 }
 
 // ── exposure-policy storage (third policy collection) ────────────────────────
@@ -1326,60 +1345,4 @@ export function setPackPolicy(
   );
 
   return stored;
-}
-
-// ── Project Policy Portal (HTTP) ─────────────────────────────────────────────
-//
-// Pure forwarding to the orchestrator functions above. Rides the ADMIN-plane
-// listener (mirroring identity.ts), owning its own error → status mapping
-// (401/403/404/400) so faults never fall through to the admin-plane catch. The
-// pre-authorized entries (executeApprovedInit, evaluateInitRequest) are
-// intentionally not exposed here. Called by http.ts when the admin listener sees
-// a `/projects/*` or `/instance/*` path.
-
-export function handlePolicyRequest(
-  cfg: HostConfig,
-  credential: string | null,
-  req: IncomingMessage,
-  res: ServerResponse,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  body: any,
-  url: URL,
-): void {
-  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
-  try {
-    if (parts[0] === 'projects') {
-      // POST /projects/init
-      if (req.method === 'POST' && parts.length === 2 && parts[1] === 'init') {
-        return sendJson(res, 201, initializeProjectWithProfile(cfg, credential, body as ProjectInitRequest));
-      }
-      // GET /projects/{id}/policy/evaluation
-      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'policy' && parts[3] === 'evaluation') {
-        return sendJson(res, 200, evaluateProjectPolicy(cfg, credential, parts[1]));
-      }
-      // POST /projects/{id}/policy/reconcile
-      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'policy' && parts[3] === 'reconcile') {
-        return sendJson(res, 200, reconcileProjectPolicy(cfg, credential, parts[1]));
-      }
-    }
-
-    if (parts[0] === 'instance') {
-      // GET /instance/pack-policy
-      if (req.method === 'GET' && parts.length === 2 && parts[1] === 'pack-policy') {
-        return sendJson(res, 200, getPackPolicy(cfg, credential));
-      }
-      // PUT /instance/pack-policy
-      if (req.method === 'PUT' && parts.length === 2 && parts[1] === 'pack-policy') {
-        return sendJson(res, 200, setPackPolicy(cfg, credential, body as InstancePackPolicy));
-      }
-    }
-
-    sendJson(res, 404, { error: 'not found' });
-  } catch (err) {
-    if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
-    if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/not found|unknown project/i.test(msg)) return sendJson(res, 404, { error: msg });
-    return sendJson(res, 400, { error: msg });
-  }
 }

@@ -11,11 +11,12 @@ import * as admin from './admin.js';
 import * as packs from './packs.js';
 import * as backupSchedule from './backup-schedule.js';
 import { bootstrapInstance } from './instance-bootstrap.js';
-import * as identity from './identity.js';
+import * as identityPortal from './identity-portal.js';
 import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
-import * as landscape from './landscape.js';
-import * as operations from './operations.js';
+import * as policyPortal from './policy-portal.js';
+import * as landscapePortal from './landscape-portal.js';
+import * as operationsPortal from './operations-portal.js';
 import { AdminAuthError, LockValidationError, UnauthenticatedError, ForbiddenError } from './errors.js';
 import { migratePermissionModel } from './migration.js';
 import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy } from './types.js';
@@ -420,11 +421,11 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     const body: any = req.method === 'POST' || req.method === 'PUT' ? (await readBody(req)) ?? {} : {};
 
     // Identity control plane rides the admin listener behind identityApiEnabled
-    // (see identity.ts). It owns its own error → status mapping, so it returns
+    // (see identity-portal.ts). It owns its own error → status mapping, so it returns
     // before the admin catch. A disabled flag answers 404 (surface not mounted).
     if (parts[0] === 'identity') {
       if (!exposure.identityApiEnabled) return sendJson(res, 404, { error: 'not found' });
-      identity.handleIdentityRequest(cfg, cred, req, res, body, url);
+      identityPortal.handleIdentityRequest(cfg, cred, req, res, body, url);
       return;
     }
 
@@ -436,7 +437,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // mapping, returning before the admin catch.
     if (parts[0] === 'projects' || parts[0] === 'instance') {
       if (!exposure.projectPolicyApiEnabled) return sendJson(res, 404, { error: 'not found' });
-      policy.handlePolicyRequest(cfg, cred, req, res, body, url);
+      policyPortal.handlePolicyRequest(cfg, cred, req, res, body, url);
       return;
     }
 
@@ -446,7 +447,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // admin blocks below are never shadowed.
     if (parts[0] === 'landscape') {
       if (!exposure.landscapeApiEnabled) return sendJson(res, 404, { error: 'not found' });
-      landscape.handleLandscapeRequest(cfg, cred, req, res, body, url);
+      landscapePortal.handleLandscapeRequest(cfg, cred, req, res, body, url);
       return;
     }
 
@@ -456,7 +457,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // 'operations', never 'admin', so the admin blocks below are never shadowed.
     if (parts[0] === 'operations') {
       if (!exposure.operationsApiEnabled) return sendJson(res, 404, { error: 'not found' });
-      operations.handleOperationsRequest(cfg, cred, req, res, url);
+      operationsPortal.handleOperationsRequest(cfg, cred, req, res, url);
       return;
     }
 

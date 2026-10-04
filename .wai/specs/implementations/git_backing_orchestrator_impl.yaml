@@ -84,32 +84,39 @@ methods:
         targetComponent: secret_repository
         targetMethod: write
       - stepNumber: 9
+        description: >-
+          Find the binding already stored for this scope, so a re-bind updates it in place and keeps
+          its id and createdAt
+        type: call
+        targetComponent: git_backing_repository
+        targetMethod: listBindings
+      - stepNumber: 10
         description: Upsert the binding through the repository (one binding per scope — a re-bind replaces)
         type: call
         targetComponent: git_backing_repository
         targetMethod: upsertBinding
         assertsGuarantees:
           - atomic
-      - stepNumber: 10
+      - stepNumber: 11
         description: Append a redacted audit event without letting a failure fail the bind
         type: try
-        endStep: 12
+        endStep: 13
         catches:
           - error: audit append failure
-            step: 13
-      - stepNumber: 11
+            step: 14
+      - stepNumber: 12
         description: Append the redacted git.backing.bind audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 12
+      - stepNumber: 13
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 14
-      - stepNumber: 13
+        toStep: 15
+      - stepNumber: 14
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: Return the stored binding
         type: return
         outcome: stored binding
@@ -299,7 +306,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the due bindings
-        endStep: 6
+        endStep: 7
       - stepNumber: 3
         description: Clone-or-open the backing repo's working copy
         type: call
@@ -313,22 +320,25 @@ methods:
         targetComponent: git_backing_adapter
         targetMethod: mirrorTree
       - stepNumber: 5
-        description: >-
-          Commit and push skip-if-clean; on a published sync record lastSyncAt through the
-          repository
+        description: Commit and push skip-if-clean
         type: call
         targetComponent: git_backing_adapter
         targetMethod: commitAndPush
       - stepNumber: 6
+        description: When the sync published, record lastSyncAt through the repository
+        type: call
+        targetComponent: git_backing_repository
+        targetMethod: touchSync
+      - stepNumber: 7
         description: >-
           Record any per-binding failure as a server diagnostic and continue — one binding's failure
           never aborts the sweep
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return once the sweep completes
         type: return
         outcome: sweep completed
 detail: full
 status: complete
 createdAt: '2026-07-16T15:40:54.973Z'
-updatedAt: '2026-10-03T17:50:48.674Z'
+updatedAt: '2026-10-04T19:43:07.786Z'

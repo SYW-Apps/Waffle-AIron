@@ -16,6 +16,7 @@ dependsOn:
   - admin_orchestrator
   - pack_orchestrator
   - project_lifecycle_orchestrator
+  - policy_repository
 portalType: HTTP_API
 mounts:
   - portal: identity_portal
@@ -37,4 +38,4 @@ mounts:
     via: handleOperationsRequest
 status: complete
 createdAt: '2026-07-04T12:33:47.174Z'
-updatedAt: '2026-09-25T22:40:26.126Z'
+updatedAt: '2026-10-04T19:49:03.984Z'

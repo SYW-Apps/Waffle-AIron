@@ -603,6 +603,7 @@ methods:
         type: call
         targetComponent: rule_store
         targetMethod: add
+    symbol: registryRegisterBuiltinRules
   - name: registerPackRules
     narrative:
       - stepNumber: 1
@@ -619,6 +620,7 @@ methods:
         type: call
         targetComponent: rule_store
         targetMethod: add
+    symbol: registryRegisterPackRules
 detail: full
 lint:
   allow:
@@ -636,4 +638,4 @@ lint:
         ruleSequence reads. A new rule adds one step here, which is the point.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-10-04T13:58:14.620Z'
+updatedAt: '2026-10-04T19:42:19.009Z'

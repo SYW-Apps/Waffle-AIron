@@ -13,17 +13,6 @@ sourcePath: src/server/packs.ts
 injectedParams:
   - cfg
 methods:
-  - name: listGlobalPacks
-    narrative: []
-    detail: intent
-    intent: >-
-      Discovers pack refs across BOTH server-global tiers — the immutable image-layer directory
-      (WAIRON_IMAGE_PACKS_DIR, default /opt/wairon/packs) and the mutable instance directory
-      (WAIRON_PACKS_DIR, or <data-dir>/packs) — and probes each in isolation via the core extension
-      loader. Returns their union as descriptors, each tagged with its tier; when the same pack name
-      exists in both tiers the instance copy is the effective one and the image copy is marked
-      shadowed, so drift is visible in the listing itself. Never throws for a bad pack — the error
-      rides on its descriptor so one broken pack cannot hide the rest.
   - name: installGlobalPack
     narrative: []
     detail: intent
@@ -92,8 +81,14 @@ methods:
   - name: storeListGlobalPacks
     narrative: []
     intent: >-
-      Reads the server-global pack directory fresh and returns one PackDescriptor per vendored
-      declarative pack — no credential gate; internal pre-authorized read.
+      Discovers pack refs across BOTH server-global tiers — the immutable image-layer directory
+      (WAIRON_IMAGE_PACKS_DIR, default /opt/wairon/packs) and the mutable instance directory
+      (WAIRON_PACKS_DIR, or <data-dir>/packs) — read fresh, and probes each in isolation via the
+      core extension loader. Returns their union as descriptors, each tagged with its tier; when the
+      same pack name exists in both tiers the instance copy is the effective one and the image copy
+      is marked shadowed, so drift is visible in the listing itself. Never throws for a bad pack —
+      the error rides on its descriptor so one broken pack cannot hide the rest. No credential gate:
+      the pre-authorized read every caller reaches after its own authorization.
     calls:
       - host_core_adapter.globalPacksDir
       - host_core_adapter.discoverPacks
@@ -224,4 +219,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-10-03T16:39:57.777Z'
+updatedAt: '2026-10-04T19:55:01.991Z'
