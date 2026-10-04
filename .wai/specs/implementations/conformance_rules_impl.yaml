@@ -959,10 +959,11 @@ methods:
           implementation, its contract's component, the file that realizes the method (its
           sourcePath, else the implementation's) and its draft context, with unresolvable and
           chained-subproject implementations already left out. modelledAt = for every entry that
-          names a sourceFile, its realizing symbol (implMethod.symbol ?? implMethod.name) under that
-          file's canonical key, carrying the component and method it belongs to — the converse
-          direction's whole subject, read off the same descent so a component and its colocated
-          neighbour come from one walk
+          names a sourceFile, the component and method it belongs to under that file's canonical
+          key, keyed two ways: by the body identity its anchor names (implMethod.symbol ??
+          implMethod.name, qualified as <exportedVia>.<symbol> when it is reached through a handle),
+          and by that bare symbol — the converse direction's whole subject, read off the same
+          descent so a component and its colocated neighbour come from one walk
         type: local
       - stepNumber: 2
         label: methodLoop
@@ -992,17 +993,21 @@ methods:
       - stepNumber: 5
         description: >-
           fnSymbol = implMethod.symbol ?? implMethod.name; colocated = modelledAt at that file;
-          sites = the private closedCallSites(code, file, fnSymbol): the function's own
-          facts.callSitesOf entry, closed transitively over the named helpers it calls, each site
-          carrying the file its names resolve in. The forward direction closes over EVERYTHING the
-          function reaches — a wider callee set can only accept more, never accuse. claims = the
-          private claimsOf(implMethod): every narrative call step carrying its stepNumber, then
-          every declared `calls` entry parsed into the component and method it names and carrying no
-          stepNumber at all. One subject, because the two assert the same call and only a step also
-          says where in the flow it happens — which this check never reads. A dispatch step names a
-          capability rather than a method and asserts nothing about a call site, and a declared
-          reference that is not <component>.<method> names no target (MALFORMED_DECLARED_CALL
-          reports exactly that): neither becomes a claim. Start an empty missed list
+          sites = the private closedCallSites(code, file, fnSymbol, exportedVia): the ONE body the
+          anchor means (facts.bodySitesOf with the anchor's exportedVia as container — same-named
+          functions in one file are judged apart where the code settles which body a name means, and
+          read as their union where it does not), closed transitively over the named helpers it
+          calls, each hop read as the body its call reaches (bodySitesOf with the site's receiver),
+          each site carrying the file its names resolve in. The forward direction closes over
+          EVERYTHING the function reaches — a wider callee set can only accept more, never accuse.
+          claims = the private claimsOf(implMethod): every narrative call step carrying its
+          stepNumber, then every declared `calls` entry parsed into the component and method it
+          names and carrying no stepNumber at all. One subject, because the two assert the same call
+          and only a step also says where in the flow it happens — which this check never reads. A
+          dispatch step names a capability rather than a method and asserts nothing about a call
+          site, and a declared reference that is not <component>.<method> names no target
+          (MALFORMED_DECLARED_CALL reports exactly that): neither becomes a claim. Start an empty
+          missed list
         type: local
       - stepNumber: 6
         description: >-
@@ -1111,10 +1116,12 @@ methods:
           together with every entry of its declared `calls`. A dispatch or register step asserts
           nothing about a call site, but it does name the target out loud, and this direction asks
           only whether the boundary hop is written down where a reader will find it. crossings = the
-          sites of closedCallSites(code, file, fnSymbol, stopping AT the colocated names) whose name
-          is a colocated modelled method of another component, is not in declared, and whose
-          code.originOf resolves to this very file. The converse direction stops at a modelled
-          method because what it goes on to call belongs to its own narrative
+          sites of closedCallSites(code, file, fnSymbol, exportedVia, stopping AT a colocated
+          modelled method) whose modelled method — the one anchored to the body the site resolved to
+          in this file, else, where the code does not settle the body, the one anchored under the
+          bare name — belongs to another component, is not in declared, and whose code.originOf
+          resolves to this very file. The converse direction stops at a modelled method because what
+          it goes on to call belongs to its own narrative
         type: local
       - stepNumber: 17
         description: >-
@@ -1747,4 +1754,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-04T10:52:54.752Z'
+updatedAt: '2026-10-04T22:32:46.489Z'

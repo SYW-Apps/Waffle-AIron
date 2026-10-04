@@ -2,16 +2,17 @@ id: surface_repository
 name: Surface Repository
 description: >-
   Facade over the stored surface snapshots of this project (.wai/surfaces/): imported
-  exchanged/authored surfaces and received parent-generated snapshots. Consumers use the facade
+  exchanged/authored surfaces and received parent-generated snapshots. Reads and writes forward 1:1
+  to the Surface Store, a read-through Store; the file I/O lives in the Surface FS Adapter. Nothing
+  is held in memory, so a CLI that writes a snapshot and a hosted server that reads one always see
+  the same files, and a short CLI command reads only what it asks for. Consumers use the facade
   only.
 subsystem: sdd_surfaces
 componentType: Repository
 owns:
   - surface_store
-  - surface_registry
-  - surface_index
   - surface_fs_adapter
 dependsOn: []
 status: complete
 createdAt: '2026-07-10T23:12:15.724Z'
-updatedAt: '2026-09-26T18:11:40.198Z'
+updatedAt: '2026-10-04T22:34:02.280Z'

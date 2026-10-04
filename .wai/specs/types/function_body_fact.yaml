@@ -1,0 +1,30 @@
+kind: value-object
+id: function_body_fact
+name: FunctionBodyFact
+description: >-
+  One function-like BODY under its name, with where it is bound — the identity that tells same-named
+  functions in one file apart. Module scope (no container, not nested) is a top-level function
+  declaration or a top-level variable's function initializer: what the bare name means anywhere in
+  the module's scope. A member (container set) belongs to a top-level named class, or is a property
+  of an object literal a top-level variable is bound to; it is reachable only through that
+  container, never by the bare name. Nested is any other binding — a function inside a function, a
+  member of a class or object literal the model cannot name — and can shadow the bare name where it
+  sits.
+subsystem: sdd_validator
+fields:
+  - name: container
+    type: string
+    description: The named class or top-level object literal the body is a member of
+    optional: true
+  - name: nested
+    type: bool
+    description: True when the body is bound somewhere the model cannot name
+    optional: true
+  - name: sites
+    type: list<CallSiteFact>
+    description: The call sites written inside this body alone
+    optional: false
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-10-04T22:32:21.299Z'
+updatedAt: '2026-10-04T22:32:21.657Z'

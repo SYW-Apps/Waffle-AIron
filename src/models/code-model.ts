@@ -102,6 +102,31 @@ export interface CallSiteFact {
 }
 
 /**
+ * One function-like BODY under its name, with where it is bound — the
+ * identity that tells same-named functions in one file apart.
+ *
+ *   module     (no `container`, no `nested`) a top-level function declaration,
+ *              or a function/arrow initializer of a top-level variable: what
+ *              the bare name means anywhere in the module's scope.
+ *   member     `container` set: a member of a top-level named class, or a
+ *              property of an object literal a top-level variable is bound to
+ *              (`const store = { save() {} }` → container "store"). Reachable
+ *              only through that container, never by the bare name.
+ *   nested     `nested` set: any other binding — a function inside a
+ *              function, a member of a class or object literal the model
+ *              cannot name. A nested body can shadow the bare name in the
+ *              scope it sits in, so where one exists the name stays ambiguous.
+ */
+export interface FunctionBodyFact {
+  /** The named class or top-level object literal the body is a member of. */
+  container?: string;
+  /** True when the body is bound somewhere the model cannot name. */
+  nested?: boolean;
+  /** The call sites written inside this body alone. */
+  sites: CallSiteFact[];
+}
+
+/**
  * One data member of a shape a file declares: its name, and whether the code
  * lets it be ABSENT.
  *
@@ -258,6 +283,16 @@ export interface SourceFileFacts {
    * Fuel for the call-step realization checks (Level 3).
    */
   functionCallSites?: Record<string, CallSiteFact[]>;
+  /**
+   * The same call sites, BODY by body, under each function-like's name: one
+   * entry per body, carrying WHERE that body is bound (see FunctionBodyFact).
+   * EXACT grade only. Where functionCallSites unions every same-named body,
+   * this keeps them apart, so an exported facade `save` and the class member
+   * `Workspace.save` it forwards to are read as the two functions they are.
+   * Which body a NAME means is bodySitesOf's question, and it answers only
+   * where the code itself settles it.
+   */
+  functionBodies?: Record<string, FunctionBodyFact[]>;
   /**
    * Runtime (value) import bindings by local name (see ImportBindingFact).
    * EXACT grade only — a weaker grade sees module specifiers but never which
@@ -496,6 +531,57 @@ export function typeBindingOf(facts: SourceFileFacts, name: string): string | un
  */
 export function callSitesOf(facts: SourceFileFacts, fn: string): CallSiteFact[] | undefined {
   return ownEntry(facts.functionCallSites, fn);
+}
+
+/** The bodies one name resolved to, and an identity a walk can de-duplicate on. */
+export interface ResolvedBody {
+  /** `<container>.<name>` for a member, `<name>` for the module binding, `*<name>` for the union. */
+  key: string;
+  sites: CallSiteFact[];
+}
+
+/**
+ * source_file_facts.bodySitesOf — the call sites of the ONE body a name
+ * means, told apart from its same-named neighbours by where each is bound;
+ * undefined when the file holds no body under the name.
+ *
+ * `container` and `member` are what the reference says about its owner:
+ * `container` is an anchor's `exportedVia` handle or a call's plain-identifier
+ * receiver, and `member` says the reference was written through a receiver at
+ * all. Only the code
+ * settles which body a name means, and where it does not this answers what
+ * the name-keyed union always answered — never a guess:
+ *
+ *   - with a container the file binds bodies of this name under, those bodies;
+ *   - else a BARE reference (an anchor's symbol, a bare call) means the
+ *     module-scope bodies, when the name has some and NO nested one: a bare
+ *     name in the module's scope binds the top-level declaration, a member is
+ *     reachable only through its container, and a nested body could shadow
+ *     the name where it sits;
+ *   - else every body under the name, unioned, as callSitesOf answers — a
+ *     receiver the file binds no container to holds a value the model cannot
+ *     follow, so which body it reaches is not this model's to say.
+ */
+export function bodySitesOf(
+  facts: SourceFileFacts,
+  fn: string,
+  container?: string,
+  member = false,
+): ResolvedBody | undefined {
+  const union = callSitesOf(facts, fn);
+  if (!union) return undefined;
+  const bodies = ownEntry(facts.functionBodies, fn);
+  if (!bodies?.length) return { key: `*${fn}`, sites: union };
+  const sitesOf = (picked: FunctionBodyFact[]): CallSiteFact[] => picked.flatMap(b => b.sites);
+  if (container !== undefined) {
+    const members = bodies.filter(b => b.container === container);
+    if (members.length) return { key: `${container}.${fn}`, sites: sitesOf(members) };
+  }
+  if (!member) {
+    const moduleScope = bodies.filter(b => b.container === undefined && !b.nested);
+    if (moduleScope.length && !bodies.some(b => b.nested)) return { key: fn, sites: sitesOf(moduleScope) };
+  }
+  return { key: `*${fn}`, sites: union };
 }
 
 /**

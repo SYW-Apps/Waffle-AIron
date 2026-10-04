@@ -1,6 +1,8 @@
 id: surface_store_impl
 name: Surface Store Implementation
-description: In-memory snapshot projection.
+description: >-
+  src/core/surfaces.ts. A read-through Store: each method is one file operation through the surface
+  fs adapter; nothing is held in memory.
 contract: isurface_store
 sourcePath: src/core/surfaces.ts
 methods:
@@ -8,29 +10,36 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      Holds or replaces the parsed snapshot keyed by its producing project name in the in-memory
-      map. A ram-projection: the map is rebuilt from the snapshot files on demand, never restored
-      from its own state; putting never touches disk.
-    symbol: saveSnapshot
+      Writes the snapshot through the fs adapter and answers the file's path; a write failure
+      propagates.
+    calls:
+      - surface_fs_adapter.writeSnapshot
+    exportedVia: surfaceStore
   - name: get
     narrative: []
     detail: intent
     intent: >-
-      Returns the held snapshot for the producing project name, or null when none is held. Never
-      performs I/O.
-    symbol: getSnapshot
+      Reads every stored snapshot through the fs adapter on each call and answers the one whose
+      producing project name matches, or null when none does.
+    calls:
+      - surface_fs_adapter.readAllSnapshots
+    exportedVia: surfaceStore
   - name: list
     narrative: []
     detail: intent
-    intent: Returns every held snapshot in stable insertion order. Never performs I/O.
-    symbol: listSnapshots
+    intent: >-
+      Reads every stored snapshot through the fs adapter on each call (read-through: no RAM copy); a
+      malformed file is skipped by the adapter, never fatal.
+    calls:
+      - surface_fs_adapter.readAllSnapshots
+    exportedVia: surfaceStore
   - name: remove
     narrative: []
     detail: intent
-    intent: >-
-      Drops the held snapshot for the project and reports whether one was held. Never touches disk —
-      file deletion is the registry's write path through the fs adapter.
-    symbol: removeSnapshot
+    intent: Removes the project's snapshot file through the fs adapter and reports whether one existed.
+    calls:
+      - surface_fs_adapter.deleteSnapshot
+    exportedVia: surfaceStore
 status: complete
 createdAt: '2026-07-10T23:15:30.692Z'
-updatedAt: '2026-07-11T19:14:23.029Z'
+updatedAt: '2026-10-04T22:34:22.276Z'

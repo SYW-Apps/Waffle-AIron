@@ -1,45 +1,41 @@
 id: surface_repository_impl
 name: Surface Repository Implementation
-description: 'Facade forwarding: writes through the registry, reads through the index.'
+description: 'src/core/surfaces.ts: facade forwarding, each method one call to the Surface Store.'
 contract: isurface_repository
 sourcePath: src/core/surfaces.ts
 methods:
   - name: saveSnapshot
     narrative:
       - stepNumber: 1
-        description: Forward to the registry write path
+        description: Write through the surface store
         type: call
-        targetComponent: surface_registry
-        targetMethod: upsertSnapshot
+        targetComponent: surface_store
+        targetMethod: put
+    exportedVia: surfaceRepository
   - name: getSnapshot
     narrative:
       - stepNumber: 1
-        description: Read through the index
+        description: Read through the surface store
         type: call
-        targetComponent: surface_index
-        targetMethod: byProject
+        targetComponent: surface_store
+        targetMethod: get
+    exportedVia: surfaceRepository
   - name: listSnapshots
     narrative:
       - stepNumber: 1
-        description: Read through the index at the given project root
+        description: Read through the surface store
         type: call
-        targetComponent: surface_index
-        targetMethod: all
+        targetComponent: surface_store
+        targetMethod: list
+    exportedVia: surfaceRepository
   - name: removeSnapshot
     narrative:
       - stepNumber: 1
-        description: Forward to the registry write path
+        description: Remove through the surface store
         type: call
-        targetComponent: surface_registry
-        targetMethod: deleteSnapshot
-  - name: hydrate
-    narrative:
-      - stepNumber: 1
-        description: Forward to the registry's file read-back
-        type: call
-        targetComponent: surface_registry
-        targetMethod: hydrateFromFiles
-    symbol: loadSurfaceSnapshots
+        targetComponent: surface_store
+        targetMethod: remove
+    exportedVia: surfaceRepository
 status: complete
 createdAt: '2026-07-10T23:14:40.814Z'
-updatedAt: '2026-09-26T18:12:05.551Z'
+updatedAt: '2026-10-04T22:34:30.658Z'

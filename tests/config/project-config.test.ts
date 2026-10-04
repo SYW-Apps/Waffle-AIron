@@ -657,13 +657,14 @@ describe('project config registry — rekeyCarried (F78)', () => {
   });
 
   it('rewrites this repository\'s own register and changes nothing but the renamed ids', () => {
-    // The real register: dozens of groups, count comments, folded prose.
+    // The real register: groups, count comments, folded prose. A covered unit
+    // names its component bare or behind a step number (`3:component.method`).
     const root = tempRoot();
     fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
     const real = fs.readFileSync(path.resolve(process.cwd(), '.wai', 'project.yaml'));
     fs.writeFileSync(configFile(root), real);
     const text = real.toString('utf8');
-    const target = /spec: (\w+_impl)\n\s+at: '(\w+)'\n\s+covers:\n\s+- '(\w+)\.\w+'/.exec(text.replace(/\r\n/g, '\n'));
+    const target = /spec: (\w+_impl)\n\s+at: '(\w+)'\n\s+covers:\n\s+- '(?:\d+:)?(\w+)\.\w+'/.exec(text.replace(/\r\n/g, '\n'));
     expect(target).not.toBeNull();
     const [, spec, , component] = target!;
     const rekeys = projectConfigRepositoryAt(root).rekeyCarried({

@@ -89,10 +89,10 @@ fields:
     description: >-
       Direct call SITES per named function-like, with the shape each call was written in (nested
       named functions carry their own entries; anonymous callbacks count toward their enclosing
-      function); exact grade only, and same-named functions union their sites. A function-like WITH
-      A BODY always gets an entry, empty when it calls nothing; a name with NO entry has no body in
-      this file to read — which is the whole of hasFunctionBody, and why an empty entry is never
-      dropped
+      function); exact grade only, and same-named functions union their sites — functionBodies keeps
+      them apart. A function-like WITH A BODY always gets an entry, empty when it calls nothing; a
+      name with NO entry has no body in this file to read — which is the whole of hasFunctionBody,
+      and why an empty entry is never dropped
     optional: true
   - name: importBindings
     type: map<string, ImportBindingFact>
@@ -198,6 +198,16 @@ fields:
       whose right side is not an object shape (`type PackPath = string`). What a named scalar's
       holds is compared with through the file's dialect (TYPE_HOLDS_MISMATCH). EXACT grade only.
     optional: true
+  - name: functionBodies
+    type: map<string, list<FunctionBodyFact>>
+    description: >-
+      The same call sites BODY by body under each function-like's name, each carrying where that
+      body is bound (module scope, a member of a named container, or nested); exact grade only.
+      Where functionCallSites unions every same-named body, this keeps them apart, so an exported
+      facade and the class member of the same name it forwards to are read as the two functions they
+      are. A barrel carries the module-scope body of each name it republishes — never a member,
+      which no export names. Which body a name means is bodySitesOf's question
+    optional: true
 methods:
   - name: resolveImport
     signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
@@ -261,6 +271,31 @@ methods:
       annotations through. None means the rule stays silent on types for this file rather than
       guess.
     symbol: dialectOf
+  - name: bodySitesOf
+    signature: 'bodySitesOf(fn: string, container?: string, member?: bool): ResolvedBody?'
+    params:
+      - name: fn
+        type: string
+      - name: container
+        type: string
+        description: >-
+          What the reference names as the body's owner: an anchor's exportedVia handle, or a member
+          call's plain-identifier receiver
+        optional: true
+      - name: member
+        type: bool
+        description: True when the reference was written through a receiver at all
+        optional: true
+    returns: ResolvedBody?
+    description: >-
+      The call sites of the ONE body a name means, told apart from its same-named neighbours by
+      where each is bound; none when the file holds no body under the name. Only the code settles
+      which body a name means, and where it does not this answers what the name-keyed union always
+      answered — never a guess: with a container the file binds bodies of this name under, those
+      bodies; else a BARE reference means the module-scope bodies when the name has some and NO
+      nested one (a bare name in the module's scope binds the top-level declaration, a member is
+      reachable only through its container, and a nested body could shadow the name where it sits);
+      else every body under the name, unioned, as callSitesOf answers
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-04T10:51:55.778Z'
+updatedAt: '2026-10-04T22:32:29.968Z'
