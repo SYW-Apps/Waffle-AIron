@@ -124,6 +124,8 @@ describe('sdd_rename_method', () => {
       pinnedSymbol: 'post',
       // The debt register names nothing this rename moved (F78).
       carried: [],
+      // The contract is not exported.
+      publishedIn: [],
     });
     invalidateSpecCache();
     expect(loadInterfaceSpec('iledger')?.methods.map((m) => m.name)).toEqual(['append', 'close']);

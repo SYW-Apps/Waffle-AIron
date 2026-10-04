@@ -159,19 +159,45 @@ methods:
         targetComponent: authoring_core_adapter
         targetMethod: loadSpec
       - stepNumber: 6
+        description: Decide whether this write gives an id to a new spec of a kind that keeps a rename trace
+        type: branch
+        condition: no spec already holds the id and the kind is component, interface, implementation or type
+        onTrueStep: 7
+        onFalseStep: 10
+      - stepNumber: 7
+        description: Read the bound tree's spec index, for the rename traces
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 8
+        description: Ask which spec of this kind retired the id (spec_index.retiredBy; a type within its owner)
+        type: branch
+        condition: a spec of this kind lists the id in its rename trace (previousIds)
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        label: id-retired
+        description: >-
+          Refuse before anything reaches disk (id-retired), naming the holder and the way out:
+          unsetting the holder's previousIds releases the id, at the cost that a consumer holding
+          the old key reads a delete and an add — left alone, it would read the new spec as the
+          renamed one
+        type: throw
+        error: id-retired
+      - stepNumber: 10
         description: >-
           Apply the restatement to the stored spec (spec_restatement.applyTo): the status, the
           candidate with every unexpressed field carried, the parent-derived fields, the narrative
           labels resolved, the notices, and the methods it changes or removes — or the refusal that
           stops it
         type: local
-      - stepNumber: 7
+      - stepNumber: 11
         description: Decide whether the restatement may be written at all
         type: branch
         condition: the application carries a refusal
-        onTrueStep: 8
-        onFalseStep: 9
-      - stepNumber: 8
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
         description: >-
           Refuse with the application's own sentence — a missing parent, a status the write would
           lower, a label that does not resolve, an interface method that names a signature source
@@ -180,16 +206,16 @@ methods:
           TYPE_NOT_NEUTRAL, naming the replacement) — before anything reaches disk
         type: throw
         error: restatement refused
-      - stepNumber: 9
+      - stepNumber: 13
         label: judge
         description: >-
           Decide whether the candidate is a component, the one kind the intrinsic rules judge at the
           write boundary
         type: branch
         condition: the restatement's kind is component
-        onTrueStep: 10
-        onFalseStep: 13
-      - stepNumber: 10
+        onTrueStep: 14
+        onFalseStep: 17
+      - stepNumber: 14
         description: >-
           Judge the candidate — the spec that will actually be written, carried fields included, so
           retyping a Portal carries its auth into the judgement instead of letting it vanish unseen
@@ -197,35 +223,35 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: validateComponentCandidate
-      - stepNumber: 11
+      - stepNumber: 15
         description: Decide on the verdict
         type: branch
         condition: the verdict holds at least one error
-        onTrueStep: 12
-        onFalseStep: 13
-      - stepNumber: 12
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
         description: >-
           Refuse the write with the formatted refusal, naming every rule code the candidate broke —
           nothing has reached disk, so the remedy is to fix the arguments and call again
         type: throw
         error: intrinsic rule violation
-      - stepNumber: 13
+      - stepNumber: 17
         label: persist
         description: >-
           Refuse the legacy mount form: a subsystem that names a projectPath is a member
           declaration, not a subsystem
         type: branch
         condition: the candidate is a subsystem that names a projectPath
-        onTrueStep: 14
-        onFalseStep: 15
-      - stepNumber: 14
+        onTrueStep: 18
+        onFalseStep: 19
+      - stepNumber: 18
         description: >-
           Refuse before anything reaches disk, naming the subsystem and the replacement: a member is
           declared in project.yaml `members` (sdd_add_member / `wairon member add`), which scaffolds
           its project; wairon never writes the L1 mount form
         type: throw
         error: mount form refused
-      - stepNumber: 15
+      - stepNumber: 19
         label: save
         description: >-
           Persist the candidate through the core client adapter, collecting the store's placement
@@ -233,14 +259,14 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: saveSpec
-      - stepNumber: 16
+      - stepNumber: 20
         label: tests
         description: Decide whether this write invalidated any test
         type: branch
         condition: the application names a changed or removed method and the project declares test roots
-        onTrueStep: 17
-        onFalseStep: 19
-      - stepNumber: 17
+        onTrueStep: 21
+        onFalseStep: 23
+      - stepNumber: 21
         description: >-
           Place each changed method in the file realizing it (the private searchedMethods): for a
           contract, read every implementation realizing it and take each one's symbol and file for
@@ -251,7 +277,7 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 18
+      - stepNumber: 22
         description: >-
           Find the tests that encode those methods, so the restatement that drops or rewrites a
           method reports the collision exactly as a delta that does the same does, each method
@@ -259,7 +285,7 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 19
+      - stepNumber: 23
         label: receipt
         description: >-
           Return the write receipt: the kind, id and name written, whether a spec already held the
@@ -318,4 +344,4 @@ methods:
         outcome: reported
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-10-03T22:08:13.614Z'
+updatedAt: '2026-10-04T13:57:38.901Z'

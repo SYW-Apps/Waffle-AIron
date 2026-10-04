@@ -1,0 +1,77 @@
+kind: value-object
+id: design_type
+name: DesignType
+description: >-
+  One exported type: an entity, value-object (a named scalar when it holds one primitive), signature
+  (a named function type) or enum, with every type position canonical and parsed.
+subsystem: sdd_surfaces
+fields:
+  - name: key
+    type: string
+    description: >-
+      `subsystem::id` for a subsystem-owned type, the bare id for a system-level one — always
+      qualified by owner, so a same-named type elsewhere never re-keys this one
+    optional: false
+  - name: kind
+    type: string
+    description: entity, value-object, signature or enum
+    optional: false
+  - name: name
+    type: string
+    optional: false
+  - name: description
+    type: string
+    optional: true
+  - name: status
+    type: string
+    optional: true
+  - name: fields
+    type: list<DesignField>
+    description: In declared order; empty on a signature, an enum and a named scalar
+    optional: false
+  - name: methods
+    type: list<DesignMethod>
+    description: Its pure methods
+    optional: false
+  - name: params
+    type: list<DesignParam>
+    description: A signature's params; empty elsewhere
+    optional: false
+  - name: returns
+    type: DesignTypeRef
+    description: A signature's output
+    optional: true
+  - name: values
+    type: list<EnumValue>
+    description: An enum's values in declared order; empty elsewhere
+    optional: false
+  - name: holds
+    type: string
+    description: A named scalar's primitive
+    optional: true
+  - name: invariants
+    type: list<Invariant>
+    optional: false
+  - name: componentClass
+    type: string
+    description: The key of the component that owns this entity
+    optional: true
+  - name: database
+    type: string
+    optional: true
+  - name: table
+    type: string
+    optional: true
+  - name: linkedEntity
+    type: string
+    optional: true
+  - name: formerly
+    type: list<string>
+    optional: false
+  - name: ext
+    type: map<string, any>
+    optional: true
+methods: []
+sourcePath: src/models/design-export.ts
+createdAt: '2026-10-04T13:53:30.105Z'
+updatedAt: '2026-10-04T15:39:15.829Z'

@@ -22,6 +22,14 @@ methods:
       (decoding is the codec's or orchestrator's concern); fails with a clear not-found error naming
       the path.
     symbol: readSurfaceDocument
+  - name: writeDesignTo
+    narrative: []
+    detail: intent
+    intent: >-
+      Writes the design export to the target path as UTF-8 JSON, creating missing directories: its
+      deterministic serialization (sorted object keys, two-space indent, one trailing newline), so
+      the same design writes the same bytes. Overwrites an existing file; fails with a clear error
+      naming the path when it cannot be written. Returns the path written.
 status: complete
 createdAt: '2026-07-10T23:15:58.334Z'
-updatedAt: '2026-10-03T16:40:58.244Z'
+updatedAt: '2026-10-04T13:54:36.064Z'

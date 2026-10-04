@@ -64,6 +64,13 @@ export {
 } from './core/extensions.js';
 export type { LoadedExtensions, DeclarativePack } from './core/extensions.js';
 
+// The design export (surface_portal.exportDesign): the bound project's whole
+// design, resolved, as one DesignExport — the library twin of `wairon export`.
+// Named here, as the embedding API above is, because the surfaces portal is
+// not on the core barrel. Pass the approval state you decided (for instance
+// from `wairon lock-check`); omitted, the export is stamped unjudged.
+export { exportDesign } from './core/surface-portal.js';
+
 // The running MCP server asks the build ON DISK for its schema fingerprint by
 // requiring this entry in a child process (src/mcp/build.ts): a server whose
 // schemas differ from the rebuilt ones refuses spec writes rather than drop

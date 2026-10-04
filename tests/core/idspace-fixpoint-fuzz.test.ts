@@ -73,6 +73,23 @@ const int = (rng: Rng, min: number, max: number): number => min + Math.floor(rng
 const pick = <T>(rng: Rng, arr: T[]): T => arr[Math.floor(rng() * arr.length)];
 const chance = (rng: Rng, p: number): boolean => rng() < p;
 
+/**
+ * A component's rename trace, derived from its shape without drawing on the
+ * PRNG (so every tree keeps the shape its seed always gave). The second entry
+ * is a REFERENCE-SHAPED string — a dependsOn disk form the loader would qualify
+ * if it bound it — so a trace that the binding or the writer touched shows up
+ * as a changed entry. Traces name keys that no longer exist and must travel
+ * verbatim through load and save.
+ */
+function traceOf(comp: GenComp): string[] {
+  return [`${comp.local}-was`, ...(comp.dependsOn.length ? [comp.dependsOn[0].diskForm] : [])];
+}
+
+/** A contract method's rename trace, derived the same way. */
+function methodTraceOf(comp: GenComp, method: GenMethod): string[] {
+  return [`i${comp.local}-was.${method.name}`, `super::gone.${method.name}`];
+}
+
 // ------------------------------ Shape model ---------------------------------
 
 interface GenStep {
@@ -363,6 +380,7 @@ function materialize(shape: GenShape, rootDir: string): void {
         ...(comp.componentType === 'Portal' ? { portalType: 'Custom' } : {}),
         owns: [],
         dependsOn: comp.dependsOn.map(d => d.diskForm),
+        previousIds: traceOf(comp),
         status: 'draft',
         createdAt: now,
         updatedAt: now,
@@ -377,7 +395,9 @@ function materialize(shape: GenShape, rootDir: string): void {
           description: `${m.name} method`,
           signature: `${m.name}(): void`,
           returns: 'void',
+          previousNames: methodTraceOf(comp, m),
         })),
+        previousIds: [`i${comp.local}-was`],
         status: 'draft',
         createdAt: now,
         updatedAt: now,
@@ -387,6 +407,7 @@ function materialize(shape: GenShape, rootDir: string): void {
         name: `${comp.local} impl`,
         description: 'd',
         contract: `i${comp.local}`, // child-local contract stays local
+        previousIds: [`${comp.local}-impl-was`],
         methods: comp.methods.map(m => ({
           name: m.name,
           narrative: m.steps.map((s, idx) =>
@@ -439,17 +460,23 @@ function snapshotIds(tree: LoadedTree): Record<string, unknown> {
     };
   }
   for (const c of [...tree.components].sort((a, b) => a.id.localeCompare(b.id))) {
-    snap[`component ${c.id}`] = { subsystem: c.subsystem, dependsOn: [...c.dependsOn], owns: [...c.owns] };
+    snap[`component ${c.id}`] = {
+      subsystem: c.subsystem, dependsOn: [...c.dependsOn], owns: [...c.owns], previousIds: c.previousIds,
+    };
   }
   for (const i of [...tree.interfaces].sort((a, b) => a.id.localeCompare(b.id))) {
-    snap[`interface ${i.id}`] = { component: i.component };
+    snap[`interface ${i.id}`] = {
+      component: i.component,
+      previousIds: i.previousIds,
+      previousNames: Object.fromEntries(i.methods.map(m => [m.name, m.previousNames])),
+    };
   }
   for (const im of [...tree.implementations].sort((a, b) => a.id.localeCompare(b.id))) {
     const targets: Record<string, (string | null)[]> = {};
     for (const m of im.methods) {
       targets[m.name] = m.narrative.map(st => st.targetComponent ?? null);
     }
-    snap[`implementation ${im.id}`] = { contract: im.contract, targets };
+    snap[`implementation ${im.id}`] = { contract: im.contract, targets, previousIds: im.previousIds };
   }
   return snap;
 }
@@ -487,16 +514,26 @@ function expectIntendedResolution(shape: GenShape, tree: LoadedTree): void {
       expect(loaded!.dependsOn, `component ${comp.qualified} dependsOn`).toEqual(
         comp.dependsOn.map(d => d.target),
       );
+      // The rename trace is never bound: it loads exactly as it was written.
+      expect(loaded!.previousIds, `component ${comp.qualified} previousIds verbatim`).toEqual(traceOf(comp));
 
       const ifaceQ = lvl.key ? `${lvl.key}::i${comp.local}` : `i${comp.local}`;
       const iface = ifacesById.get(ifaceQ);
       expect(iface, `interface ${ifaceQ} missing after initial load`).toBeDefined();
       expect(iface!.component, `interface ${ifaceQ} component ref`).toBe(comp.qualified);
+      expect(iface!.previousIds, `interface ${ifaceQ} previousIds verbatim`).toEqual([`i${comp.local}-was`]);
+      for (const method of comp.methods) {
+        expect(
+          iface!.methods.find(m => m.name === method.name)!.previousNames,
+          `interface ${ifaceQ} method ${method.name} previousNames verbatim`,
+        ).toEqual(methodTraceOf(comp, method));
+      }
 
       const implQ = lvl.key ? `${lvl.key}::${comp.local}-impl` : `${comp.local}-impl`;
       const impl = implsById.get(implQ);
       expect(impl, `implementation ${implQ} missing after initial load`).toBeDefined();
       expect(impl!.contract, `implementation ${implQ} contract ref`).toBe(ifaceQ);
+      expect(impl!.previousIds, `implementation ${implQ} previousIds verbatim`).toEqual([`${comp.local}-impl-was`]);
       for (const method of comp.methods) {
         const loadedMethod = impl!.methods.find(m => m.name === method.name)!;
         expect(

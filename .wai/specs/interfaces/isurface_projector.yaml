@@ -10,7 +10,9 @@ methods:
       canonical target (narrowed to the entry's interface when it narrows) — every method with its
       params and returns resolved, a method that takes its signature from a source carrying the
       source's inline and never the signatureFrom, since a snapshot names no producer-internal
-      method — its stereotype, dispatch table, auth and base path; the exported types listed apart;
+      method, and never its rename trace (previousNames), which is the design export's history and
+      not the contract, so a rename leaves no trace in a snapshot or its digests beyond the name it
+      changed — its stereotype, dispatch table, auth and base path; the exported types listed apart;
       the transitive type closure, followed through data types' fields and through signature types'
       params and returns, a signature type arriving with both; the project's effective id beside its
       name; and StateId provenance. Every re-export is resolved once by the export index, so a
@@ -26,4 +28,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-10T23:13:52.676Z'
-updatedAt: '2026-10-03T19:43:07.989Z'
+updatedAt: '2026-10-04T13:58:33.115Z'

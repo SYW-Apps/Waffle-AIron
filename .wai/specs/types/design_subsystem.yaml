@@ -1,0 +1,52 @@
+kind: value-object
+id: design_subsystem
+name: DesignSubsystem
+description: >-
+  One exported subsystem: a namespace inside the project, with its own export table and the
+  lifecycle roots the runtime invokes. A part's subsystems appear here like any other: a part is
+  storage, not a boundary.
+subsystem: sdd_surfaces
+fields:
+  - name: key
+    type: string
+    description: The subsystem's id
+    optional: false
+  - name: name
+    type: string
+    optional: false
+  - name: description
+    type: string
+    optional: false
+  - name: status
+    type: string
+    description: draft, design or complete
+    optional: false
+  - name: profile
+    type: string
+    optional: true
+  - name: targetLanguage
+    type: string
+    description: Its override of the project's target language
+    optional: true
+  - name: lifecycle
+    type: list<LifecycleEntrypoint>
+    description: >-
+      The roots the runtime invokes at a phase (init, shutdown, cyclic, interrupt, scheduled), each
+      naming a component key and a method
+    optional: false
+  - name: exports
+    type: list<DesignExportEntry>
+    description: The resolved L1 export table
+    optional: false
+  - name: trustedLinks
+    type: list<string>
+    description: The keys of the sibling subsystems it may call without a client adapter
+    optional: false
+  - name: ext
+    type: map<string, any>
+    description: Pack extension data, passed through
+    optional: true
+methods: []
+sourcePath: src/models/design-export.ts
+createdAt: '2026-10-04T13:53:08.217Z'
+updatedAt: '2026-10-04T15:39:09.150Z'

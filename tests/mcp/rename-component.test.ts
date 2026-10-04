@@ -114,6 +114,8 @@ describe('sdd_rename_component', () => {
       rewritten: ['books_orch'],
       // The debt register names nothing this rename moved (F78).
       carried: [],
+      // No export entry derived its public name from the renamed component.
+      keptPublicNames: [],
     });
     invalidateSpecCache();
     expect(loadComponentSpec('journal')).not.toBeNull();

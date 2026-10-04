@@ -69,6 +69,34 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: excerptParent
+  - name: loadSubsystemSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadSubsystemSpecs on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadSubsystemSpecs
+  - name: loadImplementationSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadImplementationSpecs on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadImplementationSpecs
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Call resolveSubsystemExports on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveSubsystemExports
+  - name: projectFamily
+    narrative:
+      - stepNumber: 1
+        description: Forward the project graph read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: projectFamily
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-10-02T20:24:13.758Z'
+updatedAt: '2026-10-04T17:32:10.522Z'

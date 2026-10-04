@@ -606,7 +606,28 @@ methods:
         type: return
         outcome: PackImpact
     symbol: sdd_pack_impact
+  - name: renameType
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the type through the core client adapter, resolving the tool's id — qualified by its
+          owning subsystem when two subsystems own that id — to the type it names, so core receives
+          an unambiguous id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadTypeSpec
+      - stepNumber: 2
+        description: Rename the type and rewrite every reference to it via the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameType
+      - stepNumber: 3
+        description: >-
+          Shape the tool response from the report: from and to, the specs rewritten, the public
+          names kept, the register edits
+        type: return
+        outcome: TypeRename
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-03T18:00:51.019Z'
+updatedAt: '2026-10-04T13:57:11.482Z'

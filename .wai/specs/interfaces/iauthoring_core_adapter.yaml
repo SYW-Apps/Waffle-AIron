@@ -131,6 +131,11 @@ methods:
     signature: 'loadImplementationSpecs(): list<ImplementationSpec>'
     returns: list<ImplementationSpec>
     params: []
+  - name: scanAllSpecs
+    description: >-
+      Forward to spec_tree_portal.scanAllSpecs: the bound tree's spec index, which the gated write
+      asks which spec retired an id (spec_index.retiredBy) before giving it to a new spec
+    signatureFrom: spec_tree_portal.scanAllSpecs
 status: complete
 createdAt: '2026-09-18T21:41:49.125Z'
-updatedAt: '2026-10-04T10:18:33.097Z'
+updatedAt: '2026-10-04T13:57:26.796Z'

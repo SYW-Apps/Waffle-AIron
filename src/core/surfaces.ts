@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import { canonicalize } from '../utils/canonical-json.js';
+import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { safeFilenamePart } from '../utils/filenames.js';
 import {
@@ -38,6 +38,8 @@ import {
   type PinnedParent,
   type ResolvedExternal,
   isPart,
+  type DesignApproval,
+  type DesignExport,
 } from '../models/index.js';
 // surfaces_core_adapter: every name this subsystem takes from sdd_core lands on
 // the adapter's own module, which re-exports it from the core portals.
@@ -56,6 +58,8 @@ import {
 // snapshots it names, apart from the legacy .wai/surfaces snapshots.
 import { externalsRepository } from './externals.js';
 import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
+// design_exporter: the design export's projector, beside the snapshot's.
+import { exportDesign as projectDesign } from './design-export.js';
 
 // ---------------------------------------------------------------------------
 // Public Surface Exchange (sdd_surfaces)
@@ -192,8 +196,10 @@ function contractEntry(entry: ResolvedExport, comp: ComponentSpec, interfaces: I
     .flatMap(i => i.methods)
     // The loaded tree carries every method resolved: a sourced method already
     // holds its source's params and returns inline, so the snapshot drops the
-    // signatureFrom — it names no producer-internal method.
-    .map(({ signatureFrom: _source, ...method }) => method);
+    // signatureFrom — it names no producer-internal method. A rename trace
+    // never enters a snapshot either: a renamed method moves no digest beyond
+    // the name it changed.
+    .map(({ signatureFrom: _source, previousNames: _trace, ...method }) => method);
   return {
     id: entry.publicName,
     name: entry.name ?? comp.name,
@@ -541,6 +547,47 @@ export function exportSurface(maxAudience: string, format: string, outPath?: str
   if (renderedSet && portalId) renderedSet = selectPortalSpec(renderedSet, portalId);
   const writtenPaths = outPath ? writeSurfaceFile(outPath, snapshot, renderedSet) : [];
   return exportResult(snapshot, renderedSet, writtenPaths);
+}
+
+/** A value with every object's keys in ordinal order, recursively — the one byte sequence a design writes as. */
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withSortedKeys);
+  if (value && typeof value === 'object') {
+    const src = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(src).sort(compareOrdinal)) if (src[k] !== undefined) out[k] = withSortedKeys(src[k]);
+    return out;
+  }
+  return value;
+}
+
+/**
+ * isurface_transfer_adapter.writeDesignTo — the design export written to the
+ * target path as UTF-8 JSON (sorted object keys, two-space indent, one trailing
+ * newline), creating missing directories and overwriting an existing file, so
+ * the same design writes the same bytes. Fails naming the path. Returns the
+ * path written.
+ */
+export function writeDesignTo(targetPath: string, design: DesignExport): string {
+  const resolved = path.resolve(targetPath);
+  try {
+    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+    fs.writeFileSync(resolved, `${JSON.stringify(withSortedKeys(design), null, 2)}\n`, 'utf8');
+  } catch (e) {
+    throw new Error(`Cannot write the design export to ${resolved}: ${(e as Error).message}`);
+  }
+  return resolved;
+}
+
+/**
+ * isurface_orchestrator.exportDesign — project the bound project's design
+ * export (design_exporter) and, when an output path is given, write it there.
+ * Answers with the export either way.
+ */
+export function exportDesign(outPath?: string, approval?: DesignApproval): DesignExport {
+  const design = projectDesign(approval);
+  if (outPath) writeDesignTo(outPath, design);
+  return design;
 }
 
 /** Read a foreign surface document as UTF-8 text without interpreting it;

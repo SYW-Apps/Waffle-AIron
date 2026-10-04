@@ -4,6 +4,8 @@
 // ---------------------------------------------------------------------------
 export {
   exportSurface,
+  // `wairon export`: the whole design, resolved (the design export).
+  exportDesign,
   importSurface,
   listSnapshots,
   // `wairon externals`: pin, status and list of the declared externals.

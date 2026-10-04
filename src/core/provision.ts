@@ -21,6 +21,11 @@ import {
   invalidateSpecCache,
   assertContainedProjectPath,
   loadTypeSpecs,
+  loadTypeSpec,
+  getTypePath,
+  deleteSpec,
+  scanAllSpecs,
+  specIndexRetiredBy,
   resolveSubsystemExports,
   resolveProjectExports,
   getSubsystemPath,
@@ -65,6 +70,10 @@ import {
   type ReferenceEdit,
   type SubsystemSpec,
   type SystemSpec,
+  type TypeSpec,
+  deriveMethodSignature,
+  qualifiedTypeId,
+  typeMatchesRef,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -2147,6 +2156,13 @@ export interface ComponentRename {
    * covered units. Empty when the register names none of them.
    */
   carried: CarriedRekey[];
+  /**
+   * The export entries (L0 and L1) whose public name was derived from the
+   * renamed component or its moving interface (no `as`), each by its public
+   * name: the rename wrote `as: <that name>` on them, so the published surface
+   * and every consumer's pin stay as they were. Empty when none derived it.
+   */
+  keptPublicNames: string[];
 }
 
 /**
@@ -2193,6 +2209,12 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
   if (taken.length > 0) {
     throw new WaironError(`id-taken: the new id, or an id it implies, is already in use: ${taken.join(', ')}.`);
   }
+  // …and no renamed spec may have retired them (spec_index.retiredBy).
+  refuseRetiredIds([
+    { kind: 'component', id: newId },
+    { kind: 'interface', id: interfaceId },
+    { kind: 'implementation', id: implementationId },
+  ]);
 
   // Step 13: what moves — the component's interface named after it, and the
   // implementation named after it that realizes one of its contracts.
@@ -2231,12 +2253,21 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
   // specs and every spec whose references it rewrites — is judged against the
   // request's write reach before the first write; nothing is written on a refusal.
   const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  // An export entry whose public name was derived from a renamed id: the one
+  // naming the moving interface, or naming the component with no interface.
+  const derivesName = (entry: any): boolean => (entry.interface !== undefined
+    ? movingInterface !== undefined && entry.interface === movingInterface.id
+    : entry.typeDef === undefined && entry.component === componentId);
+  const keptDry = keepPublicNames(specsDir, derivesName, true);
   assertSpecsInReach(
-    [...renamed.map(({ kind, from }) => ({ kind, id: from })), ...rewriteRefFields(specsDir, remap, undefined, true), ...rekeyLintAllows(specsDir, rename, true)],
+    [...renamed.map(({ kind, from }) => ({ kind, id: from })), ...keptDry.specs, ...rewriteRefFields(specsDir, remap, undefined, true), ...rekeyLintAllows(specsDir, rename, true)],
     `renaming component "${componentId}"`,
     Array.isArray(registerEdits) && registerEdits.length > 0,
   );
-  const rewrittenRefs = rewriteRefFields(specsDir, remap);
+  // Still step 16: the published names first — an entry that states no `as`
+  // gets the name it published, before its component or interface is respelled.
+  const kept = keepPublicNames(specsDir, derivesName);
+  const rewrittenRefs = [...kept.specs, ...rewriteRefFields(specsDir, remap)];
   // Step 17: the lint allows naming it — a site on an edge, a covered unit —
   // follow as the register does.
   const allowsRekeyed = rekeyLintAllows(specsDir, rename);
@@ -2254,7 +2285,7 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
   const carried = projectConfigRepository.rekeyCarried(rename);
 
   // Step 21: what moved, what was rewritten, and what the register followed.
-  return { renamed, rewritten, carried };
+  return { renamed, rewritten, carried, keptPublicNames: kept.names };
 }
 
 /**
@@ -2288,9 +2319,12 @@ function moveRenamedSpecs(
 
   // The component under its new id, where the loader places it — an owned member
   // nested under its owner.
-  saveComponentSpec({ ...movedComponent, id: newId });
+  // Each moved spec appends its old id to its rename trace (previousIds).
+  saveComponentSpec({ ...movedComponent, id: newId, previousIds: traced(movedComponent.previousIds, componentId) });
   // Its own interface, when that moves, under i<newId>.
-  if (movedInterface) saveInterfaceSpec({ ...movedInterface, id: interfaceId, component: newId });
+  if (movedInterface) {
+    saveInterfaceSpec({ ...movedInterface, id: interfaceId, component: newId, previousIds: traced(movedInterface.previousIds, movedInterface.id) });
+  }
   // Its own implementation, when that moves, under <newId>_impl.
   if (movedImplementation) {
     // The nested layout keeps an implementation's file beside its contract's, so
@@ -2300,7 +2334,7 @@ function moveRenamedSpecs(
     if (path.resolve(getImplementationPath(implementationId, movedImplementation.contract)) === path.resolve(oldFile)) {
       fs.unlinkSync(oldFile);
     }
-    saveImplementationSpec({ ...movedImplementation, id: implementationId });
+    saveImplementationSpec({ ...movedImplementation, id: implementationId, previousIds: traced(movedImplementation.previousIds, movedImplementation.id) });
   }
 
   // Remove each moved spec's old file, found by its old id — which the loader
@@ -2311,6 +2345,74 @@ function moveRenamedSpecs(
 
   // The removed files changed the tree outside the save paths.
   invalidateSpecCache();
+}
+
+/** A rename trace with `former` appended (oldest first), never listing one key twice. */
+function traced(trace: readonly string[] | undefined, former: string): string[] {
+  const out = [...(trace ?? [])];
+  if (!out.includes(former)) out.push(former);
+  return out;
+}
+
+/**
+ * Refuse an id a renamed spec of its kind retired (id-retired), naming the
+ * holder and the way out (spec_index.retiredBy over the bound tree).
+ */
+function refuseRetiredIds(wanted: { kind: 'component' | 'interface' | 'implementation' | 'type'; id: string }[]): void {
+  const index = scanAllSpecs({ memberDepth: 0 });
+  const retired = wanted.flatMap(({ kind, id }) => {
+    const holder = specIndexRetiredBy(index, kind, id);
+    return holder ? [`${kind} "${id}" is listed in the previousIds of "${holder}"`] : [];
+  });
+  if (retired.length > 0) {
+    throw new WaironError(
+      `id-retired: ${retired.join('; ')}. A consumer holding the old key would read the new spec as the renamed one; `
+      + "unsetting the holder's previousIds (sdd_update_spec unset) releases the id.",
+    );
+  }
+}
+
+/**
+ * Write `as: <public name>` on every L1 and L0 export entry that states none
+ * and whose public name `derives` says a rename is about to change — the name
+ * was derived from the old id, so without it the published name, and every
+ * consumer's pin on it, would move with the rename. An L0 entry that states an
+ * `id` already names itself. Answers the public names kept and the specs
+ * changed; `dryRun` changes nothing.
+ */
+function keepPublicNames(
+  specsDir: string,
+  derives: (entry: any) => boolean,
+  dryRun = false,
+): { names: string[]; specs: RewrittenSpec[] } {
+  const names: string[] = [];
+  const specs: RewrittenSpec[] = [];
+  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    if (!raw || typeof raw !== 'object') continue;
+    const kind = specKind(raw);
+    if ((kind !== 'subsystem' && kind !== 'system') || !Array.isArray(raw.publicInterfaces)) continue;
+    let changed = false;
+    for (const entry of raw.publicInterfaces) {
+      if (!entry || typeof entry !== 'object' || entry.as !== undefined || entry.id !== undefined) continue;
+      if (!derives(entry)) continue;
+      const source = entry.interface ?? entry.component ?? entry.typeDef;
+      if (typeof source !== 'string') continue;
+      const name = source.split('::').pop() ?? source;
+      entry.as = name;
+      names.push(name);
+      changed = true;
+    }
+    if (!changed) continue;
+    if (!dryRun) writeYamlFile(file, raw);
+    specs.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
+  }
+  return { names: [...new Set(names)], specs };
 }
 
 /**
@@ -2382,6 +2484,12 @@ export interface MethodRename {
    * nowhere.
    */
   carried: CarriedRekey[];
+  /**
+   * The public names of the export entries (L0 and L1) whose contract carries
+   * the renamed method: consumers pinning them see one member removed and one
+   * added. Reported, never prevented. Empty when the contract is not exported.
+   */
+  publishedIn: string[];
 }
 
 /**
@@ -2425,6 +2533,17 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   const taken = moving.filter((i) => i.methods.some((m) => m.name === newName)).map((i) => `"${i.id}"`);
   if (taken.length > 0) {
     throw new WaironError(`name-taken: ${taken.join(', ')} already declares a method under the name "${newName}".`);
+  }
+  // …and not retired there: a method listing `<contract>.<newName>` in its
+  // rename trace holds the name.
+  const retiredOn = moving.flatMap((i) => i.methods
+    .filter((m) => (m.previousNames ?? []).includes(`${i.id}.${newName}`))
+    .map((m) => `"${i.id}.${m.name}"`));
+  if (retiredOn.length > 0) {
+    throw new WaironError(
+      `name-retired: ${retiredOn.join(', ')} lists "${newName}" in its previousNames — the name is retired on that contract. `
+      + 'Unsetting that previousNames releases it.',
+    );
   }
 
   // Step 13: every implementation, for the realizations of those contracts.
@@ -2481,6 +2600,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
         ? {
           ...m,
           name: newName,
+          previousNames: traced(m.previousNames, `${contract.id}.${methodName}`),
           ...(m.params === undefined && m.signatureFrom === undefined
             ? { signature: renameInSignature(m.signature, methodName, newName) }
             : {}),
@@ -2524,8 +2644,10 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   const allowsRekeyed = rekeyLintAllows(specsDir, rename);
   const rewritten = [...new Set([...retargeted, ...allowsRekeyed].map((spec) => spec.id))];
 
-  // Step 23: what names the method and is left alone.
+  // Step 23: what names the method and is left alone — and the export
+  // entries publishing it, whose consumers see a member renamed.
   const mentions = collectMentions(specsDir, methodName, moving);
+  const publishedIn = exportsPublishing(componentId, new Set(moving.map((i) => i.id)));
 
   // Step 24: the debt register, keyed by exactly the identity just moved.
   const carried = projectConfigRepository.rekeyCarried(rename);
@@ -2540,7 +2662,29 @@ export function renameMethod(componentId: string, methodName: string, newName: s
     mentions,
     ...(pinnedSymbol ? { pinnedSymbol } : {}),
     carried,
+    publishedIn,
   };
+}
+
+/**
+ * The public names of the L1 and L0 export entries that publish a contract of
+ * `componentId` among `contracts`: an entry narrowed to one of them, or one
+ * exporting the component whole.
+ */
+function exportsPublishing(componentId: string, contracts: ReadonlySet<string>): string[] {
+  const names = new Set<string>();
+  const tables = [
+    ...loadSubsystemSpecs().filter((s) => !s.id.includes('::')).map((s) => resolveSubsystemExports(s.id)),
+    resolveProjectExports(),
+  ];
+  for (const table of tables) {
+    for (const entry of table.entries) {
+      if (entry.kind !== 'component' || entry.component !== componentId) continue;
+      if (entry.interface !== undefined && !contracts.has(entry.interface)) continue;
+      names.add(entry.publicName);
+    }
+  }
+  return [...names].sort();
 }
 
 /**
@@ -2601,6 +2745,216 @@ function collectMentions(specsDir: string, methodName: string, moved: InterfaceS
  */
 function identifierPattern(methodName: string): RegExp {
   return new RegExp(`(?<![A-Za-z0-9_])${methodName}(?![A-Za-z0-9_])`);
+}
+
+// ---------------------------------------------------------------------------
+// Type rename
+//
+// A type is named at every type position of the tree — params, returns,
+// fields, signature types, a signatureFrom read as a type — and by an export
+// entry's typeDef. A position is a type EXPRESSION (`list<Invoice>?`), so the
+// rename respells the named members of the expression that name this type and
+// leaves the rest of the text as written. A named member names the type when
+// it reads as the type's id (type_spec.matchesRef) and, when it would read as
+// another type of the same name too, when the spec writing it belongs to the
+// type's own owner — the reading the loader binds.
+// ---------------------------------------------------------------------------
+
+/** What renaming a type changed (type_rename). */
+export interface TypeRename {
+  /** The type's id before the rename, qualified by its owning subsystem when it has one. */
+  from: string;
+  /** The type's id after the rename, qualified the same way. */
+  to: string;
+  /** Ids of the other specs whose type positions, typeDef or lint allows naming the type were rewritten. */
+  rewritten: string[];
+  /** The export entries (L0 and L1) that exported the type without an `as`: the rename wrote `as: <old name>` on them. */
+  keptPublicNames: string[];
+  /** Every edit the rename made to the debt register: an entry anchored on the type. */
+  carried: CarriedRekey[];
+}
+
+/** An id respelled in the style a written reference spelled the old one: snake id, PascalCase, camelCase or kebab-case. */
+function respellLike(written: string, oldId: string, newId: string): string {
+  const words = (id: string): string[] => id.split(/[_-]+/).filter(Boolean);
+  const pascal = (id: string): string => words(id).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+  const camel = (id: string): string => { const p = pascal(id); return p.charAt(0).toLowerCase() + p.slice(1); };
+  const kebab = (id: string): string => words(id).join('-');
+  if (written === oldId) return newId;
+  if (written === pascal(oldId)) return pascal(newId);
+  if (written === camel(oldId)) return camel(newId);
+  if (written === kebab(oldId)) return kebab(newId);
+  if (written.includes('-')) return kebab(newId);
+  return /^[A-Z]/.test(written) ? pascal(newId) : newId;
+}
+
+/**
+ * Rename a type and every reference to it in the bound tree (core_orchestrator.renameType).
+ * The type moves to the new id under the same owner, its old id appended to
+ * its rename trace; every type position naming it is respelled, and an export
+ * entry's typeDef — one that stated no `as` first keeping its public name.
+ * Before writing anything it refuses a type that does not exist
+ * (type-missing), one in another project (chained-type), a new id outside the
+ * id grammar (invalid-id), and a new id another type of the same owner holds
+ * or retired (id-taken, id-retired).
+ */
+export function renameType(typeId: string, newId: string): TypeRename {
+  // Steps 1–3: the type must exist. A subsystem-qualified id names the type within its owner.
+  const all = loadTypeSpecs();
+  const cut = typeId.lastIndexOf('::');
+  const qualifier = cut >= 0 ? typeId.slice(0, cut) : undefined;
+  const ownSubsystem = qualifier !== undefined && loadSubsystemSpecs().some((s) => s.id === qualifier);
+  // Steps 4–5: …and belong to the bound project itself — an alias:: prefix names another project.
+  if (qualifier !== undefined && !ownSubsystem) {
+    throw new WaironError(`chained-type: "${typeId}" lives in another project; rename it from that project's own root.`);
+  }
+  const type: TypeSpec | null = qualifier !== undefined
+    ? all.find((t) => t.id === typeId.slice(cut + 2) && t.subsystem === qualifier) ?? null
+    : loadTypeSpec(typeId);
+  if (!type) throw new WaironError(`type-missing: no type has the id "${typeId}".`);
+  if (type.id.includes('::')) {
+    throw new WaironError(`chained-type: "${type.id}" lives in another project; rename it from that project's own root.`);
+  }
+  const oldId = type.id;
+  // Steps 6–7: the new id must be a plain lowercase identifier.
+  if (!SpecIdSchema.safeParse(newId).success) {
+    throw new WaironError(`invalid-id: "${newId}" is not a lowercase identifier with no namespace separator.`);
+  }
+  // Steps 8–10: no type of the same owner may hold or have retired the new id.
+  const sameOwner = (t: TypeSpec): boolean => (t.subsystem ?? '') === (type.subsystem ?? '');
+  if (all.some((t) => t !== type && t.id === newId && sameOwner(t))) {
+    throw new WaironError(`id-taken: another type of ${type.subsystem ? `"${type.subsystem}"` : 'the system'} already has the id "${newId}".`);
+  }
+  refuseRetiredIds([{ kind: 'type', id: qualifiedTypeId({ id: newId, subsystem: type.subsystem }) }]);
+
+  // Step 11: the move as the register and the lint allows key it, proven
+  // rewritable before the first write.
+  const rename: IdentityRename = { specs: [{ from: oldId, to: newId }] };
+  const registerEdits = projectConfigRepository.rekeyCarried(rename, true);
+
+  // Step 12: every type position naming the type, respelled.
+  const components = new Map(loadComponentSpecs().map((c) => [c.id, c.subsystem]));
+  const others = all.filter((t) => t !== type);
+  /** Whether a written named member, in a spec owned by `owner`, names the renamed type. */
+  const namesType = (token: string, owner: string | undefined): boolean => {
+    if (!typeMatchesRef(type, token)) return false;
+    if (!others.some((t) => typeMatchesRef(t, token))) return true;
+    return (owner ?? '') === (type.subsystem ?? '');
+  };
+  const respellText = (text: unknown, owner: string | undefined): unknown => {
+    if (typeof text !== 'string') return text;
+    return text.replace(/[A-Za-z_][A-Za-z0-9_-]*(?:(?:::|\.)[A-Za-z_][A-Za-z0-9_-]*)*/g, (token) => {
+      if (!namesType(token, owner)) return token;
+      const parts = token.split(/(::|\.)/);
+      parts[parts.length - 1] = respellLike(parts[parts.length - 1], oldId, newId);
+      return parts.join('');
+    });
+  };
+  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const derivesName = (entry: any): boolean => entry.interface === undefined && entry.component === undefined
+    && typeof entry.typeDef === 'string' && namesType(entry.typeDef, undefined);
+  /** Respell one spec's type positions in place; answers whether any changed. */
+  const respellSpec = (raw: any): boolean => {
+    const kind = specKind(raw);
+    const before = JSON.stringify(raw);
+    const at = (holder: any, key: string, owner: string | undefined): void => {
+      if (holder && typeof holder[key] === 'string') holder[key] = respellText(holder[key], owner);
+    };
+    const methodPositions = (method: any, owner: string | undefined, sourced: boolean): void => {
+      if (!method || typeof method !== 'object') return;
+      for (const p of Array.isArray(method.params) ? method.params : []) at(p, 'type', owner);
+      at(method, 'returns', owner);
+      if (sourced && typeof method.signatureFrom === 'string' && namesType(method.signatureFrom, owner)) at(method, 'signatureFrom', owner);
+      // A stored text derives from params; a prose text names its result after the parameter list.
+      if (typeof method.signature === 'string') {
+        if (Array.isArray(method.params)) method.signature = deriveMethodSignature(method) ?? method.signature;
+        else {
+          const close = method.signature.lastIndexOf(')');
+          if (close >= 0) method.signature = method.signature.slice(0, close + 1) + respellText(method.signature.slice(close + 1), owner);
+        }
+      }
+    };
+    if (kind === 'interface') {
+      const owner = components.get(String(raw.component));
+      for (const m of Array.isArray(raw.methods) ? raw.methods : []) methodPositions(m, owner, true);
+    } else if (kind === 'type') {
+      const owner = typeof raw.subsystem === 'string' ? raw.subsystem : undefined;
+      for (const f of Array.isArray(raw.fields) ? raw.fields : []) {
+        at(f, 'type', owner);
+        if (typeof f?.references === 'string') {
+          const [head, ...rest] = f.references.split('.');
+          if (namesType(head, owner)) f.references = [respellText(head, owner), ...rest].join('.');
+        }
+      }
+      for (const p of Array.isArray(raw.params) ? raw.params : []) at(p, 'type', owner);
+      at(raw, 'returns', owner);
+      if (typeof raw.linkedEntity === 'string' && namesType(raw.linkedEntity, owner)) at(raw, 'linkedEntity', owner);
+      for (const m of Array.isArray(raw.methods) ? raw.methods : []) methodPositions(m, owner, false);
+    } else if (kind === 'subsystem' || kind === 'system') {
+      const owner = kind === 'subsystem' ? String(raw.id) : undefined;
+      for (const e of Array.isArray(raw.publicInterfaces) ? raw.publicInterfaces : []) {
+        if (e && typeof e.typeDef === 'string' && namesType(e.typeDef, owner)) at(e, 'typeDef', owner);
+      }
+    }
+    return JSON.stringify(raw) !== before;
+  };
+  /** The specs whose type positions name the type; `dryRun` writes nothing. The type's own file is the move's. */
+  const respellAll = (dryRun: boolean): RewrittenSpec[] => {
+    const out: RewrittenSpec[] = [];
+    for (const file of listFilesRecursive(specsDir, '.yaml')) {
+      let raw: any;
+      try {
+        raw = readYamlFile(file);
+      } catch {
+        continue;
+      }
+      const kind = raw && typeof raw === 'object' ? specKind(raw) : undefined;
+      if (!kind || !respellSpec(raw)) continue;
+      if (!dryRun) writeYamlFile(file, raw);
+      out.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
+    }
+    return out;
+  };
+  // Inside a hosted request, every spec the rename would write is judged
+  // against the request's write reach before the first write.
+  assertSpecsInReach(
+    [{ kind: 'type', id: oldId }, ...keepPublicNames(specsDir, derivesName, true).specs, ...respellAll(true), ...rekeyLintAllows(specsDir, rename, true)],
+    `renaming type "${typeId}"`,
+    Array.isArray(registerEdits) && registerEdits.length > 0,
+  );
+  // The published names first, then the positions; traces are never touched.
+  const kept = keepPublicNames(specsDir, derivesName);
+  const respelled = respellAll(false);
+  const allowsRekeyed = rekeyLintAllows(specsDir, rename);
+  const rewritten = [...new Set([...kept.specs, ...respelled, ...allowsRekeyed]
+    .filter((spec) => !(spec.kind === 'type' && spec.id === oldId))
+    .map((spec) => spec.id))];
+
+  // Step 13: the rewrite changed files outside the save paths.
+  invalidateSpecCache();
+  // Step 14: the type, as the rewrite left it, under its new id and the same owner.
+  const moved = loadTypeSpecs().find((t) => t.id === oldId && (t.subsystem ?? '') === (type.subsystem ?? '')) ?? type;
+  saveSpec('type', { ...moved, id: newId, previousIds: traced(moved.previousIds, oldId) } as TypeSpec);
+  invalidateSpecCache();
+  // Step 15: the file it left behind.
+  removeSpecFile(typeFileOf(oldId, type), oldId);
+  if (loadTypeSpecs().some((t) => t.id === oldId && (t.subsystem ?? '') === (type.subsystem ?? ''))) deleteSpec('type', oldId);
+  invalidateSpecCache();
+  // Step 16: the debt register, keyed by the move.
+  const carried = projectConfigRepository.rekeyCarried(rename);
+  // Step 17.
+  return {
+    from: qualifiedTypeId(type),
+    to: qualifiedTypeId({ id: newId, subsystem: type.subsystem }),
+    rewritten,
+    keptPublicNames: kept.names,
+    carried,
+  };
+}
+
+/** The file the loader keeps a type in, by its id, owner and group. */
+function typeFileOf(id: string, type: TypeSpec): string {
+  return getTypePath(id, type.subsystem, type.group);
 }
 
 // ---------------------------------------------------------------------------

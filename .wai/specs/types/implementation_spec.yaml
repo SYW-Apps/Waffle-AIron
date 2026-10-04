@@ -104,6 +104,15 @@ fields:
       `seed(config)` realized as `bootstrapInstance(cfg)` reads as a dropped parameter to anything
       that infers. A leading parameter this list does not name is a finding.
     optional: true
+  - name: previousIds
+    type: list<string>
+    description: >-
+      The rename trace: every id this implementation held before, oldest first. Written only by the
+      rename tools (renameComponent moves <id>_impl with its component), never by an author, and
+      never rewritten or bound as a reference. The design export shows it as `formerly`. Another
+      implementation may not take an id listed here (id-retired at write, RENAME_TRACE_CONFLICT on a
+      hand edit); unsetting it releases those ids.
+    optional: true
 methods:
   - name: sourceFiles
     signature: 'sourceFiles(): string[]'
@@ -115,4 +124,4 @@ methods:
     symbol: implementationSourceFiles
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T10:20:18.584Z'
+updatedAt: '2026-10-04T13:51:50.830Z'

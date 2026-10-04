@@ -607,6 +607,27 @@ methods:
         type: return
         outcome: whether the lock changed
     detail: full
+  - name: exportDesign
+    narrative:
+      - stepNumber: 1
+        description: Project the bound project's design export
+        type: call
+        targetComponent: design_exporter
+        targetMethod: exportDesign
+      - stepNumber: 2
+        description: An output path was given
+        type: branch
+        condition: outPath provided
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Write the export to the output path as deterministic JSON
+        type: call
+        targetComponent: surface_transfer_adapter
+        targetMethod: writeDesignTo
+      - stepNumber: 4
+        description: Return the design export
+        type: return
+        outcome: DesignExport
 lint:
   allow:
     - code: UNDECLARED_COLOCATED_CALL
@@ -621,4 +642,4 @@ lint:
         replaced listExternalInterfaces, whose entry for it was retired with it.
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-03T17:59:27.400Z'
+updatedAt: '2026-10-04T13:54:56.892Z'

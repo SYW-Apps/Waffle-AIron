@@ -32,7 +32,7 @@ wairon never depends on a consumer.
 | L5 narrative (steps: call, branch, loop, try, parallel, detach) | a method body as a control-flow graph | control flow aligns; data flow is deliberately below the design level (stage 3) |
 | type spec (entity / value-object; fields; pure methods) | struct / record, enum | partly: no enum kind; type methods carry prose signatures, no params (stages 1, 2) |
 | type expressions (`Promise<X \| null>`, `X[]`) | a type system | gap: wairon's are TypeScript-flavoured strings (stage 2) |
-| declared entrypoints | executable vs library package | gap: wairon cannot say a project is runnable (stage 4) |
+| lifecycle roots, Portal endpoints, the L0 export table | executable vs library package | packaging, not design: the export carries the facts and a consumer decides (stage 4) |
 
 Where wairon is already more precise than many targets it stays that way and a translation narrows:
 optional params, effect tags (read/write), invariants, async declared on the signature.
@@ -83,17 +83,28 @@ Wiring is the consumer's job: the user wires it, or the consumer attempts it, de
 and leaves what it cannot bind for the user. wairon's part is that the design it hands over carries
 enough for that attempt: resolved signatures (stage 1) and precise types (stage 2).
 
-### 4. Runnable projects, derived
+### 4. Runnable projects: not a wairon concept
 
-A project with declared entrypoints is runnable (an executable); one without is a library. This is
-derived from what the tree already says, never a new setting.
+*Decided 2026-10-04: dropped.* Whether a project ships as an executable or a library is a packaging
+decision: the same design can be built as either, and a framework, a runtime or a build file makes
+that choice, not the architecture. That puts it outside the design layer, with deployment. A derived
+"runnable" flag would also be a guess at one consumer's notion of a start: wairon's own tree binds
+in-process library calls to endpoints, and models its command line without any entry mechanism.
+
+What the design does say, the export carries as it is: each subsystem's lifecycle roots with their
+phases, each Portal method's transport and endpoint, and the resolved L0 export table. A consumer
+reads those facts and decides "bootable or library" for its own target. Detail:
+[`stage-4-5-export.md`](stage-4-5-export.md).
 
 ### 5. The export seam
 
 A versioned, documented export of a project, with specs resolved (signatures, types, references)
-and ids stable across renames, as the one integration point any generator consumes. Open question
-for this stage: rename-stable identity (wairon keys by name and carries renames; consumers
-generally want an id that never changes).
+and ids stable across renames, as the one integration point any generator consumes. *Decided
+2026-10-04:* `wairon export` and `exportDesign()` write one JSON document per project (format
+`wairon-design`, `formatVersion` MAJOR.MINOR, a JSON Schema generated from the zod schema).
+Elements are keyed by name, as mainstream IDLs key them, and the rename tools leave a trace
+(`previousIds`, `previousNames`) that the export shows as `formerly`. Detail:
+[`stage-4-5-export.md`](stage-4-5-export.md).
 
 ## Not adopted
 

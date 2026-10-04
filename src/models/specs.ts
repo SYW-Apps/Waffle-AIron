@@ -517,6 +517,65 @@ export const PortalMountSchema = z.object({
 });
 export type PortalMount = z.infer<typeof PortalMountSchema>;
 
+/**
+ * A spec's RENAME TRACE: every id it held before, oldest first. Written only by
+ * the rename tools (renameComponent, renameType), never by an author, and never
+ * rewritten or bound as a reference — it names keys that no longer exist, so it
+ * is deliberately absent from the reference-field table. The design export
+ * shows it as `formerly`. Another spec of the same kind may not take an id
+ * listed here (id-retired at write, RENAME_TRACE_CONFLICT on a hand edit);
+ * unsetting it releases those ids.
+ */
+export const PreviousIdsSchema = z.array(z.string().min(1));
+
+/**
+ * A contract method's rename trace: every key it held before, oldest first,
+ * each `<interface id>.<method name>` — a rename keeps the interface and
+ * changes the name, a move changes the interface. Written only by renameMethod
+ * and moveMethods; like PreviousIdsSchema never rewritten or bound.
+ */
+export const PreviousNamesSchema = z.array(z.string().min(1));
+
+/** The holders spec_index.retiredBy reads: each kind's specs with their rename traces. */
+export interface RenameTraceHolders {
+  components: ReadonlyArray<{ id: string; previousIds?: string[] }>;
+  interfaces: ReadonlyArray<{ id: string; previousIds?: string[] }>;
+  implementations: ReadonlyArray<{ id: string; previousIds?: string[] }>;
+  types: ReadonlyArray<{ id: string; subsystem?: string; previousIds?: string[] }>;
+}
+
+/**
+ * spec_index.retiredBy — the spec of this kind whose rename trace
+ * (previousIds) lists `id`, or none: the holder that retired it, named by its
+ * key (a subsystem-owned type by `subsystem::id`). A trace entry is read
+ * within its holder's own namespace — a type's within its owner, a member's
+ * spec within its member — so a bare entry is qualified as the holder's own id
+ * is. The writer and the rename tools ask it before giving an id to a new
+ * spec, and refuse with id-retired naming the holder. Pure, so every
+ * subsystem that holds an index asks it the same way.
+ */
+export function specIndexRetiredBy(index: RenameTraceHolders, kind: string, id: string): string | undefined {
+  const holders: ReadonlyArray<{ id: string; subsystem?: string; previousIds?: string[] }> =
+    kind === 'component' ? index.components
+      : kind === 'interface' ? index.interfaces
+        : kind === 'implementation' ? index.implementations
+          : kind === 'type' ? index.types
+            : [];
+  for (const holder of holders) {
+    if (!holder.previousIds?.length) continue;
+    const key = kind === 'type' && holder.subsystem && !holder.id.startsWith(`${holder.subsystem}::`)
+      ? `${holder.subsystem}::${holder.id}`
+      : holder.id;
+    const cut = key.lastIndexOf('::');
+    const namespace = cut >= 0 ? key.slice(0, cut + 2) : '';
+    for (const previous of holder.previousIds) {
+      const previousKey = previous.includes('::') ? previous : namespace + previous;
+      if (previousKey === id) return key;
+    }
+  }
+  return undefined;
+}
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -559,6 +618,8 @@ export const ComponentSpecSchema = z.object({
    *  satisfies the source requirement for a source-less implementation (suppresses
    *  MISSING_SOURCE_PATH); `informative` links are context only. */
   externalLinks: z.array(ExternalLinkSchema).optional(),
+  /** The rename trace (see PreviousIdsSchema). */
+  previousIds: PreviousIdsSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
@@ -835,6 +896,8 @@ export const MethodSignatureSchema = z.object({
       seen.add(finding.code);
     });
   }).optional(),
+  /** The method's rename trace (see PreviousNamesSchema). */
+  previousNames: PreviousNamesSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
   ext: ExtDataSchema.optional(),
 });
@@ -958,6 +1021,8 @@ export const InterfaceSpecSchema = z.object({
   description: z.string(),
   component: z.string(), // References L2 Component id
   methods: z.array(StoredMethodSignatureSchema).default([]),
+  /** The rename trace (see PreviousIdsSchema). */
+  previousIds: PreviousIdsSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
@@ -1311,6 +1376,8 @@ export const ImplementationSpecSchema = z.object({
   detail: NarrativeDetailSchema.optional(),
   /** Spec-level conformance tier default (each method may override). */
   conformance: ConformanceTierSchema.optional(),
+  /** The rename trace (see PreviousIdsSchema). */
+  previousIds: PreviousIdsSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
@@ -1593,6 +1660,8 @@ export const TypeSpecSchema = z.object({
    * as `InvoiceLine`.
    */
   symbol: z.string().optional(),
+  /** The rename trace (see PreviousIdsSchema): ids this type held within its owner. */
+  previousIds: PreviousIdsSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */

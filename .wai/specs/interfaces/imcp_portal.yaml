@@ -814,6 +814,25 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_demote_member
+  - name: sdd_rename_type
+    description: >-
+      Tool: rename a type and rewrite every type position, signatureFrom and export entry naming it;
+      the old id joins the type's rename trace (previousIds), and an export entry that derived its
+      public name from the old id keeps it through `as`. Refuses an id another type of the same
+      owner holds or retired. Reports the specs rewritten, the public names kept and the
+      debt-register edits.
+    signature: 'sdd_rename_type(id: string, newId: string): TypeRename'
+    returns: TypeRename
+    params:
+      - name: id
+        type: string
+        description: The type to rename (qualified by its owning subsystem if needed)
+      - name: newId
+        type: string
+        description: Its new id
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_rename_type
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:53:44.849Z'
+updatedAt: '2026-10-04T13:57:05.817Z'

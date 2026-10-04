@@ -155,6 +155,10 @@ export interface SpecIndex {
   typeSpellings: TypeSpellingFacts;
 }
 
+// spec_index.retiredBy is pure and lives with the trace schemas
+// (models/specs.ts), so every subsystem holding an index asks it alike.
+export { specIndexRetiredBy } from '../models/specs.js';
+
 /**
  * spec_scan_options — how deep a scan reads into chained subprojects:
  * `memberDepth` absent reads every level, 0 the bound project alone, n that
@@ -2092,6 +2096,11 @@ export interface MethodMoveReport {
 // (core/provision.ts) drive it over raw files; `moveMethods` drives it over the
 // typed store, because a move must be able to compute every edit before writing
 // any of them.
+//
+// The rename traces (`previousIds` on a spec, `previousNames` on a contract
+// method) are deliberately NOT in this table: they name keys that no longer
+// exist, so no remap may rewrite them and no binding may qualify them. The
+// loader and the writer carry them verbatim.
 // ---------------------------------------------------------------------------
 
 /** Where in a spec a reference sits, which is what decides how a remap should read it. */
@@ -6365,6 +6374,18 @@ export class SpecWorkspace {
 
     const receiving = this.moveTargetContract(to, ofTarget);
     if (typeof receiving === 'string') return receiving;
+    // name-retired: a name the receiving contract retired cannot be taken
+    // again there — a consumer holding the old key would read the arriving
+    // method as the renamed one.
+    if (receiving) {
+      for (const name of methods) {
+        const holder = receiving.methods.find((m) => (m.previousNames ?? []).includes(`${receiving.id}.${name}`));
+        if (holder) {
+          return `name-retired: "${receiving.id}" retired the name "${name}" — its method "${holder.name}" lists "${receiving.id}.${name}" in its previousNames. `
+            + 'Unsetting that previousNames releases the name.';
+        }
+      }
+    }
 
     // A target with no contract receives one, and moved implementation entries
     // with no implementation to arrive in receive one — under ids nothing else
@@ -6433,7 +6454,9 @@ export class SpecWorkspace {
     for (const contract of contracts.filter((i) => i.component === source.id)) {
       const leaving = contract.methods.filter((m) => methods.includes(m.name));
       if (leaving.length === 0) continue;
-      arriving.push(...cloneSpec(leaving));
+      // Each arriving entry carries its former key `<source contract>.<name>`
+      // in its rename trace, so a consumer reads the move as a move.
+      arriving.push(...cloneSpec(leaving).map((m) => ({ ...m, previousNames: [...(m.previousNames ?? []), `${contract.id}.${m.name}`] })));
       // The copy is filtered, never the stored array: `filter` hands back the
       // SAME element objects, so a plan built that way shares its methods with
       // the snapshot a failed write has to restore — and the sweep below, which

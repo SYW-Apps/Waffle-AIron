@@ -14,6 +14,7 @@ export {
   loadImplementationSpecs,
   saveSpec,
   deleteSpec,
+  scanAllSpecs,
 } from '../index.js';
 
 /**

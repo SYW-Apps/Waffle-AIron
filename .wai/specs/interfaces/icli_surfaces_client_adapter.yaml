@@ -54,6 +54,20 @@ methods:
     signature: 'listExternals(): list<ExternalListing>'
     returns: list<ExternalListing>
     params: []
+  - name: exportDesign
+    description: >-
+      Forward to surface_portal.exportDesign: the bound project's design export, written to outPath
+      when given
+    signature: 'exportDesign(outPath?: string, approval?: DesignApproval): DesignExport'
+    returns: DesignExport
+    params:
+      - name: outPath
+        type: string
+        optional: true
+      - name: approval
+        type: DesignApproval
+        description: The lock-check state decided by checkApproval
+        optional: true
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-10-04T10:18:38.405Z'
+updatedAt: '2026-10-04T14:04:59.954Z'

@@ -1,0 +1,61 @@
+kind: value-object
+id: design_export
+name: DesignExport
+description: >-
+  The design export: one project's whole design, resolved, as the one documented integration point
+  any generator or translator consumes. Signatures are inlined (a method source is never named),
+  every type position is canonical and parsed, every reference is a key in this document or
+  `alias::publicName` into a dependency, and narratives are flat step lists. One project per
+  document: its parts are folded in, member projects and externals are listed as dependencies and
+  never inlined. Left out on purpose: lint allows, conformance tiers, symbol maps, the debt
+  register, finding declarations and timestamps — gate data and noise, not design. Deterministic:
+  the same tree and formatVersion give byte-identical JSON (sorted object keys, arrays in declared
+  order, no timestamp). The compatibility promise, stated on the format page (docs/design-export.md)
+  and in the JSON Schema generated from this type's zod schema: a MINOR formatVersion only adds (a
+  field, or a member of a closed set such as a step type, a stereotype or a transport) and consumers
+  ignore what they do not know; a MAJOR removes, renames or changes a meaning and is named in the
+  CHANGELOG; wairon emits one major at a time. A design change is never a format change.
+subsystem: sdd_surfaces
+fields:
+  - name: format
+    type: string
+    description: Always `wairon-design`
+    optional: false
+  - name: formatVersion
+    type: string
+    description: '`MAJOR.MINOR`; 1.0 at first release'
+    optional: false
+  - name: generator
+    type: string
+    description: The wairon version that wrote it
+    optional: false
+  - name: source
+    type: DesignSource
+    optional: false
+  - name: project
+    type: DesignProject
+    optional: false
+  - name: dependencies
+    type: list<DesignDependency>
+    description: Sorted by alias
+    optional: false
+  - name: subsystems
+    type: list<DesignSubsystem>
+    description: Sorted by key, as every list of elements below
+    optional: false
+  - name: components
+    type: list<DesignComponent>
+    optional: false
+  - name: interfaces
+    type: list<DesignInterface>
+    optional: false
+  - name: implementations
+    type: list<DesignImplementation>
+    optional: false
+  - name: types
+    type: list<DesignType>
+    optional: false
+methods: []
+sourcePath: src/models/design-export.ts
+createdAt: '2026-10-04T13:53:37.463Z'
+updatedAt: '2026-10-04T15:39:04.032Z'

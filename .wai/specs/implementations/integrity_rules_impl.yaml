@@ -1407,6 +1407,51 @@ methods:
     detail: full
     symbol: check
     exportedVia: namedScalarTypesRule
+  - name: renameTraces
+    sourcePath: src/core/rules/integrity/rename-traces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Collect the live keys by kind: component, interface and implementation ids, type ids per
+          owner, and `<interface>.<method>` for every declared contract method
+        type: local
+      - stepNumber: 2
+        description: For each element in scope that carries a rename trace
+        type: loop
+        loopKind: forEach
+        over: >-
+          the components, interfaces, implementations and types with previousIds, and the contract
+          methods with previousNames, in scope
+        endStep: 6
+      - stepNumber: 3
+        description: For each entry of its trace
+        type: loop
+        loopKind: forEach
+        over: the element's trace entries
+        endStep: 6
+      - stepNumber: 4
+        description: >-
+          Does a live element of the same kind hold the entry, or has another element of that kind
+          already claimed it?
+        type: branch
+        condition: >-
+          the entry is a live key of the element's kind (a type within its owner), or it was already
+          claimed by another element's trace
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report RENAME_TRACE_CONFLICT on the element, naming the entry, the other holder, and the
+          way out: rename the newcomer, or unset the entry and accept that a consumer reads a delete
+          plus an add
+        type: local
+      - stepNumber: 6
+        description: Record the entry as claimed by this element
+        type: local
+      - stepNumber: 7
+        description: 'Done: every conflict reported'
+        type: return
+    symbol: check
+    exportedVia: renameTracesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-04T11:53:54.570Z'
+updatedAt: '2026-10-04T17:40:03.823Z'

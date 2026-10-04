@@ -28,12 +28,19 @@ methods:
     params: []
   - name: resolveProjectExports
     description: >-
-      Forward to spec_tree_portal.resolveProjectExports: the project's resolved L0 export table —
-      every public name bound to its canonical target, with its audience — which the projector
-      flattens into a snapshot.
-    signature: 'resolveProjectExports(): ResolvedExportTable'
+      Forward to spec_tree_portal.resolveProjectExports: a project's resolved L0 export table —
+      every public name bound to its canonical target, with its audience. The bound project's when
+      no project is named, which the snapshot projector flattens; a member's, by its namespace,
+      which the design export reads to write a reference into that member as `alias::publicName`.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
     returns: ResolvedExportTable
-    params: []
+    params:
+      - name: project
+        type: string
+        description: >-
+          The namespace of a project the scan read (a member's alias key); the bound project when
+          omitted
+        optional: true
     guarantees:
       - idempotent
   - name: loadProjectConfig
@@ -62,6 +69,46 @@ methods:
     signature: 'excerptParent(): ParentExcerpt'
     returns: ParentExcerpt
     params: []
+  - name: loadSubsystemSpecs
+    description: >-
+      Forward to spec_tree_portal.loadSubsystemSpecs: every loaded subsystem, a part's included, for
+      the design export
+    signature: 'loadSubsystemSpecs(): list<SubsystemSpec>'
+    returns: list<SubsystemSpec>
+    params: []
+    guarantees:
+      - idempotent
+  - name: loadImplementationSpecs
+    description: >-
+      Forward to spec_tree_portal.loadImplementationSpecs: every loaded implementation with its
+      narratives, for the design export
+    signature: 'loadImplementationSpecs(): list<ImplementationSpec>'
+    returns: list<ImplementationSpec>
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveSubsystemExports
+    description: >-
+      Forward to spec_tree_portal.resolveSubsystemExports: one subsystem's resolved L1 export table,
+      which the design export carries on each subsystem
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The subsystem whose table to resolve
+    guarantees:
+      - idempotent
+  - name: projectFamily
+    description: >-
+      Forward to spec_tree_portal.projectFamily: the project graph of the current scan — every
+      project root it read with its alias, id and parent — from which the design export lists the
+      bound project's direct project members as dependencies.
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-04T10:19:39.565Z'
+updatedAt: '2026-10-04T17:32:06.662Z'

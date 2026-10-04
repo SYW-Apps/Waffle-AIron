@@ -21,6 +21,7 @@ import {
   type SubsystemSpec,
   type SystemSpec,
   type TypeSpec,
+  specIndexRetiredBy,
 } from '../models/specs.js';
 import {
   interfaceCanonicalTypes,
@@ -31,6 +32,7 @@ import {
 } from '../models/type-grammar.js';
 import type { RulesConfig } from '../models/project.js';
 import type { MethodMoveReport, SpecChangeReport, SpecWriteHooks, WritableSpecKind } from './specs.js';
+import { qualifiedTypeId } from '../models/type-references.js';
 // authoring_core_adapter and authoring_validator_adapter — every hop out of the
 // seam lands on the adapter's own module, which re-exports the provider's
 // portal by identity. The seam is a peer of sdd_core and sdd_validator, and a
@@ -42,6 +44,7 @@ import {
   loadSpec,
   moveMethods as coreMoveMethods,
   saveSpec,
+  scanAllSpecs,
   updateSpec,
 } from './adapters/authoring-core.js';
 import { validateComponentCandidate, findTestsReferencing } from './adapters/authoring-validator.js';
@@ -384,6 +387,9 @@ const STORE_MANAGED_FIELDS = new Set(['status', 'updatedAt']);
  */
 const ALWAYS_CARRIED_FIELDS = new Set(['ext']);
 
+/** The kinds whose specs keep a rename trace (previousIds). */
+const TRACED_KINDS: ReadonlySet<WritableSpecKind> = new Set(['component', 'interface', 'implementation', 'type']);
+
 /** The lifecycle statuses, weakest first. */
 const STATUS_ORDER: readonly SpecStatus[] = ['draft', 'design', 'complete'];
 
@@ -459,6 +465,12 @@ export function applyRestatement(
   const carried = carryInto(restatement, existing, candidate);
   const cleared = clearedByOmission(existing, candidate, restatement.fields);
   stampLifecycle(candidate, existing, status.status);
+
+  // A new method may not take a name its own contract retired (name-retired).
+  if (restatement.kind === 'interface') {
+    const retired = retiredMethodNames(existing, candidate);
+    if (retired) return refused(restatement, replacedExisting, `${retired} Nothing was written.`);
+  }
 
   // A source stated beside params or returns, and a method stating nothing it
   // takes, are refused; a params-bearing method's text is derived, not taken.
@@ -605,9 +617,43 @@ function carryInto(restatement: SpecRestatement, existing: Spec | null, candidat
       for (const field of carryUnexpressed(prev, method, restatement.memberFields)) carried.push(`${field} (${String(method.name)})`);
     }
   }
+  // A method's rename trace is carried whatever the door expresses: a
+  // re-authoring that states the method again never drops the names it retired.
+  if (restatement.kind === 'interface' && !restatement.memberFields && Array.isArray(candidate.methods)) {
+    const stored: Record<string, unknown>[] = (existing as { methods?: Record<string, unknown>[] }).methods ?? [];
+    for (const method of candidate.methods as Record<string, unknown>[]) {
+      const prev = stored.find((p) => p.name === method.name);
+      if (prev?.previousNames === undefined || method.previousNames !== undefined) continue;
+      method.previousNames = prev.previousNames;
+      carried.push(`previousNames (${String(method.name)})`);
+    }
+  }
   // createdAt is kept by stampLifecycle and named first above, never carried as data.
   carried.push(...carryUnexpressed(existing as Record<string, unknown>, candidate, [...restatement.fields, 'createdAt']));
   return carried;
+}
+
+/**
+ * The refusal for an interface restatement that states a NEW method under a
+ * name one of its own methods retired — `<interface>.<name>` in that method's
+ * previousNames — or undefined. A consumer holding the old key would read the
+ * new method as the renamed one; unsetting the holder's previousNames releases
+ * the name.
+ */
+function retiredMethodNames(existing: Spec | null, candidate: Record<string, any>): string | undefined {
+  const id = String(candidate.id);
+  const storedNames = new Set(((existing as { methods?: { name: string }[] } | null)?.methods ?? []).map((m) => m.name));
+  const methods = (Array.isArray(candidate.methods) ? candidate.methods : []) as { name: string; previousNames?: string[] }[];
+  const holders = [...methods, ...((existing as { methods?: { name: string; previousNames?: string[] }[] } | null)?.methods ?? [])];
+  for (const method of methods) {
+    if (storedNames.has(method.name)) continue;
+    const holder = holders.find((m) => m !== method && (m.previousNames ?? []).includes(`${id}.${method.name}`));
+    if (holder) {
+      return `Refusing to write interface "${id}": name-retired — the new method "${method.name}" takes a name this contract retired `
+        + `("${holder.name}" lists "${id}.${method.name}" in its previousNames). Unsetting that previousNames releases the name.`;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -797,7 +843,21 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   // Step 5: the spec this restatement re-authors, if one holds the id.
   const id = restatement.kind === 'system' ? 'system' : (restatement.spec as { id: string }).id;
   const existing = loadSpec(restatement.kind, id);
-  // Step 6: what the restatement becomes over it.
+  // Steps 6-9: an id given to a NEW spec must not be one a renamed spec of
+  // its kind retired (spec_index.retiredBy; a type within its owner).
+  if (!existing && TRACED_KINDS.has(restatement.kind)) {
+    const spec = restatement.spec as { id: string; subsystem?: string };
+    const key = restatement.kind === 'type' ? qualifiedTypeId(spec) : spec.id;
+    const holder = specIndexRetiredBy(scanAllSpecs({ memberDepth: 0 }), restatement.kind, key);
+    if (holder) {
+      throw new Error(
+        `id-retired: ${restatement.kind} "${spec.id}" is listed in the previousIds of "${holder}", which was renamed from it. `
+        + 'Left alone, a consumer holding the old key would read the new spec as the renamed one. Unsetting the holder\'s previousIds '
+        + '(sdd_update_spec with {"unset": ["previousIds"]}) releases the id, at the cost that such a consumer reads a delete and an add. Nothing was written.',
+      );
+    }
+  }
+  // Step 10: what the restatement becomes over it.
   const application = applyRestatement(restatement, existing, parent as SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | null);
   // Steps 7-8: a refusal stops the write before anything reaches disk.
   if (application.refusal !== undefined) throw new Error(application.refusal);

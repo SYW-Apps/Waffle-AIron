@@ -217,6 +217,17 @@ methods:
         description: The project root whose members are listed
     guarantees:
       - idempotent
+  - name: renameType
+    description: 'Forward to core_portal.renameType: rename a type and every reference to it'
+    signature: 'renameType(typeId: string, newId: string): TypeRename'
+    returns: TypeRename
+    params:
+      - name: typeId
+        type: string
+        description: The type to rename
+      - name: newId
+        type: string
+        description: Its new id
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:19:00.137Z'
+updatedAt: '2026-10-04T13:57:01.242Z'

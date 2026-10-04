@@ -1,0 +1,94 @@
+kind: value-object
+id: design_component
+name: DesignComponent
+description: One exported component with its stereotype and edges, every reference a key in the same document.
+subsystem: sdd_surfaces
+fields:
+  - name: key
+    type: string
+    description: The component's id (unique in the project)
+    optional: false
+  - name: name
+    type: string
+    optional: false
+  - name: description
+    type: string
+    optional: false
+  - name: status
+    type: string
+    optional: false
+  - name: subsystem
+    type: string
+    description: Its subsystem's key
+    optional: false
+  - name: stereotype
+    type: string
+    description: The building block or pattern (componentType)
+    optional: false
+  - name: variant
+    type: string
+    optional: true
+  - name: dependencyClass
+    type: string
+    description: pure or read, on an Orchestrator
+    optional: true
+  - name: durability
+    type: string
+    description: On a Store
+    optional: true
+  - name: portalType
+    type: string
+    description: On a Portal
+    optional: true
+  - name: owns
+    type: list<string>
+    description: Keys of its private member blocks
+    optional: false
+  - name: dependsOn
+    type: list<string>
+    description: Keys of its collaborators; `alias::publicName` across projects
+    optional: false
+  - name: emits
+    type: list<EventBinding>
+    description: The topics it publishes, each with its event when declared, in declared order
+    optional: false
+  - name: subscribesTo
+    type: list<EventBinding>
+    description: The topics it consumes, each with its event when declared, in declared order
+    optional: false
+  - name: auth
+    type: PortalAuth
+    description: A Portal's inbound auth
+    optional: true
+  - name: basePath
+    type: string
+    optional: true
+  - name: dispatch
+    type: list<DispatchBinding>
+    description: A generic Portal's capability table, targets as keys; empty elsewhere
+    optional: false
+  - name: formerly
+    type: list<string>
+    description: Its rename trace (previousIds), oldest first
+    optional: false
+  - name: ext
+    type: map<string, any>
+    optional: true
+  - name: mounts
+    type: list<PortalMount>
+    description: >-
+      A listener's mounts as declared, each portal as a key: the entrypoint facts a consumer reads
+      to decide what serves what (empty when the component mounts nothing)
+    optional: false
+  - name: patterns
+    type: list<PatternRef>
+    description: The pack-declared patterns the component realizes, as declared (empty when none)
+    optional: false
+  - name: externalLinks
+    type: list<ExternalLink>
+    description: The opaque external references the component documents, as declared (empty when none)
+    optional: false
+methods: []
+sourcePath: src/models/design-export.ts
+createdAt: '2026-10-04T13:53:13.764Z'
+updatedAt: '2026-10-04T17:32:14.873Z'

@@ -14,6 +14,7 @@ import { signatureTextRule } from './integrity/signature-text.js';
 import { typeExpressionsRule } from './integrity/type-expressions.js';
 import { enumTypesRule } from './integrity/enum-types.js';
 import { namedScalarTypesRule } from './integrity/named-scalar-types.js';
+import { renameTracesRule } from './integrity/rename-traces.js';
 import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
 import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
@@ -154,6 +155,8 @@ export const SDD_RULES: SddRule[] = [
   typeExpressionsRule,
   enumTypesRule,
   namedScalarTypesRule,
+  // The rename traces: a former key a consumer resolves must name one element.
+  renameTracesRule,
   // Contracts and the targets narratives name, in four questions with one
   // owner each: does the implementation mirror its contract, does a target
   // inside this tree resolve, does a target that leaves it pin to exactly one

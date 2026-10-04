@@ -368,12 +368,12 @@ export function removeDomain(id: string): void {
   curator.unregisterDomain(id);
 }
 
-// Component rename, contract-method rename and Specialist retirement
-// (spec_maintenance_portal renameComponent / renameMethod / retireSpecialists) — pure 1:1
+// Component rename, contract-method rename, type rename and Specialist retirement
+// (spec_maintenance_portal renameComponent / renameMethod / renameType / retireSpecialists) — pure 1:1
 // forwards to the core orchestrator, stated explicitly for the same anchored
 // conformance check.
-export { renameComponent, renameMethod } from './provision.js';
-export type { ComponentRename, MethodRename } from './provision.js';
+export { renameComponent, renameMethod, renameType } from './provision.js';
+export type { ComponentRename, MethodRename, TypeRename } from './provision.js';
 export { retireSpecialists } from './stereotype-migration.js';
 export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
 export { repairForeignStepFields } from './narrative-repair.js';
