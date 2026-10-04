@@ -213,7 +213,7 @@ methods:
     description: >-
       Project the bound project's design export and, when an output path is given, write it there as
       JSON. Answers with the export either way.
-    signature: 'exportDesign(outPath?: string, approval?: string): DesignExport'
+    signature: 'exportDesign(outPath?: string, approval?: DesignApproval): DesignExport'
     returns: DesignExport
     params:
       - name: outPath
@@ -221,7 +221,7 @@ methods:
         description: Where to write the JSON; nothing is written without it
         optional: true
       - name: approval
-        type: string
+        type: DesignApproval
         description: >-
           The lock-check state the caller decided against the gate identity; omitted, the export
           says unjudged
@@ -230,4 +230,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-04T14:02:25.699Z'
+updatedAt: '2026-10-04T14:04:57.755Z'

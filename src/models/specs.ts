@@ -517,6 +517,25 @@ export const PortalMountSchema = z.object({
 });
 export type PortalMount = z.infer<typeof PortalMountSchema>;
 
+/**
+ * A spec's RENAME TRACE: every id it held before, oldest first. Written only by
+ * the rename tools (renameComponent, renameType), never by an author, and never
+ * rewritten or bound as a reference — it names keys that no longer exist, so it
+ * is deliberately absent from the reference-field table. The design export
+ * shows it as `formerly`. Another spec of the same kind may not take an id
+ * listed here (id-retired at write, RENAME_TRACE_CONFLICT on a hand edit);
+ * unsetting it releases those ids.
+ */
+export const PreviousIdsSchema = z.array(z.string().min(1));
+
+/**
+ * A contract method's rename trace: every key it held before, oldest first,
+ * each `<interface id>.<method name>` — a rename keeps the interface and
+ * changes the name, a move changes the interface. Written only by renameMethod
+ * and moveMethods; like PreviousIdsSchema never rewritten or bound.
+ */
+export const PreviousNamesSchema = z.array(z.string().min(1));
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
@@ -559,6 +578,8 @@ export const ComponentSpecSchema = z.object({
    *  satisfies the source requirement for a source-less implementation (suppresses
    *  MISSING_SOURCE_PATH); `informative` links are context only. */
   externalLinks: z.array(ExternalLinkSchema).optional(),
+  /** The rename trace (see PreviousIdsSchema). */
+  previousIds: PreviousIdsSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
@@ -835,6 +856,8 @@ export const MethodSignatureSchema = z.object({
       seen.add(finding.code);
     });
   }).optional(),
+  /** The method's rename trace (see PreviousNamesSchema). */
+  previousNames: PreviousNamesSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
   ext: ExtDataSchema.optional(),
 });
@@ -958,6 +981,8 @@ export const InterfaceSpecSchema = z.object({
   description: z.string(),
   component: z.string(), // References L2 Component id
   methods: z.array(StoredMethodSignatureSchema).default([]),
+  /** The rename trace (see PreviousIdsSchema). */
+  previousIds: PreviousIdsSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
@@ -1311,6 +1336,8 @@ export const ImplementationSpecSchema = z.object({
   detail: NarrativeDetailSchema.optional(),
   /** Spec-level conformance tier default (each method may override). */
   conformance: ConformanceTierSchema.optional(),
+  /** The rename trace (see PreviousIdsSchema). */
+  previousIds: PreviousIdsSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
@@ -1593,6 +1620,8 @@ export const TypeSpecSchema = z.object({
    * as `InvoiceLine`.
    */
   symbol: z.string().optional(),
+  /** The rename trace (see PreviousIdsSchema): ids this type held within its owner. */
+  previousIds: PreviousIdsSchema.optional(),
   /** Per-spec lint suppressions (see LintConfigSchema). */
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */

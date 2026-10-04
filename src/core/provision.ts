@@ -2147,6 +2147,13 @@ export interface ComponentRename {
    * covered units. Empty when the register names none of them.
    */
   carried: CarriedRekey[];
+  /**
+   * The export entries (L0 and L1) whose public name was derived from the
+   * renamed component or its moving interface (no `as`), each by its public
+   * name: the rename wrote `as: <that name>` on them, so the published surface
+   * and every consumer's pin stay as they were. Empty when none derived it.
+   */
+  keptPublicNames: string[];
 }
 
 /**
@@ -2254,7 +2261,7 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
   const carried = projectConfigRepository.rekeyCarried(rename);
 
   // Step 21: what moved, what was rewritten, and what the register followed.
-  return { renamed, rewritten, carried };
+  return { renamed, rewritten, carried, keptPublicNames: [] };
 }
 
 /**
@@ -2382,6 +2389,12 @@ export interface MethodRename {
    * nowhere.
    */
   carried: CarriedRekey[];
+  /**
+   * The public names of the export entries (L0 and L1) whose contract carries
+   * the renamed method: consumers pinning them see one member removed and one
+   * added. Reported, never prevented. Empty when the contract is not exported.
+   */
+  publishedIn: string[];
 }
 
 /**
@@ -2540,6 +2553,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
     mentions,
     ...(pinnedSymbol ? { pinnedSymbol } : {}),
     carried,
+    publishedIn: [],
   };
 }
 

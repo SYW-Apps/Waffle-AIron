@@ -27,7 +27,7 @@ fields:
       the same verdict lock-check exits on. False for stale, unlocked and unjudged
     optional: false
   - name: approval
-    type: string
+    type: DesignApproval
     description: >-
       The lock-check state the caller decided: locked (the approval still covers this design), stale
       (the design or something it was approved under moved past it), unlocked (never approved) — or
@@ -36,4 +36,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-10-04T13:52:58.934Z'
-updatedAt: '2026-10-04T14:02:22.012Z'
+updatedAt: '2026-10-04T14:04:55.886Z'

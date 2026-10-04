@@ -9,11 +9,11 @@ methods:
       id, StateId, and the approval verdict the caller decided), the L0 with its resolved export
       table, the dependencies, and every subsystem, component, interface, implementation and type
       keyed, sorted and resolved. Reads only; deterministic over the tree and the verdict.
-    signature: 'exportDesign(approval?: string): DesignExport'
+    signature: 'exportDesign(approval?: DesignApproval): DesignExport'
     returns: DesignExport
     params:
       - name: approval
-        type: string
+        type: DesignApproval
         description: >-
           The lock-check state the caller decided against the gate identity (locked, stale,
           unlocked); omitted, the source says unjudged
@@ -22,4 +22,4 @@ methods:
       - idempotent
 status: design
 createdAt: '2026-10-04T13:53:56.292Z'
-updatedAt: '2026-10-04T14:02:24.198Z'
+updatedAt: '2026-10-04T14:04:56.675Z'

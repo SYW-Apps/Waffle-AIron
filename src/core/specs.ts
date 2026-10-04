@@ -84,6 +84,7 @@ import {
   type TypeSpellingFacts,
   type StoredInterfaceSpec,
   type StoredTypeSpec,
+  qualifiedTypeId,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -153,6 +154,35 @@ export interface SpecIndex {
    * only place the stored spellings are still visible.
    */
   typeSpellings: TypeSpellingFacts;
+}
+
+/**
+ * spec_index.retiredBy — the spec of this kind whose rename trace
+ * (previousIds) lists `id`, or none: the holder that retired it, named by its
+ * key (a subsystem-owned type by `subsystem::id`). A trace entry is read
+ * within its holder's own namespace — a type's within its owner, a member's
+ * spec within its member — so a bare entry is qualified as the holder's own id
+ * is. The writer and the rename tools ask it before giving an id to a new
+ * spec, and refuse with id-retired naming the holder.
+ */
+export function specIndexRetiredBy(index: SpecIndex, kind: string, id: string): string | undefined {
+  const holders: { id: string; subsystem?: string; previousIds?: string[] }[] =
+    kind === 'component' ? index.components
+      : kind === 'interface' ? index.interfaces
+        : kind === 'implementation' ? index.implementations
+          : kind === 'type' ? index.types
+            : [];
+  for (const holder of holders) {
+    if (!holder.previousIds?.length) continue;
+    const key = kind === 'type' ? qualifiedTypeId(holder) : holder.id;
+    const cut = key.lastIndexOf('::');
+    const namespace = cut >= 0 ? key.slice(0, cut + 2) : '';
+    for (const previous of holder.previousIds) {
+      const previousKey = previous.includes('::') ? previous : namespace + previous;
+      if (previousKey === id) return key;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -2092,6 +2122,11 @@ export interface MethodMoveReport {
 // (core/provision.ts) drive it over raw files; `moveMethods` drives it over the
 // typed store, because a move must be able to compute every edit before writing
 // any of them.
+//
+// The rename traces (`previousIds` on a spec, `previousNames` on a contract
+// method) are deliberately NOT in this table: they name keys that no longer
+// exist, so no remap may rewrite them and no binding may qualify them. The
+// loader and the writer carry them verbatim.
 // ---------------------------------------------------------------------------
 
 /** Where in a spec a reference sits, which is what decides how a remap should read it. */

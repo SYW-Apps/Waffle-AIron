@@ -104,6 +104,7 @@ const KINDS: Record<string, KindSpec> = {
       externalLinks: 'documented external URLs',
       lint: 'per-spec warning suppression — an answer to a validator finding, so it is authored after validate',
       ext: 'opaque pack/tool data, never authored by hand',
+      previousIds: 'the rename trace — written only by the rename tools, unset to release the ids it holds',
     },
   },
   interface: {
@@ -112,10 +113,14 @@ const KINDS: Record<string, KindSpec> = {
     updateSpecOnly: {
       lint: 'per-spec warning suppression — an answer to a validator finding, so it is authored after validate',
       ext: 'opaque pack/tool data, never authored by hand',
+      previousIds: 'the rename trace — written only by the rename tools, unset to release the ids it holds',
     },
     method: {
       schema: MethodSignatureSchema,
-      updateSpecOnly: { endpoint: 'bound by the dedicated sdd_set_endpoints tool' },
+      updateSpecOnly: {
+        endpoint: 'bound by the dedicated sdd_set_endpoints tool',
+        previousNames: 'the method rename trace — written only by renameMethod and moveMethods',
+      },
     },
   },
   implementation: {
@@ -124,6 +129,7 @@ const KINDS: Record<string, KindSpec> = {
     updateSpecOnly: {
       lint: 'per-spec warning suppression — an answer to a validator finding, so it is authored after validate',
       ext: 'opaque pack/tool data, never authored by hand',
+      previousIds: 'the rename trace — written only by the rename tools, unset to release the ids it holds',
     },
     method: { schema: MethodImplementationSchema, updateSpecOnly: {} },
   },
@@ -133,6 +139,7 @@ const KINDS: Record<string, KindSpec> = {
     updateSpecOnly: {
       lint: 'per-spec warning suppression — an answer to a validator finding, so it is authored after validate',
       ext: 'opaque pack/tool data, never authored by hand',
+      previousIds: 'the rename trace — written only by the rename tools, unset to release the ids it holds',
     },
     method: { schema: TypeMethodSchema, updateSpecOnly: {} },
   },
@@ -411,6 +418,35 @@ describe('MCP write-tool schema field coverage', () => {
     expect(after.lint).toEqual({ allow: [{ code: 'UNUSED_METHOD', reason: 'external tenant' }] });
     expect(after.ext).toEqual({ 'mypack:surface': 'public' });
     expect(after.methods.map((m: any) => m.name)).toEqual(['charge']);
+  }, 120_000);
+
+  // The rename traces are written only by the rename tools: a re-authoring
+  // never expresses them, so it must carry them — losing one would make a
+  // consumer read a rename as a delete plus an add.
+  it('re-authoring carries the rename traces: previousIds on the spec, previousNames on a method', async () => {
+    await call('sdd_update_spec', {
+      kind: 'component', id: 'cov-portal',
+      delta: { previousIds: ['cov-gate', 'cov-door'] },
+    });
+    await call('sdd_update_spec', {
+      kind: 'interface', id: 'icov-portal',
+      delta: { previousIds: ['icov-gate'], methods: [{ name: 'charge', previousNames: ['icov-gate.bill'] }] },
+    });
+
+    await call('sdd_add_component', {
+      id: 'cov-portal', name: 'Coverage Portal', description: 'The published surface v3',
+      subsystem: 'cov', componentType: 'Portal', portalType: 'HTTP_API', basePath: '/v1',
+    });
+    const out = await call('sdd_define_interface', {
+      id: 'icov-portal', name: 'ICovPortal', description: 'Contract v3', component: 'cov-portal',
+      methods: [{ name: 'charge', description: 'Charge', signature: 'charge(id: string): void', returns: 'void' }],
+    });
+    expect(out).toContain('previousNames (charge)');
+
+    expect((await getSpec('component', 'cov-portal')).previousIds).toEqual(['cov-gate', 'cov-door']);
+    const contract = await getSpec('interface', 'icov-portal');
+    expect(contract.previousIds).toEqual(['icov-gate']);
+    expect(contract.methods[0].previousNames).toEqual(['icov-gate.bill']);
   }, 120_000);
 
   it('re-authoring an implementation carries lint/ext and NAMES the narratives it removed', async () => {
