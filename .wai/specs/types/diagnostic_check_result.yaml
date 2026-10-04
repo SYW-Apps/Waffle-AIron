@@ -11,8 +11,8 @@ fields:
     description: Stable diagnostic check id.
     optional: false
   - name: status
-    type: string
-    description: 'Check status: "ok", "warning", "error", or "skipped".'
+    type: DiagnosticStatus
+    description: Check status.
     optional: false
   - name: message
     type: string
@@ -29,4 +29,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T09:08:24.914Z'
-updatedAt: '2026-09-19T11:07:06.957Z'
+updatedAt: '2026-10-04T23:53:24.307Z'

@@ -1787,7 +1787,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       renderExposurePanel(el);
     } else if (panel === 'landscape') {
       adminGet('landscape').then(function (g) {
-        var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'unit'; });
+        var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'orgUnit'; });
         var projs = (g.nodes || []).filter(function (n) { return n.nodeKind === 'project'; });
         var html = '<div class="cards"><div class="stat"><div class="k">Org units</div><div class="v">' + units.length + '</div></div>'
           + '<div class="stat"><div class="k">Projects</div><div class="v">' + projs.length + '</div></div>'

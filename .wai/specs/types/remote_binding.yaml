@@ -18,8 +18,8 @@ fields:
     description: Hosted project id, optionally subproject-qualified
     optional: false
   - name: source
-    type: string
-    description: 'Where the binding was resolved from: "flags" | "binding-file" | "mcp-config"'
+    type: RemoteBindingSource
+    description: Where the binding was resolved from.
     optional: false
   - name: attachedAt
     type: string
@@ -29,4 +29,4 @@ methods: []
 componentClass: remote_binding_store
 sourcePath: src/commands/remotebinding.ts
 createdAt: '2026-08-12T18:41:21.744Z'
-updatedAt: '2026-09-19T11:07:15.320Z'
+updatedAt: '2026-10-04T23:53:35.203Z'

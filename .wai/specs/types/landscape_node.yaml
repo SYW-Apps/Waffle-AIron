@@ -14,8 +14,8 @@ fields:
     description: Display label.
     optional: false
   - name: nodeKind
-    type: string
-    description: 'Node kind: "orgUnit", "project", or "publicInterface".'
+    type: LandscapeNodeKind
+    description: What the node stands for.
     optional: false
   - name: projectId
     type: string
@@ -44,4 +44,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:32.757Z'
-updatedAt: '2026-10-04T10:20:21.598Z'
+updatedAt: '2026-10-04T23:53:32.501Z'

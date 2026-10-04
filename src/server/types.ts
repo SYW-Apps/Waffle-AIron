@@ -499,11 +499,13 @@ export interface AuditQuery {
   limit?: number;
 }
 
+/** How one diagnostic check came out; a fail makes the instance unhealthy, a warn degraded. */
+export type DiagnosticStatus = 'pass' | 'warn' | 'fail';
+
 /** One diagnostic check outcome inside an instance health report. */
 export interface DiagnosticCheckResult {
   id: string;
-  /** 'pass' | 'warn' | 'fail' */
-  status: string;
+  status: DiagnosticStatus;
   message: string;
   observedAt: string;
   details?: string;
@@ -521,6 +523,9 @@ export interface ResourceUsageSnapshot {
   quotaMessages: string[];
 }
 
+/** How an exceeded quota limit is reported. */
+export type QuotaMode = 'observe' | 'warn' | 'block';
+
 /** Advisory quota policy protecting the instance; observe/warn only. */
 export interface ResourceQuotaPolicy {
   enabled: boolean;
@@ -528,8 +533,8 @@ export interface ResourceQuotaPolicy {
   maxMcpRequestsPerMinute?: number;
   maxProjectBytes?: number;
   maxAuditEventsPerDay?: number;
-  /** 'observe' | 'warn' */
-  mode: string;
+  /** 'block' is accepted, and evaluated as observe: the quota policy is advisory. */
+  mode: QuotaMode;
 }
 
 /** An instance's overall health. */
@@ -543,6 +548,9 @@ export interface InstanceHealthReport {
   usage?: ResourceUsageSnapshot[];
 }
 
+/** How much of an audit event's metadata is persisted. */
+export type AuditMetadataMode = 'none' | 'redacted' | 'full-redacted';
+
 /** Instance-level durable audit capture and retention policy. */
 export interface AuditRetentionPolicy {
   enabled: boolean;
@@ -553,8 +561,8 @@ export interface AuditRetentionPolicy {
   securityRetentionDays?: number;
   /** Whether read-only actions are captured (high volume). */
   includeReadEvents: boolean;
-  /** 'none' | 'redacted' | 'full-redacted' — how much metadata is persisted. */
-  metadataMode: string;
+  /** How much event metadata is persisted. */
+  metadataMode: AuditMetadataMode;
 }
 
 /** Where an approval request stands. */
@@ -634,6 +642,9 @@ export interface ProjectInitRequest {
   profileSelection?: ProjectProfileSelection;
 }
 
+/** How the instance pack policy is enforced on a project. */
+export type PackEnforcementMode = 'warn' | 'block' | 'auto_reconcile';
+
 /** The hosted instance's pack/profile policy governing project initialization. */
 export interface InstancePackPolicy {
   id: string;
@@ -647,7 +658,7 @@ export interface InstancePackPolicy {
   requireProfileSelection: boolean;
   /** 'warn' (findings surface, actions proceed) | 'block' (violations reject) |
    *  'auto_reconcile' (like warn, and reconcileProjectPolicy may install missing packs). */
-  enforcementMode: string;
+  enforcementMode: PackEnforcementMode;
   updatedAt: string;
   updatedBy?: PrincipalSubject;
 }
@@ -656,7 +667,7 @@ export interface InstancePackPolicy {
 export interface PolicyEvaluationResult {
   compliant: boolean;
   /** The enforcement mode the evaluation ran under. */
-  mode: string;
+  mode: PackEnforcementMode;
   missingPackNames: string[];
   blockedPackNames: string[];
   missingProfileIds: string[];
@@ -967,6 +978,9 @@ export interface RemotePublicInterfaceRef {
   reason: string;
 }
 
+/** Where a cross-project relation stands. */
+export type ProjectRelationStatus = 'active' | 'suspended' | 'retired';
+
 /** A directed cross-project relation: source consumes target's public interface. */
 export interface ProjectRelationRecord {
   id: string;
@@ -976,8 +990,8 @@ export interface ProjectRelationRecord {
   kind: string;
   targetPublicInterface: RemotePublicInterfaceRef;
   reason: string;
-  /** 'active' | 'suspended' | 'retired' — only active relations confer reachability. */
-  status: string;
+  /** Only an active relation confers reachability. */
+  status: ProjectRelationStatus;
   /** Recorded by the server when the relation is first created; kept on update. */
   createdAt: string;
   /** Recorded by the server from the creating principal; kept on update. */
@@ -1015,10 +1029,13 @@ export interface VisibilityResolution {
   visibleProjects: { projectId: string; distance: 'department' | 'instance' | 'partner'; via: string }[];
 }
 
+/** How far an observer stands from a project in the unit graph, nearest first. */
+export type AudienceDistance = 'department' | 'instance' | 'partner';
+
 /** One entry of the visibility-resolved discovery catalog (listVisibleSurfaces). */
 export interface VisibleSurfaceEntry {
   projectId: string;
-  distance: string;
+  distance: AudienceDistance;
   /** Redacted catalog summaries, already audience-filtered for this observer. */
   interfaces: PublicInterfaceSummary[];
 }
@@ -1042,12 +1059,14 @@ export interface ReachableProjectRef {
   publicInterfaceIds: string[];
 }
 
+/** What a landscape node stands for. */
+export type LandscapeNodeKind = 'orgUnit' | 'project' | 'publicInterface';
+
 /** A node of the hosted landscape graph (unit, project, or public interface). */
 export interface LandscapeNode {
   id: string;
   label: string;
-  /** 'unit' | 'project' | 'interface' */
-  nodeKind: string;
+  nodeKind: LandscapeNodeKind;
   projectId?: string;
   unitId?: string;
   publicInterfaceId?: string;
@@ -1059,12 +1078,14 @@ export interface LandscapeNode {
   actionable?: boolean;
 }
 
+/** What a landscape edge says about its two ends. */
+export type LandscapeEdgeKind = 'contains' | 'owns' | 'shared_with' | 'publishes' | 'consumes' | 'depends_on' | 'mirrors';
+
 /** A directed edge of the hosted landscape graph. */
 export interface LandscapeEdge {
   from: string;
   to: string;
-  /** 'hierarchy' | 'placement' | 'relation' */
-  edgeKind: string;
+  edgeKind: LandscapeEdgeKind;
   relationId?: string;
   label?: string;
 }
@@ -1077,12 +1098,15 @@ export interface LandscapeGraphModel {
   scope?: string;
 }
 
+/** The identity provider kinds an operator can configure. keycloak and authentik have
+ *  endpoint templates of their own; every other kind resolves as generic OIDC. */
+export type IdentityProviderType = 'oidc' | 'keycloak' | 'authentik' | 'google_workspace' | 'entra_id';
+
 /** An OIDC/SSO identity provider configuration. Never carries a raw client secret —
  *  clientSecretRef points into the host secret mechanism. */
 export interface IdentityProviderConfig {
   id: string;
-  /** e.g. 'oidc' | 'authentik' | 'keycloak' | 'google' | 'entra' */
-  providerType: string;
+  providerType: IdentityProviderType;
   /** Optional admin-set human label, shown on the login screen's
    *  "Sign in with <displayName>" button. Defaults to the provider id when
    *  unset. Presentation only — never used for provider resolution. */
@@ -1316,12 +1340,15 @@ export interface GovernedProjectCreation {
   profileImpact?: PackImpact;
 }
 
+/** How the admin API is exposed. Only disabled changes what is mounted today: every
+ *  other mode serves the admin listener wherever the host binds it. */
+export type AdminApiMode = 'disabled' | 'local_only' | 'private_network' | 'public';
+
 /** Runtime exposure posture for a hosted instance: which control-plane surfaces
  *  are bound over HTTP versus local/CLI-only. Mirrors
  *  .wai/specs/types/host_exposure_policy.yaml. */
 export interface HostExposurePolicy {
-  /** 'disabled' | 'local_only' | 'private_network' | 'public'. */
-  adminApiMode: string;
+  adminApiMode: AdminApiMode;
   /** Whether the optional browser admin UI is served. */
   adminUiEnabled: boolean;
   /** Whether the draft identity/audit control-plane API is served over HTTP. */

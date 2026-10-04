@@ -1,0 +1,16 @@
+kind: enum
+id: landscape_node_kind
+name: LandscapeNodeKind
+description: What a node of the hosted landscape graph stands for.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: orgUnit
+    description: An organization unit
+  - name: project
+    description: A hosted project
+  - name: publicInterface
+    description: One public interface a project publishes
+createdAt: '2026-10-04T23:53:05.163Z'
+updatedAt: '2026-10-04T23:53:05.784Z'

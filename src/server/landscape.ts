@@ -53,6 +53,7 @@ import type {
   ReachableProjectRef,
   VisibleSurfaceEntry,
   SurfaceArtifact,
+  LandscapeEdgeKind,
 } from './types.js';
 import type { SurfaceSnapshot, InterfaceSpec, MethodSignature, ResolvedExportTable } from '../models/index.js';
 import { isTypeVocabulary, methodTypeRefs } from '../models/index.js';
@@ -315,14 +316,14 @@ function interfaceNodeId(projectId: string, interfaceId: string): string {
 }
 
 /** Map a placement role to a landscape edge kind. */
-function placementEdgeKind(role: string): string {
+function placementEdgeKind(role: string): LandscapeEdgeKind {
   if (role === 'owner') return 'owns';
   if (role === 'shared') return 'shared_with';
   return 'contains';
 }
 
 /** Map a relation kind to a landscape edge kind. */
-function relationEdgeKind(kind: string): string {
+function relationEdgeKind(kind: string): LandscapeEdgeKind {
   switch (kind) {
     case 'consumes':
       return 'consumes';

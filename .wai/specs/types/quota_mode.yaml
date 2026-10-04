@@ -1,0 +1,18 @@
+kind: enum
+id: quota_mode
+name: QuotaMode
+description: >-
+  How an exceeded quota limit is reported. The quota policy is advisory: nothing is ever blocked or
+  throttled.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: observe
+    description: Annotated as an observation (the default)
+  - name: warn
+    description: Annotated as a warning
+  - name: block
+    description: 'Accepted, and evaluated as observe: the policy never enforces'
+createdAt: '2026-10-04T23:52:54.405Z'
+updatedAt: '2026-10-04T23:52:55.029Z'

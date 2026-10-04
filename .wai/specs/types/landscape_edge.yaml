@@ -14,10 +14,8 @@ fields:
     description: Target landscape node id.
     optional: false
   - name: edgeKind
-    type: string
-    description: >-
-      Edge kind: "contains", "owns", "shared_with", "publishes", "consumes", "depends_on", or
-      "mirrors".
+    type: LandscapeEdgeKind
+    description: What the edge says about its two ends.
     optional: false
   - name: relationId
     type: string
@@ -30,4 +28,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:38.806Z'
-updatedAt: '2026-09-19T11:07:09.800Z'
+updatedAt: '2026-10-04T23:53:33.142Z'

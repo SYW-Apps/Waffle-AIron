@@ -27,10 +27,10 @@ fields:
     description: Maximum audit events retained per day before policy throttling or pruning warnings apply.
     optional: true
   - name: mode
-    type: string
-    description: 'Enforcement mode: "observe", "warn", or "block".'
+    type: QuotaMode
+    description: 'How an exceeded limit is reported (advisory: block is evaluated as observe).'
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T09:08:07.406Z'
-updatedAt: '2026-10-04T10:29:13.816Z'
+updatedAt: '2026-10-04T23:53:25.986Z'

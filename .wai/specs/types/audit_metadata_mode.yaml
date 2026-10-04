@@ -1,0 +1,18 @@
+kind: enum
+id: audit_metadata_mode
+name: AuditMetadataMode
+description: >-
+  How much of an audit event's metadata the retention policy persists. Independently of the mode, an
+  event that still carries something shaped like a raw credential is refused before it persists.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: none
+    description: Metadata is dropped entirely
+  - name: redacted
+    description: The redacted metadata is kept, truncated to the size cap (the default)
+  - name: full-redacted
+    description: Accepted, and persisted exactly as redacted today
+createdAt: '2026-10-04T23:52:50.534Z'
+updatedAt: '2026-10-04T23:53:43.220Z'

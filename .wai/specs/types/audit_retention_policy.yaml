@@ -31,12 +31,12 @@ fields:
       events.
     optional: false
   - name: metadataMode
-    type: string
+    type: AuditMetadataMode
     description: >-
-      Metadata capture posture: "minimal" or "diagnostic". Both modes must redact raw tokens,
-      secrets, and full spec contents.
+      How much event metadata is persisted. Whatever the mode, an event whose fields look like a raw
+      credential is refused before it persists.
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:42.339Z'
-updatedAt: '2026-10-04T23:38:47.694Z'
+updatedAt: '2026-10-04T23:53:42.214Z'
