@@ -16,9 +16,9 @@ methods:
       onto the live table for a family producer, counted by spelled name for any other — and whether
       the family was read whole. An unreachable producer is bound with its problem, never dropped:
       unavailable, never a pass.
-    signature: 'resolveDeclared(): ExternalBinding[]'
-    returns: ExternalBinding[]
+    signature: 'resolveDeclared(): list<ExternalBinding>'
+    returns: list<ExternalBinding>
     params: []
 status: complete
 createdAt: '2026-09-26T17:43:52.033Z'
-updatedAt: '2026-10-02T20:47:34.706Z'
+updatedAt: '2026-10-04T10:18:45.614Z'

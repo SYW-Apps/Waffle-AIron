@@ -9,18 +9,18 @@ methods:
     description: >-
       Load the persisted role collection from roles.json under the hosted data root and hold it as
       the authoritative in-memory representation.
-    signature: 'load(): Role[]'
-    returns: Role[]
+    signature: 'load(): list<Role>'
+    returns: list<Role>
     params: []
   - name: replaceAll
     description: >-
       Atomically swap the in-memory role collection to the supplied complete set after the registry
       has persisted it.
-    signature: 'replaceAll(roles: Role[]): void'
+    signature: 'replaceAll(roles: list<Role>): void'
     returns: void
     params:
       - name: roles
-        type: Role[]
+        type: list<Role>
 status: complete
 createdAt: '2026-07-15T20:27:29.060Z'
-updatedAt: '2026-07-15T22:22:07.595Z'
+updatedAt: '2026-10-04T10:19:26.101Z'

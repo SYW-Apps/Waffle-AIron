@@ -57,8 +57,8 @@ methods:
       tree (the units they may administer); deny when that set is empty. List hosted users, keeping
       only those whose home unit is an actionable unit in the visible set (an instance-admin sees
       all), optionally narrowed to one project's holders.
-    signature: 'listUsers(credential: string, project?: string): HostedUserRecord[]'
-    returns: HostedUserRecord[]
+    signature: 'listUsers(credential: string, project?: string): list<HostedUserRecord>'
+    returns: list<HostedUserRecord>
     params:
       - name: credential
         type: string
@@ -70,8 +70,8 @@ methods:
       Authenticate the caller and compute their project:admin visible scopes; deny when empty.
       Constrain the audit query to the caller's actionable project scopes (an instance-admin reads
       instance-wide) and return the redacted audit events.
-    signature: 'queryAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
-    returns: AuditEvent[]
+    signature: 'queryAuditEvents(credential: string, query: AuditQuery): list<AuditEvent>'
+    returns: list<AuditEvent>
     params:
       - name: credential
         type: string
@@ -82,8 +82,8 @@ methods:
       Authenticate the caller, require instance-wide project:admin for audit administration, apply
       the instance's active retention policy, append a redacted audit event for the prune itself,
       and return the number of events removed.
-    signature: 'pruneAuditEvents(credential: string): number'
-    returns: number
+    signature: 'pruneAuditEvents(credential: string): int'
+    returns: int
     params:
       - name: credential
         type: string
@@ -135,8 +135,8 @@ methods:
       identity provider adapter, append a best-effort sso.start (info) audit event, and return the
       authorization URL. Starting a login is unauthenticated by nature — no caller credential is
       required or accepted; the signed state is the only integrity anchor carried into the callback.
-    signature: 'startSsoLogin(providerId: string, redirectUri: string): string'
-    returns: string
+    signature: 'startSsoLogin(providerId: string, redirectUri: string): async string'
+    returns: async string
     params:
       - name: providerId
         type: string
@@ -162,8 +162,8 @@ methods:
       (security) audit event and return the plaintext token exactly once. Inlines first-login
       provisioning — there is no separate resolve-or-create method. Unauthenticated by nature: no
       caller credential is required or accepted.
-    signature: 'completeSsoLogin(state: string, code: string): string'
-    returns: string
+    signature: 'completeSsoLogin(state: string, code: string): async string'
+    returns: async string
     params:
       - name: state
         type: string
@@ -175,8 +175,8 @@ methods:
       passes via bypass; a delegated project:admin@instance also passes) for identity-provider
       administration, and return every configured identity provider by forwarding to the policy
       repository. Not audited (a read).
-    signature: 'listProviders(credential: string): IdentityProviderConfig[]'
-    returns: IdentityProviderConfig[]
+    signature: 'listProviders(credential: string): list<IdentityProviderConfig>'
+    returns: list<IdentityProviderConfig>
     params:
       - name: credential
         type: string
@@ -214,8 +214,8 @@ methods:
       Authenticate the caller and compute their project:admin visible scopes; deny when empty.
       Constrain the query to the caller's actionable project scopes (an instance-admin counts
       instance-wide) and return the count of redacted audit events. Not audited (a read).
-    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
-    returns: number
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): int'
+    returns: int
     params:
       - name: credential
         type: string
@@ -232,7 +232,7 @@ methods:
       that project (permission rules gate read vs write at use time; the write flag is advisory for
       the token label). Persist only the hashed record, append a token.mint.self audit event, and
       return the plaintext once. Separate from the caller's login session.
-    signature: 'mintSelfToken(credential: string, projectId: string, write: boolean): string'
+    signature: 'mintSelfToken(credential: string, projectId: string, write: bool): string'
     returns: string
     params:
       - name: credential
@@ -240,14 +240,14 @@ methods:
       - name: projectId
         type: string
       - name: write
-        type: boolean
+        type: bool
   - name: listSelfTokens
     description: >-
       Authenticate the caller and return the caller's OWN minted credential records
       (ownerSubject.userId = caller) through the credential repository, redacted (hashed token
       only). A read; not audited.
-    signature: 'listSelfTokens(credential: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
+    signature: 'listSelfTokens(credential: string): list<ApiKeyRecord>'
+    returns: list<ApiKeyRecord>
     params:
       - name: credential
         type: string
@@ -287,13 +287,11 @@ methods:
       yet (a login start, a sign-out by session id), which records the anonymous local service
       actor. The web plane records its browser sign-in events through it, so a sign-in event is
       built in one place.
-    signature: >-
-      auditSignIn(actor: PrincipalSubject | null, action: string, level: string, over?: AuditEvent):
-      void
+    signature: 'auditSignIn(actor: PrincipalSubject?, action: string, level: string, over?: AuditEvent): void'
     returns: void
     params:
       - name: actor
-        type: PrincipalSubject | null
+        type: PrincipalSubject?
         description: The resolved subject, or null when none is resolved yet.
       - name: action
         type: string
@@ -309,4 +307,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-03T20:53:59.097Z'
+updatedAt: '2026-10-04T10:32:04.360Z'

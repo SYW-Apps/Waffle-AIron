@@ -19,22 +19,22 @@ fields:
     description: The project's root directory
     optional: false
   - name: valid
-    type: boolean
+    type: bool
     description: Whether its own gate found no error
     optional: false
   - name: errors
-    type: number
+    type: int
     description: Its own gate's error count
     optional: false
   - name: warnings
-    type: number
+    type: int
     description: Its own gate's warning count
     optional: false
   - name: notices
-    type: number
+    type: int
     description: Its own gate's notice count
     optional: false
 methods: []
 sourcePath: src/core/validation.ts
 createdAt: '2026-09-28T06:01:58.186Z'
-updatedAt: '2026-09-28T18:11:44.730Z'
+updatedAt: '2026-10-04T10:29:11.610Z'

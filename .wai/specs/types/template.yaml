@@ -23,15 +23,15 @@ fields:
     description: The instruction body, rendered per agent before export.
     optional: false
   - name: defaultTags
-    type: string[]
+    type: list<string>
     description: 'Tags applied to agents created from this template (default: an empty list)'
     optional: false
   - name: requiresOwnedPaths
-    type: boolean
+    type: bool
     description: 'Whether an agent created from this template must declare owned paths (default: true)'
     optional: false
   - name: frontmatter
-    type: object
+    type: any
     description: Extra frontmatter keys the exporters carry through to the written file.
     optional: true
   - name: version
@@ -49,4 +49,4 @@ methods:
     symbol: renderTemplateInstructions
 sourcePath: src/models/template.ts
 createdAt: '2026-09-20T19:47:43.160Z'
-updatedAt: '2026-10-03T17:53:14.672Z'
+updatedAt: '2026-10-04T10:21:17.009Z'

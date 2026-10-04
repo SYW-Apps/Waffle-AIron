@@ -22,10 +22,10 @@ fields:
     description: Purpose and scope of this database
     optional: true
   - name: tables
-    type: string[]
+    type: list<string>
     description: List of type IDs that are table schemas belonging to this database
     optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T20:47:22.939Z'
-updatedAt: '2026-09-19T11:07:06.633Z'
+updatedAt: '2026-10-04T10:20:00.825Z'

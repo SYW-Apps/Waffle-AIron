@@ -32,8 +32,8 @@ methods:
       permission for the capability is yes or approval (actionable), plus their ancestor breadcrumb
       (context) — for scope-filtered control-plane listings and the hierarchical UI. Delegates to
       permission_rules.resolveVisibleScopes.
-    signature: 'visibleScopes(principal: Principal, capability: string): VisibleScope[]'
-    returns: VisibleScope[]
+    signature: 'visibleScopes(principal: Principal, capability: string): list<VisibleScope>'
+    returns: list<VisibleScope>
     params:
       - name: principal
         type: Principal
@@ -60,13 +60,13 @@ methods:
       project's family, so a family run composes, a family migration writes only within it, and a
       spec write lands only in a subsystem the principal may change. With no subsystem settings the
       subsystems list is empty and the answer is exactly what it was before subsystem rules existed.
-    signature: 'reach(principal: Principal, projectIds: string[]): FamilyReach'
+    signature: 'reach(principal: Principal, projectIds: list<string>): FamilyReach'
     returns: FamilyReach
     params:
       - name: principal
         type: Principal
       - name: projectIds
-        type: string[]
+        type: list<string>
         description: The record ids to judge, typically the bound project's family
   - name: explain
     description: >-
@@ -97,22 +97,22 @@ methods:
       The project ids among a principal's visible scopes that it can act on: the visibleScopes
       answer read down to its project entries, dropping the breadcrumb ancestors that are visible
       only so a deeper grant can be reached.
-    signature: 'actionableProjects(scopes: VisibleScope[]): string[]'
-    returns: string[]
+    signature: 'actionableProjects(scopes: list<VisibleScope>): list<string>'
+    returns: list<string>
     params:
       - name: scopes
-        type: VisibleScope[]
+        type: list<VisibleScope>
         description: The visibleScopes answer for the principal.
   - name: actionableUnits
     description: >-
       The organization unit ids among a principal's visible scopes that it can act on: the
       visibleScopes answer read down to its unit entries, dropping the breadcrumb ancestors.
-    signature: 'actionableUnits(scopes: VisibleScope[]): string[]'
-    returns: string[]
+    signature: 'actionableUnits(scopes: list<VisibleScope>): list<string>'
+    returns: list<string>
     params:
       - name: scopes
-        type: VisibleScope[]
+        type: list<VisibleScope>
         description: The visibleScopes answer for the principal.
 status: complete
 createdAt: '2026-07-15T21:31:59.946Z'
-updatedAt: '2026-10-03T17:48:59.407Z'
+updatedAt: '2026-10-04T10:18:34.503Z'

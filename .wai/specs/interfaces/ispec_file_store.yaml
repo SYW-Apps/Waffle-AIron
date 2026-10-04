@@ -11,7 +11,7 @@ methods:
       Read and parse the spec document at the given path (resolved by the caller), or null when
       absent or empty.
     signature: 'read(specPath: string): json | null'
-    returns: json | null
+    returns: any
     effect: read
   - name: write
     description: >-
@@ -25,7 +25,7 @@ methods:
       Recursively list YAML spec files under the given directory tree (empty when the root is
       absent).
     signature: 'listTree(directory: string): string[]'
-    returns: string[]
+    returns: list<string>
     effect: read
   - name: findChainingParent
     description: >-
@@ -37,7 +37,7 @@ methods:
       and the form, or null. File I/O lives here — the store is the only spec-tree component that
       touches the disk.
     signature: 'findChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    returns: ChainingParentRef?
     effect: read
   - name: remove
     description: >-
@@ -50,8 +50,8 @@ methods:
       because the component claims to be the single file-I/O face of the spec repository: while
       deletes unlinked files directly from the workspace, that claim was false and the one place the
       storage format is chosen did not know when a document stopped existing.
-    signature: 'remove(specPath: string, specsRoot: string): boolean'
-    returns: boolean
+    signature: 'remove(specPath: string, specsRoot: string): bool'
+    returns: bool
     params:
       - name: specPath
         type: string
@@ -64,4 +64,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.287Z'
-updatedAt: '2026-09-27T10:37:05.295Z'
+updatedAt: '2026-10-04T10:19:36.815Z'

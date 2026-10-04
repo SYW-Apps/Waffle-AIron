@@ -12,7 +12,7 @@ fields:
     description: 'How much of the tree the agent must read: narrow, moderate or wide.'
     optional: false
   - name: writes
-    type: boolean
+    type: bool
     description: >-
       Whether the agent modifies files at all. A property of the ROLE, not of how many paths
       happened to resolve — deriving it from owned-path count silently produced implementers that
@@ -23,7 +23,7 @@ fields:
     description: 'How much judgment the work carries: mechanical, standard or deep.'
     optional: false
   - name: delegates
-    type: boolean
+    type: bool
     description: >-
       Whether this agent is a MANAGER whose job is routing work rather than performing it. Managers
       must stay thin: one that reads files accumulates context exactly like a main session and stops
@@ -38,4 +38,4 @@ fields:
 methods: []
 sourcePath: src/models/execution.ts
 createdAt: '2026-09-20T23:50:42.878Z'
-updatedAt: '2026-09-20T23:50:42.889Z'
+updatedAt: '2026-10-04T10:20:06.233Z'

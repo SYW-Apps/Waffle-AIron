@@ -158,13 +158,16 @@ interface ProjectConfigStore {
   rewriteScalars(edits: ScalarEdit[], dryRun?: boolean): void;
 }
 
+/** config_path_segment — one step of a path into the document: a mapping key, or a sequence index. */
+export type ConfigPathSegment = string | number;
+
 /**
  * One scalar of the document to replace in place (scalar_edit): where it sits,
  * as a path of keys and sequence indexes from the document root, what it must
  * hold now, and what it holds after.
  */
 export interface ScalarEdit {
-  path: (string | number)[];
+  path: ConfigPathSegment[];
   from: string;
   to: string;
 }

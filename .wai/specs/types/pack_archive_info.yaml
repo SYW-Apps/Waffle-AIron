@@ -21,27 +21,27 @@ fields:
     type: string
     optional: false
   - name: formatVersion
-    type: number
+    type: int
     optional: false
   - name: minWaironVersion
     type: string
     optional: true
   - name: entryCount
-    type: number
+    type: int
     description: Number of regular file entries in the archive
     optional: false
   - name: totalUncompressedBytes
-    type: number
+    type: int
     optional: false
   - name: compatible
-    type: boolean
+    type: bool
     description: Whether formatVersion + minWaironVersion are compatible with the running wairon
     optional: false
   - name: integrityVerified
-    type: boolean
+    type: bool
     description: 'Present when integrity data was carried: true if every entry digest matched'
     optional: true
 methods: []
 componentClass: sdk_orchestrator
 createdAt: '2026-07-21T18:12:35.741Z'
-updatedAt: '2026-07-21T18:12:35.961Z'
+updatedAt: '2026-10-04T10:29:05.206Z'

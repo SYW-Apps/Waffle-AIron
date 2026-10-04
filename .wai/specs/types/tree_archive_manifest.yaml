@@ -15,7 +15,7 @@ description: >-
   sha256).
 fields:
   - name: formatVersion
-    type: number
+    type: int
     description: Tree-archive format version (currently 1); a newer major is rejected, not silently mis-read
     optional: false
   - name: projectName
@@ -25,7 +25,7 @@ fields:
       suggested file name
     optional: false
   - name: roots
-    type: string[]
+    type: list<string>
     description: >-
       Project-relative directory of every packed root, in packing order: '.' for the top project,
       then each chained subproject (e.g. 'packages/foo')
@@ -45,7 +45,7 @@ fields:
     description: Minimum compatible wairon version (semver range)
     optional: true
   - name: includesDerived
-    type: boolean
+    type: bool
     description: >-
       Whether regenerable artifacts (generated/, docs/) were packed too; false for the default lean
       archive
@@ -55,7 +55,7 @@ fields:
     description: Optional integrity digest over the manifest
     optional: true
   - name: entryDigests
-    type: Record<string, string>
+    type: map<string, string>
     description: 'Optional per-entry integrity map: archive path → sha256'
     optional: true
   - name: generatedBy
@@ -69,4 +69,4 @@ fields:
 methods: []
 componentClass: tree_codec
 createdAt: '2026-08-12T17:18:10.306Z'
-updatedAt: '2026-09-13T11:22:43.374Z'
+updatedAt: '2026-10-04T10:29:21.594Z'

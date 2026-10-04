@@ -12,7 +12,7 @@ methods:
       container-local files (git.json) are kept out of commits: the approval record .wai/lock.json
       is committed with the rest of .wai/, so an approval reaches the remote, and an exclusion of it
       written by an earlier version is removed with a warning.
-    signature: 'enable(remote: string, branch: string, token: string | null, credentialRef?: string): void'
+    signature: 'enable(remote: string, branch: string, token: string?, credentialRef?: string): void'
     returns: void
     params:
       - name: remote
@@ -20,7 +20,7 @@ methods:
       - name: branch
         type: string
       - name: token
-        type: string | null
+        type: string?
         description: The resolved credential the clone presents; null for a public remote
       - name: credentialRef
         type: string
@@ -40,13 +40,13 @@ methods:
       and produce the compare URL; no-op when not git-backed or when every scoped path is clean. A
       hosted member commits through its family root's repository with its own <path>/.wai/ pathspec;
       a family migration publishes every touched project's pathspec in one commit.
-    signature: 'publish(message: string, subpaths?: string[]): GitPublish'
+    signature: 'publish(message: string, subpaths?: list<string>): GitPublish'
     returns: GitPublish
     params:
       - name: message
         type: string
       - name: subpaths
-        type: string[]
+        type: list<string>
         description: Staging pathspecs relative to the repo root; defaults to ['.wai/'].
         optional: true
   - name: status
@@ -60,15 +60,15 @@ methods:
     description: >-
       Persist the periodic-sync setting (interval + skip-if-clean) into the project's git-backing
       config; rejects when the project is not git-backed.
-    signature: 'configureSync(periodicSyncMinutes?: number, skipIfClean?: boolean): void'
+    signature: 'configureSync(periodicSyncMinutes?: int, skipIfClean?: bool): void'
     returns: void
     params:
       - name: periodicSyncMinutes
-        type: number
+        type: int
         optional: true
       - name: skipIfClean
-        type: boolean
+        type: bool
         optional: true
 status: complete
 createdAt: '2026-07-04T16:31:53.451Z'
-updatedAt: '2026-10-03T20:53:56.582Z'
+updatedAt: '2026-10-04T10:28:21.715Z'

@@ -7,23 +7,23 @@ description: >-
   systems.
 fields:
   - name: enabled
-    type: boolean
+    type: bool
     description: Whether quota enforcement is active.
     optional: false
   - name: maxProjectsPerUser
-    type: number
+    type: int
     description: Maximum active hosted projects a non-admin user may own.
     optional: true
   - name: maxMcpRequestsPerMinute
-    type: number
+    type: int
     description: Maximum MCP tool calls per minute per token or principal.
     optional: true
   - name: maxProjectBytes
-    type: number
+    type: int
     description: Maximum approximate bytes allowed for one hosted project root.
     optional: true
   - name: maxAuditEventsPerDay
-    type: number
+    type: int
     description: Maximum audit events retained per day before policy throttling or pruning warnings apply.
     optional: true
   - name: mode
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T09:08:07.406Z'
-updatedAt: '2026-09-19T11:07:16.189Z'
+updatedAt: '2026-10-04T10:29:13.816Z'

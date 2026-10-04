@@ -7,17 +7,17 @@ methods:
     description: >-
       Copies the built-in SDD skill templates into each active target's skills directory — the
       passed target types, else the project's enabled targets — and reports what it wrote.
-    signature: 'exportSddSkills(targetTypes?: string[]): SkillsExportResult'
+    signature: 'exportSddSkills(targetTypes?: list<string>): SkillsExportResult'
     returns: SkillsExportResult
     params:
       - name: targetTypes
-        type: string[]
+        type: list<string>
         description: The target types to export into; omitted means the project's enabled targets
         optional: true
   - name: listSkillNames
     description: The names of the built-in SDD skills, without extension.
-    signature: 'listSkillNames(): string[]'
-    returns: string[]
+    signature: 'listSkillNames(): list<string>'
+    returns: list<string>
     params: []
   - name: checkSkillFreshness
     description: >-
@@ -32,4 +32,4 @@ methods:
         description: The target type
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-25T21:13:43.919Z'
+updatedAt: '2026-10-04T10:19:33.791Z'

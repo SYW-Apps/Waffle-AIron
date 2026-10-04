@@ -2411,6 +2411,6 @@ methods:
         type: return
         outcome: TypeSpellingRepair[]
     detail: full
-status: design
+status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T00:10:16.186Z'
+updatedAt: '2026-10-04T10:34:16.501Z'

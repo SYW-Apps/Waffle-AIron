@@ -20,7 +20,7 @@ fields:
       authorization source (authorization resolves from permissionSubject).
     optional: false
   - name: projects
-    type: string[]
+    type: list<string>
     description: >-
       Coarse projection of the token's project narrowing; '*' denotes no narrowing (permission rules
       still gate per record). Entries are hosted record ids; an entry covers its project and every
@@ -45,7 +45,7 @@ fields:
       authorization is expressed through the permission rules over this subject.
     optional: true
   - name: authenticated
-    type: boolean
+    type: bool
     description: >-
       Whether the request presented a valid credential. The unauthenticated principal carries false;
       every gate checks it first.
@@ -53,11 +53,11 @@ fields:
 methods:
   - name: isInstanceAdmin
     signature: 'isInstanceAdmin(): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether this principal holds the permission-rules bypass: its permissionSubject marks it
       instanceAdmin. Listings short-circuit on it to show the whole instance.
     sourcePath: src/server/authorization.ts
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-10-03T17:49:06.698Z'
+updatedAt: '2026-10-04T10:20:47.639Z'

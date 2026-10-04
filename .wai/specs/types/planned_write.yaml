@@ -24,10 +24,10 @@ fields:
       export widening, new content through the gated seam).
     optional: false
   - name: args
-    type: unknown[]
+    type: list<any>
     description: Its arguments in order, as planned (a source path already re-expressed relative to the owner).
     optional: false
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T22:12:04.183Z'
-updatedAt: '2026-10-01T05:54:14.160Z'
+updatedAt: '2026-10-04T10:20:45.234Z'

@@ -7,15 +7,15 @@ description: >-
   repeatable and auditable.
 fields:
   - name: profileIds
-    type: string[]
+    type: list<string>
     description: Architectural profile ids selected for the project.
     optional: false
   - name: requiredPackNames
-    type: string[]
+    type: list<string>
     description: Instance-required pack names that must be active for the project.
     optional: false
   - name: defaultPackNames
-    type: string[]
+    type: list<string>
     description: Default pack names applied unless explicitly disabled by policy.
     optional: true
   - name: selectedBy
@@ -28,4 +28,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-08T21:58:31.373Z'
-updatedAt: '2026-07-08T21:58:31.379Z'
+updatedAt: '2026-10-04T10:20:52.177Z'

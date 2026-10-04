@@ -16,7 +16,7 @@ fields:
     description: One-paragraph statement of what the rule enforces and why.
     optional: false
   - name: codes
-    type: RuleCode[]
+    type: list<RuleCode>
     description: Every issue code this rule can emit, with default severity and summary.
     optional: false
   - name: scope
@@ -37,7 +37,7 @@ fields:
       counts as design.
     optional: true
   - name: needsWholeTree
-    type: boolean
+    type: bool
     description: >-
       Stage 8: whether the rule's verdict needs the whole system's specs — reachability and unused
       detection, topic pairing, cycles across subsystems, hydration. Such a rule is skipped (and
@@ -48,4 +48,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:52.909Z'
-updatedAt: '2026-10-02T20:52:00.408Z'
+updatedAt: '2026-10-04T10:21:02.072Z'

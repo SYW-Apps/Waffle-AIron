@@ -29,11 +29,11 @@ fields:
 methods:
   - name: equals
     signature: 'equals(other: StateId | null | undefined): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether two state ids name the same state: the same algorithm and the same digest. An absent
       id equals nothing, not even another absent one.
     symbol: stateIdEquals
 sourcePath: src/core/statehash.ts
 createdAt: '2026-07-04T12:44:18.502Z'
-updatedAt: '2026-10-03T17:53:10.249Z'
+updatedAt: '2026-10-04T10:21:10.994Z'

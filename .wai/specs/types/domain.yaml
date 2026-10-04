@@ -27,7 +27,7 @@ fields:
       than a view of them.
     optional: true
   - name: ownedPaths
-    type: string[]
+    type: list<string>
     description: Glob patterns the domain's agents are responsible for (an empty list when none are declared).
     optional: false
   - name: path
@@ -37,4 +37,4 @@ fields:
 methods: []
 sourcePath: src/models/domain.ts
 createdAt: '2026-09-20T20:42:00.586Z'
-updatedAt: '2026-10-03T17:03:26.196Z'
+updatedAt: '2026-10-04T10:20:04.898Z'

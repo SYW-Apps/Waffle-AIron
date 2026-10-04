@@ -11,13 +11,13 @@ methods:
       identity, units, users, keys, sessions, unplaced projects, duplicate owner placements); with
       apply, rewrite each in place. A dry run writes nothing; applying twice finds nothing the
       second time.
-    signature: 'run(apply: boolean): MigrationReport'
+    signature: 'run(apply: bool): MigrationReport'
     returns: MigrationReport
     params:
       - name: apply
-        type: boolean
+        type: bool
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-25T22:56:35.753Z'
-updatedAt: '2026-09-25T22:56:35.767Z'
+updatedAt: '2026-10-04T10:19:13.361Z'

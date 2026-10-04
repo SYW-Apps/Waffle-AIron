@@ -50,8 +50,8 @@ methods:
         type: string
   - name: listRoles
     description: Authenticate, require instance-level project:admin, and list all defined roles.
-    signature: 'listRoles(credential: string): Role[]'
-    returns: Role[]
+    signature: 'listRoles(credential: string): list<Role>'
+    returns: list<Role>
     params:
       - name: credential
         type: string
@@ -91,8 +91,8 @@ methods:
       stale rule never sits there silently.
     signature: >-
       listAssignments(credential: string, scopeKind?: string, scopeId?: string, subjectKind?:
-      string, subjectId?: string): PermissionAssignment[]
-    returns: PermissionAssignment[]
+      string, subjectId?: string): list<PermissionAssignment>
+    returns: list<PermissionAssignment>
     params:
       - name: credential
         type: string
@@ -183,4 +183,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-15T22:00:18.881Z'
-updatedAt: '2026-10-03T20:54:02.836Z'
+updatedAt: '2026-10-04T10:19:12.521Z'

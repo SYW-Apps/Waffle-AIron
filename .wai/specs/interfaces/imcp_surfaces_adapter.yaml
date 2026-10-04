@@ -5,18 +5,18 @@ component: mcp_surfaces_adapter
 methods:
   - name: pinExternals
     description: Forward the externals pin to the surface portal.
-    signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
-    returns: ExternalPin[]
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
     params:
       - name: aliases
-        type: string[]
+        type: list<string>
         description: The aliases to pin; all when omitted
         optional: true
   - name: getExternalsStatus
     description: Forward the externals status report to the surface portal.
-    signature: 'getExternalsStatus(): ExternalStatus[]'
-    returns: ExternalStatus[]
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
     params: []
 status: complete
 createdAt: '2026-07-24T18:14:20.548Z'
-updatedAt: '2026-09-27T10:43:07.377Z'
+updatedAt: '2026-10-04T10:19:03.504Z'

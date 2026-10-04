@@ -33,11 +33,11 @@ fields:
     description: ISO-8601 production timestamp.
     optional: false
   - name: interfaces
-    type: SurfaceContractEntry[]
+    type: list<SurfaceContractEntry>
     description: The exported contract entries, already audience-filtered by the producer.
     optional: false
   - name: types
-    type: SurfaceTypeDef[]
+    type: list<SurfaceTypeDef>
     description: >-
       Transitive type closure of every exported signature and every exported type — the snapshot is
       self-contained. Types are gathered by qualified id, so two subsystems' types of the same name
@@ -51,7 +51,7 @@ fields:
       imported surfaces.
     optional: true
   - name: exportedTypes
-    type: SurfaceTypeExport[]
+    type: list<SurfaceTypeExport>
     description: >-
       The types the producer exports by name (typeDef exports), audience-filtered like the contract
       entries and listed apart from them; each definition is in the type closure.
@@ -66,7 +66,7 @@ fields:
 methods:
   - name: isProvidedBy
     signature: 'isProvidedBy(provider: string): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether the named provider published this snapshot: its projectName, or the last :: segment of
       it (a sibling's snapshot is keyed <systemName>::<subsystemId>, so a reference names a sibling
@@ -89,7 +89,7 @@ methods:
     sourcePath: src/models/surface-references.ts
   - name: memberDigest
     signature: 'memberDigest(publicName: string, member: string): string | null'
-    returns: string | null
+    returns: string?
     description: >-
       sha256 over one used member of one public name, canonicalized so only what a caller depends on
       moves it: for a contract method, its name, its parameters' types and optionality in order
@@ -120,4 +120,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-03T22:04:29.411Z'
+updatedAt: '2026-10-04T10:21:15.010Z'

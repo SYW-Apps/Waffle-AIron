@@ -7,18 +7,18 @@ component: user_store
 methods:
   - name: load
     description: Load all persisted hosted user records into the authoritative store representation.
-    signature: 'load(): HostedUserRecord[]'
-    returns: HostedUserRecord[]
+    signature: 'load(): list<HostedUserRecord>'
+    returns: list<HostedUserRecord>
     params: []
   - name: replaceAll
     description: >-
       Replace the store contents with the supplied complete user-record set after persistence has
       succeeded.
-    signature: 'replaceAll(records: HostedUserRecord[]): void'
+    signature: 'replaceAll(records: list<HostedUserRecord>): void'
     returns: void
     params:
       - name: records
-        type: HostedUserRecord[]
+        type: list<HostedUserRecord>
 status: complete
 createdAt: '2026-07-08T20:16:02.168Z'
-updatedAt: '2026-07-09T17:43:40.812Z'
+updatedAt: '2026-10-04T10:19:45.552Z'

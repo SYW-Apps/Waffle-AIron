@@ -16,11 +16,11 @@ fields:
     description: The HTTP method the branch requires
     optional: false
   - name: segments
-    type: string[]
+    type: list<string>
     description: 'The path''s segments in order: the literal compared against, or `*` where nothing constrains it'
     optional: false
   - name: exactLength
-    type: boolean
+    type: bool
     description: >-
       Whether the branch pins the number of segments; when it does not, the path may continue past
       the last one read
@@ -28,4 +28,4 @@ fields:
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-24T20:30:22.052Z'
-updatedAt: '2026-09-24T20:30:22.561Z'
+updatedAt: '2026-10-04T10:21:00.107Z'

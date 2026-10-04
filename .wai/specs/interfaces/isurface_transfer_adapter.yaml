@@ -12,15 +12,15 @@ methods:
       portal remains, else one file per portal beside the target.
     signature: >-
       writeSnapshotTo(targetPath: string, snapshot: SurfaceSnapshot, renderedSet?:
-      NamedOpenApiSpec[]): string[]
-    returns: string[]
+      list<NamedOpenApiSpec>): list<string>
+    returns: list<string>
     params:
       - name: targetPath
         type: string
       - name: snapshot
         type: SurfaceSnapshot
       - name: renderedSet
-        type: NamedOpenApiSpec[]
+        type: list<NamedOpenApiSpec>
         description: >-
           The rendered per-portal documents (e.g. OpenAPI) to write instead of native YAML; one file
           per portal when there are several
@@ -34,4 +34,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-10T23:14:07.216Z'
-updatedAt: '2026-10-03T16:40:54.520Z'
+updatedAt: '2026-10-04T10:19:42.206Z'

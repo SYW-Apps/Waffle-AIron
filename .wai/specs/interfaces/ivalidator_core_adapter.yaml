@@ -6,27 +6,27 @@ methods:
   - name: loadSystemSpec
     description: Loads the system spec via core portal
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: loadSubsystemSpecs
     description: Loads subsystem specs via core portal
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadComponentSpecs
     description: Loads component specs via core portal
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadInterfaceSpecs
     description: Loads interface specs via core portal
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadImplementationSpecs
     description: Loads implementation specs via core portal
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: loadTypeSpecs
     description: Loads type specs via core portal
     signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    returns: list<TypeSpec>
   - name: dryRunSerializeSpecs
     description: >-
       Dry-runs every loaded spec through the writer relativization + schema pipeline via the core
@@ -34,7 +34,7 @@ methods:
       visibility of every write lock would reject. Accepts the validation run's scope predicate so
       scoped runs pay scoped cost.
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
-    returns: ValidationIssue[]
+    returns: list<ValidationIssue>
   - name: loadProjectExtensions
     description: >-
       Load the governing extension packs (global then project) via the core portal, returning the
@@ -48,8 +48,8 @@ methods:
       The bound project's configuration, or null when it has none. Forwarded to the core portal;
       validation reads its rule severities, including a parent project's when resolving through the
       parent.
-    signature: 'loadProjectConfig(): ProjectConfig | null'
-    returns: ProjectConfig | null
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
     guarantees:
       - idempotent
@@ -57,23 +57,23 @@ methods:
     description: >-
       Forward to core_portal.consumedContractInputs: the consumed contract inputs of the bound root
       alone (never a member's)
-    signature: 'consumedContractInputs(): string[]'
-    returns: string[]
+    signature: 'consumedContractInputs(): list<string>'
+    returns: list<string>
     params: []
   - name: settledSpecPaths
     description: >-
       Forward to approval_portal.settledSpecPaths: the spec files unchanged since the approval, or
       null when the tree was never approved
-    signature: 'settledSpecPaths(root?: string): Set<string> | null'
-    returns: Set<string> | null
+    signature: 'settledSpecPaths(root?: string): set<string>?'
+    returns: set<string>?
     params:
       - name: root
         type: string
         optional: true
   - name: getLoaderIssues
     description: 'Forward to spec_tree_portal.getLoaderIssues: the loader''s diagnostics for the tree just read'
-    signature: 'getLoaderIssues(): ValidationIssue[]'
-    returns: ValidationIssue[]
+    signature: 'getLoaderIssues(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
     params: []
   - name: clearLoaderIssues
     description: >-
@@ -96,16 +96,16 @@ methods:
     description: >-
       Forward to extension_portal.loadProjectVariants: the variant registry the variant rules judge
       against
-    signature: 'loadProjectVariants(): VariantDef[]'
-    returns: VariantDef[]
+    signature: 'loadProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
     params: []
   - name: readLockRecord
     description: >-
       Forward to approval_portal.readLockRecord: the bound root's lock record, or null when it is
       unlocked or the record cannot be read. The validator reads the project id the lock recorded,
       to judge the project's identity against it.
-    signature: 'readLockRecord(): LockRecord | null'
-    returns: LockRecord | null
+    signature: 'readLockRecord(): LockRecord?'
+    returns: LockRecord?
     params: []
     guarantees:
       - idempotent
@@ -172,11 +172,11 @@ methods:
         optional: true
   - name: packManifest
     description: The manifest one pack entry resolves to, or null — through the core extension portal.
-    signature: 'packManifest(entry: PackSelection | string): ExtensionPack | null'
-    returns: ExtensionPack | null
+    signature: 'packManifest(entry: PackSelection | PackPath): ExtensionPack?'
+    returns: ExtensionPack?
     params:
       - name: entry
-        type: PackSelection | string
+        type: PackSelection | PackPath
         description: A by-name selection or a legacy path reference
   - name: computeOwnStateId
     description: >-
@@ -193,8 +193,8 @@ methods:
       direct member's, for its composition subject; a member's parent's, for its pin), or null when
       it has none. Read from that root alone — no scan, no validation — which is what keeps a
       parent's gate identity proportional to its own tree plus one small file per direct member.
-    signature: 'approvalRecord(root?: string): LockRecord | null'
-    returns: LockRecord | null
+    signature: 'approvalRecord(root?: string): LockRecord?'
+    returns: LockRecord?
     params:
       - name: root
         type: string
@@ -215,18 +215,18 @@ methods:
       own specs together with its pinned parent excerpt — as the scan resolves its own, answering
       the resolved interfaces and types and the facts.
     signature: >-
-      resolveSignatures(interfaces: InterfaceSpec[], components: ComponentSpec[], types:
-      TypeSpec[]): SignatureResolution
+      resolveSignatures(interfaces: list<InterfaceSpec>, components: list<ComponentSpec>, types:
+      list<TypeSpec>): SignatureResolution
     returns: SignatureResolution
     params:
       - name: interfaces
-        type: InterfaceSpec[]
+        type: list<InterfaceSpec>
         description: The interfaces to resolve, stored or already resolved
       - name: components
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
         description: The components a method source's head is read against
       - name: types
-        type: TypeSpec[]
+        type: list<TypeSpec>
         description: The types, the signature types among them
     guarantees:
       - idempotent
@@ -239,4 +239,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T22:05:01.102Z'
+updatedAt: '2026-10-04T10:27:32.808Z'

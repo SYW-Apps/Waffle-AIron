@@ -11,14 +11,14 @@ methods:
       annotated with observe/warn quota messages. Advisory only: even a policy 'block' mode yields
       an observational message and never blocks or throttles.
     signature: >-
-      evaluateUsage(snapshots: ResourceUsageSnapshot[], policy: ResourceQuotaPolicy):
-      ResourceUsageSnapshot[]
-    returns: ResourceUsageSnapshot[]
+      evaluateUsage(snapshots: list<ResourceUsageSnapshot>, policy: ResourceQuotaPolicy):
+      list<ResourceUsageSnapshot>
+    returns: list<ResourceUsageSnapshot>
     params:
       - name: snapshots
-        type: ResourceUsageSnapshot[]
+        type: list<ResourceUsageSnapshot>
       - name: policy
         type: ResourceQuotaPolicy
 status: complete
 createdAt: '2026-07-09T09:09:54.317Z'
-updatedAt: '2026-09-15T20:46:52.498Z'
+updatedAt: '2026-10-04T10:19:24.457Z'

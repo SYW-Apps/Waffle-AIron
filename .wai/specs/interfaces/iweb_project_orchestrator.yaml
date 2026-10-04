@@ -15,8 +15,8 @@ methods:
       caller may read it through its own chain — which a read on its parent grants by inheritance,
       unless an explicit no on the member's own record removes it; each keeps parentProjectId (the
       crumb) and memberPath. A read; not audited.
-    signature: 'list(sessionId: string): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    signature: 'list(sessionId: string): list<HostedProjectRecord>'
+    returns: list<HostedProjectRecord>
     params:
       - name: sessionId
         type: string
@@ -74,4 +74,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-10-03T20:54:12.343Z'
+updatedAt: '2026-10-04T10:19:49.153Z'

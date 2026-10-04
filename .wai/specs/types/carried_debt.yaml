@@ -23,7 +23,7 @@ fields:
       take.
     optional: false
   - name: findings
-    type: CarriedFinding[]
+    type: list<CarriedFinding>
     description: The findings this reason explains.
     optional: false
   - name: revisit
@@ -42,4 +42,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-19T19:04:02.008Z'
-updatedAt: '2026-09-19T20:34:13.712Z'
+updatedAt: '2026-10-04T10:19:55.502Z'

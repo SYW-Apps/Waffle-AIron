@@ -39,18 +39,18 @@ methods:
   - name: listSnapshots
     description: All stored snapshots.
     signature: 'listSnapshots(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    returns: list<SurfaceSnapshot>
   - name: getSnapshot
     description: Stored snapshot by producing project name.
-    signature: 'getSnapshot(projectName: string): SurfaceSnapshot | null'
-    returns: SurfaceSnapshot | null
+    signature: 'getSnapshot(projectName: string): SurfaceSnapshot?'
+    returns: SurfaceSnapshot?
     params:
       - name: projectName
         type: string
   - name: removeSnapshot
     description: Remove a stored surface snapshot through the repository.
-    signature: 'removeSnapshot(projectName: string): boolean'
-    returns: boolean
+    signature: 'removeSnapshot(projectName: string): bool'
+    returns: bool
     params:
       - name: projectName
         type: string
@@ -74,11 +74,11 @@ methods:
       .wai/externals/<parent id>.yaml and the lock's `parent` entry; naming an alias at a part is
       refused. An alias the project does not declare is refused before anything is written; an
       unresolved or unreachable producer is reported and keeps its previous pin. Never locks.
-    signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
-    returns: ExternalPin[]
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
     params:
       - name: aliases
-        type: string[]
+        type: list<string>
         description: The aliases to pin; all declared externals when omitted
         optional: true
   - name: getExternalsStatus
@@ -97,16 +97,16 @@ methods:
       source.hosted external read outside a hosted server says why in its reason: "hosted-only
       producer `<id>`: available only through the hosted server". A producer whose root lies outside
       the request's reach is marked outOfReach. Writes nothing.
-    signature: 'getExternalsStatus(): ExternalStatus[]'
-    returns: ExternalStatus[]
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
     params: []
   - name: listExternals
     description: >-
       The `wairon externals list` read: each declared external with how it resolves (family and its
       relation, path, or unresolved with the reason), the audience the consumer sees, and the lock's
       entry when pinned. No live comparison.
-    signature: 'listExternals(): ExternalListing[]'
-    returns: ExternalListing[]
+    signature: 'listExternals(): list<ExternalListing>'
+    returns: list<ExternalListing>
     params: []
   - name: listFamilyPins
     description: >-
@@ -116,8 +116,8 @@ methods:
       (externals and their pins replace them); the chaining migration converts the family pin into
       an external and deletes them all. Foreign imports (exchanged or authored) are never listed.
       Reads only the bound root, and projects nothing.
-    signature: 'listFamilyPins(): FamilyPin[]'
-    returns: FamilyPin[]
+    signature: 'listFamilyPins(): list<FamilyPin>'
+    returns: list<FamilyPin>
     params: []
     guarantees:
       - idempotent
@@ -131,8 +131,8 @@ methods:
       resolves a producer, never reads another root and never climbs: an alias that was never
       pinned, or whose snapshot file is missing or malformed, is answered with its problem instead
       of a snapshot. Writes nothing.
-    signature: 'listPinnedExternals(): PinnedExternal[]'
-    returns: PinnedExternal[]
+    signature: 'listPinnedExternals(): list<PinnedExternal>'
+    returns: list<PinnedExternal>
     params: []
   - name: renamePin
     description: >-
@@ -142,8 +142,8 @@ methods:
       producer id set likewise, and the digest and `used` map stay exactly as pinned — a rename is
       not a producer change, and re-pinning would hide one. Answers false, writing nothing, when the
       alias has no pin or already reads that way. The caller must gate on reach itself.
-    signature: 'renamePin(alias: string, newAlias: string, project: string): boolean'
-    returns: boolean
+    signature: 'renamePin(alias: string, newAlias: string, project: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -161,8 +161,8 @@ methods:
       Remove the bound project's pin of one alias — its lock entry and its snapshot — when the alias
       stops being an external (adopted as a member, or folded into this project). Answers false,
       writing nothing, when there is none. The caller must gate on reach itself.
-    signature: 'unpin(alias: string): boolean'
-    returns: boolean
+    signature: 'unpin(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -176,8 +176,8 @@ methods:
       never the parent's live tree. Null when the bound root is not a part; a part never pinned, or
       whose excerpt is missing or malformed, is answered with its problem instead of an excerpt.
       Writes nothing.
-    signature: 'pinnedParent(): PinnedParent | null'
-    returns: PinnedParent | null
+    signature: 'pinnedParent(): PinnedParent?'
+    returns: PinnedParent?
     params: []
     effect: read
   - name: pinParent
@@ -189,28 +189,28 @@ methods:
       refused before anything is written; a parent the core cannot read, or one that does not claim
       the part, is answered unreachable with the reason and the previous pin stays. Answers one
       outcome, the parent's. Never locks.
-    signature: 'pinParent(aliases?: string[]): ExternalPin[]'
-    returns: ExternalPin[]
+    signature: 'pinParent(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
     params:
       - name: aliases
-        type: string[]
+        type: list<string>
         description: 'Must be empty: a part declares no alias to name'
         optional: true
   - name: prune
     description: >-
       Drop every lock entry whose alias is no longer declared, with its snapshot; answers whether
       the lock changed. The prune half of a pin with no aliases named.
-    signature: 'prune(lock: ExternalsLock, declared: string[]): boolean'
-    returns: boolean
+    signature: 'prune(lock: ExternalsLock, declared: list<string>): bool'
+    returns: bool
     params:
       - name: lock
         type: ExternalsLock
         description: The lock being written, edited in place
       - name: declared
-        type: string[]
+        type: list<string>
         description: Every alias the project declares now (externals and project members by source)
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-02T22:32:17.197Z'
+updatedAt: '2026-10-04T10:19:40.873Z'

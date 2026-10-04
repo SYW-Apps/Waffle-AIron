@@ -22,13 +22,13 @@ fields:
     description: entity | value-object | signature | enum
     optional: false
   - name: fields
-    type: object[]
+    type: list<any>
     description: >-
       Data fields (name, type, optional, description) — types reference each other within the
       closure. Empty on a signature.
     optional: false
   - name: params
-    type: object[]
+    type: list<any>
     description: >-
       A signature's parameters (name, type, optional, description), in declared order; types
       reference the closure. Only on kind signature.
@@ -38,10 +38,10 @@ fields:
     description: A signature's one output type, referencing the closure. Only on kind signature.
     optional: true
   - name: values
-    type: EnumValue[]
+    type: list<EnumValue>
     description: An enum's values in declared order; only on kind enum
     optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:32.022Z'
-updatedAt: '2026-10-03T22:04:24.652Z'
+updatedAt: '2026-10-04T10:21:15.337Z'

@@ -28,11 +28,11 @@ fields:
     description: The snapshot's content digest.
     optional: true
   - name: usedNames
-    type: number
+    type: int
     description: How many public names the lock records as used.
     optional: false
   - name: unexported
-    type: CrossProjectReference[]
+    type: list<CrossProjectReference>
     description: >-
       The consumer's references into the producer that land on no public name it may see — not
       pinnable, and reported so the author can export them.
@@ -44,4 +44,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:47:06.730Z'
-updatedAt: '2026-09-26T17:47:06.732Z'
+updatedAt: '2026-10-04T10:28:52.449Z'

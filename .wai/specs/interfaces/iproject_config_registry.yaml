@@ -28,8 +28,8 @@ methods:
       Select a pack by name: drop every selection of the same pack and append the new one last, so a
       re-selected pack moves to the highest precedence. Path references are left alone. Covers `pack
       use`. Returns whether an earlier selection was replaced.
-    signature: 'upsertPackSelection(selection: PackSelection): boolean'
-    returns: boolean
+    signature: 'upsertPackSelection(selection: PackSelection): bool'
+    returns: bool
     params:
       - name: selection
         type: PackSelection
@@ -40,8 +40,8 @@ methods:
       Deselect a pack by name: drop every selection of that pack, leaving path references alone.
       Writes only when something was dropped. Covers `pack unuse` and a hosted removal that matched
       a selection. Returns whether anything was dropped.
-    signature: 'removePackSelection(packName: string): boolean'
-    returns: boolean
+    signature: 'removePackSelection(packName: string): bool'
+    returns: bool
     params:
       - name: packName
         type: string
@@ -79,8 +79,8 @@ methods:
       Register a legacy path reference (a vendored pack folder or file under `.wai/packs/`) by
       appending it when that exact reference is absent. Covers `pack add` from a folder or an
       archive, and a hosted project-pack install. Returns whether it was added.
-    signature: 'registerPackRef(ref: string): boolean'
-    returns: boolean
+    signature: 'registerPackRef(ref: string): bool'
+    returns: bool
     params:
       - name: ref
         type: string
@@ -92,8 +92,8 @@ methods:
       when something was dropped. The caller decides which reference a pack name means. Covers `pack
       remove` and a hosted removal that matched a path reference. Returns whether anything was
       dropped.
-    signature: 'deregisterPackRef(ref: string): boolean'
-    returns: boolean
+    signature: 'deregisterPackRef(ref: string): bool'
+    returns: bool
     params:
       - name: ref
         type: string
@@ -104,11 +104,11 @@ methods:
       Record that packs were bundled into `.wai/packs/`: each selection of a named pack gets the
       committed version and `bundle: true`, in place, keeping the order. One write for the whole
       set. Covers `pack bundle`.
-    signature: 'markSelectionsBundled(bundled: PackSelection[]): void'
+    signature: 'markSelectionsBundled(bundled: list<PackSelection>): void'
     returns: void
     params:
       - name: bundled
-        type: PackSelection[]
+        type: list<PackSelection>
     guarantees:
       - idempotent
   - name: pinGlobalPacksAsSelections
@@ -116,11 +116,11 @@ methods:
       Turn the packs a project applied implicitly from the machine-wide store into explicit
       selections: append them and set `extensions.useGlobalPacks` to false, in one write. Covers
       `doctor --fix`.
-    signature: 'pinGlobalPacksAsSelections(selections: PackSelection[]): void'
+    signature: 'pinGlobalPacksAsSelections(selections: list<PackSelection>): void'
     returns: void
     params:
       - name: selections
-        type: PackSelection[]
+        type: list<PackSelection>
   - name: rekeyCarried
     description: >-
       Rekey the debt register (rules.conformance.carried) for an identity move: every carried
@@ -131,14 +131,14 @@ methods:
       per key changed, naming the finding as it stood. A dry run proves the edit and writes nothing;
       a move the register names nowhere writes nothing and answers empty; a register the store
       cannot edit precisely is refused and nothing is written.
-    signature: 'rekeyCarried(rename: IdentityRename, dryRun?: boolean): CarriedRekey[]'
-    returns: CarriedRekey[]
+    signature: 'rekeyCarried(rename: IdentityRename, dryRun?: bool): list<CarriedRekey>'
+    returns: list<CarriedRekey>
     params:
       - name: rename
         type: IdentityRename
         description: The identity move the register follows
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the edits and write nothing
         optional: true
   - name: setId
@@ -148,8 +148,8 @@ methods:
       already declares a DIFFERENT id: an id is immutable, and moving it is the rename migration,
       never a set. Declaring the id already declared writes nothing. Covers `doctor --fix`'s
       chaining migration. Returns whether it wrote.
-    signature: 'setId(id: string): boolean'
-    returns: boolean
+    signature: 'setId(id: string): bool'
+    returns: bool
     params:
       - name: id
         type: string
@@ -164,8 +164,8 @@ methods:
       The same declaration again writes nothing — and a declaration that states no `use` is the same
       as a held one that differs only in its `use` imports (importNames' state, which it leaves
       alone). Covers `doctor --fix`'s chaining migration. Returns whether it wrote.
-    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): boolean'
-    returns: boolean
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -183,8 +183,8 @@ methods:
       refuses when the alias is already a member with a DIFFERENT declaration, so a declaration a
       person wrote is never overwritten. The same declaration again writes nothing. Covers `doctor
       --fix`'s move of a legacy L1 mount. Returns whether it wrote.
-    signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
-    returns: boolean
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -199,8 +199,8 @@ methods:
       Point an existing member at a new path, keeping its description: the write behind moving a
       member's directory. Refuses an alias `members` does not declare, and an empty or absolute
       path. The same path writes nothing. Returns whether it wrote.
-    signature: 'setMemberPath(alias: string, path: string): boolean'
-    returns: boolean
+    signature: 'setMemberPath(alias: string, path: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -215,8 +215,8 @@ methods:
       Remove one member declaration from `members` — the write behind internalizing a member, whose
       specs have moved into this project. Returns false when the alias is not declared, writing
       nothing.
-    signature: 'removeMember(alias: string): boolean'
-    returns: boolean
+    signature: 'removeMember(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -232,14 +232,14 @@ methods:
       given, after the existing ones; a shorthand member is rewritten to its long form to hold them.
       Never removes or reorders a name a person wrote. The same names again write nothing. Covers
       `doctor --fix`'s positional migration step. Returns whether it wrote.
-    signature: 'importNames(alias: string, names: string[]): boolean'
-    returns: boolean
+    signature: 'importNames(alias: string, names: list<string>): bool'
+    returns: bool
     params:
       - name: alias
         type: string
         description: The external or member alias whose `use` gains the names
       - name: names
-        type: string[]
+        type: list<string>
         description: The public names to import, or `*`
     guarantees:
       - idempotent
@@ -251,8 +251,8 @@ methods:
       configuration declares neither the old id nor, when it declares none, defaults to it — so a
       plan applied to a project whose id moved under it writes nothing. Already declaring the new id
       with the old one in `previousIds` writes nothing. Returns whether it wrote.
-    signature: 'renameId(from: string, to: string): boolean'
-    returns: boolean
+    signature: 'renameId(from: string, to: string): bool'
+    returns: bool
     params:
       - name: from
         type: string
@@ -269,8 +269,8 @@ methods:
       its `use` exactly as written. Refuses a `to` outside [a-z0-9-_]+, a `from` neither map
       declares, and a `to` either map already declares. A table that already holds `to` with `from`
       gone writes nothing. Returns whether it wrote.
-    signature: 'renameAlias(from: string, to: string): boolean'
-    returns: boolean
+    signature: 'renameAlias(from: string, to: string): bool'
+    returns: bool
     params:
       - name: from
         type: string
@@ -289,17 +289,17 @@ methods:
       internalize (a consumer of the folded member now consumes the parent). Refuses an alias
       `externals` does not declare, and a producer id outside the project-id grammar. An equal
       revision writes nothing. Returns whether it wrote.
-    signature: 'repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean'
-    returns: boolean
+    signature: 'repointExternal(alias: string, project: string?, source: ExternalSource?): bool'
+    returns: bool
     params:
       - name: alias
         type: string
         description: The external's alias
       - name: project
-        type: string | null
+        type: string?
         description: The producer id to record, or null when the alias is the producer id
       - name: source
-        type: ExternalSource | null
+        type: ExternalSource?
         description: The producer's explicit place, or null to find it through the family
     guarantees:
       - idempotent
@@ -308,8 +308,8 @@ methods:
       Remove one external declaration from `externals` — the write behind adopting it as a member,
       or folding the producer into this project. Returns false when the alias is not declared,
       writing nothing.
-    signature: 'removeExternal(alias: string): boolean'
-    returns: boolean
+    signature: 'removeExternal(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -325,8 +325,8 @@ methods:
       an unparseable one. The entry is written as the shorthand when only its source remains, the
       long form otherwise. The same values write nothing. The write behind `member update`, `member
       promote` / `demote`, and `doctor --fix`. Returns whether it wrote.
-    signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
-    returns: boolean
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -345,11 +345,11 @@ methods:
       part — that is `member demote`, which moves those fields first. Creates the configuration when
       the directory has none (a fresh sibling part). The same value writes nothing. Returns whether
       it wrote.
-    signature: 'setPartOf(partOf: PartOf | null): boolean'
-    returns: boolean
+    signature: 'setPartOf(partOf: PartOf?): bool'
+    returns: bool
     params:
       - name: partOf
-        type: PartOf | null
+        type: PartOf?
         description: The parent the part belongs to, or null to remove it (promote)
     guarantees:
       - idempotent
@@ -367,4 +367,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-10-03T17:09:56.770Z'
+updatedAt: '2026-10-04T10:19:19.210Z'

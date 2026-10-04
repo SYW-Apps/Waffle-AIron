@@ -11,80 +11,80 @@ methods:
     description: >-
       Provision a hosted project placed in an organization unit (the caller needs project:create
       over it).
-    signature: 'createProject(credential: string | null, id: string, unitId: string): HostedProjectRecord'
+    signature: 'createProject(credential: string?, id: string, unitId: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: id
         type: string
       - name: unitId
         type: string
   - name: destroyProject
     description: Tear a hosted project down (project:admin over it).
-    signature: 'destroyProject(credential: string | null, id: string): void'
+    signature: 'destroyProject(credential: string?, id: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: id
         type: string
   - name: listProjects
     description: List every hosted project (master credential).
-    signature: 'listProjects(credential: string | null): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    signature: 'listProjects(credential: string?): list<HostedProjectRecord>'
+    returns: list<HostedProjectRecord>
     params:
       - name: credential
-        type: string | null
+        type: string?
   - name: lockProject
     description: >-
       Record the state-scoped lock for a project; refuses a tree that does not validate as complete
       with the lock's validation failure.
-    signature: 'lockProject(credential: string | null, project: string): LockRecord'
+    signature: 'lockProject(credential: string?, project: string): LockRecord'
     returns: LockRecord
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
   - name: mintKey
     description: Mint a project API key for a role; the key is shown once.
-    signature: 'mintKey(credential: string | null, project: string, role: string): string'
+    signature: 'mintKey(credential: string?, project: string, role: string): string'
     returns: string
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: role
         type: string
   - name: revokeKey
     description: Revoke an API key by id.
-    signature: 'revokeKey(credential: string | null, id: string): void'
+    signature: 'revokeKey(credential: string?, id: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: id
         type: string
   - name: listKeys
     description: List a project's API keys (metadata only).
-    signature: 'listKeys(credential: string | null, project: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
+    signature: 'listKeys(credential: string?, project: string): list<ApiKeyRecord>'
+    returns: list<ApiKeyRecord>
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
   - name: configureProducer
     description: Configure a producer target (Notion or Miro) for a project.
     signature: >-
-      configureProducer(credential: string | null, project: string, target: string, parentPageId:
-      string): void
+      configureProducer(credential: string?, project: string, target: string, parentPageId: string):
+      void
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: target
@@ -93,62 +93,62 @@ methods:
         type: string
   - name: produceProducer
     description: Run a configured producer target for a project.
-    signature: 'produceProducer(credential: string | null, project: string, target: string): void'
+    signature: 'produceProducer(credential: string?, project: string, target: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: target
         type: string
   - name: removeProducer
     description: Remove a producer target from a project.
-    signature: 'removeProducer(credential: string | null, project: string, target: string): void'
+    signature: 'removeProducer(credential: string?, project: string, target: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: target
         type: string
   - name: listProducers
     description: List a project's configured producer targets.
-    signature: 'listProducers(credential: string | null, project: string): ProducerConfig[]'
-    returns: ProducerConfig[]
+    signature: 'listProducers(credential: string?, project: string): list<ProducerConfig>'
+    returns: list<ProducerConfig>
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
   - name: setSecret
     description: Set an integration secret at runtime (master credential).
-    signature: 'setSecret(credential: string | null, key: string, value: string): void'
+    signature: 'setSecret(credential: string?, key: string, value: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: key
         type: string
       - name: value
         type: string
   - name: listSecrets
     description: List configured secret key names, never values (master credential).
-    signature: 'listSecrets(credential: string | null): string[]'
-    returns: string[]
+    signature: 'listSecrets(credential: string?): list<string>'
+    returns: list<string>
     params:
       - name: credential
-        type: string | null
+        type: string?
   - name: enableGit
     description: Bind a project to a git remote, optionally with its own access token.
     signature: >-
-      enableGit(credential: string | null, project: string, remote: string, branch: string, pat?:
-      string): HostedProjectRecord
+      enableGit(credential: string?, project: string, remote: string, branch: string, pat?: string):
+      HostedProjectRecord
     returns: HostedProjectRecord
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: remote
@@ -160,31 +160,31 @@ methods:
         optional: true
   - name: disableGit
     description: Remove a project's git binding.
-    signature: 'disableGit(credential: string | null, project: string): void'
+    signature: 'disableGit(credential: string?, project: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
   - name: syncGit
     description: Synchronize a git-backed project with its remote.
-    signature: 'syncGit(credential: string | null, project: string): void'
+    signature: 'syncGit(credential: string?, project: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
   - name: commitProject
     description: Commit and publish a project's specs (or one chained subsystem's) to its git remote.
     signature: >-
-      commitProject(credential: string | null, project: string, subsystem?: string, message?:
-      string): GitPublish
+      commitProject(credential: string?, project: string, subsystem?: string, message?: string):
+      GitPublish
     returns: GitPublish
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: subsystem
@@ -195,75 +195,75 @@ methods:
         optional: true
   - name: getGitBinding
     description: Read a project's git binding and sync status.
-    signature: 'getGitBinding(credential: string | null, project: string): GitBackingStatus'
+    signature: 'getGitBinding(credential: string?, project: string): GitBackingStatus'
     returns: GitBackingStatus
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
   - name: configureGitSync
     description: Configure a project's periodic git sync.
     signature: >-
-      configureGitSync(credential: string | null, project: string, periodicSyncMinutes?: number,
-      skipIfClean?: boolean): void
+      configureGitSync(credential: string?, project: string, periodicSyncMinutes?: int,
+      skipIfClean?: bool): void
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: periodicSyncMinutes
-        type: number
+        type: int
         optional: true
       - name: skipIfClean
-        type: boolean
+        type: bool
         optional: true
   - name: listGlobalPacks
     description: List the instance's installed extension packs.
-    signature: 'listGlobalPacks(credential: string | null): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listGlobalPacks(credential: string?): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
-        type: string | null
+        type: string?
   - name: installGlobalPack
     description: Install a declarative extension pack instance-wide.
-    signature: 'installGlobalPack(credential: string | null, name: string, content: string): PackDescriptor'
+    signature: 'installGlobalPack(credential: string?, name: string, content: string): PackDescriptor'
     returns: PackDescriptor
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: name
         type: string
       - name: content
         type: string
   - name: removeGlobalPack
     description: Remove an instance-wide extension pack.
-    signature: 'removeGlobalPack(credential: string | null, name: string): void'
+    signature: 'removeGlobalPack(credential: string?, name: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: name
         type: string
   - name: listProjectPacks
     description: List a project's extension packs.
-    signature: 'listProjectPacks(credential: string | null, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listProjectPacks(credential: string?, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
   - name: installProjectPack
     description: Install a declarative extension pack into one project.
     signature: >-
-      installProjectPack(credential: string | null, project: string, name: string, content: string):
+      installProjectPack(credential: string?, project: string, name: string, content: string):
       PackDescriptor
     returns: PackDescriptor
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: name
@@ -272,44 +272,42 @@ methods:
         type: string
   - name: removeProjectPack
     description: Remove an extension pack from one project.
-    signature: 'removeProjectPack(credential: string | null, project: string, name: string): void'
+    signature: 'removeProjectPack(credential: string?, project: string, name: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: name
         type: string
   - name: setAssignment
     description: Create or replace a permission assignment over a scope.
-    signature: >-
-      setAssignment(credential: string | null, assignment: PermissionAssignment):
-      PermissionAssignment
+    signature: 'setAssignment(credential: string?, assignment: PermissionAssignment): PermissionAssignment'
     returns: PermissionAssignment
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: assignment
         type: PermissionAssignment
   - name: removeAssignment
     description: Remove a permission assignment by id.
-    signature: 'removeAssignment(credential: string | null, assignmentId: string): void'
+    signature: 'removeAssignment(credential: string?, assignmentId: string): void'
     returns: void
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: assignmentId
         type: string
   - name: listAssignments
     description: List permission assignments, optionally narrowed by scope and subject.
     signature: >-
-      listAssignments(credential: string | null, scopeKind?: string, scopeId?: string, subjectKind?:
-      string, subjectId?: string): PermissionAssignment[]
-    returns: PermissionAssignment[]
+      listAssignments(credential: string?, scopeKind?: string, scopeId?: string, subjectKind?:
+      string, subjectId?: string): list<PermissionAssignment>
+    returns: list<PermissionAssignment>
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: scopeKind
         type: string
         optional: true
@@ -326,8 +324,8 @@ methods:
     description: >-
       The root path of the project registered under an id, or null — the existence check `wairon
       host demo` makes before it reseeds.
-    signature: 'existingProjectRoot(id: string): string | null'
-    returns: string | null
+    signature: 'existingProjectRoot(id: string): string?'
+    returns: string?
     params:
       - name: id
         type: string
@@ -347,22 +345,22 @@ methods:
       Mint an owner-bound API token acting as its owner's live permission, narrowed to the named
       projects (instance admin); shown once, with each deprecated member-qualified entry and the
       member record id it was stored as.
-    signature: 'mintToken(credential: string | null, request: TokenMintRequest): MintedToken'
+    signature: 'mintToken(credential: string?, request: TokenMintRequest): MintedToken'
     returns: MintedToken
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: request
         type: TokenMintRequest
   - name: upsertUnit
     description: >-
       Create or update an organization unit (project:admin over its parent, or over the unit itself
       when it exists).
-    signature: 'upsertUnit(credential: string | null, unit: OrganizationUnitRecord): OrganizationUnitRecord'
+    signature: 'upsertUnit(credential: string?, unit: OrganizationUnitRecord): OrganizationUnitRecord'
     returns: OrganizationUnitRecord
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: unit
         type: OrganizationUnitRecord
   - name: seedDefaultProvider
@@ -370,18 +368,18 @@ methods:
       Boot-time seeding of the default identity provider from the server process's own environment;
       the caller supplies only the host configuration. Answers the seeded provider, or null when no
       issuer is set.
-    signature: 'seedDefaultProvider(): IdentityProviderConfig | null'
-    returns: IdentityProviderConfig | null
+    signature: 'seedDefaultProvider(): IdentityProviderConfig?'
+    returns: IdentityProviderConfig?
     params: []
   - name: migratePermissionModel
     description: >-
       Report, and with apply rewrite, the data dir's pre-permission-model shapes (`wairon host
       doctor [--fix]`); a dry run writes nothing.
-    signature: 'migratePermissionModel(apply: boolean): MigrationReport'
+    signature: 'migratePermissionModel(apply: bool): MigrationReport'
     returns: MigrationReport
     params:
       - name: apply
-        type: boolean
+        type: bool
   - name: startHostServer
     description: >-
       Start the hosting server's listeners for this configuration (the running server's close handle
@@ -394,12 +392,12 @@ methods:
       Forward to the local admin portal: what installing a declarative pack into one hosted project
       would change, writing nothing.
     signature: >-
-      previewProjectPack(credential: string | null, project: string, name: string, content?:
-      string): PackImpact
+      previewProjectPack(credential: string?, project: string, name: string, content?: string):
+      PackImpact
     returns: PackImpact
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: name
@@ -411,13 +409,11 @@ methods:
     description: >-
       Forward to the local admin portal: what removing a registered pack from one hosted project
       would change, writing nothing.
-    signature: >-
-      previewProjectPackRemoval(credential: string | null, project: string, name: string):
-      PackImpact
+    signature: 'previewProjectPackRemoval(credential: string?, project: string, name: string): PackImpact'
     returns: PackImpact
     params:
       - name: credential
-        type: string | null
+        type: string?
       - name: project
         type: string
       - name: name
@@ -428,11 +424,11 @@ methods:
       [--fix]`, after the permission-model migration): every hosted family's members registered as
       records, member-qualified key entries rewritten to record ids, nobody's reach changed; a dry
       run writes nothing.
-    signature: 'upgradeMembers(apply: boolean): MemberUpgradeReport'
+    signature: 'upgradeMembers(apply: bool): MemberUpgradeReport'
     returns: MemberUpgradeReport
     params:
       - name: apply
-        type: boolean
+        type: bool
 status: complete
 createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-10-01T18:07:05.246Z'
+updatedAt: '2026-10-04T10:28:16.208Z'

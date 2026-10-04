@@ -106,16 +106,16 @@ methods:
     description: >-
       Forward to core_orchestrator.retireSpecialists: plan, and with apply write, the migration off
       the retired Specialist stereotype
-    signature: 'retireSpecialists(apply: boolean): SpecialistRetirement'
+    signature: 'retireSpecialists(apply: bool): SpecialistRetirement'
     returns: SpecialistRetirement
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the plan; false plans without writing
   - name: renameMethod
     description: 'Forward to core_orchestrator.renameMethod: rename a contract method and every reference to it'
     signature: >-
-      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean):
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool):
       MethodRename
     returns: MethodRename
     params:
@@ -129,7 +129,7 @@ methods:
         type: string
         description: Its new name, a camel-case identifier
       - name: pinSymbol
-        type: boolean
+        type: bool
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name; true when
           omitted
@@ -138,26 +138,26 @@ methods:
     description: >-
       Forward to core_orchestrator.repairForeignStepFields: plan, and with apply write, the removal
       of every narrative-step field its own step type cannot have. Without apply nothing is written.
-    signature: 'repairForeignStepFields(apply: boolean): ForeignFieldRepair[]'
-    returns: ForeignFieldRepair[]
+    signature: 'repairForeignStepFields(apply: bool): list<ForeignFieldRepair>'
+    returns: list<ForeignFieldRepair>
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the repair; false plans without writing
   - name: findLegacySpecFiles
     description: >-
       Published read: the bound tree's spec files stored under a legacy (undotted) name, each with
       the name the current layout expects — what `wairon doctor` reports and `validate` warns about
       before a migration.
-    signature: 'findLegacySpecFiles(): LegacySpecFile[]'
-    returns: LegacySpecFile[]
+    signature: 'findLegacySpecFiles(): list<LegacySpecFile>'
+    returns: list<LegacySpecFile>
     params: []
   - name: findChainingSubprojectsMissingConfig
     description: >-
       Published read: the chained subproject directories under a root that hold a spec tree but no
       project configuration.
-    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): string[]'
-    returns: string[]
+    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): list<string>'
+    returns: list<string>
     params:
       - name: projectRoot
         type: string
@@ -165,8 +165,8 @@ methods:
     description: >-
       Published repair: write a project configuration for every chained subproject under a root that
       has a spec tree but none, leaving its specs untouched; answers the directories repaired.
-    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): string[]'
-    returns: string[]
+    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): list<string>'
+    returns: list<string>
     params:
       - name: projectRoot
         type: string
@@ -175,8 +175,8 @@ methods:
       Published write: move one legacy L1 mount of the bound project into its `members` (path and
       description), deleting the L1 document; idempotent. Routed through the core orchestrator.
       Returns whether it wrote.
-    signature: 'moveMountToMembers(alias: string): boolean'
-    returns: boolean
+    signature: 'moveMountToMembers(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -188,8 +188,8 @@ methods:
       Published write: re-save one spec with every reference in its canonical stage-3 form, targets
       unchanged; idempotent. Routed through the core orchestrator. Returns whether the stored text
       changed.
-    signature: 'normalizeReferences(kind: string, id: string): boolean'
-    returns: boolean
+    signature: 'normalizeReferences(kind: string, id: string): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -226,8 +226,8 @@ methods:
       Published write: respell references at parsed positions of one spec of the family, each edit
       replacing exactly its text at exactly its position; refused whole when an edit's text is not
       there. Answers whether the stored text changed. Routed through the core orchestrator.
-    signature: 'rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean'
-    returns: boolean
+    signature: 'rewriteReferences(kind: string, id: string, edits: list<ReferenceEdit>): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -236,7 +236,7 @@ methods:
         type: string
         description: The spec's in-memory key, from the family's top root
       - name: edits
-        type: ReferenceEdit[]
+        type: list<ReferenceEdit>
         description: The edits for this spec
     guarantees:
       - idempotent
@@ -271,8 +271,8 @@ methods:
     description: >-
       Published write: change an existing member's `as`, source or description (stage 8). Routed
       through the core orchestrator.
-    signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
-    returns: boolean
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -284,7 +284,7 @@ methods:
     description: >-
       Published write: move a git member's pinned commit — `wairon member update` (stage 8). Routed
       through the core orchestrator.
-    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: boolean): MemberAdvance'
+    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: bool): MemberAdvance'
     returns: MemberAdvance
     params:
       - name: alias
@@ -299,7 +299,7 @@ methods:
         description: An exact commit
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Report and write nothing
         optional: true
   - name: repairSignatures
@@ -307,11 +307,11 @@ methods:
       Forward to core_orchestrator.repairSignatures: plan, and with apply write, the regeneration of
       every stored signature text its params contradict and the removal of every restatement equal
       to its method's signature source. Without apply nothing is written.
-    signature: 'repairSignatures(apply: boolean): SignatureTextRepair[]'
-    returns: SignatureTextRepair[]
+    signature: 'repairSignatures(apply: bool): list<SignatureTextRepair>'
+    returns: list<SignatureTextRepair>
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the repair; false plans without writing
   - name: repairTypeSpellings
     description: >-
@@ -319,12 +319,12 @@ methods:
       every stored type position that is an alias into its canonical spelling, with int proposed
       (never written) for number positions whose name plainly says an integer and the positions only
       an author can settle listed. Without apply nothing is written.
-    signature: 'repairTypeSpellings(apply: boolean): TypeSpellingRepair[]'
-    returns: TypeSpellingRepair[]
+    signature: 'repairTypeSpellings(apply: bool): list<TypeSpellingRepair>'
+    returns: list<TypeSpellingRepair>
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the rewrite; false plans without writing
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-03T22:07:17.323Z'
+updatedAt: '2026-10-04T10:19:37.903Z'

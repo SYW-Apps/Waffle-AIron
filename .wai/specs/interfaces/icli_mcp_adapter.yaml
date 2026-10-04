@@ -12,8 +12,8 @@ methods:
       URL and (when the entry carries them) the project selector and bearer credential. Returns null
       when no wairon entry is registered anywhere. Pure read — never writes, and never fails a
       command: an unparseable config reads as "nothing registered".
-    signature: 'detectHostedMcpSource(cwd?: string): DetectedMcpSource | null'
-    returns: DetectedMcpSource | null
+    signature: 'detectHostedMcpSource(cwd?: string): DetectedMcpSource?'
+    returns: DetectedMcpSource?
     params:
       - name: cwd
         type: string
@@ -51,15 +51,15 @@ methods:
       silent mis-attachment is observable. The entry point an AI tool spawns; it does not return
       until the transport closes.
     signature: 'serveMcpStdio(): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: planInstall
     description: >-
       What installMcpServer would write for these options, computed exactly as it computes it and
       writing nothing: per resolved backend, the file, whether it lies outside the project root, the
       wairon entry it holds now and the one it would get, and whether it is already up to date. The
       plan a caller prints and confirms before it lets an install touch a machine-wide file.
-    signature: 'planInstall(options: mcp_install_options): McpConfigWrite[]'
-    returns: McpConfigWrite[]
+    signature: 'planInstall(options: mcp_install_options): list<McpConfigWrite>'
+    returns: list<McpConfigWrite>
     params:
       - name: options
         type: mcp_install_options
@@ -71,8 +71,8 @@ methods:
       Where the legacy global Antigravity plugin sits (`<gemini home>/config/plugins/wairon`), or
       null when there is none. A plugin named "wairon" collides with the wairon MCP server, so a
       repair retires it. Pure read.
-    signature: 'findLegacyPlugin(): string | null'
-    returns: string | null
+    signature: 'findLegacyPlugin(): string?'
+    returns: string?
     params: []
     guarantees:
       - idempotent
@@ -82,9 +82,9 @@ methods:
       home>/config/wairon-plugin.wairon-backup-<timestamp>`, where it no longer loads — instead of
       deleting it, and answer where it went; null when there was none. Never deletes: the directory
       is the user's, and a backup is what lets a mistaken repair be undone.
-    signature: 'retireLegacyPlugin(): string | null'
-    returns: string | null
+    signature: 'retireLegacyPlugin(): string?'
+    returns: string?
     params: []
 status: complete
 createdAt: '2026-08-12T18:42:15.287Z'
-updatedAt: '2026-10-03T20:53:54.404Z'
+updatedAt: '2026-10-04T10:18:36.273Z'

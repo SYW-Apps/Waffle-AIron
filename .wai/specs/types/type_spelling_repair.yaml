@@ -19,17 +19,17 @@ fields:
     description: interface | type
     optional: false
   - name: rewritten
-    type: TypeRespelling[]
+    type: list<TypeRespelling>
     description: Each alias position rewritten to its canonical spelling (written when apply)
     optional: false
   - name: proposals
-    type: TypeRespelling[]
+    type: list<TypeRespelling>
     description: >-
       Each number position whose name plainly says an integer, with int as the proposed spelling;
       never written by the repair
     optional: false
   - name: authorNeeded
-    type: TypeExpressionProblem[]
+    type: list<TypeExpressionProblem>
     description: >-
       Each position no mechanical rewrite can settle: an inline function type (name a signature
       type), a literal union (name an enum), a union mixing a primitive, a number without a
@@ -38,4 +38,4 @@ fields:
 methods: []
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:03:25.363Z'
-updatedAt: '2026-10-03T22:21:53.674Z'
+updatedAt: '2026-10-04T10:21:23.910Z'

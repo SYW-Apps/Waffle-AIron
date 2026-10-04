@@ -22,21 +22,21 @@ fields:
       name.
     optional: false
   - name: imported
-    type: string[]
+    type: list<string>
     description: >-
       Test files that IMPORT that symbol — when the method's realizing file is known, only from that
       file or from a module re-exporting it from there (aliased or not, through any chain); a
       same-named import from another module is not this method's. The high-confidence list
     optional: false
   - name: mentioned
-    type: string[]
+    type: list<string>
     description: >-
       Test files that name the symbol without importing it — usually a test driving the method
       through a portal or a helper. A file that binds the name to ANOTHER module is not here: the
       name in it is that module's function. Empty when indiscriminate is true
     optional: false
   - name: indiscriminate
-    type: boolean
+    type: bool
     description: >-
       True when the bare name matched more than a tenth of the walked test files, so mentioning it
       carries no signal and `mentioned` was withheld. Saying the name is too common is an answer;
@@ -47,4 +47,4 @@ fields:
 methods: []
 sourcePath: src/core/source-analysis.ts
 createdAt: '2026-09-20T13:25:41.354Z'
-updatedAt: '2026-09-26T10:59:10.717Z'
+updatedAt: '2026-10-04T10:21:17.327Z'

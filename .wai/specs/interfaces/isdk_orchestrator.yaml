@@ -10,8 +10,8 @@ methods:
     description: >-
       Render the scaffold file map (pack_scaffold) and write it under the target directory
       (adapter); return the created file paths.
-    signature: 'scaffoldPack(request: pack_scaffold_request): string[]'
-    returns: string[]
+    signature: 'scaffoldPack(request: pack_scaffold_request): list<string>'
+    returns: list<string>
     params:
       - name: request
         type: pack_scaffold_request
@@ -61,12 +61,12 @@ methods:
       assemble the files into a .waitree (adapter). Returns the archive bytes + sealed manifest +
       suggested file name.
     signature: >-
-      buildTreeArchive(roots: tree_root_source[], projectName: string, stateId?: string,
-      includeDerived?: boolean): TreeBuildResult
+      buildTreeArchive(roots: list<tree_root_source>, projectName: string, stateId?: string,
+      includeDerived?: bool): TreeBuildResult
     returns: TreeBuildResult
     params:
       - name: roots
-        type: tree_root_source[]
+        type: list<tree_root_source>
         description: >-
           Every root to pack, top project first — discovered by the caller, which owns chaining
           knowledge
@@ -77,7 +77,7 @@ methods:
         description: The exporting tree's content state, stamped as provenance
         optional: true
       - name: includeDerived
-        type: boolean
+        type: bool
         description: Pack regenerable artifacts too (default false)
         optional: true
   - name: inspectTreeArchive
@@ -99,7 +99,7 @@ methods:
       is the caller's policy.
     signature: >-
       extractTreeArchive(archive: bytes, destDir: string, limits?: pack_extraction_limits,
-      refuseExecutableEntries?: boolean): TreeExtractionResult
+      refuseExecutableEntries?: bool): TreeExtractionResult
     returns: TreeExtractionResult
     params:
       - name: archive
@@ -110,9 +110,9 @@ methods:
         type: pack_extraction_limits
         optional: true
       - name: refuseExecutableEntries
-        type: boolean
+        type: bool
         description: Apply the portable-path guard — set by any surface accepting an archive over the wire
         optional: true
 status: complete
 createdAt: '2026-07-21T18:13:51.375Z'
-updatedAt: '2026-10-03T20:54:07.326Z'
+updatedAt: '2026-10-04T10:19:27.757Z'

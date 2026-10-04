@@ -19,7 +19,7 @@ fields:
     description: The matching contract entry (resolved only)
     optional: true
   - name: providers
-    type: string[]
+    type: list<string>
     description: The providers whose snapshots disagree on the contract (ambiguous only)
     optional: true
 methods:
@@ -33,4 +33,4 @@ methods:
       SURFACE_REF_AMBIGUOUS itself, so the finding reads the same on every kind of edge.
 sourcePath: src/models/surface-references.ts
 createdAt: '2026-09-14T06:03:40.298Z'
-updatedAt: '2026-09-19T11:07:19.202Z'
+updatedAt: '2026-10-04T10:21:14.683Z'

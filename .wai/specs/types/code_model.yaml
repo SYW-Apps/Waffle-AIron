@@ -9,7 +9,7 @@ description: >-
 subsystem: sdd_validator
 fields:
   - name: files
-    type: SourceFileFacts[]
+    type: list<SourceFileFacts>
     description: >-
       One facts entry per distinct resolved source path — an implementation's, a method's or a sim
       harness's — including missing/escaped/unreadable entries, so rules stay pure lookups
@@ -19,7 +19,7 @@ fields:
     description: The root every source path was resolved and containment-checked against
     optional: false
   - name: rootFiles
-    type: string[]
+    type: list<string>
     description: >-
       Every source file the declared source-root walk found, as canonical keys in walk order — the
       domain the unclaimed-source rule judges. Empty when the project declares no source roots,
@@ -35,10 +35,10 @@ methods:
       form every facts entry is stored under and every lookup or path comparison uses
   - name: factsFor
     signature: 'factsFor(path: string): SourceFileFacts | undefined'
-    returns: SourceFileFacts | undefined
+    returns: SourceFileFacts?
     description: >-
       The facts entry for a source path, looked up by its canonical key; undefined when the run
       analyzed no such path
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-09-19T11:07:06.167Z'
+updatedAt: '2026-10-04T10:19:58.817Z'

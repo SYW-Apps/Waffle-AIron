@@ -7,11 +7,11 @@ description: >-
   project specs.
 fields:
   - name: nodes
-    type: LandscapeNode[]
+    type: list<LandscapeNode>
     description: Organization unit, project, and public-interface nodes.
     optional: false
   - name: edges
-    type: LandscapeEdge[]
+    type: list<LandscapeEdge>
     description: Hierarchy, placement, publication, and relation edges.
     optional: false
   - name: generatedAt
@@ -25,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:44.223Z'
-updatedAt: '2026-09-19T11:07:09.884Z'
+updatedAt: '2026-10-04T10:20:21.253Z'

@@ -15,15 +15,15 @@ fields:
     description: The stored spec's id.
     optional: false
   - name: written
-    type: boolean
+    type: bool
     description: 'False when the merged spec equals what is stored: nothing reached disk.'
     optional: false
   - name: changes
-    type: SpecChange[]
+    type: list<SpecChange>
     description: Every change the write made; empty exactly when `written` is false.
     optional: false
   - name: notices
-    type: string[]
+    type: list<string>
     description: Store placement notices, component gate warnings and delta notices.
     optional: false
   - name: summary
@@ -31,14 +31,14 @@ fields:
     description: One line for people, naming the spec and either the change count or that nothing was written.
     optional: false
   - name: dryRun
-    type: boolean
+    type: bool
     description: >-
       True when the caller asked what the delta would do and nothing was written. `written` is false
       for a dry run exactly as it is for a delta that changed nothing, and only this field tells the
       two apart.
     optional: false
   - name: ineffective
-    type: string[]
+    type: list<string>
     description: >-
       Every path the delta named that the write did not act on, each with why: a key the level's
       schema drops (a nested typo the permissive delta cannot refuse), or a value the stored spec
@@ -46,7 +46,7 @@ fields:
       as a completed edit.
     optional: false
   - name: testsToRevisit
-    type: TestsToRevisit[]
+    type: list<TestsToRevisit>
     description: >-
       The tests that encode a method this write changed or deleted, one entry per such method. Empty
       when the write touched no method, when the project declares no test roots, or when nothing
@@ -56,7 +56,7 @@ fields:
       the one that reports it.
     optional: false
   - name: strippedKeys
-    type: string[]
+    type: list<string>
     description: >-
       Keys the stored document on disk carries that its level's schema does not know — read from the
       raw file, not the parsed spec, since the parse already discards them — which this write will
@@ -65,7 +65,7 @@ fields:
       silently lost.
     optional: true
   - name: respellings
-    type: TypeRespelling[]
+    type: list<TypeRespelling>
     description: >-
       Each type position of the merged spec the write normalised (or, on a dry run, would): what the
       delta or the stored file wrote against the canonical spelling stored. Empty when every
@@ -74,4 +74,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-10-03T22:04:23.505Z'
+updatedAt: '2026-10-04T10:21:07.659Z'

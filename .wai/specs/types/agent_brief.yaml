@@ -29,13 +29,13 @@ fields:
     description: Domain the agent belongs to (absent = global root).
     optional: true
   - name: ownedPaths
-    type: string[]
+    type: list<string>
     description: >-
       Glob patterns of the files this agent owns — the write-scope fence the spawning session passes
       to the subagent.
     optional: false
   - name: readPaths
-    type: string[]
+    type: list<string>
     description: >-
       Spec paths the subagent should read first (system spec, component/interface/implementation
       specs) — richer than the generated files ever carried.
@@ -69,7 +69,7 @@ fields:
     description: The execution budget (turns, tools) for this agent; absent unless execution.tier opts in.
     optional: true
   - name: typeMapping
-    type: string[]
+    type: list<string>
     description: >-
       How the neutral types of the contracts this agent implements are spelled in its language
       (type_dialect.mappingLines of the dialect for the language its implementations' technologies
@@ -79,4 +79,4 @@ fields:
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-08-08T11:11:36.097Z'
-updatedAt: '2026-10-03T22:04:36.395Z'
+updatedAt: '2026-10-04T10:19:50.160Z'

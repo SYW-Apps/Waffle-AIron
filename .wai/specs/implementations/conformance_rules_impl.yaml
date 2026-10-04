@@ -1710,6 +1710,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: asyncConformanceRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-03T22:11:32.454Z'
+updatedAt: '2026-10-04T10:34:18.205Z'

@@ -12,8 +12,8 @@ component: project_ops_orchestrator
 methods:
   - name: listGlobalPacks
     description: Forward to pack_orchestrator.listGlobalPacks (instance-level project:admin upstream).
-    signature: 'listGlobalPacks(credential: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listGlobalPacks(credential: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -41,8 +41,8 @@ methods:
         type: string
   - name: listProjectPacks
     description: Forward to pack_orchestrator.listProjectPacks (project:read over the project upstream).
-    signature: 'listProjectPacks(credential: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listProjectPacks(credential: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -116,8 +116,8 @@ methods:
         type: string
   - name: listProducers
     description: Forward to admin_orchestrator.listProducers (project:admin over the project upstream).
-    signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
-    returns: ProducerConfig[]
+    signature: 'listProducers(credential: string, project: string): list<ProducerConfig>'
+    returns: list<ProducerConfig>
     params:
       - name: credential
         type: string
@@ -151,8 +151,8 @@ methods:
         type: string
   - name: produceProducer
     description: Forward to admin_orchestrator.produceProducer (project:admin over the project upstream).
-    signature: 'produceProducer(credential: string, project: string, target: string): void'
-    returns: void
+    signature: 'produceProducer(credential: string, project: string, target: string): async void'
+    returns: async void
     params:
       - name: credential
         type: string
@@ -230,8 +230,8 @@ methods:
   - name: configureGitSync
     description: Forward to admin_orchestrator.configureGitSync (project:admin over the project upstream).
     signature: >-
-      configureGitSync(credential: string, project: string, periodicSyncMinutes?: number,
-      skipIfClean?: boolean): void
+      configureGitSync(credential: string, project: string, periodicSyncMinutes?: int, skipIfClean?:
+      bool): void
     returns: void
     params:
       - name: credential
@@ -239,17 +239,17 @@ methods:
       - name: project
         type: string
       - name: periodicSyncMinutes
-        type: number
+        type: int
         optional: true
       - name: skipIfClean
-        type: boolean
+        type: bool
         optional: true
   - name: queryAuditEvents
     description: >-
       Forward to identity_orchestrator.queryAuditEvents (filtered to the caller's project:admin
       visible scopes upstream).
-    signature: 'queryAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
-    returns: AuditEvent[]
+    signature: 'queryAuditEvents(credential: string, query: AuditQuery): list<AuditEvent>'
+    returns: list<AuditEvent>
     params:
       - name: credential
         type: string
@@ -257,8 +257,8 @@ methods:
         type: AuditQuery
   - name: countAuditEvents
     description: Forward to identity_orchestrator.countAuditEvents (scoped identically to queryAuditEvents).
-    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
-    returns: number
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): int'
+    returns: int
     params:
       - name: credential
         type: string
@@ -288,8 +288,8 @@ methods:
     description: >-
       Forward to git_backing_orchestrator.listBindings (filtered to the caller's project:admin reach
       upstream).
-    signature: 'listBackingBindings(credential: string): GitBackingBinding[]'
-    returns: GitBackingBinding[]
+    signature: 'listBackingBindings(credential: string): list<GitBackingBinding>'
+    returns: list<GitBackingBinding>
     params:
       - name: credential
         type: string
@@ -327,8 +327,8 @@ methods:
     description: >-
       Forward to git_backing_orchestrator.syncScope (project:admin over the binding's own scope
       upstream).
-    signature: 'syncBackingScope(credential: string, bindingId: string): boolean'
-    returns: boolean
+    signature: 'syncBackingScope(credential: string, bindingId: string): bool'
+    returns: bool
     params:
       - name: credential
         type: string
@@ -369,15 +369,15 @@ methods:
         optional: true
   - name: listAvailableProfiles
     description: Forward to pack_orchestrator.listAvailableProfiles with the caller's credential.
-    signature: 'listAvailableProfiles(credential: string): AvailableProfile[]'
-    returns: AvailableProfile[]
+    signature: 'listAvailableProfiles(credential: string): list<AvailableProfile>'
+    returns: list<AvailableProfile>
     params:
       - name: credential
         type: string
   - name: listAdoptableProjectPacks
     description: Forward to pack_orchestrator.listAdoptableProjectPacks with the caller's credential.
-    signature: 'listAdoptableProjectPacks(credential: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listAdoptableProjectPacks(credential: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -422,8 +422,8 @@ methods:
     description: >-
       Forward to pack_orchestrator.listProjectProfiles with the caller's credential (project:read
       over the project upstream).
-    signature: 'listProjectProfiles(credential: string, project: string): AvailableProfile[]'
-    returns: AvailableProfile[]
+    signature: 'listProjectProfiles(credential: string, project: string): list<AvailableProfile>'
+    returns: list<AvailableProfile>
     params:
       - name: credential
         type: string
@@ -432,8 +432,8 @@ methods:
   - name: exportProjectTree
     description: Forward to admin_orchestrator.exportProjectTree (project:read over the project upstream).
     signature: >-
-      exportProjectTree(credential: string, project: string, includeDerived?: boolean,
-      allowPartial?: boolean): TreeExportResult
+      exportProjectTree(credential: string, project: string, includeDerived?: bool, allowPartial?:
+      bool): TreeExportResult
     returns: TreeExportResult
     params:
       - name: credential
@@ -441,10 +441,10 @@ methods:
       - name: project
         type: string
       - name: includeDerived
-        type: boolean
+        type: bool
         optional: true
       - name: allowPartial
-        type: boolean
+        type: bool
         description: >-
           Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left
           out in the result, instead of refusing the whole export.
@@ -455,7 +455,7 @@ methods:
       executable entries always refused).
     signature: >-
       importProjectTree(credential: string, project: string, archive: bytes, replaceExisting?:
-      boolean): TreeImportResult
+      bool): TreeImportResult
     returns: TreeImportResult
     params:
       - name: credential
@@ -465,7 +465,7 @@ methods:
       - name: archive
         type: bytes
       - name: replaceExisting
-        type: boolean
+        type: bool
         optional: true
   - name: previewProjectPack
     description: >-
@@ -505,4 +505,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-10-03T20:54:05.103Z'
+updatedAt: '2026-10-04T10:32:10.867Z'

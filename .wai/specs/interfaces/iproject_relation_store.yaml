@@ -9,18 +9,18 @@ methods:
     description: >-
       Load the persisted cross-project relation set from the relations.json file under the hosted
       data root and hold it as the authoritative in-memory representation, returning it.
-    signature: 'load(): ProjectRelationRecord[]'
-    returns: ProjectRelationRecord[]
+    signature: 'load(): list<ProjectRelationRecord>'
+    returns: list<ProjectRelationRecord>
     params: []
   - name: replaceAll
     description: >-
       Atomically swap the in-memory relation set to the supplied complete set after the registry has
       persisted it.
-    signature: 'replaceAll(relations: ProjectRelationRecord[]): void'
+    signature: 'replaceAll(relations: list<ProjectRelationRecord>): void'
     returns: void
     params:
       - name: relations
-        type: ProjectRelationRecord[]
+        type: list<ProjectRelationRecord>
         description: The complete relation set that replaces the stored one
 lint:
   allow:
@@ -38,4 +38,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:05:52.453Z'
-updatedAt: '2026-10-03T16:46:54.327Z'
+updatedAt: '2026-10-04T10:19:22.340Z'

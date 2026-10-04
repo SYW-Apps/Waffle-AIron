@@ -27,12 +27,12 @@ methods:
       markdown, or null when the project defines none. Read LIVE on every brief composition — user
       edits apply on the next fetch; wairon scaffolds this file once on request and never
       regenerates or prunes it (it is user-owned).
-    signature: 'loadAgentOverride(agentId: string): string | null'
-    returns: string | null
+    signature: 'loadAgentOverride(agentId: string): string?'
+    returns: string?
     params:
       - name: agentId
         type: string
         description: The resolved agent id whose guidance file to read.
 status: complete
 createdAt: '2026-08-08T11:11:55.834Z'
-updatedAt: '2026-10-03T16:47:03.525Z'
+updatedAt: '2026-10-04T10:19:42.565Z'

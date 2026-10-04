@@ -11,23 +11,23 @@ methods:
       first, then pack rules) with the two audits of declared exceptions forced last — the
       conformance debt register, then the lint allows. Both read what the earlier rules did with a
       declared exception, so a pack rule registered after the built-ins must still run before them.
-    signature: 'ruleSequence(): SddRule[]'
-    returns: SddRule[]
+    signature: 'ruleSequence(): list<SddRule>'
+    returns: list<SddRule>
     params: []
   - name: knownIssueCodes
     description: >-
       Return every issue code any registered rule can emit — the set used to validate lint.allow
       references (UNKNOWN_LINT_ALLOW_CODE).
-    signature: 'knownIssueCodes(): RuleCode[]'
-    returns: RuleCode[]
+    signature: 'knownIssueCodes(): list<RuleCode>'
+    returns: list<RuleCode>
     params: []
   - name: specScopedRules
     description: >-
       Return the spec-scoped rules in run order: the rules that read only one spec's own fields,
       which the write gate runs on a candidate before it is saved.
-    signature: 'specScopedRules(): SddRule[]'
-    returns: SddRule[]
+    signature: 'specScopedRules(): list<SddRule>'
+    returns: list<SddRule>
     params: []
 status: complete
 createdAt: '2026-07-14T19:17:17.309Z'
-updatedAt: '2026-09-19T19:06:49.321Z'
+updatedAt: '2026-10-04T10:19:26.523Z'

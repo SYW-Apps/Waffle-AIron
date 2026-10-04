@@ -6,7 +6,7 @@ methods:
   - name: readAllSnapshots
     description: Parse every snapshot file under .wai/surfaces/ (missing dir yields empty).
     signature: 'readAllSnapshots(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    returns: list<SurfaceSnapshot>
   - name: writeSnapshot
     description: Write/overwrite one snapshot file named by producing project.
     signature: 'writeSnapshot(snapshot: SurfaceSnapshot): void'
@@ -16,11 +16,11 @@ methods:
         type: SurfaceSnapshot
   - name: deleteSnapshot
     description: Remove a snapshot file.
-    signature: 'deleteSnapshot(projectName: string): boolean'
-    returns: boolean
+    signature: 'deleteSnapshot(projectName: string): bool'
+    returns: bool
     params:
       - name: projectName
         type: string
 status: complete
 createdAt: '2026-07-10T23:13:41.939Z'
-updatedAt: '2026-09-26T18:11:40.369Z'
+updatedAt: '2026-10-04T10:19:40.226Z'

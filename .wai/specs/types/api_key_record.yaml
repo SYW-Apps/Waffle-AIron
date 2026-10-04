@@ -24,7 +24,7 @@ fields:
       master-only mintKey path; unset by the user-bound mint flows.
     optional: true
   - name: projects
-    type: string[]
+    type: list<string>
     description: >-
       The token's project narrowing: the hosted record ids this token may act on, or "*" for the
       owner's full accessible set. An entry naming a project covers that project and every member
@@ -71,4 +71,4 @@ methods:
     symbol: hashToken
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-10-03T17:57:22.779Z'
+updatedAt: '2026-10-04T10:19:51.163Z'

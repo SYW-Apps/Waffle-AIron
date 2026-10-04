@@ -19,21 +19,21 @@ fields:
     description: The spec as the caller stated it, before anything is carried into it
     optional: false
   - name: fields
-    type: string[]
+    type: list<string>
     description: >-
       The spec-level fields this caller's input can express. A field on the list and absent from
       spec is cleared by omission (and reported); a field off the list is carried from the stored
       spec
     optional: false
   - name: memberFields
-    type: string[] | undefined
+    type: list<string>
     description: >-
       The per-method fields this caller's input can express, for the kinds whose methods carry
       fields of their own (interface, implementation): a method's unexpressed fields are carried
       from the stored method of the same name
     optional: true
   - name: status
-    type: string | undefined
+    type: string
     description: >-
       The lifecycle status the caller stated: draft, design or complete. Absent keeps the stored
       status, and draft for a new spec
@@ -41,7 +41,7 @@ fields:
 methods:
   - name: parent
     signature: 'parent(): SpecParent | null'
-    returns: SpecParent | null
+    returns: SpecParent?
     description: >-
       The spec this one cannot be written without: the L0 for a subsystem, the subsystem named by a
       component, the component named by an interface, the contract named by an implementation, and
@@ -84,4 +84,4 @@ methods:
     symbol: applyRestatement
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:24.425Z'
-updatedAt: '2026-10-03T22:04:49.437Z'
+updatedAt: '2026-10-04T10:21:09.666Z'

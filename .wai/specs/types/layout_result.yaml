@@ -7,13 +7,13 @@ description: >-
   drawing what is inside.
 fields:
   - name: boxes
-    type: Record<string, LayoutBox>
+    type: map<string, LayoutBox>
     description: >-
       Absolute box per visible component, including members placed inside the pattern that owns
       them, keyed by component id.
     optional: false
   - name: subs
-    type: Record<string, LayoutBox>
+    type: map<string, LayoutBox>
     description: >-
       Absolute box per subsystem container, keyed by subsystem id, each also carrying whether it is
       collapsed.
@@ -21,4 +21,4 @@ fields:
 methods: []
 sourcePath: src/core/canvas-layout.ts
 createdAt: '2026-09-20T16:40:42.601Z'
-updatedAt: '2026-09-20T16:40:42.613Z'
+updatedAt: '2026-10-04T10:20:22.254Z'

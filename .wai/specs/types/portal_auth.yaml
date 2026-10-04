@@ -40,7 +40,7 @@ fields:
     description: 'oauth2 only: the refresh endpoint URL.'
     optional: true
   - name: scopes
-    type: object[]
+    type: list<any>
     description: 'oauth2 only: the offered scopes; each element is { name: string, description: string }.'
     optional: true
   - name: flow
@@ -62,4 +62,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-23T15:53:47.353Z'
-updatedAt: '2026-09-19T11:07:13.398Z'
+updatedAt: '2026-10-04T10:20:45.935Z'

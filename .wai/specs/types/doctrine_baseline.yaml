@@ -8,7 +8,7 @@ description: >-
   stored.
 fields:
   - name: ruleDefaults
-    type: Map<string, string>
+    type: map<string, string>
     description: >-
       Every builtin rule code → its default severity: rule_repository.knownIssueCodes() read right
       after registerBuiltinRules(), before any pack rule is registered. The family-run codes are not
@@ -16,25 +16,25 @@ fields:
       a pack profile naming one changes nothing (an inert change).
     optional: false
   - name: profiles
-    type: string[]
+    type: list<string>
     description: >-
       The builtin profile ids (spec_validator.builtinProfileIds). A pack profile with one of these
       ids REDEFINES that builtin for every project governed by it — without the project changing its
       projectType.
     optional: false
   - name: projectKinds
-    type: string[]
+    type: list<string>
     description: The builtin composite project kinds (spec_validator.builtinProjectKinds).
     optional: false
   - name: stereotypes
-    type: string[]
+    type: list<string>
     description: >-
       The authorable building blocks and patterns (Portal, Orchestrator, Supervisor, Actor, Store,
       Index, Query, Registry, Adapter, Observer, Repository, and the UI View / FeatureComponent /
       RouterComponent).
     optional: false
   - name: guarantees
-    type: string[]
+    type: list<string>
     description: 'The builtin guarantee tokens: idempotent, atomic, transactional, exactly-once.'
     optional: false
   - name: designDepth
@@ -46,4 +46,4 @@ fields:
 methods: []
 sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:26.284Z'
-updatedAt: '2026-09-29T16:41:13.846Z'
+updatedAt: '2026-10-04T10:20:03.888Z'

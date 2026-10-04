@@ -265,9 +265,13 @@ methods:
         type: local
       - stepNumber: 5
         label: checkHollow
-        description: 'Branch: does the type declare neither fields nor methods?'
+        description: >-
+          Branch: does the type model nothing — no fields, no methods, no enum values and no
+          signature returns?
         type: branch
-        condition: the type has no fields (or an empty fields list) and no methods (or an empty methods list)
+        condition: >-
+          the type has no fields, no methods, no values and no returns (each absent or an empty
+          list)
         onFalseStep: 1
       - stepNumber: 6
         label: typesEnd
@@ -1348,6 +1352,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: enumTypesRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-03T22:06:11.343Z'
+updatedAt: '2026-10-04T10:34:17.204Z'

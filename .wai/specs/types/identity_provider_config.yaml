@@ -28,15 +28,15 @@ fields:
     description: Secret repository key holding the client secret; never the raw secret.
     optional: true
   - name: allowedDomains
-    type: string[]
+    type: list<string>
     description: Optional email domains allowed to authenticate through this provider.
     optional: true
   - name: adminGroupClaims
-    type: string[]
+    type: list<string>
     description: External group or claim values mapped to hosted instance admin grants.
     optional: true
   - name: enabled
-    type: boolean
+    type: bool
     description: Whether this provider is available for sign-in.
     optional: false
   - name: updatedAt
@@ -44,7 +44,7 @@ fields:
     description: ISO-8601 update timestamp.
     optional: false
   - name: allowedRedirectUris
-    type: string[]
+    type: list<string>
     description: >-
       Exact-match allowlist of redirect URIs accepted for this provider's SSO flow. When set and
       non-empty, a redirectUri not on the list is refused (server-side redirect_uri pinning). When
@@ -88,7 +88,7 @@ fields:
 methods:
   - name: admitsAsAdmin
     signature: 'admitsAsAdmin(groups: string[]): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a signed-in user's verified groups make them an admin through this provider: they
       intersect its adminGroupClaims. An unset or empty adminGroupClaims admits nobody.
@@ -96,4 +96,4 @@ methods:
     symbol: isInAdminGroup
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-10-03T17:53:16.410Z'
+updatedAt: '2026-10-04T10:20:17.912Z'

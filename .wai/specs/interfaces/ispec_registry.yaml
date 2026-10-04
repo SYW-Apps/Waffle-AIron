@@ -36,7 +36,7 @@ methods:
       paths use — same relativization, same schema parse — without touching the filesystem; returns
       one ROUNDTRIP_SERIALIZATION issue per refused spec and never throws for an unserializable one.
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
-    returns: ValidationIssue[]
+    returns: list<ValidationIssue>
     guarantees:
       - idempotent
   - name: invalidateCache
@@ -69,8 +69,8 @@ methods:
       hosted request nothing more is judged.
     signature: >-
       save(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
-      ImplementationSpec | TypeSpec): string[]
-    returns: string[]
+      ImplementationSpec | TypeSpec): list<string>
+    returns: list<string>
     params:
       - name: kind
         type: string
@@ -85,8 +85,8 @@ methods:
       none existed. A kind of system is refused: the L0 cannot be deleted. Inside a hosted request a
       spec of a subsystem the request may not change is refused before anything is removed
       (SubsystemWriteDenied), as save refuses it.
-    signature: 'delete(kind: string, id: string): boolean'
-    returns: boolean
+    signature: 'delete(kind: string, id: string): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -101,8 +101,8 @@ methods:
       carrying projectPath that the scan reads as a member declaration and never loads as a
       subsystem. Idempotent: false when the project holds no such document. The caller carries the
       mount's fields and declares the member first; this only removes the old form.
-    signature: 'deleteMount(alias: string): boolean'
-    returns: boolean
+    signature: 'deleteMount(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -121,8 +121,8 @@ methods:
       their spelling. Refuses a reference whose canonical form cannot be written (bound outside or
       unresolved while carrying a deprecated form), naming it. Answers whether the stored text
       changed; a spec already canonical writes nothing.
-    signature: 'normalizeReferences(kind: string, id: string): boolean'
-    returns: boolean
+    signature: 'normalizeReferences(kind: string, id: string): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -145,8 +145,8 @@ methods:
       substring-matches the file. Compares the serialized document with the stored one and writes
       through the file store only when they differ, answering whether it wrote; the lock is never
       touched.
-    signature: 'rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean'
-    returns: boolean
+    signature: 'rewriteReferences(kind: string, id: string, edits: list<ReferenceEdit>): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -155,10 +155,10 @@ methods:
         type: string
         description: The spec's in-memory key, from the family's top root
       - name: edits
-        type: ReferenceEdit[]
+        type: list<ReferenceEdit>
         description: The edits for this spec
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-10-03T13:39:58.936Z'
+updatedAt: '2026-10-04T10:19:38.243Z'

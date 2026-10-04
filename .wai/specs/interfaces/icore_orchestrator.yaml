@@ -215,11 +215,11 @@ methods:
     description: >-
       Project the current project's spec tree into a level-filtered WebGraphModel for the web UI,
       forwarded to the pure graph projection of architecture_diagrams.
-    signature: 'buildProjectGraph(level: number): WebGraphModel'
+    signature: 'buildProjectGraph(level: int): WebGraphModel'
     returns: WebGraphModel
     params:
       - name: level
-        type: number
+        type: int
   - name: resolveChainingParent
     description: >-
       Report whether the currently bound project root is a chained subproject of a parent project
@@ -1182,4 +1182,4 @@ methods:
         description: Write the rewrite; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T00:10:31.407Z'
+updatedAt: '2026-10-04T10:28:18.111Z'

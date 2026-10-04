@@ -32,17 +32,17 @@ fields:
     description: Optional stability label exported by the project.
     optional: true
   - name: methods
-    type: string[]
+    type: list<string>
     description: Public method signatures or operation names safe to expose to consumers.
     optional: false
   - name: endpoints
-    type: string[]
+    type: list<string>
     description: >-
       Redacted endpoint metadata safe to expose, such as method/path without secrets or host-private
       roots.
     optional: true
   - name: publicTypes
-    type: string[]
+    type: list<string>
     description: Referenced public DTO/value-object type ids that are safe to expose to consumers.
     optional: true
   - name: details
@@ -52,4 +52,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:10:56.643Z'
-updatedAt: '2026-09-19T11:07:14.921Z'
+updatedAt: '2026-10-04T10:20:53.832Z'

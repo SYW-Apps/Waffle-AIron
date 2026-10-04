@@ -17,10 +17,10 @@ fields:
     description: 'Audience distance class: department | instance | partner.'
     optional: false
   - name: interfaces
-    type: PublicInterfaceSummary[]
+    type: list<PublicInterfaceSummary>
     description: Redacted catalog-grade summaries, already audience-filtered for this observer.
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-11T09:38:08.814Z'
-updatedAt: '2026-09-19T11:07:20.965Z'
+updatedAt: '2026-10-04T10:21:27.200Z'

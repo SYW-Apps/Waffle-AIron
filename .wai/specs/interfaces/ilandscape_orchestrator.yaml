@@ -81,8 +81,8 @@ methods:
       Authenticate the credential; compute the caller's project:read visible scopes and deny when
       empty. List cross-project relations whose source or target project is an actionable project in
       the visible set (an instance-admin sees all). Reads are not audited.
-    signature: 'listRelations(credential: string, projectId?: string): ProjectRelationRecord[]'
-    returns: ProjectRelationRecord[]
+    signature: 'listRelations(credential: string, projectId?: string): list<ProjectRelationRecord>'
+    returns: list<ProjectRelationRecord>
     params:
       - name: credential
         type: string
@@ -121,4 +121,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T21:13:44.021Z'
-updatedAt: '2026-10-03T17:08:32.692Z'
+updatedAt: '2026-10-04T10:18:57.718Z'

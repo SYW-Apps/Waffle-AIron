@@ -34,7 +34,7 @@ fields:
     description: Optional lifecycle/status label for filtering and styling.
     optional: true
   - name: actionable
-    type: boolean
+    type: bool
     description: >-
       True when the caller can act on this scope (it is an actionable visible scope). False/absent
       on an ancestor-breadcrumb (context) organization unit included only so the hierarchy stays
@@ -44,4 +44,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:32.757Z'
-updatedAt: '2026-09-19T11:07:09.970Z'
+updatedAt: '2026-10-04T10:20:21.598Z'

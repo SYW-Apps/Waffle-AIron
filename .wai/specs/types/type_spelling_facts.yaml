@@ -9,11 +9,11 @@ description: >-
 subsystem: sdd_core
 fields:
   - name: respellings
-    type: TypeRespelling[]
+    type: list<TypeRespelling>
     description: One per stored position whose text is an alias (TYPE_SPELLING_STALE)
     optional: false
   - name: problems
-    type: TypeExpressionProblem[]
+    type: list<TypeExpressionProblem>
     description: >-
       One per stored position that is not canonical (TYPE_EXPRESSION_INVALID, TYPE_POSITION_INVALID,
       TYPE_FORM_UNSUPPORTED, TYPE_NOT_NEUTRAL)
@@ -21,4 +21,4 @@ fields:
 methods: []
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:03:20.274Z'
-updatedAt: '2026-10-03T22:21:53.211Z'
+updatedAt: '2026-10-04T10:21:23.583Z'

@@ -4,10 +4,16 @@
 // flags one way without reaching into the validator for it.
 // ---------------------------------------------------------------------------
 
+/**
+ * member_depth — how far a run or a scan reaches into a project's members:
+ * every level (true), none (false), or that many levels (a whole number).
+ */
+export type MemberDepth = boolean | number;
+
 /** The two switches the choice between the runs reads. */
 export interface FamilySwitches {
   family?: boolean;
-  recursive?: boolean | number;
+  recursive?: MemberDepth;
 }
 
 /**

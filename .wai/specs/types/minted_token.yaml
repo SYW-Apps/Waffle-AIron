@@ -13,11 +13,11 @@ fields:
     description: The plaintext token, shown exactly once and never stored
     optional: false
   - name: mapped
-    type: string[]
+    type: list<string>
     description: >-
       One line per deprecated member-qualified entry: '<qualified entry> -> <member record id>'
       (e.g. 'platform::billing -> billing'); empty when every entry was stored as asked
     optional: false
 methods: []
 createdAt: '2026-10-01T18:06:48.023Z'
-updatedAt: '2026-10-01T18:06:48.024Z'
+updatedAt: '2026-10-04T10:20:33.614Z'

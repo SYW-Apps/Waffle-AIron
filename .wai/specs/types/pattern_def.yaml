@@ -19,10 +19,10 @@ fields:
     description: Human-readable description of the pattern.
     optional: true
   - name: metadata
-    type: Json
+    type: any
     description: Optional free-form metadata carried with the pattern.
     optional: true
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:56:22.460Z'
-updatedAt: '2026-09-19T11:07:12.833Z'
+updatedAt: '2026-10-04T10:20:42.749Z'

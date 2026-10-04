@@ -6,18 +6,18 @@ description: >-
   files, and the target types skipped because they have no skills directory.
 fields:
   - name: destinations
-    type: string[]
+    type: list<string>
     description: Skills directories written to
     optional: false
   - name: fileCount
-    type: number
+    type: int
     description: Total skill files written
     optional: false
   - name: skipped
-    type: string[]
+    type: list<string>
     description: Target types that have no skills directory, and were skipped
     optional: false
 methods: []
 sourcePath: src/core/skills.ts
 createdAt: '2026-09-13T23:11:48.552Z'
-updatedAt: '2026-09-19T11:07:17.143Z'
+updatedAt: '2026-10-04T10:29:16.660Z'

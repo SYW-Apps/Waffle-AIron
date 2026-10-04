@@ -6,15 +6,15 @@ description: >-
   warnings and notices ride along as the write's notices, each still named by its severity.
 fields:
   - name: errors
-    type: ValidationIssue[]
+    type: list<ValidationIssue>
     description: Intrinsic violations; the write is refused, and each names its rule code
     optional: false
   - name: warnings
-    type: ValidationIssue[]
+    type: list<ValidationIssue>
     description: Intrinsic advisories such as MISSING_DURABILITY; surfaced, never blocking
     optional: false
   - name: notices
-    type: ValidationIssue[]
+    type: list<ValidationIssue>
     description: >-
       Intrinsic findings a project set to notice severity; surfaced beside the warnings, never
       blocking
@@ -30,4 +30,4 @@ methods:
       written as one message because the authoring seam's channel is a thrown error's text.
 sourcePath: src/models/candidate.ts
 createdAt: '2026-09-14T06:03:51.301Z'
-updatedAt: '2026-09-26T14:48:53.575Z'
+updatedAt: '2026-10-04T10:19:54.505Z'

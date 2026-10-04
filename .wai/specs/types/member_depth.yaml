@@ -1,0 +1,20 @@
+kind: value-object
+id: member_depth
+name: MemberDepth
+description: >-
+  How far a validation run or a scan reaches into a project's members, held as a boolean or a whole
+  number: every member level (true), none, the owner's own tree alone (false), or exactly that many
+  member levels (a whole number).
+fields: []
+methods: []
+sourcePath: src/models/validation-options.ts
+lint:
+  allow:
+    - code: HOLLOW_TYPE
+      reason: >-
+        A named scalar domain, not a placeholder: a member reach held as a boolean or a whole number
+        (realized as `type MemberDepth = boolean | number` in src/models/validation-options.ts). It
+        replaces the mixed union `boolean | number` (M3); the type grammar has no form for saying
+        which primitives a named value-object holds.
+createdAt: '2026-10-04T10:27:23.737Z'
+updatedAt: '2026-10-04T10:34:11.366Z'

@@ -40,8 +40,8 @@ methods:
     effect: write
   - name: readJournal
     description: One owner's journal of a transaction, or null when it has none.
-    signature: 'readJournal(owner: string, id: string): TransactionJournal | null'
-    returns: TransactionJournal | null
+    signature: 'readJournal(owner: string, id: string): TransactionJournal?'
+    returns: TransactionJournal?
     params:
       - name: owner
         type: string
@@ -54,8 +54,8 @@ methods:
     description: >-
       Every journal under one owner's .wai/transactions/, whatever its phase; empty when there is
       none.
-    signature: 'listJournals(owner: string): TransactionJournal[]'
-    returns: TransactionJournal[]
+    signature: 'listJournals(owner: string): list<TransactionJournal>'
+    returns: list<TransactionJournal>
     params:
       - name: owner
         type: string
@@ -86,8 +86,8 @@ methods:
     effect: write
   - name: readFile
     description: The bytes held in an owner's transaction area for a file, or null when there are none.
-    signature: 'readFile(owner: string, id: string, area: string, path: string): bytes | null'
-    returns: bytes | null
+    signature: 'readFile(owner: string, id: string, area: string, path: string): bytes?'
+    returns: bytes?
     params:
       - name: owner
         type: string
@@ -138,4 +138,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-09-30T20:25:56.186Z'
-updatedAt: '2026-09-30T21:33:47.285Z'
+updatedAt: '2026-10-04T10:19:43.244Z'

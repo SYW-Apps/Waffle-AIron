@@ -34,11 +34,11 @@ fields:
     description: Wire flavour when componentType is Portal (HTTP_API, gRPC, …)
     optional: true
   - name: owns
-    type: string[]
+    type: list<string>
     description: Private member component ids (pattern containment, one hop)
     optional: false
   - name: dependsOn
-    type: string[]
+    type: list<string>
     description: Collaborator component ids
     optional: false
   - name: status
@@ -46,7 +46,7 @@ fields:
     description: draft | design | complete (an omitted status is parsed as complete)
     optional: false
   - name: dispatch
-    type: DispatchBinding[]
+    type: list<DispatchBinding>
     description: >-
       Portal-only: machine-readable capability → component.method dispatch table for generic-handle
       portals. Each entry is validated against the serving component's interface
@@ -63,7 +63,7 @@ fields:
       is evictable and loss-safe.
     optional: true
   - name: patterns
-    type: PatternRef[]
+    type: list<PatternRef>
     description: >-
       Optional references to pack-declared reusable patterns this component realizes. Resolved
       against loaded packs' PatternDefs (UNKNOWN_PATTERN_REF when unresolved); pack rules enforce
@@ -86,19 +86,19 @@ fields:
     description: 'Portal-only: the inbound transport authentication the Portal requires'
     optional: true
   - name: emits
-    type: EventBinding[]
+    type: list<EventBinding>
     description: >-
       Topics this component publishes; every emitted topic needs a subscriber somewhere in the tree
       (UNCONSUMED_TOPIC)
     optional: true
   - name: subscribesTo
-    type: EventBinding[]
+    type: list<EventBinding>
     description: >-
       Topics this component consumes; every subscription needs an emitter somewhere in the tree
       (UNSOURCED_SUBSCRIPTION)
     optional: true
   - name: externalLinks
-    type: ExternalLink[]
+    type: list<ExternalLink>
     description: Opaque external references; an implementation link stands in for a local source path
     optional: true
   - name: dependencyClass
@@ -116,7 +116,7 @@ fields:
       each with a reason.
     optional: true
   - name: ext
-    type: json
+    type: any
     description: >-
       Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
       the core, preserved verbatim through load and save.
@@ -130,7 +130,7 @@ fields:
     description: When this spec was last written. Store-managed.
     optional: false
   - name: mounts
-    type: PortalMount[]
+    type: list<PortalMount>
     description: >-
       Portal-only: the portals this LISTENER serves, each under its path prefixes and through its
       entry point. Declaring the field — even empty — is what marks a portal as a listener, the one
@@ -152,23 +152,23 @@ methods:
       Registries; full otherwise
   - name: isPattern
     signature: 'isPattern(): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether the component is a pattern that owns member blocks: Repository, FeatureComponent or
       RouterComponent
   - name: isLogic
     signature: 'isLogic(): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether its methods are flowcharts of the system's logic: an Orchestrator, Supervisor or Actor
       (or a Specialist until it is retired)
   - name: holdsState
     signature: 'holdsState(): boolean'
-    returns: boolean
+    returns: bool
     description: 'Whether it owns domain or runtime state between calls: a Store, Index, Supervisor or Actor'
   - name: isRetired
     signature: 'isRetired(): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether its componentType is a retired stereotype (Specialist or Gateway). The rules that
       judge a stereotype's shape skip it, and retired-stereotypes reports it once, until it is
@@ -189,4 +189,4 @@ methods:
       diagrams, "cli_packs_adapter" about packs. Empty when every word names a block.
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T17:03:07.591Z'
+updatedAt: '2026-10-04T10:19:59.815Z'

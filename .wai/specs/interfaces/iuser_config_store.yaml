@@ -48,20 +48,20 @@ methods:
     description: >-
       The short command names this person has opted out of — exceptions, not selections, so an alias
       added in a later release is active without anyone opting in.
-    signature: 'disabledAliases(): string[]'
-    returns: string[]
+    signature: 'disabledAliases(): list<string>'
+    returns: list<string>
     params: []
     guarantees:
       - idempotent
   - name: setDisabledAliases
     description: Record the opted-out alias names, leaving every other setting as it stands.
-    signature: 'setDisabledAliases(names: string[]): void'
+    signature: 'setDisabledAliases(names: list<string>): void'
     returns: void
     params:
       - name: names
-        type: string[]
+        type: list<string>
         description: The alias names to keep disabled
     effect: write
 status: complete
 createdAt: '2026-09-22T21:18:02.040Z'
-updatedAt: '2026-09-22T21:19:47.384Z'
+updatedAt: '2026-10-04T10:19:44.571Z'

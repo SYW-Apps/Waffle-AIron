@@ -29,8 +29,8 @@ methods:
       operations:read grant; results are filtered to the caller's scope. Resolve the caller's
       operations:read scope, narrow the hosted project records to the in-scope projects (a
       super-admin sees all), and return redacted resource usage snapshots. Read-only.
-    signature: 'getUsage(credential: string, scope?: string): ResourceUsageSnapshot[]'
-    returns: ResourceUsageSnapshot[]
+    signature: 'getUsage(credential: string, scope?: string): list<ResourceUsageSnapshot>'
+    returns: list<ResourceUsageSnapshot>
     params:
       - name: credential
         type: string
@@ -45,8 +45,8 @@ methods:
       all), and evaluate them against the advisory ResourceQuotaPolicy (resolved from host config,
       secure default when unset), returning snapshots annotated with observe/warn advisory quota
       messages. Advisory only — never blocks or throttles.
-    signature: 'evaluateQuota(credential: string, scope?: string): ResourceUsageSnapshot[]'
-    returns: ResourceUsageSnapshot[]
+    signature: 'evaluateQuota(credential: string, scope?: string): list<ResourceUsageSnapshot>'
+    returns: list<ResourceUsageSnapshot>
     params:
       - name: credential
         type: string
@@ -55,4 +55,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-09T09:10:20.273Z'
-updatedAt: '2026-10-03T16:46:49.576Z'
+updatedAt: '2026-10-04T10:19:07.587Z'

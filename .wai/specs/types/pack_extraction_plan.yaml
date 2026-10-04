@@ -8,14 +8,14 @@ description: >-
   paths, each under the destination directory — so no unsafe path ever reaches the filesystem.
 fields:
   - name: paths
-    type: string[]
+    type: list<string>
     description: Approved, normalized relative paths to inflate + write under the destination
     optional: false
   - name: totalUncompressedBytes
-    type: number
+    type: int
     description: Sum of approved entries' inflated sizes
     optional: false
 methods: []
 componentClass: pack_codec
 createdAt: '2026-07-21T18:13:05.037Z'
-updatedAt: '2026-07-21T18:13:05.160Z'
+updatedAt: '2026-10-04T10:29:09.360Z'

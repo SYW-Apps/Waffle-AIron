@@ -33,14 +33,14 @@ fields:
       conformance).
     optional: false
   - name: packs
-    type: object[]
+    type: list<any>
     description: >-
       The parent's pack selections as its configuration records them (name, exact version, digest);
       the part alone loads exactly these and reports a pack it cannot load as unavailable, never by
       a version the machine happens to hold.
     optional: false
   - name: specs
-    type: object[]
+    type: list<any>
     description: >-
       The parent's spec documents the part references and the closure judging them needs: each
       component a part spec depends on or calls, with its contract, its subsystem's L1
@@ -58,4 +58,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-10-02T20:17:30.275Z'
-updatedAt: '2026-10-02T20:17:30.276Z'
+updatedAt: '2026-10-04T10:20:42.059Z'

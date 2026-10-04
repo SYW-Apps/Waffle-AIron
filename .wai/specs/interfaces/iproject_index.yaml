@@ -18,7 +18,7 @@ methods:
       Return all hosted-project records registered under the data root — family roots and member
       records alike, each member with its derived rootPath.
     signature: 'list(): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    returns: list<HostedProjectRecord>
   - name: resolveBinding
     description: >-
       Resolve the FULL binding of an authorized target to a hosted RECORD: the bound record's id,
@@ -36,15 +36,15 @@ methods:
       Only an active record resolves; anything else is null with no existence leak. resolveRoot is
       this binding's rootPath projection.
     signature: 'resolveBinding(principal: Principal, selector: string): ProjectBinding | null'
-    returns: ProjectBinding | null
+    returns: ProjectBinding?
   - name: existingRoot
     description: >-
       The root path of the hosted record registered under this id — a member record's derived from
       its parent's root and memberPath — or null when the id is malformed or no record holds it.
       Unscoped by design: an existence lookup for callers that have already authorized the operation
       it serves, never a resolution a request selector reaches.
-    signature: 'existingRoot(id: string): string | null'
-    returns: string | null
+    signature: 'existingRoot(id: string): string?'
+    returns: string?
     params:
       - name: id
         type: string
@@ -54,8 +54,8 @@ methods:
       below it, depth-first in declaration order, each with its derived root. A record with no
       members answers just its family root's family. Empty for an unknown id. Records only — it
       reads no project file.
-    signature: 'family(id: string): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    signature: 'family(id: string): list<HostedProjectRecord>'
+    returns: list<HostedProjectRecord>
     params:
       - name: id
         type: string
@@ -76,8 +76,8 @@ methods:
       and never a record of its own; and a `hosted:` project member, which is its own top-level
       record, related to the declarer but not contained by it, so it gets no parentProjectId and
       inherits no access through it. Records only, read from disk; nothing written.
-    signature: 'declaredMembers(id: string): PlannedMemberRecord[]'
-    returns: PlannedMemberRecord[]
+    signature: 'declaredMembers(id: string): list<PlannedMemberRecord>'
+    returns: list<PlannedMemberRecord>
     params:
       - name: id
         type: string
@@ -87,8 +87,8 @@ methods:
       Where the record commits: its family root's isolated root (the family's one git repository)
       and the pathspec of the record's own .wai/ relative to it ('.wai/' for a family root,
       '<memberPath chain>/.wai/' for a member). Null for an unknown id.
-    signature: 'repositoryScope(id: string): RepositoryScope | null'
-    returns: RepositoryScope | null
+    signature: 'repositoryScope(id: string): RepositoryScope?'
+    returns: RepositoryScope?
     params:
       - name: id
         type: string
@@ -97,8 +97,8 @@ methods:
       Whether a member record was retired as a part (stage 8): disabled, and its folder holding no
       project content any more (no id, no L0, no lock) — so its specs are reached, permissioned and
       written through its parent's record. Reads the record's folder; writes nothing.
-    signature: 'isRetiredPart(record: HostedProjectRecord): boolean'
-    returns: boolean
+    signature: 'isRetiredPart(record: HostedProjectRecord): bool'
+    returns: bool
     params:
       - name: record
         type: HostedProjectRecord
@@ -108,8 +108,8 @@ methods:
       The subsystem ids a record's spec tree declares now, each as its local id — a part's
       subsystems included, since they are the record's own — read at the record's root through the
       host core adapter; null for an id with no root on disk. Read from disk; nothing written.
-    signature: 'declaredSubsystems(id: string): string[] | null'
-    returns: string[] | null
+    signature: 'declaredSubsystems(id: string): list<string>?'
+    returns: list<string>?
     params:
       - name: id
         type: string
@@ -122,8 +122,8 @@ methods:
       members) holds now, each its local id, read in the part's folder through the host core
       adapter; null when the record has no root or declares no contained member under the alias.
       Read from disk; nothing written.
-    signature: 'partSubsystems(id: string, alias: string): string[] | null'
-    returns: string[] | null
+    signature: 'partSubsystems(id: string, alias: string): list<string>?'
+    returns: list<string>?
     params:
       - name: id
         type: string
@@ -147,4 +147,4 @@ methods:
         description: One entry of a mint request's projects narrowing.
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-10-03T17:57:32.620Z'
+updatedAt: '2026-10-04T10:19:20.352Z'

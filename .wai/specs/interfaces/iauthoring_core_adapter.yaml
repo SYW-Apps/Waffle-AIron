@@ -14,8 +14,8 @@ methods:
       disk. A dry run is forwarded too: the store runs the whole write and answers with the report
       it would have produced, writing nothing. Forwarded to the core portal.
     signature: >-
-      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?:
-      boolean): SpecChangeReport
+      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -32,7 +32,7 @@ methods:
         description: The write-boundary judgement to run on the merged spec
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Report what the delta would do and write nothing
         optional: true
   - name: loadProjectConfig
@@ -41,8 +41,8 @@ methods:
       type are what a candidate is judged with. An uninitialized or unreadable project answers with
       nothing rather than throwing: a configuration read must never be the thing that fails a write
       closed.
-    signature: 'loadProjectConfig(): ProjectConfig | null'
-    returns: ProjectConfig | null
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
     guarantees:
       - idempotent
@@ -54,8 +54,8 @@ methods:
       candidate homes when the move is refused and asks the hook to assess each; the seam still
       reads no spec of its own. A dry run is forwarded too. Forwarded to the core portal.
     signature: >-
-      moveMethods(from: string, to: string, methods: string[], hooks?: SpecWriteHooks, dryRun?:
-      boolean): MethodMoveReport
+      moveMethods(from: string, to: string, methods: list<string>, hooks?: SpecWriteHooks, dryRun?:
+      bool): MethodMoveReport
     returns: MethodMoveReport
     params:
       - name: from
@@ -65,7 +65,7 @@ methods:
         type: string
         description: The component id that should receive them
       - name: methods
-        type: string[]
+        type: list<string>
         description: The method names to move
       - name: hooks
         type: SpecWriteHooks
@@ -74,7 +74,7 @@ methods:
           refusal
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Report what the move would do and write nothing
         optional: true
   - name: loadSpec
@@ -83,11 +83,9 @@ methods:
       it cannot be written without, or the spec a delete is about to remove. Forwarded to the core
       portal.
     signature: >-
-      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
-      | ImplementationSpec | TypeSpec | null
-    returns: >-
-      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
-      null
+      loadSpec(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec)?
+    returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
         type: string
@@ -103,8 +101,8 @@ methods:
       to the core portal.
     signature: >-
       saveSpec(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
-      ImplementationSpec | TypeSpec): string[]
-    returns: string[]
+      ImplementationSpec | TypeSpec): list<string>
+    returns: list<string>
     params:
       - name: kind
         type: string
@@ -116,8 +114,8 @@ methods:
     description: >-
       Delete one spec document of the named kind; false when none was stored. Forwarded to the core
       portal.
-    signature: 'deleteSpec(kind: string, id: string): boolean'
-    returns: boolean
+    signature: 'deleteSpec(kind: string, id: string): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -130,9 +128,9 @@ methods:
       Every implementation spec of the bound tree — how the test search finds the files that realize
       a contract's methods, since a contract method's tests import its realization. Forwarded to the
       core portal.
-    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    signature: 'loadImplementationSpecs(): list<ImplementationSpec>'
+    returns: list<ImplementationSpec>
     params: []
 status: complete
 createdAt: '2026-09-18T21:41:49.125Z'
-updatedAt: '2026-09-27T10:54:33.324Z'
+updatedAt: '2026-10-04T10:18:33.097Z'

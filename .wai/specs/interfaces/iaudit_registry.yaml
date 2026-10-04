@@ -14,8 +14,8 @@ methods:
         type: AuditRetentionPolicy
   - name: prune
     description: Delete events older than the retention window selected by level and category policy.
-    signature: 'prune(policy: AuditRetentionPolicy, now: string): number'
-    returns: number
+    signature: 'prune(policy: AuditRetentionPolicy, now: string): int'
+    returns: int
     params:
       - name: policy
         type: AuditRetentionPolicy
@@ -23,4 +23,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T20:16:48.659Z'
-updatedAt: '2026-07-09T17:43:38.342Z'
+updatedAt: '2026-10-04T10:28:15.208Z'

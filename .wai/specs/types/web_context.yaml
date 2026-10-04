@@ -13,11 +13,11 @@ fields:
     description: The resolved identity behind the session.
     optional: false
   - name: isAdmin
-    type: boolean
+    type: bool
     description: True when the principal is an instance admin (permissionSubject.instanceAdmin).
     optional: false
   - name: local
-    type: boolean
+    type: bool
     description: >-
       True when this context comes from the local developer server (`wairon dev`): the SAME client
       hides the tenancy/login/account chrome (Landscape tier, project picker, sign-out, admin badge)
@@ -26,4 +26,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:20.576Z'
-updatedAt: '2026-09-19T11:07:21.265Z'
+updatedAt: '2026-10-04T10:21:27.878Z'

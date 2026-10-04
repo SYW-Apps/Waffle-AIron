@@ -40,7 +40,7 @@ fields:
       `<algorithm>:<digest>`. Absent when state is never.
     optional: true
   - name: upgraded
-    type: boolean
+    type: bool
     description: >-
       True when the project is drifted ONLY in the sense that its lock was taken under an earlier
       gate identity algorithm (LockStatus.upgraded): the identity gained inputs in stage 5, which
@@ -74,4 +74,4 @@ fields:
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-10-02T23:58:40.322Z'
+updatedAt: '2026-10-04T10:20:48.630Z'

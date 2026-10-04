@@ -13,7 +13,7 @@ fields:
       project's generated files.
     optional: false
   - name: overrides
-    type: object
+    type: any
     description: >-
       Per-agent budgets keyed by agent id, each a partial budget merged over the derived one. An
       explicit budget always wins: the tree is a good default, not an authority on how you want to
@@ -22,4 +22,4 @@ fields:
 methods: []
 sourcePath: src/models/execution.ts
 createdAt: '2026-09-20T23:50:46.626Z'
-updatedAt: '2026-09-20T23:50:46.636Z'
+updatedAt: '2026-10-04T10:20:05.895Z'

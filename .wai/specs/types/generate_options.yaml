@@ -11,18 +11,18 @@ fields:
     description: The root output paths resolve within; the bound project when omitted.
     optional: true
   - name: filterTargets
-    type: string[]
+    type: list<string>
     description: Write only these targets; all configured ones when omitted.
     optional: true
   - name: filterDomainIds
-    type: string[]
+    type: list<string>
     description: Write only agents belonging to these domains.
     optional: true
   - name: dryRun
-    type: boolean
+    type: bool
     description: Compute everything and write nothing, so a caller can see what a run would do.
     optional: true
 methods: []
 sourcePath: src/exporters/generate.ts
 createdAt: '2026-09-20T19:47:54.250Z'
-updatedAt: '2026-09-20T19:47:54.260Z'
+updatedAt: '2026-10-04T10:20:13.307Z'

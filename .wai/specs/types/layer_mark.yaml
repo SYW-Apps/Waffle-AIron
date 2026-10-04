@@ -1,0 +1,18 @@
+kind: signature
+id: layer_mark
+name: LayerMark
+description: >-
+  A caller's markup for a layer's label in the completeness report, told which layer it labels so a
+  caller may distinguish them or not.
+fields: []
+methods: []
+params:
+  - name: kind
+    type: string
+    description: 'Which layer: system, subsystem, project (a member), component, interface or implementation'
+  - name: text
+    type: string
+    description: The label as the renderer would print it
+returns: string
+createdAt: '2026-10-04T10:27:10.487Z'
+updatedAt: '2026-10-04T10:27:10.488Z'

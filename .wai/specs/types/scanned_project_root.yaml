@@ -37,7 +37,7 @@ fields:
       legacy L1 subsystem carrying `projectPath` (DEPRECATED_MOUNT_FORM). Absent for the bound root.
     optional: true
   - name: legacyMount
-    type: SubsystemSpec | null
+    type: SubsystemSpec?
     description: >-
       The legacy L1 mount subsystem as the parent wrote it (its description, publicInterfaces,
       trustedLinks, consumers, lint and any other field), read so the migration can carry its fields
@@ -49,14 +49,14 @@ fields:
     description: The root directory, absolute.
     optional: false
   - name: system
-    type: SystemSpec | null
+    type: SystemSpec?
     description: >-
       The root's own L0, its export entries qualified into its key (`from` against its subsystems,
       members and externals, `component`, `interface` and `typeDef` against their source); null when
       the root has none.
     optional: false
   - name: config
-    type: ProjectConfig | null
+    type: ProjectConfig?
     description: >-
       The root's configuration, read through the configuration bound at that root — the per-root
       binding the scan already reads the root's specs folder through (a scan may read the
@@ -64,7 +64,7 @@ fields:
       is part of the scan's freshness signature. Null when unreadable.
     optional: false
   - name: aliases
-    type: Map<string, string>
+    type: map<string, string>
     description: >-
       The root's alias table: each `members` key (or legacy mount id) and each declared external's
       alias, mapped to the key of the project it names in this scan; an external whose producer the
@@ -78,23 +78,23 @@ fields:
       into this project binds against. Empty when the root has no L0.
     optional: false
   - name: subsystemExports
-    type: Map<string, ResolvedExportTable>
+    type: map<string, ResolvedExportTable>
     description: >-
       Each of the root's subsystems' L1 export tables, keyed by subsystem key, resolved in the same
       pass.
     optional: false
   - name: specIds
-    type: string[]
+    type: list<string>
     description: The keys of every spec this root's files declared.
     optional: false
   - name: authoredReferences
-    type: AuthoredReference[]
+    type: list<AuthoredReference>
     description: >-
       Every reference with `::` this root's files wrote, with the form it was read in and what it
       bound to.
     optional: false
   - name: problems
-    type: ProjectFamilyProblem[]
+    type: list<ProjectFamilyProblem>
     description: >-
       The family problems the scan met at this root, as spec_index.listProjectRoots records them:
       its members that were absent, an alias declared both as a member and as an external, a key two
@@ -110,14 +110,14 @@ fields:
       legacy mount's description; absent for the bound root and for a member declared without one.
     optional: true
   - name: parts
-    type: ScannedPart[]
+    type: list<ScannedPart>
     description: >-
       The parts this root declares (stage 8), in declaration order, each with where its files came
       from and the keys of the specs it put in the index under THIS root's key. A part is not a
       root: it appears here and nowhere in the root list.
     optional: false
   - name: referenced
-    type: ScannedPart[]
+    type: list<ScannedPart>
     description: >-
       The referenced project members this root declares (stage 8): each `../` or git member whose
       content makes it a project, located where it is stored — the sibling checkout, or the fetch
@@ -130,4 +130,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-26T17:39:58.407Z'
-updatedAt: '2026-10-02T22:31:58.887Z'
+updatedAt: '2026-10-04T10:21:01.740Z'

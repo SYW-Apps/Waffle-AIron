@@ -31,14 +31,14 @@ fields:
       not compared.
     optional: false
   - name: uses
-    type: object[]
+    type: list<any>
     description: >-
       The uses that are NOT unchanged — each {name: `publicName` or `publicName.member`, state:
       changed | removed | unlocked | unavailable, detail?} — so the tooltip says exactly which uses
       changed or were removed and why one could not be compared.
     optional: false
   - name: unchanged
-    type: number
+    type: int
     description: How many uses compared unchanged (listed as a count, not by name, to keep the page small).
     optional: false
   - name: pinnedCommit
@@ -59,4 +59,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-03T12:14:20.817Z'
-updatedAt: '2026-10-03T12:25:41.246Z'
+updatedAt: '2026-10-04T10:28:49.393Z'

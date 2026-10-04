@@ -70,8 +70,8 @@ methods:
   - name: typeDeclarations
     description: >-
       Rule type-declarations. A type owned by a subsystem must reference an existing one, and a type
-      declaring neither fields nor methods is a placeholder that can inform neither implementers nor
-      the ERD.
+      declaring neither fields nor methods (nor, for an enum, values, nor, for a signature type,
+      returns) is a placeholder that can inform neither implementers nor the ERD.
     signature: 'typeDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -582,4 +582,4 @@ methods:
           of another kind carries values
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-03T22:12:29.336Z'
+updatedAt: '2026-10-04T10:37:22.057Z'

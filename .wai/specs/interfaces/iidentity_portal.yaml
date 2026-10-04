@@ -36,8 +36,8 @@ methods:
       path: /identity/tokens/{id}
   - name: listUsers
     description: List hosted users or service principals, optionally filtered by project.
-    signature: 'listUsers(credential: string, project?: string): HostedUserRecord[]'
-    returns: HostedUserRecord[]
+    signature: 'listUsers(credential: string, project?: string): list<HostedUserRecord>'
+    returns: list<HostedUserRecord>
     params:
       - name: credential
         type: string
@@ -50,8 +50,8 @@ methods:
       path: /identity/users
   - name: listAuditEvents
     description: Return admin-only redacted audit events matching the supplied query.
-    signature: 'listAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
-    returns: AuditEvent[]
+    signature: 'listAuditEvents(credential: string, query: AuditQuery): list<AuditEvent>'
+    returns: list<AuditEvent>
     params:
       - name: credential
         type: string
@@ -63,8 +63,8 @@ methods:
       path: /identity/audit/events
   - name: pruneAuditEvents
     description: Apply the active audit retention policy and return the number of events pruned.
-    signature: 'pruneAuditEvents(credential: string): number'
-    returns: number
+    signature: 'pruneAuditEvents(credential: string): int'
+    returns: int
     params:
       - name: credential
         type: string
@@ -104,8 +104,8 @@ methods:
     description: >-
       Begin a headless SSO login for one provider and return the provider authorization URL.
       Unauthenticated by nature — no caller credential.
-    signature: 'startSsoLogin(providerId: string, redirectUri: string): string'
-    returns: string
+    signature: 'startSsoLogin(providerId: string, redirectUri: string): async string'
+    returns: async string
     params:
       - name: providerId
         type: string
@@ -119,8 +119,8 @@ methods:
     description: >-
       Complete a headless SSO login from the provider callback and return a user-bound token once.
       Unauthenticated by nature — trust derives from the signed state and the code exchange.
-    signature: 'completeSsoLogin(state: string, code: string): string'
-    returns: string
+    signature: 'completeSsoLogin(state: string, code: string): async string'
+    returns: async string
     params:
       - name: state
         type: string
@@ -132,8 +132,8 @@ methods:
       path: /identity/sso/callback
   - name: listIdentityProviders
     description: List configured identity providers after instance-admin authorization.
-    signature: 'listIdentityProviders(credential: string): IdentityProviderConfig[]'
-    returns: IdentityProviderConfig[]
+    signature: 'listIdentityProviders(credential: string): list<IdentityProviderConfig>'
+    returns: list<IdentityProviderConfig>
     params:
       - name: credential
         type: string
@@ -173,8 +173,8 @@ methods:
     description: >-
       Return the count of redacted audit events matching the supplied query after admin-only
       authorization.
-    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
-    returns: number
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): int'
+    returns: int
     params:
       - name: credential
         type: string
@@ -186,4 +186,4 @@ methods:
       path: /identity/audit/count
 status: complete
 createdAt: '2026-07-08T20:19:45.785Z'
-updatedAt: '2026-10-03T20:53:59.626Z'
+updatedAt: '2026-10-04T10:32:05.266Z'

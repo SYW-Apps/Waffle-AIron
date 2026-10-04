@@ -16,8 +16,8 @@ methods:
       beside the family included (stage 8); answer each copied live file's sha256 by its absolute
       path. Refuses an owner root outside the base, and an owner on another volume than the
       coordinator: a rename across volumes is not atomic.
-    signature: 'mirror(scope: TransactionScope, target: string): Map<string, string>'
-    returns: Map<string, string>
+    signature: 'mirror(scope: TransactionScope, target: string): map<string, string>'
+    returns: map<string, string>
     params:
       - name: scope
         type: TransactionScope
@@ -34,24 +34,24 @@ methods:
       only live a delete — each with its owner (mapped back to live), its owner-relative path, the
       base digest the mirror recorded and the staged digest. Ordered by owner then path. For a scope
       that names areas only those areas and whole owners are compared.
-    signature: 'compare(rehearsal: Rehearsal): FileChange[]'
-    returns: FileChange[]
+    signature: 'compare(rehearsal: Rehearsal): list<FileChange>'
+    returns: list<FileChange>
     params:
       - name: rehearsal
         type: Rehearsal
         description: The rehearsal after the verb's writes
   - name: read
     description: A file's bytes, or null when it is absent.
-    signature: 'read(path: string): bytes | null'
-    returns: bytes | null
+    signature: 'read(path: string): bytes?'
+    returns: bytes?
     params:
       - name: path
         type: string
         description: Absolute path
   - name: digest
     description: sha256 of a file's bytes, or null when it is absent.
-    signature: 'digest(path: string): string | null'
-    returns: string | null
+    signature: 'digest(path: string): string?'
+    returns: string?
     params:
       - name: path
         type: string
@@ -92,8 +92,8 @@ methods:
         description: The live path
   - name: makeDirs
     description: Create a directory and its missing parents, answering the ones it created, shallowest first.
-    signature: 'makeDirs(dir: string): string[]'
-    returns: string[]
+    signature: 'makeDirs(dir: string): list<string>'
+    returns: list<string>
     params:
       - name: dir
         type: string
@@ -102,8 +102,8 @@ methods:
     description: >-
       Remove a directory when it is empty, then each empty parent up to but not including stopAt,
       answering the ones removed, deepest first.
-    signature: 'prune(dir: string, stopAt: string): string[]'
-    returns: string[]
+    signature: 'prune(dir: string, stopAt: string): list<string>'
+    returns: list<string>
     params:
       - name: dir
         type: string
@@ -115,8 +115,8 @@ methods:
     description: >-
       Whether two existing paths lie on one volume (their device ids agree), so a rename between
       them cannot fail with EXDEV.
-    signature: 'sameVolume(a: string, b: string): boolean'
-    returns: boolean
+    signature: 'sameVolume(a: string, b: string): bool'
+    returns: bool
     params:
       - name: a
         type: string
@@ -131,8 +131,8 @@ methods:
       ancestor lands strictly within the root's real path too; null for an empty, absolute,
       ../-escaping or link-escaping path, or the root itself. A planner's read of where a path
       lands, so no planner touches the file system. Writes nothing.
-    signature: 'resolve(root: string, path: string): string | null'
-    returns: string | null
+    signature: 'resolve(root: string, path: string): string?'
+    returns: string?
     params:
       - name: root
         type: string
@@ -144,8 +144,8 @@ methods:
       - idempotent
   - name: holdsProject
     description: 'Whether a directory already holds a wairon project: a .wai/project.yaml there. Writes nothing.'
-    signature: 'holdsProject(dir: string): boolean'
-    returns: boolean
+    signature: 'holdsProject(dir: string): bool'
+    returns: bool
     params:
       - name: dir
         type: string
@@ -171,4 +171,4 @@ methods:
         description: Where they go, absolute; created as needed
 status: complete
 createdAt: '2026-09-30T20:27:16.585Z'
-updatedAt: '2026-10-02T23:59:16.175Z'
+updatedAt: '2026-10-04T10:18:46.054Z'

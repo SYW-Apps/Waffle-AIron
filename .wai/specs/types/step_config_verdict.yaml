@@ -9,13 +9,13 @@ description: >-
   runs behind, because a graph built over jumps that target nothing reports sound steps as dead.
 fields:
   - name: problems
-    type: StepConfigProblem[]
+    type: list<StepConfigProblem>
     description: >-
       The step-config problems, in step order: labels first, then numbering, then each step's own
       config and jump targets.
     optional: false
   - name: sound
-    type: boolean
+    type: bool
     description: >-
       True when nothing found makes the control flow unreadable — the precondition for judging
       structure.
@@ -23,4 +23,4 @@ fields:
 methods: []
 sourcePath: src/models/step-config.ts
 createdAt: '2026-09-17T22:21:29.573Z'
-updatedAt: '2026-09-19T11:07:18.503Z'
+updatedAt: '2026-10-04T10:21:12.301Z'

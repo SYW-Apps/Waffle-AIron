@@ -16,10 +16,10 @@ fields:
     description: What was written, or what is already there when nothing changed.
     optional: false
   - name: unchanged
-    type: boolean
+    type: bool
     description: True when the file already held exactly this content and was left alone.
     optional: false
 methods: []
 sourcePath: src/exporters/base.ts
 createdAt: '2026-09-20T19:44:47.691Z'
-updatedAt: '2026-09-20T19:44:47.704Z'
+updatedAt: '2026-10-04T10:20:07.290Z'

@@ -8,7 +8,7 @@ methods:
   - name: resolveAgentTopology
     description: Resolves dynamic agent topology
     signature: 'resolveAgentTopology(): AgentRecord[]'
-    returns: AgentRecord[]
+    returns: list<AgentRecord>
   - name: composeAgentBrief
     description: >-
       Compose the live delegation brief for one resolved agent (rendered instructions + scope
@@ -25,12 +25,12 @@ methods:
       sdd_core component — the CLI importing the exporters module directly is the crossing this
       Portal exists to prevent.
     signature: >-
-      generateAll(agents: AgentRecord[], config: ProjectConfig, options?: GenerateOptions):
-      GenerateSummary[]
-    returns: GenerateSummary[]
+      generateAll(agents: list<AgentRecord>, config: ProjectConfig, options?: GenerateOptions):
+      list<GenerateSummary>
+    returns: list<GenerateSummary>
     params:
       - name: agents
-        type: AgentRecord[]
+        type: list<AgentRecord>
         description: Every agent to write
       - name: config
         type: ProjectConfig
@@ -44,11 +44,11 @@ methods:
       Every path a generate run would write for these agents and targets, without rendering or
       writing any of them — how the command knows which files are wairon's own before it prunes or
       reports.
-    signature: 'resolveExpectedOutputPaths(agents: AgentRecord[], config: ProjectConfig): Set<string>'
-    returns: Set<string>
+    signature: 'resolveExpectedOutputPaths(agents: list<AgentRecord>, config: ProjectConfig): set<string>'
+    returns: set<string>
     params:
       - name: agents
-        type: AgentRecord[]
+        type: list<AgentRecord>
         description: The agents whose outputs to enumerate
       - name: config
         type: ProjectConfig
@@ -64,8 +64,8 @@ methods:
     params: []
   - name: resolveDomains
     description: Every domain this project has, derived from subsystems and registered free-standing alike.
-    signature: 'resolveDomains(): Domain[]'
-    returns: Domain[]
+    signature: 'resolveDomains(): list<Domain>'
+    returns: list<Domain>
     params: []
   - name: addDomain
     description: >-
@@ -90,19 +90,19 @@ methods:
       Which directories look like domains nobody has registered yet. Proposals only — nothing here
       writes.
     signature: >-
-      detectDomainCandidates(projectRoot: string, trackedPaths?: Set<string>, trackedIds?:
-      Set<string>): DetectedDomainCandidate[]
-    returns: DetectedDomainCandidate[]
+      detectDomainCandidates(projectRoot: string, trackedPaths?: set<string>, trackedIds?:
+      set<string>): list<DetectedDomainCandidate>
+    returns: list<DetectedDomainCandidate>
     params:
       - name: projectRoot
         type: string
         description: The repository root to scan
       - name: trackedPaths
-        type: Set<string>
+        type: set<string>
         description: Paths already claimed by a registered domain
         optional: true
       - name: trackedIds
-        type: Set<string>
+        type: set<string>
         description: Domain ids already in use
         optional: true
   - name: deriveExecutionProfile
@@ -123,8 +123,8 @@ methods:
       is off. Forwarded to the budget policy.
     signature: >-
       resolveBudget(profile: ExecutionProfile, config: ExecutionConfig, agentId: string):
-      ExecutionBudget | undefined
-    returns: ExecutionBudget | undefined
+      ExecutionBudget?
+    returns: ExecutionBudget?
     params:
       - name: profile
         type: ExecutionProfile
@@ -141,8 +141,8 @@ methods:
     description: >-
       Published read: where an AI tool keeps its machine-wide configuration. Forwarded to the tool
       guide.
-    signature: 'globalGuideFilePath(target: string): string | null'
-    returns: string | null
+    signature: 'globalGuideFilePath(target: string): string?'
+    returns: string?
     params:
       - name: target
         type: string
@@ -153,8 +153,8 @@ methods:
     description: >-
       Published read: where an AI tool keeps its per-project configuration. Forwarded to the tool
       guide.
-    signature: 'localGuideFilePath(projectRoot: string, target: string): string | null'
-    returns: string | null
+    signature: 'localGuideFilePath(projectRoot: string, target: string): string?'
+    returns: string?
     params:
       - name: projectRoot
         type: string
@@ -196,22 +196,22 @@ methods:
     description: >-
       Published write: refresh the in-project guide for every target that already has one, answering
       the paths written. Forwarded to the tool guide.
-    signature: 'reinjectLocalGuides(projectRoot: string, targets: string[]): string[]'
-    returns: string[]
+    signature: 'reinjectLocalGuides(projectRoot: string, targets: list<string>): list<string>'
+    returns: list<string>
     params:
       - name: projectRoot
         type: string
         description: The project root
       - name: targets
-        type: string[]
+        type: list<string>
         description: The AI tools to refresh
     effect: write
   - name: readStampVersion
     description: >-
       Published read: the wairon version stamped in generated content, or nothing when it carries
       none. Forwarded to the version stamp.
-    signature: 'readStampVersion(content: string): string | null'
-    returns: string | null
+    signature: 'readStampVersion(content: string): string?'
+    returns: string?
     params:
       - name: content
         type: string
@@ -230,8 +230,8 @@ methods:
     description: >-
       Published read: whether this project keeps a context directory, so the derived context
       documents are owed. Forwarded to the context composer.
-    signature: 'hasContext(): boolean'
-    returns: boolean
+    signature: 'hasContext(): bool'
+    returns: bool
     params: []
     guarantees:
       - idempotent
@@ -239,11 +239,11 @@ methods:
     description: >-
       Published read: where the two derived context documents live, for callers reporting on them.
       Forwarded to the context composer.
-    signature: 'derivedDocPaths(): string[]'
-    returns: string[]
+    signature: 'derivedDocPaths(): list<string>'
+    returns: list<string>
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:13.399Z'
-updatedAt: '2026-10-01T23:45:12.889Z'
+updatedAt: '2026-10-04T10:18:28.825Z'

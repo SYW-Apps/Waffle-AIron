@@ -14,8 +14,8 @@ methods:
     description: >-
       Forward to identity_orchestrator.listUsers with the session as the credential; returns the
       hosted users within the caller's scope, optionally narrowed to one project's grant holders.
-    signature: 'listUsers(sessionId: string, project?: string): HostedUserRecord[]'
-    returns: HostedUserRecord[]
+    signature: 'listUsers(sessionId: string, project?: string): list<HostedUserRecord>'
+    returns: list<HostedUserRecord>
     params:
       - name: sessionId
         type: string
@@ -50,8 +50,8 @@ methods:
     description: >-
       Forward to identity_orchestrator.listProviders with the session as the credential; returns the
       configured identity providers (instance-admin only upstream).
-    signature: 'listIdentityProviders(sessionId: string): IdentityProviderConfig[]'
-    returns: IdentityProviderConfig[]
+    signature: 'listIdentityProviders(sessionId: string): list<IdentityProviderConfig>'
+    returns: list<IdentityProviderConfig>
     params:
       - name: sessionId
         type: string
@@ -87,7 +87,7 @@ methods:
       (mcp:read, plus mcp:write when write is true); mintToken authorizes strictly against the
       caller's own access to that project. Returns the plaintext token once. This is an agent
       credential, entirely separate from the human's web session.
-    signature: 'mintProjectToken(sessionId: string, projectId: string, write: boolean): string'
+    signature: 'mintProjectToken(sessionId: string, projectId: string, write: bool): string'
     returns: string
     params:
       - name: sessionId
@@ -95,7 +95,7 @@ methods:
       - name: projectId
         type: string
       - name: write
-        type: boolean
+        type: bool
   - name: revokeProjectToken
     description: >-
       Revoke a previously minted MCP token by id. Forwards to identity_orchestrator.revokeToken with
@@ -111,8 +111,8 @@ methods:
     description: >-
       Return the caller's own minted MCP tokens (redacted) by forwarding to
       identity_orchestrator.listSelfTokens with the session as the credential.
-    signature: 'listMyTokens(sessionId: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
+    signature: 'listMyTokens(sessionId: string): list<ApiKeyRecord>'
+    returns: list<ApiKeyRecord>
     params:
       - name: sessionId
         type: string
@@ -120,8 +120,8 @@ methods:
     description: >-
       Forward to permission_admin_orchestrator.listRoles with the session as the credential
       (instance-admin only upstream).
-    signature: 'listRoles(sessionId: string): Role[]'
-    returns: Role[]
+    signature: 'listRoles(sessionId: string): list<Role>'
+    returns: list<Role>
     params:
       - name: sessionId
         type: string
@@ -158,8 +158,8 @@ methods:
       (project:admin over the scope upstream).
     signature: >-
       listAssignments(sessionId: string, scopeKind?: string, scopeId?: string, subjectKind?: string,
-      subjectId?: string): PermissionAssignment[]
-    returns: PermissionAssignment[]
+      subjectId?: string): list<PermissionAssignment>
+    returns: list<PermissionAssignment>
     params:
       - name: sessionId
         type: string
@@ -253,4 +253,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-10-03T20:54:11.451Z'
+updatedAt: '2026-10-04T10:19:47.812Z'

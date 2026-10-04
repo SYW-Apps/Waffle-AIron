@@ -10,22 +10,22 @@ description: >-
   antipattern analysis both read it, so they never disagree about what comes next.
 fields:
   - name: stepNumbers
-    type: number[]
+    type: list<int>
     description: The narrative's step numbers in ascending order
     optional: false
 methods:
   - name: stepAt
     signature: 'stepAt(stepNumber: number): NarrativeStep | undefined'
-    returns: NarrativeStep | undefined
+    returns: NarrativeStep?
     description: The step with this number, if there is one
   - name: nextOf
     signature: 'nextOf(stepNumber: number): number | undefined'
-    returns: number | undefined
+    returns: int?
     description: The next step number in ascending order, ignoring jumps and parallel joins
   - name: successorsOf
     signature: 'successorsOf(stepNumber: number): number[]'
-    returns: number[]
+    returns: list<int>
     description: The distinct existing step numbers flow can continue at from this step
 sourcePath: src/models/step-graph.ts
 createdAt: '2026-09-14T06:03:35.169Z'
-updatedAt: '2026-09-19T11:07:18.615Z'
+updatedAt: '2026-10-04T10:29:19.802Z'

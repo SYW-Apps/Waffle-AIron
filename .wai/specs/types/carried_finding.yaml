@@ -22,7 +22,7 @@ fields:
       method.
     optional: false
   - name: covers
-    type: string[]
+    type: list<string>
     description: >-
       The units an aggregating finding covers: the crossings of one UNDECLARED_COLOCATED_CALL, the
       steps of one CALL_STEP_UNREALIZED. Keyed by code, spec and site alone, a 24th crossing added
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-19T19:04:07.920Z'
-updatedAt: '2026-09-19T19:04:07.932Z'
+updatedAt: '2026-10-04T10:19:55.828Z'

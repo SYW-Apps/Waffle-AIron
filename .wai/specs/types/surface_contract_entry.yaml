@@ -33,13 +33,13 @@ fields:
     description: Local name of the backing Portal in the producing project (informational for consumers).
     optional: false
   - name: methods
-    type: object[]
+    type: list<any>
     description: >-
       Full contract methods: name, description, signature, params, returns, guarantees, effect,
       endpoint.
     optional: false
   - name: dispatch
-    type: DispatchBinding[]
+    type: list<DispatchBinding>
     description: >-
       The backing portal's capability dispatch table, when it is a generic-dispatch portal — carries
       the per-capability typing.
@@ -86,11 +86,11 @@ fields:
 methods:
   - name: sameContract
     signature: 'sameContract(other: SurfaceContractEntry): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether two entries carry the same contract: the same backing component by local name, the
       same methods and the same dispatch table, so whichever judges an edge the verdict is the same
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:38.492Z'
-updatedAt: '2026-09-26T16:08:06.104Z'
+updatedAt: '2026-10-04T10:21:14.022Z'

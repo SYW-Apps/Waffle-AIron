@@ -44,14 +44,14 @@ methods:
     description: >-
       Report or resolve the unfinished transactions under a project root — doctor's entry (routed to
       the family migration workflow).
-    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
-    returns: RecoveredTransaction[]
+    signature: 'recover(root: string, fix: bool): list<RecoveredTransaction>'
+    returns: list<RecoveredTransaction>
     params:
       - name: root
         type: string
         description: The project root
       - name: fix
-        type: boolean
+        type: bool
         description: Resolve, or only report
     endpoint:
       transport: Custom
@@ -63,21 +63,21 @@ methods:
       migration's positional step writes from, so the upgrade report (verdict_changes) explains
       exactly what `doctor --fix` would write. Pure; writes nothing.
     signature: >-
-      matchPositions(unresolved: AuthoredReference[], family: ProjectFamily, tables:
-      ResolvedExportTable[], types: TypeSpec[]): PositionalMatch[]
-    returns: PositionalMatch[]
+      matchPositions(unresolved: list<AuthoredReference>, family: ProjectFamily, tables:
+      list<ResolvedExportTable>, types: list<TypeSpec>): list<PositionalMatch>
+    returns: list<PositionalMatch>
     params:
       - name: unresolved
-        type: AuthoredReference[]
+        type: list<AuthoredReference>
         description: The references to read, from the family top's scan
       - name: family
         type: ProjectFamily
         description: The family top's graph
       - name: tables
-        type: ResolvedExportTable[]
+        type: list<ResolvedExportTable>
         description: Every project's resolved L0 export table
       - name: types
-        type: TypeSpec[]
+        type: list<TypeSpec>
         description: Every type the family top's scan loaded
     endpoint:
       transport: Custom
@@ -98,8 +98,8 @@ methods:
     description: >-
       Route to the family transaction: the rehearsal's difference from the live owners. Writes
       nothing.
-    signature: 'diff(rehearsal: Rehearsal): FileChange[]'
-    returns: FileChange[]
+    signature: 'diff(rehearsal: Rehearsal): list<FileChange>'
+    returns: list<FileChange>
     params:
       - name: rehearsal
         type: Rehearsal
@@ -111,13 +111,13 @@ methods:
       journaled under each owner's .wai/transactions/<id>/, swapped, the coordinator marked
       committed; any failure before the commit point restores every backup, and a crash leaves a
       journal recover rolls back. The rehearsal is dropped either way.
-    signature: 'commit(rehearsal: Rehearsal, changes: FileChange[], verb: string): TransactionOutcome'
+    signature: 'commit(rehearsal: Rehearsal, changes: list<FileChange>, verb: string): TransactionOutcome'
     returns: TransactionOutcome
     params:
       - name: rehearsal
         type: Rehearsal
       - name: changes
-        type: FileChange[]
+        type: list<FileChange>
       - name: verb
         type: string
         description: The journal's verb, e.g. member-upgrade
@@ -136,4 +136,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:36:31.021Z'
-updatedAt: '2026-10-01T16:28:22.087Z'
+updatedAt: '2026-10-04T10:19:05.973Z'

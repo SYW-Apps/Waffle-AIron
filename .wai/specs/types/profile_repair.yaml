@@ -22,11 +22,11 @@ fields:
     description: 'Set only when a repair was actually written: the profile id now governing.'
     optional: true
   - name: selectedProfileIds
-    type: string[]
+    type: list<string>
     description: >-
       The project's recorded profile-selection ids as the repair left them — the repaired id folded
       to the front when one was written.
     optional: false
 methods: []
 createdAt: '2026-09-18T17:55:20.633Z'
-updatedAt: '2026-09-18T17:55:20.645Z'
+updatedAt: '2026-10-04T10:20:48.308Z'

@@ -24,8 +24,8 @@ methods:
       validationResult = the design half's counts, and the project's effective id. Never writes
       `children`, never writes anything into the spec tree or below this project. Returns the
       written record, or null when the human declined.
-    signature: 'lockTree(options: LockOptions, gate: ValidationResult, captured: StateId): LockRecord | null'
-    returns: LockRecord | null
+    signature: 'lockTree(options: LockOptions, gate: ValidationResult, captured: StateId): async LockRecord?'
+    returns: async LockRecord?
     params:
       - name: options
         type: LockOptions
@@ -66,15 +66,15 @@ methods:
       asked for, so a project that never locks cannot start failing because it upgraded. A
       repository with no spec tree is reported as such rather than crashing or being mistaken for an
       unapproved one.
-    signature: 'checkApproval(strict: boolean): ApprovalCheck'
+    signature: 'checkApproval(strict: bool): ApprovalCheck'
     returns: ApprovalCheck
     params:
       - name: strict
-        type: boolean
+        type: bool
         description: >-
           Whether the absence of an approval is itself a refusal. False (the default) passes an
           unlocked or spec-tree-less repository with a notice.
         optional: false
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-09-30T05:54:45.439Z'
+updatedAt: '2026-10-04T10:31:56.705Z'

@@ -7,7 +7,7 @@ description: >-
   the manifest itself. The project it applies to is the bound one.
 fields:
   - name: entry
-    type: PackSelection | string
+    type: PackSelection | PackPath
     description: >-
       The selection `pack use` would record, or the legacy path reference `pack add` / a hosted
       install or adopt would register. Absent only for a write that changes the projectType and
@@ -22,7 +22,7 @@ fields:
       request). Given, it is merged at the entry's position instead of resolving the entry.
     optional: true
   - name: remove
-    type: boolean
+    type: bool
     description: >-
       Measure dropping the entry instead of writing it: `pack unuse`, and `pack impact` on a pack
       that is already applied exactly as asked (then the report is what the pack accounts for now).
@@ -36,4 +36,4 @@ fields:
 methods: []
 sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:47.325Z'
-updatedAt: '2026-09-29T16:41:12.462Z'
+updatedAt: '2026-10-04T10:27:29.888Z'

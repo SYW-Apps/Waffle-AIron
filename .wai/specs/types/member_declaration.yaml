@@ -31,7 +31,7 @@ fields:
       the member's project node.
     optional: true
   - name: use
-    type: string[]
+    type: list<string>
     description: >-
       Project members only: the member's public names this project imports, exactly as an external's
       `use`: `['*']` imports everything the member exports, a list only those names. Without `use`
@@ -74,4 +74,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:30.244Z'
-updatedAt: '2026-10-02T20:44:40.154Z'
+updatedAt: '2026-10-04T10:20:28.041Z'

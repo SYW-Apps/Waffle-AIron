@@ -16,7 +16,7 @@ fields:
     description: The subsystem's local id in that root's tree, a part's subsystems included
     optional: false
   - name: writable
-    type: boolean
+    type: bool
     description: Whether the request may change this subsystem's specs
     optional: false
   - name: decidedBy
@@ -27,4 +27,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-10-03T13:35:32.925Z'
-updatedAt: '2026-10-03T13:35:32.927Z'
+updatedAt: '2026-10-04T10:21:13.702Z'

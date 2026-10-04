@@ -30,17 +30,17 @@ methods:
       rule opt-in. Deterministic over file contents; a single file's analysis failure degrades that
       file, never the run.
     signature: >-
-      buildCodeModel(implementations: ImplementationSpec[], types: TypeSpec[], projectRoot: string,
-      sourceRoots?: string[], exclude?: string[]): CodeModel
+      buildCodeModel(implementations: list<ImplementationSpec>, types: list<TypeSpec>, projectRoot:
+      string, sourceRoots?: list<string>, exclude?: list<string>): CodeModel
     returns: CodeModel
     params:
       - name: implementations
-        type: ImplementationSpec[]
+        type: list<ImplementationSpec>
         description: >-
           The loaded L4 specs whose implementation, method and sim paths define part of the file set
           (deduplicated — N:1 sharing is expected)
       - name: types
-        type: TypeSpec[]
+        type: list<TypeSpec>
         description: >-
           The loaded type specs whose own and per-method sourcePaths claim code, analyzed on the
           same terms
@@ -48,13 +48,13 @@ methods:
         type: string
         description: The root every source path and source root is resolved and containment-checked within
       - name: sourceRoots
-        type: string[]
+        type: list<string>
         description: >-
           Project-relative directories or files holding this project's own source code; empty means
           no walk, and the unclaimed-source rule stays silent
         optional: true
       - name: exclude
-        type: string[]
+        type: list<string>
         description: >-
           Paths inside those roots that are not this project's code to claim — vendored libraries,
           generated output, a chained subproject's own directory
@@ -82,12 +82,12 @@ methods:
       nothing and answers empty, which is what keeps this opt-in. Deterministic over file contents;
       an unreadable test or source file is skipped, never fatal.
     signature: >-
-      findTestsReferencing(methods: MethodImplementation[], projectRoot: string, testRoots:
-      string[]): TestsToRevisit[]
-    returns: TestsToRevisit[]
+      findTestsReferencing(methods: list<MethodImplementation>, projectRoot: string, testRoots:
+      list<string>): list<TestsToRevisit>
+    returns: list<TestsToRevisit>
     params:
       - name: methods
-        type: MethodImplementation[]
+        type: list<MethodImplementation>
         description: >-
           The methods to look for; each contributes its `symbol` when it declares one, otherwise its
           name, and its `sourcePath` — the file realizing it, project-relative — when the caller
@@ -96,7 +96,7 @@ methods:
         type: string
         description: The root every test root is resolved and containment-checked within
       - name: testRoots
-        type: string[]
+        type: list<string>
         description: >-
           Project-relative directories holding the project's tests; empty means no walk and an empty
           answer
@@ -104,4 +104,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-10-03T20:54:08.290Z'
+updatedAt: '2026-10-04T10:19:35.941Z'

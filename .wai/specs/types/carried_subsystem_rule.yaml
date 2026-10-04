@@ -10,7 +10,7 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: from
-    type: string[]
+    type: list<string>
     description: >-
       The subsystem scopes (`<parent>/<subsystem>`) the setting came from; several when a collapse
       folds them onto one rule
@@ -38,4 +38,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-10-03T14:20:03.847Z'
-updatedAt: '2026-10-03T14:20:03.850Z'
+updatedAt: '2026-10-04T10:19:56.507Z'

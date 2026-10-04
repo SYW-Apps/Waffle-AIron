@@ -13,8 +13,8 @@ methods:
     effect: write
   - name: get
     description: Held snapshot by project name, or null.
-    signature: 'get(projectName: string): SurfaceSnapshot | null'
-    returns: SurfaceSnapshot | null
+    signature: 'get(projectName: string): SurfaceSnapshot?'
+    returns: SurfaceSnapshot?
     params:
       - name: projectName
         type: string
@@ -22,12 +22,12 @@ methods:
   - name: list
     description: All held snapshots.
     signature: 'list(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    returns: list<SurfaceSnapshot>
     effect: read
   - name: remove
     description: Drop the held snapshot for a project.
-    signature: 'remove(projectName: string): boolean'
-    returns: boolean
+    signature: 'remove(projectName: string): bool'
+    returns: bool
     params:
       - name: projectName
         type: string
@@ -54,4 +54,4 @@ lint:
         and surface_registry.
 status: complete
 createdAt: '2026-07-10T23:13:31.819Z'
-updatedAt: '2026-09-19T21:29:24.487Z'
+updatedAt: '2026-10-04T10:19:41.875Z'

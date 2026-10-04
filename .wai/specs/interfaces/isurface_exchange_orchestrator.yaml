@@ -14,8 +14,8 @@ methods:
       ReachableProjectRef carries the relation ids, kinds, and target public interface ids.
     signature: >-
       listReachableProjectsForMcp(credential: string, currentProjectId: string):
-      ReachableProjectRef[]
-    returns: ReachableProjectRef[]
+      list<ReachableProjectRef>
+    returns: list<ReachableProjectRef>
     params:
       - name: credential
         type: string
@@ -32,8 +32,8 @@ methods:
       default).
     signature: >-
       listReachableProjectInterfacesForMcp(credential: string, currentProjectId: string,
-      targetProjectId: string): PublicInterfaceSummary[]
-    returns: PublicInterfaceSummary[]
+      targetProjectId: string): list<PublicInterfaceSummary>
+    returns: list<PublicInterfaceSummary>
     params:
       - name: credential
         type: string
@@ -49,8 +49,8 @@ methods:
       distance and the redacted catalog summaries whose ceiling covers that distance. Also the
       data-plane MCP tool sdd_landscape_list_visible_surfaces (currentProjectId = the BOUND
       project). Reads are not audited.
-    signature: 'listVisibleSurfaces(credential: string, currentProjectId: string): VisibleSurfaceEntry[]'
-    returns: VisibleSurfaceEntry[]
+    signature: 'listVisibleSurfaces(credential: string, currentProjectId: string): list<VisibleSurfaceEntry>'
+    returns: list<VisibleSurfaceEntry>
     params:
       - name: credential
         type: string
@@ -102,4 +102,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-11T12:02:52.785Z'
-updatedAt: '2026-07-23T22:15:48.081Z'
+updatedAt: '2026-10-04T10:19:39.895Z'

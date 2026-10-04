@@ -11,9 +11,7 @@ methods:
       Forward the sdd_update_spec patch to the authoring portal's gate: the intrinsic rules judge
       the merged candidate and refuse it before anything reaches disk, and a dry run runs that whole
       write and answers with the report it would have produced without touching a file.
-    signature: >-
-      updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
-      SpecChangeReport
+    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
     returns: SpecChangeReport
     params:
       - name: kind
@@ -26,7 +24,7 @@ methods:
         type: SpecDelta
         description: The partial change to merge, carrying the delta's own verbs
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer with what the delta would do and write nothing
         optional: true
   - name: moveMethods
@@ -34,7 +32,7 @@ methods:
       Forward the sdd_move_methods request to the authoring portal's gate: the move is judged as a
       whole and refused before anything reaches disk, and a dry run runs that same move and answers
       with the report it would have produced without writing.
-    signature: 'moveMethods(from: string, to: string, methods: string[], dryRun?: boolean): MethodMoveReport'
+    signature: 'moveMethods(from: string, to: string, methods: list<string>, dryRun?: bool): MethodMoveReport'
     returns: MethodMoveReport
     params:
       - name: from
@@ -44,10 +42,10 @@ methods:
         type: string
         description: The component id that should receive them
       - name: methods
-        type: string[]
+        type: list<string>
         description: The method names to move
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer with what the move would do and write nothing
         optional: true
   - name: writeSpec
@@ -75,4 +73,4 @@ methods:
         description: The spec id
 status: complete
 createdAt: '2026-09-18T21:42:03.998Z'
-updatedAt: '2026-09-24T22:22:00.086Z'
+updatedAt: '2026-10-04T10:18:59.362Z'

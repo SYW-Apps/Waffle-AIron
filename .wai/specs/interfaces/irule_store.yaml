@@ -14,8 +14,8 @@ methods:
         type: SddRule
   - name: list
     description: Return every held rule in registration order.
-    signature: 'list(): SddRule[]'
-    returns: SddRule[]
+    signature: 'list(): list<SddRule>'
+    returns: list<SddRule>
     params: []
   - name: clear
     description: Empty the held set, so a new validation run seeds its rules from nothing.
@@ -27,4 +27,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T19:17:10.227Z'
-updatedAt: '2026-09-17T20:37:35.714Z'
+updatedAt: '2026-10-04T10:19:27.325Z'

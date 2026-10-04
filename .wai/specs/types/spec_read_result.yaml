@@ -21,15 +21,15 @@ fields:
     description: The stored spec, exactly as it is held, minus the derived markers beside it.
     optional: false
   - name: partialResult
-    type: PartialMethodResult | null
+    type: PartialMethodResult?
     description: Present only when a methods filter narrowed the read.
     optional: true
   - name: variantGuidance
-    type: VariantDef | null
+    type: VariantDef?
     description: >-
       Derived, read-only guidance for a variant-tagged component, resolved from the variant registry
       rather than stored on the spec. Never written back.
     optional: true
 methods: []
 createdAt: '2026-09-19T23:05:27.992Z'
-updatedAt: '2026-09-19T23:05:28.293Z'
+updatedAt: '2026-10-04T10:21:09.324Z'

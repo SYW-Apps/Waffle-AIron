@@ -9,11 +9,11 @@ methods:
       embedded templates, substituting the pack name/version and — for code packs — pinning the
       @wairon/sdk dependency to the running SDK version. Includes a wairon-pack.yaml envelope stub,
       the entry file, and (code) package.json/tsconfig/build script, plus an optional SKILL.md stub.
-    signature: 'render(request: pack_scaffold_request): PackFile[]'
-    returns: PackFile[]
+    signature: 'render(request: pack_scaffold_request): list<PackFile>'
+    returns: list<PackFile>
     params:
       - name: request
         type: pack_scaffold_request
 status: complete
 createdAt: '2026-07-21T18:13:40.057Z'
-updatedAt: '2026-10-03T20:54:02.419Z'
+updatedAt: '2026-10-04T10:19:10.931Z'

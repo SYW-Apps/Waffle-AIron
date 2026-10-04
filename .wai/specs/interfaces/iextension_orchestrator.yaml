@@ -18,11 +18,11 @@ methods:
     description: >-
       Load extension packs from explicit refs (all project-scoped) resolved against the given
       project root — the programmatic entry used when a caller injects its own pack set.
-    signature: 'load(packRefs: string[], projectRoot: string): LoadedExtensions'
+    signature: 'load(packRefs: list<string>, projectRoot: string): LoadedExtensions'
     returns: LoadedExtensions
     params:
       - name: packRefs
-        type: string[]
+        type: list<string>
       - name: projectRoot
         type: string
     invokedBy:
@@ -46,8 +46,8 @@ methods:
       unchanged; a selection resolves against the committed bundle then the store. Null when a
       selection cannot be resolved, leaving the caller to decide whether that is an error it reports
       or an entry it skips.
-    signature: 'packEntryRef(entry: PackSelection, projectRoot: string): string | null'
-    returns: string | null
+    signature: 'packEntryRef(entry: PackSelection, projectRoot: string): string?'
+    returns: string?
     params:
       - name: entry
         type: PackSelection
@@ -59,8 +59,8 @@ methods:
       by default: a project's doctrine is what the project declares, so installing a pack makes it
       available rather than authoritative. One accessor so every reader and every config writer
       agrees on the default.
-    signature: 'globalPacksEnabled(config: ProjectConfig): boolean'
-    returns: boolean
+    signature: 'globalPacksEnabled(config: ProjectConfig): bool'
+    returns: bool
     params:
       - name: config
         type: ProjectConfig
@@ -83,8 +83,8 @@ methods:
       loading off. Doctrine that governs a project becomes declared BY that project, visible in a
       diff and reproducible for a clone. Returns the names recorded; does nothing for a project that
       already decided, so selections are never invented for one that deliberately applies nothing.
-    signature: 'pinInstalledPacksAsSelections(): string[]'
-    returns: string[]
+    signature: 'pinInstalledPacksAsSelections(): list<string>'
+    returns: list<string>
     params: []
   - name: defaultPackSelections
     description: >-
@@ -94,8 +94,8 @@ methods:
       empty list. The distinction it exists for: a machine-wide install becomes a default for
       projects created from now on (written into the new project's config, visible in review and
       removable) rather than retroactive authority over every project on disk.
-    signature: 'defaultPackSelections(): PackSelection[]'
-    returns: PackSelection[]
+    signature: 'defaultPackSelections(): list<PackSelection>'
+    returns: list<PackSelection>
     params: []
   - name: packStoreDir
     description: >-
@@ -112,8 +112,8 @@ methods:
       Every pack installed on this machine, whatever any project has declared. The distinction
       matters: installed and applied are different states, and a pack present but undeclared is
       exactly what `wairon doctor` reports.
-    signature: 'listInstalledPacks(): InstalledPack[]'
-    returns: InstalledPack[]
+    signature: 'listInstalledPacks(): list<InstalledPack>'
+    returns: list<InstalledPack>
     params: []
     guarantees:
       - idempotent
@@ -121,8 +121,8 @@ methods:
     description: >-
       One installed pack by name, at a given version or the newest when none is named, or nothing
       when it is not installed.
-    signature: 'resolveInstalledPack(name: string, version: string): InstalledPack | null'
-    returns: InstalledPack | null
+    signature: 'resolveInstalledPack(name: string, version: string): InstalledPack?'
+    returns: InstalledPack?
     params:
       - name: name
         type: string
@@ -151,8 +151,8 @@ methods:
       Remove an installed pack, answering whether there was one to remove. Removing from the machine
       store never edits a project: a project that declared the pack still declares it, and that
       mismatch is something to report rather than silently repair.
-    signature: 'uninstallPack(name: string, version: string): boolean'
-    returns: boolean
+    signature: 'uninstallPack(name: string, version: string): bool'
+    returns: bool
     params:
       - name: name
         type: string
@@ -172,15 +172,15 @@ methods:
     description: >-
       The pack refs in a directory, sorted for a deterministic load order; empty for a missing or
       unreadable directory. Forwarded from the pack source.
-    signature: 'discoverPacks(dir: string): string[]'
-    returns: string[]
+    signature: 'discoverPacks(dir: string): list<string>'
+    returns: list<string>
     params:
       - name: dir
         type: string
   - name: packDirEntry
     description: The entry file that makes a directory a pack, or null when the directory is not one.
-    signature: 'packDirEntry(dir: string): string | null'
-    returns: string | null
+    signature: 'packDirEntry(dir: string): string?'
+    returns: string?
     params:
       - name: dir
         type: string
@@ -189,11 +189,11 @@ methods:
       Load the given packs, each under its scope, against a project root into one LoadedExtensions —
       a failed pack rides on the result's errors rather than throwing. What a caller uses to probe a
       pack in isolation.
-    signature: 'loadPacks(refs: PackRef[], projectRoot: string): LoadedExtensions'
+    signature: 'loadPacks(refs: list<PackRef>, projectRoot: string): LoadedExtensions'
     returns: LoadedExtensions
     params:
       - name: refs
-        type: PackRef[]
+        type: list<PackRef>
       - name: projectRoot
         type: string
   - name: checkDeclarativePack
@@ -201,11 +201,11 @@ methods:
       Judge a parsed manifest against the declarative-pack schema: the first schema error's message,
       or null when the manifest is a valid declarative pack. How a caller that must refuse rule and
       code packs tells them apart before installing anything.
-    signature: 'checkDeclarativePack(manifest: Json): string | null'
-    returns: string | null
+    signature: 'checkDeclarativePack(manifest: any): string?'
+    returns: string?
     params:
       - name: manifest
-        type: Json
+        type: any
         description: The parsed manifest document, untyped until this judges it
   - name: loadFor
     description: >-
@@ -238,11 +238,11 @@ methods:
       the bundle then the store (a pinned integrity verified), a legacy path ref against the project
       root. Null when it does not resolve or fails to parse — the caller reports why; the gate
       already reports the same entry under its own code. Writes nothing.
-    signature: 'manifestOf(entry: PackSelection | string): ExtensionPack | null'
-    returns: ExtensionPack | null
+    signature: 'manifestOf(entry: PackSelection | PackPath): ExtensionPack?'
+    returns: ExtensionPack?
     params:
       - name: entry
-        type: PackSelection | string
+        type: PackSelection | PackPath
         description: A by-name selection or a legacy path reference
     guarantees:
       - idempotent
@@ -254,14 +254,14 @@ methods:
       caller holding a pack's content before anything is on disk (a hosted preview, a policy write
       measured before its vendoring) supplies it as a pack impact candidate's manifest. Writes
       nothing.
-    signature: 'parseDeclarativePack(manifest: Json): ExtensionPack'
+    signature: 'parseDeclarativePack(manifest: any): ExtensionPack'
     returns: ExtensionPack
     params:
       - name: manifest
-        type: Json
+        type: any
         description: The parsed manifest document, untyped until this reads it
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-10-03T20:53:55.761Z'
+updatedAt: '2026-10-04T10:27:30.807Z'

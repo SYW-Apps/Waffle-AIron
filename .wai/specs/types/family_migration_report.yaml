@@ -11,7 +11,7 @@ fields:
     description: The plan applied.
     optional: false
   - name: applied
-    type: boolean
+    type: bool
     description: >-
       True when the transaction committed; false for a dry run, a refused or empty plan, or a failed
       commit.
@@ -23,10 +23,10 @@ fields:
       restored. Absent when nothing was committed because the plan was refused, empty, or a dry run.
     optional: true
   - name: relock
-    type: string[]
+    type: list<string>
     description: The plan's re-lock list, when applied; nothing is locked on anyone's behalf.
     optional: false
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:53.126Z'
-updatedAt: '2026-09-30T21:33:08.944Z'
+updatedAt: '2026-10-04T10:20:11.616Z'

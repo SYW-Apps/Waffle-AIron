@@ -11,12 +11,12 @@ methods:
       subjectKind, subjectId, and capability. All filters optional; an empty filter returns every
       assignment.
     signature: >-
-      listAssignments(scopeIds?: string[], subjectKind?: string, subjectId?: string, capability?:
-      string): PermissionAssignment[]
-    returns: PermissionAssignment[]
+      listAssignments(scopeIds?: list<string>, subjectKind?: string, subjectId?: string,
+      capability?: string): list<PermissionAssignment>
+    returns: list<PermissionAssignment>
     params:
       - name: scopeIds
-        type: string[]
+        type: list<string>
         optional: true
       - name: subjectKind
         type: string
@@ -31,11 +31,11 @@ methods:
     description: >-
       Return one assignment by id, or null when absent — used to authorize a removal against the
       assignment's own scope.
-    signature: 'getAssignment(assignmentId: string): PermissionAssignment | null'
-    returns: PermissionAssignment | null
+    signature: 'getAssignment(assignmentId: string): PermissionAssignment?'
+    returns: PermissionAssignment?
     params:
       - name: assignmentId
         type: string
 status: complete
 createdAt: '2026-07-15T20:27:57.661Z'
-updatedAt: '2026-10-03T20:54:03.300Z'
+updatedAt: '2026-10-04T10:19:12.938Z'

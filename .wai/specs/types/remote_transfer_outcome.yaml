@@ -24,11 +24,11 @@ fields:
     description: The moved tree's project name, from its envelope
     optional: false
   - name: roots
-    type: string[]
+    type: list<string>
     description: Project-relative roots moved — '.' plus every chained subproject
     optional: false
   - name: fileCount
-    type: number
+    type: int
     description: How many spec-tree files moved
     optional: false
   - name: backupPath
@@ -36,7 +36,7 @@ fields:
     description: Where the destination's previous tree was moved aside; absent when it held none
     optional: true
   - name: createdProject
-    type: boolean
+    type: bool
     description: 'Push only: the hosted project was initialized as part of this migration'
     optional: true
   - name: archivePath
@@ -50,7 +50,7 @@ fields:
       directory other than the bound project root.
     optional: true
   - name: skipped
-    type: object[]
+    type: list<any>
     description: >-
       The mounts a partial export left out (allowed by allowPartial), each as {mount, projectPath,
       reason}; absent when nothing was skipped.
@@ -59,4 +59,4 @@ methods: []
 componentClass: remote_orchestrator
 sourcePath: src/commands/remote.ts
 createdAt: '2026-08-12T18:31:17.450Z'
-updatedAt: '2026-10-03T17:04:55.224Z'
+updatedAt: '2026-10-04T10:29:12.805Z'

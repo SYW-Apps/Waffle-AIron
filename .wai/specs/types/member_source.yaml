@@ -1,0 +1,23 @@
+kind: value-object
+id: member_source
+name: MemberSource
+description: >-
+  A member's location in its one string grammar, held as a string: a contained path
+  (`services/scheduler`), a sibling checkout (`../admin`), a git repository at a commit
+  (`git@host:acme/payments.git#<commit>`) or a hosted record (`hosted:marketplace`). It is the
+  shorthand a `members` entry may be instead of its long form, which carries the same location as
+  its `source`.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+lint:
+  allow:
+    - code: HOLLOW_TYPE
+      reason: >-
+        A named scalar domain, not a placeholder: a member location held as a string (realized as
+        `type MemberSource = string` in src/models/project.ts). It exists so a members entry is
+        `MemberDeclaration | MemberSource`, a union of named types (M3); the type grammar has no
+        form for saying which primitive a named value-object holds.
+createdAt: '2026-10-04T10:27:21.889Z'
+updatedAt: '2026-10-04T10:34:09.815Z'

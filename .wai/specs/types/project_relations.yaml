@@ -15,7 +15,7 @@ fields:
     optional: false
     key: primary
   - name: externals
-    type: ExternalStatus[]
+    type: list<ExternalStatus>
     description: >-
       Its externals status (surface_orchestrator.getExternalsStatus at its root): one entry per
       external and referenced project member, each per use — and one per CONTAINED project member it
@@ -37,4 +37,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-03T12:14:14.074Z'
-updatedAt: '2026-10-03T12:25:39.996Z'
+updatedAt: '2026-10-04T10:20:52.824Z'

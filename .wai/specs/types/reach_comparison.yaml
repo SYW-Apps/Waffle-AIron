@@ -35,9 +35,9 @@ fields:
     description: The effective permission after the change (no for a project that will have no record)
     optional: false
   - name: equal
-    type: boolean
+    type: bool
     description: True when before.value equals after.value
     optional: false
 methods: []
 createdAt: '2026-10-01T16:27:09.521Z'
-updatedAt: '2026-10-01T16:55:11.030Z'
+updatedAt: '2026-10-04T10:20:54.482Z'

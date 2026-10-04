@@ -21,7 +21,7 @@ fields:
     description: One-line description of what the code flags.
     optional: false
   - name: carryable
-    type: boolean
+    type: bool
     description: >-
       This code may appear in the conformance debt register (rules.conformance.carried) — the
       allowlist that keeps the register from becoming a second, general-purpose lint.allow. A code
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:14.460Z'
-updatedAt: '2026-09-26T15:26:11.954Z'
+updatedAt: '2026-10-04T10:21:00.766Z'

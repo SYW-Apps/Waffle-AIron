@@ -8,7 +8,7 @@ methods:
   - name: loadSystemSpec
     description: Loads the L0 system specification, or null when the project has none.
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: loadSubsystemSpecs
     description: >-
       Loads all L1 subsystem specifications of the bound root and of every member the scan read,
@@ -20,46 +20,46 @@ methods:
       identically from every loading root; every loader issue about a member (escaping, cyclic,
       missing) carries the member's key, so a validation scope that includes the member keeps it.
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadSubsystemSpec
     description: Loads a single subsystem specification by id.
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
+    returns: SubsystemSpec?
   - name: loadComponentSpecs
     description: Loads all L2 component specifications.
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadComponentSpec
     description: Loads a single component specification by id.
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
-    returns: ComponentSpec | null
+    returns: ComponentSpec?
   - name: loadInterfaceSpecs
     description: Loads all L3 interface specifications.
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadInterfaceSpec
     description: Loads a single interface specification by id.
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
-    returns: InterfaceSpec | null
+    returns: InterfaceSpec?
   - name: loadImplementationSpecs
     description: Loads all L4 implementation specifications.
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: loadImplementationSpec
     description: Loads a single implementation specification by id.
     signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
-    returns: ImplementationSpec | null
+    returns: ImplementationSpec?
   - name: loadTypeSpecs
     description: Loads all type specifications across flat, per-subsystem, and grouped layouts.
     signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    returns: list<TypeSpec>
   - name: resolveSubprojectForNamespace
     description: >-
       Resolve a member's key (its project id, or its alias path when its id is taken or missing) to
       that member's project root, as the scan recorded it; a member refused at scan time (escaping,
       missing, cyclic) resolves to null, as does a key no member has.
-    signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
-    returns: string | null
+    signature: 'resolveSubprojectForNamespace(namespace: string): string?'
+    returns: string?
     params:
       - name: namespace
         type: string
@@ -80,8 +80,8 @@ methods:
     description: >-
       Loads a single type specification by id, across the flat, per-subsystem and grouped layouts;
       null when the workspace holds none under that id.
-    signature: 'loadTypeSpec(id: string): TypeSpec | null'
-    returns: TypeSpec | null
+    signature: 'loadTypeSpec(id: string): TypeSpec?'
+    returns: TypeSpec?
     params:
       - name: id
         type: string
@@ -91,11 +91,9 @@ methods:
       Load one spec of the named kind by id through the typed loader of that kind, or null when none
       is stored. The L0 is a singleton: its id is informational.
     signature: >-
-      load(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
-      ImplementationSpec | TypeSpec | null
-    returns: >-
-      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
-      null
+      load(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
+      ImplementationSpec | TypeSpec)?
+    returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
         type: string
@@ -119,8 +117,8 @@ methods:
       scan as every other read, so it is never stale with it; the scan's freshness signature also
       covers each root's .wai/project.yaml and each part's directory (a git part by its pinned
       commit), so an edit to a root's members, externals or parts re-scans.
-    signature: 'listProjectRoots(): ScannedProjectRoot[]'
-    returns: ScannedProjectRoot[]
+    signature: 'listProjectRoots(): list<ScannedProjectRoot>'
+    returns: list<ScannedProjectRoot>
     params: []
     guarantees:
       - idempotent
@@ -170,8 +168,8 @@ methods:
         optional: true
   - name: snapshot
     description: Every spec file of the workspace read through the file store, its bytes keyed by path.
-    signature: 'snapshot(): Map<string, string>'
-    returns: Map<string, string>
+    signature: 'snapshot(): map<string, string>'
+    returns: map<string, string>
     params: []
   - name: signatureFacts
     description: >-
@@ -195,4 +193,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-03T22:04:56.861Z'
+updatedAt: '2026-10-04T10:19:37.241Z'

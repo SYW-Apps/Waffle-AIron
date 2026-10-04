@@ -104,8 +104,8 @@ methods:
       mismatch, or when the instance identity has never been seeded, returns null. Never throws and
       performs no session, throttle, or audit work — the web orchestrator owns the session mint and
       the failed-attempt throttle.
-    signature: 'verifyBuiltinAdmin(user: string, password: string): PrincipalSubject | null'
-    returns: PrincipalSubject | null
+    signature: 'verifyBuiltinAdmin(user: string, password: string): PrincipalSubject?'
+    returns: PrincipalSubject?
     params:
       - name: user
         type: string
@@ -119,8 +119,8 @@ methods:
       'builtin:localdev'). Defense-in-depth companion to the UUID scheme (UUID = unguessable, guard
       = unclaimable); identity.upsertUser enforces it on every user write so an admin-created user
       can never inherit the built-in bypass.
-    signature: 'isReservedSubject(userId: string): boolean'
-    returns: boolean
+    signature: 'isReservedSubject(userId: string): bool'
+    returns: bool
     params:
       - name: userId
         type: string
@@ -140,12 +140,12 @@ methods:
       'builtin:localdev'), the guessable ids the built-in subjects carried before the boot-reserved
       UUIDs. The permission-model migration uses it to re-own legacy built-in records; an absent id
       is never one.
-    signature: 'isLegacyBuiltin(userId: string | undefined): boolean'
-    returns: boolean
+    signature: 'isLegacyBuiltin(userId: string?): bool'
+    returns: bool
     params:
       - name: userId
-        type: string | undefined
+        type: string?
         description: The user id a legacy record carries, if any.
 status: complete
 createdAt: '2026-07-04T12:49:50.542Z'
-updatedAt: '2026-10-03T17:49:26.065Z'
+updatedAt: '2026-10-04T10:18:32.718Z'

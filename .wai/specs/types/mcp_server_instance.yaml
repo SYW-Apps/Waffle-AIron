@@ -1,0 +1,19 @@
+kind: value-object
+id: mcp_server_instance
+name: McpServerInstance
+description: >-
+  A configured MCP server, its tools, resources and prompts registered, that a transport connects
+  to: the stdio entry point connects one for the session, the hosted request path one per request.
+  An opaque handle — its concrete class is the MCP protocol library's, an implementation choice, so
+  no contract depends on its members.
+fields: []
+methods: []
+lint:
+  allow:
+    - code: HOLLOW_TYPE
+      reason: >-
+        An opaque handle, not a placeholder: the configured MCP server a transport connects to. Its
+        concrete class is the MCP protocol library's (an implementation choice), and no contract
+        reads its members, so a field or method here would leak that library into the design.
+createdAt: '2026-10-04T10:27:27.578Z'
+updatedAt: '2026-10-04T10:34:14.292Z'

@@ -30,15 +30,15 @@ methods:
       compared, the pin and when it was compared) and each consumption edge names it; a pair the
       relations do not answer is unavailable, never ok. Without relations the model carries none,
       and the canvas says health was not checked.
-    signature: 'build(issues?: ValidationIssue[], relations?: ProjectRelations[]): CanvasModel'
+    signature: 'build(issues?: list<ValidationIssue>, relations?: list<ProjectRelations>): CanvasModel'
     returns: CanvasModel
     params:
       - name: issues
-        type: ValidationIssue[]
+        type: list<ValidationIssue>
         description: Findings to mark on the nodes they name; none when omitted
         optional: true
       - name: relations
-        type: ProjectRelations[]
+        type: list<ProjectRelations>
         description: >-
           The family's relation health (family_validator.relations) to colour consumption edges by;
           when omitted the model carries no relations and every consumption edge is drawn as not
@@ -76,4 +76,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T16:38:05.210Z'
-updatedAt: '2026-10-03T22:09:07.251Z'
+updatedAt: '2026-10-04T10:19:36.335Z'

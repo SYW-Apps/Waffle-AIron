@@ -723,6 +723,6 @@ methods:
     detail: full
     symbol: check
     exportedVia: packDeprecationsRule
-status: design
+status: complete
 createdAt: '2026-09-14T23:15:33.948Z'
-updatedAt: '2026-10-03T22:11:00.412Z'
+updatedAt: '2026-10-04T10:34:18.827Z'

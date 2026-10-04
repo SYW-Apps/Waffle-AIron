@@ -13,16 +13,16 @@ fields:
     description: Hosted project id these references belong to.
     optional: false
   - name: packNames
-    type: string[]
+    type: list<string>
     description: >-
       Pack names the project references: its registered extension packs (extensions.packs) unioned
       with any required/default pack names recorded in its profile selection.
     optional: false
   - name: profileIds
-    type: string[]
+    type: list<string>
     description: Architectural profile ids the project selected in its recorded profile selection, if any.
     optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-10T12:35:57.474Z'
-updatedAt: '2026-09-19T11:07:14.434Z'
+updatedAt: '2026-10-04T10:20:51.861Z'

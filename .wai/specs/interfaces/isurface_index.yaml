@@ -5,8 +5,8 @@ component: surface_index
 methods:
   - name: byProject
     description: Snapshot produced by the named project, or null.
-    signature: 'byProject(projectName: string): SurfaceSnapshot | null'
-    returns: SurfaceSnapshot | null
+    signature: 'byProject(projectName: string): SurfaceSnapshot?'
+    returns: SurfaceSnapshot?
     params:
       - name: projectName
         type: string
@@ -14,9 +14,9 @@ methods:
     description: >-
       Every snapshot held at a project root — the bound root when omitted, or a chained mount's own
       root when validation reads the surfaces that mount holds.
-    signature: 'all(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    signature: 'all(): list<SurfaceSnapshot>'
+    returns: list<SurfaceSnapshot>
     params: []
 status: complete
 createdAt: '2026-07-10T23:13:38.422Z'
-updatedAt: '2026-10-03T16:45:11.937Z'
+updatedAt: '2026-10-04T10:19:40.551Z'

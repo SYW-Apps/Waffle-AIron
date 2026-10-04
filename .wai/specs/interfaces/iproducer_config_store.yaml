@@ -6,7 +6,7 @@ methods:
   - name: read
     description: Read a target's config, or null.
     signature: 'read(target: string): ProducerConfig | null'
-    returns: ProducerConfig | null
+    returns: ProducerConfig?
     effect: read
   - name: write
     description: Persist a producer config.
@@ -21,7 +21,7 @@ methods:
   - name: list
     description: List all producer configs.
     signature: 'list(): ProducerConfig[]'
-    returns: ProducerConfig[]
+    returns: list<ProducerConfig>
 status: complete
 createdAt: '2026-07-04T17:37:47.379Z'
-updatedAt: '2026-09-17T16:34:48.046Z'
+updatedAt: '2026-10-04T10:19:16.492Z'

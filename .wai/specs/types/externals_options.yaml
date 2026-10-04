@@ -5,10 +5,10 @@ description: The options `wairon externals` reads.
 subsystem: sdd_cli
 fields:
   - name: json
-    type: boolean
+    type: bool
     description: '--json: print the structured answer instead of the table.'
     optional: true
 methods: []
 sourcePath: src/commands/externals.ts
 createdAt: '2026-10-03T17:11:27.059Z'
-updatedAt: '2026-10-03T17:11:27.061Z'
+updatedAt: '2026-10-04T10:20:09.291Z'

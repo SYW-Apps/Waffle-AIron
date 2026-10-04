@@ -43,14 +43,14 @@ methods:
       data-plane permission gate. Appends a redacted audit event for every handled data-plane tool
       call — stamped with the TOP project id for provenance plus the bound member qualifier when one
       applied; append failures are recorded as server diagnostics and never fail the request.
-    signature: 'handle(body: unknown, credential?: string | null): void'
-    returns: void
+    signature: 'handle(body: any, credential?: string?): async void'
+    returns: async void
     params:
       - name: body
-        type: unknown
+        type: any
         description: 'The decoded JSON-RPC body: one tool call (a batch is refused).'
       - name: credential
-        type: string | null
+        type: string?
         description: >-
           The credential the HTTP layer already resolved — a bearer token or a web-session id;
           omitted, the request's bearer token is used.
@@ -82,12 +82,12 @@ methods:
       member only; it never reaches its parent's. A tool that throws answers in the same envelope
       with isError set, never as a transport failure.
     signature: >-
-      dispatchProjectLifecycleTool(credential: string | null, projectId: string, body: unknown):
-      McpToolResponse | undefined
-    returns: McpToolResponse | undefined
+      dispatchProjectLifecycleTool(credential: string?, projectId: string, body: any): async
+      McpToolResponse?
+    returns: async McpToolResponse?
     params:
       - name: credential
-        type: string | null
+        type: string?
         description: >-
           The caller's credential (null when none was presented), forwarded so each orchestrator
           resolves its own permission
@@ -95,7 +95,7 @@ methods:
         type: string
         description: The id of the already-bound record every served tool is scoped to
       - name: body
-        type: unknown
+        type: any
         description: The decoded JSON-RPC body carrying the tool call
   - name: auditToolCall
     description: >-
@@ -107,9 +107,7 @@ methods:
       the required actor is always present. Every data-plane outcome flows through this one path — a
       permission refusal, a tool the data plane served itself, and a tool the scoped MCP server
       served.
-    signature: >-
-      auditToolCall(principal: Principal, binding: ProjectBinding, body: unknown, outcome: string):
-      void
+    signature: 'auditToolCall(principal: Principal, binding: ProjectBinding, body: any, outcome: string): void'
     returns: void
     params:
       - name: principal
@@ -119,7 +117,7 @@ methods:
         type: ProjectBinding
         description: The bound record the event names, and the deprecated qualifier recorded as composition
       - name: body
-        type: unknown
+        type: any
         description: The decoded JSON-RPC message of the handled call, which names the tool the event targets
       - name: outcome
         type: string
@@ -128,4 +126,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-10-03T17:54:11.782Z'
+updatedAt: '2026-10-04T10:32:03.543Z'

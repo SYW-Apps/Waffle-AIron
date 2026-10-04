@@ -68,8 +68,8 @@ methods:
       list pending approval requests the caller may decide: an instance-admin sees all; otherwise a
       request is included only when the caller's resolved approval:decide permission over the
       request's project is yes. Optionally narrowed to one project.
-    signature: 'listPendingRequests(credential: string, projectId?: string): ApprovalRequest[]'
-    returns: ApprovalRequest[]
+    signature: 'listPendingRequests(credential: string, projectId?: string): list<ApprovalRequest>'
+    returns: list<ApprovalRequest>
     params:
       - name: credential
         type: string
@@ -126,15 +126,17 @@ methods:
       leaves pending status (approved/denied/completed/expired) or the timeout elapses, and return
       the request in its current state. Pairs with decideRequest's auto-execute so an approved
       request returns already completed.
-    signature: 'awaitApproval(credential: string, requestId: string, timeoutSeconds: number): ApprovalRequest'
-    returns: ApprovalRequest
+    signature: >-
+      awaitApproval(credential: string, requestId: string, timeoutSeconds: int): async
+      ApprovalRequest
+    returns: async ApprovalRequest
     params:
       - name: credential
         type: string
       - name: requestId
         type: string
       - name: timeoutSeconds
-        type: number
+        type: int
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-10-03T20:54:04.664Z'
+updatedAt: '2026-10-04T10:32:09.968Z'

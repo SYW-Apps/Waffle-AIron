@@ -771,8 +771,11 @@ export function declaredProfileIds(config: Pick<ProjectConfig, 'profileSelection
   return [...new Set(config.profileSelection?.profileIds ?? [])];
 }
 
+/** pack_path — a legacy path reference to a pack file, as `pack add` registers it in `extensions.packs`. */
+export type PackPath = string;
+
 /** One entry of `extensions.packs`: a by-name selection or a legacy path reference. */
-export type PackEntry = PackSelection | string;
+export type PackEntry = PackSelection | PackPath;
 
 /**
  * project_config.withPack — the configuration as it would read after one pack
@@ -1154,6 +1157,13 @@ export const FULL_COMMIT_RE = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 /** A git URL: a scheme git speaks, or the scp form user@host:path. */
 const GIT_URL_RE = /^(?:(?:https?|ssh|git|file):\/\/|[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:)/;
 
+/**
+ * member_source — a member's location in its one string grammar: the
+ * shorthand a `members` entry may be instead of its long form, and the long
+ * form's `source`.
+ */
+export type MemberSource = string;
+
 /** One source string read: its object form and storage, or why it cannot be read. */
 export interface ParsedMemberSource {
   source: ExternalSource;
@@ -1179,7 +1189,7 @@ function segmentsOf(p: string): string[] {
  * absolute path, an inner `..`, and a git source without its commit — each
  * answered as the problem, never thrown.
  */
-export function parseMemberSource(written: string): ParsedMemberSource {
+export function parseMemberSource(written: MemberSource): ParsedMemberSource {
   const text = written.trim();
   if (text === '') return { source: { path: '' }, storage: 'contained', problem: 'its source is empty' };
   if (text.startsWith('hosted:')) {

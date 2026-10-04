@@ -11,7 +11,7 @@ description: >-
   rendering it.
 fields:
   - name: system
-    type: object
+    type: any
     description: >-
       The system's name, vision, target language, declared databases, and the diagram view
       preferences the canvas opens with.
@@ -21,7 +21,7 @@ fields:
     description: When the model was built, stamped into the rendered page.
     optional: false
   - name: subsystems
-    type: object[]
+    type: list<any>
     description: >-
       Each subsystem's id, name and description — and, for a project with members, each PROJECT
       member as a project node (stage 3), a referenced one (a `../`, git or hosted source; stage 8)
@@ -41,11 +41,11 @@ fields:
       how it is labelled.
     optional: false
   - name: components
-    type: object[]
+    type: list<any>
     description: Each component with what the canvas shows about it, including the findings marked on it.
     optional: false
   - name: edges
-    type: object[]
+    type: list<any>
     description: >-
       Dependency and ownership edges between the nodes, each flagged when it crosses a subsystem
       boundary; a dependency on a referenced project's public name, or on a declared external's,
@@ -58,7 +58,7 @@ fields:
       computed but no entry for its pair names an unavailable relation, never none.
     optional: false
   - name: relations
-    type: CanvasRelation[]
+    type: list<CanvasRelation>
     description: >-
       Relation health, one entry per consumer-project-to-producer-project pair the canvas draws an
       edge between, with the per-use detail and the time it was compared. PRESENT only when health
@@ -69,28 +69,28 @@ fields:
       were when it was built, each with its comparedAt.
     optional: true
   - name: types
-    type: object[]
+    type: list<any>
     description: >-
       The type nodes of the types/ERD view: each type's id, name, kind, fields, methods, the
       interface methods that use it, and its database binding.
     optional: false
   - name: typeEdges
-    type: object[]
+    type: list<any>
     description: >-
       Type-to-type references derived from field types (the ERD edges): {from, to, field, card: 1 |
       0..1 | *}.
     optional: false
   - name: dataEdges
-    type: object[]
+    type: list<any>
     description: >-
       Data-coupling edges: a component that uses a type another subsystem owns, pointed at that
       subsystem's published portal ({from, to}).
     optional: false
   - name: issues
-    type: object[]
+    type: list<any>
     description: 'The validator''s findings for the issue overlay: {severity, code, message, specId?}.'
     optional: false
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-10-03T17:05:17.244Z'
+updatedAt: '2026-10-04T10:19:54.839Z'

@@ -16,7 +16,7 @@ methods:
       set (and the context every session loads) proportional to a single layer instead of the whole
       deep tree.
     signature: 'resolveAgentTopology(): AgentRecord[]'
-    returns: AgentRecord[]
+    returns: list<AgentRecord>
   - name: composeAgentBrief
     description: >-
       Compose the LIVE delegation brief for one resolved agent. An id qualified `<alias>::<agentId>`
@@ -54,4 +54,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T22:09:36.708Z'
+updatedAt: '2026-10-04T10:18:29.569Z'

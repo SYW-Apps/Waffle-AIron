@@ -5,11 +5,11 @@ description: The options every family-migration command shares, plus the few one
 subsystem: sdd_cli
 fields:
   - name: report
-    type: boolean
+    type: bool
     description: '--report: print the plan and write nothing.'
     optional: true
   - name: 'yes'
-    type: boolean
+    type: bool
     description: '--yes: apply without asking; required in a non-interactive shell.'
     optional: true
   - name: description
@@ -29,7 +29,7 @@ fields:
       selects.
     optional: true
   - name: exports
-    type: string[]
+    type: list<string>
     description: >-
       member internalize --export <name>…: public names of the member the parent exports afterwards,
       beyond those the family uses.
@@ -45,7 +45,7 @@ fields:
       absent.
     optional: true
   - name: widen
-    type: boolean
+    type: bool
     description: >-
       member detach --widen: widen exactly the exports the family uses that the member exports only
       to the family to the instance audience, shown in the plan, instead of refusing.
@@ -62,4 +62,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-09-30T20:37:46.672Z'
-updatedAt: '2026-10-02T22:47:03.160Z'
+updatedAt: '2026-10-04T10:20:32.207Z'

@@ -12,34 +12,34 @@ description: >-
 subsystem: sdd_validator
 fields:
   - name: paths
-    type: string[]
+    type: list<string>
     description: The closed set this graph resolves against, in construction order
     optional: false
 methods:
   - name: importsOf
     signature: 'importsOf(path: string): Set<string>'
-    returns: Set<string>
+    returns: set<string>
     description: >-
       A file's resolved runtime-import targets inside the closed set, itself excluded; empty for a
       file the run did not analyze
   - name: tracesOf
     signature: 'tracesOf(path: string): Set<string>'
-    returns: Set<string>
+    returns: set<string>
     description: >-
       Its imports together with its resolved re-export targets — the traces a declared edge may be
       realized by
   - name: connects
     signature: 'connects(from: Set<string>, to: Set<string>, allowReverse: boolean): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether any trace runs from one file set into the other — or, when the reverse is allowed (the
       mounting shape, where the server file imports the portal's), back the other way
   - name: reachFrom
     signature: 'reachFrom(path: string): Set<string>'
-    returns: Set<string>
+    returns: set<string>
     description: >-
       Every path reachable from a file by following traces transitively, the file itself included;
       traversal stops at a file the run did not analyze
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:25.963Z'
-updatedAt: '2026-09-19T11:07:09.112Z'
+updatedAt: '2026-10-04T10:20:19.257Z'

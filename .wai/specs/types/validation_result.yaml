@@ -8,13 +8,13 @@ description: >-
   resolve-through-parent and its resolvedThrough marker are gone (stage 4).
 fields:
   - name: valid
-    type: boolean
+    type: bool
     description: >-
       True when no error-severity issues were found; warnings and notices never make a result
       invalid
     optional: false
   - name: issues
-    type: ValidationIssue[]
+    type: list<ValidationIssue>
     description: All findings (errors, warnings and notices) collected during the run
     optional: false
   - name: hint
@@ -27,7 +27,7 @@ fields:
       the project that declares them.
     optional: true
   - name: projects
-    type: ProjectVerdict[]
+    type: list<ProjectVerdict>
     description: >-
       A family run only: one line per selected project (the root first, then its members in scan
       order) with its own gate's totals. Absent on the owner's gate.
@@ -64,4 +64,4 @@ methods:
     sourcePath: src/models/lock.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-30T06:21:45.867Z'
+updatedAt: '2026-10-04T10:21:26.208Z'

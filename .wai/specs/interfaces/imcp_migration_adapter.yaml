@@ -31,15 +31,15 @@ methods:
     description: >-
       Forward to migration_portal.recover; the MCP server asks only with fix false, for the
       pending-transaction banner — recovery itself is `wairon doctor --fix`'s.
-    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
-    returns: RecoveredTransaction[]
+    signature: 'recover(root: string, fix: bool): list<RecoveredTransaction>'
+    returns: list<RecoveredTransaction>
     params:
       - name: root
         type: string
         description: The bound project root
       - name: fix
-        type: boolean
+        type: bool
         description: Always false here
 status: complete
 createdAt: '2026-09-30T20:39:15.096Z'
-updatedAt: '2026-09-30T21:34:06.866Z'
+updatedAt: '2026-10-04T10:19:01.033Z'

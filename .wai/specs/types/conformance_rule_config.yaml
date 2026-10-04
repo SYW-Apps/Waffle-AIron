@@ -10,28 +10,28 @@ description: >-
   be deleted (by paying the debt it names), and anything neither carried nor claimed is reported.
 fields:
   - name: sourceRoots
-    type: string[]
+    type: list<string>
     description: >-
       Project-relative paths holding this project's own source code; a directory is walked
       recursively, a file names itself. Absolute or parent-escaping entries are refused by
       containment, exactly as a sourcePath is.
     optional: true
   - name: exclude
-    type: string[]
+    type: list<string>
     description: >-
       Paths inside a source root that are not this project's code to claim — vendored libraries,
       generated output. A file at, or under, one of these is never walked, so it is neither reported
       nor carried as debt.
     optional: true
   - name: unclaimed
-    type: string[]
+    type: list<string>
     description: >-
       The files under the source roots that no spec names yet, frozen. A listed file is not
       reported; an unlisted one is UNCLAIMED_SOURCE_FILE; an entry the walk no longer finds
       unclaimed is STALE_UNCLAIMED_ENTRY, so the list can only shrink.
     optional: true
   - name: carried
-    type: CarriedDebt[]
+    type: list<CarriedDebt>
     description: >-
       The conformance findings this tree carries as declared debt, grouped by the reason that
       explains them — the unclaimed list's shape, for findings about code a spec DOES claim. It is
@@ -42,7 +42,7 @@ fields:
       is STALE_CARRIED_FINDING, so the register only shrinks.
     optional: true
   - name: testRoots
-    type: string[]
+    type: list<string>
     description: >-
       Project-relative directories holding this project's tests. Declaring none means no test scan
       and no `testsToRevisit` on any write — opt-in on the same terms as `sourceRoots`, so a project
@@ -53,4 +53,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-19T10:44:18.090Z'
-updatedAt: '2026-09-20T13:26:01.819Z'
+updatedAt: '2026-10-04T10:20:00.485Z'

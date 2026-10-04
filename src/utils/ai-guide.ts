@@ -93,9 +93,12 @@ export function localGuideFilePath(projectRoot: string, targetType: string): str
 // Detect / inject
 // ---------------------------------------------------------------------------
 
+/** guide_scope — which guide file a body is for: a user-level one (global) or a project's own (local). */
+export type GuideScope = 'global' | 'local';
+
 /** The guide body for a scope: the global body for a user-level guide file,
  *  the local body for a project's own. */
-export function guideBody(scope: 'global' | 'local'): string {
+export function guideBody(scope: GuideScope): string {
   return scope === 'global' ? GLOBAL_GUIDE_BODY : LOCAL_GUIDE_BODY;
 }
 
@@ -103,7 +106,7 @@ export function guideBody(scope: 'global' | 'local'): string {
  * Inject (or update) the wairon guide section in the given file.
  * Creates the file and any parent directories if they don't exist.
  */
-export function injectGuide(filePath: string, scope: 'global' | 'local'): void {
+export function injectGuide(filePath: string, scope: GuideScope): void {
   // Use `wairon` literally in injected docs — never substitute a dev path. The
   // guide is documentation (the AI uses MCP tools; the human runs `wairon`).
   const body = guideBody(scope);

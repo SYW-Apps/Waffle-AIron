@@ -19,7 +19,7 @@ fields:
     description: How much effort it may spend within that tier. Absent means the host's own default.
     optional: true
   - name: maxTurns
-    type: number
+    type: int
     description: >-
       Turn ceiling — a circuit breaker, not a target. Hitting it returns partial output, which is
       the intended failure mode; a subagent running hundreds of turns is no longer preserving the
@@ -30,7 +30,7 @@ fields:
     description: 'Which grant of tools the agent gets: read-only, implement, orchestrate or full.'
     optional: false
   - name: allowNestedDelegation
-    type: boolean
+    type: bool
     description: >-
       Whether this agent may spawn its own subagents. False withholds the tool entirely — structural
       enforcement, so no instruction text has to be carried and re-read to achieve it.
@@ -42,7 +42,7 @@ fields:
 methods:
   - name: summarize
     signature: 'summarize(profile: ExecutionProfile): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       Human-readable lines for a brief or CLI output, speaking in capability TIERS and never model
       names — the consumer maps a tier onto whatever its host understands, and only the consumer
@@ -52,4 +52,4 @@ methods:
       global.
 sourcePath: src/models/execution.ts
 createdAt: '2026-09-20T19:47:48.244Z'
-updatedAt: '2026-09-20T23:50:17.063Z'
+updatedAt: '2026-10-04T10:28:51.977Z'

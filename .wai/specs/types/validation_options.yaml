@@ -25,7 +25,7 @@ fields:
     description: Narrow the run to one subsystem's slice of the tree. Omitted, the whole tree is judged.
     optional: true
   - name: recursive
-    type: boolean | number
+    type: MemberDepth
     description: >-
       At a project that declares members: whether the run is the family run over it and its members
       (true, the default), how many member levels that family run selects (a number), or the owner's
@@ -40,7 +40,7 @@ fields:
       without passing anything.
     optional: true
   - name: treatAllAsComplete
-    type: boolean
+    type: bool
     description: >-
       Judge at full strictness: every spec is treated as complete, so the completeness rules that
       relax while a spec is draft apply as errors. This is the as-complete gate behind `wairon
@@ -48,7 +48,7 @@ fields:
       status set beforehand.
     optional: true
   - name: family
-    type: boolean
+    type: bool
     description: >-
       Ask for the family run explicitly (`validate --family`, MCP `family: true`). At a member this
       is the one way to compose its externals against their live producers: the walk up to them is
@@ -57,7 +57,7 @@ fields:
       owner's gate.
     optional: true
   - name: packSelections
-    type: PackSelection[]
+    type: list<PackSelection>
     description: >-
       The by-name pack selections the pack rules (pack-resolution, pack-reproducibility) judge.
       Omitted, the project's own stored selections are read. Given only by a dry run that judges a
@@ -68,7 +68,7 @@ fields:
 methods:
   - name: selectsFamily
     signature: 'selectsFamily(declaresMembers: boolean): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether these options ask for the family run rather than the owner's gate: true when `family`
       is set, or when the bound project declares members and `recursive` is not false. The one
@@ -77,4 +77,4 @@ methods:
     sourcePath: src/models/validation-options.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-09-20T14:26:35.723Z'
-updatedAt: '2026-09-29T15:50:02.555Z'
+updatedAt: '2026-10-04T10:27:35.725Z'

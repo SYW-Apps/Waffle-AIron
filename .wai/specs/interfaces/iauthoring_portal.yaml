@@ -19,9 +19,7 @@ methods:
       which of the delta's paths changed nothing, or that nothing did and nothing was written. A dry
       run runs the whole write, gate included, and answers with the report it would have produced
       without touching disk. Routed to the gated workflow.
-    signature: >-
-      updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
-      SpecChangeReport
+    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
     returns: SpecChangeReport
     params:
       - name: kind
@@ -34,7 +32,7 @@ methods:
         type: SpecDelta
         description: The partial change to merge, carrying the delta's own verbs
       - name: dryRun
-        type: boolean
+        type: bool
         description: >-
           Answer with what the delta would do and write nothing; the report carries dryRun true and
           written false
@@ -46,7 +44,7 @@ methods:
       the cheapest legal home. A partial move is the failure worth preventing here: it leaves
       callers pointing at a method that is no longer where they say it is. Routed to the gated
       workflow.
-    signature: 'moveMethods(from: string, to: string, methods: string[], dryRun?: boolean): MethodMoveReport'
+    signature: 'moveMethods(from: string, to: string, methods: list<string>, dryRun?: bool): MethodMoveReport'
     returns: MethodMoveReport
     params:
       - name: from
@@ -56,10 +54,10 @@ methods:
         type: string
         description: The component id that should receive them
       - name: methods
-        type: string[]
+        type: list<string>
         description: The method names to move
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer with what the move would do and write nothing
         optional: true
   - name: writeSpec
@@ -90,4 +88,4 @@ methods:
         description: The spec id
 status: complete
 createdAt: '2026-09-18T21:41:27.211Z'
-updatedAt: '2026-09-26T21:28:09.020Z'
+updatedAt: '2026-10-04T10:18:33.804Z'

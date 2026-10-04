@@ -7,9 +7,7 @@ methods:
     description: >-
       Forward a delta to authoring_portal.updateSpecGated: merged, judged and written, or with
       dryRun judged and not written; answers the change report.
-    signature: >-
-      updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
-      SpecChangeReport
+    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
     returns: SpecChangeReport
     params:
       - name: kind
@@ -22,7 +20,7 @@ methods:
         type: SpecDelta
         description: The partial change to merge
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer what the delta would do and write nothing
         optional: true
   - name: writeSpec
@@ -35,4 +33,4 @@ methods:
         description: The spec as the migration states it
 status: complete
 createdAt: '2026-09-30T20:45:34.881Z'
-updatedAt: '2026-09-30T21:33:56.701Z'
+updatedAt: '2026-10-04T10:19:05.182Z'

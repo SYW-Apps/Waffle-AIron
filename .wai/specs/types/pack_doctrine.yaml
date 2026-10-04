@@ -15,10 +15,10 @@ fields:
     description: The version its manifest declares, when it declares one.
     optional: true
   - name: changes
-    type: DoctrineChange[]
+    type: list<DoctrineChange>
     description: Everything it changes against wairon's defaults, stated neutrally.
     optional: false
 methods: []
 sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T16:14:33.041Z'
-updatedAt: '2026-09-29T16:41:20.892Z'
+updatedAt: '2026-10-04T10:20:38.367Z'

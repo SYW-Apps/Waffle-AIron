@@ -15,25 +15,25 @@ fields:
       weakest analysis grade.
     optional: false
   - name: codes
-    type: string[]
+    type: list<string>
     description: >-
       Every finding code a code-judging rule declares (SddRule.judges = code), sorted. Present on a
       ValidationResult so designOnly can partition its issues by code; left out of a lock record,
       where it would be noise the analyzer identity already pins.
     optional: true
   - name: errors
-    type: number
+    type: int
     description: Code-conformance findings at error severity.
     optional: false
   - name: warnings
-    type: number
+    type: int
     description: Code-conformance findings at warning severity.
     optional: false
   - name: notices
-    type: number
+    type: int
     description: Code-conformance findings at notice severity.
     optional: false
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:24.483Z'
-updatedAt: '2026-09-30T06:12:20.044Z'
+updatedAt: '2026-10-04T10:28:50.047Z'

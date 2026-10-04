@@ -8,11 +8,11 @@ description: >-
   the whole tree.
 fields:
   - name: paths
-    type: Set<string>
+    type: set<string>
     description: >-
       Spec paths in scope, relative to the project root with POSIX separators — the same keys the
       approval is recorded under.
     optional: false
 methods: []
 createdAt: '2026-09-12T00:19:27.640Z'
-updatedAt: '2026-09-12T00:19:27.656Z'
+updatedAt: '2026-10-04T10:19:52.493Z'

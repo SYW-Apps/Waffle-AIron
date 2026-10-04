@@ -6,7 +6,7 @@ methods:
   - name: read
     description: Read the project's GitConfig, or null when not git-backed.
     signature: 'read(): GitConfig | null'
-    returns: GitConfig | null
+    returns: GitConfig?
   - name: write
     description: Persist the project's GitConfig.
     signature: 'write(config: GitConfig): void'
@@ -17,4 +17,4 @@ methods:
     returns: void
 status: complete
 createdAt: '2026-07-04T16:32:01.932Z'
-updatedAt: '2026-09-17T16:34:41.766Z'
+updatedAt: '2026-10-04T10:18:50.346Z'

@@ -16,7 +16,7 @@ fields:
     description: The created project's persisted record, exactly as before.
     optional: false
   - name: packImpacts
-    type: PackImpact[]
+    type: list<PackImpact>
     description: >-
       One per required/default declarative pack the init applied, in application order, each
       measured against the new project's configuration as it stood before that pack's write. Empty
@@ -32,4 +32,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-09-29T16:14:30.254Z'
-updatedAt: '2026-09-29T21:58:59.101Z'
+updatedAt: '2026-10-04T10:20:15.306Z'

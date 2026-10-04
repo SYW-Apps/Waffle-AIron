@@ -10,7 +10,7 @@ methods:
       materialization (materializeAgentFiles) both default OFF — per-subsystem agents are served as
       live MCP briefs, and the injected guides + skills are the only per-tool artifacts.
     signature: 'runInit(options: { yes?: boolean }): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runGenerate
     description: >-
       Reconciles THIS project's generated outputs to the configured state — and only this project's:
@@ -31,7 +31,7 @@ methods:
     signature: >-
       runGenerate(options: { target?: string; domain?: string; domains?: string; root?: boolean;
       dryRun?: boolean; family?: boolean; global?: boolean }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runValidate
     description: >-
       `wairon validate`: the registry, project-config and spec-tree checks. At a project that
@@ -42,19 +42,19 @@ methods:
     signature: >-
       runValidate(options: { ci?: boolean; subsystem?: string; recursive?: boolean; family?: boolean
       }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runList
     description: Lists all dynamically resolved agents
     signature: 'runList(): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runShow
     description: Shows details for a single dynamically resolved agent
     signature: 'runShow(id: string): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runUpdate
     description: Checks for updates or performs self-updates
     signature: 'runUpdate(options: { check?: boolean; channel?: string }): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runHostProject
     description: >-
       Admin project lifecycle against the hosting control plane (create | list | destroy), reading
@@ -62,23 +62,23 @@ methods:
     signature: >-
       runHostProject(action: string, options: { id?: string; unit?: string; dataDir?: string }):
       Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runHostKey
     description: Admin API-key lifecycle against the hosting control plane (mint | revoke | list).
     signature: >-
       runHostKey(action: string, options: { project?: string; owner?: string; label?: string; role?:
       string; id?: string; dataDir?: string }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runHostLock
     description: Validate-as-complete and write the commit-scoped lock record for a hosted project.
     signature: 'runHostLock(options: { project?: string }): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runProduce
     description: >-
       Project the local project's specs to a producer target (e.g. notion), resolving the credential
       from flag, env, or an interactive prompt.
     signature: 'runProduce(target: string, options: { page?: string; token?: string }): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runMemberAdd
     description: >-
       `wairon member add <alias> <source> [--project] [--description]`: create a member of the
@@ -92,14 +92,14 @@ methods:
     signature: >-
       runMemberAdd(alias: string, source: string, options: { description?: string, project?: boolean
       }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runMemberMove
     description: >-
       `wairon member move <alias> <path>`: relocate a member's directory and point its `members`
       entry there in one step (a member still declared in the legacy L1 form is moved into `members`
       first). Replaces `wairon subsystem move`.
     signature: 'runMemberMove(alias: string, path: string): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runSubsystemExternalize
     description: >-
       `wairon subsystem externalize <id> --path <dir> [--as part|project] [--report] [--yes]`: move
@@ -111,8 +111,8 @@ methods:
       respelled `alias::name`, the new member's external for this project pinned; a reference that
       would need a component made public refuses the plan. It keeps its name because it acts on a
       subsystem. Source code is moved by the user. Through runMigration.
-    signature: 'runSubsystemExternalize(id: string, options?: MigrationCommandOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runSubsystemExternalize(id: string, options?: MigrationCommandOptions): async void'
+    returns: async void
     params:
       - name: id
         type: string
@@ -128,8 +128,8 @@ methods:
       project, sending its own metadata to the named homes and re-pointing every family consumer of
       it at the current project. Through runMigration. Replaces the single-subsystem form, which
       deleted the member's whole .wai.
-    signature: 'runMemberInternalize(alias: string, options: MigrationCommandOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runMemberInternalize(alias: string, options: MigrationCommandOptions): async void'
+    returns: async void
     params:
       - name: alias
         type: string
@@ -148,13 +148,13 @@ methods:
     signature: >-
       runSurface(action: string, options: { audience?: string; format?: string; out?: string;
       source?: string; origin?: string; portal?: string }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runPacks
     description: >-
       Deprecated alias of `wairon pack` for the add | list | remove subset — forwards to the packs
       adapter. Kept for back-compat; new usage should prefer `wairon pack`.
-    signature: 'runPacks(action: string, arg?: string, options?: PackCommandOptions): void'
-    returns: void
+    signature: 'runPacks(action: string, arg?: string, options?: PackCommandOptions): async void'
+    returns: async void
     params:
       - name: action
         type: string
@@ -190,8 +190,8 @@ methods:
       `--yes` passes through to the commands that select or update a pack, which otherwise show its
       impact and ask before writing. The primary pack UX; `wairon packs` remains as a deprecated
       alias (runPacks) for add | list | remove.
-    signature: 'runPack(action: string, arg?: string, options?: PackCommandOptions): void'
-    returns: void
+    signature: 'runPack(action: string, arg?: string, options?: PackCommandOptions): async void'
+    returns: async void
     params:
       - name: action
         type: string
@@ -217,8 +217,8 @@ methods:
       generates at its own root. Post-lock guidance points sessions at the live MCP briefs
       (sdd_get_agent_brief) — it no longer instructs a session restart, because brief content is
       composed per call and is already current.
-    signature: 'runLock(options: LockOptions): void'
-    returns: void
+    signature: 'runLock(options: LockOptions): async void'
+    returns: async void
     params:
       - name: options
         type: LockOptions
@@ -231,8 +231,8 @@ methods:
       current brief (a header explaining that spec facts are inferred live plus the subsystem
       description as a starting point) and REFUSES when the file already exists — it is user-owned,
       never regenerated, never pruned.
-    signature: 'runAgent(action: string, id: string): Promise<void>'
-    returns: Promise<void>
+    signature: 'runAgent(action: string, id: string): async void'
+    returns: async void
     params:
       - name: action
         type: string
@@ -248,8 +248,8 @@ methods:
       Resolves the instance, project and credential from flags, the environment, the recorded
       binding, or the agent's own MCP configuration, then routes to the remote orchestrator and
       reports exactly what happened — including any backup a replaced tree can be undone from.
-    signature: 'runRemote(action: string, options?: remote_command_options): Promise<void>'
-    returns: Promise<void>
+    signature: 'runRemote(action: string, options?: remote_command_options): async void'
+    returns: async void
     params:
       - name: action
         type: string
@@ -264,8 +264,8 @@ methods:
       Takes the token from --token or a prompt, verifies it against the instance before storing (a
       credential that does not work is a worse outcome than no credential), and never echoes it
       back.
-    signature: 'runLogin(url: string, options?: remote_command_options): Promise<void>'
-    returns: Promise<void>
+    signature: 'runLogin(url: string, options?: remote_command_options): async void'
+    returns: async void
     params:
       - name: url
         type: string
@@ -278,8 +278,8 @@ methods:
       when no URL is given). Local only: it does NOT revoke the token on the instance, which the
       output states plainly so nobody believes a leaked credential has been killed — revocation
       lives in the hosted UI under Tokens.
-    signature: 'runLogout(url?: string): Promise<void>'
-    returns: Promise<void>
+    signature: 'runLogout(url?: string): async void'
+    returns: async void
     params:
       - name: url
         type: string
@@ -291,8 +291,8 @@ methods:
     description: >-
       `wairon mcp serve` — run the wairon MCP server on stdio for an AI tool that spawned it,
       attached to the resolved project root.
-    signature: 'runMcpServe(): Promise<void>'
-    returns: Promise<void>
+    signature: 'runMcpServe(): async void'
+    returns: async void
     params: []
   - name: runMcpInstall
     description: >-
@@ -300,8 +300,8 @@ methods:
       stdio server over this checkout by default, or a HOSTED http entry when --hosted names an
       instance, so the agent authors that instance's tree and `wairon remote` can read the same
       entry back.
-    signature: 'runMcpInstall(options: mcp_install_options): Promise<void>'
-    returns: Promise<void>
+    signature: 'runMcpInstall(options: mcp_install_options): void'
+    returns: void
     params:
       - name: options
         type: mcp_install_options
@@ -309,16 +309,16 @@ methods:
     description: >-
       `wairon mcp status` — report where a wairon MCP server is registered and what it points at
       (local checkout or hosted instance), alongside what the CLI itself resolves.
-    signature: 'runMcpStatus(): Promise<void>'
-    returns: Promise<void>
+    signature: 'runMcpStatus(): void'
+    returns: void
     params: []
   - name: runStatus
     description: >-
       `wairon status` — print the spec tree's completeness dashboard. In an ATTACHED checkout there
       is no local tree, so it reports the hosted project's instead, naming the instance so the two
       are never confused.
-    signature: 'runStatus(options: status_command_options): Promise<void>'
-    returns: Promise<void>
+    signature: 'runStatus(options: status_command_options): async void'
+    returns: async void
     params:
       - name: options
         type: status_command_options
@@ -326,15 +326,15 @@ methods:
     description: >-
       `wairon execution show`: list every agent's execution allowance with the rationale that
       produced it, under the project's current tier.
-    signature: 'runExecutionShow(): Promise<void>'
-    returns: Promise<void>
+    signature: 'runExecutionShow(): async void'
+    returns: async void
     params: []
   - name: runExecutionSetTier
     description: >-
       `wairon execution set-tier <tier>`: move the project's execution-budget dial and state what
       the new tier costs.
-    signature: 'runExecutionSetTier(tier: string): Promise<void>'
-    returns: Promise<void>
+    signature: 'runExecutionSetTier(tier: string): async void'
+    returns: async void
     params:
       - name: tier
         type: string
@@ -357,8 +357,8 @@ methods:
       project; with --report composed-validation it prints what stage 4 changed in each project's
       verdict (today's gate against the totals its lock recorded, and every new finding with its
       reason) — either report changes nothing and never combines with --fix.
-    signature: 'runDoctor(options?: DoctorOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runDoctor(options?: DoctorOptions): async void'
+    returns: async void
     params:
       - name: options
         type: DoctorOptions
@@ -381,8 +381,8 @@ methods:
       It is optional by construction: only `stale` refuses by default, and `stale` cannot occur in a
       project that never locked. `--strict` is what turns "never approved" into a failure, and a
       project has to ask for it.
-    signature: 'runLockCheck(options: LockCheckOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runLockCheck(options: LockCheckOptions): async void'
+    returns: async void
     params:
       - name: options
         type: LockCheckOptions
@@ -399,8 +399,8 @@ methods:
       consumption edge by its relation's health — the family's relations compared with their live
       producers, as of the time it was written — unless `--no-health` is given, when those edges are
       drawn as not checked.
-    signature: 'runDiagram(options?: DiagramOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runDiagram(options?: DiagramOptions): async void'
+    returns: async void
     params:
       - name: options
         type: DiagramOptions
@@ -411,16 +411,16 @@ methods:
       `wairon domains list`: show every domain this project has, derived and registered alike,
       saying which is which — a reader deciding whether they can remove one needs to know it came
       from a subsystem.
-    signature: 'runDomainsList(): Promise<void>'
-    returns: Promise<void>
+    signature: 'runDomainsList(): async void'
+    returns: async void
     params: []
   - name: runDomainsScan
     description: >-
       `wairon domains scan`: show the directories that look like domains nobody has registered,
       including the ones already covered so the answer reassures rather than appearing to have
       missed them. Proposes only; `--add` is what registers.
-    signature: 'runDomainsScan(options?: DomainsScanOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runDomainsScan(options?: DomainsScanOptions): async void'
+    returns: async void
     params:
       - name: options
         type: DomainsScanOptions
@@ -431,8 +431,8 @@ methods:
       `wairon domains add`: register a free-standing domain. The id and the path each derive from
       the other when only one is given. Refuses an id a subsystem already derives, because the
       derived one would win every lookup and the added one would sit in the file doing nothing.
-    signature: 'runDomainsAdd(options?: DomainsAddOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runDomainsAdd(options?: DomainsAddOptions): async void'
+    returns: async void
     params:
       - name: options
         type: DomainsAddOptions
@@ -443,8 +443,8 @@ methods:
       `wairon domains remove`: unregister a free-standing domain. A derived one cannot be removed
       here — the way to remove it is to remove its subsystem, and saying so is more useful than a
       silent no-op.
-    signature: 'runDomainsRemove(id: string): Promise<void>'
-    returns: Promise<void>
+    signature: 'runDomainsRemove(id: string): async void'
+    returns: async void
     params:
       - name: id
         type: string
@@ -453,13 +453,13 @@ methods:
     description: >-
       `wairon aliases list`: show every supported short command name and whether it is active, opted
       out, shadowed by something else on PATH, or simply missing.
-    signature: 'runAliasesList(): Promise<void>'
-    returns: Promise<void>
+    signature: 'runAliasesList(): async void'
+    returns: async void
     params: []
   - name: runAliasesEnable
     description: '`wairon aliases enable <name>`: create the alias and clear it from the opted-out list.'
-    signature: 'runAliasesEnable(alias: string): Promise<void>'
-    returns: Promise<void>
+    signature: 'runAliasesEnable(alias: string): async void'
+    returns: async void
     params:
       - name: alias
         type: string
@@ -468,8 +468,8 @@ methods:
     description: >-
       `wairon aliases disable <name>`: remove the alias and record the opt-out so a later install
       does not recreate it.
-    signature: 'runAliasesDisable(alias: string): Promise<void>'
-    returns: Promise<void>
+    signature: 'runAliasesDisable(alias: string): async void'
+    returns: async void
     params:
       - name: alias
         type: string
@@ -481,8 +481,8 @@ methods:
       pin tree, computed by the validator at each project's own root so it agrees with the member's
       own status), and the lock's verdict underneath. It renders nothing itself — the tree is drawn
       once, in core, and this supplies only what colour each role should take.
-    signature: 'localStatus(options?: StatusOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'localStatus(options?: StatusOptions): async void'
+    returns: async void
     params:
       - name: options
         type: StatusOptions
@@ -508,14 +508,14 @@ methods:
     signature: >-
       runServe(options: { host?: string; port?: string | number; adminHost?: string; adminPort?:
       string | number; dataDir?: string; noAuth?: boolean }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runDev
     description: >-
       Run the local single-project developer server (`wairon dev`) over the current project:
       register it as the one dev-mode project, start the loopback server with auth off, and
       optionally open the browser.
     signature: 'runDev(options: { port?: string | number; open?: boolean }): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runHostDemo
     description: >-
       Provision a demo project seeded with the example spec tree (`wairon host demo`), ensuring its
@@ -523,7 +523,7 @@ methods:
     signature: >-
       runHostDemo(options: { id?: string; unit?: string; force?: boolean; dataDir?: string }):
       Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runHostPermission
     description: >-
       Permission assignments against the hosting control plane (set | list | remove), reading the
@@ -535,32 +535,32 @@ methods:
       runHostPermission(action: string, options: { user?: string; capability?: string; value?:
       string; project?: string; subsystem?: string; unit?: string; instance?: boolean; id?: string;
       dataDir?: string }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runHostProducer
     description: Producer targets of a hosted project (configure | produce | remove | list).
     signature: >-
       runHostProducer(action: string, options: { project?: string; target?: string; page?: string;
       dataDir?: string }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runHostSecret
     description: Integration secrets of the instance (set | list); a listing shows key names only.
     signature: >-
       runHostSecret(action: string, options: { key?: string; value?: string; dataDir?: string }):
       Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runHostPacks
     description: Extension packs of the instance, or of one project with --project (list | install | remove).
     signature: >-
       runHostPacks(action: string, options: { project?: string; name?: string; file?: string;
       dataDir?: string }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runHostGit
     description: Git backing of a hosted project (enable | disable | sync | commit | status | sync-config).
     signature: >-
       runHostGit(action: string, options: { project?: string; remote?: string; branch?: string;
       subsystem?: string; message?: string; interval?: string | number; skipIfClean?: boolean;
       dataDir?: string }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runHostUnit
     description: >-
       Organization units of the hosted instance (create), reading the master credential from the
@@ -568,7 +568,7 @@ methods:
     signature: >-
       runHostUnit(action: string, options: { slug?: string; name?: string; kind?: string; parent?:
       string; dataDir?: string }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runHostDoctor
     description: >-
       Inspect the hosted data dir for pre-permission-model shapes and for hosted families whose
@@ -576,7 +576,7 @@ methods:
       permission-model migration first, then the stage-7 member upgrade (records registered,
       member-qualified key entries rewritten, nobody's reach changed), all or nothing.
     signature: 'runHostDoctor(options: { fix?: boolean; dataDir?: string }): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runExternals
     description: >-
       `wairon externals <action> [alias…]`: pin (pin the named declared externals, else all, into
@@ -585,14 +585,14 @@ methods:
       unchanged, changed, removed, unlocked, or unavailable with EXTERNAL_CHECK_UNAVAILABLE; it
       reports and never fails the command on staleness), and list (the declared externals, how each
       resolves, and what is pinned). `--json` prints the structured answer instead of the table.
-    signature: 'runExternals(action: string, aliases: string[], options?: ExternalsOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runExternals(action: string, aliases: list<string>, options?: ExternalsOptions): async void'
+    returns: async void
     params:
       - name: action
         type: string
         description: pin | status
       - name: aliases
-        type: string[]
+        type: list<string>
         description: The declared externals to act on; empty for all
       - name: options
         type: ExternalsOptions
@@ -607,8 +607,8 @@ methods:
       without --yes stops, writing nothing), apply the confirmed plan, and print the outcome — the
       projects to re-lock when it committed, the failure and that nothing changed when it did not,
       or the files `wairon doctor --fix` must restore when a rollback could not. Never locks.
-    signature: 'runMigration(request: MigrationRequest, options: MigrationCommandOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runMigration(request: MigrationRequest, options: MigrationCommandOptions): async void'
+    returns: async void
     params:
       - name: request
         type: MigrationRequest
@@ -621,8 +621,8 @@ methods:
       `wairon member attach <alias> <path> [--description] [--report] [--yes]`: make the existing
       project at the path a member of the current project, keeping its L0 and subsystems (unlike
       `member add`, which scaffolds). Through runMigration.
-    signature: 'runMemberAttach(alias: string, path: string, options: MigrationCommandOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runMemberAttach(alias: string, path: string, options: MigrationCommandOptions): async void'
+    returns: async void
     params:
       - name: alias
         type: string
@@ -638,8 +638,8 @@ methods:
       `wairon project rename <new-id> [--project <alias path>] [--report] [--yes]`: move a project's
       id — the current project's, or a member's named by its alias path — and every reference to the
       old id across the family, listing every project to re-lock. Through runMigration.
-    signature: 'runProjectRename(newId: string, options: MigrationCommandOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runProjectRename(newId: string, options: MigrationCommandOptions): async void'
+    returns: async void
     params:
       - name: newId
         type: string
@@ -653,9 +653,9 @@ methods:
       project (a member or an external) and respell the current project's references through it;
       nothing in any member or sibling changes. Through runMigration.
     signature: >-
-      runMemberRenameAlias(alias: string, newAlias: string, options: MigrationCommandOptions):
-      Promise<void>
-    returns: Promise<void>
+      runMemberRenameAlias(alias: string, newAlias: string, options: MigrationCommandOptions): async
+      void
+    returns: async void
     params:
       - name: alias
         type: string
@@ -673,8 +673,8 @@ methods:
       Refused while a family project uses an export the member gives the family alone, unless
       --widen: then exactly those exports are widened to the instance audience, shown in the plan.
       Through runMigration.
-    signature: 'runMemberDetach(alias: string, options: MigrationCommandOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runMemberDetach(alias: string, options: MigrationCommandOptions): async void'
+    returns: async void
     params:
       - name: alias
         type: string
@@ -686,8 +686,8 @@ methods:
     description: >-
       `wairon member adopt <alias> [--report] [--yes]`: make the current project's external found by
       a path inside it a member — detach's inverse. Through runMigration.
-    signature: 'runMemberAdopt(alias: string, options: MigrationCommandOptions): Promise<void>'
-    returns: Promise<void>
+    signature: 'runMemberAdopt(alias: string, options: MigrationCommandOptions): async void'
+    returns: async void
     params:
       - name: alias
         type: string
@@ -704,7 +704,7 @@ methods:
     signature: >-
       runMemberPromote(alias: string, options: MigrationCommandOptions & { id?: string }):
       Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runMemberDemote
     description: >-
       `wairon member demote <alias> [--home <subsystem>] [--adopt-packs|--drop-packs] [--report]
@@ -712,7 +712,7 @@ methods:
       promote's inverse; refused while another family project consumes it. Plan first, confirmed,
       all-or-nothing, never locks. Through runMigration.
     signature: 'runMemberDemote(alias: string, options: MigrationCommandOptions): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runMemberUpdate
     description: >-
       `wairon member update <alias> [--ref <ref> | --commit <sha>] [--report]` (stage 8): move a git
@@ -723,7 +723,7 @@ methods:
     signature: >-
       runMemberUpdate(alias: string, options: { ref?: string, commit?: string, report?: boolean }):
       Promise<void>
-    returns: Promise<void>
+    returns: async void
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T20:53:55.264Z'
+updatedAt: '2026-10-04T10:32:02.218Z'

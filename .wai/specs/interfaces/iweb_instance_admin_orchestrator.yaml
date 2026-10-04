@@ -12,8 +12,8 @@ methods:
       Resolve the session to a Principal via the authentication component, require an instance-wide
       admin grant, and return every organization unit through the organization repository. Not
       audited (a read).
-    signature: 'listOrganizationUnits(sessionId: string): OrganizationUnitRecord[]'
-    returns: OrganizationUnitRecord[]
+    signature: 'listOrganizationUnits(sessionId: string): list<OrganizationUnitRecord>'
+    returns: list<OrganizationUnitRecord>
     params:
       - name: sessionId
         type: string
@@ -56,8 +56,8 @@ methods:
       configured secret KEY NAMES (never the values) through the secret repository — so the
       identity-provider form can offer existing clientSecretRefs to pick from. Names are not
       sensitive; raw secrets never leave the store. A read; not audited.
-    signature: 'listSecretRefs(sessionId: string): string[]'
-    returns: string[]
+    signature: 'listSecretRefs(sessionId: string): list<string>'
+    returns: list<string>
     params:
       - name: sessionId
         type: string
@@ -98,4 +98,4 @@ methods:
         description: The secret itself; stored, never returned
 status: complete
 createdAt: '2026-09-18T16:56:30.596Z'
-updatedAt: '2026-10-01T17:05:54.445Z'
+updatedAt: '2026-10-04T10:19:48.460Z'

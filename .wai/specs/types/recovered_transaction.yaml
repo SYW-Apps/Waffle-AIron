@@ -13,7 +13,7 @@ fields:
     description: The migration it was applying.
     optional: false
   - name: owners
-    type: string[]
+    type: list<string>
     description: The owner roots it touches.
     optional: false
   - name: phase
@@ -34,4 +34,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:39.241Z'
-updatedAt: '2026-09-30T21:33:08.482Z'
+updatedAt: '2026-10-04T10:20:55.151Z'

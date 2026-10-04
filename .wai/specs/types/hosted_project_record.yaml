@@ -64,7 +64,7 @@ fields:
 methods:
   - name: isValidId
     signature: 'isValidId(id: unknown): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a value is a valid record id: a path-safe id (lowercase letters, digits and hyphens,
       starting with a letter or digit, at most 64 characters), so a crafted id can never escape the
@@ -74,4 +74,4 @@ methods:
     symbol: isValidProjectId
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-10-03T17:57:24.760Z'
+updatedAt: '2026-10-04T10:20:15.954Z'

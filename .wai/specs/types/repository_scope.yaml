@@ -18,9 +18,9 @@ fields:
     description: The family root's isolated root, absolute
     optional: false
   - name: pathspecs
-    type: string[]
+    type: list<string>
     description: Forward-slash pathspecs relative to repositoryRoot, each ending in .wai/
     optional: false
 methods: []
 createdAt: '2026-10-01T16:27:29.766Z'
-updatedAt: '2026-10-01T16:27:39.624Z'
+updatedAt: '2026-10-04T10:20:57.473Z'

@@ -7,26 +7,26 @@ description: >-
   default profile. Hosted install passes a stricter profile than local CLI install.
 fields:
   - name: maxEntries
-    type: number
+    type: int
     description: Max entry count (default 4096)
     optional: true
   - name: maxTotalUncompressedBytes
-    type: number
+    type: int
     description: Max total inflated size (default 32 MiB; hosted 8 MiB)
     optional: true
   - name: maxEntryBytes
-    type: number
+    type: int
     description: Max single-entry inflated size (default 8 MiB)
     optional: true
   - name: maxCompressionRatio
-    type: number
+    type: float
     description: Max inflated:compressed ratio, zip-bomb guard (default 100)
     optional: true
   - name: maxDepth
-    type: number
+    type: int
     description: Max path nesting depth (default 16)
     optional: true
 methods: []
 componentClass: pack_codec
 createdAt: '2026-07-21T18:12:45.243Z'
-updatedAt: '2026-07-21T18:12:45.380Z'
+updatedAt: '2026-10-04T10:29:08.280Z'

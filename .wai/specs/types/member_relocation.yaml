@@ -26,7 +26,7 @@ fields:
     description: The host data directory, absolute — the transaction's coordinator and an owner itself
     optional: false
   - name: areas
-    type: string[]
+    type: list<string>
     description: The host store files the coordinator owner contributes (project records, organization)
     optional: false
   - name: from
@@ -38,4 +38,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-01T17:03:04.052Z'
-updatedAt: '2026-10-01T19:52:10.432Z'
+updatedAt: '2026-10-04T10:20:29.062Z'

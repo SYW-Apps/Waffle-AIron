@@ -10,8 +10,8 @@ methods:
     description: >-
       Where a tool keeps its machine-wide configuration, honouring the environment override that
       account aliases set, or nothing when the tool is not one we inject into.
-    signature: 'globalPath(targetType: string): string | null'
-    returns: string | null
+    signature: 'globalPath(targetType: string): string?'
+    returns: string?
     params:
       - name: targetType
         type: string
@@ -22,8 +22,8 @@ methods:
     description: >-
       Where a tool keeps its per-project configuration inside this repository, or nothing when the
       tool is not one we inject into.
-    signature: 'localPath(projectRoot: string, targetType: string): string | null'
-    returns: string | null
+    signature: 'localPath(projectRoot: string, targetType: string): string?'
+    returns: string?
     params:
       - name: projectRoot
         type: string
@@ -38,14 +38,14 @@ methods:
       Put the guide into a file, replacing any section already there. Creates the file and its
       directories when absent. Idempotent by construction: the old section is removed before the new
       one is appended, so running it twice leaves the same file.
-    signature: 'inject(filePath: string, scope: string): void'
+    signature: 'inject(filePath: string, scope: GuideScope): void'
     returns: void
     params:
       - name: filePath
         type: string
         description: The configuration file to write
       - name: scope
-        type: string
+        type: GuideScope
         description: '`global` for the machine-wide guide, `local` for the in-project one'
     effect: write
   - name: strip
@@ -81,14 +81,14 @@ methods:
       guide should say — a wairon upgrade, a regenerate — so a stale guide is never left claiming to
       describe the current tree. It INSTALLS as well as refreshes: a known target gets a guide
       whether or not it had one, and an unrecognized target name is ignored rather than refused.
-    signature: 'refreshLocal(projectRoot: string, targetTypes: string[]): string[]'
-    returns: string[]
+    signature: 'refreshLocal(projectRoot: string, targetTypes: list<string>): list<string>'
+    returns: list<string>
     params:
       - name: projectRoot
         type: string
         description: The project root
       - name: targetTypes
-        type: string[]
+        type: list<string>
         description: The target type keys of the AI tools to refresh
     effect: write
   - name: body
@@ -96,12 +96,12 @@ methods:
       The wairon guide body for a scope: the global body for a user-level guide file, the local body
       for a project's own. The same body inject writes between the guide markers, so a renderer that
       embeds the guide shows exactly what an injected file holds.
-    signature: 'body(scope: ''global'' | ''local''): string'
+    signature: 'body(scope: GuideScope): string'
     returns: string
     params:
       - name: scope
-        type: '''global'' | ''local'''
+        type: GuideScope
         description: global for a user-level guide file, local for a project's own
 status: complete
 createdAt: '2026-09-23T00:11:03.274Z'
-updatedAt: '2026-10-03T20:52:15.892Z'
+updatedAt: '2026-10-04T10:27:01.201Z'

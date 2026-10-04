@@ -4,22 +4,22 @@ name: NarrativeReach
 description: What a narrative graph walk reached from its seeds.
 fields:
   - name: reachedComponents
-    type: Set<string>
+    type: set<string>
     description: Ids of the components reached
     optional: false
   - name: reachedMethods
-    type: Set<string>
+    type: set<string>
     description: The methods reached, keyed component#method (component ids may themselves contain ::)
     optional: false
 methods:
   - name: reachesComponent
     signature: 'reachesComponent(compId: string): boolean'
-    returns: boolean
+    returns: bool
     description: Whether the walk reached this component
   - name: reachesMethod
     signature: 'reachesMethod(compId: string, methodName: string): boolean'
-    returns: boolean
+    returns: bool
     description: Whether the walk reached this method of this component
 sourcePath: src/core/rules/narrative-graph-projector.ts
 createdAt: '2026-09-14T06:03:48.859Z'
-updatedAt: '2026-09-19T11:07:11.467Z'
+updatedAt: '2026-10-04T10:20:34.286Z'

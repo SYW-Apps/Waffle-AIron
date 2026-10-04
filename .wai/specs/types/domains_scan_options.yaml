@@ -8,10 +8,10 @@ description: >-
   detecting twice.
 fields:
   - name: add
-    type: boolean
+    type: bool
     description: Register every untracked candidate rather than only listing them.
     optional: true
 methods: []
 sourcePath: src/commands/domains.ts
 createdAt: '2026-09-20T22:10:20.893Z'
-updatedAt: '2026-09-20T22:10:20.902Z'
+updatedAt: '2026-10-04T10:20:05.225Z'

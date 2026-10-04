@@ -18,9 +18,7 @@ methods:
       nothing did and nothing was written — the respellings applied, and every key the stored file
       carries that the schema will drop (strippedKeys), so no write loses data unannounced. A dry
       run forwards the caller's request to be told what the delta would do without writing it.
-    signature: >-
-      updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
-      SpecChangeReport
+    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
     returns: SpecChangeReport
     params:
       - name: kind
@@ -33,7 +31,7 @@ methods:
         type: SpecDelta
         description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer with what the delta would do and write nothing
         optional: true
   - name: moveMethods
@@ -46,7 +44,7 @@ methods:
       rules judge. On a refusal nothing is written and the report names the rule plus where the
       methods could live instead, because a refusal that only names the rule leaves the caller to
       search for a legal home by hand.
-    signature: 'moveMethods(from: string, to: string, methods: string[], dryRun?: boolean): MethodMoveReport'
+    signature: 'moveMethods(from: string, to: string, methods: list<string>, dryRun?: bool): MethodMoveReport'
     returns: MethodMoveReport
     params:
       - name: from
@@ -56,10 +54,10 @@ methods:
         type: string
         description: The component id that should receive them
       - name: methods
-        type: string[]
+        type: list<string>
         description: The method names to move; every one must exist on the source contract
       - name: dryRun
-        type: boolean
+        type: bool
         description: >-
           Run the whole move, gate included, and answer with the report it would have produced
           without touching disk
@@ -100,4 +98,4 @@ methods:
         description: The spec id
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-10-03T22:08:21.892Z'
+updatedAt: '2026-10-04T10:18:33.467Z'

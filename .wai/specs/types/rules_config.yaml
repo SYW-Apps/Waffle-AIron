@@ -4,23 +4,23 @@ name: RulesConfig
 description: Rules configuration
 fields:
   - name: noOverlappingOwnership
-    type: boolean
+    type: bool
     description: Two agents may not own the same path
     optional: false
   - name: requireOwnedPaths
-    type: boolean
+    type: bool
     description: Non-meta agents must declare ownedPaths
     optional: false
   - name: metaAgentTags
-    type: string[]
+    type: list<string>
     description: Tags exempting an agent from ownership requirements
     optional: false
   - name: enforceReproducibility
-    type: boolean
+    type: bool
     description: Generated files must be reproducible from the registry
     optional: false
   - name: sddRuleSeverity
-    type: object
+    type: any
     description: >-
       Per-code severity overrides for the SDD conformance rules: error, warning, notice or off. A
       code set to notice is still reported but never fails the gate; one set to off is not reported
@@ -45,11 +45,11 @@ fields:
       the unclaimed-source check
     optional: true
   - name: generateComponentImplementers
-    type: boolean
+    type: bool
     description: 'Whether generation derives an implementer agent per component (default: false)'
     optional: false
   - name: materializeAgentFiles
-    type: boolean
+    type: bool
     description: >-
       Whether generation writes agent files to disk; when false the live briefs are the only view of
       the topology (default: false)
@@ -63,4 +63,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T17:03:37.832Z'
+updatedAt: '2026-10-04T10:21:00.432Z'

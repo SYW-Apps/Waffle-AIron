@@ -21,7 +21,7 @@ methods:
   - name: list
     description: List all hosted-project records.
     signature: 'list(): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    returns: list<HostedProjectRecord>
   - name: remove
     description: >-
       Deregister a project; a family root's isolated tree is removed with it, a member record's
@@ -34,7 +34,7 @@ methods:
       the deprecated qualifier when one resolved it) — the data-plane request seam; see the index's
       authorization matrix. Pure 1:1 forward.
     signature: 'resolveBinding(principal: Principal, selector: string): ProjectBinding | null'
-    returns: ProjectBinding | null
+    returns: ProjectBinding?
   - name: existingRoot
     description: >-
       The root path of the hosted project registered under this id, or null. Pure 1:1 forward to the
@@ -90,4 +90,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-04T12:49:59.044Z'
-updatedAt: '2026-10-03T21:10:22.330Z'
+updatedAt: '2026-10-04T10:19:22.748Z'

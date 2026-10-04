@@ -27,7 +27,7 @@ fields:
     description: Today's as-complete owner's gate totals, comparable with the lock's
     optional: false
   - name: predatesStage4
-    type: boolean
+    type: bool
     description: >-
       Whether the lock was taken by a validator older than the stage-4 release: only then is a
       difference in totals attributed to the upgrade
@@ -35,4 +35,4 @@ fields:
 methods: []
 sourcePath: src/commands/verdict-changes.ts
 createdAt: '2026-09-28T06:15:25.650Z'
-updatedAt: '2026-09-28T18:12:38.758Z'
+updatedAt: '2026-10-04T10:21:24.899Z'

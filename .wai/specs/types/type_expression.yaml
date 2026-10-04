@@ -43,7 +43,7 @@ fields:
       `alias::name`), or an applied generic's head; absent on the structural forms
     optional: true
   - name: args
-    type: TypeExpression[]
+    type: list<TypeExpression>
     description: >-
       The element (list, set), key then value (map), inner (optional, async), members in written
       order (union) or arguments (applied); empty on a primitive or named type
@@ -82,9 +82,9 @@ methods:
       table's job.
     symbol: canonicalTypeText
   - name: namedRefs
-    signature: 'namedRefs(): string[]'
+    signature: 'namedRefs(): list<string>'
     params: []
-    returns: string[]
+    returns: list<string>
     description: >-
       Every named type this expression references, in order of appearance, duplicates kept — what
       the reference rules, the surface closure, the ERD and unused-type detection resolve.
@@ -92,13 +92,13 @@ methods:
       arguments' references.
     symbol: typeNamedRefs
   - name: isMany
-    signature: 'isMany(): boolean'
+    signature: 'isMany(): bool'
     params: []
-    returns: boolean
+    returns: bool
     description: >-
       Whether a value of this type holds many: a list, a set or a map at the top, under `?` or under
       async. What the ERD draws as a `*` multiplicity.
     symbol: typeIsMany
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:49.343Z'
-updatedAt: '2026-10-03T22:21:48.781Z'
+updatedAt: '2026-10-04T10:21:21.875Z'

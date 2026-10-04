@@ -14,8 +14,8 @@ methods:
     description: >-
       List pack refs in a directory (YAML/JS files, and subdirectories containing a pack entry
       file), sorted for deterministic load order.
-    signature: 'discoverPacks(dir: string): string[]'
-    returns: string[]
+    signature: 'discoverPacks(dir: string): list<string>'
+    returns: list<string>
     params:
       - name: dir
         type: string
@@ -48,4 +48,4 @@ methods:
           directory of the bundle entry being loaded
 status: complete
 createdAt: '2026-07-14T18:59:04.313Z'
-updatedAt: '2026-10-03T16:47:19.307Z'
+updatedAt: '2026-10-04T10:19:11.333Z'

@@ -60,7 +60,7 @@ fields:
     description: 'For git-backed projects: the compare/PR URL a human opens to merge'
     optional: true
   - name: specs
-    type: Record<string, string>
+    type: map<string, string>
     description: >-
       THE APPROVAL: spec path (relative to the project root, POSIX separators) → sha256 of that
       file's content when approved. Absent on a record written before approval moved in here — such
@@ -68,7 +68,7 @@ fields:
       whole-tree StateId did.
     optional: true
   - name: children
-    type: Record<string, string>
+    type: map<string, string>
     description: >-
       LEGACY (format 1): chained child mount id → that child's approved StateId, copied from the
       child's record without checking that record still matched the child's tree. Read for one
@@ -85,13 +85,13 @@ fields:
       project had no effective id to record.
     optional: true
   - name: format
-    type: number
+    type: int
     description: >-
       The record format. 2 from stage 5 on (members, code, no children). Absent means format 1: read
       as written, its `children` taken as the member pins for one release, never written again.
     optional: true
   - name: members
-    type: Record<string, MemberPin>
+    type: map<string, MemberPin>
     description: >-
       Each DIRECT member this project declares, keyed by its alias → its composition subject and
       approval state (approved | drifted | never) as they stood when this project locked. The
@@ -120,4 +120,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-10-03T17:04:52.729Z'
+updatedAt: '2026-10-04T10:28:59.486Z'

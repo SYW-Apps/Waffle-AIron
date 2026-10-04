@@ -10,8 +10,8 @@ methods:
     description: >-
       Every domain this project has, derived and registered alike. The distinction matters to
       whoever writes a domain and not at all to whoever reads one.
-    signature: 'resolve(): Domain[]'
-    returns: Domain[]
+    signature: 'resolve(): list<Domain>'
+    returns: list<Domain>
     params: []
     guarantees:
       - idempotent
@@ -19,11 +19,11 @@ methods:
     description: >-
       Only the domains the spec tree implies — one per subsystem, bound to it, owning the
       subsystem's path and every component path under it. Projected on every call, never stored.
-    signature: 'deriveFromSubsystems(): Domain[]'
-    returns: Domain[]
+    signature: 'deriveFromSubsystems(): list<Domain>'
+    returns: list<Domain>
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-20T22:44:20.640Z'
-updatedAt: '2026-09-20T22:45:23.504Z'
+updatedAt: '2026-10-04T10:18:43.475Z'

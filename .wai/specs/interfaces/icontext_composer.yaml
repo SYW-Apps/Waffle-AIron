@@ -41,18 +41,18 @@ methods:
       documents are owed. It is the directory, not the human-written project document, so a project
       that never wrote one still has its derived guide kept current. Its absence is a normal state,
       not a fault.
-    signature: 'isPresent(): boolean'
-    returns: boolean
+    signature: 'isPresent(): bool'
+    returns: bool
     params: []
     guarantees:
       - idempotent
   - name: derivedPaths
     description: Where the two derived documents live, for callers that report on them rather than read them.
-    signature: 'derivedPaths(): string[]'
-    returns: string[]
+    signature: 'derivedPaths(): list<string>'
+    returns: list<string>
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-23T11:11:10.943Z'
-updatedAt: '2026-10-01T23:45:11.745Z'
+updatedAt: '2026-10-04T10:18:39.396Z'

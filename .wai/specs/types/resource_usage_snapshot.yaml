@@ -14,26 +14,26 @@ fields:
     description: ISO-8601 capture timestamp.
     optional: false
   - name: projectCount
-    type: number
+    type: int
     description: Number of active projects in scope, when applicable.
     optional: true
   - name: projectBytes
-    type: number
+    type: int
     description: Approximate stored bytes in scope, when measurable.
     optional: true
   - name: mcpRequestsLastMinute
-    type: number
+    type: int
     description: Recent MCP request count used for rate/quota enforcement.
     optional: true
   - name: auditEventsToday
-    type: number
+    type: int
     description: Audit event count for the current day in scope, when available.
     optional: true
   - name: quotaMessages
-    type: string[]
+    type: list<string>
     description: Human-readable quota observations, warnings, or blocking reasons.
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T09:08:18.133Z'
-updatedAt: '2026-09-19T11:07:16.283Z'
+updatedAt: '2026-10-04T10:29:15.061Z'

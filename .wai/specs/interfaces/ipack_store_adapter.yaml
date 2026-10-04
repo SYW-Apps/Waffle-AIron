@@ -16,8 +16,8 @@ methods:
       the HIGHEST installed version (latest-by-default). Returns null when nothing satisfies the
       selection — the caller turns that into the PACK_NOT_INSTALLED finding rather than loading a
       weakened rule set.
-    signature: 'resolveInstalledPack(name: string, version?: string): InstalledPack | null'
-    returns: InstalledPack | null
+    signature: 'resolveInstalledPack(name: string, version?: string): InstalledPack?'
+    returns: InstalledPack?
     params:
       - name: name
         type: string
@@ -48,8 +48,8 @@ methods:
       Remove a pack from the store: the named version, or every version when none is given. Returns
       whether anything was removed. Refusing an uninstall that some project still selects is the
       calling workflow's job — this adapter reports what it removed.
-    signature: 'uninstallPack(name: string, version?: string): boolean'
-    returns: boolean
+    signature: 'uninstallPack(name: string, version?: string): bool'
+    returns: bool
     params:
       - name: name
         type: string
@@ -79,9 +79,9 @@ methods:
       record where present; a legacy FLAT store entry (a bare *.yaml/*.cjs file or an unversioned
       directory from before the versioned layout) is reported as version "0.0.0-unversioned" so an
       existing install keeps resolving.
-    signature: 'listInstalledPacks(): InstalledPack[]'
-    returns: InstalledPack[]
+    signature: 'listInstalledPacks(): list<InstalledPack>'
+    returns: list<InstalledPack>
     params: []
 status: complete
 createdAt: '2026-07-29T17:41:50.550Z'
-updatedAt: '2026-09-23T12:56:40.990Z'
+updatedAt: '2026-10-04T10:19:12.113Z'

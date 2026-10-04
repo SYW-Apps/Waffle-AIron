@@ -42,11 +42,11 @@ fields:
     description: Optional logical group id
     optional: true
   - name: fields
-    type: object[]
+    type: list<any>
     description: Data fields declared by this type; none on a signature (SIGNATURE_TYPE_MEMBERS)
     optional: false
   - name: methods
-    type: TypeMethod[]
+    type: list<TypeMethod>
     description: >-
       Pure intrinsic methods declared by this type (type_method), none on a signature
       (SIGNATURE_TYPE_MEMBERS). Each may carry structured params, which then derive its shown
@@ -71,7 +71,7 @@ fields:
     description: Optional logical entity id represented by a table-schema type
     optional: true
   - name: invariants
-    type: Invariant[]
+    type: list<Invariant>
     description: >-
       Declared domain invariants (entities); every write-effect method of the componentClass must
       carry a narrative step asserting each one
@@ -97,7 +97,7 @@ fields:
       each with a reason.
     optional: true
   - name: ext
-    type: json
+    type: any
     description: >-
       Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
       the core, preserved verbatim through load and save.
@@ -111,7 +111,7 @@ fields:
     description: When this spec was last written. Store-managed.
     optional: false
   - name: params
-    type: object[]
+    type: list<any>
     description: >-
       A signature's parameters, in the method_signature param shape ({name, type, description,
       optional}); only on kind signature (SIGNATURE_TYPE_MEMBERS otherwise)
@@ -123,7 +123,7 @@ fields:
       (SIGNATURE_TYPE_MEMBERS)
     optional: true
   - name: values
-    type: EnumValue[]
+    type: list<EnumValue>
     description: >-
       An enum's values, in declared order (the order is part of the design), unique by nameKey;
       required and non-empty on kind enum and only there (ENUM_MEMBERS)
@@ -137,7 +137,7 @@ methods:
     symbol: qualifiedTypeId
   - name: matchesRef
     signature: 'matchesRef(ref: string): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a written type reference names this type: the reference's :: or . segments are a
       suffix of the qualified id, compared ignoring case and punctuation
@@ -145,13 +145,13 @@ methods:
     symbol: typeMatchesRef
   - name: genericParameters
     signature: 'genericParameters(): Set<string>'
-    returns: Set<string>
+    returns: set<string>
     description: The generic parameters declared in its name (Page<T> gives T)
     sourcePath: src/models/type-references.ts
     symbol: typeGenericParameters
   - name: fieldTypeRefs
     signature: 'fieldTypeRefs(fieldType: string): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The named types one of this type's field types references (type_expression.namedRefs of the
       field's parsed type), with this type's own generic parameters left out (compared ignoring
@@ -161,14 +161,14 @@ methods:
     sourcePath: src/models/type-references.ts
   - name: sourceFiles
     signature: 'sourceFiles(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       Every source file this type names — its own sourcePath, then each method's — deduplicated, in
       declaration order.
     symbol: typeSourceFiles
   - name: derivedSignature
     signature: 'derivedSignature(): string | undefined'
-    returns: string | undefined
+    returns: string?
     description: >-
       A signature type's shown text, `(a: T, b?: U): R`, derived from its params and returns the way
       method_signature.derivedSignature derives a method's, without a name; undefined on an entity
@@ -177,7 +177,7 @@ methods:
     symbol: deriveTypeSignature
   - name: signatureTypeRefs
     signature: 'signatureTypeRefs(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The type identifiers a signature type names in place of fields: every param type, then its
       returns. None on an entity or a value-object, whose references are its fields'.
@@ -197,4 +197,4 @@ methods:
     symbol: typeCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-03T22:21:57.737Z'
+updatedAt: '2026-10-04T10:21:23.245Z'

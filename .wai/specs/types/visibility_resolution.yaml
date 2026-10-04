@@ -15,11 +15,11 @@ fields:
     optional: false
     key: primary
   - name: observerUnitIds
-    type: string[]
+    type: list<string>
     description: Units the observer's placements land in, plus their ancestor chains.
     optional: false
   - name: visibleProjects
-    type: object[]
+    type: list<any>
     description: >-
       Per visible target: { projectId, distance: department | instance | partner, via: unitId } —
       the placement unit that granted visibility.
@@ -27,4 +27,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-11T09:37:02.102Z'
-updatedAt: '2026-09-19T11:07:20.770Z'
+updatedAt: '2026-10-04T10:21:26.539Z'

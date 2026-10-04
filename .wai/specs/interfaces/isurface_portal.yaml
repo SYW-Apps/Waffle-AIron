@@ -49,18 +49,18 @@ methods:
       All stored surface snapshots available to this project (imported plus received
       parent-generated).
     signature: 'listSnapshots(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    returns: list<SurfaceSnapshot>
   - name: getSnapshot
     description: The stored snapshot produced by the named project, or null.
-    signature: 'getSnapshot(projectName: string): SurfaceSnapshot | null'
-    returns: SurfaceSnapshot | null
+    signature: 'getSnapshot(projectName: string): SurfaceSnapshot?'
+    returns: SurfaceSnapshot?
     params:
       - name: projectName
         type: string
   - name: removeSnapshot
     description: Remove a stored surface snapshot (file and projection).
-    signature: 'removeSnapshot(projectName: string): boolean'
-    returns: boolean
+    signature: 'removeSnapshot(projectName: string): bool'
+    returns: bool
     params:
       - name: projectName
         type: string
@@ -69,31 +69,31 @@ methods:
       Pin the bound project's declared externals (the named aliases, else all): snapshots under
       .wai/externals/ and the lock at .wai/externals.lock.yaml. The caller must gate on reach
       itself.
-    signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
-    returns: ExternalPin[]
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
     params:
       - name: aliases
-        type: string[]
+        type: list<string>
         description: The aliases to pin; all declared externals when omitted
         optional: true
   - name: getExternalsStatus
     description: >-
       Report each declared external's pin against its live producer at signature level; what cannot
       be compared is EXTERNAL_CHECK_UNAVAILABLE. Writes nothing.
-    signature: 'getExternalsStatus(): ExternalStatus[]'
-    returns: ExternalStatus[]
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
     params: []
   - name: listExternals
     description: List the bound project's declared externals, how each resolves and what is pinned for it.
-    signature: 'listExternals(): ExternalListing[]'
-    returns: ExternalListing[]
+    signature: 'listExternals(): list<ExternalListing>'
+    returns: list<ExternalListing>
     params: []
   - name: listFamilyPins
     description: >-
       The stage-1 family pins (generated family and sibling snapshots) the bound root still holds,
       for the chaining migration to convert and delete. Pure 1:1 forward to the orchestrator.
-    signature: 'listFamilyPins(): FamilyPin[]'
-    returns: FamilyPin[]
+    signature: 'listFamilyPins(): list<FamilyPin>'
+    returns: list<FamilyPin>
     params: []
     guarantees:
       - idempotent
@@ -102,15 +102,15 @@ methods:
       The bound project's declared externals, each with its lock entry and pinned snapshot, read
       from its own .wai/externals files only — what the owner's gate judges a reference into another
       project against. Pure 1:1 forward.
-    signature: 'listPinnedExternals(): PinnedExternal[]'
-    returns: PinnedExternal[]
+    signature: 'listPinnedExternals(): list<PinnedExternal>'
+    returns: list<PinnedExternal>
     params: []
   - name: renamePin
     description: >-
       Carry the bound project's pin of one external to its new alias or producer id without
       re-pinning (digest and used map unchanged). The caller must gate on reach itself.
-    signature: 'renamePin(alias: string, newAlias: string, project: string): boolean'
-    returns: boolean
+    signature: 'renamePin(alias: string, newAlias: string, project: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -127,8 +127,8 @@ methods:
     description: >-
       Remove the bound project's pin of one alias — lock entry and snapshot. The caller must gate on
       reach itself.
-    signature: 'unpin(alias: string): boolean'
-    returns: boolean
+    signature: 'unpin(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -140,9 +140,9 @@ methods:
       A part's pinned parent — its lock's parent entry and the excerpt it names, read from its own
       .wai/externals files only — what the owner's gate opened at a part judges against (stage 8);
       null at a project. Pure 1:1 forward.
-    signature: 'pinnedParent(): PinnedParent | null'
-    returns: PinnedParent | null
+    signature: 'pinnedParent(): PinnedParent?'
+    returns: PinnedParent?
     params: []
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-03T16:47:01.980Z'
+updatedAt: '2026-10-04T10:19:41.201Z'

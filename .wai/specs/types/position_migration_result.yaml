@@ -8,7 +8,7 @@ description: >-
 subsystem: sdd_migrations
 fields:
   - name: written
-    type: string[]
+    type: list<string>
     description: >-
       Every write, in write order: each parent's project.yaml (its members) and deleted L1 mount
       document, each rewritten spec and each deleted family-pin snapshot. A write the adapter
@@ -17,10 +17,10 @@ fields:
       <pin key>` for a snapshot.
     optional: false
   - name: relock
-    type: string[]
+    type: list<string>
     description: The directories of the projects whose lock the writes left stale.
     optional: false
 methods: []
 sourcePath: src/migrations/position-migration.ts
 createdAt: '2026-09-27T10:44:33.869Z'
-updatedAt: '2026-09-30T21:05:12.758Z'
+updatedAt: '2026-10-04T10:20:47.302Z'

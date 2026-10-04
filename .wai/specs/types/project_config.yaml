@@ -12,7 +12,7 @@ fields:
     description: 'Display name. Not an identity: `id` is.'
     optional: false
   - name: targets
-    type: object[]
+    type: list<any>
     description: 'Output targets: type (claude | gemini | custom), outputDir, enabled'
     optional: false
   - name: rules
@@ -20,7 +20,7 @@ fields:
     description: Topology + conformance rule configuration
     optional: false
   - name: extensions
-    type: object
+    type: any
     description: Extension configuration such as registered pack references and whether global packs are used.
     optional: true
   - name: profileSelection
@@ -70,7 +70,7 @@ fields:
     optional: true
     key: primary
   - name: externals
-    type: Map<string, ExternalDeclaration>
+    type: map<string, ExternalDeclaration>
     description: >-
       The other projects this project consumes, keyed by alias — the first segment of its
       `alias::name` references. Each value is an ExternalDeclaration; the alias defaults the
@@ -85,7 +85,7 @@ fields:
       to an alias's `use`).
     optional: true
   - name: members
-    type: Map<string, MemberDeclaration | string>
+    type: map<string, MemberDeclaration | MemberSource>
     description: >-
       What this project is made of beyond its own specs folder, keyed by alias, each value one
       `source` in one grammar — `scheduler: services/scheduler` (contained), `admin: ../admin`
@@ -116,7 +116,7 @@ fields:
       CompositionConfig).
     optional: true
   - name: previousIds
-    type: string[]
+    type: list<string>
     description: >-
       The ids this project answered to before, oldest first, each appended by the rename migration
       and never removed or reordered by a writer. It is the project's own record that an id moved
@@ -145,7 +145,7 @@ fields:
     description: 'Execution budgets, the resource axis of the derived topology (default: tier off, no overrides)'
     optional: false
   - name: paths
-    type: object
+    type: any
     description: 'Project path settings: specsDir, the spec tree''s root (default .wai/specs)'
     optional: false
   - name: globalTemplatesDir
@@ -157,7 +157,7 @@ fields:
 methods:
   - name: declaredPackNames
     signature: 'declaredPackNames(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The names of the packs this configuration declares, deduplicated in first-seen order: each
       `extensions.packs` entry (a selection's name, or a legacy path reference's file stem — its
@@ -165,19 +165,19 @@ methods:
       `profileSelection`. Empty when nothing is declared.
   - name: declaredProfileIds
     signature: 'declaredProfileIds(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The profile ids recorded in `profileSelection`, deduplicated in first-seen order; empty when
       no selection is recorded. The governing `projectType` is not included.
   - name: activeTargetTypes
     signature: 'activeTargetTypes(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The target types this configuration enables: every target not explicitly disabled. Empty for a
       configuration with no enabled targets.
   - name: effectiveId
     signature: 'effectiveId(): string | null'
-    returns: string | null
+    returns: string?
     description: >-
       The declared id when there is one, as written; otherwise `name` slugified — in every reader,
       the project graph included, so a project answers to one id wherever it is read (a chained
@@ -200,7 +200,7 @@ methods:
     symbol: projectIdentity
   - name: declaredExternals
     signature: 'declaredExternals(): DeclaredExternal[]'
-    returns: DeclaredExternal[]
+    returns: list<DeclaredExternal>
     description: >-
       The configuration's `externals`, one DeclaredExternal per alias in declaration order: the
       producer id is the entry's `project`, else the alias; the source path is copied as written;
@@ -210,7 +210,7 @@ methods:
       nothing is declared.
   - name: declaredMembers
     signature: 'declaredMembers(): DeclaredMember[]'
-    returns: DeclaredMember[]
+    returns: list<DeclaredMember>
     description: >-
       The configuration's `members`, one DeclaredMember per alias in declaration order: the source
       string (the shorthand, the long form's `source`, or for one release the deprecated `path`,
@@ -232,18 +232,18 @@ methods:
       an impact report equal what the write then produces (impact-matches-apply).
   - name: requiredPolicies
     signature: 'requiredPolicies(): PackRequirement[]'
-    returns: PackRequirement[]
+    returns: list<PackRequirement>
     description: >-
       The configuration's `composition.requirePolicies` in declaration order, a second requirement
       for a pack already required dropped (the first one stands, and the family run reports nothing
       about the duplicate). Empty when nothing is required.
   - name: isPart
     signature: 'isPart(): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether this is a non-contained part's configuration: `partOf` is set. The test every reader
       that treats such a root differently from a project's (the owner's gate opened at a part,
       `externals pin` at a part, status) asks, so they cannot disagree about it.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T17:03:51.449Z'
+updatedAt: '2026-10-04T10:27:33.658Z'

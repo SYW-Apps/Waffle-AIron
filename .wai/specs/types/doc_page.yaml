@@ -15,10 +15,10 @@ fields:
     description: Markdown-ish page body (headings, tables, code fences, links)
     optional: false
   - name: children
-    type: DocPage[]
+    type: list<DocPage>
     description: Nested child pages
     optional: false
 methods: []
 sourcePath: src/producers/types.ts
 createdAt: '2026-07-04T17:29:15.489Z'
-updatedAt: '2026-09-19T11:07:07.284Z'
+updatedAt: '2026-10-04T10:20:04.560Z'

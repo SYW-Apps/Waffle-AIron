@@ -21,7 +21,7 @@ methods:
       registry (rejecting cross-project access), project its spec tree at the requested level via
       the host core adapter, overlay validator issues as per-node issue counts, and return it. An
       unknown tier is rejected.
-    signature: 'get(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
+    signature: 'get(sessionId: string, tier: string, projectId: string, level: int): WebGraphModel'
     returns: WebGraphModel
     params:
       - name: sessionId
@@ -32,7 +32,7 @@ methods:
         type: string
         description: The project to graph; ignored (may be '') for the landscape tier
       - name: level
-        type: number
+        type: int
   - name: getProjectCanvas
     description: >-
       Render the interactive architecture canvas (the full renderCanvasHtml canvas — Cytoscape
@@ -110,8 +110,8 @@ methods:
       when the family root is in it, and a source.hosted producer is read when its record is;
       anything else is reported unavailable. The SPA renders it on the project page's Relations tab;
       the canvas colours its edges from the family's relations, read the same way.
-    signature: 'getProjectExternals(sessionId: string, projectId: string): ExternalStatus[]'
-    returns: ExternalStatus[]
+    signature: 'getProjectExternals(sessionId: string, projectId: string): list<ExternalStatus>'
+    returns: list<ExternalStatus>
     params:
       - name: sessionId
         type: string
@@ -121,4 +121,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-10-03T16:47:08.076Z'
+updatedAt: '2026-10-04T10:28:39.174Z'

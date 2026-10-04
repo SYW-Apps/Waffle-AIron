@@ -9,14 +9,14 @@ methods:
       when the plan is refused or empty, answer it likewise; otherwise apply it and answer the
       report — committed with the projects to re-lock, or failed with the family restored (or the
       files `wairon doctor --fix` must restore). Never locks.
-    signature: 'run(request: MigrationRequest, dryRun?: boolean): FamilyMigrationReport'
+    signature: 'run(request: MigrationRequest, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: request
         type: MigrationRequest
         description: The tool's verb and arguments
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
   - name: pending
@@ -25,11 +25,11 @@ methods:
       unfinished family-migration transaction under the bound root — its id, verb and coordinator
       phase, pointing at `wairon doctor --fix` (a human's repair; no tool recovers). Empty when
       there is none. Writes nothing.
-    signature: 'pending(): string[]'
-    returns: string[]
+    signature: 'pending(): list<string>'
+    returns: list<string>
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:39:28.924Z'
-updatedAt: '2026-09-30T21:34:09.138Z'
+updatedAt: '2026-10-04T10:19:01.434Z'

@@ -286,6 +286,17 @@ describe('type shape rules', () => {
       expect(hollow[0].severity).toBe('warning');
     } finally { proj.cleanup(); }
   });
+
+  it('an enum models its values and a signature type its params and returns: neither is HOLLOW_TYPE', () => {
+    const proj = createTempProject();
+    proj.writeSpec('type', 'track', 'kind: enum\nid: track\nname: Track\ndescription: a release track\nvalues:\n  - name: stable\n  - name: beta');
+    proj.writeSpec('type', 'mark', 'kind: signature\nid: mark\nname: Mark\ndescription: a text markup\nparams:\n  - name: text\n    type: string\nreturns: string');
+    proj.activate();
+    try {
+      const res = validateProject();
+      expect(res.issues.filter(i => i.code === 'HOLLOW_TYPE')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
 });
 
 describe('per-spec lint allows (#[allow] for the conformance gate)', () => {

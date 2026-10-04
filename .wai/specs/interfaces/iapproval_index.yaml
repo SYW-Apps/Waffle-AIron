@@ -5,8 +5,8 @@ component: approval_index
 methods:
   - name: getById
     description: Return one approval request by id, or null when absent.
-    signature: 'getById(id: string): ApprovalRequest | null'
-    returns: ApprovalRequest | null
+    signature: 'getById(id: string): ApprovalRequest?'
+    returns: ApprovalRequest?
     params:
       - name: id
         type: string
@@ -16,8 +16,8 @@ methods:
       and action kind.
     signature: >-
       list(status?: string, projectId?: string, requestedByUserId?: string, kind?: string):
-      ApprovalRequest[]
-    returns: ApprovalRequest[]
+      list<ApprovalRequest>
+    returns: list<ApprovalRequest>
     params:
       - name: status
         type: string
@@ -33,4 +33,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-09T19:30:42.416Z'
-updatedAt: '2026-10-03T16:46:02.283Z'
+updatedAt: '2026-10-04T10:18:30.626Z'

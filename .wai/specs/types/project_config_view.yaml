@@ -16,7 +16,7 @@ fields:
       'backend' by default when the config omits it.
     optional: false
   - name: locked
-    type: boolean
+    type: bool
     description: 'True when a lock is in force: the lock record exists AND matches the current tree.'
     optional: false
   - name: profileSource
@@ -27,7 +27,7 @@ fields:
       resolves to no loaded profile.
     optional: true
   - name: profileResolvable
-    type: boolean
+    type: bool
     description: >-
       Whether the recorded projectType actually resolves to a governing profile (a built-in, a
       project kind, or a profile contributed by a pack registered in this project). False means the
@@ -43,7 +43,7 @@ fields:
       into the project to make the selected profile resolvable — the name of that adopted pack.
     optional: true
   - name: unappliedProfileIds
-    type: string[]
+    type: list<string>
     description: >-
       Profile ids recorded in the project's profileSelection that are NOT the governing projectType.
       projectType takes exactly one profile, so a multi-id selection leaves a remainder: it is
@@ -51,7 +51,7 @@ fields:
       (subsystem.profile) if it is meant to apply at all.
     optional: true
   - name: overridingSubsystemIds
-    type: string[]
+    type: list<string>
     description: >-
       Ids of the project's subsystems that declare a profile of their own, which therefore takes
       precedence over the project-level profile for their components. Reported so "the project
@@ -66,7 +66,7 @@ fields:
       unattended policy write, so this is how it states what it changed.
     optional: true
   - name: lockStale
-    type: boolean
+    type: bool
     description: >-
       Present (and true) only when a lock record exists but no longer matches the tree, so a UI
       prompts for a re-lock instead of showing the project as never locked.
@@ -74,4 +74,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-23T11:23:30.795Z'
-updatedAt: '2026-10-03T17:04:38.753Z'
+updatedAt: '2026-10-04T10:20:49.595Z'

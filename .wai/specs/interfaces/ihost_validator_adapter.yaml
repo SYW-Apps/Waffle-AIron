@@ -27,8 +27,8 @@ methods:
     description: >-
       List the ids of wairon's built-in architectural profiles (backend, frontend-reactive, …),
       forwarded to the validator portal — the built-in half of the selectable-profile catalog.
-    signature: 'builtinProfileIds(): string[]'
-    returns: string[]
+    signature: 'builtinProfileIds(): list<string>'
+    returns: list<string>
     params: []
   - name: builtinProjectKinds
     description: >-
@@ -37,8 +37,8 @@ methods:
       of their own, forwarded to the validator portal. The counterpart of builtinProfileIds: the
       hosted profile-application path must recognize a project kind as resolvable-as-is (no
       contributing pack to adopt) instead of refusing it as an unknown profile.
-    signature: 'builtinProjectKinds(): string[]'
-    returns: string[]
+    signature: 'builtinProjectKinds(): list<string>'
+    returns: list<string>
     params: []
   - name: measurePackImpact
     description: >-
@@ -66,11 +66,11 @@ methods:
       and each member's within `depth` levels, each at the member's own root). The hosted lock asks
       with depth 1 for the direct members it records; the caller has already bound a root it is
       entitled to reach.
-    signature: 'familyApprovals(depth?: number): ProjectApproval[]'
-    returns: ProjectApproval[]
+    signature: 'familyApprovals(depth?: int): list<ProjectApproval>'
+    returns: list<ProjectApproval>
     params:
       - name: depth
-        type: number
+        type: int
         description: 'Member levels to include: 1 = direct members'
         optional: true
     guarantees:
@@ -81,11 +81,11 @@ methods:
       canvas and share snapshots. The caller has already bound a root it is entitled to reach and
       granted the request's reach (the caller's listed projects), so a producer or member outside it
       is answered unavailable, never read.
-    signature: 'familyRelations(): ProjectRelations[]'
-    returns: ProjectRelations[]
+    signature: 'familyRelations(): list<ProjectRelations>'
+    returns: list<ProjectRelations>
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-10-03T12:15:25.317Z'
+updatedAt: '2026-10-04T10:28:25.347Z'

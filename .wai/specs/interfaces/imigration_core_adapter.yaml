@@ -9,8 +9,8 @@ methods:
     description: >-
       Forward to spec_tree_portal.resolveChainingParent: The bound root's chaining parent, or null
       for a top root and when the request may not read above its root.
-    signature: 'resolveChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    signature: 'resolveChainingParent(): ChainingParentRef?'
+    returns: ChainingParentRef?
     params: []
   - name: projectFamily
     description: >-
@@ -34,13 +34,13 @@ methods:
     description: >-
       Forward to project_config_portal.loadProjectConfig: The bound project's configuration, or null
       when it has none.
-    signature: 'loadProjectConfig(): ProjectConfig | null'
-    returns: ProjectConfig | null
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
   - name: approvalRecord
     description: 'Forward to approval_portal.approvalRecord: The lock record a project root carries, or null.'
-    signature: 'approvalRecord(root?: string): LockRecord | null'
-    returns: LockRecord | null
+    signature: 'approvalRecord(root?: string): LockRecord?'
+    returns: LockRecord?
     params:
       - name: root
         type: string
@@ -50,8 +50,8 @@ methods:
     description: >-
       Forward to project_config_portal.setId: Declare the bound project's id (never replaces a
       different one).
-    signature: 'setId(id: string): boolean'
-    returns: boolean
+    signature: 'setId(id: string): bool'
+    returns: bool
     params:
       - name: id
         type: string
@@ -60,8 +60,8 @@ methods:
     description: >-
       Forward to project_config_portal.renameId: Move the bound project's id, keeping the old one in
       previousIds.
-    signature: 'renameId(from: string, to: string): boolean'
-    returns: boolean
+    signature: 'renameId(from: string, to: string): bool'
+    returns: bool
     params:
       - name: from
         type: string
@@ -73,8 +73,8 @@ methods:
     description: >-
       Forward to project_config_portal.renameAlias: Rekey one member or external alias of the bound
       project.
-    signature: 'renameAlias(from: string, to: string): boolean'
-    returns: boolean
+    signature: 'renameAlias(from: string, to: string): bool'
+    returns: bool
     params:
       - name: from
         type: string
@@ -86,8 +86,8 @@ methods:
     description: >-
       Forward to project_config_portal.declareMember: Declare an existing project as a member of the
       bound project.
-    signature: 'declareMember(alias: string, declaration: MemberDeclaration): boolean'
-    returns: boolean
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -99,16 +99,16 @@ methods:
     description: >-
       Forward to project_config_portal.removeMember: Remove one member declaration of the bound
       project.
-    signature: 'removeMember(alias: string): boolean'
-    returns: boolean
+    signature: 'removeMember(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
         description: The alias
   - name: declareExternal
     description: 'Forward to project_config_portal.declareExternal: Declare one external of the bound project.'
-    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): boolean'
-    returns: boolean
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -120,24 +120,24 @@ methods:
     description: >-
       Forward to project_config_portal.repointExternal: Revise one external's producer id and
       explicit source.
-    signature: 'repointExternal(alias: string, project: string | null, source: ExternalSource | null): boolean'
-    returns: boolean
+    signature: 'repointExternal(alias: string, project: string?, source: ExternalSource?): bool'
+    returns: bool
     params:
       - name: alias
         type: string
         description: The alias
       - name: project
-        type: string | null
+        type: string?
         description: The producer id, or null when the alias is the id
       - name: source
-        type: ExternalSource | null
+        type: ExternalSource?
         description: The explicit place, or null
   - name: removeExternal
     description: >-
       Forward to project_config_portal.removeExternal: Remove one external declaration of the bound
       project.
-    signature: 'removeExternal(alias: string): boolean'
-    returns: boolean
+    signature: 'removeExternal(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -146,21 +146,21 @@ methods:
     description: >-
       Forward to project_config_portal.importNames: Add public names to the use of an external or
       member of the bound project.
-    signature: 'importNames(alias: string, names: string[]): boolean'
-    returns: boolean
+    signature: 'importNames(alias: string, names: list<string>): bool'
+    returns: bool
     params:
       - name: alias
         type: string
         description: The alias
       - name: names
-        type: string[]
+        type: list<string>
         description: The names, or *
   - name: rewriteReferences
     description: >-
       Forward to spec_maintenance_portal.rewriteReferences: Respell references at parsed positions
       of one spec of the family.
-    signature: 'rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean'
-    returns: boolean
+    signature: 'rewriteReferences(kind: string, id: string, edits: list<ReferenceEdit>): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -169,7 +169,7 @@ methods:
         type: string
         description: The spec's in-memory key
       - name: edits
-        type: ReferenceEdit[]
+        type: list<ReferenceEdit>
         description: The edits for this spec
   - name: externalizeSubsystem
     description: >-
@@ -205,8 +205,8 @@ methods:
     description: >-
       Forward to project_config_portal.projectConfigExists: whether the bound project has a
       configuration.
-    signature: 'projectConfigExists(): boolean'
-    returns: boolean
+    signature: 'projectConfigExists(): bool'
+    returns: bool
     params: []
   - name: exportUsage
     description: >-
@@ -224,11 +224,9 @@ methods:
   - name: loadSpec
     description: 'Forward to spec_tree_portal.loadSpec: one spec of the named kind by id, or null.'
     signature: >-
-      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
-      | ImplementationSpec | TypeSpec | null
-    returns: >-
-      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
-      null
+      loadSpec(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec)?
+    returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
         type: string
@@ -240,8 +238,8 @@ methods:
     description: >-
       Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
       members' included.
-    signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    signature: 'loadTypeSpecs(): list<TypeSpec>'
+    returns: list<TypeSpec>
     params: []
   - name: resolveSubsystemExports
     description: 'Forward to spec_tree_portal.resolveSubsystemExports: one subsystem''s resolved L1 export table.'
@@ -255,8 +253,8 @@ methods:
     description: >-
       Forward to spec_maintenance_portal.moveMountToMembers: move one legacy L1 mount of the bound
       project into its `members`.
-    signature: 'moveMountToMembers(alias: string): boolean'
-    returns: boolean
+    signature: 'moveMountToMembers(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -265,8 +263,8 @@ methods:
     description: >-
       Forward to spec_maintenance_portal.normalizeReferences: re-save one spec with every reference
       in its canonical stage-3 form.
-    signature: 'normalizeReferences(kind: string, id: string): boolean'
-    returns: boolean
+    signature: 'normalizeReferences(kind: string, id: string): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -302,8 +300,8 @@ methods:
       Forward to spec_maintenance_portal.updateMember: change a member's declaration — the chaining
       migration's rewrite of a deprecated long-form `path` to the one location key, and promote /
       demote dropping a contradicted `as`.
-    signature: 'updateMember(alias: string, changes: MemberDeclaration): boolean'
-    returns: boolean
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -313,4 +311,4 @@ methods:
         description: The fields to set
 status: complete
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-10-02T20:50:33.859Z'
+updatedAt: '2026-10-04T10:19:05.547Z'

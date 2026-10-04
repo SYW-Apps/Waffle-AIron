@@ -54,8 +54,8 @@ methods:
       exposeTo[] reference to a moved id across all units, persist the renamed subtree durably, and
       return the old->new id remap for every moved unit so the caller can rewrite external
       references.
-    signature: 'reparentUnit(unitId: string, newParentId?: string): UnitIdRemap[]'
-    returns: UnitIdRemap[]
+    signature: 'reparentUnit(unitId: string, newParentId?: string): list<UnitIdRemap>'
+    returns: list<UnitIdRemap>
     params:
       - name: unitId
         type: string
@@ -85,4 +85,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-09T22:05:44.376Z'
-updatedAt: '2026-10-01T17:05:57.962Z'
+updatedAt: '2026-10-04T10:19:08.936Z'

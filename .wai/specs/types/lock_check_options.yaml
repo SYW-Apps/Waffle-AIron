@@ -8,7 +8,7 @@ description: >-
 subsystem: sdd_cli
 fields:
   - name: strict
-    type: boolean
+    type: bool
     description: >-
       Treat a repository that was never approved — or that carries no spec tree at all — as a
       failure rather than a notice. Off by default, so importing the gate cannot make an existing
@@ -17,4 +17,4 @@ fields:
 methods: []
 sourcePath: src/commands/lock.ts
 createdAt: '2026-09-19T12:25:29.023Z'
-updatedAt: '2026-09-19T12:25:29.035Z'
+updatedAt: '2026-10-04T10:20:24.325Z'

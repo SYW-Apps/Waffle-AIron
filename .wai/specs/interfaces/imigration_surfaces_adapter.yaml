@@ -7,17 +7,17 @@ component: migration_surfaces_adapter
 methods:
   - name: pinExternals
     description: 'Forward to surface_portal.pinExternals: pin the named externals of the bound project.'
-    signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
-    returns: ExternalPin[]
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
     params:
       - name: aliases
-        type: string[]
+        type: list<string>
         description: The aliases to pin
         optional: true
   - name: renamePin
     description: 'Forward to surface_portal.renamePin: carry a pin to a new alias or producer id, digest kept.'
-    signature: 'renamePin(alias: string, newAlias: string, project: string): boolean'
-    returns: boolean
+    signature: 'renamePin(alias: string, newAlias: string, project: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
@@ -30,32 +30,32 @@ methods:
         description: The producer id from now on
   - name: unpin
     description: 'Forward to surface_portal.unpin: remove a pin.'
-    signature: 'unpin(alias: string): boolean'
-    returns: boolean
+    signature: 'unpin(alias: string): bool'
+    returns: bool
     params:
       - name: alias
         type: string
         description: The alias
   - name: listExternals
     description: Forward to surface_portal.listExternals.
-    signature: 'listExternals(): ExternalListing[]'
-    returns: ExternalListing[]
+    signature: 'listExternals(): list<ExternalListing>'
+    returns: list<ExternalListing>
     params: []
   - name: listFamilyPins
     description: 'Forward to surface_portal.listFamilyPins: the stage-1 family pins the bound root still holds.'
-    signature: 'listFamilyPins(): FamilyPin[]'
-    returns: FamilyPin[]
+    signature: 'listFamilyPins(): list<FamilyPin>'
+    returns: list<FamilyPin>
     params: []
   - name: removeSnapshot
     description: >-
       Forward to surface_portal.removeSnapshot: remove one stored snapshot of the bound root by its
       key; false when there was none.
-    signature: 'removeSnapshot(projectName: string): boolean'
-    returns: boolean
+    signature: 'removeSnapshot(projectName: string): bool'
+    returns: bool
     params:
       - name: projectName
         type: string
         description: The snapshot's storage key
 status: complete
 createdAt: '2026-09-30T20:31:55.432Z'
-updatedAt: '2026-09-30T22:58:34.642Z'
+updatedAt: '2026-10-04T10:19:06.367Z'

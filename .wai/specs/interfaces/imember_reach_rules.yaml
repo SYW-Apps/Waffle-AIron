@@ -14,22 +14,22 @@ methods:
       Assignments, roles and units are untouched — a membership change moves no setting, only the
       chain.
     signature: >-
-      relink(world: PermissionWorld, added: ProjectParentLink[], removed: string[], placements:
-      ProjectPlacement[], unplaced: string[]): PermissionWorld
+      relink(world: PermissionWorld, added: list<ProjectParentLink>, removed: list<string>,
+      placements: list<ProjectPlacement>, unplaced: list<string>): PermissionWorld
     returns: PermissionWorld
     params:
       - name: world
         type: PermissionWorld
       - name: added
-        type: ProjectParentLink[]
+        type: list<ProjectParentLink>
       - name: removed
-        type: string[]
+        type: list<string>
         description: Member record ids whose parent link is removed
       - name: placements
-        type: ProjectPlacement[]
+        type: list<ProjectPlacement>
         description: Placements to add (empty for every change but a detach)
       - name: unplaced
-        type: string[]
+        type: list<string>
         description: Project ids whose placements are removed (empty for every change but an adopt)
     guarantees:
       - idempotent
@@ -42,23 +42,23 @@ methods:
       each row with equal set. Callers keep all rows (the upgrade's proof) or only unequal ones (a
       reach listing).
     signature: >-
-      compare(users: HostedUserRecord[], before: PermissionWorld, beforeId: string | null, after:
-      PermissionWorld, afterId: string | null): ReachComparison[]
-    returns: ReachComparison[]
+      compare(users: list<HostedUserRecord>, before: PermissionWorld, beforeId: string?, after:
+      PermissionWorld, afterId: string?): list<ReachComparison>
+    returns: list<ReachComparison>
     params:
       - name: users
-        type: HostedUserRecord[]
+        type: list<HostedUserRecord>
       - name: before
         type: PermissionWorld
       - name: beforeId
-        type: string | null
+        type: string?
         description: >-
           The project resolved before (the family root at upgrade; the member before a change; null
           when it had no record)
       - name: after
         type: PermissionWorld
       - name: afterId
-        type: string | null
+        type: string?
         description: The project resolved after (null when it will have no record)
     guarantees:
       - idempotent
@@ -69,13 +69,13 @@ methods:
       which already covers its members through the chain) is kept; duplicates collapse, order kept.
       Answers null when no entry is qualified, otherwise the rewrite and its documented widening
       (record-level tools on the member's own record, within the member only).
-    signature: 'narrowing(key: ApiKeyRecord, members: PlannedMemberRecord[]): PlannedNarrowing | null'
-    returns: PlannedNarrowing | null
+    signature: 'narrowing(key: ApiKeyRecord, members: list<PlannedMemberRecord>): PlannedNarrowing?'
+    returns: PlannedNarrowing?
     params:
       - name: key
         type: ApiKeyRecord
       - name: members
-        type: PlannedMemberRecord[]
+        type: list<PlannedMemberRecord>
     guarantees:
       - idempotent
   - name: carryPlan
@@ -89,12 +89,12 @@ methods:
       at a moved subsystem is listed as not carried: a role only grants, so leaving it out can only
       narrow.
     signature: >-
-      carryPlan(users: HostedUserRecord[], world: PermissionWorld, parentId: string, memberId:
-      string, moved: string[]): CarriedSubsystemRule[]
-    returns: CarriedSubsystemRule[]
+      carryPlan(users: list<HostedUserRecord>, world: PermissionWorld, parentId: string, memberId:
+      string, moved: list<string>): list<CarriedSubsystemRule>
+    returns: list<CarriedSubsystemRule>
     params:
       - name: users
-        type: HostedUserRecord[]
+        type: list<HostedUserRecord>
       - name: world
         type: PermissionWorld
       - name: parentId
@@ -104,10 +104,10 @@ methods:
         type: string
         description: The new project's id
       - name: moved
-        type: string[]
+        type: list<string>
         description: The subsystem ids that move into the new project
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-10-01T16:56:27.256Z'
-updatedAt: '2026-10-03T14:20:12.193Z'
+updatedAt: '2026-10-04T10:19:04.296Z'

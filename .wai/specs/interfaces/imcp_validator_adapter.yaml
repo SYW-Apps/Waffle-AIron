@@ -51,15 +51,15 @@ methods:
       approval state computed at its own root — what sdd_get_status prints beside the completeness
       report. On the hosted data plane the caller has bound a root within the credential's reach
       before asking.
-    signature: 'familyApprovals(depth?: number): ProjectApproval[]'
-    returns: ProjectApproval[]
+    signature: 'familyApprovals(depth?: int): list<ProjectApproval>'
+    returns: list<ProjectApproval>
     params:
       - name: depth
-        type: number
+        type: int
         description: 'Member levels to include: omitted = every level the status report covers'
         optional: true
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-30T05:54:10.505Z'
+updatedAt: '2026-10-04T10:28:31.521Z'

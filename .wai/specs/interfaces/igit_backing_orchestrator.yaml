@@ -11,8 +11,8 @@ methods:
     description: >-
       Authenticate and return the bindings whose scope the caller holds project:admin over (an
       instance admin sees all). A read; not audited.
-    signature: 'listBindings(credential: string): GitBackingBinding[]'
-    returns: GitBackingBinding[]
+    signature: 'listBindings(credential: string): list<GitBackingBinding>'
+    returns: list<GitBackingBinding>
     params:
       - name: credential
         type: string
@@ -57,8 +57,8 @@ methods:
       <workdir>/instance/ — NEVER the secret store, credentials only as hashed records; then
       commit+push skip-if-clean, record lastSyncAt on a published sync, and audit at info level.
       Returns whether anything was published.
-    signature: 'syncScope(credential: string, bindingId: string): boolean'
-    returns: boolean
+    signature: 'syncScope(credential: string, bindingId: string): bool'
+    returns: bool
     params:
       - name: credential
         type: string
@@ -77,4 +77,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-16T15:39:32.918Z'
-updatedAt: '2026-09-24T13:20:06.978Z'
+updatedAt: '2026-10-04T10:18:49.500Z'

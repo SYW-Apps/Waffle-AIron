@@ -35,13 +35,13 @@ fields:
       always contained by the project declaring it.
     optional: true
   - name: publicInterfaces
-    type: PublicInterface[]
+    type: list<PublicInterface>
     description: >-
       The subsystem's export table: own items (a component or type it owns) and re-exports from
       other subsystems of the project
     optional: false
   - name: trustedLinks
-    type: object[]
+    type: list<any>
     description: 'Acknowledged mutual couplings: subsystem + reason'
     optional: false
   - name: status
@@ -49,7 +49,7 @@ fields:
     description: draft | design | complete (an omitted status is parsed as complete)
     optional: false
   - name: lifecycle
-    type: LifecycleEntrypoint[]
+    type: list<LifecycleEntrypoint>
     description: >-
       Declared init/shutdown flow roots. Reachability analysis (unused-detection, durability
       round-trip hydration) treats these as entrypoints alongside Portals, Observers, and published
@@ -62,7 +62,7 @@ fields:
       each with a reason.
     optional: true
   - name: ext
-    type: json
+    type: any
     description: >-
       Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
       the core, preserved verbatim through load and save.
@@ -90,9 +90,9 @@ fields:
 methods:
   - name: isDraft
     signature: 'isDraft(): boolean'
-    returns: boolean
+    returns: bool
     description: Whether the subsystem's status is draft or design
     symbol: isDraftSubsystem
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T17:03:21.209Z'
+updatedAt: '2026-10-04T10:21:13.364Z'

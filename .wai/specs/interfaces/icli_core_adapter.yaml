@@ -6,7 +6,7 @@ methods:
   - name: loadSystemSpec
     description: Calls loadSystemSpec on the core portal
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: moveMember
     description: >-
       Forward to spec_maintenance_portal.moveMember: relocate a member's directory and point its
@@ -33,14 +33,14 @@ methods:
     description: >-
       Pack the local project's whole spec tree (its own .wai plus every chained subproject) into a
       .waitree archive. Forwarded to the core portal.
-    signature: 'exportSpecTree(includeDerived?: boolean, allowPartial?: boolean): TreeExportResult'
+    signature: 'exportSpecTree(includeDerived?: bool, allowPartial?: bool): TreeExportResult'
     returns: TreeExportResult
     params:
       - name: includeDerived
-        type: boolean
+        type: bool
         optional: true
       - name: allowPartial
-        type: boolean
+        type: bool
         description: >-
           Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left
           out in the result, instead of refusing the whole export.
@@ -60,8 +60,8 @@ methods:
         type: tree_import_options
   - name: loadProjectConfig
     description: The local project's configuration, or null when it has none. Forwarded to the core portal.
-    signature: 'loadProjectConfig(): ProjectConfig | null'
-    returns: ProjectConfig | null
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
     guarantees:
       - idempotent
@@ -87,8 +87,8 @@ methods:
     description: >-
       Whether the local project has a configuration — the CLI's is-this-a-wairon-project guard.
       Forwarded to the core portal.
-    signature: 'projectConfigExists(): boolean'
-    returns: boolean
+    signature: 'projectConfigExists(): bool'
+    returns: bool
     params: []
     guarantees:
       - idempotent
@@ -96,8 +96,8 @@ methods:
     description: >-
       The agent topology resolved from the current spec tree: the live records `wairon list`, `show`
       and `generate` work from. Forwarded to the core portal.
-    signature: 'resolveAgentTopology(): AgentRecord[]'
-    returns: AgentRecord[]
+    signature: 'resolveAgentTopology(): list<AgentRecord>'
+    returns: list<AgentRecord>
     params: []
     guarantees:
       - idempotent
@@ -129,8 +129,8 @@ methods:
       Forward to the core portal: the direct members of a project root, one level deep — its
       `members` entries and, for one release, its legacy L1 mounts — each as its directory, alias
       and form.
-    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
-    returns: ChainedSubprojectDir[]
+    signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
+    returns: list<ChainedSubprojectDir>
     params:
       - name: projectRoot
         type: string
@@ -141,8 +141,8 @@ methods:
     description: >-
       The store packs that apply by default, shaped as selections to seed into a new project's
       configuration. Forwarded to the core portal.
-    signature: 'defaultPackSelections(): PackSelection[]'
-    returns: PackSelection[]
+    signature: 'defaultPackSelections(): list<PackSelection>'
+    returns: list<PackSelection>
     params: []
     guarantees:
       - idempotent
@@ -158,21 +158,21 @@ methods:
     description: >-
       Forward to core_portal.retireSpecialists: plan, and with apply write, the migration off the
       retired Specialist stereotype
-    signature: 'retireSpecialists(apply: boolean): SpecialistRetirement'
+    signature: 'retireSpecialists(apply: bool): SpecialistRetirement'
     returns: SpecialistRetirement
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the plan; false plans without writing
   - name: repairForeignStepFields
     description: >-
       Forward to core_portal.repairForeignStepFields: plan, and with apply write, the removal of
       every narrative-step field its own step type cannot have
-    signature: 'repairForeignStepFields(apply: boolean): ForeignFieldRepair[]'
-    returns: ForeignFieldRepair[]
+    signature: 'repairForeignStepFields(apply: bool): list<ForeignFieldRepair>'
+    returns: list<ForeignFieldRepair>
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the repair; false plans without writing
   - name: renderDiagram
     description: >-
@@ -180,14 +180,14 @@ methods:
       the artifact as a string. The CLI reaches diagram rendering through here rather than importing
       the canvas and exporter modules directly — those live in another subsystem, and an adapter is
       what a subsystem boundary is crossed with.
-    signature: 'renderDiagram(format: string, relations?: ProjectRelations[]): string'
+    signature: 'renderDiagram(format: string, relations?: list<ProjectRelations>): string'
     returns: string
     params:
       - name: format
         type: string
         description: canvas, mermaid, drawio or excalidraw
       - name: relations
-        type: ProjectRelations[]
+        type: list<ProjectRelations>
         description: >-
           The family's relation health for the canvas; omitted (`--no-health`), the canvas says it
           was not checked
@@ -198,12 +198,12 @@ methods:
       CLI reaches generation through here rather than importing the exporters module, which is
       another subsystem's.
     signature: >-
-      generateAll(agents: AgentRecord[], config: ProjectConfig, options?: GenerateOptions):
-      GenerateSummary[]
-    returns: GenerateSummary[]
+      generateAll(agents: list<AgentRecord>, config: ProjectConfig, options?: GenerateOptions):
+      list<GenerateSummary>
+    returns: list<GenerateSummary>
     params:
       - name: agents
-        type: AgentRecord[]
+        type: list<AgentRecord>
         description: Every agent to write
       - name: config
         type: ProjectConfig
@@ -216,11 +216,11 @@ methods:
     description: >-
       Calls resolveExpectedOutputPaths on core portal: which files a generate run would own, without
       writing any.
-    signature: 'resolveExpectedOutputPaths(agents: AgentRecord[], config: ProjectConfig): Set<string>'
-    returns: Set<string>
+    signature: 'resolveExpectedOutputPaths(agents: list<AgentRecord>, config: ProjectConfig): set<string>'
+    returns: set<string>
     params:
       - name: agents
-        type: AgentRecord[]
+        type: list<AgentRecord>
         description: The agents whose outputs to enumerate
       - name: config
         type: ProjectConfig
@@ -229,8 +229,8 @@ methods:
     description: >-
       Calls resolve on the topology repository: every domain this project has, derived and
       registered alike.
-    signature: 'resolveDomains(): Domain[]'
-    returns: Domain[]
+    signature: 'resolveDomains(): list<Domain>'
+    returns: list<Domain>
     params: []
   - name: addDomain
     description: >-
@@ -255,19 +255,19 @@ methods:
       Calls the domain detector: which directories look like domains nobody has registered.
       Proposals only.
     signature: >-
-      detectDomainCandidates(projectRoot: string, trackedPaths?: Set<string>, trackedIds?:
-      Set<string>): DetectedDomainCandidate[]
-    returns: DetectedDomainCandidate[]
+      detectDomainCandidates(projectRoot: string, trackedPaths?: set<string>, trackedIds?:
+      set<string>): list<DetectedDomainCandidate>
+    returns: list<DetectedDomainCandidate>
     params:
       - name: projectRoot
         type: string
         description: The repository root to scan
       - name: trackedPaths
-        type: Set<string>
+        type: set<string>
         description: Paths already claimed by a registered domain
         optional: true
       - name: trackedIds
-        type: Set<string>
+        type: set<string>
         description: Domain ids already in use
         optional: true
   - name: deriveExecutionProfile
@@ -286,8 +286,8 @@ methods:
       core portal.
     signature: >-
       resolveBudget(profile: ExecutionProfile, config: ExecutionConfig, agentId: string):
-      ExecutionBudget | undefined
-    returns: ExecutionBudget | undefined
+      ExecutionBudget?
+    returns: ExecutionBudget?
     params:
       - name: profile
         type: ExecutionProfile
@@ -304,8 +304,8 @@ methods:
     description: >-
       Where an AI tool keeps its machine-wide configuration, for `wairon init`. Forwarded to the
       core portal.
-    signature: 'globalGuideFilePath(target: string): string | null'
-    returns: string | null
+    signature: 'globalGuideFilePath(target: string): string?'
+    returns: string?
     params:
       - name: target
         type: string
@@ -316,8 +316,8 @@ methods:
     description: >-
       Where an AI tool keeps its per-project configuration, for `wairon init` and `wairon doctor`.
       Forwarded to the core portal.
-    signature: 'localGuideFilePath(projectRoot: string, target: string): string | null'
-    returns: string | null
+    signature: 'localGuideFilePath(projectRoot: string, target: string): string?'
+    returns: string?
     params:
       - name: projectRoot
         type: string
@@ -359,22 +359,22 @@ methods:
     description: >-
       Refresh the in-project guides, for `wairon generate` and `wairon doctor --fix`. Forwarded to
       the core portal.
-    signature: 'reinjectLocalGuides(projectRoot: string, targets: string[]): string[]'
-    returns: string[]
+    signature: 'reinjectLocalGuides(projectRoot: string, targets: list<string>): list<string>'
+    returns: list<string>
     params:
       - name: projectRoot
         type: string
         description: The project root
       - name: targets
-        type: string[]
+        type: list<string>
         description: The AI tools to refresh
     effect: write
   - name: readStampVersion
     description: >-
       The wairon version stamped in generated content, for `wairon doctor`'s staleness check.
       Forwarded to the core portal.
-    signature: 'readStampVersion(content: string): string | null'
-    returns: string | null
+    signature: 'readStampVersion(content: string): string?'
+    returns: string?
     params:
       - name: content
         type: string
@@ -393,8 +393,8 @@ methods:
     description: >-
       Whether the project keeps a context directory, so `wairon generate` owes it the derived
       context documents. Forwarded to the core portal.
-    signature: 'hasContext(): boolean'
-    returns: boolean
+    signature: 'hasContext(): bool'
+    returns: bool
     params: []
     guarantees:
       - idempotent
@@ -402,8 +402,8 @@ methods:
     description: >-
       Where the derived context documents live, for `wairon doctor`'s staleness report. Forwarded to
       the core portal.
-    signature: 'derivedDocPaths(): string[]'
-    returns: string[]
+    signature: 'derivedDocPaths(): list<string>'
+    returns: list<string>
     params: []
     guarantees:
       - idempotent
@@ -428,11 +428,11 @@ methods:
       Forward to approval_portal.approvalVerdict: what the lock says about the tree, given the pin
       tree the validator computed (members whose pin moved, members drifted or never approved, and
       the stage-5 upgrade note).
-    signature: 'approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict'
+    signature: 'approvalVerdict(approvals?: list<ProjectApproval>): ApprovalVerdict'
     returns: ApprovalVerdict
     params:
       - name: approvals
-        type: ProjectApproval[]
+        type: list<ProjectApproval>
         description: The pin tree from the validator adapter's familyApprovals
         optional: true
     guarantees:
@@ -441,15 +441,15 @@ methods:
     description: >-
       Forward to spec_maintenance_portal.findLegacySpecFiles: the spec files `wairon doctor` reports
       as stored under a legacy name
-    signature: 'findLegacySpecFiles(): LegacySpecFile[]'
-    returns: LegacySpecFile[]
+    signature: 'findLegacySpecFiles(): list<LegacySpecFile>'
+    returns: list<LegacySpecFile>
     params: []
   - name: findChainingSubprojectsMissingConfig
     description: >-
       Forward to spec_maintenance_portal.findChainingSubprojectsMissingConfig: the chained
       subprojects `wairon doctor` reports as unrunnable standalone
-    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): string[]'
-    returns: string[]
+    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): list<string>'
+    returns: list<string>
     params:
       - name: projectRoot
         type: string
@@ -457,8 +457,8 @@ methods:
     description: >-
       Forward to spec_maintenance_portal.backfillChainedSubprojectConfigs: the `wairon doctor --fix`
       repair
-    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): string[]'
-    returns: string[]
+    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): list<string>'
+    returns: list<string>
     params:
       - name: projectRoot
         type: string
@@ -471,16 +471,16 @@ methods:
     description: >-
       Forward to extension_portal.pinInstalledPacksAsSelections: the `wairon doctor --fix` pack
       migration
-    signature: 'pinInstalledPacksAsSelections(): string[]'
-    returns: string[]
+    signature: 'pinInstalledPacksAsSelections(): list<string>'
+    returns: list<string>
     params: []
   - name: resolveChainingParent
     description: >-
       Forward to spec_tree_portal.resolveChainingParent: the bound root's chaining parent (parent
       root and mounting subsystem id), or null for a top root and when the bound request may not
       read above its root.
-    signature: 'resolveChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    signature: 'resolveChainingParent(): ChainingParentRef?'
+    returns: ChainingParentRef?
     params: []
   - name: projectFamily
     description: 'Forward to spec_tree_portal.projectFamily: the project graph of the bound root''s scan.'
@@ -529,14 +529,14 @@ methods:
     description: >-
       Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
       members' included (keyed by project id)
-    signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    signature: 'loadTypeSpecs(): list<TypeSpec>'
+    returns: list<TypeSpec>
     params: []
   - name: advanceMember
     description: >-
       Forward to spec_maintenance_portal.advanceMember: move a git member's pinned commit (`wairon
       member update`).
-    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: boolean): MemberAdvance'
+    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: bool): MemberAdvance'
     returns: MemberAdvance
     params:
       - name: alias
@@ -551,7 +551,7 @@ methods:
         description: An exact commit
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Report and write nothing
         optional: true
   - name: repairSignatures
@@ -559,23 +559,23 @@ methods:
       Forward to core_portal.repairSignatures: plan, and with apply write, the regeneration of
       stored signature texts from their params and the removal of restatements equal to a method's
       signature source.
-    signature: 'repairSignatures(apply: boolean): SignatureTextRepair[]'
-    returns: SignatureTextRepair[]
+    signature: 'repairSignatures(apply: bool): list<SignatureTextRepair>'
+    returns: list<SignatureTextRepair>
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the repair; false plans without writing
   - name: repairTypeSpellings
     description: >-
       Forward to core_portal.repairTypeSpellings: plan, and with apply write, the rewrite of stored
       type positions into their canonical spelling, with the int proposals and the positions needing
       an author beside it.
-    signature: 'repairTypeSpellings(apply: boolean): TypeSpellingRepair[]'
-    returns: TypeSpellingRepair[]
+    signature: 'repairTypeSpellings(apply: bool): list<TypeSpellingRepair>'
+    returns: list<TypeSpellingRepair>
     params:
       - name: apply
-        type: boolean
+        type: bool
         description: Write the rewrite; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T22:07:19.077Z'
+updatedAt: '2026-10-04T10:18:35.212Z'

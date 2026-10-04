@@ -13,7 +13,7 @@ import { loadProjectVariants } from '../../core/index.js';
 // component opts into via `variant: <id>`.
 // ---------------------------------------------------------------------------
 
-export async function listVariants(): Promise<void> {
+export function listVariants(): void {
   const variants = loadProjectVariants();
 
   console.log(chalk.bold(`\nComponent variants (${variants.length})\n`));

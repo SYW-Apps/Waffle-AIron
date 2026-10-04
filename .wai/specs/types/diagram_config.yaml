@@ -14,10 +14,10 @@ fields:
     description: 'Default view mode: architecture, types, or databases'
     optional: true
   - name: showDatabases
-    type: boolean
+    type: bool
     description: Whether to show the databases view tab in the canvas
     optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T20:47:29.113Z'
-updatedAt: '2026-09-19T11:07:07.038Z'
+updatedAt: '2026-10-04T10:20:02.855Z'

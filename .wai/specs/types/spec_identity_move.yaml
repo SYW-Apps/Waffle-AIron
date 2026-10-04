@@ -16,10 +16,10 @@ fields:
     description: The spec id after it
     optional: false
   - name: sites
-    type: string[]
+    type: list<string>
     description: When given, only a finding anchored at one of these sites follows the move
     optional: true
 methods: []
 sourcePath: src/models/identity-rename.ts
 createdAt: '2026-09-26T10:58:28.249Z'
-updatedAt: '2026-09-26T10:58:28.254Z'
+updatedAt: '2026-10-04T10:21:08.659Z'

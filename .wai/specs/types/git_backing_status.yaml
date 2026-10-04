@@ -9,7 +9,7 @@ description: >-
   the scoped path, never the whole working tree.
 fields:
   - name: enabled
-    type: boolean
+    type: bool
     description: True when the project is bound to a repository.
     optional: false
   - name: remote
@@ -25,17 +25,17 @@ fields:
     description: The isolated working branch wairon commits to.
     optional: true
   - name: dirty
-    type: boolean
+    type: bool
     description: >-
       True when the .wai/ tree holds changes not yet published (scoped status, never the whole
       tree).
     optional: true
   - name: periodicSyncMinutes
-    type: number
+    type: int
     description: Interval for the periodic backup sweep; absent disables periodic sync for this project.
     optional: true
   - name: skipIfClean
-    type: boolean
+    type: bool
     description: >-
       Periodic sweep skips the commit when the scoped path is clean (default true) so a quiet
       project never commits noise.
@@ -46,4 +46,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-16T15:23:54.158Z'
-updatedAt: '2026-07-16T15:23:54.219Z'
+updatedAt: '2026-10-04T10:28:55.367Z'

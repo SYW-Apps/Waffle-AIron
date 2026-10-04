@@ -124,6 +124,7 @@ import {
   type ParentExcerpt,
   type SystemSpec,
   type TypeSpec,
+  type MemberDepth,
 } from '../models/index.js';
 import { declaredMembers, isPart, ProjectConfigSchema, RulesConfigSchema } from '../models/project.js';
 import type {
@@ -365,7 +366,7 @@ export interface ValidationOptions {
   rules?: RulesConfig;
   projectType?: string;
   scopeSubsystem?: string;
-  recursive?: boolean | number;
+  recursive?: MemberDepth;
   /**
    * Pre-loaded extension packs (the programmatic-wrapper path). When omitted,
    * the packs declared in the project's own config are loaded — so CLI and

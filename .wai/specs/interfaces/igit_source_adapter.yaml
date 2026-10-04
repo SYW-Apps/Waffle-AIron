@@ -46,8 +46,8 @@ methods:
       The commit checked out in the work tree that holds a directory, or null when the directory is
       in no git work tree. No network. Provenance for a part or member stored on disk: the parent's
       lock records it, and nothing judges by it.
-    signature: 'head(directory: string): string | null'
-    returns: string | null
+    signature: 'head(directory: string): string?'
+    returns: string?
     params:
       - name: directory
         type: string
@@ -58,12 +58,12 @@ methods:
       entry), or null when it lies in none. No process and no network: a filesystem walk. What tells
       a producer in another repository (whose commit a pin records) from a contained or
       same-repository one (whose commit nothing records).
-    signature: 'repositoryRoot(directory: string): string | null'
-    returns: string | null
+    signature: 'repositoryRoot(directory: string): string?'
+    returns: string?
     params:
       - name: directory
         type: string
         description: An absolute directory
 status: complete
 createdAt: '2026-10-02T20:19:32.127Z'
-updatedAt: '2026-10-02T23:58:20.593Z'
+updatedAt: '2026-10-04T10:18:51.526Z'

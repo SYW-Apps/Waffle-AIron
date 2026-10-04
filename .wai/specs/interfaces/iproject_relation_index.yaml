@@ -11,8 +11,8 @@ methods:
       project id, and status — otherwise all relations.
     signature: >-
       list(sourceProjectId?: string, targetProjectId?: string, status?: string):
-      ProjectRelationRecord[]
-    returns: ProjectRelationRecord[]
+      list<ProjectRelationRecord>
+    returns: list<ProjectRelationRecord>
     params:
       - name: sourceProjectId
         type: string
@@ -25,4 +25,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-09T22:05:59.895Z'
-updatedAt: '2026-10-03T20:54:05.521Z'
+updatedAt: '2026-10-04T10:19:21.928Z'

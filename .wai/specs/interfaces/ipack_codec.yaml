@@ -36,12 +36,12 @@ methods:
       paths, symlinks, and non-regular entries, and enforce entry-count / total-size / per-entry /
       compression-ratio / depth caps.
     signature: >-
-      planExtraction(entries: archive_entry_meta[], limits: pack_extraction_limits):
+      planExtraction(entries: list<archive_entry_meta>, limits: pack_extraction_limits):
       PackExtractionPlan
     returns: PackExtractionPlan
     params:
       - name: entries
-        type: archive_entry_meta[]
+        type: list<archive_entry_meta>
       - name: limits
         type: pack_extraction_limits
   - name: verifyIdentity
@@ -62,19 +62,19 @@ methods:
       When the envelope carries integrity data, verify every entry's sha256 against entryDigests;
       returns true if integrity data was present and matched, false if the archive carried none.
       Throws on a digest mismatch.
-    signature: 'verifyIntegrity(manifest: pack_archive_manifest, files: pack_file[]): boolean'
-    returns: boolean
+    signature: 'verifyIntegrity(manifest: pack_archive_manifest, files: list<pack_file>): bool'
+    returns: bool
     params:
       - name: manifest
         type: pack_archive_manifest
       - name: files
-        type: pack_file[]
+        type: list<pack_file>
   - name: checkCompatibility
     description: >-
       Return whether the archive's formatVersion and minWaironVersion are compatible with the
       running wairon version.
-    signature: 'checkCompatibility(manifest: pack_archive_manifest, waironVersion: string): boolean'
-    returns: boolean
+    signature: 'checkCompatibility(manifest: pack_archive_manifest, waironVersion: string): bool'
+    returns: bool
     params:
       - name: manifest
         type: pack_archive_manifest
@@ -87,18 +87,18 @@ methods:
       caller-supplied values (time is passed in, keeping the codec pure), and return the sealed
       PackArchiveManifest.
     signature: >-
-      sealIntegrity(manifest: pack_archive_manifest, files: pack_file[], generatedBy: string,
+      sealIntegrity(manifest: pack_archive_manifest, files: list<pack_file>, generatedBy: string,
       generatedAt: string): PackArchiveManifest
     returns: PackArchiveManifest
     params:
       - name: manifest
         type: pack_archive_manifest
       - name: files
-        type: pack_file[]
+        type: list<pack_file>
       - name: generatedBy
         type: string
       - name: generatedAt
         type: string
 status: complete
 createdAt: '2026-07-21T18:13:36.380Z'
-updatedAt: '2026-10-03T20:54:02.008Z'
+updatedAt: '2026-10-04T10:19:10.163Z'

@@ -714,7 +714,7 @@ async function repairMcpRegistration(options: DoctorOptions, targets: string[]):
       continue;
     }
     if (writes.some((w) => w.outsideProject && !w.upToDate)) outside.push({ install, writes });
-    else await installMcp(install);
+    else installMcp(install);
   }
 
   // Cleanup/migration (belongs in --fix, not install): the legacy plugin whose
@@ -724,14 +724,14 @@ async function repairMcpRegistration(options: DoctorOptions, targets: string[]):
 
   printOutsideWrites(outside, plugin);
   if (!(await confirmOutsideWrites(options))) return;
-  for (const planned of outside) await installMcp(planned.install);
+  for (const planned of outside) installMcp(planned.install);
   if (plugin) retireLegacyPlugin();
 }
 
 /** One install, its failure reported as a warning rather than ending --fix. */
-async function installMcp(install: McpInstallOptions): Promise<void> {
+function installMcp(install: McpInstallOptions): void {
   try {
-    await runMcpInstall(install);
+    runMcpInstall(install);
   } catch (e) {
     console.log(`  ${icon('warn')} MCP install for ${install.backend} failed: ${e instanceof Error ? e.message : String(e)}`);
   }

@@ -43,7 +43,7 @@ fields:
       subject resolves the Principal directly, with permissionSubject resolved live).
     optional: true
   - name: projects
-    type: string[]
+    type: list<string>
     description: >-
       The session's project narrowing: the project ids it may reach, or ['*'] for no narrowing
       beyond the subject's own permissions.
@@ -51,4 +51,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T22:00:22.213Z'
-updatedAt: '2026-10-03T17:04:58.126Z'
+updatedAt: '2026-10-04T10:21:29.200Z'

@@ -6,19 +6,19 @@ methods:
   - name: loadSystemSpec
     description: Loads the L0 system spec (incl. its gateway publicInterfaces).
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: loadComponentSpecs
     description: Loads component specs (portals + dispatch tables).
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadInterfaceSpecs
     description: Loads interface specs (the contracts to export).
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadTypeSpecs
     description: Loads type specs (closure source).
     signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    returns: list<TypeSpec>
   - name: computeStateId
     description: >-
       Forward to approval_portal.computeStateId: the spec tree's content identity a snapshot is
@@ -41,8 +41,8 @@ methods:
       Forward to project_config_portal.loadProjectConfig: the bound project's configuration, or null
       when it has none — read for the project's effective id, which a snapshot records beside its
       name.
-    signature: 'loadProjectConfig(): ProjectConfig | null'
-    returns: ProjectConfig | null
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
     guarantees:
       - idempotent
@@ -52,8 +52,8 @@ methods:
       members (a `../`, git or hosted source), each bound to its producer (family, source.path, git,
       hosted), with the project's references into each by public name. The surfaces plane never
       walks the family itself.
-    signature: 'resolveExternals(): ExternalBinding[]'
-    returns: ExternalBinding[]
+    signature: 'resolveExternals(): list<ExternalBinding>'
+    returns: list<ExternalBinding>
     params: []
   - name: excerptParent
     description: >-
@@ -64,4 +64,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-02T20:48:02.060Z'
+updatedAt: '2026-10-04T10:19:39.565Z'

@@ -84,6 +84,7 @@ import {
   type TypeSpellingFacts,
   type StoredInterfaceSpec,
   type StoredTypeSpec,
+  type MemberDepth,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -157,7 +158,7 @@ export interface SpecIndex {
 
 /** spec_scan_options — how deep a scan reads into chained subprojects. */
 export interface SpecScanOptions {
-  recursive?: boolean | number;
+  recursive?: MemberDepth;
 }
 
 /** legacy_spec_file — a spec file stored under a legacy (undotted) name, and the name the current layout expects. */

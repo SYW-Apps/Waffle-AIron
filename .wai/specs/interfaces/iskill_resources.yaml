@@ -12,8 +12,8 @@ methods:
       genuinely NEW pack skills (namespaced by pack id). A pack skill that EXTENDS a builtin gets no
       descriptor of its own — it composed into that builtin's content, which is the point: one
       coherent instruction rather than two an agent must reconcile.
-    signature: 'listSkillResources(): SkillResourceDescriptor[]'
-    returns: SkillResourceDescriptor[]
+    signature: 'listSkillResources(): list<SkillResourceDescriptor>'
+    returns: list<SkillResourceDescriptor>
     params: []
   - name: readSkillResource
     description: >-
@@ -28,4 +28,4 @@ methods:
         description: The skill resource id, e.g. "sdd-architect".
 status: complete
 createdAt: '2026-07-08T22:01:40.898Z'
-updatedAt: '2026-09-15T20:46:58.690Z'
+updatedAt: '2026-10-04T10:19:35.521Z'

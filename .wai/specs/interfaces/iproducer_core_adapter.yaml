@@ -6,23 +6,23 @@ methods:
   - name: loadSystemSpec
     description: Load the L0 system spec.
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: loadSubsystemSpecs
     description: Load subsystem specs.
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadComponentSpecs
     description: Load component specs.
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadInterfaceSpecs
     description: Load interface specs.
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadImplementationSpecs
     description: Load implementation specs.
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: renderDiagram
     description: Render the project's diagram in the given format.
     signature: 'renderDiagram(format: string): string'
@@ -30,7 +30,7 @@ methods:
   - name: loadTypeSpecs
     description: Load type specs, each signature type with its params and returns.
     signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    returns: list<TypeSpec>
 status: complete
 createdAt: '2026-07-04T17:37:41.880Z'
-updatedAt: '2026-10-03T21:04:19.065Z'
+updatedAt: '2026-10-04T10:19:16.877Z'

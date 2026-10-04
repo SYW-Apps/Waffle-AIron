@@ -8,23 +8,23 @@ methods:
   - name: loadSystemSpec
     description: Calls loadSystemSpec on core portal
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: resolveAgentTopology
     description: Calls resolveAgentTopology on core portal
     signature: 'resolveAgentTopology(): AgentRecord[]'
-    returns: AgentRecord[]
+    returns: list<AgentRecord>
   - name: loadSubsystemSpec
     description: Calls loadSubsystemSpec on core portal
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
+    returns: SubsystemSpec?
   - name: loadComponentSpec
     description: Calls loadComponentSpec on core portal
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
-    returns: ComponentSpec | null
+    returns: ComponentSpec?
   - name: loadInterfaceSpec
     description: Calls loadInterfaceSpec on core portal
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
-    returns: InterfaceSpec | null
+    returns: InterfaceSpec?
   - name: moveMember
     description: >-
       Calls moveMember on the core portal to relocate a member's directory and point its `members`
@@ -43,7 +43,7 @@ methods:
       Forward chaining-parent detection to the core portal: is the bound root a chained subproject,
       and of which parent/mount? Used by server startup to announce the context.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    returns: ChainingParentRef?
   - name: composeAgentBrief
     description: >-
       Calls composeAgentBrief on core portal — the live per-agent delegation brief for the
@@ -58,8 +58,8 @@ methods:
       Calls loadProjectConfig on the core portal: the bound project's configuration, or null when it
       has none. Read by the sdd_validate_tree tool for the rule severities and projectType that
       govern the gate.
-    signature: 'loadProjectConfig(): ProjectConfig | null'
-    returns: ProjectConfig | null
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
     guarantees:
       - idempotent
@@ -77,7 +77,7 @@ methods:
   - name: renameMethod
     description: 'Forward to core_portal.renameMethod: rename a contract method and every reference to it'
     signature: >-
-      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean):
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool):
       MethodRename
     returns: MethodRename
     params:
@@ -91,23 +91,23 @@ methods:
         type: string
         description: Its new name, a camel-case identifier
       - name: pinSymbol
-        type: boolean
+        type: bool
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name; true when
           omitted
         optional: true
   - name: loadImplementationSpec
     description: Calls loadImplementationSpec on core portal
-    signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
-    returns: ImplementationSpec | null
+    signature: 'loadImplementationSpec(id: string): ImplementationSpec?'
+    returns: ImplementationSpec?
     params:
       - name: id
         type: string
         description: The stored implementation's id
   - name: loadTypeSpec
     description: Calls loadTypeSpec on core portal
-    signature: 'loadTypeSpec(id: string): TypeSpec | null'
-    returns: TypeSpec | null
+    signature: 'loadTypeSpec(id: string): TypeSpec?'
+    returns: TypeSpec?
     params:
       - name: id
         type: string
@@ -130,19 +130,19 @@ methods:
       Forward to approval_portal.approvalVerdict: what the lock says about the tree, given the pin
       tree the validator computed (members whose pin moved, members drifted or never approved, and
       the stage-5 upgrade note).
-    signature: 'approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict'
+    signature: 'approvalVerdict(approvals?: list<ProjectApproval>): ApprovalVerdict'
     returns: ApprovalVerdict
     params:
       - name: approvals
-        type: ProjectApproval[]
+        type: list<ProjectApproval>
         description: The pin tree from the validator adapter's familyApprovals
         optional: true
     guarantees:
       - idempotent
   - name: loadComponentSpecs
     description: 'Forward to spec_tree_portal.loadComponentSpecs: every component of the bound tree'
-    signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    signature: 'loadComponentSpecs(): list<ComponentSpec>'
+    returns: list<ComponentSpec>
     params: []
   - name: loadRegistry
     description: 'Forward to agent_context_portal.loadRegistry: the agent registry the topology tools read'
@@ -151,8 +151,8 @@ methods:
     params: []
   - name: resolveDomains
     description: 'Forward to agent_context_portal.resolveDomains: the project''s domains'
-    signature: 'resolveDomains(): Domain[]'
-    returns: Domain[]
+    signature: 'resolveDomains(): list<Domain>'
+    returns: list<Domain>
     params: []
     invokedBy:
       kind: external
@@ -163,24 +163,24 @@ methods:
     description: >-
       Forward to extension_portal.loadProjectVariants: the variant registry a variant-tagged
       component's guidance is resolved against
-    signature: 'loadProjectVariants(): VariantDef[]'
-    returns: VariantDef[]
+    signature: 'loadProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
     params: []
   - name: resolveVariantGuidance
     description: >-
       Forward to extension_portal.resolveVariantGuidance: one component's variant guidance and
       same-variant siblings
     signature: >-
-      resolveVariantGuidance(component: ComponentSpec, allComponents: ComponentSpec[], variantsById:
-      VariantDef[]): VariantDef
+      resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
+      variantsById: list<VariantDef>): VariantDef
     returns: VariantDef
     params:
       - name: component
         type: ComponentSpec
       - name: allComponents
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
       - name: variantsById
-        type: VariantDef[]
+        type: list<VariantDef>
   - name: createMember
     description: >-
       Calls createMember on the core portal: create a member at a source in the members grammar — a
@@ -209,8 +209,8 @@ methods:
       Calls listDirectChainedSubprojects on the core portal: the direct members of a project root,
       one level deep — its `members` entries and, for one release, its legacy L1 mounts — each as
       its directory, alias and form.
-    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
-    returns: ChainedSubprojectDir[]
+    signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
+    returns: list<ChainedSubprojectDir>
     params:
       - name: projectRoot
         type: string
@@ -219,4 +219,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T18:03:30.038Z'
+updatedAt: '2026-10-04T10:19:00.137Z'

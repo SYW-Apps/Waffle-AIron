@@ -11,7 +11,7 @@ import { exportSddSkills, listSkillNames } from './adapters/skills.js';
 // into each active target's skills directory and run in-session.
 // ---------------------------------------------------------------------------
 
-export async function runSkillsList(): Promise<void> {
+export function runSkillsList(): void {
   assertProjectInitialized();
   const names = listSkillNames();
   logger.header(`SDD Skills (${names.length})`);
@@ -21,7 +21,7 @@ export async function runSkillsList(): Promise<void> {
   }
 }
 
-export async function runSkillsInstall(): Promise<void> {
+export function runSkillsInstall(): void {
   assertProjectInitialized();
   const result = exportSddSkills();
 

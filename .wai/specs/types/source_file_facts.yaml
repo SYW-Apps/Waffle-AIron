@@ -64,7 +64,7 @@ fields:
       barrel republishing its orchestrator).
     optional: false
   - name: functionComplexity
-    type: Record<string, number>
+    type: map<string, int>
     description: >-
       Cyclomatic complexity per named function-like (function, method and accessor declarations, and
       function or arrow initializers of named slots); exact grade only, and same-named functions
@@ -256,4 +256,4 @@ methods:
     symbol: dialectOf
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-03T23:40:29.022Z'
+updatedAt: '2026-10-04T10:29:17.862Z'

@@ -16,10 +16,10 @@ fields:
     description: 'externals | members: where the alias is declared, for the `use` line a hint names'
     optional: false
   - name: use
-    type: string[]
+    type: list<string>
     description: The `use` entries, deduplicated in first-seen order; `*` stays `*`
     optional: false
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-28T17:16:21.747Z'
-updatedAt: '2026-09-28T17:16:21.750Z'
+updatedAt: '2026-10-04T10:20:50.904Z'
