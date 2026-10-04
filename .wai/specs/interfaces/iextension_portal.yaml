@@ -15,8 +15,8 @@ methods:
     description: >-
       Published read: the store packs that apply by default, as selections for a new project's
       configuration.
-    signature: 'defaultPackSelections(): PackSelection[]'
-    returns: PackSelection[]
+    signature: 'defaultPackSelections(): list<PackSelection>'
+    returns: list<PackSelection>
     params: []
     guarantees:
       - idempotent
@@ -33,8 +33,8 @@ methods:
     description: >-
       Published read: every pack installed on this machine, whatever any project declares. Forwarded
       to the extension orchestrator.
-    signature: 'listInstalledPacks(): InstalledPack[]'
-    returns: InstalledPack[]
+    signature: 'listInstalledPacks(): list<InstalledPack>'
+    returns: list<InstalledPack>
     params: []
     guarantees:
       - idempotent
@@ -42,8 +42,8 @@ methods:
     description: >-
       Published read: one installed pack by name and optional version. Forwarded to the extension
       orchestrator.
-    signature: 'resolveInstalledPack(name: string, version: string): InstalledPack | null'
-    returns: InstalledPack | null
+    signature: 'resolveInstalledPack(name: string, version: string): InstalledPack?'
+    returns: InstalledPack?
     params:
       - name: name
         type: string
@@ -71,8 +71,8 @@ methods:
     description: >-
       Published write: remove an installed pack, answering whether there was one. Forwarded to the
       extension orchestrator.
-    signature: 'uninstallPack(name: string, version: string): boolean'
-    returns: boolean
+    signature: 'uninstallPack(name: string, version: string): bool'
+    returns: bool
     params:
       - name: name
         type: string
@@ -92,8 +92,8 @@ methods:
     description: >-
       Published read: the pack refs in a directory, sorted; empty for a missing or unreadable one.
       Forwarded to the extension orchestrator.
-    signature: 'discoverPacks(dir: string): string[]'
-    returns: string[]
+    signature: 'discoverPacks(dir: string): list<string>'
+    returns: list<string>
     params:
       - name: dir
         type: string
@@ -101,8 +101,8 @@ methods:
     description: >-
       Published read: the entry file that makes a directory a pack, or null. Forwarded to the
       extension orchestrator.
-    signature: 'packDirEntry(dir: string): string | null'
-    returns: string | null
+    signature: 'packDirEntry(dir: string): string?'
+    returns: string?
     params:
       - name: dir
         type: string
@@ -110,29 +110,29 @@ methods:
     description: >-
       Published read: load the given packs, each under its scope, against a project root — how a
       pack is probed in isolation before it is installed. Forwarded to the extension orchestrator.
-    signature: 'loadExtensionPacks(refs: PackRef[], projectRoot: string): LoadedExtensions'
+    signature: 'loadExtensionPacks(refs: list<PackRef>, projectRoot: string): LoadedExtensions'
     returns: LoadedExtensions
     params:
       - name: refs
-        type: PackRef[]
+        type: list<PackRef>
       - name: projectRoot
         type: string
   - name: checkDeclarativePack
     description: >-
       Published read: judge a parsed manifest as a declarative pack — the first schema error's
       message, or null when it is one. Forwarded to the extension orchestrator.
-    signature: 'checkDeclarativePack(manifest: Json): string | null'
-    returns: string | null
+    signature: 'checkDeclarativePack(manifest: any): string?'
+    returns: string?
     params:
       - name: manifest
-        type: Json
+        type: any
         description: The parsed manifest document, untyped until this judges it
   - name: packEntryRef
     description: >-
       Published read: the loadable ref for one configured pack entry, or null when a selection does
       not resolve. Forwarded to the extension orchestrator.
-    signature: 'packEntryRef(entry: PackSelection, projectRoot: string): string | null'
-    returns: string | null
+    signature: 'packEntryRef(entry: PackSelection, projectRoot: string): string?'
+    returns: string?
     params:
       - name: entry
         type: PackSelection
@@ -151,8 +151,8 @@ methods:
     description: >-
       Published read: whether machine-wide packs also apply to a project that has not said.
       Forwarded to the extension orchestrator.
-    signature: 'globalPacksEnabled(config: ProjectConfig): boolean'
-    returns: boolean
+    signature: 'globalPacksEnabled(config: ProjectConfig): bool'
+    returns: bool
     params:
       - name: config
         type: ProjectConfig
@@ -168,31 +168,31 @@ methods:
       Published write: for a project that never declared a position on machine-wide packs, record
       the installed-but-unapplied packs as explicit selections and turn machine-wide loading off;
       answers the names recorded. Forwarded to the extension orchestrator.
-    signature: 'pinInstalledPacksAsSelections(): string[]'
-    returns: string[]
+    signature: 'pinInstalledPacksAsSelections(): list<string>'
+    returns: list<string>
     params: []
   - name: loadProjectVariants
     description: >-
       Published read: the component-variant registry governing the current project. Forwarded to the
       extension orchestrator.
-    signature: 'loadProjectVariants(): VariantDef[]'
-    returns: VariantDef[]
+    signature: 'loadProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
     params: []
   - name: resolveVariantGuidance
     description: >-
       Published read: one component's variant guidance and its same-variant siblings, or null.
       Forwarded to the extension orchestrator.
     signature: >-
-      resolveVariantGuidance(component: ComponentSpec, allComponents: ComponentSpec[], variantsById:
-      VariantDef[]): VariantDef
+      resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
+      variantsById: list<VariantDef>): VariantDef
     returns: VariantDef
     params:
       - name: component
         type: ComponentSpec
       - name: allComponents
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
       - name: variantsById
-        type: VariantDef[]
+        type: list<VariantDef>
   - name: loadExtensionsFor
     description: >-
       Published read: the packs that would govern the bound project under a given configuration (the
@@ -214,11 +214,11 @@ methods:
     description: >-
       Published read: the manifest one pack entry resolves to, the loader's way, or null. Forwarded
       to the extension orchestrator's manifestOf.
-    signature: 'packManifest(entry: PackSelection | string): ExtensionPack | null'
-    returns: ExtensionPack | null
+    signature: 'packManifest(entry: PackSelection | PackPath): ExtensionPack?'
+    returns: ExtensionPack?
     params:
       - name: entry
-        type: PackSelection | string
+        type: PackSelection | PackPath
         description: A by-name selection or a legacy path reference
     guarantees:
       - idempotent
@@ -227,11 +227,11 @@ methods:
       Published read: a parsed manifest read as a declarative pack — the ExtensionPack the loader
       would build from it, throwing the first schema error when it is not one. Forwarded to the
       extension orchestrator.
-    signature: 'parseDeclarativePack(manifest: Json): ExtensionPack'
+    signature: 'parseDeclarativePack(manifest: any): ExtensionPack'
     returns: ExtensionPack
     params:
       - name: manifest
-        type: Json
+        type: any
         description: The parsed manifest document, untyped until this reads it
 lint:
   allow:
@@ -243,4 +243,4 @@ lint:
         no site, so this allow is spec-wide; it is the only untyped parameter on this contract.
 status: complete
 createdAt: '2026-09-25T17:33:10.144Z'
-updatedAt: '2026-10-03T20:53:56.193Z'
+updatedAt: '2026-10-04T10:27:31.813Z'

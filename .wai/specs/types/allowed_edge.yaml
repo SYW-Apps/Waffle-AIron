@@ -7,11 +7,11 @@ description: >-
   containment are never relaxable this way; the deny half is a forbid-edge declarative assertion.
 fields:
   - name: from
-    type: string[]
+    type: list<string>
     description: The depending component types this license covers (at least one)
     optional: false
   - name: to
-    type: string[]
+    type: list<string>
     description: The dependency component types it covers (at least one)
     optional: false
   - name: reason
@@ -20,4 +20,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-09-14T23:23:38.442Z'
-updatedAt: '2026-09-14T23:23:38.450Z'
+updatedAt: '2026-10-04T10:19:50.826Z'

@@ -1378,12 +1378,18 @@ methods:
           that names no file is making no claim about code and there is nothing here to check
         type: local
       - stepNumber: 2
+        description: Is the type a named scalar? Its shape is the primitive it holds, not a field list
+        type: branch
+        condition: the type declares holds
+        onTrueStep: 11
+        onFalseStep: 3
+      - stepNumber: 3
         description: Decide whether the shape can honestly be read at all
         type: branch
         condition: the file was read at exact grade and a shape of that name was found
-        onTrueStep: 3
-        onFalseStep: 9
-      - stepNumber: 3
+        onTrueStep: 4
+        onFalseStep: 10
+      - stepNumber: 4
         label: read
         description: >-
           Take the shape's data members and whether the code lets each be absent. Method-style
@@ -1392,26 +1398,26 @@ methods:
           A field the spec gives a function type that the code writes as a method is one fact in two
           spellings, not a disagreement
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Decide whether this shape's whole membership is in front of us
         type: branch
         condition: the shape extends another type
-        onTrueStep: 7
-        onFalseStep: 5
-      - stepNumber: 5
+        onTrueStep: 8
+        onFalseStep: 6
+      - stepNumber: 6
         label: presence
         description: >-
           Report each declared field the shape does not carry. The spec is describing data the code
           does not have, and it is the ERD and the briefs that carried the claim — nothing breaks at
           a call site to correct it
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Report each field the shape carries that no declared field names. Data the design never
           described is data no diagram draws and no brief hands to an implementer, which is how a
           record grows past the model of it without anyone deciding to
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         label: optionality
         description: >-
           Report each field both sides carry but disagree about. Absent-able is the code's word for
@@ -1420,13 +1426,13 @@ methods:
           describing. Judged even for a shape that extends another, because a member this file lists
           is one this file answers for
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Done: the type's data was compared to the code's, which is the one reading a spec-driven
           gate could not make before
         type: return
         outcome: judged
-      - stepNumber: 9
+      - stepNumber: 10
         label: silent
         description: >-
           Say nothing. Below exact grade a member list cannot be told from a mention, and a guess
@@ -1435,6 +1441,35 @@ methods:
           absence look like two
         type: return
         outcome: unjudged
+      - stepNumber: 11
+        label: scalar
+        description: >-
+          Take what the file declares under the type's code name: the right side of a type alias
+          (source_file_facts.aliasTypes), or an object shape (typeShapes), and the file's dialect
+          (source_file_facts.dialect)
+        type: local
+      - stepNumber: 12
+        description: Does the code disagree with holds?
+        type: branch
+        condition: >-
+          the file was read at exact grade and has a dialect, and either the alias's right side does
+          not agree with the primitive holds names (type_dialect.agrees) or the name is declared as
+          an object shape instead of an alias
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Report TYPE_HOLDS_MISMATCH naming the type, the primitive it holds and what the code
+          declares under its name instead — another primitive, a named type, or a record; every
+          reader of a named scalar is told what one value of it is, and the code says otherwise
+        type: local
+      - stepNumber: 14
+        description: >-
+          Done: the named scalar was compared to the code's alias, or there was nothing to compare
+          it with (no alias of that name, below exact grade, or no dialect — typeRealization says
+          when the declaration is missing)
+        type: return
+        outcome: judged
     symbol: check
     exportedVia: typeShapeRule
   - name: paramConformance
@@ -1497,9 +1532,12 @@ methods:
           For each matched position, report a name that differs while the declared type agrees. The
           type agreeing is what makes this a rename rather than a different argument, and a rename
           is worth saying: the contract, the ERD and every brief carry one word and the code answers
-          to another. Where the code annotates no type, say nothing about the name — without it a
-          rename cannot be told from a substitution, and a guess about somebody's signature is worse
-          than silence
+          to another. Agreement is read through the file's dialect (source_file_facts.dialect, then
+          type_dialect.agrees on the code's annotation and the contract's canonical type, a named
+          type matching through its code-level name); with no dialect for the file's language, or
+          where the code annotates no type or the dialect cannot read it, say nothing about the name
+          — without it a rename cannot be told from a substitution, and a guess about somebody's
+          signature is worse than silence
         type: local
       - stepNumber: 8
         description: >-
@@ -1629,6 +1667,84 @@ methods:
         outcome: judged
     symbol: check
     exportedVia: portalImportsRule
+  - name: enumValues
+    sourcePath: src/core/rules/conformance/enum-values.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each enum type that names a source file, ask the analyzer for the values of the
+          enum-like declaration there under the type's own code name — its `symbol` when it declares
+          one, else its name
+        type: local
+      - stepNumber: 2
+        description: Decide whether the values can honestly be read
+        type: branch
+        condition: the file was read at exact grade and values were read for that name
+        onFalseStep: 6
+      - stepNumber: 3
+        description: >-
+          Report each value the enum lists that the declaration does not hold
+          (UNREALIZED_ENUM_VALUE), compared exactly — a value is data, and `local_only` is not
+          `local-only`
+        type: local
+      - stepNumber: 4
+        description: >-
+          Report each value the declaration holds that the enum does not list
+          (UNDECLARED_ENUM_VALUE)
+        type: local
+      - stepNumber: 5
+        description: 'Done: the enum''s values were compared to the code''s'
+        type: return
+        outcome: judged
+      - stepNumber: 6
+        label: silent
+        description: >-
+          Say nothing: below exact grade a value list cannot be told from a mention, and a
+          declaration the file does not hold at all is typeRealization's finding
+        type: return
+        outcome: unjudged
+    detail: full
+    symbol: check
+    exportedVia: enumValuesRule
+  - name: asyncConformance
+    sourcePath: src/core/rules/conformance/async-conformance.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each implementation method with a contract method, find the bodies realizing it in its
+          own file under its `symbol` when it declares one, as param-conformance does
+        type: local
+      - stepNumber: 2
+        description: Decide whether a body is there to read
+        type: branch
+        condition: the file was read at exact grade and at least one function of that name has a body
+        onFalseStep: 6
+      - stepNumber: 3
+        description: >-
+          Read whether the contract's returns is `async T` from its canonical expression, and
+          whether each body completes later from source_file_facts.asyncFunctions
+        type: local
+      - stepNumber: 4
+        description: >-
+          Report ASYNC_MISMATCH when every body disagrees with the contract the same way, naming
+          which side says async; a wider answer can only narrow what this rule accuses
+        type: local
+      - stepNumber: 5
+        description: Done
+        type: return
+        outcome: judged
+      - stepNumber: 6
+        label: silent
+        description: >-
+          Say nothing: below exact grade a body cannot be told from a call, and a file that only
+          calls the function is methodRealization's finding
+        type: return
+        outcome: unjudged
+    detail: full
+    symbol: check
+    exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-03T17:55:19.393Z'
+updatedAt: '2026-10-04T10:52:54.752Z'

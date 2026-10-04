@@ -717,70 +717,6 @@ methods:
         type: local
     symbol: check
     exportedVia: methodCohesionRule
-  - name: signatureLanguageBuiltins
-    sourcePath: src/core/rules/heuristic/signature-language-builtins.ts
-    narrative:
-      - stepNumber: 1
-        label: language_tables
-        description: >-
-          Define markersFor(family): LANGUAGE_MARKERS[family] merged with
-          ctx.ext.languages[family]?.foreignBuiltins (lowercased) when present; families = the union
-          of LANGUAGE_MARKERS's keys and ctx.ext.languages's keys.
-        type: local
-      - stepNumber: 2
-        label: scan_set
-        description: >-
-          Gather the references a declared target language can judge: for every interface, comp =
-          ctx.componentMap.get(intf.component) and lang = ctx.targetLanguageFor(comp?.subsystem),
-          already normalized to the language-table key; when lang is defined and ownMarkers =
-          markersFor(lang) is non-empty, every type reference of every method (m.typeRefs()) becomes
-          one entry carrying intf, method, ref, lang, ownMarkers and isDraftCtx =
-          ctx.isComponentDraft(intf.component) or intf.status being 'draft' or 'design'. An
-          interface with no target language, or one whose language has no builtin vocabulary of its
-          own (unknown, or a pack platform that declared none), could legitimately share any builtin
-          and contributes nothing.
-        type: local
-      - stepNumber: 3
-        label: scan_loop
-        description: Check every gathered type reference against the foreign language families.
-        type: loop
-        loopKind: forEach
-        over: the scan entries
-        endStep: 9
-      - stepNumber: 4
-        label: native_guard
-        description: Branch on whether the reference already belongs to the target language's own vocabulary.
-        type: branch
-        condition: ownMarkers has ref.toLowerCase() (the reference is native to this target language)
-        onFalseStep: 6
-      - stepNumber: 5
-        description: Continue to the next reference - it's already native.
-        type: jump
-        toStep: 9
-      - stepNumber: 6
-        label: find_family
-        description: >-
-          foreign = the first family in families, other than lang, whose markersFor(family) contains
-          the lowercased reference (the search stops at that first match).
-        type: local
-      - stepNumber: 7
-        label: foreign_guard
-        description: Branch on whether any other family claims this reference.
-        type: branch
-        condition: foreign is defined - another language family claims the reference as its own builtin
-        onFalseStep: 9
-      - stepNumber: 8
-        label: report_builtin
-        description: >-
-          Report LANGUAGE_FOREIGN_BUILTIN (warning; draft context isDraftCtx) naming the method's
-          name, intf.id, the reference, the matched family and lang.
-        type: local
-      - stepNumber: 9
-        label: scan_done
-        description: This type reference is processed.
-        type: local
-    symbol: check
-    exportedVia: signatureLanguageBuiltinsRule
   - name: narrativeLanguageConstructs
     sourcePath: src/core/rules/heuristic/narrative-language-constructs.ts
     narrative:
@@ -1104,4 +1040,4 @@ methods:
     exportedVia: signatureSourceSuggestionsRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-03T20:54:43.586Z'
+updatedAt: '2026-10-03T22:06:46.741Z'

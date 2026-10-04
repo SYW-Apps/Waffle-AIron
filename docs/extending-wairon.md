@@ -294,7 +294,6 @@ languages:
     unsupportedFlow:              # warning: LANGUAGE_FOREIGN_FLOW
       # keyspace: branch | switch | forEach | for | while | doWhile | try | throw | jump
       doWhile: remodeling guidance shown to the spec author
-    foreignBuiltins: [bundle]     # builtin vocabulary unambiguous to THIS language
 ```
 
 Semantics worth knowing:
@@ -311,6 +310,11 @@ Semantics worth knowing:
   `rules.sddRuleSeverity`.
 - Unregistered `profile` / `projectType` names get `UNKNOWN_PROFILE`
   (warning) naming the registered set.
+- `foreignBuiltins` is **deprecated**: contracts speak one language-neutral
+  type grammar (see [the architecture standard](standards/architecture.md#6-entities-and-types)), so there is no
+  per-language builtin vocabulary left to declare. A pack that still declares
+  it loads, ignores the field and gets a `PACK_FIELD_DEPRECATED` notice; the
+  field is removed in the next release.
 
 ## Pack-provided AI-agent skills
 

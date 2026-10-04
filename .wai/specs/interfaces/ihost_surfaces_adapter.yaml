@@ -19,9 +19,9 @@ methods:
       Forward getExternalsStatus to the surface portal against the currently bound project root:
       each declared external's pin against its live producer at signature level, what cannot be
       compared reported as unavailable, never a pass. The caller must gate on reach itself.
-    signature: 'externalsStatus(): ExternalStatus[]'
-    returns: ExternalStatus[]
+    signature: 'externalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
     params: []
 status: complete
 createdAt: '2026-07-11T09:48:46.778Z'
-updatedAt: '2026-10-01T16:35:03.858Z'
+updatedAt: '2026-10-04T10:18:54.000Z'

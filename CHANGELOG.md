@@ -50,8 +50,10 @@ by default (`--project` for a project) and `subsystem externalize` a storage mov
 (`--as project` for the old behaviour), renames `sdd_add_member`'s `path` to `source`, deprecates
 the long-form member `path` key, refuses `../` and git members on hosted, and compares path
 externals per use (re-pin once). The debt triage makes a hosted token mint require its
-project list (`*` for the full reach) and drops `environment` from hosted project init. Nothing here is purely
-additive, so `[minor]` would understate it.
+project list (`*` for the full reach) and drops `environment` from hosted project init. The type
+grammar respells every stored type position once (`doctor --fix`, then a re-lock), refuses `number`
+and the forms it leaves out at write, retires `LANGUAGE_FOREIGN_BUILTIN` and moves every surface
+digest once (re-pin). Nothing here is purely additive, so `[minor]` would understate it.
 
 ### A third severity: `notice`
 
@@ -1162,6 +1164,107 @@ from where its files live.
 - The admin plane's canvas diagram and its download carry it too, read with the
   master credential's whole-instance reach. Other formats are unchanged, and the
   signed view link still renders with health "not checked".
+
+### Types speak one language
+
+Every structured type position (a param's type, a method's returns, a field's type, a type
+method's and a signature type's params and returns) is read under one small,
+language-neutral grammar instead of being tokenized as free text. A contract now means the
+same thing to every implementation language, and every consumer reads one spelling.
+
+- **The grammar.** Ten primitives: `string`, `int`, `float`, `bool`, `bytes`, `date` (a
+  calendar day), `datetime` (an instant), `duration`, `void` and `any`. Three collections:
+  `list<T>`, `set<T>` and `map<K, V>`, whose key is `string`, `int` or an enum. `T?` means
+  T or no value, and `async T` is a returns that completes later. A named type is an
+  entity, a value-object, an enum or a signature type, applied to arguments when it is
+  generic (`Page<T>`). A position is read whole: a trailing aside does not parse.
+- **One "none".** `T?` belongs to the type, and the `optional` flag keeps meaning "may be
+  left out". TypeScript's `null` and `undefined` both read as `?`, and `T | undefined` on
+  an optional position reads as the flag alone. Both together mean "may be left out, and
+  may be explicitly none".
+- **Canonical spelling, and respelling reports.** TypeScript's spellings and the old
+  builtin vocabulary are accepted as input: `string[]` and `Array<T>` read as `list`,
+  `Record` and `Map` as `map`, `T | null` as `T?`, `Promise<T>` as `async T`, `boolean` as
+  `bool`, `object`, `unknown` and `json` as `any`. The loader reads every position canonical
+  in memory, and the writer stores canonical text. `sdd_add_type`, `sdd_define_interface`
+  and `sdd_update_spec` answer with a `respellings` list (`path`, `written`, `stored`) for
+  every alias they rewrote. A stored alias is `TYPE_SPELLING_STALE` (warning) until any
+  save or `doctor --fix` rewrites it, and stage 1's derived signature texts follow the
+  canonical types.
+- **`int` and `float`.** `number` is not an alias, because it does not say which one it
+  is. A write holding it is refused with "int or float?", and a stored one is
+  `TYPE_NOT_NEUTRAL` (warning) and is read as `float` until an author decides. The same
+  code names the legacy builtins with no neutral meaning (`uuid`, `decimal`, `tuple`,
+  `box`, ...) and their replacement.
+- **Unions of named types.** `A | B` is exactly one of named types. `?` is the only way a
+  non-named member joins. A union mixing in a primitive or a collection, an inline object
+  shape, an inline function type, a string-literal union, an intersection, a utility type
+  and a tuple are left out of the grammar: refused at write, `TYPE_FORM_UNSUPPORTED`
+  (warning) on load, and each message names the replacement (a value-object, a signature
+  type, an enum). Only a text that does not parse (`TYPE_EXPRESSION_INVALID`) and a broken
+  position rule (`TYPE_POSITION_INVALID`: `void` or `async` out of place, a non-scalar map
+  key, `T??`) are errors.
+- **The `enum` kind.** A new type kind: a closed, ordered list of `values` (`name`, an
+  optional `description`), unique by name, with optional pure methods and nothing else
+  (`ENUM_MEMBERS`, error, otherwise). `sdd_add_type` takes `kind: enum` with `values`, and
+  the web specs editor shows the kind and edits each value's description. Code
+  conformance compares the values with a string-literal union alias, a `z.enum([...])`
+  or a string `enum` (`UNREALIZED_ENUM_VALUE` and `UNDECLARED_ENUM_VALUE`, carryable
+  warnings at exact grade).
+- **Named scalars.** A value-object may declare `holds: <primitive>` (`string`, `int`,
+  `float`, `bool`, `bytes`, `date`, `datetime` or `duration`) in place of fields: one value
+  under a name, a newtype or type alias in every language (`type OrderId = string`). It is
+  not a union, not a named type and not `any`; anything else in `holds` is
+  `TYPE_POSITION_INVALID`, and an alias such as `boolean` is respelled. A named scalar is
+  not `HOLLOW_TYPE`. Fields beside `holds`, a table or component link on it, or `holds` on
+  an entity, an enum or a signature type is `NAMED_SCALAR_MEMBERS` (error). Type-shape
+  conformance compares it with the type alias the code declares under its name, read
+  through the dialect: `TYPE_HOLDS_MISMATCH` (carryable warning, exact grade) when the
+  alias's right side is another type, or the name is declared as a record. OpenAPI renders
+  it as its primitive's schema under the type's name and reads such a component back; the
+  ERD draws it compactly with no relation edges; the surface closure and digest carry what
+  it holds; the briefs' type mapping says how it is spelled. `sdd_add_type` takes `holds`,
+  and the web specs editor sets it on a fieldless value-object. This is how a mixed union
+  such as `PackSelection | string` becomes a union of named types: the string gets a name.
+- **`async` and `ASYNC_MISMATCH`.** `async` on a returns is checked against the realizing
+  function: `ASYNC_MISMATCH` (carryable warning, exact grade) reports a contract and a
+  function that disagree on whether the call completes later.
+- **Code through a dialect.** Param conformance compares the contract's canonical type
+  with the code's annotation read through the language's dialect, so `T[]` agrees with
+  `list<T>`, and TypeScript `number` agrees with both `int` and `float`. Implementer briefs
+  carry a `typeMapping` for their language, the same table, also folded into the
+  instructions as a "Types in <language>" section.
+- **OpenAPI.** The codec maps the whole grammar both ways. `T?` admits null (`type: [X,
+  "null"]`, or `anyOf` with `{type: "null"}` around a `$ref`) where it used to be an
+  "Unresolved type". `map` is `additionalProperties`, `set` is an array with
+  `uniqueItems`, `bytes` is a base64 string, `date` is `format: date` (it was
+  `date-time`), `duration` is `format: duration`, a union of named types is `oneOf`, and
+  an enum is a string component with its values as `enum`. `fromOpenApi` reads every
+  schema back into its canonical type, and a named string component carrying `enum`
+  becomes an enum type.
+- **ERD.** Multiplicity comes from the parsed expression: `*` for a list, set or map,
+  `0..1` for an optional field or a `T?` type. A field typed by an enum or a named scalar
+  gets no relation edge, because each is a value domain, and an enum node lists its values
+  in place of fields.
+- **Surface snapshots.** The type closure follows the named types each parsed expression
+  references and carries an enum with its values in order. Digests hash the canonical
+  expression, so an alias and its canonical spelling digest alike, and adding, removing or
+  reordering an enum value moves the digest.
+- **`LANGUAGE_FOREIGN_BUILTIN` is retired.** It pushed contracts towards one language's
+  spellings, which is the opposite of what the grammar does. The pack field
+  `languages.<id>.foreignBuiltins` is accepted and ignored for one release: a pack that
+  still declares it gets `PACK_FIELD_DEPRECATED` (notice), and the field goes in the
+  release after.
+
+**Upgrading.** Run `wairon doctor --fix` once: it rewrites every stored type position that
+is an alias into its canonical spelling (plain `wairon doctor` prints the plan first). Then
+settle by hand what it lists and never writes: each `number` position (it proposes `int`
+where the name says a whole number; confirm by writing `int`, or write `float`), and each
+position using a form the grammar leaves out, with its replacement named. The rewritten
+specs make the lock stale, so re-lock afterwards. Surface digests now hash canonical
+types, so a consumer that pinned a snapshot whose members changed spelling sees
+`EXTERNAL_DRIFTED` once and re-pins (`wairon surface pin`). A pack declaring
+`foreignBuiltins` can drop the field.
 
 ### Signatures: one source, named when shared
 

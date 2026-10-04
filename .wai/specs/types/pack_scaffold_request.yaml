@@ -24,10 +24,10 @@ fields:
     description: Directory to scaffold the pack project into
     optional: false
   - name: withSkill
-    type: boolean
+    type: bool
     description: Include a skills/<id>/SKILL.md stub
     optional: true
 methods: []
 componentClass: pack_scaffold
 createdAt: '2026-07-21T18:12:50.242Z'
-updatedAt: '2026-07-21T18:12:50.371Z'
+updatedAt: '2026-10-04T10:20:40.350Z'

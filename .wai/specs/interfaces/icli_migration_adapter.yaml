@@ -29,34 +29,34 @@ methods:
         description: The plan
   - name: recover
     description: Forward to migration_portal.recover.
-    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
-    returns: RecoveredTransaction[]
+    signature: 'recover(root: string, fix: bool): list<RecoveredTransaction>'
+    returns: list<RecoveredTransaction>
     params:
       - name: root
         type: string
         description: The project root
       - name: fix
-        type: boolean
+        type: bool
         description: Resolve, or only report
   - name: matchPositions
     description: Forward to migration_portal.matchPositions.
     signature: >-
-      matchPositions(unresolved: AuthoredReference[], family: ProjectFamily, tables:
-      ResolvedExportTable[], types: TypeSpec[]): PositionalMatch[]
-    returns: PositionalMatch[]
+      matchPositions(unresolved: list<AuthoredReference>, family: ProjectFamily, tables:
+      list<ResolvedExportTable>, types: list<TypeSpec>): list<PositionalMatch>
+    returns: list<PositionalMatch>
     params:
       - name: unresolved
-        type: AuthoredReference[]
+        type: list<AuthoredReference>
         description: The references to read
       - name: family
         type: ProjectFamily
         description: The family top's graph
       - name: tables
-        type: ResolvedExportTable[]
+        type: list<ResolvedExportTable>
         description: Every project's resolved L0 export table
       - name: types
-        type: TypeSpec[]
+        type: list<TypeSpec>
         description: Every type the family top's scan loaded
 status: complete
 createdAt: '2026-09-30T20:37:31.884Z'
-updatedAt: '2026-09-30T21:34:01.178Z'
+updatedAt: '2026-10-04T10:18:36.612Z'

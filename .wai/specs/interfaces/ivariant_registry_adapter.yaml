@@ -10,8 +10,8 @@ methods:
       Load the component-variant registry governing the current project: wairon's built-in variants,
       then the global variants (WAIRON_VARIANTS_DIR, else ~/.wairon/variants), then the project's
       .wai/variants/, a later layer winning on an id collision.
-    signature: 'loadProjectVariants(): VariantDef[]'
-    returns: VariantDef[]
+    signature: 'loadProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
     params: []
   - name: resolveVariantGuidance
     description: >-
@@ -21,18 +21,18 @@ methods:
       with the guidance because that is the entire payoff of a variant — every component of the same
       kind gets implemented alike instead of reinvented per instance.
     signature: >-
-      resolveVariantGuidance(component: ComponentSpec, allComponents: ComponentSpec[], variantsById:
-      VariantDef[]): VariantDef
+      resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
+      variantsById: list<VariantDef>): VariantDef
     returns: VariantDef
     params:
       - name: component
         type: ComponentSpec
         description: The component whose variant to resolve.
       - name: allComponents
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
         description: Every component, for finding same-variant siblings.
       - name: variantsById
-        type: VariantDef[]
+        type: list<VariantDef>
         description: The loaded variant registry, keyed by id.
   - name: composeVariantGuidance
     description: >-
@@ -42,32 +42,32 @@ methods:
       implementation: a hosted agent and a local session are told the same thing about a variant by
       construction, not by two copies staying in step.
     signature: >-
-      composeVariantGuidance(comps: ComponentSpec[], allComponents: ComponentSpec[], variantsById:
-      VariantDef[]): string
+      composeVariantGuidance(comps: list<ComponentSpec>, allComponents: list<ComponentSpec>,
+      variantsById: list<VariantDef>): string
     returns: string
     params:
       - name: comps
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
         description: The agent's own components.
       - name: allComponents
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
         description: Every component, for finding same-variant siblings.
       - name: variantsById
-        type: VariantDef[]
+        type: list<VariantDef>
         description: The loaded variant registry, keyed by id.
   - name: listProjectVariants
     description: >-
       The variants the project's own .wai/variants/ files define, without the built-in or global
       layers: the variants a migration may rewrite.
-    signature: 'listProjectVariants(): VariantDef[]'
-    returns: VariantDef[]
+    signature: 'listProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
     params: []
   - name: rebaseProjectVariants
     description: >-
       Rewrite the base of every project variant whose base is fromBase to toBase, in place in its
       .wai/variants/ file, keeping the file's other content; returns the ids rebased.
-    signature: 'rebaseProjectVariants(fromBase: string, toBase: string): string[]'
-    returns: string[]
+    signature: 'rebaseProjectVariants(fromBase: string, toBase: string): list<string>'
+    returns: list<string>
     params:
       - name: fromBase
         type: string
@@ -77,4 +77,4 @@ methods:
         description: The stereotype that replaces it
 status: complete
 createdAt: '2026-07-15T12:24:19.110Z'
-updatedAt: '2026-09-25T21:08:41.183Z'
+updatedAt: '2026-10-04T10:19:46.842Z'

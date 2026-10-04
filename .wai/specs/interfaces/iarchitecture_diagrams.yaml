@@ -8,14 +8,14 @@ methods:
       Render the current project's spec tree into the requested format (canvas | mermaid | drawio |
       excalidraw) and return the artifact as a string. Self-contained (the canvas embeds everything,
       offline).
-    signature: 'render(format: string, relations?: ProjectRelations[]): string'
+    signature: 'render(format: string, relations?: list<ProjectRelations>): string'
     returns: string
     params:
       - name: format
         type: string
         description: canvas | mermaid | drawio | excalidraw
       - name: relations
-        type: ProjectRelations[]
+        type: list<ProjectRelations>
         description: >-
           The family's relation health, drawn on the canvas's consumption edges; the other formats
           ignore it. Omitted: the canvas says health was not checked
@@ -29,25 +29,25 @@ methods:
       between the included nodes. Distinct from render, which stays the static HTML/diagram export;
       this returns a live JSON graph model for the web UI. No I/O beyond the loader; no
       authorization.
-    signature: 'buildGraphModel(level: number): WebGraphModel'
+    signature: 'buildGraphModel(level: int): WebGraphModel'
     returns: WebGraphModel
     params:
       - name: level
-        type: number
+        type: int
   - name: buildCanvasDataModel
     description: >-
       The canvas model render('canvas') draws, for the current project, returned as data instead of
       a self-contained page — so a client that mounts the shared renderer itself receives the model.
       Pure derivation; relation health is drawn only when passed in.
-    signature: 'buildCanvasDataModel(relations?: ProjectRelations[]): CanvasModel'
+    signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
     returns: CanvasModel
     params:
       - name: relations
-        type: ProjectRelations[]
+        type: list<ProjectRelations>
         description: The family's relation health to carry on the model; omitted, the model carries none
         optional: true
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-10-03T12:16:04.015Z'
+updatedAt: '2026-10-04T10:28:13.607Z'

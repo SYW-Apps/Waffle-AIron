@@ -26,19 +26,19 @@ fields:
     description: The ref resolved, when a commit was not given explicitly.
     optional: true
   - name: added
-    type: string[]
+    type: list<string>
     description: Spec files the new commit adds, by their path inside the member.
     optional: false
   - name: changed
-    type: string[]
+    type: list<string>
     description: Spec files whose content differs.
     optional: false
   - name: removed
-    type: string[]
+    type: list<string>
     description: Spec files the new commit no longer holds.
     optional: false
   - name: written
-    type: boolean
+    type: bool
     description: >-
       Whether the new commit was written into the declaration (false for a dry run or when nothing
       moved).
@@ -46,4 +46,4 @@ fields:
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-02T20:28:43.201Z'
-updatedAt: '2026-10-02T20:28:43.203Z'
+updatedAt: '2026-10-04T10:20:27.369Z'

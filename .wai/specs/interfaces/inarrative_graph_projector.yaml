@@ -14,14 +14,14 @@ methods:
       nothing; one whose narrative does not show its calls contributes the ones it DECLARES (its
       `calls` references) and nothing else, so a collaborator the method does not name is not
       reached. Pure: the same context, seeds and options always give the same reach.
-    signature: 'walk(ctx: RuleContext, seeds: WalkSeed[], options?: WalkOptions): NarrativeReach'
+    signature: 'walk(ctx: RuleContext, seeds: list<WalkSeed>, options?: WalkOptions): NarrativeReach'
     returns: NarrativeReach
     params:
       - name: ctx
         type: RuleContext
         description: The validation run's shared read model
       - name: seeds
-        type: WalkSeed[]
+        type: list<WalkSeed>
         description: Where the walk starts
       - name: options
         type: WalkOptions
@@ -39,9 +39,9 @@ methods:
       enqueueing them is the walk's job, so the same step, context and option always give the same
       edges.
     signature: >-
-      stepEdges(step: NarrativeStep, ctx: RuleContext, followRegisterEdges: boolean):
-      NarrativeEdge[]
-    returns: NarrativeEdge[]
+      stepEdges(step: NarrativeStep, ctx: RuleContext, followRegisterEdges: bool):
+      list<NarrativeEdge>
+    returns: list<NarrativeEdge>
     params:
       - name: step
         type: NarrativeStep
@@ -52,7 +52,7 @@ methods:
           The validation run's shared read model, for routing a dispatch step through the target
           Portal's dispatch table
       - name: followRegisterEdges
-        type: boolean
+        type: bool
         description: >-
           Whether a register handoff contributes its edge — the walk's doctrine, not a property of
           the step
@@ -60,4 +60,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-14T06:07:00.382Z'
-updatedAt: '2026-09-19T21:38:41.125Z'
+updatedAt: '2026-10-04T10:19:06.756Z'

@@ -14,22 +14,22 @@ methods:
       still exposes the referenced interface; missing snapshots or drifted interfaces produce a
       warn). Pure: no I/O.
     signature: >-
-      runChecks(projects: HostedProjectRecord[], imagePackNames: string[], instancePackNames:
-      string[], projectReferences: ProjectPackReference[], scope?: string, relations?:
-      ProjectRelationRecord[], relationSnapshots?: ProjectPublicSurfaceSnapshot[]):
-      DiagnosticCheckResult[]
-    returns: DiagnosticCheckResult[]
+      runChecks(projects: list<HostedProjectRecord>, imagePackNames: list<string>,
+      instancePackNames: list<string>, projectReferences: list<ProjectPackReference>, scope?:
+      string, relations?: list<ProjectRelationRecord>, relationSnapshots?:
+      list<ProjectPublicSurfaceSnapshot>): list<DiagnosticCheckResult>
+    returns: list<DiagnosticCheckResult>
     params:
       - name: projects
-        type: HostedProjectRecord[]
+        type: list<HostedProjectRecord>
       - name: imagePackNames
-        type: string[]
+        type: list<string>
         description: Pack names present in the immutable image-layer tier (WAIRON_IMAGE_PACKS_DIR).
       - name: instancePackNames
-        type: string[]
+        type: list<string>
         description: Pack names present in the mutable instance tier (WAIRON_PACKS_DIR).
       - name: projectReferences
-        type: ProjectPackReference[]
+        type: list<ProjectPackReference>
         description: >-
           Per-project declared pack/profile references, so the check can flag references absent from
           both tiers.
@@ -37,24 +37,24 @@ methods:
         type: string
         optional: true
       - name: relations
-        type: ProjectRelationRecord[]
+        type: list<ProjectRelationRecord>
         description: >-
           The declared project relations, so the relation-health check can judge each against its
           producer
         optional: true
       - name: relationSnapshots
-        type: ProjectPublicSurfaceSnapshot[]
+        type: list<ProjectPublicSurfaceSnapshot>
         description: The producers' stored public-surface snapshots the relations are judged against
         optional: true
   - name: collectUsage
     description: >-
       Derive resource usage snapshots for the requested scope from the supplied hosted project
       records, without exposing private specs or secrets.
-    signature: 'collectUsage(projects: HostedProjectRecord[], scope?: string): ResourceUsageSnapshot[]'
-    returns: ResourceUsageSnapshot[]
+    signature: 'collectUsage(projects: list<HostedProjectRecord>, scope?: string): list<ResourceUsageSnapshot>'
+    returns: list<ResourceUsageSnapshot>
     params:
       - name: projects
-        type: HostedProjectRecord[]
+        type: list<HostedProjectRecord>
       - name: scope
         type: string
         optional: true
@@ -63,14 +63,14 @@ methods:
       Assemble an aggregated instance health report from diagnostic checks and usage snapshots,
       computing the overall status.
     signature: >-
-      buildHealthReport(checks: DiagnosticCheckResult[], usage: ResourceUsageSnapshot[]):
+      buildHealthReport(checks: list<DiagnosticCheckResult>, usage: list<ResourceUsageSnapshot>):
       InstanceHealthReport
     returns: InstanceHealthReport
     params:
       - name: checks
-        type: DiagnosticCheckResult[]
+        type: list<DiagnosticCheckResult>
       - name: usage
-        type: ResourceUsageSnapshot[]
+        type: list<ResourceUsageSnapshot>
 status: complete
 createdAt: '2026-07-09T09:10:04.195Z'
-updatedAt: '2026-10-03T17:10:45.228Z'
+updatedAt: '2026-10-04T10:18:42.129Z'

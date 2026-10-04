@@ -23,7 +23,7 @@ fields:
       unavailable is closed (stage 8). Absent only for an unresolved producer.
     optional: true
   - name: reachable
-    type: boolean
+    type: bool
     description: >-
       Whether the climb reached the whole family: false when a hop above the bound root was out of
       reach, so a family producer above it could not be looked for.
@@ -31,4 +31,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:43:46.075Z'
-updatedAt: '2026-10-02T20:48:03.259Z'
+updatedAt: '2026-10-04T10:20:09.624Z'

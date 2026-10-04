@@ -292,6 +292,64 @@ describe('interactive canvas generation', () => {
     expect(disc).toMatchObject({ from: 'invoice', to: 'discount', card: '0..1' });
   });
 
+  it('reads multiplicity from the parsed expression, draws no edge to an enum, and lists an enum\'s values', () => {
+    buildFixture();
+    saveTypeSpec({
+      kind: 'value-object', id: 'line-item', name: 'LineItem', description: 'one invoice line',
+      fields: [{ name: 'sku', type: 'string', optional: false }],
+      methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    saveTypeSpec({
+      kind: 'enum', id: 'status', name: 'Status', description: 'where an invoice stands',
+      fields: [], values: [{ name: 'open', description: 'Not yet paid.' }, { name: 'paid' }],
+      methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    saveTypeSpec({
+      kind: 'entity', id: 'invoice', name: 'Invoice', description: 'a bill',
+      fields: [
+        { name: 'byKey', type: 'map<string, LineItem>', optional: false },
+        { name: 'unique', type: 'set<LineItem>', optional: false },
+        { name: 'maybe', type: 'LineItem?', optional: false },
+        { name: 'one', type: 'LineItem', optional: false },
+        { name: 'status', type: 'Status', optional: false },
+        { name: 'history', type: 'list<Status>', optional: false },
+      ],
+      methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    const model = buildCanvasModel();
+    const card = (field: string) => model.typeEdges.find(e => e.field === field)?.card;
+    expect(card('byKey')).toBe('*');
+    expect(card('unique')).toBe('*');
+    expect(card('maybe')).toBe('0..1');
+    expect(card('one')).toBe('1');
+    // An enum is a value domain, not an entity relation.
+    expect(model.typeEdges.some(e => e.to === 'status')).toBe(false);
+    expect(model.types.find(t => t.id === 'status')!.values).toEqual([{ name: 'open', description: 'Not yet paid.' }, { name: 'paid' }]);
+    expect(model.types.find(t => t.id === 'invoice')!.values).toBeUndefined();
+  });
+
+  it("draws no edge to a named scalar and carries the primitive it holds", () => {
+    buildFixture();
+    saveTypeSpec({
+      kind: 'value-object', id: 'invoice-number', name: 'InvoiceNumber', description: 'the number printed on a bill',
+      fields: [], holds: 'string', methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    saveTypeSpec({
+      kind: 'entity', id: 'invoice', name: 'Invoice', description: 'a bill',
+      fields: [{ name: 'number', type: 'InvoiceNumber', optional: false }],
+      methods: [], createdAt: now, updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    const model = buildCanvasModel();
+    // A named scalar is a value domain, not an entity relation.
+    expect(model.typeEdges.some(e => e.to === 'invoice-number')).toBe(false);
+    expect(model.types.find(t => t.id === 'invoice-number')!.holds).toBe('string');
+    expect(model.types.find(t => t.id === 'invoice')!.holds).toBeUndefined();
+  });
+
   it('renders a self-contained HTML canvas with the embedded model and no external references', () => {
     buildFixture();
     const html = renderCanvasHtml(buildCanvasModel());

@@ -13,8 +13,8 @@ methods:
     description: >-
       Authenticate, require instance-level project:admin, and list the server-global installed
       packs.
-    signature: 'listGlobalPacks(credential: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listGlobalPacks(credential: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -44,8 +44,8 @@ methods:
     description: >-
       Authenticate, require project:read over the project, bind its scope, and list its registered
       packs.
-    signature: 'listProjectPacks(credential: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listProjectPacks(credential: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -122,8 +122,8 @@ methods:
       available for selection: the wairon built-in profiles plus every profile contributed by the
       server-global packs, each tagged with its source ("builtin" or the providing pack's name) so a
       UI can present them grouped by source.
-    signature: 'listAvailableProfiles(credential: string): AvailableProfile[]'
-    returns: AvailableProfile[]
+    signature: 'listAvailableProfiles(credential: string): list<AvailableProfile>'
+    returns: list<AvailableProfile>
     params:
       - name: credential
         type: string
@@ -150,8 +150,8 @@ methods:
       available for the project to adopt (the instance catalog, each descriptor carrying its
       contents) so a project admin can pick from available packs instead of uploading an archive.
       The already-installed ones are marked by the caller against listProjectPacks.
-    signature: 'listAdoptableProjectPacks(credential: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listAdoptableProjectPacks(credential: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -166,8 +166,8 @@ methods:
       contributed by the server-global packs (adoptable on selection). This is the catalog a
       project-type picker must use — the instance-wide listAvailableProfiles cannot see a project's
       own packs and cannot say which profiles would need adopting.
-    signature: 'listProjectProfiles(credential: string, project: string): AvailableProfile[]'
-    returns: AvailableProfile[]
+    signature: 'listProjectProfiles(credential: string, project: string): list<AvailableProfile>'
+    returns: list<AvailableProfile>
     params:
       - name: credential
         type: string
@@ -225,4 +225,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T18:46:52.736Z'
-updatedAt: '2026-09-29T16:16:39.736Z'
+updatedAt: '2026-10-04T10:19:10.541Z'

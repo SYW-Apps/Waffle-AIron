@@ -7,8 +7,8 @@ component: mcp_skills_adapter
 methods:
   - name: listResources
     description: List the built-in SDD skill resources via the skills portal.
-    signature: 'listResources(): SkillResourceDescriptor[]'
-    returns: SkillResourceDescriptor[]
+    signature: 'listResources(): list<SkillResourceDescriptor>'
+    returns: list<SkillResourceDescriptor>
     params: []
   - name: readResource
     description: Read one built-in SDD skill resource's content by id via the skills portal.
@@ -25,4 +25,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-10T12:21:45.718Z'
-updatedAt: '2026-07-29T10:50:45.295Z'
+updatedAt: '2026-10-04T10:19:03.061Z'

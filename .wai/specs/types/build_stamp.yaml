@@ -12,14 +12,14 @@ fields:
     description: The build entry file the server was loaded from.
     optional: false
   - name: mtimeMs
-    type: number
+    type: float
     description: Its modification time when the server started.
     optional: false
   - name: size
-    type: number
+    type: int
     description: Its size in bytes when the server started.
     optional: false
 methods: []
 sourcePath: src/mcp/build.ts
 createdAt: '2026-09-26T00:23:58.755Z'
-updatedAt: '2026-09-26T00:23:58.758Z'
+updatedAt: '2026-10-04T10:28:48.401Z'

@@ -15,17 +15,17 @@ fields:
       or "project" (one project's spec tree).
     optional: false
   - name: nodes
-    type: WebGraphNode[]
+    type: list<WebGraphNode>
     description: The LOD nodes included up to the requested detail level.
     optional: false
   - name: edges
-    type: LandscapeEdge[]
+    type: list<LandscapeEdge>
     description: >-
       Edges between the included nodes (contains/owns/depends_on/publishes/consumes/mirrors),
       reusing the LandscapeEdge shape.
     optional: false
   - name: level
-    type: number
+    type: int
     description: The maximum node detail level included in this payload (the client-requested depth).
     optional: false
   - name: generatedAt
@@ -41,4 +41,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:14.595Z'
-updatedAt: '2026-09-19T11:07:21.370Z'
+updatedAt: '2026-10-04T10:29:25.641Z'

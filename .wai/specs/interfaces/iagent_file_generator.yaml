@@ -9,12 +9,12 @@ methods:
   - name: generateAll
     description: Do that for every agent in the registry, answering one summary per agent.
     signature: >-
-      generateAll(agents: AgentRecord[], projectConfig: ProjectConfig, options?: GenerateOptions):
-      GenerateSummary[]
-    returns: GenerateSummary[]
+      generateAll(agents: list<AgentRecord>, projectConfig: ProjectConfig, options?:
+      GenerateOptions): list<GenerateSummary>
+    returns: list<GenerateSummary>
     params:
       - name: agents
-        type: AgentRecord[]
+        type: list<AgentRecord>
         description: Every agent to write
       - name: projectConfig
         type: ProjectConfig
@@ -30,12 +30,12 @@ methods:
       under a target directory that is not in this set was not written by wairon, and deleting it
       would be destroying somebody else's work.
     signature: >-
-      resolveExpectedOutputPaths(agents: AgentRecord[], projectConfig: ProjectConfig, projectRoot?:
-      string): Set<string>
-    returns: Set<string>
+      resolveExpectedOutputPaths(agents: list<AgentRecord>, projectConfig: ProjectConfig,
+      projectRoot?: string): set<string>
+    returns: set<string>
     params:
       - name: agents
-        type: AgentRecord[]
+        type: list<AgentRecord>
         description: The agents whose outputs to enumerate
       - name: projectConfig
         type: ProjectConfig
@@ -48,4 +48,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T19:46:03.367Z'
-updatedAt: '2026-10-03T16:45:47.338Z'
+updatedAt: '2026-10-04T10:18:29.179Z'

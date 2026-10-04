@@ -75,8 +75,8 @@ methods:
       List the MCP resources the server publishes: the built-in SDD skills plus one live
       wairon-agent:// brief resource per agent in the CURRENT topology — recomputed per request, so
       a re-lock is visible on the next list.
-    signature: 'listResources(): SkillResourceDescriptor[]'
-    returns: SkillResourceDescriptor[]
+    signature: 'listResources(): list<SkillResourceDescriptor>'
+    returns: list<SkillResourceDescriptor>
     params: []
   - name: readResource
     description: >-
@@ -116,7 +116,7 @@ methods:
     description: >-
       Resolve the namespaced component id against the bound tree, then rename its contract method
       through the core adapter
-    signature: 'renameMethod(id: string, method: string, newName: string, pinSymbol?: boolean): MethodRename'
+    signature: 'renameMethod(id: string, method: string, newName: string, pinSymbol?: bool): MethodRename'
     returns: MethodRename
     params:
       - name: id
@@ -129,7 +129,7 @@ methods:
         type: string
         description: Its new name, a camel-case identifier
       - name: pinSymbol
-        type: boolean
+        type: bool
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name; true when
           omitted
@@ -140,7 +140,7 @@ methods:
       answer with the change report — what changed, every path the delta named that the write did
       not act on, or that nothing changed and nothing was written. A dry run runs the whole write,
       gate included, and writes nothing.
-    signature: 'updateSpec(kind: string, id: string, delta: SpecDelta, dryRun?: boolean): SpecChangeReport'
+    signature: 'updateSpec(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
     returns: SpecChangeReport
     params:
       - name: kind
@@ -153,7 +153,7 @@ methods:
         type: SpecDelta
         description: The partial change to merge, carrying the delta's own verbs
       - name: dryRun
-        type: boolean
+        type: bool
         description: >-
           Ask what the delta would do instead of doing it; the report comes back marked dryRun with
           written false
@@ -164,14 +164,14 @@ methods:
       named method from that transport's own address fields and check it against the endpoint
       schema, then persist the contract with the bindings attached. A method the contract does not
       declare, or an endpoint the schema rejects, refuses the whole write before anything is saved.
-    signature: 'setEndpoints(interfaceId: string, endpoints: EndpointBinding[]): SpecChangeReport'
+    signature: 'setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>): SpecChangeReport'
     returns: SpecChangeReport
     params:
       - name: interfaceId
         type: string
         description: The L3 contract to bind, as the tool's interface argument names it
       - name: endpoints
-        type: EndpointBinding[]
+        type: list<EndpointBinding>
         description: >-
           One binding per method: the method name, the transport, and that transport's address
           fields
@@ -184,7 +184,7 @@ methods:
       entry left out is gone. An own component item still needs its type and details; a re-export
       may omit both.
     signature: >-
-      setPublicInterfaces(subsystemId: string, publicInterfaces: PublicInterface[]):
+      setPublicInterfaces(subsystemId: string, publicInterfaces: list<PublicInterface>):
       SpecChangeReport
     returns: SpecChangeReport
     params:
@@ -192,7 +192,7 @@ methods:
         type: string
         description: The L1 subsystem whose published surface is replaced
       - name: publicInterfaces
-        type: PublicInterface[]
+        type: list<PublicInterface>
         description: >-
           The full replacement list: type, details, and the realizing component and optional
           interface
@@ -208,7 +208,7 @@ methods:
       never reads as a method with no content; a narrowed answer carries the partial-result marker,
       because the write tools REPLACE a method list and re-authoring from a partial read would
       delete every method left out.
-    signature: 'getSpec(kind: string, id: string, methods?: string[]): SpecReadResult'
+    signature: 'getSpec(kind: string, id: string, methods?: list<string>): SpecReadResult'
     returns: SpecReadResult
     params:
       - name: kind
@@ -218,19 +218,21 @@ methods:
         type: string
         description: The id to read it by; the L0 system spec is a singleton
       - name: methods
-        type: string[]
+        type: list<string>
         description: >-
           Read only these methods by name; every other field comes back unchanged. Only a contract,
           an implementation and a type declare methods
         optional: true
   - name: addType
     description: >-
-      The sdd_add_type workflow: define an entity, a value-object or a signature through the core
-      client adapter and answer with the receipt for it. The tool takes the kind signature with
-      top-level params and returns, and a type method's optional params. A define is an UPSERT, so
-      re-defining an id REPLACES its fields, methods, invariants, params and returns and restates
-      its code claim — the notices name what was carried forward, what a dropped member removed and
-      what an omission cleared. A type carries no lifecycle status, so the receipt states none.
+      The sdd_add_type workflow: define an entity, a value-object, a signature or an enum through
+      the core client adapter and answer with the receipt for it. The tool takes the kind signature
+      with top-level params and returns, the kind enum with its values, a named scalar's holds, and
+      a type method's optional params. A define is an UPSERT, so re-defining an id REPLACES its
+      fields, methods, invariants, params, returns, values and holds and restates its code claim —
+      the notices name what was carried forward, what a dropped member removed and what an omission
+      cleared, and the respellings each type position stored canonical. A type carries no lifecycle
+      status, so the receipt states none.
     signature: 'addType(spec: TypeSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -243,7 +245,7 @@ methods:
       authoring gate, which judges it as a whole and writes all of it or none of it. The
       verification is here rather than in the gate because a mistyped component id should read as a
       mistyped id, not as a rule refusing the design.
-    signature: 'moveMethods(from: string, to: string, methods: string[], dryRun?: boolean): MethodMoveReport'
+    signature: 'moveMethods(from: string, to: string, methods: list<string>, dryRun?: bool): MethodMoveReport'
     returns: MethodMoveReport
     params:
       - name: from
@@ -253,10 +255,10 @@ methods:
         type: string
         description: The component id that should receive them
       - name: methods
-        type: string[]
+        type: list<string>
         description: The method names to move
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer with what the move would do and write nothing
         optional: true
   - name: deleteSpec
@@ -279,8 +281,8 @@ methods:
       The getProjectConfig workflow: answer with the bound project's resolved configuration, or null
       when it has none. Null is an answer, not a failure — an unconfigured project and a
       default-configured one are different states and the caller is entitled to tell them apart.
-    signature: 'getProjectConfig(): ProjectConfig | null'
-    returns: ProjectConfig | null
+    signature: 'getProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
   - name: addMember
     description: >-
@@ -332,4 +334,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-03T19:38:11.218Z'
+updatedAt: '2026-10-04T10:53:46.812Z'

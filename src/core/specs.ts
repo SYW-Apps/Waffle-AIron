@@ -64,7 +64,7 @@ import {
   stepFieldsFor,
   // The bare-name reading of stage 4's imports: one nameKey, the local type
   // match, and the type identifiers a spec names.
-  BUILTIN_TYPES,
+  isTypeVocabulary,
   nameKey,
   typeMatchesRef,
   methodTypeRefs,
@@ -75,6 +75,13 @@ import {
   storedMethodSignature,
   storedTypeMethod,
   deriveMethodSignature,
+  // The neutral type grammar: the scan, the writer and the delta update read
+  // every spec's type positions through the same two type methods.
+  interfaceCanonicalTypes,
+  typeCanonicalTypes,
+  emptyTypeSpellingFacts,
+  type TypeRespelling,
+  type TypeSpellingFacts,
   type StoredInterfaceSpec,
   type StoredTypeSpec,
 } from '../models/index.js';
@@ -139,11 +146,22 @@ export interface SpecIndex {
   };
   /** What the scan's signature resolution recorded: each signatureFrom it met and how it resolved, and each stored text its params contradict. */
   signatures: SignatureFacts;
+  /**
+   * What the scan's type canonicalisation recorded: each stored type position
+   * that is an alias of its canonical spelling, and each that is not canonical
+   * at all. The loaded interfaces and types hold canonical text, so this is the
+   * only place the stored spellings are still visible.
+   */
+  typeSpellings: TypeSpellingFacts;
 }
 
-/** spec_scan_options — how deep a scan reads into chained subprojects. */
+/**
+ * spec_scan_options — how deep a scan reads into chained subprojects:
+ * `memberDepth` absent reads every level, 0 the bound project alone, n that
+ * many levels.
+ */
 export interface SpecScanOptions {
-  recursive?: boolean | number;
+  memberDepth?: number;
 }
 
 /** legacy_spec_file — a spec file stored under a legacy (undotted) name, and the name the current layout expects. */
@@ -340,6 +358,7 @@ function emptyIndex(): SpecIndex {
       group: {},
     },
     signatures: { sources: [], staleTexts: [] },
+    typeSpellings: emptyTypeSpellingFacts(),
   };
 }
 
@@ -1059,7 +1078,7 @@ function bareRawReferences(kind: ReferenceKind, spec: unknown): { position: stri
   const out: { position: string; value: string }[] = [];
   const seen = new Set<string>();
   const add = (position: string, value: string | undefined, generics: ReadonlySet<string> = new Set()): void => {
-    if (!value || value.includes('::') || BUILTIN_TYPES.has(value.toLowerCase()) || generics.has(value.toLowerCase())) return;
+    if (!value || value.includes('::') || isTypeVocabulary(value) || generics.has(value.toLowerCase())) return;
     const k = `${position}|${value}`;
     if (seen.has(k)) return;
     seen.add(k);
@@ -1613,6 +1632,75 @@ function bindImport(raw: RawRoot, suppliers: ImportSupplier[], p: PendingReferen
 }
 
 /** Phase three at one root: bind every reference set aside, record it, and put the bound value in the spec. */
+/**
+ * The text one type position of an interface or a type holds, addressed by the
+ * path a respelling names (methods.save.params.key, methods.save.returns,
+ * fields.createdAt, params.listener, returns); undefined when the spec no
+ * longer holds it.
+ */
+function typePositionText(spec: Record<string, any>, at: string): string | undefined {
+  const [head, name, member, param] = at.split('.');
+  const named = (list: unknown, key: string | undefined): Record<string, any> | undefined =>
+    (Array.isArray(list) ? list.find((x) => x?.name === key) : undefined);
+  if (head === 'returns') return spec.returns;
+  if (head === 'params') return named(spec.params, name)?.type;
+  if (head === 'fields') return named(spec.fields, name)?.type;
+  if (head !== 'methods') return undefined;
+  const method = named(spec.methods, name);
+  return member === 'returns' ? method?.returns : named(method?.params, param)?.type;
+}
+
+/**
+ * The text every params-bearing method of every root derives from its params
+ * AS THE FILE SPELLS THEM, keyed `<interface|type>|<spec key>|<method>` — what
+ * step 23 compares a stale stored text against, so a text that differs only
+ * because its params are stored in alias spellings is not reported twice. A
+ * sourced method stores no text and is left out.
+ */
+function writtenSignatureTexts(raws: RawRoot[]): Map<string, string> {
+  const texts = new Map<string, string>();
+  const record = (kind: 'interface' | 'type', specId: string, methods: ReadonlyArray<Parameters<typeof deriveMethodSignature>[0] & { signatureFrom?: string }>): void => {
+    for (const m of methods) {
+      if (m.signatureFrom !== undefined) continue;
+      const derived = deriveMethodSignature(m);
+      if (derived !== undefined) texts.set(`${kind}|${specId}|${m.name}`, derived);
+    }
+  };
+  for (const raw of raws) {
+    for (const intf of raw.index.interfaces) record('interface', intf.id, intf.methods ?? []);
+    for (const type of raw.index.types) record('type', type.id, type.methods ?? []);
+  }
+  return texts;
+}
+
+/**
+ * spec_index_impl.listProjectRoots step 18 — every root's interfaces and types
+ * read under the type grammar (interface_spec.canonicalTypes,
+ * type_spec.canonicalTypes), in place on the root's index: each structured
+ * type position respelled to its canonical text in memory, so every consumer
+ * reads one spelling. Run on the specs as read, before any reference is
+ * bound, so a respelling compares the file's own text. Answers the stored
+ * aliases and the positions that are not canonical, located by spec and path.
+ */
+function canonicalizeRootTypes(raws: RawRoot[]): TypeSpellingFacts {
+  const facts = emptyTypeSpellingFacts();
+  for (const raw of raws) {
+    raw.index.interfaces = raw.index.interfaces.map((intf) => {
+      const read = interfaceCanonicalTypes(intf);
+      facts.respellings.push(...read.respellings);
+      facts.problems.push(...read.problems);
+      return read.spec;
+    });
+    raw.index.types = raw.index.types.map((type) => {
+      const read = typeCanonicalTypes(type);
+      facts.respellings.push(...read.respellings);
+      facts.problems.push(...read.problems);
+      return read.spec;
+    });
+  }
+  return facts;
+}
+
 function bindRootReferences(raw: RawRoot, raws: RawRoot[], readables: ReadableProject[]): void {
   const bound = new Map<string, Map<string, string>>();
   for (const p of raw.pending) {
@@ -1854,6 +1942,13 @@ export interface SpecChangeReport {
   ineffective: string[];
   /** Store placement notices, gate warnings and delta notices. */
   notices: string[];
+  /**
+   * Each type position of the merged spec the write normalised (or, on a dry
+   * run, would): what the delta or the stored file wrote against the canonical
+   * spelling stored. Empty when every position was already canonical, and on a
+   * write that changes nothing.
+   */
+  respellings: TypeRespelling[];
   /** One line for people. */
   summary: string;
   /**
@@ -2021,9 +2116,11 @@ export function specKind(raw: any): SpecRefKind | undefined {
   if ('component' in raw && Array.isArray(raw.methods)) return 'interface';
   if ('contract' in raw && Array.isArray(raw.methods)) return 'implementation';
   if ('kind' in raw && Array.isArray(raw.fields)) return 'type';
-  // A signature type carries params and returns instead of fields, and a file
-  // written by hand may leave its empty fields list out.
-  if (raw.kind === 'signature') return 'type';
+  // A signature type carries params and returns instead of fields, and an enum
+  // values instead, and a named scalar holds; a file written by hand may leave
+  // its empty fields list out.
+  if (raw.kind === 'signature' || raw.kind === 'enum') return 'type';
+  if ('kind' in raw && typeof raw.holds === 'string') return 'type';
   return undefined;
 }
 
@@ -2696,7 +2793,7 @@ export class SpecWorkspace {
   readonly paths: WaiPaths;
 
   private cachedIndex: SpecIndex | null = null;
-  private cachedRecursive: boolean | number | null = null;
+  private cachedDepth: number | null = null;
   private cachedSpecDirs: string[] = [];
   private cachedSignature: string | null = null;
   private lastSignatureCheckMs = 0;
@@ -2729,7 +2826,7 @@ export class SpecWorkspace {
 
   invalidate(): void {
     this.cachedIndex = null;
-    this.cachedRecursive = null;
+    this.cachedDepth = null;
     this.cachedSpecDirs = [];
     this.cachedConfigFiles = [];
     this.cachedRoots = [];
@@ -2745,9 +2842,9 @@ export class SpecWorkspace {
   // Scanning
   // -------------------------------------------------------------------------
 
-  scanAll(options?: { recursive?: boolean | number }): SpecIndex {
-    const recursive = options?.recursive ?? true;
-    if (this.cachedIndex && this.cachedRecursive === recursive) {
+  scanAll(options?: SpecScanOptions): SpecIndex {
+    const maxDepth = options?.memberDepth ?? Infinity;
+    if (this.cachedIndex && this.cachedDepth === maxDepth) {
       // Cache hit — but the files may have been edited externally (hand edits,
       // another process) since we scanned. Re-verify via mtime signature at
       // most once per TTL.
@@ -2759,11 +2856,10 @@ export class SpecWorkspace {
     }
 
     this.loaderIssues = [];
-    this.cachedRecursive = recursive;
+    this.cachedDepth = maxDepth;
     this.scanVisitedSpecDirs = [];
     this.scanVisitedConfigFiles = [];
 
-    const maxDepth = typeof recursive === 'number' ? recursive : (recursive ? Infinity : 0);
     const scan = this.scanFamily(maxDepth);
     this.cachedIndex = scan.index;
     this.cachedRoots = scan.raws.map((raw) => raw.record);
@@ -2808,6 +2904,12 @@ export class SpecWorkspace {
     const readables = raws.map((raw) => readableOf(raw));
     // Steps 9-11: phase two, every root's tables, producers before consumers.
     resolveFamilyTables(raws);
+    // The text each params-bearing method's params derive as the file spells
+    // them, read before step 18 respells them (step 23 compares against it).
+    const writtenTexts = writtenSignatureTexts(raws);
+    // Step 18: before any reference is bound, every root's type positions read
+    // under the grammar — respelled in memory, the stored spellings kept as facts.
+    const typeSpellings = canonicalizeRootTypes(raws);
     // Steps 12-13: phase three, every reference with `::` bound.
     raws.forEach((raw) => bindRootReferences(raw, raws, readables));
     // Steps 14-15: the index, every root's specs under their keys.
@@ -2821,7 +2923,7 @@ export class SpecWorkspace {
       index.groups.push(...raw.index.groups);
       for (const kind of Object.keys(index.paths) as (keyof SpecIndex['paths'])[]) Object.assign(index.paths[kind], raw.index.paths[kind]);
     }
-    // Step 21: once every reference of the family is bound, its signatures —
+    // Step 22: once every reference of the family is bound, its signatures —
     // sourced methods filled, every params-bearing method's text derived; the
     // facts kept on the index, the one place the stored form stays visible.
     // Every root's authored references go with them, so an `alias::` signature
@@ -2829,7 +2931,13 @@ export class SpecWorkspace {
     const signatures = resolveTree(index.interfaces, index.components, index.types, raws.flatMap((r) => r.record.authoredReferences));
     index.interfaces = signatures.interfaces;
     index.types = signatures.types;
-    index.signatures = signatures.facts;
+    // Step 23: a stored text stale only because its params are stored in alias
+    // spellings is the type-spelling facts' to report, not a second finding.
+    index.signatures = {
+      ...signatures.facts,
+      staleTexts: signatures.facts.staleTexts.filter((stale) => writtenTexts.get(`${stale.kind}|${stale.specId}|${stale.method}`) !== stale.stored),
+    };
+    index.typeSpellings = typeSpellings;
     return { index, raws, readables };
   }
 
@@ -4006,7 +4114,10 @@ export class SpecWorkspace {
    * the owning project.
    */
   prepareInterfaceForWrite(spec: InterfaceSpec | StoredInterfaceSpec): StoredInterfaceSpec {
-    const stored = { ...spec, methods: (spec.methods ?? []).map((m) => storedMethodSignature(m)) };
+    // Every type position canonical (a position that is not canonical is
+    // written as it stands), then each method's text derived from them.
+    const canonical = interfaceCanonicalTypes(spec).spec;
+    const stored = { ...canonical, methods: (canonical.methods ?? []).map((m) => storedMethodSignature(m)) };
     return this.relativizeSpec('interface', stored as InterfaceSpec) as StoredInterfaceSpec;
   }
 
@@ -4022,9 +4133,14 @@ export class SpecWorkspace {
     return partDir ? partRelativeFilePaths(relative, this.rootDir, partDir) : relative;
   }
 
-  /** A type written in its stored form — every params-bearing method's text derived — relative to the owning project. */
+  /**
+   * A type written in its stored form — every type position canonical (one
+   * that is not canonical written as it stands), every params-bearing method's
+   * text derived from them — relative to the owning project.
+   */
   prepareTypeForWrite(spec: TypeSpec | StoredTypeSpec): StoredTypeSpec {
-    const stored = { ...spec, methods: (spec.methods ?? []).map((m) => storedTypeMethod(m)) };
+    const canonical = typeCanonicalTypes(spec).spec;
+    const stored = { ...canonical, methods: (canonical.methods ?? []).map((m) => storedTypeMethod(m)) };
     return this.relativizeSpec('type', stored as TypeSpec) as StoredTypeSpec;
   }
 
@@ -4295,7 +4411,7 @@ export class SpecWorkspace {
     try {
       const raw = readSpecFile(p);
       // A file the scan did not index is resolved alone, against the index's components and types.
-      return resolveTree([InterfaceSpecSchema.parse(raw)], index.components, index.types).interfaces[0];
+      return resolveTree([interfaceCanonicalTypes(InterfaceSpecSchema.parse(raw)).spec], index.components, index.types).interfaces[0];
     } catch (e: any) {
       this.loaderIssues.push({
         severity: 'error',
@@ -4909,6 +5025,40 @@ export class SpecWorkspace {
     index.listProjectRoots();
     // Step 2: the facts the scan kept on the index.
     return this.cachedIndex!.signatures;
+  }
+
+  /**
+   * A delta's merged spec with every type position canonical, IN PLACE (an
+   * interface or a type; nothing else holds type positions). Answers the
+   * respellings the write applies: each alias the merge holds — written by the
+   * delta — and each alias the stored file still holds at a position the merge
+   * kept, which the scan recorded and the save rewrites with it. A position
+   * that is not canonical stays as written.
+   */
+  private canonicalizeMerged(kind: WritableSpecKind, merged: Record<string, any>): TypeRespelling[] {
+    if (kind !== 'interface' && kind !== 'type') return [];
+    const read = kind === 'interface'
+      ? interfaceCanonicalTypes(merged as unknown as StoredInterfaceSpec)
+      : typeCanonicalTypes(merged as unknown as StoredTypeSpec);
+    Object.assign(merged, read.spec);
+    const respelled = new Set(read.respellings.map((r) => r.path));
+    const fromFile = this.scanAll().typeSpellings.respellings.filter((r) => r.specId === merged.id && r.kind === kind
+      && !respelled.has(r.path) && typePositionText(merged, r.path) === r.stored);
+    return [...read.respellings, ...fromFile];
+  }
+
+  /**
+   * ispec_index.typeSpellingFacts — what the current scan's type
+   * canonicalisation recorded: every stored type position that is an alias of
+   * its canonical spelling, and every one that is not canonical at all. Read
+   * from the cached scan, rescanning first when the tree changed.
+   */
+  typeSpellingFacts(): TypeSpellingFacts {
+    // Step 1: serve the workspace scan, rescanning when the file signature no longer holds.
+    const index: SpecWorkspace = this;
+    index.listProjectRoots();
+    // Step 2: the facts the scan kept on the index.
+    return this.cachedIndex!.typeSpellings;
   }
 
   snapshotSpecFiles(): Map<string, string> {
@@ -5863,6 +6013,11 @@ export class SpecWorkspace {
     const qualifiedDelta = qualifyDeltaRefs(mergeableDelta);
     const mergedResult = mergeDelta(result, qualifiedDelta);
     for (const field of unsetFields) delete mergedResult[field];
+    // Every type position the merged spec holds, canonical — so a delta writing
+    // an alias of what is stored changes nothing, and the texts below are
+    // derived from canonical types. A position that is not canonical stays as
+    // written, for the caller's gate to judge.
+    const respellings = this.canonicalizeMerged(kind, mergedResult);
     // A method's text is derived from its params on the write, never taken
     // from the delta. A sourced method is left as merged, so the caller's gate
     // sees a restatement the delta made (the writer drops it either way).
@@ -5933,6 +6088,7 @@ export class SpecWorkspace {
         changes,
         ineffective,
         notices,
+        respellings: [],
         testsToRevisit: [],
         summary: `No change to ${kind} "${id}" — the delta matches what is stored, so nothing ${dryRun ? 'would be' : 'was'} written.`,
       };
@@ -5962,6 +6118,7 @@ export class SpecWorkspace {
         changes,
         ineffective,
         notices,
+        respellings,
         testsToRevisit: [],
         ...(stripped.length ? { strippedKeys: stripped } : {}),
         summary: `Dry run on ${kind} "${id}": ${changes.length} change${changes.length === 1 ? '' : 's'} would be made. Nothing was written.`,
@@ -5986,6 +6143,7 @@ export class SpecWorkspace {
       changes,
       ineffective,
       notices,
+      respellings,
       // The store never searches for tests: it holds the tree and knows
       // nothing about the rule engine that reads code. The GATED write above
       // it fills this in, which is also the only write path a human drives.
@@ -6732,6 +6890,7 @@ function moveChangeReports(edits: MoveEdit[], dryRun: boolean): SpecChangeReport
       changes,
       ineffective: [],
       notices: [] as string[],
+      respellings: [] as TypeRespelling[],
       testsToRevisit: [] as TestsToRevisit[],
       summary: edit.before === null
         ? `${dryRun ? 'Would create' : 'Created'} ${edit.kind} "${edit.id}" to receive the moved methods.`
@@ -7397,6 +7556,11 @@ export function snapshotSpecFiles(): Map<string, string> {
 /** ispec_loader.signatureFacts — forwarded 1:1 to the index read face. */
 export function signatureFacts(): SignatureFacts {
   return current().signatureFacts();
+}
+
+/** ispec_loader.typeSpellingFacts — forwarded 1:1 to the index read face. */
+export function typeSpellingFacts(): TypeSpellingFacts {
+  return current().typeSpellingFacts();
 }
 
 /** Restore files captured by snapshotSpecFiles(). Caller invalidates the cache. */

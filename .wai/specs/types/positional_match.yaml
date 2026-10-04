@@ -46,7 +46,7 @@ fields:
     description: 'For import: the producer''s existing public name for the target, when it has one'
     optional: true
   - name: candidates
-    type: string[]
+    type: list<string>
     description: 'For ambiguous: every `<producer id>::<id>` the name keyed onto'
     optional: true
   - name: reason
@@ -62,4 +62,4 @@ fields:
 methods: []
 sourcePath: src/migrations/position-reader.ts
 createdAt: '2026-09-28T16:09:03.266Z'
-updatedAt: '2026-09-30T21:05:13.360Z'
+updatedAt: '2026-10-04T10:20:46.606Z'

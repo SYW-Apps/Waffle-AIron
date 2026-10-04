@@ -138,6 +138,15 @@ export const AgentBriefSchema = z.object({
   variantGuidance: z.string().optional(),
 
   /**
+   * How the neutral types of the contracts this agent implements are spelled
+   * in its language: the write table (type_dialect.mappingLines) of the dialect
+   * for the language its implementations are written in, also folded into
+   * instructions. Absent when no dialect is shipped for that language or the
+   * agent implements nothing.
+   */
+  typeMapping: z.array(z.string()).optional(),
+
+  /**
    * Set only on a brief for a member's agent (an id qualified `<alias>::`): the
    * member's directory relative to the root the brief was asked from. The
    * brief was composed at that root, and its ownedPaths and readPaths are

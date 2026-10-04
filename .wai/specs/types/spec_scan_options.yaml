@@ -4,11 +4,13 @@ name: SpecScanOptions
 description: How deep a scan of the bound tree reads into chained subprojects.
 subsystem: sdd_core
 fields:
-  - name: recursive
-    type: boolean | number
-    description: true reads every chained subproject, false none, a number that many levels deep
+  - name: memberDepth
+    type: int
+    description: >-
+      How many member levels the scan reads below the bound project: absent, every level; 0, the
+      bound project alone; n, that many levels deep
     optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:08:47.145Z'
-updatedAt: '2026-09-25T21:08:47.147Z'
+updatedAt: '2026-10-04T10:54:00.514Z'

@@ -21,10 +21,10 @@ fields:
       code annotates nothing
     optional: true
   - name: optional
-    type: boolean
+    type: bool
     description: Whether a caller may leave it out — marked optional, given a default, or a rest parameter
     optional: false
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-23T20:35:12.500Z'
-updatedAt: '2026-09-23T20:35:12.732Z'
+updatedAt: '2026-10-04T10:20:41.714Z'

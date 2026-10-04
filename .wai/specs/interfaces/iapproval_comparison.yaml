@@ -15,15 +15,15 @@ methods:
       files under `members/<alias>/<path inside the part>`, so a part's specs are approved by its
       parent's lock spec by spec and moving a part's storage changes no key. A part fetched from git
       is digested from the cache at its pinned commit.
-    signature: 'captureApprovedSpecs(root?: string, scope?: object): Record<string, string>'
-    returns: Record<string, string>
+    signature: 'captureApprovedSpecs(root?: string, scope?: any): map<string, string>'
+    returns: map<string, string>
     params:
       - name: root
         type: string
         description: The project root being approved; the bound project when omitted
         optional: true
       - name: scope
-        type: object
+        type: any
         description: >-
           { paths: Set<string> } — a scoped approval (lock --subsystem) restricts the capture to
           those spec files; everything outside keeps the approval it already had. Omitted captures
@@ -34,8 +34,8 @@ methods:
       What differs between the tree as it stands and the approval on record: which specs were added,
       which changed, which were removed, and which are untouched. Null when the project has no
       record at all — never approved is not the same as approved and drifted.
-    signature: 'diffAgainstApproval(root?: string): ApprovalDiff | null'
-    returns: ApprovalDiff | null
+    signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
+    returns: ApprovalDiff?
     params:
       - name: root
         type: string
@@ -45,8 +45,8 @@ methods:
       - idempotent
   - name: approvalRecord
     description: The approval record this project carries, or null when it has none.
-    signature: 'approvalRecord(root?: string): LockRecord | null'
-    returns: LockRecord | null
+    signature: 'approvalRecord(root?: string): LockRecord?'
+    returns: LockRecord?
     params:
       - name: root
         type: string
@@ -58,8 +58,8 @@ methods:
     description: >-
       The spec paths the approval on record covers, as a set for membership tests. Null when there
       is no record.
-    signature: 'settledSpecPaths(root?: string): Set<string> | null'
-    returns: Set<string> | null
+    signature: 'settledSpecPaths(root?: string): set<string>?'
+    returns: set<string>?
     params:
       - name: root
         type: string
@@ -80,11 +80,11 @@ methods:
       Published rather than kept private because every presenter needs the same answer — the
       terminal, the MCP status tool and anything else — and two renderings of "has this drifted"
       that can disagree is precisely the thing a lock exists to prevent.
-    signature: 'verdict(approvals?: ProjectApproval[]): ApprovalVerdict'
+    signature: 'verdict(approvals?: list<ProjectApproval>): ApprovalVerdict'
     returns: ApprovalVerdict
     params:
       - name: approvals
-        type: ProjectApproval[]
+        type: list<ProjectApproval>
         description: >-
           The pin tree from validator_portal.familyApprovals: the root's own entry and its members'.
           Omitted: no member or upgrade note.
@@ -93,4 +93,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T15:19:05.602Z'
-updatedAt: '2026-10-03T20:53:53.116Z'
+updatedAt: '2026-10-04T10:18:30.259Z'

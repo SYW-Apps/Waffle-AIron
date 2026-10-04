@@ -6,7 +6,7 @@ description: >-
   describes. Its `type` decides which of its other fields it may carry.
 fields:
   - name: stepNumber
-    type: number
+    type: int
     description: The step's position; jump fields refer to it.
     optional: false
   - name: label
@@ -34,19 +34,19 @@ fields:
     description: 'dispatch: the capability routed through the target Portal.'
     optional: true
   - name: auth
-    type: object
+    type: any
     description: 'call, dispatch: the credential presented to an authed Portal and where it is loaded from.'
     optional: true
   - name: detach
-    type: boolean
+    type: bool
     description: 'call, dispatch: fire-and-forget.'
     optional: true
   - name: assertsGuarantees
-    type: string[]
+    type: list<string>
     description: 'call, dispatch: guarantees the step relies on from the called method.'
     optional: true
   - name: assertsInvariants
-    type: string[]
+    type: list<string>
     description: 'local, call, dispatch: declared entity invariants the step upholds.'
     optional: true
   - name: condition
@@ -54,11 +54,11 @@ fields:
     description: branch; loop while and doWhile.
     optional: true
   - name: onTrueStep
-    type: number
+    type: int
     description: 'branch: where the true path goes (default: next step).'
     optional: true
   - name: onFalseStep
-    type: number
+    type: int
     description: 'branch: where the false path goes.'
     optional: true
   - name: 'on'
@@ -66,11 +66,11 @@ fields:
     description: 'switch: the dispatched value.'
     optional: true
   - name: cases
-    type: object[]
+    type: list<any>
     description: 'switch: value-to-step cases.'
     optional: true
   - name: defaultStep
-    type: number
+    type: int
     description: 'switch: the default region.'
     optional: true
   - name: loopKind
@@ -82,23 +82,23 @@ fields:
     description: 'loop forEach and for: the iteration source.'
     optional: true
   - name: endStep
-    type: number
+    type: int
     description: 'loop, try, parallel: the last step of the body region.'
     optional: true
   - name: catches
-    type: object[]
+    type: list<any>
     description: 'try: error-to-handler regions.'
     optional: true
   - name: finallyStep
-    type: number
+    type: int
     description: 'try: the first step of the always-runs region.'
     optional: true
   - name: branches
-    type: object[]
+    type: list<any>
     description: 'parallel: the arms.'
     optional: true
   - name: toStep
-    type: number
+    type: int
     description: 'jump: the target step.'
     optional: true
   - name: outcome
@@ -112,7 +112,7 @@ fields:
 methods:
   - name: foreignFields
     signature: 'foreignFields(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The fields this step carries that its own `type` cannot: every field set on it beyond what
       every step carries (stepNumber, label, description, type, assertsGuarantees,
@@ -124,4 +124,4 @@ methods:
     symbol: narrativeStepForeignFields
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T16:53:32.013Z'
-updatedAt: '2026-09-19T11:07:11.558Z'
+updatedAt: '2026-10-04T10:29:03.931Z'

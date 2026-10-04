@@ -9,25 +9,25 @@ description: >-
 subsystem: sdd_core
 fields:
   - name: nodes
-    type: ProjectNode[]
+    type: list<ProjectNode>
     description: Every project root the scan read, bound root first, then members in walk order.
     optional: false
   - name: owners
-    type: Map<string, string>
+    type: map<string, string>
     description: Spec key → the key of the project that declares it.
     optional: false
   - name: authoredReferences
-    type: AuthoredReference[]
+    type: list<AuthoredReference>
     description: Every reference with `::` across the family, as written and as bound.
     optional: false
   - name: problems
-    type: ProjectFamilyProblem[]
+    type: list<ProjectFamilyProblem>
     description: >-
       Id collisions, id-less and defaulted members, absent members and alias conflicts across the
       family.
     optional: false
   - name: references
-    type: CrossProjectReference[]
+    type: list<CrossProjectReference>
     description: >-
       Every reference in the family whose bound target lies in another project than the referring
       spec's, in the positions CrossProjectReference lists.
@@ -35,16 +35,16 @@ fields:
 methods:
   - name: node
     signature: 'node(namespace: string): ProjectNode | null'
-    returns: ProjectNode | null
+    returns: ProjectNode?
     description: The node with that key, or null.
     symbol: familyNode
   - name: ownerOf
     signature: 'ownerOf(specId: string): ProjectNode | null'
-    returns: ProjectNode | null
+    returns: ProjectNode?
     description: 'The project that declares the spec: its owner entry. Null for a key the scan did not read.'
   - name: producerOf
     signature: 'producerOf(reference: string, from?: string): ProjectNode | null'
-    returns: ProjectNode | null
+    returns: ProjectNode?
     description: >-
       The project a reference lands in. With `from` (a project key), the reference is read from that
       project the way the scan binds one — an id without `::` is local to `from`; `alias::name` goes
@@ -55,14 +55,14 @@ methods:
       binds (an outside or unresolved first segment).
   - name: declares
     signature: 'declares(consumer: string, producer: string): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether the consumer may reach the producer as a declared dependency: the producer is one of
       the consumer's direct members (its `members` key, or a legacy mount, is the alias), or one of
       the consumer's externals resolves to it.
   - name: dependencyCycles
     signature: 'dependencyCycles(): string[][]'
-    returns: string[][]
+    returns: list<list<string>>
     description: >-
       The loops in the project dependency graph: an edge runs from a consumer to a producer for
       every cross-project reference (and every L0 re-export from a member or external), and each
@@ -71,4 +71,4 @@ methods:
       or from it: containment is not dependency. Empty for an acyclic family.
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:40:06.197Z'
-updatedAt: '2026-09-27T10:33:37.487Z'
+updatedAt: '2026-10-04T10:20:49.920Z'

@@ -10,7 +10,7 @@ description: >-
   method that is no longer there.
 fields:
   - name: moved
-    type: boolean
+    type: bool
     description: >-
       True only when the methods now live on `to` and every edit reached disk. False for a refusal
       and for a dry run alike; `refusals` and `dryRun` tell those apart.
@@ -24,18 +24,18 @@ fields:
     description: The component asked to receive them.
     optional: false
   - name: methods
-    type: string[]
+    type: list<string>
     description: The method names the caller asked to move, in the order given.
     optional: false
   - name: edits
-    type: SpecChangeReport[]
+    type: list<SpecChangeReport>
     description: >-
       One report per spec the move touched: the two contracts, the two implementations, and every
       caller implementation whose steps or `calls` named the old home. Empty when the move was
       refused.
     optional: false
   - name: repointed
-    type: number
+    type: int
     description: >-
       How many references were re-pointed to follow the methods, across every kind that names a
       component: narrative `call`, `register` and `dispatch` steps by their targetComponent,
@@ -44,19 +44,19 @@ fields:
       fewer leaves a dangling reference the validator will find later.
     optional: false
   - name: refusals
-    type: string[]
+    type: list<string>
     description: >-
       The rule codes that refused the move, each with what it judged. Empty exactly when nothing
       refused it; a non-empty list means nothing reached disk.
     optional: false
   - name: alternatives
-    type: MethodMoveCandidate[]
+    type: list<MethodMoveCandidate>
     description: >-
       Where these methods could live instead, cheapest legal home first, including `to` itself so
       its shortfall can be read beside the others. Populated only on a refusal.
     optional: false
   - name: notices
-    type: string[]
+    type: list<string>
     description: >-
       What the caller should know but nothing refused: the source component left with no methods, a
       status that differs between the two homes, a moved method whose narrative is empty.
@@ -68,20 +68,20 @@ fields:
       rule refused it and the cheapest home that would not.
     optional: false
   - name: dryRun
-    type: boolean
+    type: bool
     description: >-
       True when the caller asked what the move would do and nothing was written. The whole move
       runs, gate included, so a dry run answers with the same edits and refusals a real one would.
     optional: false
   - name: mentions
-    type: string[]
+    type: list<string>
     description: >-
       Ids of the specs whose prose still names the old home, and wire endpoint bindings that keep
       it. Nothing here was rewritten: a move never edits prose and never changes a published wire
       address, so this is the list a human still has to read.
     optional: false
   - name: created
-    type: string[]
+    type: list<string>
     description: >-
       The specs the move created to receive the methods, each named with its kind and id — i<target>
       for a target that declared no contract, <target>_impl for a receiving contract no
@@ -89,7 +89,7 @@ fields:
       the target already had both, and on a refusal; a dry run names what it would create.
     optional: false
   - name: carried
-    type: CarriedRekey[]
+    type: list<CarriedRekey>
     description: >-
       Every edit the move made — or, on a dry run, would make — to the debt register
       (.wai/project.yaml rules.conformance.carried): an entry anchored at a moved method on the spec
@@ -99,4 +99,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-20T12:02:20.127Z'
-updatedAt: '2026-09-26T10:59:15.507Z'
+updatedAt: '2026-10-04T10:29:02.567Z'

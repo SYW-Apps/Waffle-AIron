@@ -10,21 +10,21 @@ description: >-
 subsystem: sdd_cli
 fields:
   - name: projects
-    type: UpgradeReportProject[]
+    type: list<UpgradeReportProject>
     description: One line per project the report covered (the bound root, and its members at a parent)
     optional: false
   - name: entries
-    type: UpgradeReportEntry[]
+    type: list<UpgradeReportEntry>
     description: >-
       Every finding of today's owner's gates whose reason is new in stage 4, grouped by code when
       printed
     optional: false
   - name: unclassified
-    type: number
+    type: int
     description: Today's findings the report cannot attribute to stage 4 — counted, never explained away
     optional: false
   - name: unmatched
-    type: PositionalMatch[]
+    type: list<PositionalMatch>
     description: >-
       Every positional candidate the family top's match could not explain on its own — ambiguous
       (with every candidate `<producer id>::<id>` and why no tie-break rule chose) or none — listed
@@ -34,4 +34,4 @@ fields:
 methods: []
 sourcePath: src/commands/verdict-changes.ts
 createdAt: '2026-09-28T06:15:22.082Z'
-updatedAt: '2026-09-29T13:54:47.348Z'
+updatedAt: '2026-10-04T10:29:24.847Z'

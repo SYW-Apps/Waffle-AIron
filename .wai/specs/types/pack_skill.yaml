@@ -24,7 +24,7 @@ fields:
     description: Path to the SKILL.md file, relative to the pack directory.
     optional: false
   - name: targets
-    type: string[]
+    type: list<string>
     description: AI client targets this skill installs into (claude, gemini, codex, ...).
     optional: false
   - name: extends
@@ -37,4 +37,4 @@ fields:
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:56:18.960Z'
-updatedAt: '2026-10-03T17:04:22.550Z'
+updatedAt: '2026-10-04T10:20:41.378Z'

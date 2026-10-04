@@ -7,17 +7,17 @@ methods:
     description: >-
       Calls exportSddSkills on the skills portal, forwarding the target types and returning what was
       written.
-    signature: 'exportSddSkills(targetTypes?: string[]): SkillsExportResult'
+    signature: 'exportSddSkills(targetTypes?: list<string>): SkillsExportResult'
     returns: SkillsExportResult
     params:
       - name: targetTypes
-        type: string[]
+        type: list<string>
         description: The target types to export into; omitted means the project's enabled targets
         optional: true
   - name: listSkillNames
     description: 'Forward to skills_portal.listSkillNames: the built-in skills `wairon skills list` prints'
-    signature: 'listSkillNames(): string[]'
-    returns: string[]
+    signature: 'listSkillNames(): list<string>'
+    returns: list<string>
     params: []
   - name: checkSkillFreshness
     description: >-
@@ -30,4 +30,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:13:59.756Z'
+updatedAt: '2026-10-04T10:18:38.013Z'

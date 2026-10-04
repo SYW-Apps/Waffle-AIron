@@ -9,13 +9,13 @@ description: >-
 subsystem: sdd_validator
 fields:
   - name: findings
-    type: ValidationIssue[]
+    type: list<ValidationIssue>
     description: >-
       EXTERNAL_INCOMPATIBLE, EXTERNAL_DRIFTED and EXTERNAL_CHECK_UNAVAILABLE on the project's
       externals, each at the project's own severity and stamped with its key
     optional: false
   - name: notSelected
-    type: string[]
+    type: list<string>
     description: >-
       The aliases of the externals whose producer lay outside the run's reach: never read, never
       judged, counted in the run's hint
@@ -23,4 +23,4 @@ fields:
 methods: []
 sourcePath: src/core/family-validation.ts
 createdAt: '2026-09-28T18:11:27.152Z'
-updatedAt: '2026-09-28T18:11:27.161Z'
+updatedAt: '2026-10-04T10:20:09.949Z'

@@ -18,8 +18,8 @@ methods:
       gates a write from above without the store ever calling the rule engine that reads it. A
       mechanical write passes no hooks and stays ungated. Routed through the core orchestrator.
     signature: >-
-      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?:
-      boolean): SpecChangeReport
+      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -38,7 +38,7 @@ methods:
           ungated
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Report what the delta would do and write nothing
         optional: true
   - name: moveMethods
@@ -46,8 +46,8 @@ methods:
       Forward to core_orchestrator.moveMethods: move contract methods to another component, carrying
       their implementations and retargeting every reference to them
     signature: >-
-      moveMethods(from: string, to: string, methods: string[], hooks?: SpecWriteHooks, dryRun?:
-      boolean): MethodMoveReport
+      moveMethods(from: string, to: string, methods: list<string>, hooks?: SpecWriteHooks, dryRun?:
+      bool): MethodMoveReport
     returns: MethodMoveReport
     params:
       - name: from
@@ -57,14 +57,14 @@ methods:
         type: string
         description: The component id that should receive them
       - name: methods
-        type: string[]
+        type: list<string>
         description: The method names to move
       - name: hooks
         type: SpecWriteHooks
         description: The judgement to run on the resulting components at the write boundary
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Report what the move would do and write nothing
         optional: true
   - name: saveSpec
@@ -74,8 +74,8 @@ methods:
       Routed through the core orchestrator.
     signature: >-
       saveSpec(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
-      ImplementationSpec | TypeSpec): string[]
-    returns: string[]
+      ImplementationSpec | TypeSpec): list<string>
+    returns: list<string>
     params:
       - name: kind
         type: string
@@ -87,8 +87,8 @@ methods:
     description: >-
       Delete one spec document of the named kind. False when it was not there; the L0 cannot be
       deleted. Routed through the core orchestrator.
-    signature: 'deleteSpec(kind: string, id: string): boolean'
-    returns: boolean
+    signature: 'deleteSpec(kind: string, id: string): bool'
+    returns: bool
     params:
       - name: kind
         type: string
@@ -98,4 +98,4 @@ methods:
         description: The spec id (namespaced if needed)
 status: complete
 createdAt: '2026-09-25T17:33:00.554Z'
-updatedAt: '2026-09-27T11:01:40.611Z'
+updatedAt: '2026-10-04T10:19:38.573Z'

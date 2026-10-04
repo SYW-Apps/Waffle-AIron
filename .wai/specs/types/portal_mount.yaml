@@ -14,7 +14,7 @@ fields:
     description: The mounted Portal's component id
     optional: false
   - name: prefixes
-    type: string[]
+    type: list<string>
     description: >-
       The path prefixes this listener routes to the portal. A path lies under a prefix when it
       equals it or continues it past a slash, so `/` matches only the root itself
@@ -29,4 +29,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-24T19:43:36.895Z'
-updatedAt: '2026-09-24T19:44:17.010Z'
+updatedAt: '2026-10-04T10:20:46.271Z'

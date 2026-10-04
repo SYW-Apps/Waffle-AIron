@@ -15,10 +15,10 @@ fields:
     description: 'The site inside that spec: a contract method, or an edge `from -> to`'
     optional: true
   - name: covers
-    type: string[]
+    type: list<string>
     description: The units an aggregating finding covers
     optional: true
 methods: []
 sourcePath: src/models/identity-rename.ts
 createdAt: '2026-09-26T10:58:36.242Z'
-updatedAt: '2026-09-26T10:58:36.244Z'
+updatedAt: '2026-10-04T10:20:56.164Z'

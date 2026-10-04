@@ -1256,7 +1256,7 @@ export function mountCanvas(host, model, opts = {}) {
       return '';
     }
     function visibleFields(t) {
-      if (det === 'names') return [];
+      if (det === 'names' || t.values || t.holds) return [];
       if (det === 'keys') return t.fields.filter(function (f) { return markerOf(t, f) !== ''; });
       return t.fields;
     }
@@ -1301,15 +1301,19 @@ export function mountCanvas(host, model, opts = {}) {
       var meths = det === 'full' ? t.methods : [];
       // A signature type is drawn with its derived text in place of a field list.
       var sig = t.signature && det !== 'names' ? t.signature : '';
-      var head = t.name + '  \u00AB' + t.kind + '\u00BB';
-      var rows = (sig ? [sig] : []).concat(fields.map(function (f) { return rowText(t, f); }))
+      // An enum is drawn with its values in place of a field list.
+      var vals = t.values && det !== 'names' ? t.values : [];
+      // A named scalar is drawn compactly: its name and the primitive it holds.
+      var head = t.name + (t.holds ? ' = ' + t.holds : '') + '  \u00AB' + t.kind + '\u00BB';
+      var rows = (sig ? [sig] : []).concat(vals.map(function (v) { return '\u2022 ' + v.name; }))
+        .concat(fields.map(function (f) { return rowText(t, f); }))
         .concat(meths.map(function (m) { return '\u0192 ' + m.name + '(): ' + m.returns; }));
       var longest = head.length + 4;
       rows.forEach(function (r) { if (r.length > longest) longest = r.length; });
       var plain = rows.length === 0;
       var pw = Math.max(170, head.length * 6.8 + 26);
       var W = Math.max(210, Math.min(400, longest * 6.6 + 30));
-      return { fields: fields, meths: meths, sig: sig, head: head, plain: plain, w: plain ? pw : W, h: plain ? 40 : TH_H + (sig ? ROW_H : 0) + fields.length * ROW_H + meths.length * ROW_H };
+      return { fields: fields, meths: meths, sig: sig, vals: vals, head: head, plain: plain, w: plain ? pw : W, h: plain ? 40 : TH_H + (sig ? ROW_H : 0) + vals.length * ROW_H + fields.length * ROW_H + meths.length * ROW_H };
     }
 
     // Emit one type table with its top-left at (ax, ay); returns its size.
@@ -1340,6 +1344,13 @@ export function mountCanvas(host, model, opts = {}) {
         });
         ry += ROW_H;
       }
+      sh.vals.forEach(function (v, vi) {
+        eles.push({
+          data: { id: 'TV~' + t.id + '~' + vi, parent: 'T~' + t.id, label: '\u2022 ' + v.name, w: sh.w, h: ROW_H, tw: sh.w - 14 },
+          position: { x: ax + sh.w / 2, y: ry + ROW_H / 2 }, classes: 'typeRow' + (dim ? ' dimmed' : ''), grabbable: false,
+        });
+        ry += ROW_H;
+      });
       sh.fields.forEach(function (f) {
         var rid = 'TF~' + t.id + '~' + f.name;
         rowIds[rid] = 1;
@@ -3873,6 +3884,17 @@ export function mountCanvas(host, model, opts = {}) {
           : '<span class="desc">no fields</span>';
         if (ty.signature) {
           body += section('Signature', 1, '<div class="method"><code>' + esc(ty.signature) + '</code></div>', true);
+        } else if (ty.holds) {
+          body += section('Holds', 1, '<div class="method"><code>' + esc(ty.holds) + '</code>'
+            + '<div class="mdesc">A named scalar: one ' + esc(ty.holds) + ' under this name.</div></div>', true);
+        } else if (ty.values) {
+          body += section('Values', ty.values.length, ty.values.length
+            ? ty.values.map(function (v) {
+                return '<div class="method"><div class="mname">' + esc(v.name) + '</div>'
+                  + (v.description ? '<div class="mdesc">' + esc(v.description) + '</div>' : '')
+                  + '</div>';
+              }).join('')
+            : '<span class="desc">no values</span>', true);
         } else {
           body += section('Fields', ty.fields.length, fieldsInner, true);
         }

@@ -11,8 +11,9 @@ methods:
       intercepted by the host request orchestrator before any call reaches this server, so the
       advertised registrations carry descriptor stubs that only answer outside a hosted request
       (where the tools are unsupported by design).
-    signature: 'createScopedServer(): McpServer'
-    returns: McpServer
+    signature: 'createScopedServer(): McpServerInstance'
+    returns: McpServerInstance
+    params: []
 status: complete
 createdAt: '2026-07-04T12:49:36.270Z'
-updatedAt: '2026-07-16T00:14:54.434Z'
+updatedAt: '2026-10-04T10:27:41.951Z'

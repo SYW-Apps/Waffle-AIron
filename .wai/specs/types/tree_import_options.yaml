@@ -9,7 +9,7 @@ description: >-
   silently replacing a tree.
 fields:
   - name: replaceExisting
-    type: boolean
+    type: bool
     description: >-
       Replace AUTHORED design already present at the destination (the previous tree is moved aside
       to a backup first). Absent or false REFUSES rather than overwriting. A freshly provisioned
@@ -17,7 +17,7 @@ fields:
       is imported over without this.
     optional: true
   - name: refuseExecutableEntries
-    type: boolean
+    type: bool
     description: >-
       Apply the portable-path guard, refusing executable content — set by every surface accepting an
       archive over the wire.
@@ -30,4 +30,4 @@ methods: []
 componentClass: tree_transfer_orchestrator
 sourcePath: src/core/treetransfer.ts
 createdAt: '2026-08-12T17:23:41.472Z'
-updatedAt: '2026-09-19T11:07:19.901Z'
+updatedAt: '2026-10-04T10:21:20.574Z'

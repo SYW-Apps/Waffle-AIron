@@ -133,7 +133,8 @@ describe('delta merge: a field an element leaves out keeps its stored value (F88
     it(`keeps a method's description when the delta passes it ${label}`, () => {
       fresh(`desc-${label}`);
       updateSpec('interface', 'iflow', { methods: [{ name: 'run', description: value, returns: 'boolean' }] });
-      expect(intfMethod('run')).toMatchObject({ description: 'runs the flow', returns: 'boolean' });
+      // The alias the delta writes is stored canonical (stage 2: the writer respells it).
+      expect(intfMethod('run')).toMatchObject({ description: 'runs the flow', returns: 'bool' });
     });
   }
 

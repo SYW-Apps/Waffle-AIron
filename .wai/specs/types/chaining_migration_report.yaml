@@ -13,11 +13,11 @@ fields:
     description: The plan applied, findings included.
     optional: false
   - name: applied
-    type: boolean
+    type: bool
     description: True when apply wrote; false when the plan was empty and nothing was written.
     optional: false
   - name: written
-    type: string[]
+    type: list<string>
     description: >-
       Every write apply made, in write order (project.yaml ids, L0 system specs created or extended
       and L1 publications carried from a mount, project.yaml externals, pinned snapshots and
@@ -27,7 +27,7 @@ fields:
       root>/.wai/surfaces: <pin key>`); a write that changed nothing is not listed.
     optional: false
   - name: relock
-    type: string[]
+    type: list<string>
     description: >-
       The directories of the projects whose lock the writes left stale: a producer whose L0 changed
       (its spec digests moved), a consumer whose externals and pins changed (gate inputs). Nothing
@@ -36,4 +36,4 @@ fields:
 methods: []
 sourcePath: src/migrations/chaining-migration.ts
 createdAt: '2026-09-26T21:12:09.954Z'
-updatedAt: '2026-09-30T21:05:06.884Z'
+updatedAt: '2026-10-04T10:19:57.845Z'

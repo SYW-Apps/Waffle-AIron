@@ -19,7 +19,7 @@ fields:
     description: Optional ISO-8601 token expiry.
     optional: true
   - name: projects
-    type: string[]
+    type: list<string>
     description: >-
       The project ids the token may act on — the token's narrowing. Required and non-empty: ["*"] is
       the owner's full accessible set and must be written to mean it.
@@ -27,4 +27,4 @@ fields:
 methods: []
 sourcePath: src/server/identity.ts
 createdAt: '2026-07-08T20:17:13.853Z'
-updatedAt: '2026-10-03T17:07:28.354Z'
+updatedAt: '2026-10-04T10:21:17.643Z'

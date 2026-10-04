@@ -13,7 +13,7 @@ description: >-
 subsystem: sdd_validator
 fields:
   - name: ownedMembers
-    type: Set<string>
+    type: set<string>
     description: >-
       The member blocks a legal claim was made on — the domain of ownerOf; a block outside it is a
       facade or standalone
@@ -21,8 +21,8 @@ fields:
 methods:
   - name: ownerOf
     signature: 'ownerOf(memberId: string): string | undefined'
-    returns: string | undefined
+    returns: string?
     description: The pattern that owns a member block, or none when no legal claim was made on it
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:32.070Z'
-updatedAt: '2026-09-19T11:07:12.010Z'
+updatedAt: '2026-10-04T10:20:36.029Z'

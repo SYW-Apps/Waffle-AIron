@@ -9,8 +9,8 @@ methods:
     description: >-
       List organization units, narrowed to the direct children of parentId when supplied, otherwise
       all units.
-    signature: 'listUnits(parentId?: string): OrganizationUnitRecord[]'
-    returns: OrganizationUnitRecord[]
+    signature: 'listUnits(parentId?: string): list<OrganizationUnitRecord>'
+    returns: list<OrganizationUnitRecord>
     params:
       - name: parentId
         type: string
@@ -19,8 +19,8 @@ methods:
     description: >-
       List project placements narrowed by project id and/or organization unit id, otherwise all
       placements.
-    signature: 'listPlacements(projectId?: string, unitId?: string): ProjectPlacement[]'
-    returns: ProjectPlacement[]
+    signature: 'listPlacements(projectId?: string, unitId?: string): list<ProjectPlacement>'
+    returns: list<ProjectPlacement>
     params:
       - name: projectId
         type: string
@@ -30,11 +30,11 @@ methods:
         optional: true
   - name: getUnit
     description: Return one organization unit by id, or null when absent.
-    signature: 'getUnit(id: string): OrganizationUnitRecord | null'
-    returns: OrganizationUnitRecord | null
+    signature: 'getUnit(id: string): OrganizationUnitRecord?'
+    returns: OrganizationUnitRecord?
     params:
       - name: id
         type: string
 status: complete
 createdAt: '2026-07-09T22:05:48.954Z'
-updatedAt: '2026-10-03T20:54:00.618Z'
+updatedAt: '2026-10-04T10:19:08.517Z'

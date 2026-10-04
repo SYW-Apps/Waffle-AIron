@@ -6,14 +6,14 @@ description: >-
   to how DocPage is what a documentation producer (Notion) renders.
 fields:
   - name: nodes
-    type: GraphNode[]
+    type: list<GraphNode>
     description: Component nodes
     optional: false
   - name: edges
-    type: GraphEdge[]
+    type: list<GraphEdge>
     description: dependsOn edges
     optional: false
 methods: []
 sourcePath: src/producers/types.ts
 createdAt: '2026-07-04T18:03:58.004Z'
-updatedAt: '2026-09-19T11:07:08.374Z'
+updatedAt: '2026-10-04T10:20:15.631Z'

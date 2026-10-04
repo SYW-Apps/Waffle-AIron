@@ -10,14 +10,14 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: passwordLogin
-    type: boolean
+    type: bool
     description: >-
       Whether the built-in admin password login is configured (BOTH WAIRON_ADMIN_USER and
       WAIRON_ADMIN_PASSWORD set on the server). The login screen shows the username/password form
       only when true.
     optional: false
   - name: providers
-    type: object[]
+    type: list<any>
     description: >-
       One entry per ENABLED identity provider, each exactly { id, displayName } — displayName is the
       admin-set label, defaulting to the provider id. Only what a login page needs to render a
@@ -26,4 +26,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-14T12:53:32.525Z'
-updatedAt: '2026-09-19T11:07:21.582Z'
+updatedAt: '2026-10-04T10:21:28.874Z'

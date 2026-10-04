@@ -32,8 +32,8 @@ methods:
     description: >-
       Begin a browser SSO sign-in, forwarding to the web orchestrator, and hand back the provider
       authorization URL for the browser to follow.
-    signature: 'startSignIn(providerId: string, redirectUri: string): string'
-    returns: string
+    signature: 'startSignIn(providerId: string, redirectUri: string): async string'
+    returns: async string
     params:
       - name: providerId
         type: string
@@ -47,8 +47,8 @@ methods:
     description: >-
       Handle the SSO provider callback, forwarding to the web orchestrator to create the session,
       then set the session cookie and return the new session id.
-    signature: 'completeSignIn(state: string, code: string, expectedNonce: string): string'
-    returns: string
+    signature: 'completeSignIn(state: string, code: string, expectedNonce: string): async string'
+    returns: async string
     params:
       - name: state
         type: string
@@ -93,7 +93,7 @@ methods:
     description: >-
       Return the live level-of-detail graph for the requested tier/project/level by forwarding to
       the web orchestrator's getGraph.
-    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
+    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: int): WebGraphModel'
     returns: WebGraphModel
     params:
       - name: sessionId
@@ -107,7 +107,7 @@ methods:
           rather than showing one
         optional: false
       - name: level
-        type: number
+        type: int
     endpoint:
       transport: HTTP
       method: GET
@@ -159,8 +159,8 @@ methods:
     description: >-
       List hosted users in the caller's scope; forwards the session to
       web_admin_orchestrator.listUsers.
-    signature: 'adminListUsers(sessionId: string, project?: string): HostedUserRecord[]'
-    returns: HostedUserRecord[]
+    signature: 'adminListUsers(sessionId: string, project?: string): list<HostedUserRecord>'
+    returns: list<HostedUserRecord>
     params:
       - name: sessionId
         type: string
@@ -203,8 +203,8 @@ methods:
     description: >-
       List identity-provider (SSO) configurations; forwards to
       web_admin_orchestrator.listIdentityProviders.
-    signature: 'adminListProviders(sessionId: string): IdentityProviderConfig[]'
-    returns: IdentityProviderConfig[]
+    signature: 'adminListProviders(sessionId: string): list<IdentityProviderConfig>'
+    returns: list<IdentityProviderConfig>
     params:
       - name: sessionId
         type: string
@@ -244,8 +244,8 @@ methods:
       path: /web/admin/providers/remove
   - name: adminListOrgUnits
     description: List organization units; forwards to web_admin_orchestrator.listOrganizationUnits.
-    signature: 'adminListOrgUnits(sessionId: string): OrganizationUnitRecord[]'
-    returns: OrganizationUnitRecord[]
+    signature: 'adminListOrgUnits(sessionId: string): list<OrganizationUnitRecord>'
+    returns: list<OrganizationUnitRecord>
     params:
       - name: sessionId
         type: string
@@ -287,7 +287,7 @@ methods:
     description: >-
       Mint a single-project MCP token for an AI agent; forwards to
       web_admin_orchestrator.mintProjectToken. User self-service, session-authorized.
-    signature: 'mintAgentToken(sessionId: string, projectId: string, write: boolean): string'
+    signature: 'mintAgentToken(sessionId: string, projectId: string, write: bool): string'
     returns: string
     params:
       - name: sessionId
@@ -295,7 +295,7 @@ methods:
       - name: projectId
         type: string
       - name: write
-        type: boolean
+        type: bool
     endpoint:
       transport: HTTP
       method: POST
@@ -315,8 +315,8 @@ methods:
       path: /web/tokens/revoke
   - name: listAgentTokens
     description: List the caller's own MCP tokens; forwards to web_admin_orchestrator.listMyTokens.
-    signature: 'listAgentTokens(sessionId: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
+    signature: 'listAgentTokens(sessionId: string): list<ApiKeyRecord>'
+    returns: list<ApiKeyRecord>
     params:
       - name: sessionId
         type: string
@@ -331,8 +331,8 @@ methods:
       draws a member's crumb to its parent (named only when the parent is itself in the list, a
       neutral crumb otherwise) and lists under each project the members the list holds whose
       parentProjectId names it. Nothing the caller cannot read is listed or named.
-    signature: 'projectList(sessionId: string): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    signature: 'projectList(sessionId: string): list<HostedProjectRecord>'
+    returns: list<HostedProjectRecord>
     params:
       - name: sessionId
         type: string
@@ -418,8 +418,8 @@ methods:
     description: >-
       List the configured secret ref names (never values); forwards to
       web_admin_orchestrator.listSecretRefs. For the IdP form's clientSecretRef picker.
-    signature: 'adminListSecretRefs(sessionId: string): string[]'
-    returns: string[]
+    signature: 'adminListSecretRefs(sessionId: string): list<string>'
+    returns: list<string>
     params:
       - name: sessionId
         type: string
@@ -460,8 +460,8 @@ methods:
       path: /web/admin/org/units/remove
   - name: adminListRoles
     description: List permission roles; forwards to web_admin_orchestrator.listRoles.
-    signature: 'adminListRoles(sessionId: string): Role[]'
-    returns: Role[]
+    signature: 'adminListRoles(sessionId: string): list<Role>'
+    returns: list<Role>
     params:
       - name: sessionId
         type: string
@@ -518,8 +518,8 @@ methods:
       subsystem its project no longer declares is kept and shown labelled "subsystem not found".
     signature: >-
       adminListAssignments(sessionId: string, scopeKind?: string, scopeId?: string, subjectKind?:
-      string, subjectId?: string): PermissionAssignment[]
-    returns: PermissionAssignment[]
+      string, subjectId?: string): list<PermissionAssignment>
+    returns: list<PermissionAssignment>
     params:
       - name: sessionId
         type: string
@@ -613,8 +613,8 @@ methods:
       path: /web/admin/roles/unbind
   - name: adminListGlobalPacks
     description: List server-global packs; forwards to project_ops_orchestrator.listGlobalPacks.
-    signature: 'adminListGlobalPacks(sessionId: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'adminListGlobalPacks(sessionId: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: sessionId
         type: string
@@ -654,8 +654,8 @@ methods:
       path: /web/admin/packs/remove
   - name: projectPacksList
     description: List one project's registered packs; forwards to project_ops_orchestrator.listProjectPacks.
-    signature: 'projectPacksList(sessionId: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'projectPacksList(sessionId: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: sessionId
         type: string
@@ -773,8 +773,8 @@ methods:
     description: >-
       List one project's configured producer targets; forwards to
       project_ops_orchestrator.listProducers.
-    signature: 'projectProducersList(sessionId: string, project: string): ProducerConfig[]'
-    returns: ProducerConfig[]
+    signature: 'projectProducersList(sessionId: string, project: string): list<ProducerConfig>'
+    returns: list<ProducerConfig>
     params:
       - name: sessionId
         type: string
@@ -822,8 +822,8 @@ methods:
       path: /web/projects/producers/remove
   - name: projectProducerRun
     description: Run a configured producer projection; forwards to project_ops_orchestrator.produceProducer.
-    signature: 'projectProducerRun(sessionId: string, project: string, target: string): void'
-    returns: void
+    signature: 'projectProducerRun(sessionId: string, project: string, target: string): async void'
+    returns: async void
     params:
       - name: sessionId
         type: string
@@ -929,8 +929,8 @@ methods:
       Set a project's periodic-sync cadence (interval + skip-if-clean); forwards to
       project_ops_orchestrator.configureGitSync.
     signature: >-
-      projectGitSyncConfig(sessionId: string, project: string, periodicSyncMinutes?: number,
-      skipIfClean?: boolean): void
+      projectGitSyncConfig(sessionId: string, project: string, periodicSyncMinutes?: int,
+      skipIfClean?: bool): void
     returns: void
     params:
       - name: sessionId
@@ -938,10 +938,10 @@ methods:
       - name: project
         type: string
       - name: periodicSyncMinutes
-        type: number
+        type: int
         optional: true
       - name: skipIfClean
-        type: boolean
+        type: bool
         optional: true
     endpoint:
       transport: HTTP
@@ -951,8 +951,8 @@ methods:
     description: >-
       The scope-filtered, paginated, redacted audit viewer; forwards to
       project_ops_orchestrator.queryAuditEvents (filters from query params).
-    signature: 'adminAuditQuery(sessionId: string, query: AuditQuery): AuditEvent[]'
-    returns: AuditEvent[]
+    signature: 'adminAuditQuery(sessionId: string, query: AuditQuery): list<AuditEvent>'
+    returns: list<AuditEvent>
     params:
       - name: sessionId
         type: string
@@ -966,8 +966,8 @@ methods:
     description: >-
       The scoped audit-event count for pagination; forwards to
       project_ops_orchestrator.countAuditEvents.
-    signature: 'adminAuditCount(sessionId: string, query: AuditQuery): number'
-    returns: number
+    signature: 'adminAuditCount(sessionId: string, query: AuditQuery): int'
+    returns: int
     params:
       - name: sessionId
         type: string
@@ -1005,8 +1005,8 @@ methods:
     description: >-
       List the container-level backup bindings in the caller's admin reach; forwards to
       project_ops_orchestrator.listBackingBindings.
-    signature: 'adminListGitBacking(sessionId: string): GitBackingBinding[]'
-    returns: GitBackingBinding[]
+    signature: 'adminListGitBacking(sessionId: string): list<GitBackingBinding>'
+    returns: list<GitBackingBinding>
     params:
       - name: sessionId
         type: string
@@ -1054,8 +1054,8 @@ methods:
       path: /web/admin/git-backing/remove
   - name: adminSyncGitBacking
     description: Run a container-level backup sync now; forwards to project_ops_orchestrator.syncBackingScope.
-    signature: 'adminSyncGitBacking(sessionId: string, bindingId: string): boolean'
-    returns: boolean
+    signature: 'adminSyncGitBacking(sessionId: string, bindingId: string): bool'
+    returns: bool
     params:
       - name: sessionId
         type: string
@@ -1082,8 +1082,8 @@ methods:
       path: /web/admin/share
   - name: adminListShareLinks
     description: List a project's share links; forwards to share_admin_orchestrator.listShareLinks.
-    signature: 'adminListShareLinks(sessionId: string, projectId: string): ShareLink[]'
-    returns: ShareLink[]
+    signature: 'adminListShareLinks(sessionId: string, projectId: string): list<ShareLink>'
+    returns: list<ShareLink>
     params:
       - name: sessionId
         type: string
@@ -1138,15 +1138,15 @@ methods:
       path: /web/admin/share/remove
   - name: adminGetShareAccessLog
     description: Read a link's access log; forwards to share_admin_orchestrator.getShareAccessLog.
-    signature: 'adminGetShareAccessLog(sessionId: string, linkId: string, limit: number): ShareAccessEntry[]'
-    returns: ShareAccessEntry[]
+    signature: 'adminGetShareAccessLog(sessionId: string, linkId: string, limit: int): list<ShareAccessEntry>'
+    returns: list<ShareAccessEntry>
     params:
       - name: sessionId
         type: string
       - name: linkId
         type: string
       - name: limit
-        type: number
+        type: int
     endpoint:
       transport: HTTP
       method: GET
@@ -1202,8 +1202,8 @@ methods:
     description: >-
       List the profiles available for selection (built-in + server-global pack profiles, each tagged
       with its source); forwards to project_ops_orchestrator.listAvailableProfiles.
-    signature: 'availableProfilesList(sessionId: string): AvailableProfile[]'
-    returns: AvailableProfile[]
+    signature: 'availableProfilesList(sessionId: string): list<AvailableProfile>'
+    returns: list<AvailableProfile>
     params:
       - name: sessionId
         type: string
@@ -1215,8 +1215,8 @@ methods:
     description: >-
       List the server-global packs a project may adopt (the instance catalog with contents);
       forwards to project_ops_orchestrator.listAdoptableProjectPacks.
-    signature: 'projectPacksAdoptable(sessionId: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'projectPacksAdoptable(sessionId: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: sessionId
         type: string
@@ -1289,8 +1289,8 @@ methods:
       project_ops_orchestrator.listProjectProfiles with the session as the credential. The
       project-type picker reads this instead of the instance-wide /web/admin/profiles catalog, which
       cannot see a project's own packs and cannot say which profiles still need adopting.
-    signature: 'projectProfilesList(sessionId: string, project: string): AvailableProfile[]'
-    returns: AvailableProfile[]
+    signature: 'projectProfilesList(sessionId: string, project: string): list<AvailableProfile>'
+    returns: list<AvailableProfile>
     params:
       - name: sessionId
         type: string
@@ -1308,8 +1308,8 @@ methods:
       application/zip with a download disposition naming the project. Requires project:read over the
       project upstream.
     signature: >-
-      projectTreeExport(sessionId: string, project: string, includeDerived?: boolean, allowPartial?:
-      boolean): TreeExportResult
+      projectTreeExport(sessionId: string, project: string, includeDerived?: bool, allowPartial?:
+      bool): TreeExportResult
     returns: TreeExportResult
     params:
       - name: sessionId
@@ -1317,10 +1317,10 @@ methods:
       - name: project
         type: string
       - name: includeDerived
-        type: boolean
+        type: bool
         optional: true
       - name: allowPartial
-        type: boolean
+        type: bool
         description: >-
           Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left
           out in the result, instead of refusing the whole export.
@@ -1337,8 +1337,8 @@ methods:
       project:admin over the project upstream, refuses executable entries, and reports where the
       replaced tree was backed up.
     signature: >-
-      projectTreeImport(sessionId: string, project: string, archive: bytes, replaceExisting?:
-      boolean): TreeImportResult
+      projectTreeImport(sessionId: string, project: string, archive: bytes, replaceExisting?: bool):
+      TreeImportResult
     returns: TreeImportResult
     params:
       - name: sessionId
@@ -1348,7 +1348,7 @@ methods:
       - name: archive
         type: bytes
       - name: replaceExisting
-        type: boolean
+        type: bool
         optional: true
     endpoint:
       transport: HTTP
@@ -1398,8 +1398,8 @@ methods:
       path: /web/admin/health
   - name: adminGetUsage
     description: The resource usage snapshots, forwarding to the operations orchestrator (operations:read).
-    signature: 'adminGetUsage(sessionId: string): ResourceUsageSnapshot[]'
-    returns: ResourceUsageSnapshot[]
+    signature: 'adminGetUsage(sessionId: string): list<ResourceUsageSnapshot>'
+    returns: list<ResourceUsageSnapshot>
     params:
       - name: sessionId
         type: string
@@ -1411,8 +1411,8 @@ methods:
     description: >-
       The approval requests pending in the caller's scope, forwarding to the project lifecycle
       orchestrator (approval:decide).
-    signature: 'adminListApprovals(sessionId: string): ApprovalRequest[]'
-    returns: ApprovalRequest[]
+    signature: 'adminListApprovals(sessionId: string): list<ApprovalRequest>'
+    returns: list<ApprovalRequest>
     params:
       - name: sessionId
         type: string
@@ -1535,8 +1535,8 @@ methods:
       is in that list, and a source.hosted producer when its record is. The SPA renders it on the
       project page's Relations tab, one row per external with its health and reason — the same word
       the canvas's edges carry.
-    signature: 'projectExternalsStatus(sessionId: string, projectId: string): ExternalStatus[]'
-    returns: ExternalStatus[]
+    signature: 'projectExternalsStatus(sessionId: string, projectId: string): list<ExternalStatus>'
+    returns: list<ExternalStatus>
     params:
       - name: sessionId
         type: string
@@ -1574,4 +1574,4 @@ methods:
       path: /web/admin/permissions/explain
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-03T20:54:11.873Z'
+updatedAt: '2026-10-04T10:32:14.252Z'

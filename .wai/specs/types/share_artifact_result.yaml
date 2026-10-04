@@ -7,7 +7,7 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: found
-    type: boolean
+    type: bool
     optional: false
   - name: outcome
     type: string
@@ -29,4 +29,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-17T22:32:54.133Z'
-updatedAt: '2026-07-24T09:47:47.193Z'
+updatedAt: '2026-10-04T10:21:03.079Z'

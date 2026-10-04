@@ -8,13 +8,13 @@ methods:
   - name: listSnapshots
     description: All surface snapshots available to this project, via the surface portal.
     signature: 'listSnapshots(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    returns: list<SurfaceSnapshot>
   - name: listPinnedExternals
     description: >-
       The bound project's declared externals with their lock entries and pinned snapshots, via the
       surface portal — the owner's gate judges references into other projects against these alone.
-    signature: 'listPinnedExternals(): PinnedExternal[]'
-    returns: PinnedExternal[]
+    signature: 'listPinnedExternals(): list<PinnedExternal>'
+    returns: list<PinnedExternal>
     params: []
   - name: getExternalsStatus
     description: >-
@@ -22,16 +22,16 @@ methods:
       producer, via the surface portal — what a family run turns into EXTERNAL_INCOMPATIBLE,
       EXTERNAL_DRIFTED and EXTERNAL_CHECK_UNAVAILABLE. The caller must gate on reach itself: a
       producer outside the request's reach comes back outOfReach, unread.
-    signature: 'getExternalsStatus(): ExternalStatus[]'
-    returns: ExternalStatus[]
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
     params: []
   - name: pinnedParent
     description: >-
       A part's pinned parent, via the surface portal — what the owner's gate opened at a part judges
       it against alone (stage 8); null at a project.
-    signature: 'pinnedParent(): PinnedParent | null'
-    returns: PinnedParent | null
+    signature: 'pinnedParent(): PinnedParent?'
+    returns: PinnedParent?
     params: []
 status: complete
 createdAt: '2026-07-10T23:14:09.299Z'
-updatedAt: '2026-10-02T20:25:13.480Z'
+updatedAt: '2026-10-04T10:19:46.518Z'

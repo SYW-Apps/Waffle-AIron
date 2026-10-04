@@ -14,49 +14,49 @@ fields:
     description: 'Admin API exposure mode: "disabled", "local_only", "private_network", or "public".'
     optional: false
   - name: adminUiEnabled
-    type: boolean
+    type: bool
     description: Whether the optional browser admin UI is served.
     optional: false
   - name: identityApiEnabled
-    type: boolean
+    type: bool
     description: Whether the draft identity/audit control-plane API is served over HTTP.
     optional: false
   - name: landscapeApiEnabled
-    type: boolean
+    type: bool
     description: Whether the draft landscape control-plane API is served over HTTP.
     optional: false
   - name: projectPolicyApiEnabled
-    type: boolean
+    type: bool
     description: Whether the draft project policy control-plane API is served over HTTP.
     optional: false
   - name: cliControlEnabled
-    type: boolean
+    type: bool
     description: >-
       Whether local CLI/container execution may use the same control workflows even when HTTP admin
       APIs are disabled.
     optional: false
   - name: requireTls
-    type: boolean
+    type: bool
     description: >-
       Whether externally exposed HTTP control-plane surfaces must be served behind TLS or trusted
       TLS termination.
     optional: false
   - name: allowedOrigins
-    type: string[]
+    type: list<string>
     description: Optional allowed browser origins for UI/control-plane requests.
     optional: true
   - name: allowedNetworks
-    type: string[]
+    type: list<string>
     description: Optional CIDR/network labels allowed to reach private-network control-plane surfaces.
     optional: true
   - name: operationsApiEnabled
-    type: boolean
+    type: bool
     description: >-
       Whether the operations control-plane API for read-only health, usage, and advisory quota
       reporting is served over HTTP.
     optional: false
   - name: webUiEnabled
-    type: boolean
+    type: bool
     description: 'Whether the browser web UI (canvas, specs, admin) is served. Opt-in: default false.'
     optional: false
 methods:
@@ -71,4 +71,4 @@ methods:
     symbol: effectiveExposure
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:28.871Z'
-updatedAt: '2026-10-03T17:53:23.196Z'
+updatedAt: '2026-10-04T10:20:16.943Z'

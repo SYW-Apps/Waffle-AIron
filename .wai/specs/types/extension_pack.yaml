@@ -17,47 +17,47 @@ fields:
     description: The pack's declared name.
     optional: false
   - name: profiles
-    type: ProfileDef[]
+    type: list<ProfileDef>
     description: Custom architectural profiles, keyed by profile id.
     optional: false
   - name: languages
-    type: LanguagePackDef[]
+    type: list<LanguagePackDef>
     description: Custom language/platform tables, keyed by language.
     optional: false
   - name: rules
-    type: SddRule[]
+    type: list<SddRule>
     description: Programmatic conformance rules; empty for declarative packs.
     optional: false
   - name: skills
-    type: PackSkill[]
+    type: list<PackSkill>
     description: Pack-provided AI-agent skills, installed to client targets and the MCP resource mirror.
     optional: false
   - name: patterns
-    type: PatternDef[]
+    type: list<PatternDef>
     description: Named, versioned reusable pattern definitions referenceable by specs.
     optional: false
   - name: guarantees
-    type: string[]
+    type: list<string>
     description: >-
       Pack-declared semantic guarantee tokens extending the builtin vocabulary
       (idempotent/atomic/transactional/exactly-once); a referenced token that is neither builtin nor
       declared by any loaded pack is flagged UNKNOWN_GUARANTEE.
     optional: false
   - name: assertions
-    type: PackAssertion[]
+    type: list<PackAssertion>
     description: >-
       Declarative rule assertions — instances of the closed kinds (forbid-edge / require-field /
       endpoint-shape), the hosted-safe doctrine channel; an unknown kind fails the pack load loudly.
     optional: false
   - name: instructions
-    type: PackInstructionBlock[]
+    type: list<PackInstructionBlock>
     description: >-
       Connecting-agent guidance appended to wairon's own MCP initialize instructions under an
       attributed per-pack heading, in pack load order. A pack contributes its platform delta only —
       wairon owns and teaches the SDD model itself.
     optional: false
   - name: applyByDefault
-    type: boolean
+    type: bool
     description: >-
       Seed this pack into the selections of projects created FROM NOW ON (wairon init) rather than
       applying it retroactively to every project on the machine. This is what a machine-wide install
@@ -85,7 +85,7 @@ methods:
     symbol: packSettings
   - name: changesAgainst
     signature: 'changesAgainst(baseline: DoctrineBaseline): DoctrineChange[]'
-    returns: DoctrineChange[]
+    returns: list<DoctrineChange>
     description: >-
       Everything this pack changes against wairon's defaults, as neutral changes: per profile, each
       rules.sddRuleSeverity entry against the baseline default (loosened, raised or off; a code the
@@ -99,4 +99,4 @@ methods:
     sourcePath: src/models/pack-impact.ts
     symbol: doctrineChanges
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-09-29T16:41:28.916Z'
+updatedAt: '2026-10-04T10:20:08.623Z'

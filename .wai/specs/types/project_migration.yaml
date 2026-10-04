@@ -28,18 +28,18 @@ fields:
       reported.
     optional: true
   - name: exports
-    type: PlannedExport[]
+    type: list<PlannedExport>
     description: >-
       The L0 entries apply adds: re-exports for the references other projects make, own `{ typeDef
       }` entries for the project-level types they use, and the entries carried from its legacy
       mount, in source then item order (own types first).
     optional: false
   - name: externals
-    type: PlannedExternal[]
+    type: list<PlannedExternal>
     description: The externals apply declares in its project.yaml, in alias order.
     optional: false
   - name: pins
-    type: string[]
+    type: list<string>
     description: >-
       The aliases apply pins LAST, once every other write is done: each planned external, each
       existing one whose producer gains entries or through which the project gains imports, and each
@@ -47,7 +47,7 @@ fields:
       never re-pinned here: that would hide a producer's change).
     optional: false
   - name: supersededPins
-    type: string[]
+    type: list<string>
     description: >-
       The storage keys of its stage-1 family pins in .wai/surfaces (the parent's family surface and
       every sibling pin): nothing reads them since stage 3, so apply deletes them once the externals
@@ -55,7 +55,7 @@ fields:
       count, never one line per pin.
     optional: false
   - name: createsSystem
-    type: boolean
+    type: bool
     description: >-
       Whether apply writes a minimal L0 first: the project gains export entries and has no L0 of its
       own. The minimal L0 is new content, so it goes through the gated authoring seam: its name is
@@ -63,13 +63,13 @@ fields:
       line naming it an exporting project when there is none), and nothing else.
     optional: false
   - name: members
-    type: PlannedMember[]
+    type: list<PlannedMember>
     description: >-
       The legacy L1 mounts apply moves into this project's `members`, each with what it carries, in
       declaration order.
     optional: false
   - name: droppedKeys
-    type: string[]
+    type: list<string>
     description: >-
       Keys the project's stored L0 file carries that the L0 schema does not know, which apply's
       first gated L0 write will drop (the dry run's strippedKeys, e.g. `status: draft` on Waffler's
@@ -77,7 +77,7 @@ fields:
       nothing is dropped silently; empty when there are none or the project gains no L0 entry.
     optional: false
   - name: imports
-    type: PlannedImport[]
+    type: list<PlannedImport>
     description: >-
       The `use` entries apply adds to this project's externals and members (stage 4's positional
       step): one per (alias, public name), each listing every bare reference it makes resolve, in
@@ -85,7 +85,7 @@ fields:
       is declared.
     optional: false
   - name: locations
-    type: string[]
+    type: list<string>
     description: >-
       Stage 8's one doctor step, this project's share: the aliases of its members declared with the
       deprecated long-form `path` key (PositionMigrationPlan.locations), in declaration order, each
@@ -96,4 +96,4 @@ fields:
 methods: []
 sourcePath: src/migrations/chaining-migration.ts
 createdAt: '2026-09-26T21:11:55.782Z'
-updatedAt: '2026-10-02T21:40:42.672Z'
+updatedAt: '2026-10-04T10:20:51.226Z'

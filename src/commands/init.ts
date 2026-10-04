@@ -447,7 +447,7 @@ async function executeInit(
   if (targetTypes.includes('claude')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
-      await runMcpInstall({ global: false, backend: 'claude' });
+      runMcpInstall({ global: false, backend: 'claude' });
     } catch (err) {
       logger.warn(`Failed to automatically register MCP server for Claude: ${err}`);
     }
@@ -458,7 +458,7 @@ async function executeInit(
   if (targetTypes.includes('gemini') || targetTypes.includes('agy')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
-      await runMcpInstall({ backend: 'gemini', global: false });
+      runMcpInstall({ backend: 'gemini', global: false });
     } catch (err) {
       logger.warn(`Failed to automatically register MCP server for Antigravity: ${err}`);
     }

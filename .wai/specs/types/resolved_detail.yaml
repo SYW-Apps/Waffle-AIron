@@ -10,7 +10,7 @@ fields:
     description: full | calls-only | intent
     optional: false
   - name: explicit
-    type: boolean
+    type: bool
     description: >-
       True when the method or its implementation set the level; false when it is the component
       type's default
@@ -18,4 +18,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-14T06:03:29.922Z'
-updatedAt: '2026-09-19T11:07:15.914Z'
+updatedAt: '2026-10-04T10:20:57.801Z'

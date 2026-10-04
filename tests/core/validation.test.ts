@@ -217,8 +217,8 @@ component: comp-a
 methods:
   - name: doSomething
     description: Do something
-    signature: "doSomething(): Promise<void>"
-    returns: "Promise<void>"
+    signature: "doSomething(): async void"
+    returns: "async void"
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -240,9 +240,10 @@ updatedAt: '2026-06-10T22:00:00Z'
 `);
 
     // The clean tree also honors structural conformance: the claimed
-    // sourcePath exists and realizes the contract method.
+    // sourcePath exists and realizes the contract method — completing later,
+    // as its `async void` returns says.
     fs.mkdirSync(path.join(proj.tempDir, 'src'), { recursive: true });
-    fs.writeFileSync(path.join(proj.tempDir, 'src', 'comp-a.ts'), 'export function doSomething(): void {}\n');
+    fs.writeFileSync(path.join(proj.tempDir, 'src', 'comp-a.ts'), 'export async function doSomething(): Promise<void> {}\n');
 
     proj.activate();
     try {
@@ -466,8 +467,8 @@ component: comp-a
 methods:
   - name: doSomething
     description: Do something
-    signature: "doSomething(): Promise<void>"
-    returns: "Promise<void>"
+    signature: "doSomething(): async void"
+    returns: "async void"
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -1708,7 +1709,7 @@ methods:
   - name: delete
     description: Delete something
     signature: "delete(uuid: string, options: { mode: 'raw' | 'wrapped', code?: 10 }) -> void (wrapped bytes)"
-    returns: "void — return comment with raw and persisted"
+    returns: "void"
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
@@ -2389,7 +2390,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
-  it('flags foreign-language builtins in signatures when a targetLanguage is declared', () => {
+  it('judges contract types by the neutral type grammar, never by the target language\'s builtins', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', `
 schemaVersion: 1.0.0
@@ -2441,11 +2442,15 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.activate();
     try {
       const res = validateProject();
-      const foreign = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_BUILTIN');
-      // Vec is a Rust marker → flagged in a TypeScript system; Promise is native → not flagged.
-      expect(foreign).toHaveLength(1);
-      expect(foreign[0].message).toContain('Vec');
-      expect(foreign[0].severity).toBe('warning');
+      // The foreign-builtin check is retired: a contract names no language,
+      // whatever targetLanguage says. What is judged is the stored spelling:
+      // Vec<string> and Promise<string> are aliases of the canonical
+      // `list<string>` and `async string`, which any save writes.
+      expect(res.issues.some(i => i.code === 'LANGUAGE_FOREIGN_BUILTIN')).toBe(false);
+      const stale = res.issues.filter(i => i.code === 'TYPE_SPELLING_STALE').map(i => i.message);
+      expect(stale).toHaveLength(2);
+      expect(stale.some(m => m.includes('"Vec<string>"') && m.includes('"list<string>"'))).toBe(true);
+      expect(stale.some(m => m.includes('"Promise<string>"') && m.includes('"async string"'))).toBe(true);
     } finally {
       proj.cleanup();
     }
@@ -2576,8 +2581,8 @@ component: comp-a
 methods:
   - name: doSomething
     description: Do something
-    signature: "doSomething(): Promise<void>"
-    returns: "Promise<void>"
+    signature: "doSomething(): async void"
+    returns: "async void"
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);

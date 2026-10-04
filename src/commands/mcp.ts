@@ -387,7 +387,7 @@ export function planMcpInstall(options: McpInstallOptions): McpConfigWrite[] {
   }));
 }
 
-export async function runMcpInstall(options: McpInstallOptions = {}): Promise<void> {
+export function runMcpInstall(options: McpInstallOptions = {}): void {
   for (const target of resolveInstallTargets(options)) {
     const agentLabel = target.backend === 'gemini' ? 'Antigravity' : 'Claude';
     // Self-heal: if an entry already exists but points somewhere else (e.g. a
@@ -452,7 +452,7 @@ function reportInstalled(target: InstallTarget, agentLabel: string): void {
 // wairon mcp status  — show whether the MCP server is configured
 // ---------------------------------------------------------------------------
 
-export async function runMcpStatus(): Promise<void> {
+export function runMcpStatus(): void {
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();

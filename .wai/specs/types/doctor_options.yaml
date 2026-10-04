@@ -5,7 +5,7 @@ description: The flags of `wairon doctor`.
 subsystem: sdd_cli
 fields:
   - name: fix
-    type: boolean
+    type: bool
     description: >-
       Apply the repairs before the report: today's fixed steps, then the chaining migration once
       confirmed.
@@ -17,13 +17,13 @@ fields:
       never combines with --fix.
     optional: true
   - name: 'yes'
-    type: boolean
+    type: bool
     description: >-
       Answer the chaining migration's confirmation for a non-interactive run. It does NOT answer a
       write outside the project root — that takes --global as well.
     optional: true
   - name: global
-    type: boolean
+    type: bool
     description: >-
       Consent to the --fix writes outside the project root (a machine-wide MCP configuration, the
       legacy global plugin). Together with --yes it answers their confirmation for a non-interactive
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/commands/doctor.ts
 createdAt: '2026-09-26T21:12:12.389Z'
-updatedAt: '2026-10-01T23:45:53.149Z'
+updatedAt: '2026-10-04T10:20:03.557Z'

@@ -1,0 +1,13 @@
+kind: value-object
+id: pack_path
+name: PackPath
+description: >-
+  A legacy path reference to a pack file, held as a string: what `pack add` (and a hosted install or
+  adopt) registers in `extensions.packs` beside the by-name selections `pack use` records. The
+  pack's name is the file's stem, its basename without a pack extension.
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+holds: string
+createdAt: '2026-10-04T10:27:19.546Z'
+updatedAt: '2026-10-04T11:22:01.474Z'

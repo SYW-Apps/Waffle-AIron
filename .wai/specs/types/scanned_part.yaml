@@ -36,20 +36,20 @@ fields:
       compared by a verdict.
     optional: true
   - name: partOf
-    type: PartOf | null
+    type: PartOf?
     description: >-
       What a non-contained part's own configuration says it belongs to; null for a contained part
       (which has no configuration) and for a non-contained one that declares none
       (MEMBER_KIND_MISMATCH).
     optional: false
   - name: subsystems
-    type: string[]
+    type: list<string>
     description: >-
       The keys of the subsystems its files declare — the declaring project's subsystems that live in
       this part.
     optional: false
   - name: specIds
-    type: string[]
+    type: list<string>
     description: The keys of every spec its files declare, under the declaring root's key.
     optional: false
   - name: contentDigest
@@ -75,4 +75,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-10-02T20:17:18.690Z'
-updatedAt: '2026-10-02T23:58:37.427Z'
+updatedAt: '2026-10-04T10:21:01.417Z'

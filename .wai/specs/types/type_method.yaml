@@ -20,7 +20,7 @@ fields:
       prose
     optional: false
   - name: params
-    type: object[]
+    type: list<any>
     description: >-
       Structured parameters in the method_signature param shape ({name, type, description,
       optional}) — authoritative for type checking when present
@@ -44,7 +44,7 @@ fields:
 methods:
   - name: derivedSignature
     signature: 'derivedSignature(): string | undefined'
-    returns: string | undefined
+    returns: string?
     description: >-
       The signature text its structured params determine, in method_signature.derivedSignature's
       exact form; undefined for a type method without params, whose prose is its signature.
@@ -52,7 +52,7 @@ methods:
     symbol: deriveMethodSignature
   - name: typeRefs
     signature: 'typeRefs(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The type identifiers this type method names, read exactly as method_signature.typeRefs reads a
       contract method's: from its structured params and returns when params are given, else parsed
@@ -61,4 +61,4 @@ methods:
     symbol: methodTypeRefs
 sourcePath: src/models/specs.ts
 createdAt: '2026-10-03T19:31:10.963Z'
-updatedAt: '2026-10-03T20:29:45.739Z'
+updatedAt: '2026-10-04T10:21:22.203Z'

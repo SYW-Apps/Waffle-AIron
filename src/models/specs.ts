@@ -720,11 +720,10 @@ export type Guarantee = z.infer<typeof GuaranteeSchema>;
 export const MethodParamSchema = z.object({
   name: z.string(),
   /**
-   * A primitive/builtin or a defined type id (qualified across subsystems, e.g.
-   * "billing.Invoice"), on its own or inside a generic, an array or a UNION:
-   * `Invoice | null`, `Promise<Invoice | null>`, `Invoice[] | null`. Every
-   * identifier the string names has to resolve — see the grammar on
-   * src/models/type-references.ts.
+   * A type expression in the neutral type grammar (src/models/type-grammar.ts):
+   * a primitive, a named type (`billing.Invoice`, `alias::name`), `list<T>`,
+   * `set<T>`, `map<K, V>`, `T?`, a union of named types. Stored canonical; an
+   * alias (`Invoice[]`, `Invoice | null`, `boolean`) is normalised on write.
    */
   type: z.string(),
   description: z.string().optional(),
@@ -768,8 +767,9 @@ export const MethodSignatureSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
   description: z.string(),
   signature: z.string().optional(), // e.g. "save(key: string, data: Buffer): Promise<void>"
-  // e.g. "Promise<void>", or a union: "Invoice | null" — the commonest shape in
-  // any real tree. See the grammar on src/models/type-references.ts.
+  // A type expression in the neutral grammar, at the returns position — the only
+  // one `async T` and `void` may stand in: "async void", "Invoice?". Stored
+  // canonical; see src/models/type-grammar.ts.
   returns: z.string().optional(),
   /** Structured parameters (authoritative for type checking when present). */
   params: z.array(MethodParamSchema).optional(),
@@ -1433,15 +1433,18 @@ export function implementationSourceFiles(
 // Types: entities and value objects (the data the components operate on).
 // Defined once by their owner; referenced — never redefined — elsewhere.
 // ---------------------------------------------------------------------------
-/** entity | value-object (data) | signature (a named function type: params and returns, nothing else). */
-export const TypeKindSchema = z.enum(['entity', 'value-object', 'signature']);
+/**
+ * entity | value-object (data) | signature (a named function type: params and
+ * returns, nothing else) | enum (a closed, ordered set of named values).
+ */
+export const TypeKindSchema = z.enum(['entity', 'value-object', 'signature', 'enum']);
 export type TypeKind = z.infer<typeof TypeKindSchema>;
 
 export const TypeFieldSchema = z.object({
   name: z.string(),
-  // A primitive, or another type id (qualified across subsystems, e.g.
-  // "billing.Invoice") — on its own or inside a generic, an array or a union
-  // ("Invoice[] | null"). See the grammar on src/models/type-references.ts.
+  // A type expression in the neutral grammar (src/models/type-grammar.ts): a
+  // primitive, a named type ("billing.Invoice"), list/set/map, `T?`, a union
+  // of named types. Stored canonical.
   type: z.string(),
   description: z.string().optional(),
   optional: z.boolean().default(false),
@@ -1521,8 +1524,19 @@ export const InvariantSchema = z.object({
 });
 export type Invariant = z.infer<typeof InvariantSchema>;
 
+/**
+ * enum_value — one value of an enum type: its name, which is also the value as
+ * data carries it, and an optional description. Ordered and unique by nameKey
+ * within its enum (ENUM_MEMBERS); no ordinal and no separate wire value.
+ */
+export const EnumValueSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+});
+export type EnumValue = z.infer<typeof EnumValueSchema>;
+
 export const TypeSpecSchema = z.object({
-  kind: TypeKindSchema, // discriminator — entity | value-object | signature
+  kind: TypeKindSchema, // discriminator — entity | value-object | signature | enum
   id: SpecIdSchema,
   name: z.string(),
   description: z.string().optional(),
@@ -1585,6 +1599,20 @@ export const TypeSpecSchema = z.object({
   params: z.array(MethodParamSchema).optional(),
   /** A signature's one output type; required on kind signature and only there (SIGNATURE_TYPE_MEMBERS). */
   returns: z.string().optional(),
+  /**
+   * An enum's values, in declared order (the order is part of the design),
+   * unique by nameKey; required and non-empty on kind enum and only there
+   * (ENUM_MEMBERS).
+   */
+  values: z.array(EnumValueSchema).optional(),
+  /**
+   * A named scalar's one primitive (string, int, float, bool, bytes, date,
+   * datetime or duration), in place of fields: a value-object that is a
+   * newtype or type alias in every language. Read as a type position (the
+   * grammar's `holds` position); only on a value-object and never beside
+   * fields (NAMED_SCALAR_MEMBERS).
+   */
+  holds: z.string().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -1658,6 +1686,10 @@ export const SurfaceTypeDefSchema = z.object({
   })).optional(),
   /** A signature's one output type; only on kind signature. */
   returns: z.string().optional(),
+  /** An enum's values in declared order; only on kind enum. */
+  values: z.array(EnumValueSchema).optional(),
+  /** A named scalar's one primitive, in place of fields; only on a value-object that declares it. */
+  holds: z.string().optional(),
 });
 export type SurfaceTypeDef = z.infer<typeof SurfaceTypeDefSchema>;
 

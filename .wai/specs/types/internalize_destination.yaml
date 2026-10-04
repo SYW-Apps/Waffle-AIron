@@ -25,7 +25,7 @@ fields:
       such a pack refuses the internalize, naming it.
     optional: true
   - name: exports
-    type: string[]
+    type: list<string>
     description: >-
       The member's public names the parent exports afterwards, each as a re-export from the moved
       subsystem that realizes it at the audience the member gave it: the names other projects of the
@@ -36,4 +36,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-30T20:21:21.371Z'
-updatedAt: '2026-09-30T20:21:21.374Z'
+updatedAt: '2026-10-04T10:20:20.582Z'

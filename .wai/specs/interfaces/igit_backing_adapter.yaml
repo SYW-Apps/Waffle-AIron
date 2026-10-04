@@ -40,8 +40,8 @@ methods:
     description: >-
       Stage the working copy's mirrored content, commit with the bot identity, and push the branch;
       returns false without committing when nothing changed (skip-if-clean).
-    signature: 'commitAndPush(workdir: string, message: string): boolean'
-    returns: boolean
+    signature: 'commitAndPush(workdir: string, message: string): bool'
+    returns: bool
     params:
       - name: workdir
         type: string
@@ -49,4 +49,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-16T15:39:15.327Z'
-updatedAt: '2026-10-03T16:46:37.412Z'
+updatedAt: '2026-10-04T10:18:48.677Z'

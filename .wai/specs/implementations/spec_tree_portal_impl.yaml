@@ -253,10 +253,24 @@ methods:
   - name: resolveSignatures
     narrative:
       - stepNumber: 1
+        description: >-
+          Read the handed interfaces' and types' type positions under the grammar first
+          (interface_spec.canonicalTypes, type_spec.canonicalTypes) — an excerpt's documents are
+          stored forms and may still hold aliases — so a sourced method resolved from the excerpt
+          carries canonical types like every method the scan resolved
+        type: local
+      - stepNumber: 2
         description: Hand the specs to the pure signature resolver and answer what it resolved
         type: call
         targetComponent: signature_resolver
         targetMethod: resolveTree
+  - name: typeSpellingFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: typeSpellingFacts
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T20:28:45.683Z'
+updatedAt: '2026-10-03T22:05:25.882Z'

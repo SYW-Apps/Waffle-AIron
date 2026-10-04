@@ -23,11 +23,11 @@ fields:
       error message when isError is set.
     optional: false
   - name: isError
-    type: boolean
+    type: bool
     description: >-
       Set when the dispatched tool threw; the envelope still travels as a successful HTTP 200
       response so the MCP client sees a tool error rather than a transport failure.
     optional: true
 methods: []
 createdAt: '2026-09-18T19:30:34.884Z'
-updatedAt: '2026-09-18T19:30:35.032Z'
+updatedAt: '2026-10-04T10:20:26.330Z'

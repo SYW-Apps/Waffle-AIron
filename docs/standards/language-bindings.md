@@ -37,6 +37,33 @@ belongs in a Store, runtime state in an Actor.
 
 ---
 
+## Type mapping
+
+Contracts are typed in the neutral grammar of the
+[Architecture Standard](architecture.md#type-expressions-one-neutral-grammar);
+each language spells it with what it has. The TypeScript column is the dialect
+conformance reads code through, and the one an implementer brief carries as
+its `typeMapping`; the others are the idiomatic spellings to follow.
+
+| Neutral | TypeScript | Rust | Python | Go | Java / Kotlin / C# |
+|---|---|---|---|---|---|
+| `string` | `string` | `String` | `str` | `string` | `String` / `String` / `string` |
+| `int`, `float` | `number` | `i64`, `f64` (width per L4) | `int`, `float` | `int64`, `float64` | `long`, `double` |
+| `bool` | `boolean` | `bool` | `bool` | `bool` | `boolean` / `Boolean` / `bool` |
+| `bytes` | `Uint8Array` | `Vec<u8>` | `bytes` | `[]byte` | `byte[]` / `ByteArray` / `byte[]` |
+| `date`, `datetime`, `duration` | `string` (ISO 8601) | `chrono` types | `date`, `datetime`, `timedelta` | `time.Time`, `time.Duration` | `java.time` / `DateTime`, `TimeSpan` |
+| `list<T>` | `T[]` | `Vec<T>` | `list[T]` | `[]T` | `List<T>` |
+| `set<T>` | `Set<T>` | `HashSet<T>` | `set[T]` | `map[T]struct{}` | `Set<T>` |
+| `map<K, V>` | `Record<K, V>` | `HashMap<K, V>` | `dict[K, V]` | `map[K]V` | `Map<K, V>` / `Dictionary<K, V>` |
+| `T?` | `T \| null` | `Option<T>` | `T \| None` | `*T` | nullable `T` / `T?` |
+| `A \| B` | `A \| B` | `enum` with payload | `A \| B` | an interface both implement | `sealed` hierarchy |
+| `async T` | `Promise<T>` | `async fn` → `T` | `async def` → `T` | a blocking call or a channel | `CompletableFuture<T>` / `suspend` / `Task<T>` |
+| enum `E` | `type E = 'a' \| 'b'` | `enum E` | `class E(StrEnum)` | typed `string` constants | `enum E` |
+| named scalar `E` holding `P` | `type E = P` | `struct E(P)` | `E = NewType('E', P)` | `type E P` | a value class / `@JvmInline value class E` / `record struct E(P)` |
+| `any` | `unknown` | `serde_json::Value` | `Any` | `any` | `Object` / `Any` / `object` |
+
+---
+
 ## Concurrency strategy → primitives
 
 ### Default: wait-free reads / in-order serialized writes

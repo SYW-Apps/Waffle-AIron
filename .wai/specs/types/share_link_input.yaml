@@ -17,21 +17,21 @@ fields:
     description: '''snapshot'' (default) | ''live''.'
     optional: false
   - name: artifacts
-    type: string[]
+    type: list<string>
     description: Artifact kinds to capture (canvas | html | openapi).
     optional: false
   - name: expiresAt
     type: string
     optional: true
   - name: allowDownloadHtml
-    type: boolean
+    type: bool
     optional: true
   - name: allowDownloadOpenapi
-    type: boolean
+    type: bool
     optional: true
   - name: frameAncestors
-    type: string[]
+    type: list<string>
     optional: true
 methods: []
 createdAt: '2026-07-17T22:32:40.007Z'
-updatedAt: '2026-07-17T22:32:40.070Z'
+updatedAt: '2026-10-04T10:21:03.764Z'

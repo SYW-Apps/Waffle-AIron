@@ -65,8 +65,8 @@ methods:
       returned view is deduplicated by scope with actionable winning over context.
     signature: >-
       resolveVisibleScopes(subject: PermissionSubject, capability: string, world: PermissionWorld):
-      VisibleScope[]
-    returns: VisibleScope[]
+      list<VisibleScope>
+    returns: list<VisibleScope>
     params:
       - name: subject
         type: PermissionSubject
@@ -88,8 +88,8 @@ methods:
       differently from the project without reading the spec tree.
     signature: >-
       resolveSubsystemReach(subject: PermissionSubject, projectId: string, world: PermissionWorld):
-      SubsystemReach[]
-    returns: SubsystemReach[]
+      list<SubsystemReach>
+    returns: list<SubsystemReach>
     params:
       - name: subject
         type: PermissionSubject
@@ -102,4 +102,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-15T20:28:12.840Z'
-updatedAt: '2026-10-03T13:36:23.280Z'
+updatedAt: '2026-10-04T10:19:14.163Z'

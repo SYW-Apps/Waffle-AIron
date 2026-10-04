@@ -1,0 +1,23 @@
+kind: value-object
+id: enum_value
+name: EnumValue
+description: >-
+  One value of an enum type: its name, which is also the value as data carries it, and an optional
+  description. An enum's values are ordered (the order is part of the design: a narrowest-first
+  track list means something) and unique by reference_resolution.nameKey, because every language
+  derives one identifier from `foo-bar` and `foo_bar` alike. No ordinal and no separate wire value:
+  numeric enum values are not shared across mainstream languages, and the name already settles the
+  serialised form.
+fields:
+  - name: name
+    type: string
+    description: The value's name, exactly as data carries it ('stable', 'local_only')
+    optional: false
+  - name: description
+    type: string
+    description: What the value means
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-03T22:02:30.864Z'
+updatedAt: '2026-10-03T22:21:55.767Z'

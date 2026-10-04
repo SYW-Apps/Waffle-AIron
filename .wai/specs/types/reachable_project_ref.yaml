@@ -11,15 +11,15 @@ fields:
     description: Reachable hosted project id.
     optional: false
   - name: relationIds
-    type: string[]
+    type: list<string>
     description: Cross-project relation ids that make the target reachable from the current project.
     optional: false
   - name: relationKinds
-    type: string[]
+    type: list<string>
     description: Relation kinds visible to the caller, such as "consumes" or "depends_on".
     optional: false
   - name: publicInterfaceIds
-    type: string[]
+    type: list<string>
     description: >-
       Target system public interface ids reachable through those relations. The caller must request
       interface details separately.
@@ -27,4 +27,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:55:00.785Z'
-updatedAt: '2026-09-19T11:07:15.016Z'
+updatedAt: '2026-10-04T10:20:54.154Z'

@@ -55,8 +55,8 @@ methods:
     description: >-
       List the active conformance rule set (built-ins plus loaded pack rules) for `wairon rules
       list`.
-    signature: 'listRules(): SddRule[]'
-    returns: SddRule[]
+    signature: 'listRules(): list<SddRule>'
+    returns: list<SddRule>
     params: []
   - name: validateComponentCandidate
     description: >-
@@ -92,18 +92,18 @@ methods:
       Published: the tests that encode a given set of methods, so a write that changes or deletes
       one can say which tests it just invalidated.
     signature: >-
-      findTestsReferencing(methods: MethodImplementation[], projectRoot: string, testRoots:
-      string[]): TestsToRevisit[]
-    returns: TestsToRevisit[]
+      findTestsReferencing(methods: list<MethodImplementation>, projectRoot: string, testRoots:
+      list<string>): list<TestsToRevisit>
+    returns: list<TestsToRevisit>
     params:
       - name: methods
-        type: MethodImplementation[]
+        type: list<MethodImplementation>
         description: The methods to look for
       - name: projectRoot
         type: string
         description: The root the test roots are resolved within
       - name: testRoots
-        type: string[]
+        type: list<string>
         description: Project-relative test directories; empty answers empty
     guarantees:
       - idempotent
@@ -111,15 +111,15 @@ methods:
     description: >-
       Published read: the ids of wairon's built-in architectural profiles, the built-in half of what
       a projectType may name.
-    signature: 'builtinProfileIds(): string[]'
-    returns: string[]
+    signature: 'builtinProfileIds(): list<string>'
+    returns: list<string>
     params: []
   - name: builtinProjectKinds
     description: >-
       Published read: the ids of wairon's built-in composite project kinds — projectType values that
       are not architectural profiles.
-    signature: 'builtinProjectKinds(): string[]'
-    returns: string[]
+    signature: 'builtinProjectKinds(): list<string>'
+    returns: list<string>
     params: []
   - name: validateFamily
     description: >-
@@ -133,8 +133,8 @@ methods:
       - name: options
         type: ValidationOptions
         description: >-
-          The run's switches; `family` makes the walk up explicit, a numeric `recursive` bounds the
-          member depth
+          The run's switches; `family` makes the walk up explicit, `memberDepth` bounds the member
+          levels
   - name: measurePackImpact
     description: >-
       What one pack write would change on the bound project, measured before it happens: the pack's
@@ -171,11 +171,11 @@ methods:
       record `members`, enforce requireApprovedMembers), `wairon status` and sdd_get_status read, so
       they cannot disagree. Writes nothing. Hosted callers must gate on reach themselves before
       asking about a family.
-    signature: 'familyApprovals(depth?: number): ProjectApproval[]'
-    returns: ProjectApproval[]
+    signature: 'familyApprovals(depth?: int): list<ProjectApproval>'
+    returns: list<ProjectApproval>
     params:
       - name: depth
-        type: number
+        type: int
         description: 'Member levels to include: 1 = direct members, omitted = every level'
         optional: true
     guarantees:
@@ -186,11 +186,11 @@ methods:
       member's externals status read at its own root, stamped with when, a project that could not be
       opened answered with its reason — what the canvas colours its consumption edges from. Writes
       nothing. Callers grant the reach first (a hosted request keeps its credential's).
-    signature: 'familyRelations(): ProjectRelations[]'
-    returns: ProjectRelations[]
+    signature: 'familyRelations(): list<ProjectRelations>'
+    returns: list<ProjectRelations>
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T16:47:00.326Z'
+updatedAt: '2026-10-04T10:54:14.063Z'

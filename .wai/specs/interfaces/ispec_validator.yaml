@@ -96,8 +96,8 @@ methods:
       Return the active conformance rule set — the built-in rules plus the loaded programmatic pack
       rules, in run order — for display by `wairon rules list`. Loads and registers the governing
       packs, then reads the composed sequence.
-    signature: 'listRules(): SddRule[]'
-    returns: SddRule[]
+    signature: 'listRules(): list<SddRule>'
+    returns: list<SddRule>
     params: []
   - name: validateComponentCandidate
     description: >-
@@ -137,18 +137,18 @@ methods:
       Find the tests that encode a given set of methods, resolving the project's declared test roots
       before handing the walk to the source analyzer. A project that declares none answers empty.
     signature: >-
-      findTestsReferencing(methods: MethodImplementation[], projectRoot: string, testRoots:
-      string[]): TestsToRevisit[]
-    returns: TestsToRevisit[]
+      findTestsReferencing(methods: list<MethodImplementation>, projectRoot: string, testRoots:
+      list<string>): list<TestsToRevisit>
+    returns: list<TestsToRevisit>
     params:
       - name: methods
-        type: MethodImplementation[]
+        type: list<MethodImplementation>
         description: The methods to look for
       - name: projectRoot
         type: string
         description: The root the test roots are resolved within
       - name: testRoots
-        type: string[]
+        type: list<string>
         description: Project-relative test directories; empty answers empty
     guarantees:
       - idempotent
@@ -156,17 +156,17 @@ methods:
     description: >-
       The ids of wairon's built-in architectural profiles — the built-in half of the profiles a
       projectType may name. A read of a bundled constant; never fails.
-    signature: 'builtinProfileIds(): string[]'
-    returns: string[]
+    signature: 'builtinProfileIds(): list<string>'
+    returns: list<string>
     params: []
   - name: builtinProjectKinds
     description: >-
       The ids of wairon's built-in composite project kinds (fullstack, system-of-systems, monorepo):
       legal projectType values that are not architectural profiles and carry no doctrine of their
       own. A read of a bundled constant; never fails.
-    signature: 'builtinProjectKinds(): string[]'
-    returns: string[]
+    signature: 'builtinProjectKinds(): list<string>'
+    returns: list<string>
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T16:46:59.175Z'
+updatedAt: '2026-10-04T10:19:39.228Z'

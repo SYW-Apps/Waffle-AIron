@@ -14,7 +14,7 @@ fields:
       method.
     optional: false
   - name: covers
-    type: string[]
+    type: list<string>
     description: >-
       The units the finding aggregates, each named the way the finding's own message names it.
       Omitted when the finding is one indivisible fact.
@@ -22,4 +22,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-19T19:04:12.229Z'
-updatedAt: '2026-09-19T19:04:12.242Z'
+updatedAt: '2026-10-04T10:20:12.624Z'

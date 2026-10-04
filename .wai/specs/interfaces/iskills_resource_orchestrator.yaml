@@ -10,8 +10,8 @@ methods:
     description: >-
       List the built-in SDD skills as MCP resource descriptors for advertisement to connected
       agents.
-    signature: 'list(): SkillResourceDescriptor[]'
-    returns: SkillResourceDescriptor[]
+    signature: 'list(): list<SkillResourceDescriptor>'
+    returns: list<SkillResourceDescriptor>
     params: []
   - name: read
     description: Read one built-in SDD skill's content by MCP resource id, rejecting an unknown id.
@@ -32,4 +32,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T22:02:40.411Z'
-updatedAt: '2026-09-17T20:37:39.672Z'
+updatedAt: '2026-10-04T10:19:35.140Z'

@@ -8,13 +8,13 @@ description: >-
   honestly instead of silently skipping names the instance cannot satisfy.
 fields:
   - name: resolved
-    type: resolved_global_pack[]
+    type: list<resolved_global_pack>
     description: >-
       The packs that resolved, each with its canonical name, serialized content, and originating
       tier.
     optional: false
   - name: unresolved
-    type: string[]
+    type: list<string>
     description: >-
       Requested names with no matching server-global pack in either tier — nothing was installed for
       these; they signal an instance-side gap, not a per-project drift.
@@ -22,4 +22,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-22T17:27:39.078Z'
-updatedAt: '2026-09-19T11:07:12.470Z'
+updatedAt: '2026-10-04T10:20:40.014Z'

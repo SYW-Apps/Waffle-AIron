@@ -18,16 +18,16 @@ fields:
     description: Written output path when one was requested.
     optional: true
   - name: renderedSet
-    type: NamedOpenApiSpec[]
+    type: list<NamedOpenApiSpec>
     description: >-
       One named OpenAPI document per public portal (openapi format), never one combined document;
       narrowed to a single entry when a portal was selected.
     optional: true
   - name: writtenPaths
-    type: string[]
+    type: list<string>
     description: Every written path; a multi-portal export writes one file per portal.
     optional: true
 methods: []
 sourcePath: src/core/surfaces.ts
 createdAt: '2026-07-11T09:48:49.299Z'
-updatedAt: '2026-10-03T17:04:56.687Z'
+updatedAt: '2026-10-04T10:21:14.354Z'

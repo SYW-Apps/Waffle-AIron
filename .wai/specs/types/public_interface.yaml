@@ -34,7 +34,7 @@ fields:
     description: The L3 interface the entry narrows to.
     optional: true
   - name: consumers
-    type: string[]
+    type: list<string>
     description: >-
       The subsystems an own item is published to. Absent, anyone may depend on it; present, only
       these subsystems may — when every entry publishing the component names consumers, the union of
@@ -62,7 +62,7 @@ fields:
 methods:
   - name: isOwnComponentItem
     signature: 'isOwnComponentItem(): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether the entry is an OWN component item — neither a re-export (`from`) nor a type export
       (`typeDef`). Only an own component item publishes a component: the public-surface rules judge
@@ -70,4 +70,4 @@ methods:
     symbol: isOwnComponentEntry
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-09-26T16:16:26.305Z'
+updatedAt: '2026-10-04T10:20:53.508Z'

@@ -14,16 +14,16 @@ methods:
       registers nothing. Under --yes, or with no terminal to ask on, it applies and says so without
       the report. `--global` copies into the machine-wide folder and selects nothing for any
       project, so it shows no report.
-    signature: 'addPack(source: string, global?: boolean, yes?: boolean): void'
-    returns: void
+    signature: 'addPack(source: string, global?: bool, yes?: bool): async void'
+    returns: async void
     params:
       - name: source
         type: string
       - name: global
-        type: boolean
+        type: bool
         optional: true
       - name: 'yes'
-        type: boolean
+        type: bool
         description: Apply without showing the impact report
         optional: true
   - name: listPacks
@@ -38,42 +38,42 @@ methods:
       declining deregisters and deletes nothing. Under --yes, or with no terminal, it removes and
       says so without the report. `--global` removes a machine-wide file and selects nothing for any
       project, so it shows no report.
-    signature: 'removePack(name: string, global?: boolean, yes?: boolean): void'
-    returns: void
+    signature: 'removePack(name: string, global?: bool, yes?: bool): async void'
+    returns: async void
     params:
       - name: name
         type: string
       - name: global
-        type: boolean
+        type: bool
         optional: true
       - name: 'yes'
-        type: boolean
+        type: bool
         description: Remove without showing the impact report
         optional: true
   - name: initPack
     description: >-
       Scaffold a new pack project (`wairon pack init <name>`) via the SDK portal — declarative or
       code variant (--kind), optional skill stub (--skill) — into a target directory.
-    signature: 'initPack(name: string, options?: object): void'
+    signature: 'initPack(name: string, options?: any): void'
     returns: void
     params:
       - name: name
         type: string
       - name: options
-        type: object
+        type: any
         description: '{ kind?: ''declarative''|''code''; dir?: string; skill?: boolean }'
         optional: true
   - name: buildPack
     description: >-
       Build an installable .wpack archive from a pack directory (`wairon pack build [source]`) via
       the SDK portal; write it to <name>-<version>.wpack (or --out) and report the path + size.
-    signature: 'buildPack(source: string, options?: object): void'
+    signature: 'buildPack(source: string, options?: any): void'
     returns: void
     params:
       - name: source
         type: string
       - name: options
-        type: object
+        type: any
         description: '{ out?: string }'
         optional: true
   - name: installPack
@@ -92,14 +92,14 @@ methods:
       terminal, it installs and says the floating selection now resolves to the new version, without
       the report. Other projects on the machine that float on the name are not measured: nothing
       here knows them.
-    signature: 'installPack(source: string, yes?: boolean): void'
-    returns: void
+    signature: 'installPack(source: string, yes?: bool): async void'
+    returns: async void
     params:
       - name: source
         type: string
         description: A pack directory or a .wpack/.zip archive.
       - name: 'yes'
-        type: boolean
+        type: bool
         description: Install without showing the impact report
         optional: true
   - name: uninstallStorePack
@@ -138,14 +138,14 @@ methods:
       pack replaces its existing entry rather than duplicating it (an update: the report then also
       shows the replaced version), and an origin that is not a fetchable URL is reported because CI
       and a fresh clone could not resolve it.
-    signature: 'usePack(spec: string, options?: object): void'
-    returns: void
+    signature: 'usePack(spec: string, options?: any): async void'
+    returns: async void
     params:
       - name: spec
         type: string
         description: A pack name, or name@version.
       - name: options
-        type: object
+        type: any
         description: source / pin / bundle / yes (apply without the report).
         optional: true
   - name: unusePack
@@ -154,13 +154,13 @@ methods:
       in the store; only this project stops applying it. It first shows the removal's impact (the
       stored selection measured with `remove`) and asks; declining writes nothing. Under --yes, or
       with no terminal, it deselects and says so without the report.
-    signature: 'unusePack(name: string, yes?: boolean): void'
-    returns: void
+    signature: 'unusePack(name: string, yes?: bool): async void'
+    returns: async void
     params:
       - name: name
         type: string
       - name: 'yes'
-        type: boolean
+        type: bool
         description: Deselect without showing the impact report
         optional: true
   - name: bundlePack
@@ -172,7 +172,7 @@ methods:
       version, because a bundle is a copy of one specific version and a floating selection would let
       the committed bytes and the declared intent drift apart. With no argument it bundles every
       selection already marked for bundling.
-    signature: 'bundlePack(name?: string, options?: object): void'
+    signature: 'bundlePack(name?: string, options?: any): void'
     returns: void
     params:
       - name: name
@@ -180,7 +180,7 @@ methods:
         description: 'Optional pack name; omitted bundles every selection marked bundle: true.'
         optional: true
       - name: options
-        type: object
+        type: any
         description: all — bundle every selection this project declares.
         optional: true
   - name: syncPacks
@@ -194,8 +194,8 @@ methods:
       naming the manual route. A pinned integrity digest is verified at install time rather than
       being discovered later by the gate. Fetching happens ONLY here and in `pack install <url>` —
       never during validation — because the core workflow must work offline.
-    signature: 'syncPacks(): void'
-    returns: void
+    signature: 'syncPacks(): async void'
+    returns: async void
     params: []
   - name: impactPack
     description: >-
@@ -214,4 +214,4 @@ methods:
         description: A pack name, or name@version.
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-10-03T17:10:41.977Z'
+updatedAt: '2026-10-04T10:31:58.164Z'

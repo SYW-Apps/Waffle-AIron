@@ -18,8 +18,8 @@ methods:
       identity provider adapter, append a best-effort web.signin.start (info) audit event, and
       return the authorization URL. Unauthenticated by nature; no caller credential is required or
       accepted.
-    signature: 'startSignIn(providerId: string, redirectUri: string): string'
-    returns: string
+    signature: 'startSignIn(providerId: string, redirectUri: string): async string'
+    returns: async string
     params:
       - name: providerId
         type: string
@@ -43,8 +43,8 @@ methods:
       grant filtered out, so no SSO path can ever yield a *:* session. Append a best-effort
       web.signin (security) audit event and return the new session id (which the portal sets as the
       session cookie). Unauthenticated by nature.
-    signature: 'completeSignIn(state: string, code: string, expectedNonce: string): string'
-    returns: string
+    signature: 'completeSignIn(state: string, code: string, expectedNonce: string): async string'
+    returns: async string
     params:
       - name: state
         type: string
@@ -132,4 +132,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-11T11:33:17.127Z'
-updatedAt: '2026-09-24T13:20:11.554Z'
+updatedAt: '2026-10-04T10:32:15.207Z'

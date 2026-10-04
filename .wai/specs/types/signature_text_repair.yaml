@@ -17,14 +17,14 @@ fields:
     description: interface | type
     optional: false
   - name: regenerated
-    type: StaleSignatureText[]
+    type: list<StaleSignatureText>
     description: Each method whose stored text is replaced by its derived text
     optional: false
   - name: dropped
-    type: string[]
+    type: list<string>
     description: Each sourced method whose restated params and returns are dropped
     optional: false
 methods: []
 sourcePath: src/core/signature-repair.ts
 createdAt: '2026-10-03T19:31:33.599Z'
-updatedAt: '2026-10-03T20:54:45.028Z'
+updatedAt: '2026-10-04T10:21:06.040Z'

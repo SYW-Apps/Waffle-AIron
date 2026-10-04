@@ -12,29 +12,29 @@ fields:
     description: The candidate component's id.
     optional: false
   - name: legal
-    type: boolean
+    type: bool
     description: True when the methods could move here with no rule refusing it.
     optional: false
   - name: newDependencies
-    type: string[]
+    type: list<string>
     description: >-
       The dependencies this component does not have yet but the moved methods call. Empty when it
       already reaches everything they need — the cheapest possible home.
     optional: false
   - name: dependencyCount
-    type: number
+    type: int
     description: >-
       What this component's dependency count would become after the move, counting
       `newDependencies`.
     optional: false
   - name: dependencyLimit
-    type: number
+    type: int
     description: >-
       The project's `maxComponentDependencies` at the time of the answer, so `dependencyCount` can
       be read without looking up the config.
     optional: false
   - name: refusals
-    type: string[]
+    type: list<string>
     description: >-
       The rule codes that would refuse the move into this component. Empty exactly when `legal` is
       true.
@@ -42,4 +42,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-20T12:02:07.039Z'
-updatedAt: '2026-09-20T12:05:50.951Z'
+updatedAt: '2026-10-04T10:29:01.839Z'

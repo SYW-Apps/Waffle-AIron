@@ -59,8 +59,8 @@ methods:
       path: /landscape/relations/{id}
   - name: listRelations
     description: List cross-project relations visible to the caller.
-    signature: 'listRelations(credential: string, projectId?: string): ProjectRelationRecord[]'
-    returns: ProjectRelationRecord[]
+    signature: 'listRelations(credential: string, projectId?: string): list<ProjectRelationRecord>'
+    returns: list<ProjectRelationRecord>
     params:
       - name: credential
         type: string
@@ -104,8 +104,8 @@ methods:
     description: >-
       Visibility-resolved discovery catalog for one observer project (targets + audience-filtered
       redacted summaries).
-    signature: 'listVisibleSurfaces(credential: string, currentProjectId: string): VisibleSurfaceEntry[]'
-    returns: VisibleSurfaceEntry[]
+    signature: 'listVisibleSurfaces(credential: string, currentProjectId: string): list<VisibleSurfaceEntry>'
+    returns: list<VisibleSurfaceEntry>
     params:
       - name: credential
         type: string
@@ -144,4 +144,4 @@ methods:
       path: /landscape/projects/{id}/surface
 status: complete
 createdAt: '2026-07-08T21:13:58.131Z'
-updatedAt: '2026-10-03T16:46:47.886Z'
+updatedAt: '2026-10-04T10:18:58.130Z'

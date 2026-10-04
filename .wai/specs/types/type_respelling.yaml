@@ -1,0 +1,34 @@
+kind: value-object
+id: type_respelling
+name: TypeRespelling
+description: >-
+  One type position whose written text is an alias of its canonical spelling: what was written
+  against what is stored. The loader records it before it replaces the text in memory, so a file
+  still holding the alias stays visible to TYPE_SPELLING_STALE and to the doctor repair that
+  rewrites it; the write tools answer with the same record for every position they normalised, so
+  the author sees exactly what was rewritten.
+fields:
+  - name: specId
+    type: string
+    description: The interface or type holding the position
+    optional: false
+  - name: kind
+    type: string
+    description: interface | type
+    optional: false
+  - name: path
+    type: string
+    description: Where in the spec, e.g. methods.save.params.key, methods.save.returns, fields.createdAt
+    optional: false
+  - name: written
+    type: string
+    description: The text the author or the file holds
+    optional: false
+  - name: stored
+    type: string
+    description: The canonical text, which is what is stored and shown
+    optional: false
+methods: []
+sourcePath: src/models/type-grammar.ts
+createdAt: '2026-10-03T22:03:02.731Z'
+updatedAt: '2026-10-03T22:21:51.533Z'

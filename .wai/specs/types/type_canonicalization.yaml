@@ -1,0 +1,28 @@
+kind: value-object
+id: type_canonicalization
+name: TypeCanonicalization
+description: >-
+  One spec with every structured type position read under the grammar: the spec as consumers read it
+  (each position holding its canonical text, and a position that cannot be canonical left as
+  written), every position whose written text was an alias, and every position that is not canonical
+  at all. Answered by interface_spec.canonicalTypes and type_spec.canonicalTypes; the scan, the
+  writer and the authoring seam all read a spec's types through it, so the three can never disagree
+  about what a spelling means. Prose signature text is not a structured position: a method without
+  params keeps its prose, and only its returns is read.
+fields:
+  - name: spec
+    type: InterfaceSpec | TypeSpec
+    description: The spec with every canonicalisable position respelled; nothing else in it changes
+    optional: false
+  - name: respellings
+    type: list<TypeRespelling>
+    description: Each position whose written text differs from its canonical text
+    optional: false
+  - name: problems
+    type: list<TypeExpressionProblem>
+    description: Each position that is not canonical, located (specId, kind, path)
+    optional: false
+methods: []
+sourcePath: src/models/type-grammar.ts
+createdAt: '2026-10-03T22:03:16.970Z'
+updatedAt: '2026-10-04T10:21:21.241Z'

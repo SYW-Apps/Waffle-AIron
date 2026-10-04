@@ -3,6 +3,16 @@ import type { ProjectConfig } from '../models/project.js';
 import type { Domain } from '../models/domain.js';
 import * as projector from './domain_projector.js';
 import * as curator from './domain_curator.js';
+import {
+  interfaceCanonicalTypes,
+  typeCanonicalTypes,
+  type ComponentSpec,
+  type InterfaceSpec,
+  type StoredInterfaceSpec,
+  type StoredTypeSpec,
+  type TypeSpec,
+} from '../models/index.js';
+import { resolveTree, type SignatureResolution } from './signature-sources.js';
 
 // ---------------------------------------------------------------------------
 // What these Portals publish — and nothing else.
@@ -102,14 +112,31 @@ export {
   // spec_tree_portal signatureFacts: what the scan's signature resolution
   // recorded — a passthrough read of the spec repository (spec_loader).
   signatureFacts,
+  // spec_tree_portal typeSpellingFacts: what the scan's type canonicalisation
+  // recorded — a passthrough read of the spec repository (spec_loader).
+  typeSpellingFacts,
 } from './specs.js';
 export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './specs.js';
 export type { SignatureFacts, SignatureResolution, SignatureSourceFact, StaleSignatureText } from './signature-sources.js';
 
-// spec_tree_portal resolveSignatures: specs read outside the scan — a part's
-// own with its pinned parent excerpt — resolved exactly as the scan resolves
-// its own, by the pure signature resolver.
-export { resolveTree as resolveSignatures } from './signature-sources.js';
+/**
+ * spec_tree_portal resolveSignatures: specs read outside the scan — a part's
+ * own with its pinned parent excerpt — resolved exactly as the scan resolves
+ * its own, by the pure signature resolver. An excerpt's documents are stored
+ * forms and may still hold aliases, so their type positions are read under the
+ * grammar first, as the scan reads its own.
+ */
+export function resolveSignatures(
+  interfaces: ReadonlyArray<InterfaceSpec | StoredInterfaceSpec>,
+  components: ReadonlyArray<ComponentSpec>,
+  types: ReadonlyArray<TypeSpec | StoredTypeSpec>,
+): SignatureResolution {
+  // Step 1: every type position canonical, as the scan's own are.
+  const canonicalInterfaces = interfaces.map((intf) => interfaceCanonicalTypes(intf).spec);
+  const canonicalTypes = types.map((type) => typeCanonicalTypes(type).spec);
+  // Step 2: the pure resolver, and what it resolved.
+  return resolveTree(canonicalInterfaces, components, canonicalTypes);
+}
 
 // spec_tree_portal resolveExternals: the bound project's declared externals,
 // each bound to its producer — a dispatch to the external-producers workflow.
@@ -356,6 +383,11 @@ export type { ForeignFieldRepair } from './narrative-repair.js';
 // orchestrator.
 export { repairSignatures } from './signature-repair.js';
 export type { SignatureTextRepair } from './signature-repair.js';
+// spec_maintenance_portal repairTypeSpellings: the doctor's one-time rewrite of
+// stored type positions into their canonical spelling, with int proposed for
+// the number positions whose name says so and the positions only an author can
+// settle listed — a 1:1 forward to the core orchestrator.
+export { repairTypeSpellings } from './type-spelling-repair.js';
 
 // The approval (approval_portal captureApprovedSpecs … approvalVerdict) — the
 // per-spec digests a lock RECORDS instead of writing statuses into the tree.

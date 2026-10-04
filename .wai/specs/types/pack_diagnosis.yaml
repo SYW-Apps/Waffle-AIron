@@ -10,7 +10,7 @@ description: >-
   into explicit, reproducible selections.
 fields:
   - name: globalsUndeclared
-    type: boolean
+    type: bool
     description: >-
       True when extensions.useGlobalPacks is ABSENT from the project file — the project never
       decided, so the default governs it. The parsed config cannot express this (it defaults the
@@ -18,19 +18,19 @@ fields:
       the former may have depended on machine-wide doctrine.
     optional: false
   - name: notApplied
-    type: InstalledPack[]
+    type: list<InstalledPack>
     description: >-
       Installed packs this project applies by no route. When globalsUndeclared, these are exactly
       the packs that would have applied automatically before — the migration set.
     optional: false
   - name: unresolved
-    type: string[]
+    type: list<string>
     description: >-
       Declared selections that do not resolve, each with the same message the conformance gate
       reports. Repeated here because doctor is where a user looks when something is off.
     optional: false
   - name: globalsApplied
-    type: InstalledPack[]
+    type: list<InstalledPack>
     description: >-
       Machine-wide packs this project applies because it opted in explicitly. Legal, but that
       doctrine does not travel with the repository, so a clone or CI enforces different rules —
@@ -39,4 +39,4 @@ fields:
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-29T19:43:44.384Z'
-updatedAt: '2026-09-19T11:07:12.265Z'
+updatedAt: '2026-10-04T10:20:38.044Z'

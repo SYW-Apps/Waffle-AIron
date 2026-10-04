@@ -11,10 +11,8 @@ methods:
       the point of that tier rather than an error: enabling this feature must never silently change
       an existing project's generated output. A per-agent override in the configuration is merged
       over the derived answer last, because an explicit budget always wins.
-    signature: >-
-      resolve(profile: ExecutionProfile, config: ExecutionConfig, agentId: string): ExecutionBudget
-      | undefined
-    returns: ExecutionBudget | undefined
+    signature: 'resolve(profile: ExecutionProfile, config: ExecutionConfig, agentId: string): ExecutionBudget?'
+    returns: ExecutionBudget?
     params:
       - name: profile
         type: ExecutionProfile
@@ -29,4 +27,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T23:51:08.930Z'
-updatedAt: '2026-09-20T23:52:23.497Z'
+updatedAt: '2026-10-04T10:18:34.867Z'

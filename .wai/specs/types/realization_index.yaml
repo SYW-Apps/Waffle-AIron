@@ -11,34 +11,34 @@ description: >-
 subsystem: sdd_validator
 fields:
   - name: paths
-    type: string[]
+    type: list<string>
     description: Every file those implementations name, canonical keys, in the order they were first named
     optional: false
 methods:
   - name: implementationsOf
     signature: 'implementationsOf(compId: string): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
     description: The implementations realizing a component, in load order
   - name: implementationsAt
     signature: 'implementationsAt(path: string): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
     description: >-
       The implementations naming a file, in load order — N:1 sharing made readable, and the anchor a
       file-level finding takes
   - name: filesOf
     signature: 'filesOf(compId: string): string[]'
-    returns: string[]
+    returns: list<string>
     description: The files a component's implementations name, canonical keys, in declaration order
   - name: filesIn
     signature: 'filesIn(subsystemId: string): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The files named across a whole subsystem — what proves a cross-subsystem hop EXISTS (any
       module of the target subsystem does); where the hop lands is portal-imports' question
   - name: componentsAt
     signature: 'componentsAt(path: string): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
     description: The components a file realizes, in the order their implementations named it
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:17.484Z'
-updatedAt: '2026-09-25T21:52:17.616Z'
+updatedAt: '2026-10-04T10:20:54.819Z'

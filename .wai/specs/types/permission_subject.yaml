@@ -12,11 +12,11 @@ fields:
     description: The user/principal id being authorized.
     optional: false
   - name: roleBindings
-    type: RoleBinding[]
+    type: list<RoleBinding>
     description: The subject's role bindings.
     optional: false
   - name: instanceAdmin
-    type: boolean
+    type: bool
     description: >-
       True ONLY for the built-in super-admin subject (issuer 'local', userId === the persisted
       boot-reserved super-admin UUID seeded at first boot), the master credential, or (devMode only)
@@ -27,7 +27,7 @@ fields:
       instance identity, never by an assignment and never by an account name.
     optional: false
   - name: aliasSubjectIds
-    type: string[]
+    type: list<string>
     description: >-
       Alternate ids this subject is also known by when a user record's id and its subject's userId
       have diverged (legacy records). Permission rules honor a per-user assignment keyed by any
@@ -37,4 +37,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:25.002Z'
-updatedAt: '2026-09-19T11:07:13.109Z'
+updatedAt: '2026-10-04T10:20:43.104Z'

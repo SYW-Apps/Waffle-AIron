@@ -6,29 +6,29 @@ description: >-
   violations are reported as warnings or errors depending on sddRuleSeverity overrides.
 fields:
   - name: maxMethodParams
-    type: i32
+    type: int
     description: Non-negative integer maximum number of parameters per interface method
     optional: true
   - name: maxInterfaceMethods
-    type: i32
+    type: int
     description: Non-negative integer maximum number of methods per interface
     optional: true
   - name: maxNarrativeSteps
-    type: i32
+    type: int
     description: >-
       Non-negative integer maximum number of narrative steps per method, reported as a warning.
       Defaults to 25 when unset.
     optional: true
   - name: maxComponentDependencies
-    type: i32
+    type: int
     description: Non-negative integer maximum number of dependsOn entries per component
     optional: true
   - name: maxSubsystemComponents
-    type: i32
+    type: int
     description: Non-negative integer maximum number of components per subsystem
     optional: true
   - name: narrativeStepsHardMax
-    type: i32
+    type: int
     description: >-
       Non-negative integer step count above which a narrative is an error rather than a warning. No
       default: unset means the step count only ever warns.
@@ -46,7 +46,7 @@ fields:
       the cognitive band only ever warns.
     optional: true
   - name: maxUnnarratedComplexity
-    type: i32
+    type: int
     description: >-
       The cyclomatic complexity above which a method specified below full detail is reported
       (UNNARRATED_COMPLEXITY); 8 when unset.
@@ -54,4 +54,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-07-06T20:47:08.558Z'
-updatedAt: '2026-10-03T17:05:02.177Z'
+updatedAt: '2026-10-04T10:19:59.160Z'

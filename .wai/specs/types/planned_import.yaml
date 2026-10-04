@@ -27,13 +27,13 @@ fields:
     optional: false
     key: primary
   - name: references
-    type: string[]
+    type: list<string>
     description: >-
       The bare references it resolves, each `<spec id> <position> <as written>` — every one listed
       in the plan
     optional: false
   - name: exportPlanned
-    type: boolean
+    type: bool
     description: >-
       Whether the producer gains the export this import names (an own `{ typeDef }` entry for a
       project-level type, a `from:` re-export for a subsystem-owned one)
@@ -47,7 +47,7 @@ fields:
     description: The canonical target `<producer id>::<local id>` the name binds
     optional: false
   - name: declaresExternal
-    type: boolean
+    type: bool
     description: >-
       Whether the consumer must first declare the producer as an external (it declares no alias for
       it yet)
@@ -60,4 +60,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-09-28T16:08:56.957Z'
-updatedAt: '2026-09-30T20:47:38.434Z'
+updatedAt: '2026-10-04T10:20:44.161Z'

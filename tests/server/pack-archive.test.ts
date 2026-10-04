@@ -55,7 +55,6 @@ function writeDeclarativeSource(name: string, version = '1.0.0'): string {
       'languages:',
       '  rust:',
       '    unsupportedFlow: {}',
-      '    foreignBuiltins: []',
       '',
     ].join('\n'),
   );

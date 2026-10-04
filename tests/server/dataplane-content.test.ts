@@ -161,8 +161,9 @@ const IFACE_METHODS = [
   {
     name: 'get',
     description: 'read a session record',
-    signature: 'get(id: string): string | null',
-    returns: 'string | null',
+    // Written canonical (stage 2), so the round-trip compares like for like.
+    signature: 'get(id: string): string?',
+    returns: 'string?',
     params: [{ name: 'id', type: 'string' }],
     effect: 'read',
   },

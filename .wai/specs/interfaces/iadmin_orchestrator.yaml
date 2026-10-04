@@ -37,7 +37,7 @@ methods:
   - name: listProjects
     description: Authenticate and list hosted projects.
     signature: 'listProjects(credential: string): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    returns: list<HostedProjectRecord>
   - name: mintKey
     description: >-
       Authenticate the master credential and mint a project-scoped API key. REFUSES any request that
@@ -56,7 +56,7 @@ methods:
   - name: listKeys
     description: Authenticate and list a project's API keys.
     signature: 'listKeys(credential: string, project: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
+    returns: list<ApiKeyRecord>
   - name: lockProject
     description: >-
       Authenticate the caller (bootstrap master or a user token), resolve the caller's project:write
@@ -151,8 +151,8 @@ methods:
     description: >-
       Authenticate, require project:admin over the project, mint a signed canvas link, and project
       the project to the target.
-    signature: 'produceProducer(credential: string, project: string, target: string): void'
-    returns: void
+    signature: 'produceProducer(credential: string, project: string, target: string): async void'
+    returns: async void
     params:
       - name: credential
         type: string
@@ -173,8 +173,8 @@ methods:
         type: string
   - name: listProducers
     description: Authenticate, require project:admin over the project, and list its configured producers.
-    signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
-    returns: ProducerConfig[]
+    signature: 'listProducers(credential: string, project: string): list<ProducerConfig>'
+    returns: list<ProducerConfig>
     params:
       - name: credential
         type: string
@@ -187,7 +187,7 @@ methods:
   - name: listSecrets
     description: Authenticate and list configured secret keys (names only).
     signature: 'listSecrets(credential: string): string[]'
-    returns: string[]
+    returns: list<string>
   - name: executeApprovedCreate
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
@@ -305,8 +305,8 @@ methods:
       backup cadence is repository-binding administration, distinct from the project:write commit
       itself.
     signature: >-
-      configureGitSync(credential: string, project: string, periodicSyncMinutes?: number,
-      skipIfClean?: boolean): void
+      configureGitSync(credential: string, project: string, periodicSyncMinutes?: int, skipIfClean?:
+      bool): void
     returns: void
     params:
       - name: credential
@@ -314,10 +314,10 @@ methods:
       - name: project
         type: string
       - name: periodicSyncMinutes
-        type: number
+        type: int
         optional: true
       - name: skipIfClean
-        type: boolean
+        type: bool
         optional: true
   - name: exportProjectTree
     description: >-
@@ -326,8 +326,8 @@ methods:
       export grants nothing new. A member is exported by its own record id; no qualifier exists
       since stage 7.
     signature: >-
-      exportProjectTree(credential: string, project: string, includeDerived?: boolean,
-      allowPartial?: boolean): TreeExportResult
+      exportProjectTree(credential: string, project: string, includeDerived?: bool, allowPartial?:
+      bool): TreeExportResult
     returns: TreeExportResult
     params:
       - name: credential
@@ -335,10 +335,10 @@ methods:
       - name: project
         type: string
       - name: includeDerived
-        type: boolean
+        type: bool
         optional: true
       - name: allowPartial
-        type: boolean
+        type: bool
         description: >-
           Pack whatever CAN be packed when a member cannot be, and list the members left out in the
           result, instead of refusing the whole export.
@@ -353,7 +353,7 @@ methods:
       A member is imported into by its own record id.
     signature: >-
       importProjectTree(credential: string, project: string, archive: bytes, replaceExisting?:
-      boolean): TreeImportResult
+      bool): TreeImportResult
     returns: TreeImportResult
     params:
       - name: credential
@@ -363,7 +363,7 @@ methods:
       - name: archive
         type: bytes
       - name: replaceExisting
-        type: boolean
+        type: bool
         optional: true
   - name: registerLocalDevProject
     description: >-
@@ -407,4 +407,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-10-03T17:51:28.770Z'
+updatedAt: '2026-10-04T10:31:55.820Z'

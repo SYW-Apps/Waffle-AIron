@@ -12,29 +12,29 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: members
-    type: PlannedMemberRecord[]
+    type: list<PlannedMemberRecord>
     description: Every declared member, family roots first then depth-first
     optional: false
   - name: reach
-    type: ReachComparison[]
+    type: list<ReachComparison>
     description: >-
       The no-widening proof: every subject x capability x member, before (over the family root, as
       the data plane resolved members until now) and after (over the member's own record through the
       new chain). Any unequal row refuses the plan
     optional: false
   - name: narrowings
-    type: PlannedNarrowing[]
+    type: list<PlannedNarrowing>
     description: Every API key with a member-qualified entry, rewritten to the member's record id
     optional: false
   - name: refusals
-    type: MigrationFinding[]
+    type: list<MigrationFinding>
     description: >-
       What blocks the whole plan: a member id another record holds, a member declared twice, an
       unreadable member, a setting already scoped at a member's id (it would decide before the
       inherited chain), an unequal reach row
     optional: false
   - name: changes
-    type: FileChange[]
+    type: list<FileChange>
     description: The host store files the apply would replace, from the rehearsal
     optional: false
   - name: rehearsal
@@ -43,4 +43,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-01T16:27:23.715Z'
-updatedAt: '2026-10-01T16:55:07.887Z'
+updatedAt: '2026-10-04T10:20:29.403Z'

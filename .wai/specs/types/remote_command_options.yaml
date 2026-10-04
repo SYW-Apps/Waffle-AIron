@@ -25,11 +25,11 @@ fields:
     description: 'Push: owner organization unit for a project this command should create first'
     optional: true
   - name: force
-    type: boolean
+    type: bool
     description: Replace an authored tree at the destination (backed up first)
     optional: true
   - name: includeDerived
-    type: boolean
+    type: bool
     description: 'Push: pack regenerable artifacts too'
     optional: true
   - name: archive
@@ -41,7 +41,7 @@ fields:
     description: 'Pull: the local project root to import into'
     optional: true
   - name: allowPartial
-    type: boolean
+    type: bool
     description: >-
       Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left out,
       instead of refusing the whole export
@@ -50,4 +50,4 @@ methods: []
 componentClass: cli_runner
 sourcePath: src/commands/remote.ts
 createdAt: '2026-08-12T18:33:33.586Z'
-updatedAt: '2026-10-03T17:04:53.776Z'
+updatedAt: '2026-10-04T10:20:56.505Z'

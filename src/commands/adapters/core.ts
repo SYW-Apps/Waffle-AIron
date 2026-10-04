@@ -27,6 +27,7 @@ export {
   retireSpecialists,
   repairForeignStepFields,
   repairSignatures,
+  repairTypeSpellings,
   renderDiagram,
   generateAll,
   resolveExpectedOutputPaths,

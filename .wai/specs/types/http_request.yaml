@@ -14,7 +14,7 @@ fields:
     description: Request path
     optional: false
   - name: headers
-    type: string[]
+    type: list<string>
     description: Raw header lines (includes Authorization)
     optional: false
   - name: body
@@ -23,4 +23,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-04T12:58:04.741Z'
-updatedAt: '2026-07-04T12:58:04.744Z'
+updatedAt: '2026-10-04T10:20:17.265Z'

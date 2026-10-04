@@ -61,8 +61,8 @@ methods:
     description: >-
       How many members the hosted families declare on disk that hold no record yet — the count the
       server logs at boot as awaiting `wairon host doctor --fix`. Reads only; plans nothing.
-    signature: 'pending(): number'
-    returns: number
+    signature: 'pending(): int'
+    returns: int
     params: []
   - name: recover
     description: >-
@@ -74,8 +74,8 @@ methods:
       the project it was found under, with the same line in the server log. Housekeeping that only
       returns the family to the state an earlier request left it in, so it runs whatever the
       credential's permission; a failure is logged and never fails the request.
-    signature: 'recover(principal: Principal, binding: ProjectBinding): RecoveredTransaction[]'
-    returns: RecoveredTransaction[]
+    signature: 'recover(principal: Principal, binding: ProjectBinding): list<RecoveredTransaction>'
+    returns: list<RecoveredTransaction>
     params:
       - name: principal
         type: Principal
@@ -156,7 +156,9 @@ methods:
       denied gains access, and a token narrowed to the retired record alone loses its reach — and
       every carried rule, and audit each, naming the member and the initiating tool. Writes no grant
       beyond the carried subsystem rules.
-    signature: 'reconcile(principal: Principal, projectId: string, touched: string[]): MemberReconciliation'
+    signature: >-
+      reconcile(principal: Principal, projectId: string, touched: list<string>):
+      MemberReconciliation
     returns: MemberReconciliation
     params:
       - name: principal
@@ -166,7 +168,7 @@ methods:
         type: string
         description: The bound project the tool ran at — the composition of every event
       - name: touched
-        type: string[]
+        type: list<string>
         description: The record ids the tool's report names as written (the applied plan's owners)
   - name: detach
     description: >-
@@ -188,7 +190,7 @@ methods:
       and the audit event say "no git binding: enable one for this project", and its git status
       reads not git-backed until one is enabled.
     signature: >-
-      detach(principal: Principal, binding: ProjectBinding, alias: string, apply: boolean):
+      detach(principal: Principal, binding: ProjectBinding, alias: string, apply: bool):
       MemberDetachment
     returns: MemberDetachment
     params:
@@ -202,7 +204,7 @@ methods:
         type: string
         description: The member alias
       - name: apply
-        type: boolean
+        type: bool
         description: False for a dry run
   - name: adopt
     description: >-
@@ -227,7 +229,7 @@ methods:
       placements as before the detach.
     signature: >-
       adopt(principal: Principal, binding: ProjectBinding, alias: string, path: string, apply:
-      boolean): MemberAdoption
+      bool): MemberAdoption
     returns: MemberAdoption
     params:
       - name: principal
@@ -243,7 +245,7 @@ methods:
         type: string
         description: The member path to adopt it at, relative to the bound project's root
       - name: apply
-        type: boolean
+        type: bool
         description: False for a dry run
   - name: recoverData
     description: >-
@@ -255,11 +257,11 @@ methods:
       migration.recovered event by the operator with the same line in the server log. Without fix it
       only reports them and writes nothing. A failure is reported and never prevents the server from
       starting.
-    signature: 'recoverData(fix: boolean): RecoveredTransaction[]'
-    returns: RecoveredTransaction[]
+    signature: 'recoverData(fix: bool): list<RecoveredTransaction>'
+    returns: list<RecoveredTransaction>
     params:
       - name: fix
-        type: boolean
+        type: bool
         description: Resolve (true) or only report (false)
     guarantees:
       - idempotent
@@ -273,12 +275,12 @@ methods:
       nothing, and a subject already holding a setting there keeps it). The subsystem rule itself is
       kept. Answers one reach row per carried rule: before at the subsystem scope, after at the
       member's project scope.
-    signature: 'carrySubsystemRules(members: ProjectParentLink[]): ReachComparison[]'
-    returns: ReachComparison[]
+    signature: 'carrySubsystemRules(members: list<ProjectParentLink>): list<ReachComparison>'
+    returns: list<ReachComparison>
     params:
       - name: members
-        type: ProjectParentLink[]
+        type: list<ProjectParentLink>
         description: The members registered or returned, each with its parent record
 status: complete
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-03T20:54:00.105Z'
+updatedAt: '2026-10-04T10:28:32.328Z'

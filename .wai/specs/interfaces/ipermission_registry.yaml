@@ -32,11 +32,11 @@ methods:
       Rewrite the scopeId of every assignment referencing an old unit/project id to its new id per
       the supplied remap (applied when an organization unit is renamed or moved), persist durably,
       and refresh the store.
-    signature: 'remapScope(remap: UnitIdRemap[]): void'
+    signature: 'remapScope(remap: list<UnitIdRemap>): void'
     returns: void
     params:
       - name: remap
-        type: UnitIdRemap[]
+        type: list<UnitIdRemap>
     guarantees:
       - atomic
   - name: removeAssignmentsForScopes
@@ -44,13 +44,13 @@ methods:
       Remove every assignment whose scopeId is in the given set (the scopes of a cascade-deleted
       unit subtree), persist durably, and refresh the store. Prevents orphaned grants/denies from
       resurrecting if a unit is later recreated at the same qualified path.
-    signature: 'removeAssignmentsForScopes(scopeIds: string[]): void'
+    signature: 'removeAssignmentsForScopes(scopeIds: list<string>): void'
     returns: void
     params:
       - name: scopeIds
-        type: string[]
+        type: list<string>
     guarantees:
       - atomic
 status: complete
 createdAt: '2026-07-15T20:27:53.130Z'
-updatedAt: '2026-07-15T22:22:07.239Z'
+updatedAt: '2026-10-04T10:19:13.759Z'

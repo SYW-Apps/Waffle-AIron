@@ -46,7 +46,6 @@ languages:
     unsupportedFlow:
       doWhile: this platform has no do-while — model it as a counted loop with a post-check branch
       jump: steps cannot jump arbitrarily — restructure with a switch and branches so control flow stays a forward pipeline
-    foreignBuiltins: [bundle]
 
 patterns:
   - id: demo-pipeline

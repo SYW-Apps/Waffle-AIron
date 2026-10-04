@@ -8,11 +8,11 @@ description: >-
 subsystem: sdd_migrations
 fields:
   - name: committed
-    type: boolean
+    type: bool
     description: True when every file was swapped and the coordinator's journal reads committed.
     optional: false
   - name: written
-    type: FileChange[]
+    type: list<FileChange>
     description: The changes now live (empty unless committed).
     optional: false
   - name: failure
@@ -22,14 +22,14 @@ fields:
       `moved since planned` naming the file whose live bytes no longer match its baseDigest.
     optional: true
   - name: restored
-    type: boolean
+    type: bool
     description: 'On failure: every live file is byte-identical to before (true), or some are not (false).'
     optional: false
   - name: unrestored
-    type: string[]
+    type: list<string>
     description: Files a rollback could not put back; the journal is left in place and names them.
     optional: false
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:35.945Z'
-updatedAt: '2026-09-30T21:33:06.962Z'
+updatedAt: '2026-10-04T10:21:18.620Z'

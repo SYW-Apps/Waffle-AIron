@@ -1,0 +1,86 @@
+kind: value-object
+id: type_dialect
+name: TypeDialect
+description: >-
+  One language's reading and writing of the neutral type grammar: the seam through which code
+  conformance and implementer briefs meet a language without the design ever speaking it. read turns
+  the language's own spelling of a type into the canonical expression; write gives the language's
+  idiomatic spelling of a canonical one. The TypeScript dialect ships first, and its reader IS the
+  alias table type_expression.parse normalises input with — one table, so normalising a spec and
+  reading code can never drift apart — plus the loose readings only code needs: `number` agrees with
+  int and float alike (TypeScript cannot tell them apart), and `T | undefined` with `T?`. Its
+  writer: string, boolean, Uint8Array, number for int and float, string (ISO 8601) for date,
+  datetime and duration, T[], Set<T>, Record<K, V>, `T | null`, `A | B`, Promise<T>, an enum as a
+  string-literal union alias, unknown for any. A dialect is code shipped beside the analyzer that
+  reads that language, never configuration: a future analyzer brings its own (for Rust: Vec<T> to
+  list, HashMap to map, HashSet to set, Option<T> to `T?`, String to string, the sized integers to
+  int, f32/f64 to float, Vec<u8> to bytes, async fn to async). The omittable marker (`x?: T`) and
+  the async modifier are what the code's position says, not its type, so the analyzer reports them
+  as facts of their own (parameter_fact.optional, source_file_facts.asyncFunctions) rather than
+  through read.
+fields:
+  - name: language
+    type: string
+    description: The language this dialect reads and writes, as the code analyzer names it (typescript)
+    optional: false
+methods:
+  - name: forLanguage
+    signature: 'forLanguage(language: string): TypeDialect?'
+    params:
+      - name: language
+        type: string
+        description: The effective language a source file was analyzed as, or an L4 technology's language
+    returns: TypeDialect?
+    description: >-
+      The dialect shipped for a language, or none when no dialect reads it yet — a conformance check
+      then stays silent rather than guess.
+    symbol: typeDialectFor
+  - name: read
+    signature: 'read(annotation: string): TypeExpression?'
+    params:
+      - name: annotation
+        type: string
+        description: The annotation as the code writes it, whitespace-normalised
+    returns: TypeExpression?
+    description: >-
+      The canonical expression a code annotation spells, or none when the annotation has no
+      canonical reading (a type the grammar leaves out); none is silence for every caller, never a
+      finding.
+  - name: agrees
+    signature: 'agrees(annotation: string, expression: TypeExpression, codeNames: map<string, string>): bool'
+    params:
+      - name: annotation
+        type: string
+        description: The annotation as the code writes it
+      - name: expression
+        type: TypeExpression
+        description: The spec's canonical expression
+      - name: codeNames
+        type: map<string, string>
+        description: Each type id (bare and subsystem-qualified) to the code-level name realizing it
+    returns: bool
+    description: >-
+      Whether a code annotation and a canonical spec expression describe the same type: the
+      annotation read through this dialect equals the expression, a named type matching through its
+      code-level name, and this dialect's loose readings counting as agreement. An annotation it
+      cannot read never agrees.
+  - name: write
+    signature: 'write(expression: TypeExpression): string'
+    params:
+      - name: expression
+        type: TypeExpression
+        description: The canonical expression
+    returns: string
+    description: This language's idiomatic spelling of a canonical expression.
+  - name: mappingLines
+    signature: 'mappingLines(): list<string>'
+    params: []
+    returns: list<string>
+    description: >-
+      The write table as lines an implementer brief carries (`list<T> → T[]`, `T? → T | null`,
+      `async T → Promise<T>`, an enum → a string-literal union alias, a named scalar → a type alias
+      of its primitive, ...), so an implementer maps a contract's types by rule rather than by
+      guess.
+sourcePath: src/models/type-dialects.ts
+createdAt: '2026-10-03T22:03:39.838Z'
+updatedAt: '2026-10-04T10:53:52.746Z'

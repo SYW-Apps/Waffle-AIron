@@ -32,6 +32,8 @@ import {
   graph,
 } from './specs.js';
 import { ComponentSpec, implementationSourceFiles } from '../models/specs.js';
+import { languageOfSourcePath } from '../models/code-model.js';
+import { typeDialectFor } from '../models/type-dialects.js';
 import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
 
 // Cache for project files relative to the system root
@@ -599,6 +601,16 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     instructions = `${instructions.trimEnd()}\n\n## Project guidance\n\n${guidance.trim()}\n`;
   }
 
+  // Step 13: the type mapping — how the neutral contract types are spelled in
+  // the language this agent's implementations are written in, so an
+  // implementer maps list<T>, T?, async T and an enum by rule, not by guess.
+  const language = implementationLanguage(record);
+  const dialect = language ? typeDialectFor(language) : null;
+  const typeMapping = dialect ? dialect.mappingLines() : undefined;
+  if (typeMapping) {
+    instructions = `${instructions.trimEnd()}\n\n## Types in ${language}\n\nContracts speak wairon's neutral type grammar; write each type in ${language} as:\n\n${typeMapping.map((line) => `- ${line}`).join('\n')}\n`;
+  }
+
   // The resource axis, resolved from the same live topology as the rest of the
   // brief. Absent at tier `off` (the default), so a consumer that never opted
   // in sees exactly the brief it saw before budgets existed.
@@ -614,9 +626,35 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     readPaths: record.readPaths,
     instructions,
     variantGuidance: record.variantGuidance || undefined,
+    ...(typeMapping ? { typeMapping } : {}),
     profile: budget ? profile : undefined,
     budget,
   };
+}
+
+/**
+ * The language a record's implementations are written in: a technology they
+ * bind that names a language a dialect is shipped for, else the language their
+ * source files are analyzed as. Undefined when the record implements nothing
+ * (the architect, a delegating member owner) or no file names a language.
+ */
+function implementationLanguage(record: AgentRecord): string | undefined {
+  const owned = new Set(record.ownedPaths);
+  const implementations = loadImplementationSpecs()
+    .filter((impl) => implementationSourceFiles(impl).some((file) => owned.has(file)));
+  for (const impl of implementations) {
+    for (const technology of impl.technologies ?? []) {
+      const name = typeof technology === 'string' ? technology : technology.name;
+      if (typeDialectFor(name)) return name.toLowerCase();
+    }
+  }
+  for (const impl of implementations) {
+    for (const file of implementationSourceFiles(impl)) {
+      const language = languageOfSourcePath(file);
+      if (language) return language;
+    }
+  }
+  return undefined;
 }
 
 /** A qualified id's first hop: the direct member its alias names, and the rest of the id. */

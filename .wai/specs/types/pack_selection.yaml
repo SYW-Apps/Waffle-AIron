@@ -33,7 +33,7 @@ fields:
       doctrine. Supports a {version} placeholder and ${VAR} env expansion for private URLs.
     optional: true
   - name: bundle
-    type: boolean
+    type: bool
     description: >-
       Commit a copy under .wai/packs/<name>/<version>/ and resolve from there first, so the
       repository needs no machine setup at all — the answer for private packs, air-gapped CI, and
@@ -42,4 +42,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-07-29T18:53:30.799Z'
-updatedAt: '2026-09-19T11:07:12.567Z'
+updatedAt: '2026-10-04T10:20:40.681Z'

@@ -10,14 +10,14 @@ methods:
       Forward to migration_portal.recover: with fix true, roll back every transaction under the root
       whose coordinator never committed and clean up every one that did; answers what was found and
       done (empty when there was nothing).
-    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
-    returns: RecoveredTransaction[]
+    signature: 'recover(root: string, fix: bool): list<RecoveredTransaction>'
+    returns: list<RecoveredTransaction>
     params:
       - name: root
         type: string
         description: A hosted project root
       - name: fix
-        type: boolean
+        type: bool
         description: Resolve (true) or only report (false)
     guarantees:
       - idempotent
@@ -30,8 +30,8 @@ methods:
         type: TransactionScope
   - name: diff
     description: 'Forward to migration_portal.diff: the rehearsal''s difference from the live owners.'
-    signature: 'diff(rehearsal: Rehearsal): FileChange[]'
-    returns: FileChange[]
+    signature: 'diff(rehearsal: Rehearsal): list<FileChange>'
+    returns: list<FileChange>
     params:
       - name: rehearsal
         type: Rehearsal
@@ -39,13 +39,13 @@ methods:
       - idempotent
   - name: commit
     description: 'Forward to migration_portal.commit: the changes made live all or nothing.'
-    signature: 'commit(rehearsal: Rehearsal, changes: FileChange[], verb: string): TransactionOutcome'
+    signature: 'commit(rehearsal: Rehearsal, changes: list<FileChange>, verb: string): TransactionOutcome'
     returns: TransactionOutcome
     params:
       - name: rehearsal
         type: Rehearsal
       - name: changes
-        type: FileChange[]
+        type: list<FileChange>
       - name: verb
         type: string
     guarantees:
@@ -73,4 +73,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T21:05:23.712Z'
-updatedAt: '2026-10-01T17:03:54.106Z'
+updatedAt: '2026-10-04T10:18:52.758Z'

@@ -706,6 +706,23 @@ methods:
         type: local
     symbol: check
     exportedVia: packRequirementsRule
+  - name: packDeprecations
+    sourcePath: src/core/rules/extension/pack-deprecations.ts
+    narrative:
+      - stepNumber: 1
+        description: For each deprecation the loaded packs recorded
+        type: loop
+        loopKind: forEach
+        over: ctx.ext.deprecations
+        endStep: 2
+      - stepNumber: 2
+        description: >-
+          Report PACK_FIELD_DEPRECATED naming the pack, the field and what replaces it, and that it
+          is ignored now and removed in the next release
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: packDeprecationsRule
 status: complete
 createdAt: '2026-09-14T23:15:33.948Z'
-updatedAt: '2026-09-29T16:40:51.989Z'
+updatedAt: '2026-10-04T10:34:18.827Z'

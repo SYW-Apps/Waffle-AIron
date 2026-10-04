@@ -135,6 +135,8 @@ describe('the tools answer with data, and still with the same sentence', () => {
       replacedExisting: false,
       status: 'design',
       notices: [],
+      // A component holds no type positions, so nothing was respelled.
+      respellings: [],
       // A new spec changed no stored method, so it invalidated no test.
       testsToRevisit: [],
     });

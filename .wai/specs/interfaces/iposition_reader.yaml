@@ -23,12 +23,12 @@ methods:
       makes the producer export. Every automatic choice carries its reason. None is none. Never
       consults anything but what it is handed, never resolves for validation.
     signature: >-
-      match(unresolved: AuthoredReference[], family: ProjectFamily, tables: ResolvedExportTable[],
-      types: TypeSpec[]): PositionalMatch[]
-    returns: PositionalMatch[]
+      match(unresolved: list<AuthoredReference>, family: ProjectFamily, tables:
+      list<ResolvedExportTable>, types: list<TypeSpec>): list<PositionalMatch>
+    returns: list<PositionalMatch>
     params:
       - name: unresolved
-        type: AuthoredReference[]
+        type: list<AuthoredReference>
         description: >-
           The references to read, from the family top's scan: form import with binding unresolved,
           and self-prefixed forms
@@ -36,13 +36,13 @@ methods:
         type: ProjectFamily
         description: 'The family top''s graph: every project''s key, id and alias table'
       - name: tables
-        type: ResolvedExportTable[]
+        type: list<ResolvedExportTable>
         description: Every project's resolved L0 export table
       - name: types
-        type: TypeSpec[]
+        type: list<TypeSpec>
         description: Every type the family top's scan loaded, keyed by project
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-28T16:09:32.534Z'
-updatedAt: '2026-09-29T14:31:25.341Z'
+updatedAt: '2026-10-04T10:19:16.135Z'

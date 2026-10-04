@@ -294,10 +294,10 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
  * files and next steps. A code pack's package.json pins @wairon/sdk to the
  * running SDK version so it builds against a matching contract.
  */
-export async function initPack(
+export function initPack(
   name: string,
   options: { kind?: 'declarative' | 'code'; dir?: string; skill?: boolean } = {},
-): Promise<void> {
+): void {
   const kind = options.kind === 'code' ? 'code' : 'declarative';
   const targetDir = options.dir ?? `./${name}`;
   const request: PackScaffoldRequest = { name, kind, targetDir };
@@ -321,7 +321,7 @@ export async function initPack(
  * --out), and report the path + size. The SDK seals integrity and validates the
  * envelope against the inner pack manifest before emitting the archive.
  */
-export async function buildPack(source: string, options: { out?: string } = {}): Promise<void> {
+export function buildPack(source: string, options: { out?: string } = {}): void {
   const sourceDir = source && source.length > 0 ? source : '.';
 
   // Step 1: build the archive via the SDK portal.
@@ -511,7 +511,7 @@ function extractArchiveToTemp(source: string): { dir: string } | null {
 }
 
 /** `wairon pack uninstall <name>[@version]` — remove from the store. */
-export async function uninstallStorePack(spec: string): Promise<void> {
+export function uninstallStorePack(spec: string): void {
   const { name, version } = parseNameAtVersion(spec);
   if (!uninstallPack(name, version)) {
     logger.error(`No pack "${spec}" is installed in the store (${packStoreDir()}).`);
@@ -523,7 +523,7 @@ export async function uninstallStorePack(spec: string): Promise<void> {
 }
 
 /** `wairon pack which <name>[@version]` — identify exactly which pack resolves. */
-export async function whichPack(spec: string): Promise<void> {
+export function whichPack(spec: string): void {
   const { name, version } = parseNameAtVersion(spec);
   const resolved = resolveInstalledPack(name, version);
   if (!resolved) {
@@ -750,7 +750,7 @@ function writeBundle(root: string, resolved: InstalledPack): string {
   return dest;
 }
 
-export async function bundlePack(name?: string, options: { all?: boolean } = {}): Promise<void> {
+export function bundlePack(name?: string, options: { all?: boolean } = {}): void {
   if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first.');
     process.exitCode = 1;
@@ -833,7 +833,7 @@ function parseNameAtVersion(spec: string): { name: string; version?: string } {
   return { name: spec.slice(0, at), version: spec.slice(at + 1) };
 }
 
-export async function listPacks(): Promise<void> {
+export function listPacks(): void {
   const inProject = projectConfigExists();
   const config = inProject ? loadProjectConfig() : null;
   if (inProject && !config) throw new ProjectNotInitializedError();
@@ -1047,7 +1047,7 @@ function printImpact(impact: PackImpact): void {
  * applying the requested one as `pack use` would record it; for one it applies
  * exactly as asked, it measures removing it: what the pack accounts for now.
  */
-export async function impactPack(spec: string): Promise<void> {
+export function impactPack(spec: string): void {
   // Steps 1-3: an impact is measured on a project.
   if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first.');

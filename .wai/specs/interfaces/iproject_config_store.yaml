@@ -11,8 +11,8 @@ methods:
     description: >-
       Read the configuration: the document parsed against the schema with its defaults applied, or
       null when the project has no configuration file.
-    signature: 'read(): ProjectConfig | null'
-    returns: ProjectConfig | null
+    signature: 'read(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
     effect: read
   - name: write
@@ -30,16 +30,16 @@ methods:
     effect: write
   - name: exists
     description: Whether the project has a configuration file.
-    signature: 'exists(): boolean'
-    returns: boolean
+    signature: 'exists(): bool'
+    returns: bool
     params: []
     effect: read
   - name: declares
     description: >-
       Whether the document sets a top-level or dotted field explicitly (for example
       `extensions.useGlobalPacks`), as opposed to the schema supplying its default.
-    signature: 'declares(field: string): boolean'
-    returns: boolean
+    signature: 'declares(field: string): bool'
+    returns: bool
     params:
       - name: field
         type: string
@@ -49,8 +49,8 @@ methods:
       The raw value at a top-level or dotted path of the document (for example `paths.specsDir`),
       read before any schema parsing, or undefined when the document or the path is absent. Lets a
       read that must work on a configuration the schema rejects still reach one field.
-    signature: 'readField(field: string): Json | undefined'
-    returns: Json | undefined
+    signature: 'readField(field: string): any'
+    returns: any
     params:
       - name: field
         type: string
@@ -67,17 +67,17 @@ methods:
       scalar — or a scalar holding anything but `from` is refused naming the path, and nothing is
       written. A dry run does all of it and writes nothing, so a caller can prove the edit before
       its first write. No edits writes nothing.
-    signature: 'rewriteScalars(edits: ScalarEdit[], dryRun?: boolean): void'
+    signature: 'rewriteScalars(edits: list<ScalarEdit>, dryRun?: bool): void'
     returns: void
     params:
       - name: edits
-        type: ScalarEdit[]
+        type: list<ScalarEdit>
         description: The scalars to replace, each by path, current value and new value
       - name: dryRun
-        type: boolean
+        type: bool
         description: Prove the edit and write nothing
         optional: true
     effect: write
 status: complete
 createdAt: '2026-09-13T10:50:08.266Z'
-updatedAt: '2026-09-26T21:10:18.279Z'
+updatedAt: '2026-10-04T10:19:19.983Z'

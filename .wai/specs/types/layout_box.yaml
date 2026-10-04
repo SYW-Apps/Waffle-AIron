@@ -7,22 +7,22 @@ description: >-
   parent chain to do so.
 fields:
   - name: x
-    type: number
+    type: float
     description: Left edge.
     optional: false
   - name: 'y'
-    type: number
+    type: float
     description: Top edge.
     optional: false
   - name: w
-    type: number
+    type: float
     description: Width.
     optional: false
   - name: h
-    type: number
+    type: float
     description: Height.
     optional: false
 methods: []
 sourcePath: src/core/canvas-layout.ts
 createdAt: '2026-09-20T16:40:36.926Z'
-updatedAt: '2026-09-20T16:40:37.119Z'
+updatedAt: '2026-10-04T10:28:58.547Z'

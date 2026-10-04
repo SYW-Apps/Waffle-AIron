@@ -28,7 +28,7 @@ fields:
     description: Optional human-readable summary of the profile for the picker.
     optional: true
   - name: installed
-    type: boolean
+    type: bool
     description: >-
       Whether this profile can already govern the project it was listed for: true for a built-in,
       and for a profile contributed by a pack registered in that project's own extensions.packs;
@@ -39,4 +39,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-22T19:11:42.715Z'
-updatedAt: '2026-09-19T11:07:05.677Z'
+updatedAt: '2026-10-04T10:19:53.500Z'

@@ -459,7 +459,52 @@ export type ColdChainConsignment = z.infer<typeof ColdChainConsignmentSchema>;
       'The sealed consignment is inferred from the draft consignment schema extended so the seal timestamp is always set, and the entity calls it required.',
     tree: extendedSealTree(false),
   }),
+
+  // -------------------------------------------------------------------------
+  // TYPE_HOLDS_MISMATCH — a named scalar's shape is the primitive it holds,
+  // compared with the right side of the alias the file declares under its
+  // name, through the TypeScript dialect. Fire and control differ only in the
+  // alias's right side.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'TYPE_HOLDS_MISMATCH',
+    severity: 'warning',
+    anchoredTo: 'seal-number',
+    expectFire: true,
+    scenario:
+      'The seal number is a named scalar holding a string, but the consignment module declares SealNumber as an alias of number.',
+    tree: sealNumberTree('number'),
+  }),
+  defineRuleFixture({
+    code: 'TYPE_HOLDS_MISMATCH',
+    expectFire: false,
+    reason: 'The right side of the alias is string, which the TypeScript dialect reads as the string the named scalar holds.',
+    scenario: 'The seal number is a named scalar holding a string, and the consignment module declares SealNumber as an alias of string.',
+    tree: sealNumberTree('string'),
+  }),
 ];
+
+/** A named scalar realized by a type alias whose right side is the one under test. */
+function sealNumberTree(aliasOf: string): FixtureTree {
+  return {
+    ...plannerSpecs,
+    types: [{
+      id: 'seal-number',
+      name: 'SealNumber',
+      kind: 'value-object',
+      subsystem: 'cold-chain',
+      description: 'The number printed on the tamper seal of a cold box.',
+      holds: 'string',
+      sourcePath: 'src/cold-chain/consignment.ts',
+    }],
+    files: {
+      'src/cold-chain/planner.ts': PLANNER_MODULE,
+      'src/cold-chain/consignment.ts': `
+export type SealNumber = ${aliasOf};
+`,
+    },
+  };
+}
 
 /** The draft → sealed composition: `sealedAt` optional on the base, required once extended; the spec says `sealedOptional`. */
 function extendedSealTree(sealedOptional: boolean): FixtureTree {

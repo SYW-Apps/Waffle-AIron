@@ -32,7 +32,7 @@ fields:
     description: 'Narrative detail default: full | calls-only | intent'
     optional: true
   - name: methods
-    type: MethodImplementation[]
+    type: list<MethodImplementation>
     description: >-
       Per-method L5 narratives (see method_implementation): name, sourcePath, narrative steps,
       detail, intent, conformance, symbol. A dispatch step routes a named capability through a
@@ -66,7 +66,7 @@ fields:
       each direct dependency's
     optional: true
   - name: technologies
-    type: Technology[]
+    type: list<Technology>
     description: >-
       External technologies this implementation binds to (e.g. mysql), each a bare name or `{ name,
       matches }` (see technology); its component's ownership tree becomes each technology's home,
@@ -79,7 +79,7 @@ fields:
       each with a reason.
     optional: true
   - name: ext
-    type: json
+    type: any
     description: >-
       Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
       the core, preserved verbatim through load and save.
@@ -93,7 +93,7 @@ fields:
     description: When this spec was last written. Store-managed.
     optional: false
   - name: injectedParams
-    type: string[]
+    type: list<string>
     description: >-
       Parameter names this realization takes BEFORE the ones its contract declares — a config
       object, a data root, the transport handles a portal is handed. Supplied by whatever wires the
@@ -107,7 +107,7 @@ fields:
 methods:
   - name: sourceFiles
     signature: 'sourceFiles(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       Every source file this implementation names — its own sourcePath and each method's —
       deduplicated, in declaration order. The simPath harness is not a source file of the
@@ -115,4 +115,4 @@ methods:
     symbol: implementationSourceFiles
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T17:03:19.159Z'
+updatedAt: '2026-10-04T10:20:18.584Z'

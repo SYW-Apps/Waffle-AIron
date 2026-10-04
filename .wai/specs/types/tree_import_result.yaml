@@ -15,15 +15,15 @@ fields:
     description: The imported project's name, from the archive envelope
     optional: false
   - name: roots
-    type: string[]
+    type: list<string>
     description: Project-relative roots recreated under destDir
     optional: false
   - name: fileCount
-    type: number
+    type: int
     description: How many spec-tree files were written
     optional: false
   - name: replaced
-    type: boolean
+    type: bool
     description: Whether a spec tree was already present and got replaced
     optional: false
   - name: backupPath
@@ -38,4 +38,4 @@ methods: []
 componentClass: tree_transfer_orchestrator
 sourcePath: src/core/treetransfer.ts
 createdAt: '2026-08-12T17:23:45.971Z'
-updatedAt: '2026-09-19T11:07:19.988Z'
+updatedAt: '2026-10-04T10:29:23.710Z'

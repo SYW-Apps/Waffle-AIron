@@ -14,7 +14,7 @@ fields:
     description: The method whose narrative holds the step
     optional: false
   - name: stepNumber
-    type: number
+    type: int
     description: The step the fields sat on
     optional: false
   - name: stepType
@@ -22,10 +22,10 @@ fields:
     description: The step's own type, which is what makes the fields foreign
     optional: false
   - name: fields
-    type: string[]
+    type: list<string>
     description: The foreign fields, in the order the step declared them
     optional: false
 methods: []
 sourcePath: src/core/narrative-repair.ts
 createdAt: '2026-09-18T23:50:31.848Z'
-updatedAt: '2026-09-19T11:07:07.888Z'
+updatedAt: '2026-10-04T10:28:53.652Z'

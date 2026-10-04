@@ -34,26 +34,26 @@ methods:
   - name: listSnapshots
     description: Forward list to the surface portal.
     signature: 'listSnapshots(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    returns: list<SurfaceSnapshot>
   - name: pinExternals
     description: Forward to surface_portal.pinExternals.
-    signature: 'pinExternals(aliases?: string[]): ExternalPin[]'
-    returns: ExternalPin[]
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
     params:
       - name: aliases
-        type: string[]
+        type: list<string>
         description: The aliases to pin; all when omitted
         optional: true
   - name: getExternalsStatus
     description: Forward to surface_portal.getExternalsStatus.
-    signature: 'getExternalsStatus(): ExternalStatus[]'
-    returns: ExternalStatus[]
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
     params: []
   - name: listExternals
     description: Forward to surface_portal.listExternals.
-    signature: 'listExternals(): ExternalListing[]'
-    returns: ExternalListing[]
+    signature: 'listExternals(): list<ExternalListing>'
+    returns: list<ExternalListing>
     params: []
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-09-30T20:51:18.308Z'
+updatedAt: '2026-10-04T10:18:38.405Z'

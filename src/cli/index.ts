@@ -305,7 +305,8 @@ async function statusCommand(opts: { subsystem?: string; recursive?: boolean }):
     process.stdout.write(`${await statusAttached(target, opts.subsystem)}\n`);
     return;
   }
-  await runStatus({ subsystem: opts.subsystem, recursive: opts.recursive });
+  // The flag at the edge: --no-recursive is a member depth of 0, the default every level.
+  await runStatus({ subsystem: opts.subsystem, ...(opts.recursive === false ? { memberDepth: 0 } : {}) });
 }
 
 // ---------------------------------------------------------------------------
@@ -413,18 +414,18 @@ program
 // cli_runner dispatch for the pack-ecosystem commands — consistent with
 // runValidate/runGenerate/…: the orchestrator routes each subcommand to its
 // command adapter rather than the commander action calling the adapter inline.
-async function runRules(): Promise<void> {
-  await listRules();
+function runRules(): void {
+  listRules();
 }
-async function runPatterns(): Promise<void> {
-  await listPatterns();
+function runPatterns(): void {
+  listPatterns();
 }
-async function runVariants(): Promise<void> {
-  await listVariants();
+function runVariants(): void {
+  listVariants();
 }
 async function runPacks(action: string, arg?: string, options: PackCommandOptions = {}): Promise<void> {
   if (action === 'add') await addPack(arg!, options.global);
-  else if (action === 'list') await listPacks();
+  else if (action === 'list') listPacks();
   else if (action === 'remove') await removePack(arg!, options.global);
 }
 async function runPack(
@@ -434,19 +435,19 @@ async function runPack(
 ): Promise<void> {
   // --yes passes through to the commands that select, update or remove a
   // project's pack; without it they show the pack's impact and ask first.
-  if (action === 'init') await initPack(arg!, { kind: options.kind === 'code' ? 'code' : 'declarative', dir: options.dir, skill: options.skill });
-  else if (action === 'build') await buildPack(arg ?? '.', { out: options.out });
+  if (action === 'init') initPack(arg!, { kind: options.kind === 'code' ? 'code' : 'declarative', dir: options.dir, skill: options.skill });
+  else if (action === 'build') buildPack(arg ?? '.', { out: options.out });
   else if (action === 'add') await addPack(arg!, options.global, options.yes);
-  else if (action === 'list') await listPacks();
+  else if (action === 'list') listPacks();
   else if (action === 'remove') await removePack(arg!, options.global, options.yes);
   else if (action === 'install') await installPack(arg!, options.yes);
-  else if (action === 'uninstall') await uninstallStorePack(arg!);
-  else if (action === 'which') await whichPack(arg!);
+  else if (action === 'uninstall') uninstallStorePack(arg!);
+  else if (action === 'which') whichPack(arg!);
   else if (action === 'use') await usePack(arg!, { source: options.source, bundle: options.bundle, pin: options.pin, yes: options.yes });
   else if (action === 'unuse') await unusePack(arg!, options.yes);
-  else if (action === 'bundle') await bundlePack(arg, { all: options.all });
+  else if (action === 'bundle') bundlePack(arg, { all: options.all });
   else if (action === 'sync') await syncPacks();
-  else if (action === 'impact') await impactPack(arg!);
+  else if (action === 'impact') impactPack(arg!);
   else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | impact | bundle | sync | add | list | remove)');
 }
 
@@ -857,18 +858,18 @@ mcpCmd
  * the credential stored for that instance — because the config adapter may not
  * read the credential store; `wairon login` once is enough to wire an agent.
  */
-async function mcpInstallCommand(opts: {
+function mcpInstallCommand(opts: {
   global?: boolean;
   configDir?: string;
   backend?: string;
   hosted?: string;
   project?: string;
   token?: string;
-}): Promise<void> {
+}): void {
   const hostedToken = opts.hosted
     ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '')) ?? undefined)
     : undefined;
-  await runMcpInstall({
+  runMcpInstall({
     global: opts.global,
     configDir: opts.configDir,
     backend: opts.backend,
@@ -892,8 +893,8 @@ mcpCmd
 mcpCmd
   .command('status')
   .description('Show whether the wairon MCP server is registered in Claude Code and Antigravity settings')
-  .action(async () => {
-    await runMcpStatus();
+  .action(() => {
+    runMcpStatus();
   });
 
 // ---------------------------------------------------------------------------
@@ -1400,16 +1401,16 @@ skillsCmd
   .command('list')
   .alias('ls')
   .description('List the built-in SDD skills')
-  .action(async () => {
-    await runSkillsList();
+  .action(() => {
+    runSkillsList();
   });
 
 skillsCmd
   .command('install')
   .alias('sync')
   .description('Install/refresh the SDD skills into each active target tool')
-  .action(async () => {
-    await runSkillsInstall();
+  .action(() => {
+    runSkillsInstall();
   });
 
 // ---------------------------------------------------------------------------

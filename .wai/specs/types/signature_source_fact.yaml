@@ -49,14 +49,14 @@ fields:
       source, or the restated difference
     optional: true
   - name: differs
-    type: boolean
+    type: bool
     description: >-
       On a restated outcome: whether the stated params or returns differ from the source's. A
       difference is SIGNATURE_SOURCE_RESTATED; an equal restatement is only redundant, and the
       doctor's signature repair drops it
     optional: true
   - name: candidates
-    type: string[]
+    type: list<string>
     description: >-
       On an ambiguous outcome: the method (`<component key>.<method>`) and the signature type's
       qualified id the value both names
@@ -64,4 +64,4 @@ fields:
 methods: []
 sourcePath: src/core/signature-sources.ts
 createdAt: '2026-10-03T19:31:17.009Z'
-updatedAt: '2026-10-03T19:51:54.925Z'
+updatedAt: '2026-10-04T10:21:05.700Z'

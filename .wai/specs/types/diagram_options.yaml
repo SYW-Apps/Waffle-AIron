@@ -18,23 +18,23 @@ fields:
       of the architecture.
     optional: true
   - name: depth
-    type: number
+    type: int
     description: How far to descend.
     optional: true
   - name: all
-    type: boolean
+    type: bool
     description: Draw the whole tree rather than the default slice.
     optional: true
   - name: canvas
-    type: boolean
+    type: bool
     description: Emit the interactive self-contained HTML canvas instead of Mermaid.
     optional: true
   - name: drawio
-    type: boolean
+    type: bool
     description: Emit an editable draw.io file.
     optional: true
   - name: excalidraw
-    type: boolean
+    type: bool
     description: Emit an Excalidraw scene.
     optional: true
   - name: out
@@ -42,7 +42,7 @@ fields:
     description: Where to write the artifact.
     optional: true
   - name: health
-    type: boolean
+    type: bool
     description: >-
       Compare each consumption relation of the family with its live producer and colour the canvas's
       edges by it. On unless `--no-health` sets it false: the comparison reads each producer's
@@ -60,4 +60,4 @@ fields:
 methods: []
 sourcePath: src/commands/diagram.ts
 createdAt: '2026-09-20T16:42:26.894Z'
-updatedAt: '2026-10-03T17:04:37.053Z'
+updatedAt: '2026-10-04T10:28:51.097Z'

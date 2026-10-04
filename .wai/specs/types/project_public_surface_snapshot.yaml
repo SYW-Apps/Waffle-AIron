@@ -20,7 +20,7 @@ fields:
     description: L0 system name from the project.
     optional: false
   - name: interfaces
-    type: PublicInterfaceSummary[]
+    type: list<PublicInterfaceSummary>
     description: Redacted summaries of declared L0 system public interfaces.
     optional: false
   - name: exportedAt
@@ -34,4 +34,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:02.889Z'
-updatedAt: '2026-09-19T11:07:14.641Z'
+updatedAt: '2026-10-04T10:20:52.510Z'

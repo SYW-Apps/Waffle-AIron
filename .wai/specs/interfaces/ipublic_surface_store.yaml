@@ -11,18 +11,18 @@ methods:
       Load the persisted public-surface snapshot set, keyed by project id, from the
       public-surfaces.json file under the hosted data root and hold it as the authoritative
       in-memory representation, returning it.
-    signature: 'load(): ProjectPublicSurfaceSnapshot[]'
-    returns: ProjectPublicSurfaceSnapshot[]
+    signature: 'load(): list<ProjectPublicSurfaceSnapshot>'
+    returns: list<ProjectPublicSurfaceSnapshot>
     params: []
   - name: replaceAll
     description: >-
       Atomically swap the in-memory snapshot set to the supplied complete set after the registry has
       persisted it.
-    signature: 'replaceAll(snapshots: ProjectPublicSurfaceSnapshot[]): void'
+    signature: 'replaceAll(snapshots: list<ProjectPublicSurfaceSnapshot>): void'
     returns: void
     params:
       - name: snapshots
-        type: ProjectPublicSurfaceSnapshot[]
+        type: list<ProjectPublicSurfaceSnapshot>
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -39,4 +39,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:06:03.875Z'
-updatedAt: '2026-09-19T21:29:24.259Z'
+updatedAt: '2026-10-04T10:19:24.025Z'

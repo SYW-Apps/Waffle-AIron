@@ -8,31 +8,31 @@ description: >-
 subsystem: sdd_core
 fields:
   - name: subsystems
-    type: SubsystemSpec[]
+    type: list<SubsystemSpec>
     description: Every loaded subsystem spec
     optional: false
   - name: components
-    type: ComponentSpec[]
+    type: list<ComponentSpec>
     description: Every loaded component spec
     optional: false
   - name: interfaces
-    type: InterfaceSpec[]
+    type: list<InterfaceSpec>
     description: Every loaded interface spec
     optional: false
   - name: implementations
-    type: ImplementationSpec[]
+    type: list<ImplementationSpec>
     description: Every loaded implementation spec
     optional: false
   - name: types
-    type: TypeSpec[]
+    type: list<TypeSpec>
     description: Every loaded type spec
     optional: false
   - name: groups
-    type: Json[]
+    type: list<any>
     description: Every loaded type group
     optional: false
   - name: paths
-    type: Record<string, Record<string, string>>
+    type: map<string, map<string, string>>
     description: Per kind, each spec id's absolute file path
     optional: false
   - name: signatures
@@ -41,7 +41,14 @@ fields:
       What the scan's signature resolution recorded: each signatureFrom it met and how it resolved,
       and each stored signature text its params contradict
     optional: false
+  - name: typeSpellings
+    type: TypeSpellingFacts
+    description: >-
+      What the scan's type canonicalisation recorded: each stored type position that is an alias of
+      its canonical spelling, and each that is not canonical at all. The loaded interfaces and types
+      hold canonical text, so this is the only place the stored spellings are still visible
+    optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-10-03T19:31:36.431Z'
+updatedAt: '2026-10-04T10:21:08.990Z'

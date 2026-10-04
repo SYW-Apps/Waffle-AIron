@@ -19,15 +19,15 @@ fields:
     description: Default implementation language for language-aware validation
     optional: true
   - name: boundaries
-    type: string[]
+    type: list<string>
     description: Declared system boundaries
     optional: false
   - name: globalRequirements
-    type: string[]
+    type: list<string>
     description: System-wide requirements every subsystem must honour
     optional: false
   - name: databases
-    type: DatabaseSpec[]
+    type: list<DatabaseSpec>
     description: >-
       Database definitions at the system level, grouping type specs that serve as table schemas (an
       empty list when none are declared)
@@ -37,7 +37,7 @@ fields:
     description: Diagram rendering configuration for the interactive canvas
     optional: true
   - name: publicInterfaces
-    type: SystemPublicInterface[]
+    type: list<SystemPublicInterface>
     description: >-
       The project's gateway surface: L0 entries intentionally exported beyond the project, each
       backed by a subsystem-published Portal and carrying an audience ceiling. Cross-PROJECT
@@ -61,4 +61,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T17:03:22.253Z'
+updatedAt: '2026-10-04T10:21:16.015Z'

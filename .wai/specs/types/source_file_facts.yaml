@@ -32,52 +32,52 @@ fields:
       — carried onto finding messages
     optional: true
   - name: declaredNames
-    type: string[]
+    type: list<string>
     description: >-
       Declaration-tier anchors: named declarations at any nesting depth, destructuring bindings,
       object-literal keys, import bindings, and export specifiers (export-* barrels chased through
       relative specifiers with a visited set)
     optional: false
   - name: anchoredNames
-    type: string[]
+    type: list<string>
     description: >-
       Weaker anchors: exact string-literal occurrences (tool/route registrations) and
       property-access references (forwarding through a namespace, e.g. specs.loadComponentSpecs) —
       satisfy only the 'anchored' conformance tier
     optional: false
   - name: exportedNames
-    type: string[]
+    type: list<string>
     description: Exported bindings of the file (Level 2 dependency-conformance and UNDECLARED_EXPORT fuel)
     optional: false
   - name: imports
-    type: string[]
+    type: list<string>
     description: >-
       Runtime import/require module specifiers found in the file (dependency-conformance fuel).
       Type-only imports are excluded — type coupling is allowed by default and never forms a
       dependency edge.
     optional: false
   - name: reexports
-    type: string[]
+    type: list<string>
     description: >-
       Module specifiers of export-from declarations — surface republication, not collaboration:
       never accused as an undeclared dependency, but realizes a declared forwarding edge (a portal
       barrel republishing its orchestrator).
     optional: false
   - name: functionComplexity
-    type: Record<string, number>
+    type: map<string, int>
     description: >-
       Cyclomatic complexity per named function-like (function, method and accessor declarations, and
       function or arrow initializers of named slots); exact grade only, and same-named functions
       record their maximum — fuel for the detail-sufficiency lint
     optional: true
   - name: topLevelMutableBindings
-    type: string[]
+    type: list<string>
     description: >-
       Module-scope let and var bindings; exact grade only — fuel for the hidden-state lint, which
       cannot see mutation of const-bound containers
     optional: true
   - name: reexportOnly
-    type: boolean
+    type: bool
     description: >-
       True when the file declares nothing of its own and every name it publishes comes from a
       re-export — a pure re-export barrel, which has no code to claim. Exact grade only: a weaker
@@ -85,7 +85,7 @@ fields:
       guess.
     optional: true
   - name: functionCallSites
-    type: Record<string, CallSiteFact[]>
+    type: map<string, list<CallSiteFact>>
     description: >-
       Direct call SITES per named function-like, with the shape each call was written in (nested
       named functions carry their own entries; anonymous callbacks count toward their enclosing
@@ -95,14 +95,14 @@ fields:
       dropped
     optional: true
   - name: importBindings
-    type: Record<string, ImportBindingFact>
+    type: map<string, ImportBindingFact>
     description: >-
       Runtime (value) import bindings by local name; exact grade only — a weaker grade sees module
       specifiers but never which local name they bound. The closed set a call site's origin is
       resolved through
     optional: true
   - name: fieldTypes
-    type: Record<string, string[]>
+    type: map<string, list<string>>
     description: >-
       The type names an instance FIELD is DECLARED with, by field name — read off class property
       declarations and constructor parameter properties, which is where a constructor-injected
@@ -112,7 +112,7 @@ fields:
       records nothing: what an initializer INFERS is not what the code declares
     optional: true
   - name: typeOnlyBindings
-    type: Record<string, string>
+    type: map<string, string>
     description: >-
       The module specifier each TYPE-ONLY import binding came from, by local name; exact grade only.
       The half of the import list importBindings deliberately leaves out, because a type binding can
@@ -120,7 +120,7 @@ fields:
       why it is kept apart rather than folded in
     optional: true
   - name: localTypes
-    type: Record<string, string[]>
+    type: map<string, list<string>>
     description: >-
       The type names a locally BOUND name is DECLARED with, by name — read off function and method
       parameters and off variable declarations that carry an annotation, which is where a module
@@ -133,7 +133,7 @@ fields:
       reference: what an initializer INFERS is not what the code declares
     optional: true
   - name: typeShapes
-    type: Record<string, TypeShapeFact>
+    type: map<string, TypeShapeFact>
     description: >-
       The members of each named shape the file declares, by declaration name — what lets a type
       spec's `fields` be checked against the data the code actually carries, rather than read as
@@ -141,7 +141,7 @@ fields:
       a mention, and a guess about somebody's data model is worse than silence.
     optional: true
   - name: functionParams
-    type: Record<string, ParameterFact[][]>
+    type: map<string, list<list<ParameterFact>>>
     description: >-
       The parameter lists of each named function-like in the file, by name — what lets a contract's
       declared `params` be checked against the signature that realizes them, the last of the three
@@ -154,7 +154,7 @@ fields:
       below it a parameter list cannot be told from a call.
     optional: true
   - name: functionRoutes
-    type: Record<string, RouteFact[]>
+    type: map<string, list<RouteFact>>
     description: >-
       The routes each named function-like in the file handles, by name — what lets a listener's
       mount be read against the contract endpoints of the portal it serves, so a route the router
@@ -163,7 +163,7 @@ fields:
       route records none rather than an empty guess.
     optional: true
   - name: reexportBindings
-    type: ReexportBindingFact[]
+    type: list<ReexportBindingFact>
     description: >-
       What each export-from declaration republishes, name by name: a named one with both sides of
       its rename (`export { a as b } from 'm'` publishes `b` as m's `a`), a star with `*` on both
@@ -171,10 +171,37 @@ fields:
       is what lets a reader follow a republished name to the module that wrote it, and a weaker
       grade leaves it unset rather than guess
     optional: true
+  - name: asyncFunctions
+    type: list<string>
+    description: >-
+      The named function-likes in the file that complete later — declared `async`, or annotated to
+      return a Promise — listed once per such BODY, in the order the bodies are met, exactly as
+      functionParams keeps one signature per body: a name with several bodies (a class member and
+      the facade forwarding to it) is judged on what they all say, as many entries as signatures
+      being every body and none being no body. What ASYNC_MISMATCH compares a contract method's
+      `async` returns with. EXACT grade only.
+    optional: true
+  - name: enumValues
+    type: map<string, list<string>>
+    description: >-
+      The values of each enum-like declaration in the file, by declaration name, in declared order:
+      a string-literal union alias, the string array a `z.enum([...])` constant holds (an alias
+      `z.infer<typeof X>` followed one hop, as a derived shape is), or a string enum's member
+      values. What lets an enum type's values be checked against the code (UNREALIZED_ENUM_VALUE,
+      UNDECLARED_ENUM_VALUE). EXACT grade only; a union mixing non-literals is not enum-like and is
+      left out.
+    optional: true
+  - name: aliasTypes
+    type: map<string, string>
+    description: >-
+      The right side of each type alias the file declares, as written, by alias name — every alias
+      whose right side is not an object shape (`type PackPath = string`). What a named scalar's
+      holds is compared with through the file's dialect (TYPE_HOLDS_MISMATCH). EXACT grade only.
+    optional: true
 methods:
   - name: resolveImport
     signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
-    returns: string | undefined
+    returns: string?
     description: >-
       Resolve one of this file's relative import specifiers against a set of known source paths:
       join it with this file's directory, then try the joined path, .js swapped for .ts or .tsx, the
@@ -182,14 +209,14 @@ methods:
       when nothing matches
   - name: callSitesOf
     signature: 'callSitesOf(fn: string): CallSiteFact[] | undefined'
-    returns: CallSiteFact[] | undefined
+    returns: list<CallSiteFact>?
     description: >-
       The call sites written inside one named function-like, or undefined when the file holds no
       BODY under that name. The two answers are different findings and must never be collapsed: an
       empty array is a body that calls nothing, undefined is nothing to read
   - name: hasFunctionBody
     signature: 'hasFunctionBody(symbol: string): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether the file holds a function-like BODY under a name, as the model measured it: a
       function, method or accessor declaration, or a function/arrow initializer bound to a named
@@ -199,31 +226,41 @@ methods:
       caller that would ACCUSE on the answer must check the grade itself
   - name: importBindingOf
     signature: 'importBindingOf(name: string): ImportBindingFact | undefined'
-    returns: ImportBindingFact | undefined
+    returns: ImportBindingFact?
     description: >-
       The runtime import binding this file makes under a local name, or undefined when the name is
       not an import of this file — it is local, global, or bound type-only
   - name: fieldTypesOf
     signature: 'fieldTypesOf(field: string): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The type names an instance field is declared with, or EMPTY when the file declares no such
       field, annotates it with nothing, or was analyzed below exact grade — an empty answer being
       what keeps an unresolvable field from becoming a guess
   - name: typeBindingOf
     signature: 'typeBindingOf(name: string): string | undefined'
-    returns: string | undefined
+    returns: string?
     description: >-
       The module specifier a NAME was imported from, whether the import was type-only or a runtime
       one, since a declared type may be spelled either way; undefined when the file imports no such
       name, which leaves the name local, global or ambient
   - name: localTypesOf
     signature: 'localTypesOf(name: string): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The type names a locally bound name is declared with, or EMPTY when the file binds no such
       name, annotates it with nothing, or was analyzed below exact grade — the empty answer being
       what keeps an unannotated receiver from becoming a guess, exactly as it is for a field
+  - name: dialect
+    signature: 'dialect(): TypeDialect?'
+    params: []
+    returns: TypeDialect?
+    description: >-
+      The type dialect shipped for the language this file was analyzed as (type_dialect.forLanguage
+      of its effective language), or none — what a conformance rule reads this file's type
+      annotations through. None means the rule stays silent on types for this file rather than
+      guess.
+    symbol: dialectOf
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-09-26T10:59:00.469Z'
+updatedAt: '2026-10-04T10:51:55.778Z'

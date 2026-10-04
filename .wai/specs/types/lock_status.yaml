@@ -17,7 +17,7 @@ fields:
       algorithm — see upgraded()).
     optional: false
   - name: record
-    type: LockRecord | null
+    type: LockRecord?
     description: >-
       The persisted record, or null when the project was never locked. Retained for a stale verdict
       too — staleness is a judgement ABOUT the record, not its deletion, so a caller can prompt for
@@ -32,7 +32,7 @@ fields:
 methods:
   - name: upgraded
     signature: 'upgraded(): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a stale verdict comes from the identity itself changing shape rather than from
       anything it covers: true when the state is stale and the record's stateId.algorithm differs
@@ -43,4 +43,4 @@ methods:
     symbol: lockUpgraded
 sourcePath: src/core/specs.ts
 createdAt: '2026-07-30T15:58:52.007Z'
-updatedAt: '2026-10-03T17:03:27.183Z'
+updatedAt: '2026-10-04T10:20:25.337Z'

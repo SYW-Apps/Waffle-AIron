@@ -406,13 +406,26 @@ methods:
         targetComponent: export_resolver
         targetMethod: projectTable
       - stepNumber: 18
+        label: types
+        description: >-
+          Before any reference is bound, read every root's interfaces and types under the type
+          grammar (interface_spec.canonicalTypes, type_spec.canonicalTypes): each structured type
+          position is respelled to its canonical text in memory, so every consumer — the binder, the
+          signature resolver's derived texts, the rules, the canvas, the surfaces — reads one
+          spelling; each position whose stored text is an alias is kept as a respelling and each
+          that is not canonical as a problem, located by spec and path, together the index's
+          typeSpellings. Run on the specs as read, so a respelling compares the file's own text and
+          never a bound reference; a position that is not canonical is left as written and read by
+          consumers as opaque
+        type: local
+      - stepNumber: 19
         label: bind
         description: Bind every recorded reference with `::`
         type: loop
         loopKind: forEach
         over: the references with `::` every root's files wrote
-        endStep: 19
-      - stepNumber: 19
+        endStep: 20
+      - stepNumber: 20
         label: bound
         description: >-
           Local first; then by form. alias — the first segment is an alias of the referring root: a
@@ -436,7 +449,7 @@ methods:
           (unresolved). Record the form, the binding, the producer, the public name and the rewrite
           the writer would emit (AuthoredReference)
         type: local
-      - stepNumber: 20
+      - stepNumber: 21
         label: imports
         description: >-
           Bind every bare name set aside, per root, through the root's imports — local first always
@@ -454,7 +467,7 @@ methods:
           importing it and the `use` line that would. Nothing outside the root's own alias table is
           ever consulted: no family-wide lookup. Record each as an AuthoredReference of form import
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         label: signatures
         description: >-
           Once every reference of the family is bound, resolve the index's signatures, handing over
@@ -466,14 +479,24 @@ methods:
         type: call
         targetComponent: signature_resolver
         targetMethod: resolveTree
-      - stepNumber: 22
+      - stepNumber: 23
+        label: respelled-texts
+        description: >-
+          Drop each stale-text fact whose stored text equals the text the method's params derive as
+          the file spells them (the specs as read, before step 18): that text differs from the
+          derived one only because its params are still stored in alias spellings, which the
+          type-spelling facts already hold (TYPE_SPELLING_STALE) and the save that respells them
+          rewrites together with the text — one cause, reported once. A text that contradicts its
+          params as stored stays a stale-text fact
+        type: local
+      - stepNumber: 24
         description: >-
           Record per root its key, parent, alias and form, the description its parent's declaration
           gives it, legacy mount, L0, configuration, alias table, tables, spec keys, its parts, and
           authored references, and the family problems met (its members' part-unavailable and
           kind-mismatch problems included)
         type: local
-      - stepNumber: 23
+      - stepNumber: 25
         description: Answer the recorded roots, bound root first
         type: return
         outcome: ScannedProjectRoot[]
@@ -528,6 +551,17 @@ methods:
         description: Answer the signature facts the scan kept on the index
         type: return
         outcome: SignatureFacts
+  - name: typeSpellingFacts
+    narrative:
+      - stepNumber: 1
+        description: Serve the workspace scan, rescanning when the tree's file signature no longer holds
+        type: call
+        targetComponent: spec_index
+        targetMethod: listProjectRoots
+      - stepNumber: 2
+        description: Answer the type-spelling facts the scan kept on the index
+        type: return
+        outcome: TypeSpellingFacts
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-03T20:28:37.169Z'
+updatedAt: '2026-10-03T22:41:40.712Z'

@@ -11,15 +11,15 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: registered
-    type: string[]
+    type: list<string>
     description: Member record ids created
     optional: false
   - name: relocated
-    type: string[]
+    type: list<string>
     description: Member record ids whose memberPath or parentProjectId changed
     optional: false
   - name: departed
-    type: string[]
+    type: list<string>
     description: Member record ids disabled because the family no longer declares them
     optional: false
   - name: commit
@@ -27,25 +27,25 @@ fields:
     description: The family commit, absent when the family is not git-backed or nothing changed
     optional: true
   - name: renamed
-    type: string[]
+    type: list<string>
     description: >-
       'old->new' for every member record re-keyed by a project rename (its own-scope settings and
       key entries moved with it)
     optional: false
   - name: reachChanges
-    type: ReachComparison[]
+    type: list<ReachComparison>
     description: >-
       Every subject x capability x project whose effective permission changed because a member
       gained, lost or changed its parent — audited with the change
     optional: false
   - name: returned
-    type: string[]
+    type: list<string>
     description: >-
       Member record ids re-enabled because the family declares their member again after they were
       disabled as departed
     optional: false
   - name: retired
-    type: string[]
+    type: list<string>
     description: >-
       Member records retired because their member's content is now a part of its parent (stage 8:
       demote) — disabled with the reason "part of <parent>", never deleted, their own-scope settings
@@ -53,4 +53,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-10-01T16:27:33.167Z'
-updatedAt: '2026-10-02T23:58:01.979Z'
+updatedAt: '2026-10-04T10:20:28.725Z'

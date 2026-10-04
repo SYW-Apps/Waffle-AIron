@@ -11,13 +11,13 @@ fields: []
 methods:
   - name: gate
     signature: 'gate(kind: string, merged: object): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       Judge the fully merged spec immediately before it is persisted, and throw to refuse the write.
       Returns any notices to surface alongside the write's own.
   - name: assess
     signature: 'assess(kind: string, merged: object): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       Judge a spec the same way `gate` does but answer with the rule codes instead of throwing, so a
       caller can ask whether a shape WOULD be legal without attempting the write. This exists for
@@ -26,4 +26,4 @@ methods:
       would mean driving a search on caught exceptions.
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:13:19.876Z'
-updatedAt: '2026-09-20T12:04:44.906Z'
+updatedAt: '2026-10-04T10:21:10.324Z'

@@ -7,7 +7,7 @@ description: >-
 subsystem: sdd_cli
 fields:
   - name: global
-    type: boolean
+    type: bool
     description: Act on the global pack store instead of the project's
     optional: true
   - name: kind
@@ -19,7 +19,7 @@ fields:
     description: 'init: the directory to scaffold into'
     optional: true
   - name: skill
-    type: boolean
+    type: bool
     description: 'init: scaffold a skill too'
     optional: true
   - name: out
@@ -31,22 +31,22 @@ fields:
     description: 'use: where to take the pack from'
     optional: true
   - name: bundle
-    type: boolean
+    type: bool
     description: 'use: vendor the pack into the project bundle'
     optional: true
   - name: pin
-    type: boolean
+    type: bool
     description: 'use: pin the resolved version'
     optional: true
   - name: all
-    type: boolean
+    type: bool
     description: 'bundle: every selection the project declares'
     optional: true
   - name: 'yes'
-    type: boolean
+    type: bool
     description: Apply without showing the impact report first
     optional: true
 methods: []
 sourcePath: src/commands/packs.ts
 createdAt: '2026-10-03T16:49:18.609Z'
-updatedAt: '2026-10-03T16:49:18.616Z'
+updatedAt: '2026-10-04T10:20:37.356Z'

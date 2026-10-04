@@ -11,7 +11,7 @@ import {
   graph,
 } from './specs.js';
 import type { ValidationIssue } from './validation.js';
-import { deriveTypeSignature, extractTypeIdentifiers, familyNode, isOwnComponentEntry, matchTypeRef, methodTypeRefs, relationHealth, type ExternalStatus, type ProjectNode, type ProjectRelations, type RelationHealth } from '../models/index.js';
+import { deriveTypeSignature, familyNode, parseTypeExpression, typeIsMany, writtenTypeRefs, isOwnComponentEntry, matchTypeRef, methodTypeRefs, relationHealth, type ExternalStatus, type ProjectNode, type ProjectRelations, type RelationHealth } from '../models/index.js';
 import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 
 // ---------------------------------------------------------------------------
@@ -157,6 +157,10 @@ export interface CanvasModel {
     methods: { name: string; signature: string; returns: string; description?: string }[];
     /** A signature type's derived text, `(a: T, b?: U): R` — drawn in place of a field list. */
     signature?: string;
+    /** An enum's values in declared order — drawn in place of a field list. */
+    values?: { name: string; description?: string }[];
+    /** A named scalar's primitive — drawn compactly beside its name, with no field rows and no edges. */
+    holds?: string;
     /** Interface methods whose params/returns reference this type (usage trace). */
     usedBy: { component: string; method: string }[];
     componentClass?: string;
@@ -501,19 +505,28 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
     })),
     methods: t.methods.map(m => ({ name: m.name, signature: m.signature, returns: m.returns, ...(m.description ? { description: m.description } : {}) })),
     ...(t.kind === 'signature' ? { signature: deriveTypeSignature(t) } : {}),
+    ...(t.kind === 'enum'
+      ? { values: (t.values ?? []).map(v => ({ name: v.name, ...(v.description ? { description: v.description } : {}) })) }
+      : {}),
+    ...(t.holds !== undefined ? { holds: t.holds } : {}),
     usedBy: usedByFor(t),
     ...(t.componentClass ? { componentClass: t.componentClass } : {}),
     ...(t.database ? { database: t.database } : {}),
     ...(t.table ? { table: t.table } : {}),
     ...(t.linkedEntity ? { linkedEntity: t.linkedEntity } : {}),
   }));
-  // Cardinality is derivable from the field's type string: collection shapes
-  // mean "many", the optional flag means 0..1 — real ERD multiplicity for free.
-  const MANY_SHAPE = /\[\s*\]|Array<|Vec<|Set<|List<|Map<|Record<|HashMap</i;
+  // Multiplicity is read from the field's parsed type expression, never by
+  // pattern: a list, set or map holds many (type_expression.isMany); an
+  // optional field or a `T?` type is 0..1; anything else is 1.
+  const multiplicity = (field: { type: string; optional?: boolean }): '1' | '0..1' | '*' => {
+    const expression = parseTypeExpression(field.type, 'field').expression;
+    if (expression && typeIsMany(expression)) return '*';
+    return field.optional || expression?.form === 'optional' ? '0..1' : '1';
+  };
   const typeEdges: CanvasModel['typeEdges'] = [];
   for (const t of typeSpecs) {
     for (const field of t.fields) {
-      const refs = new Set<string>(extractTypeIdentifiers(field.type));
+      const refs = new Set<string>(writtenTypeRefs(field.type, 'field'));
       if (field.references) {
         const refStr = field.references;
         refs.add(refStr);
@@ -531,8 +544,9 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
             : other.id;
           return matchTypeRef(ref, qualified);
         });
-        if (target && target.id !== t.id) {
-          const card = MANY_SHAPE.test(field.type) ? '*' : field.optional ? '0..1' : '1';
+        // No edge to an enum or a named scalar: each is a value domain, not an entity relation.
+        if (target && target.id !== t.id && target.kind !== 'enum' && target.holds === undefined) {
+          const card = multiplicity(field);
           if (!typeEdges.some(e => e.from === t.id && e.to === target.id && e.field === field.name)) {
             typeEdges.push({ from: t.id, to: target.id, field: field.name, card });
           }
@@ -2217,7 +2231,7 @@ var MODEL = __MODEL_JSON__;
       return '';
     }
     function visibleFields(t) {
-      if (det === 'names') return [];
+      if (det === 'names' || t.values || t.holds) return [];
       if (det === 'keys') return t.fields.filter(function (f) { return markerOf(t, f) !== ''; });
       return t.fields;
     }
@@ -2262,15 +2276,19 @@ var MODEL = __MODEL_JSON__;
       var meths = det === 'full' ? t.methods : [];
       // A signature type is drawn with its derived text in place of a field list.
       var sig = t.signature && det !== 'names' ? t.signature : '';
-      var head = t.name + '  \\u00AB' + t.kind + '\\u00BB';
-      var rows = (sig ? [sig] : []).concat(fields.map(function (f) { return rowText(t, f); }))
+      // An enum is drawn with its values in place of a field list.
+      var vals = t.values && det !== 'names' ? t.values : [];
+      // A named scalar is drawn compactly: its name and the primitive it holds.
+      var head = t.name + (t.holds ? ' = ' + t.holds : '') + '  \\u00AB' + t.kind + '\\u00BB';
+      var rows = (sig ? [sig] : []).concat(vals.map(function (v) { return '\\u2022 ' + v.name; }))
+        .concat(fields.map(function (f) { return rowText(t, f); }))
         .concat(meths.map(function (m) { return '\\u0192 ' + m.name + '(): ' + m.returns; }));
       var longest = head.length + 4;
       rows.forEach(function (r) { if (r.length > longest) longest = r.length; });
       var plain = rows.length === 0;
       var pw = Math.max(170, head.length * 6.8 + 26);
       var W = Math.max(210, Math.min(400, longest * 6.6 + 30));
-      return { fields: fields, meths: meths, sig: sig, head: head, plain: plain, w: plain ? pw : W, h: plain ? 40 : TH_H + (sig ? ROW_H : 0) + fields.length * ROW_H + meths.length * ROW_H };
+      return { fields: fields, meths: meths, sig: sig, vals: vals, head: head, plain: plain, w: plain ? pw : W, h: plain ? 40 : TH_H + (sig ? ROW_H : 0) + vals.length * ROW_H + fields.length * ROW_H + meths.length * ROW_H };
     }
 
     // Emit one type table with its top-left at (ax, ay); returns its size.
@@ -2301,6 +2319,13 @@ var MODEL = __MODEL_JSON__;
         });
         ry += ROW_H;
       }
+      sh.vals.forEach(function (v, vi) {
+        eles.push({
+          data: { id: 'TV~' + t.id + '~' + vi, parent: 'T~' + t.id, label: '\\u2022 ' + v.name, w: sh.w, h: ROW_H, tw: sh.w - 14 },
+          position: { x: ax + sh.w / 2, y: ry + ROW_H / 2 }, classes: 'typeRow' + (dim ? ' dimmed' : ''), grabbable: false,
+        });
+        ry += ROW_H;
+      });
       sh.fields.forEach(function (f) {
         var rid = 'TF~' + t.id + '~' + f.name;
         rowIds[rid] = 1;
@@ -4834,6 +4859,17 @@ var MODEL = __MODEL_JSON__;
           : '<span class="desc">no fields</span>';
         if (ty.signature) {
           body += section('Signature', 1, '<div class="method"><code>' + esc(ty.signature) + '</code></div>', true);
+        } else if (ty.holds) {
+          body += section('Holds', 1, '<div class="method"><code>' + esc(ty.holds) + '</code>'
+            + '<div class="mdesc">A named scalar: one ' + esc(ty.holds) + ' under this name.</div></div>', true);
+        } else if (ty.values) {
+          body += section('Values', ty.values.length, ty.values.length
+            ? ty.values.map(function (v) {
+                return '<div class="method"><div class="mname">' + esc(v.name) + '</div>'
+                  + (v.description ? '<div class="mdesc">' + esc(v.description) + '</div>' : '')
+                  + '</div>';
+              }).join('')
+            : '<span class="desc">no values</span>', true);
         } else {
           body += section('Fields', ty.fields.length, fieldsInner, true);
         }

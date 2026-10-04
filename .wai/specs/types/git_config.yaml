@@ -7,7 +7,7 @@ description: >-
   repository is safely shared with the project's own codebase. Persisted at .wai/git.json.
 fields:
   - name: enabled
-    type: boolean
+    type: bool
     description: Whether git backing is active for the project
     optional: false
   - name: remote
@@ -23,13 +23,13 @@ fields:
     description: The isolated branch the container commits to (never the default)
     optional: false
   - name: periodicSyncMinutes
-    type: number
+    type: int
     description: >-
       Interval for the periodic .wai/-scoped backup sweep; absent disables periodic sync for this
       project.
     optional: true
   - name: skipIfClean
-    type: boolean
+    type: bool
     description: >-
       The periodic sweep skips the commit when the scoped path is clean (default true) — a quiet
       project never commits noise.
@@ -47,4 +47,4 @@ fields:
 methods: []
 sourcePath: src/git/types.ts
 createdAt: '2026-07-04T16:31:25.752Z'
-updatedAt: '2026-10-03T17:05:00.727Z'
+updatedAt: '2026-10-04T10:28:55.806Z'

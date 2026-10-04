@@ -19,7 +19,7 @@ fields:
       governs, and then only the pack's added codes are settings.
     optional: true
   - name: severities
-    type: Map<string, string>
+    type: map<string, string>
     description: >-
       Rule code → the severity (error | warning | notice | off) the pack gives it: the profile's
       rules.sddRuleSeverity, then each assertion's namespaced code at its declared severity, then
@@ -48,4 +48,4 @@ methods: []
 sourcePath: src/models/pack-impact.ts
 symbol: PackSettings
 createdAt: '2026-09-29T15:50:20.251Z'
-updatedAt: '2026-09-29T16:40:57.989Z'
+updatedAt: '2026-10-04T10:20:41.036Z'

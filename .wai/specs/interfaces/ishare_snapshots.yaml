@@ -16,7 +16,7 @@ methods:
       creator's reach, what was out of it unavailable — and no member record ids, so a shared page
       links to nothing its viewer may not open.
     signature: >-
-      capture(principal: Principal, projectId: string, view: string, artifacts: string[]):
+      capture(principal: Principal, projectId: string, view: string, artifacts: list<string>):
       ShareSnapshot
     returns: ShareSnapshot
     params:
@@ -28,9 +28,9 @@ methods:
       - name: view
         type: string
       - name: artifacts
-        type: string[]
+        type: list<string>
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-17T22:30:09.552Z'
-updatedAt: '2026-10-03T16:50:11.801Z'
+updatedAt: '2026-10-04T10:19:31.784Z'

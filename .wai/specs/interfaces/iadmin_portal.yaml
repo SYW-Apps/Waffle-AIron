@@ -25,7 +25,7 @@ methods:
   - name: listProjects
     description: List hosted projects.
     signature: 'listProjects(credential: string): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    returns: list<HostedProjectRecord>
     endpoint:
       transport: HTTP
       method: GET
@@ -52,7 +52,7 @@ methods:
   - name: listKeys
     description: List API keys authorized for a project.
     signature: 'listKeys(credential: string, project: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
+    returns: list<ApiKeyRecord>
     endpoint:
       transport: HTTP
       method: GET
@@ -144,7 +144,7 @@ methods:
   - name: listProducers
     description: List a project's producers.
     signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
-    returns: ProducerConfig[]
+    returns: list<ProducerConfig>
     endpoint:
       transport: HTTP
       method: GET
@@ -160,15 +160,15 @@ methods:
   - name: listSecrets
     description: List configured secret keys.
     signature: 'listSecrets(credential: string): string[]'
-    returns: string[]
+    returns: list<string>
     endpoint:
       transport: HTTP
       method: GET
       path: /admin/secrets
   - name: listGlobalPacks
     description: List the server-global installed packs.
-    signature: 'listGlobalPacks(credential: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listGlobalPacks(credential: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -206,8 +206,8 @@ methods:
       path: /admin/packs/{name}
   - name: listProjectPacks
     description: List a project's registered packs.
-    signature: 'listProjectPacks(credential: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listProjectPacks(credential: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -256,8 +256,8 @@ methods:
       List approval requests for the human decision surface, optionally filtered by status and
       project. Human decision surface for the project-lifecycle approval exception until the admin
       UI lands.
-    signature: 'listApprovals(credential: string, status?: string, project?: string): ApprovalRequest[]'
-    returns: ApprovalRequest[]
+    signature: 'listApprovals(credential: string, status?: string, project?: string): list<ApprovalRequest>'
+    returns: list<ApprovalRequest>
     params:
       - name: credential
         type: string
@@ -276,7 +276,7 @@ methods:
       Approve or deny a pending approval request. Human decision surface for the project-lifecycle
       approval exception until the admin UI lands.
     signature: >-
-      decideApproval(credential: string, requestId: string, approved: boolean, reason?: string):
+      decideApproval(credential: string, requestId: string, approved: bool, reason?: string):
       ApprovalRequest
     returns: ApprovalRequest
     params:
@@ -285,7 +285,7 @@ methods:
       - name: requestId
         type: string
       - name: approved
-        type: boolean
+        type: bool
       - name: reason
         type: string
         optional: true
@@ -330,7 +330,7 @@ methods:
       the web portal's /web/projects/tree/import.
     signature: >-
       importProjectTree(credential: string, project: string, archiveBase64: string,
-      replaceExisting?: boolean): TreeImportResult
+      replaceExisting?: bool): TreeImportResult
     returns: TreeImportResult
     params:
       - name: credential
@@ -340,7 +340,7 @@ methods:
       - name: archiveBase64
         type: string
       - name: replaceExisting
-        type: boolean
+        type: bool
         optional: true
     endpoint:
       transport: HTTP
@@ -393,4 +393,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-10-03T20:53:52.614Z'
+updatedAt: '2026-10-04T10:18:28.473Z'

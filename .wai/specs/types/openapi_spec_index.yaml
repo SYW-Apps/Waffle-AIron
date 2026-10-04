@@ -11,13 +11,13 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: openapiIndex
-    type: boolean
+    type: bool
     description: >-
       Discriminator — always true; marks the string body as an index of APIs rather than a single
       OpenAPI document.
     optional: false
   - name: specs
-    type: OpenApiSpecRef[]
+    type: list<OpenApiSpecRef>
     description: >-
       The available per-portal API references, one per published portal (empty when the project
       publishes no portal).
@@ -34,4 +34,4 @@ lint:
         referenced in the producing narratives/prose rather than as a field or method-signature
         type, so the used-by-signature check cannot see it.
 createdAt: '2026-07-24T09:45:00.858Z'
-updatedAt: '2026-09-19T11:07:11.666Z'
+updatedAt: '2026-10-04T10:20:35.026Z'

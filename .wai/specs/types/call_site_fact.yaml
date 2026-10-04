@@ -15,7 +15,7 @@ fields:
     description: 'The invoked name: the identifier of a bare call, the property name of a member call'
     optional: false
   - name: member
-    type: boolean
+    type: bool
     description: >-
       True when the call was written as a member access (receiver.name(...)) rather than as a bare
       identifier
@@ -57,4 +57,4 @@ fields:
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-19T15:29:49.702Z'
-updatedAt: '2026-09-20T10:41:26.031Z'
+updatedAt: '2026-10-04T10:19:54.170Z'

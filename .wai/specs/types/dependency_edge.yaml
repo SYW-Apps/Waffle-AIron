@@ -37,7 +37,7 @@ fields:
       carrying that kind
     optional: true
   - name: retired
-    type: boolean
+    type: bool
     description: >-
       Either end is a retired stereotype, so no boundary or matrix rule judges the edge:
       retired-stereotypes reports the component once, and its migration decides what the edge
@@ -45,13 +45,13 @@ fields:
       declares it
     optional: false
   - name: draftContext
-    type: boolean
+    type: bool
     description: >-
       The draft context a finding on this edge takes: the source's, and the target's too once the
       target resolves
     optional: false
   - name: licensed
-    type: boolean
+    type: bool
     description: >-
       The governing pack profile's allowedEdges licenses this stereotype pair — the platform's own
       idiom, declared with a reason. It is carried on the edge because the matrix is five rules:
@@ -66,4 +66,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T01:06:24.794Z'
-updatedAt: '2026-09-28T17:16:15.599Z'
+updatedAt: '2026-10-04T10:20:01.839Z'

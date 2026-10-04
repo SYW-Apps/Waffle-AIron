@@ -7,50 +7,56 @@ description: >-
   Rules merge these over their built-in tables and resolve spec references against them.
 fields:
   - name: profiles
-    type: ProfileDef[]
+    type: list<ProfileDef>
     description: Pack-registered profiles, keyed by profile id.
     optional: false
   - name: languages
-    type: LanguagePackDef[]
+    type: list<LanguagePackDef>
     description: Pack-registered language/platform tables, keyed by normalized language.
     optional: false
   - name: patterns
-    type: PatternDef[]
+    type: list<PatternDef>
     description: Pack-registered reusable pattern definitions, resolvable by PatternRef.
     optional: false
   - name: guarantees
-    type: string[]
+    type: list<string>
     description: >-
       Pack-declared guarantee tokens; the guarantee-token rule unions these with the builtin
       SEMANTIC_GUARANTEES set to form the accepted vocabulary.
     optional: false
   - name: assertions
-    type: PackAssertion[]
+    type: list<PackAssertion>
     description: >-
       Loaded declarative assertions the declarative-assertions rule evaluates; their namespaced
       codes join the known-issue-code set so lint.allow and severity overrides treat them like
       builtins.
     optional: false
   - name: packSelections
-    type: PackSelection[]
+    type: list<PackSelection>
     description: >-
       The project's by-name pack selections (legacy path references excluded), which the
       pack-reproducibility rule checks for a version or integrity pin
     optional: false
   - name: selectionFailures
-    type: PackSelectionFailure[]
+    type: list<PackSelectionFailure>
     description: >-
       Declared selections the extension loader could not resolve, each carrying the code the
       pack-resolution rule reports it under
     optional: false
   - name: packRequirements
-    type: PackRequirement[]
+    type: list<PackRequirement>
     description: >-
       The bound project's OWN composition.requirePolicies (project_config.requiredPolicies), which
       the pack-requirements rule checks for a readable range. Never a parent's: a project's gate
       judges only what its own configuration states, and a parent's requirements reach a member only
       in the family run (member-gate-unchanged-by-requirements). Empty when nothing is required.
     optional: false
+  - name: deprecations
+    type: list<string>
+    description: >-
+      Each deprecated field a loaded pack still declares, as the extension loader recorded it
+      (loaded_extensions.deprecations) — what the pack-deprecations rule reports as a notice
+    optional: false
 methods: []
 createdAt: '2026-07-14T18:56:56.419Z'
-updatedAt: '2026-09-29T16:07:21.677Z'
+updatedAt: '2026-10-03T23:40:33.021Z'

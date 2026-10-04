@@ -8,20 +8,20 @@ description: >-
   lets the same arrangement serve formats that know nothing of each other.
 fields:
   - name: subsystems
-    type: object[]
+    type: list<any>
     description: The subsystem containers, by id.
     optional: false
   - name: components
-    type: object[]
+    type: list<any>
     description: >-
       Each component's id, its subsystem, its componentType, the pattern that owns it if any, what
       it owns, and what it depends on.
     optional: false
   - name: edges
-    type: object[]
+    type: list<any>
     description: Dependency edges as from/to ids, each flagged when it crosses a subsystem boundary.
     optional: false
 methods: []
 sourcePath: src/core/canvas-layout.ts
 createdAt: '2026-09-20T16:40:48.647Z'
-updatedAt: '2026-09-20T16:40:48.658Z'
+updatedAt: '2026-10-04T10:20:21.922Z'

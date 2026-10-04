@@ -32,7 +32,7 @@ fields:
       neither names one, and handed over raw because that is the string a finding quotes
     optional: true
   - name: draftContext
-    type: boolean
+    type: bool
     description: >-
       The draft context a finding on this method takes (ctx.isImplementationDraft), read once per
       implementation rather than once per method
@@ -40,4 +40,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T13:02:39.452Z'
-updatedAt: '2026-09-19T11:07:16.097Z'
+updatedAt: '2026-10-04T10:20:58.797Z'

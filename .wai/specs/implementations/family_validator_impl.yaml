@@ -16,13 +16,13 @@ methods:
       - stepNumber: 1
         description: >-
           Read the bound root's project graph through the core adapter: the root, the project
-          members it contains (depth-bounded by a numeric `recursive`), their keys and directories,
-          the cross-project references and the identity and membership problems — and, since stage
-          8, each referenced project member (a `../`, git or hosted source; role member), whose root
-          is opened where it is stored: the sibling checkout, the fetch cache at its pinned commit,
-          or the hosted record within reach. Parts are no selection entries: they are their
-          declaring project's own subsystems, judged by its gate. This is the selection; a
-          referenced member whose root cannot be opened is left out and counted
+          members it contains (depth-bounded by `memberDepth`), their keys and directories, the
+          cross-project references and the identity and membership problems — and, since stage 8,
+          each referenced project member (a `../`, git or hosted source; role member), whose root is
+          opened where it is stored: the sibling checkout, the fetch cache at its pinned commit, or
+          the hosted record within reach. Parts are no selection entries: they are their declaring
+          project's own subsystems, judged by its gate. This is the selection; a referenced member
+          whose root cannot be opened is left out and counted
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
@@ -628,4 +628,4 @@ methods:
     symbol: familyRelations
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-03T12:36:12.166Z'
+updatedAt: '2026-10-04T10:54:16.062Z'

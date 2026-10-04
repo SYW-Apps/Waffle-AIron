@@ -1,30 +1,43 @@
-kind: value-object
+kind: enum
 id: update_channel
 name: UpdateChannel
 description: >-
-  Which release track `wairon update` follows: `stable`, `beta`, `preview` or `dev`, listed
-  narrowest first. The order is the whole point — each channel is a superset of the one before it,
-  so a person on `beta` is offered stable releases too, and widening the channel can only ever add
-  candidates. A value this build does not recognize is never honoured: it reads as `stable`, because
-  an unknown string in a hand-edited or future-version config must not be able to widen what a
-  stable install will fetch.
+  Which release track `wairon update` follows, listed narrowest first. The order is the whole point
+  — each channel is a superset of the one before it, so a person on `beta` is offered stable
+  releases too, and widening the channel can only ever add candidates. A value this build does not
+  recognize is never honoured: it reads as `stable`, because an unknown string in a hand-edited or
+  future-version config must not be able to widen what a stable install will fetch.
 fields: []
 methods:
   - name: isValid
-    signature: 'isValid(value: string): boolean'
-    returns: boolean
+    signature: 'isValid(value: string): bool'
+    params:
+      - name: value
+        type: string
+        description: A raw channel string, from the CLI flag or the stored setting
+    returns: bool
     description: >-
       Whether a string names a channel this build knows. Lives on the type because it is the one
       question anyone asks about a raw channel string, and every caller that asks it — the CLI flag,
       the stored setting — must get the same answer.
     symbol: isUpdateChannel
   - name: all
-    signature: 'all(): UpdateChannel[]'
-    returns: UpdateChannel[]
+    signature: 'all(): list<UpdateChannel>'
+    params: []
+    returns: list<UpdateChannel>
     description: >-
       Every update channel, in order from most stable to least: stable, beta, preview, dev. The
       order is the meaning — a channel follows every channel before it.
     symbol: UPDATE_CHANNELS
 sourcePath: src/config/userconfig.ts
+values:
+  - name: stable
+    description: Releases only.
+  - name: beta
+    description: Beta builds, and every stable release.
+  - name: preview
+    description: Preview builds, and everything beta follows.
+  - name: dev
+    description: Development builds, and everything preview follows.
 createdAt: '2026-09-22T21:20:58.590Z'
-updatedAt: '2026-10-03T17:53:08.906Z'
+updatedAt: '2026-10-04T10:32:26.543Z'

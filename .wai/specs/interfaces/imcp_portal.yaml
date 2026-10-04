@@ -14,11 +14,11 @@ methods:
       none and stays correct-on-poll). A hosted caller may also ask for the seventeen hosted
       data-plane tools to be advertised in tools/list; they are discovery only, served by the
       hosting request orchestrator before any call reaches this server.
-    signature: 'createMcpServer(hostedTools?: boolean): McpServer'
-    returns: McpServer
+    signature: 'createMcpServer(hostedTools?: bool): McpServerInstance'
+    returns: McpServerInstance
     params:
       - name: hostedTools
-        type: boolean
+        type: bool
         description: >-
           Advertise the hosted data-plane tools for discovery; false for the stdio server, which
           cannot serve them.
@@ -76,13 +76,17 @@ methods:
       signatureFrom naming its source — a signature type, or `component.method` along a
       dependsOn/owns edge — with neither params nor returns (both together are refused,
       SIGNATURE_SOURCE_RESTATED), or, for a method without params, a prose signature with returns.
-      The input may state the spec's lifecycle status, so a contract can be authored straight at
-      design or complete instead of being born draft and needing a follow-up edit nobody remembers.
-      An unstated status means draft for a new spec and the stored status for a re-authoring, and a
-      stated status that would lower the stored one is refused by name — reopening a frozen spec is
-      an update, not a restatement. The answer carries the write receipt as structured content
-      beside the sentence, so a caller learns the status written and whether a spec already held
-      that id without parsing English; the sentence itself is unchanged.
+      Every param type and returns is written in the neutral type grammar; today's spellings (`T[]`,
+      `T | null`, `Promise<T>`, `boolean`, `Record<K, V>`, ...) are accepted and stored canonical,
+      the receipt's respellings naming each, and a position that is not canonical is refused with
+      its replacement (`number`: int or float?; an inline function type: a signature type; a literal
+      union: an enum). The input may state the spec's lifecycle status, so a contract can be
+      authored straight at design or complete instead of being born draft and needing a follow-up
+      edit nobody remembers. An unstated status means draft for a new spec and the stored status for
+      a re-authoring, and a stated status that would lower the stored one is refused by name —
+      reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
+      as structured content beside the sentence, so a caller learns the status written and whether a
+      spec already held that id without parsing English; the sentence itself is unchanged.
     signature: 'sdd_define_interface(spec: InterfaceSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -116,7 +120,7 @@ methods:
       run composes only within the credential's reach). Optionally narrowed to one subsystem, or to
       one member by its key. An unfinished family-migration transaction under the bound root adds a
       notice naming it and pointing at `wairon doctor --fix` (the pending-transaction banner).
-    signature: 'sdd_validate_tree(subsystem?: string, recursive?: boolean, family?: boolean): ValidationResult'
+    signature: 'sdd_validate_tree(subsystem?: string, recursive?: bool, family?: bool): ValidationResult'
     returns: ValidationResult
     params:
       - name: subsystem
@@ -124,13 +128,13 @@ methods:
         description: Validate only this subsystem's slice of the tree; omitted validates all of it
         optional: true
       - name: recursive
-        type: boolean
+        type: bool
         description: >-
           At a project that declares members: false asks for the owner's gate alone instead of the
           family run
         optional: true
       - name: family
-        type: boolean
+        type: bool
         description: >-
           Ask for the family run at any project; at a member this composes its externals against
           their live producers, within the request's reach
@@ -147,7 +151,7 @@ methods:
       first call of a session surfaces it before anything is written; an unfinished family-migration
       transaction under the bound root leads likewise, one notice line each, pointing at `wairon
       doctor --fix`.
-    signature: 'sdd_get_status(subsystem?: string, recursive?: boolean): string'
+    signature: 'sdd_get_status(subsystem?: string, recursive?: bool): string'
     returns: string
     params:
       - name: subsystem
@@ -155,7 +159,7 @@ methods:
         description: Report only this subsystem's slice of the tree; omitted reports all of it
         optional: true
       - name: recursive
-        type: boolean
+        type: bool
         description: Descend into the members this project declares
         optional: true
     endpoint:
@@ -173,7 +177,7 @@ methods:
       made public refuses the plan). dryRun answers the plan and writes nothing; run it first and
       show the plan. Never locks: the answer names the projects to re-lock.
     signature: >-
-      sdd_externalize_subsystem(subsystem: string, path: string, as?: string, dryRun?: boolean):
+      sdd_externalize_subsystem(subsystem: string, path: string, as?: string, dryRun?: bool):
       FamilyMigrationReport
     returns: FamilyMigrationReport
     params:
@@ -188,7 +192,7 @@ methods:
         description: part (default) or project
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
     endpoint:
@@ -199,8 +203,8 @@ methods:
       MCP resource: list everything the server publishes as read-only resources — the built-in SDD
       skills (wairon-skill://) plus one live agent-brief resource per agent in the current topology
       (wairon-agent://).
-    signature: 'listResources(): SkillResourceDescriptor[]'
-    returns: SkillResourceDescriptor[]
+    signature: 'listResources(): list<SkillResourceDescriptor>'
+    returns: list<SkillResourceDescriptor>
     params: []
     endpoint:
       transport: Custom
@@ -255,9 +259,7 @@ methods:
       Tool: rename a contract method and retarget every reference to it; the method moves on the
       component's interfaces and their implementations, carrying its narrative and bindings. Reports
       the specs moved, the specs retargeted, and the specs whose prose still names it.
-    signature: >-
-      sdd_rename_method(id: string, method: string, newName: string, pinSymbol?: boolean):
-      MethodRename
+    signature: 'sdd_rename_method(id: string, method: string, newName: string, pinSymbol?: bool): MethodRename'
     returns: MethodRename
     params:
       - name: id
@@ -270,7 +272,7 @@ methods:
         type: string
         description: Its new name, a camel-case identifier
       - name: pinSymbol
-        type: boolean
+        type: bool
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name so its
           function still binds; true when omitted
@@ -284,15 +286,15 @@ methods:
       a sourced method carries only its signatureFrom — and a method's signature text is derived
       from its params on the write, never taken from the delta. Adopting a source on a method that
       states params means unsetting its params and returns in the same delta, or the write is
-      refused (SIGNATURE_SOURCE_RESTATED). The delta's arrays UPSERT by element identity rather than
-      replace, so a delta naming one element leaves the others intact, and it is deliberately open
-      below its top level — a key that is not a field at its depth is named back under NO EFFECT
-      instead of being silently dropped. The answer carries the change report as structured content
-      beside the rendered sentence, from the one report, so the prose can never disagree with the
-      data.
-    signature: >-
-      sdd_update_spec(kind: string, id: string, delta: SpecDelta, dryRun?: boolean):
-      SpecChangeReport
+      refused (SIGNATURE_SOURCE_RESTATED). A type position the delta writes as an alias is stored
+      canonical and named in the report's respellings; one it writes that is not canonical is
+      refused with its replacement, while a stored one it leaves alone is not judged. The delta's
+      arrays UPSERT by element identity rather than replace, so a delta naming one element leaves
+      the others intact, and it is deliberately open below its top level — a key that is not a field
+      at its depth is named back under NO EFFECT instead of being silently dropped. The answer
+      carries the change report as structured content beside the rendered sentence, from the one
+      report, so the prose can never disagree with the data.
+    signature: 'sdd_update_spec(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
     returns: SpecChangeReport
     params:
       - name: kind
@@ -305,7 +307,7 @@ methods:
         type: SpecDelta
         description: The partial change to merge, carrying the delta's own verbs
       - name: dryRun
-        type: boolean
+        type: bool
         description: >-
           Ask what the delta would do instead of doing it: the whole write runs, the candidate gate
           included, and not one byte of the stored file moves
@@ -319,14 +321,14 @@ methods:
       Portal, and run after sdd_define_interface. The caller picks a transport and fills that
       transport's address fields; the binding is checked against the endpoint schema before the
       contract is saved.
-    signature: 'sdd_set_endpoints(interfaceId: string, endpoints: EndpointBinding[]): SpecChangeReport'
+    signature: 'sdd_set_endpoints(interfaceId: string, endpoints: list<EndpointBinding>): SpecChangeReport'
     returns: SpecChangeReport
     params:
       - name: interfaceId
         type: string
         description: The L3 contract to bind, as the tool's interface argument names it
       - name: endpoints
-        type: EndpointBinding[]
+        type: list<EndpointBinding>
         description: >-
           One binding per method: the method NAME (not the HTTP verb), the transport, and that
           transport's address fields
@@ -343,7 +345,7 @@ methods:
       its target's. The tool for backfilling bindings once a subsystem's components exist, because a
       cross-subsystem dependency may only target a published public component.
     signature: >-
-      sdd_set_public_interfaces(subsystemId: string, publicInterfaces: PublicInterface[]):
+      sdd_set_public_interfaces(subsystemId: string, publicInterfaces: list<PublicInterface>):
       SpecChangeReport
     returns: SpecChangeReport
     params:
@@ -351,7 +353,7 @@ methods:
         type: string
         description: The L1 subsystem to update, as the tool's subsystem argument names it
       - name: publicInterfaces
-        type: PublicInterface[]
+        type: list<PublicInterface>
         description: The full replacement list of published surfaces for this subsystem
     endpoint:
       transport: Custom
@@ -370,7 +372,7 @@ methods:
       returns and text, and the source they came from). The structured content keeps every derived
       marker SEPARATE from the stored spec, so nothing derived can be written back by accident; the
       text block folds them in as it always has.
-    signature: 'sdd_get_spec(kind: string, id: string, methods?: string[]): SpecReadResult'
+    signature: 'sdd_get_spec(kind: string, id: string, methods?: list<string>): SpecReadResult'
     returns: SpecReadResult
     params:
       - name: kind
@@ -382,7 +384,7 @@ methods:
           The id to read it by; the L0 system spec is a singleton, named by the system name or
           "system"
       - name: methods
-        type: string[]
+        type: list<string>
         description: Return only these methods by name; omit it for the whole spec
         optional: true
     endpoint:
@@ -390,16 +392,25 @@ methods:
       address: mcp tools/call sdd_get_spec
   - name: sdd_add_type
     description: >-
-      Tool: define a type — an entity or value-object, the data the components operate on, or a
-      signature, a named function type. Entities are owned by a subsystem; a shared value object or
-      signature names none and is system-level. Fields are data; methods are PURE intrinsic
-      behaviour only, because anything needing a collaborator belongs on a component that takes the
-      entity as an argument, and a type method may carry structured params, which then derive its
-      signature text as a contract method's do. A signature carries params and returns and nothing
-      else (SIGNATURE_TYPE_MEMBERS); a contract method takes it by naming it as its signatureFrom. A
-      type may also CLAIM code: a sourcePath names the file holding its declaration and a symbol
-      binds the code-level name, and the file must then resolve with the declaration anchored in it.
-      The answer carries the write receipt as structured content beside the sentence.
+      Tool: define a type — an entity or value-object, the data the components operate on, a
+      signature, a named function type, or an enum, a closed ordered set of named values (`values:
+      [{name, description?}]`, with optional pure methods and nothing else — ENUM_MEMBERS). A
+      value-object may instead be a named scalar: `holds: <primitive>` (string, int, float, bool,
+      bytes, date, datetime or duration) in place of fields, a newtype or type alias in every
+      language (NAMED_SCALAR_MEMBERS beside fields or on another kind). Entities are owned by a
+      subsystem; a shared value object, signature or enum names none and is system-level. Fields are
+      data; methods are PURE intrinsic behaviour only, because anything needing a collaborator
+      belongs on a component that takes the entity as an argument, and a type method may carry
+      structured params, which then derive its signature text as a contract method's do. A signature
+      carries params and returns and nothing else (SIGNATURE_TYPE_MEMBERS); a contract method takes
+      it by naming it as its signatureFrom. Every type position is written in the neutral type
+      grammar (string, int, float, bool, bytes, date, datetime, duration, void, any; list<T>,
+      set<T>, map<K, V>; `T?`; `A | B` of named types; `async T` on a returns); today's spellings
+      are accepted and stored canonical, the receipt's respellings naming each, and a position that
+      is not canonical is refused with its replacement (`number`: int or float?). A type may also
+      CLAIM code: a sourcePath names the file holding its declaration and a symbol binds the
+      code-level name, and the file must then resolve with the declaration anchored in it. The
+      answer carries the write receipt as structured content beside the sentence.
     signature: 'sdd_add_type(spec: TypeSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -422,7 +433,7 @@ methods:
       instead, cheapest legal home first. A dry run runs the whole move, gate included, and reports
       what it would have done.
     signature: >-
-      sdd_move_methods(from: string, to: string, methods: string[], dryRun?: boolean):
+      sdd_move_methods(from: string, to: string, methods: list<string>, dryRun?: bool):
       MethodMoveReport
     returns: MethodMoveReport
     params:
@@ -433,10 +444,10 @@ methods:
         type: string
         description: The component that should receive them (namespaced if needed)
       - name: methods
-        type: string[]
+        type: list<string>
         description: The method names to move; every one must exist on the source contract
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer with what the move would do and write nothing
         optional: true
     endpoint:
@@ -480,8 +491,8 @@ methods:
       and paths a validate or a write will actually use. Answers null when the project has none,
       rather than assuming defaults, so a caller can tell an unconfigured project from a
       default-configured one.
-    signature: 'getProjectConfig(): ProjectConfig | null'
-    returns: ProjectConfig | null
+    signature: 'getProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
     endpoint:
       transport: Custom
@@ -492,11 +503,11 @@ methods:
       else all — into .wai/externals/<alias>.yaml and .wai/externals.lock.yaml, recording each used
       member's signature digest. Answers one outcome per alias (pinned, unchanged, unresolved,
       unreachable) with its unexported references.
-    signature: 'sdd_pin_externals(aliases?: string[]): ExternalPin[]'
-    returns: ExternalPin[]
+    signature: 'sdd_pin_externals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
     params:
       - name: aliases
-        type: string[]
+        type: list<string>
         description: The aliases to pin; all declared externals when omitted
         optional: true
     endpoint:
@@ -507,8 +518,8 @@ methods:
       Tool (scope: tree, a read): each declared external's pin compared with its live producer at
       signature level — unchanged, changed, removed, unlocked — and EXTERNAL_CHECK_UNAVAILABLE for
       anything that cannot be compared, never a pass. Writes nothing.
-    signature: 'sdd_get_externals_status(): ExternalStatus[]'
-    returns: ExternalStatus[]
+    signature: 'sdd_get_externals_status(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
     params: []
     endpoint:
       transport: Custom
@@ -578,8 +589,8 @@ methods:
       All-or-nothing; dryRun answers the plan and writes nothing; run it first and show the plan.
       Never locks.
     signature: >-
-      sdd_internalize_member(alias: string, into?: string, packs?: string, exports?: string[],
-      dryRun?: boolean): FamilyMigrationReport
+      sdd_internalize_member(alias: string, into?: string, packs?: string, exports?: list<string>,
+      dryRun?: bool): FamilyMigrationReport
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -594,11 +605,11 @@ methods:
         description: 'adopt | drop: packs only the member selects'
         optional: true
       - name: exports
-        type: string[]
+        type: list<string>
         description: Extra public names of the member the bound project exports afterwards
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
     endpoint:
@@ -631,7 +642,7 @@ methods:
       collides with a family project's. All-or-nothing; dryRun answers the plan and writes nothing.
       Never locks.
     signature: >-
-      sdd_attach_member(alias: string, path: string, description?: string, dryRun?: boolean):
+      sdd_attach_member(alias: string, path: string, description?: string, dryRun?: bool):
       FamilyMigrationReport
     returns: FamilyMigrationReport
     params:
@@ -646,7 +657,7 @@ methods:
         description: What the member is to this project
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
     endpoint:
@@ -659,7 +670,7 @@ methods:
       and re-exports, externals naming it, pins). The whole family must be in reach. Every project
       it writes must be re-locked; the answer names them. All-or-nothing; dryRun answers the plan
       and writes nothing; run it first and show the plan.
-    signature: 'sdd_rename_project(newId: string, project?: string, dryRun?: boolean): FamilyMigrationReport'
+    signature: 'sdd_rename_project(newId: string, project?: string, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: newId
@@ -670,7 +681,7 @@ methods:
         description: The member's alias path from the bound project; the bound project when omitted
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
     endpoint:
@@ -681,9 +692,7 @@ methods:
       Tool: rename one alias of the bound project (a member or an external) and respell the bound
       project's references through it; nothing in any member or sibling changes. All-or-nothing;
       dryRun answers the plan and writes nothing. Never locks.
-    signature: >-
-      sdd_rename_member_alias(alias: string, newAlias: string, dryRun?: boolean):
-      FamilyMigrationReport
+    signature: 'sdd_rename_member_alias(alias: string, newAlias: string, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -693,7 +702,7 @@ methods:
         type: string
         description: The new alias
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
     endpoint:
@@ -707,18 +716,18 @@ methods:
       family alone, unless widen is set: then exactly those used exports are widened to the instance
       audience in the member's L0, each shown in the plan. All-or-nothing; dryRun answers the plan
       and writes nothing. Never locks.
-    signature: 'sdd_detach_member(alias: string, widen?: boolean, dryRun?: boolean): FamilyMigrationReport'
+    signature: 'sdd_detach_member(alias: string, widen?: bool, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
         type: string
         description: The member's alias
       - name: widen
-        type: boolean
+        type: bool
         description: Widen the used family-only exports to instance instead of refusing
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
     endpoint:
@@ -730,7 +739,7 @@ methods:
       external is found by a path inside the bound project; on a hosted instance it names a project
       by source.hosted and path says where to adopt it (the hosting server relocates it there).
       All-or-nothing; dryRun answers the plan and writes nothing. Never locks.
-    signature: 'sdd_adopt_member(alias: string, path?: string, dryRun?: boolean): FamilyMigrationReport'
+    signature: 'sdd_adopt_member(alias: string, path?: string, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -743,7 +752,7 @@ methods:
           project; a source.path external is adopted where it is
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
     endpoint:
@@ -759,7 +768,7 @@ methods:
       subsystem does not publish, or an id already taken. All-or-nothing; dryRun answers the plan
       and writes nothing — run it first and show the plan. Never locks: the answer names the project
       to re-lock and the new one to lock.
-    signature: 'sdd_promote_member(alias: string, id?: string, dryRun?: boolean): FamilyMigrationReport'
+    signature: 'sdd_promote_member(alias: string, id?: string, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -770,7 +779,7 @@ methods:
         description: 'The new project''s id (default: the alias)'
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
     endpoint:
@@ -787,7 +796,7 @@ methods:
       All-or-nothing; dryRun answers the plan and writes nothing — run it first and show the plan.
       Never locks.
     signature: >-
-      sdd_demote_member(alias: string, destination?: InternalizeDestination, dryRun?: boolean):
+      sdd_demote_member(alias: string, destination?: InternalizeDestination, dryRun?: bool):
       FamilyMigrationReport
     returns: FamilyMigrationReport
     params:
@@ -799,7 +808,7 @@ methods:
         description: Where its own metadata goes (its home subsystem, packs to adopt or drop)
         optional: true
       - name: dryRun
-        type: boolean
+        type: bool
         description: Answer the plan and write nothing
         optional: true
     endpoint:
@@ -807,4 +816,4 @@ methods:
       address: mcp tools/call sdd_demote_member
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T20:52:14.487Z'
+updatedAt: '2026-10-04T10:53:44.849Z'

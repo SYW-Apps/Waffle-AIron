@@ -1535,7 +1535,7 @@ methods:
         description: With --fix, apply the repairs before the report, so the report shows the repaired state
         type: branch
         condition: '--fix was given'
-        onFalseStep: 35
+        onFalseStep: 36
       - stepNumber: 10
         description: >-
           First, resolve any family migration a crash left unfinished under this root — roll back
@@ -1554,7 +1554,7 @@ methods:
         description: Skip the fixes otherwise, warning when the configuration is invalid; the report flags both
         type: branch
         condition: the project is initialized and its configuration is valid
-        onFalseStep: 35
+        onFalseStep: 36
       - stepNumber: 13
         description: >-
           Rebuild the derived context documents through the core adapter, each written only if it
@@ -1622,6 +1622,16 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: repairSignatures
       - stepNumber: 22
+        description: >-
+          Rewrite the stored type spellings with apply true: every type position that is an alias is
+          re-saved in its canonical spelling, and the derived signature texts follow; print what was
+          rewritten, then the int proposals and the positions needing an author, none of which is
+          written. A mechanical spec repair like the ones above — one project, idempotent, outside
+          the family transaction
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairTypeSpellings
+      - stepNumber: 23
         label: chaining
         description: >-
           Plan the chaining migration through the migration portal (verb chaining, without a
@@ -1636,12 +1646,12 @@ methods:
         type: call
         targetComponent: cli_migration_adapter
         targetMethod: plan
-      - stepNumber: 23
+      - stepNumber: 24
         description: 'Nothing to migrate: go on without asking'
         type: branch
         condition: the plan has something to write
-        onFalseStep: 27
-      - stepNumber: 24
+        onFalseStep: 28
+      - stepNumber: 25
         description: >-
           Print the plan per project as --report chaining does — a project outside this project's
           root (the family above it, which a chained member's migration also writes) marked as such
@@ -1650,12 +1660,12 @@ methods:
           as it always has. The family's writes are covered by this plan, its confirmation and the
           family transaction's all-or-nothing restore
         type: local
-      - stepNumber: 25
+      - stepNumber: 26
         description: Only a confirmed plan is applied
         type: branch
         condition: the person confirmed, or --yes was given
-        onFalseStep: 27
-      - stepNumber: 26
+        onFalseStep: 28
+      - stepNumber: 27
         description: >-
           Apply the confirmed plan through the migration portal — rehearsed, staged and swapped
           all-or-nothing — and print each file written; then name every project whose lock the
@@ -1666,7 +1676,7 @@ methods:
         type: call
         targetComponent: cli_migration_adapter
         targetMethod: apply
-      - stepNumber: 27
+      - stepNumber: 28
         label: mcp
         description: >-
           Plan the MCP registration for each active backend without writing anything — Claude in the
@@ -1676,27 +1686,27 @@ methods:
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: planInstall
-      - stepNumber: 28
+      - stepNumber: 29
         description: >-
           Register or repair every backend whose planned writes stay inside the project root (or are
           already up to date); a write inside the project needs no further consent, as before
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
-      - stepNumber: 29
+      - stepNumber: 30
         description: >-
           For a Gemini or Antigravity target, look for the legacy global Antigravity plugin, whose
           name collides with the MCP server
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: findLegacyPlugin
-      - stepNumber: 30
+      - stepNumber: 31
         label: outside-writes
         description: Anything to write outside the project root?
         type: branch
         condition: a planned MCP write outside the project root is pending, or the legacy plugin is present
-        onFalseStep: 35
-      - stepNumber: 31
+        onFalseStep: 36
+      - stepNumber: 32
         description: >-
           Print every write outside the project root as its own plan — for each MCP configuration
           the file, the wairon entry it holds and the one it would get (a large entry summarised, a
@@ -1705,12 +1715,12 @@ methods:
           run with neither skips every one of these writes and says so, naming `wairon doctor --fix
           --yes --global`. Nothing outside the project has been touched up to here
         type: local
-      - stepNumber: 32
+      - stepNumber: 33
         description: Only confirmed writes outside the project root are made
         type: branch
         condition: '--yes was given together with --global, or the person said yes at the terminal'
-        onFalseStep: 35
-      - stepNumber: 33
+        onFalseStep: 36
+      - stepNumber: 34
         description: >-
           Apply each confirmed MCP registration outside the project root through the install, which
           first copies the file it replaces beside itself as <file>.wairon-backup-<timestamp> and
@@ -1718,33 +1728,33 @@ methods:
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
-      - stepNumber: 34
+      - stepNumber: 35
         description: Move a present legacy plugin aside instead of deleting it, and print where it went
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: retireLegacyPlugin
-      - stepNumber: 35
+      - stepNumber: 36
         label: report
         description: 'Project: is this an initialized wairon project?'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
-      - stepNumber: 36
+      - stepNumber: 37
         description: Stop at a folder that is not a wairon project
         type: branch
         condition: the project is not initialized
-        onFalseStep: 38
-      - stepNumber: 37
+        onFalseStep: 39
+      - stepNumber: 38
         description: Report it, naming `wairon init`, print the summary and exit non-zero
         type: return
         outcome: not a wairon project
-      - stepNumber: 38
+      - stepNumber: 39
         label: config
         description: Report whether the configuration is valid, and read its active targets
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 39
+      - stepNumber: 40
         description: >-
           Transactions: report each unfinished family migration under this root — its verb, its
           owners and its coordinator's phase — as an error pointing at `wairon doctor --fix`; silent
@@ -1752,29 +1762,29 @@ methods:
         type: call
         targetComponent: cli_migration_adapter
         targetMethod: recover
-      - stepNumber: 40
+      - stepNumber: 41
         description: 'Spec filenames: list the spec files still stored under a legacy name'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findLegacySpecFiles
-      - stepNumber: 41
+      - stepNumber: 42
         description: 'Chained subprojects: list the ones with specs but no project.yaml'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findChainingSubprojectsMissingConfig
-      - stepNumber: 42
+      - stepNumber: 43
         description: >-
           Report whether the system spec is present, whether the spec filenames are current, and any
           chained subproject with specs but no project.yaml
         type: local
-      - stepNumber: 43
+      - stepNumber: 44
         description: >-
           Spec tree: with a system spec and a valid configuration, run the conformance gate and
           report its error, warning and notice counts; notices alone leave the check passing
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateProject
-      - stepNumber: 44
+      - stepNumber: 45
         description: >-
           Stereotypes: plan the Specialist retirement with apply false and report each Specialist
           with the dependencyClass it would take as an Orchestrator, and each variant to rebase,
@@ -1782,7 +1792,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 45
+      - stepNumber: 46
         description: >-
           Narrative steps: plan the foreign-field repair with apply false and report each step
           carrying a field its own type cannot have — the implementation, the method, the step and
@@ -1790,7 +1800,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 46
+      - stepNumber: 47
         description: >-
           Signatures: plan the signature repair with apply false and report each interface or type
           whose stored signature text its params contradict, and each method restating its source's
@@ -1799,7 +1809,17 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairSignatures
-      - stepNumber: 47
+      - stepNumber: 48
+        description: >-
+          Type spellings: plan the type-spelling repair with apply false and report each interface
+          or type holding a type position that is an alias of its canonical spelling, pointing at
+          `wairon doctor --fix`; then list, apart, each number position with int proposed (an author
+          confirms by writing int, or writes float) and each position only an author can settle,
+          with its replacement; silent when every stored type position is canonical
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairTypeSpellings
+      - stepNumber: 49
         description: >-
           Chaining: plan the migration through the migration portal without a rehearsal and report
           how much is pending — ids, L0s, entries, externals, pins, mounts to move, references to
@@ -1809,14 +1829,14 @@ methods:
         type: call
         targetComponent: cli_migration_adapter
         targetMethod: plan
-      - stepNumber: 48
+      - stepNumber: 50
         description: >-
           Ask where the derived context documents live, so the staleness check reports on the
           generated pair and never on the two a person wrote
         type: call
         targetComponent: cli_core_adapter
         targetMethod: derivedDocPaths
-      - stepNumber: 49
+      - stepNumber: 51
         description: >-
           Generated files and skills: read the version each one was stamped with and compare it
           against the running build, so a file written by an older wairon is reported as stale
@@ -1824,19 +1844,19 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readStampVersion
-      - stepNumber: 50
+      - stepNumber: 52
         description: >-
           Skills: for each active target, compare the installed SDD skills with what an export would
           write now, reporting the missing and stale ones
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: checkSkillFreshness
-      - stepNumber: 51
+      - stepNumber: 53
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 52
+      - stepNumber: 54
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
           frozen, warning when it predates per-spec approval; a stale one warns to re-lock; a
@@ -1844,25 +1864,25 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
-      - stepNumber: 53
+      - stepNumber: 55
         description: >-
           Extension packs: diagnose the project's pack situation — unresolved selections, installed
           packs not applied, packs applied from the machine-wide store
         type: call
         targetComponent: cli_core_adapter
         targetMethod: diagnoseProjectPacks
-      - stepNumber: 54
+      - stepNumber: 56
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed but not applied, and those applied from
           the machine-wide store
         type: local
-      - stepNumber: 55
+      - stepNumber: 57
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and flag a legacy global Antigravity plugin
         type: local
-      - stepNumber: 56
+      - stepNumber: 58
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -3231,4 +3251,4 @@ lint:
         steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T19:36:26.448Z'
+updatedAt: '2026-10-03T22:07:45.810Z'

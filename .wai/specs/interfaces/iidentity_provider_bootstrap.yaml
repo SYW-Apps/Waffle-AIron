@@ -11,11 +11,11 @@ methods:
       unless an issuer is set; a raw client secret is stored under the fixed reference the provider
       then names (or a stored reference the environment names is used); the provider is upserted and
       returned.
-    signature: 'seedDefault(): IdentityProviderConfig | null'
-    returns: IdentityProviderConfig | null
+    signature: 'seedDefault(): IdentityProviderConfig?'
+    returns: IdentityProviderConfig?
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-25T23:00:05.593Z'
-updatedAt: '2026-09-25T23:00:05.606Z'
+updatedAt: '2026-10-04T10:18:56.092Z'

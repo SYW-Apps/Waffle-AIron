@@ -2,18 +2,31 @@ kind: value-object
 id: type_spec
 name: TypeSpec
 description: >-
-  L3 data type specification loaded from the types spec tree, of one of three kinds: an entity or a
-  value-object (data: fields, pure methods, invariants) or a signature — a named function type,
-  Waffler's WafflerSignature: params (the method_signature param shape) and one returns, with a
-  description, and nothing else: no fields, no methods, no invariants, no inheritance. A contract
-  method takes a signature by naming it in its signatureFrom; a param may also be typed by one (a
-  callback). sourcePath and symbol make the type a CLAIM on code — the file it names must resolve
-  and its declaration must be anchored in it — exactly as an implementation_spec's sourcePath claims
-  the code realizing a contract.
+  L3 data type specification loaded from the types spec tree, of one of four kinds: an entity or a
+  value-object (data: fields, pure methods, invariants), a signature — a named function type: params
+  (the method_signature param shape) and one returns, with a description, and nothing else: no
+  fields, no methods, no invariants, no inheritance — or an enum: a closed, ordered set of named
+  values (EnumValue), with optional pure methods exactly as a value-object's, and nothing else (no
+  fields, params, returns, componentClass, database, table or linkedEntity — ENUM_MEMBERS). A
+  value-object may instead be a NAMED SCALAR: it declares `holds: <primitive>` (string, int, float,
+  bool, bytes, date, datetime or duration) in place of fields — a newtype or type alias in every
+  language (`type PackPath = string`), not a union, not a named type and not any. A named scalar
+  models its value, so it is not hollow; it carries no fields, componentClass, database, table or
+  linkedEntity, and holds on an entity, an enum or a signature means nothing (NAMED_SCALAR_MEMBERS).
+  A contract method takes a signature by naming it in its signatureFrom; a param may also be typed
+  by one (a callback). An enum may type any position a named type may, a map key included. Every
+  type position it holds — a field's type, a type method's params and returns, a signature's params
+  and returns, a named scalar's holds — is written in the neutral type grammar (type_expression).
+  sourcePath and symbol make the type a CLAIM on code — the file it names must resolve and its
+  declaration must be anchored in it — exactly as an implementation_spec's sourcePath claims the
+  code realizing a contract; an enum's declaration is a string-literal union alias, a z.enum schema
+  or a string enum in TypeScript, and its values are compared with the code's
+  (UNREALIZED_ENUM_VALUE, UNDECLARED_ENUM_VALUE); a named scalar's declaration is a type alias whose
+  right side must agree with holds through the file's dialect (TYPE_HOLDS_MISMATCH).
 fields:
   - name: kind
     type: string
-    description: 'Type category: entity, value-object or signature'
+    description: 'Type category: entity, value-object, signature or enum'
     optional: false
   - name: id
     type: string
@@ -36,11 +49,11 @@ fields:
     description: Optional logical group id
     optional: true
   - name: fields
-    type: object[]
+    type: list<any>
     description: Data fields declared by this type; none on a signature (SIGNATURE_TYPE_MEMBERS)
     optional: false
   - name: methods
-    type: TypeMethod[]
+    type: list<TypeMethod>
     description: >-
       Pure intrinsic methods declared by this type (type_method), none on a signature
       (SIGNATURE_TYPE_MEMBERS). Each may carry structured params, which then derive its shown
@@ -65,7 +78,7 @@ fields:
     description: Optional logical entity id represented by a table-schema type
     optional: true
   - name: invariants
-    type: Invariant[]
+    type: list<Invariant>
     description: >-
       Declared domain invariants (entities); every write-effect method of the componentClass must
       carry a narrative step asserting each one
@@ -91,7 +104,7 @@ fields:
       each with a reason.
     optional: true
   - name: ext
-    type: json
+    type: any
     description: >-
       Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
       the core, preserved verbatim through load and save.
@@ -105,7 +118,7 @@ fields:
     description: When this spec was last written. Store-managed.
     optional: false
   - name: params
-    type: object[]
+    type: list<any>
     description: >-
       A signature's parameters, in the method_signature param shape ({name, type, description,
       optional}); only on kind signature (SIGNATURE_TYPE_MEMBERS otherwise)
@@ -116,6 +129,20 @@ fields:
       A signature's one output type; required on kind signature and only there
       (SIGNATURE_TYPE_MEMBERS)
     optional: true
+  - name: values
+    type: list<EnumValue>
+    description: >-
+      An enum's values, in declared order (the order is part of the design), unique by nameKey;
+      required and non-empty on kind enum and only there (ENUM_MEMBERS)
+    optional: true
+  - name: holds
+    type: string
+    description: >-
+      A named scalar's one primitive (string, int, float, bool, bytes, date, datetime or duration),
+      in place of fields; only on a value-object, and never beside fields (NAMED_SCALAR_MEMBERS).
+      Read as a type position: an alias is respelled, number is refused ("int or float?"), and
+      anything but one of those primitives is TYPE_POSITION_INVALID.
+    optional: true
 methods:
   - name: qualifiedId
     signature: 'qualifiedId(): string'
@@ -125,7 +152,7 @@ methods:
     symbol: qualifiedTypeId
   - name: matchesRef
     signature: 'matchesRef(ref: string): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a written type reference names this type: the reference's :: or . segments are a
       suffix of the qualified id, compared ignoring case and punctuation
@@ -133,29 +160,30 @@ methods:
     symbol: typeMatchesRef
   - name: genericParameters
     signature: 'genericParameters(): Set<string>'
-    returns: Set<string>
+    returns: set<string>
     description: The generic parameters declared in its name (Page<T> gives T)
     sourcePath: src/models/type-references.ts
     symbol: typeGenericParameters
   - name: fieldTypeRefs
     signature: 'fieldTypeRefs(fieldType: string): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
-      The type identifiers one of this type's field types names, with comments, trailing prose and
-      string literals stripped and this type's own generic parameters left out (compared ignoring
-      case). It takes the field's type rather than its name, because nothing makes field names
-      unique within a type.
+      The named types one of this type's field types references (type_expression.namedRefs of the
+      field's parsed type), with this type's own generic parameters left out (compared ignoring
+      case). A field type that does not parse names nothing here: the problem is
+      TYPE_EXPRESSION_INVALID's to report. It takes the field's type rather than its name, because
+      nothing makes field names unique within a type.
     sourcePath: src/models/type-references.ts
   - name: sourceFiles
     signature: 'sourceFiles(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       Every source file this type names — its own sourcePath, then each method's — deduplicated, in
       declaration order.
     symbol: typeSourceFiles
   - name: derivedSignature
     signature: 'derivedSignature(): string | undefined'
-    returns: string | undefined
+    returns: string?
     description: >-
       A signature type's shown text, `(a: T, b?: U): R`, derived from its params and returns the way
       method_signature.derivedSignature derives a method's, without a name; undefined on an entity
@@ -164,11 +192,24 @@ methods:
     symbol: deriveTypeSignature
   - name: signatureTypeRefs
     signature: 'signatureTypeRefs(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The type identifiers a signature type names in place of fields: every param type, then its
       returns. None on an entity or a value-object, whose references are its fields'.
     sourcePath: src/models/type-references.ts
+  - name: canonicalTypes
+    signature: 'canonicalTypes(): TypeCanonicalization'
+    params: []
+    returns: TypeCanonicalization
+    description: >-
+      This type with every type position read under the grammar (type_expression.parse, with the
+      position each stands in: field, type-method-param, type-method-returns, signature-param,
+      signature-returns, holds): each canonicalisable position respelled to its canonical text,
+      every alias position recorded as a respelling, and every position that is not canonical
+      recorded as a located problem and left as written. A type method without params keeps its
+      prose signature; only its returns is read. Pure.
+    sourcePath: src/models/type-grammar.ts
+    symbol: typeCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-03T20:29:44.185Z'
+updatedAt: '2026-10-04T10:51:30.613Z'

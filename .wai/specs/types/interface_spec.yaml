@@ -21,7 +21,7 @@ fields:
     description: L2 component realizing this contract
     optional: false
   - name: methods
-    type: MethodSignature[]
+    type: list<MethodSignature>
     description: >-
       Method signatures (see method_signature): name, params, returns, guarantees, endpoint, effect
       (read | write — required on a durable Store's contract methods so the durability round-trip
@@ -43,7 +43,7 @@ fields:
       each with a reason.
     optional: true
   - name: ext
-    type: json
+    type: any
     description: >-
       Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
       the core, preserved verbatim through load and save.
@@ -59,10 +59,23 @@ fields:
 methods:
   - name: genericParameters
     signature: 'genericParameters(): Set<string>'
-    returns: Set<string>
+    returns: set<string>
     description: The generic parameters declared in its name
     sourcePath: src/models/type-references.ts
     symbol: interfaceGenericParameters
+  - name: canonicalTypes
+    signature: 'canonicalTypes(): TypeCanonicalization'
+    params: []
+    returns: TypeCanonicalization
+    description: >-
+      This contract with every structured type position read under the grammar
+      (type_expression.parse, as param or returns): each canonicalisable position respelled to its
+      canonical text, every alias position recorded as a respelling, and every position that is not
+      canonical recorded as a located problem and left as written. A method without params keeps its
+      prose signature and only its returns is read; a sourced method states no params or returns and
+      has none to read. Pure.
+    sourcePath: src/models/type-grammar.ts
+    symbol: interfaceCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T17:03:18.215Z'
+updatedAt: '2026-10-04T10:20:20.256Z'

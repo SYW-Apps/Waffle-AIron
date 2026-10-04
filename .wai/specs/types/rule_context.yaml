@@ -13,23 +13,23 @@ fields:
     description: The L0 system spec
     optional: false
   - name: subsystems
-    type: SubsystemSpec[]
+    type: list<SubsystemSpec>
     description: The loaded subsystem specs
     optional: false
   - name: components
-    type: ComponentSpec[]
+    type: list<ComponentSpec>
     description: The loaded component specs
     optional: false
   - name: interfaces
-    type: InterfaceSpec[]
+    type: list<InterfaceSpec>
     description: The loaded interface specs
     optional: false
   - name: implementations
-    type: ImplementationSpec[]
+    type: list<ImplementationSpec>
     description: The loaded implementation specs
     optional: false
   - name: types
-    type: TypeSpec[]
+    type: list<TypeSpec>
     description: The loaded type specs
     optional: false
   - name: rules
@@ -45,44 +45,44 @@ fields:
     description: The subsystem a scoped run is limited to
     optional: true
   - name: componentMap
-    type: Map<string, ComponentSpec>
+    type: map<string, ComponentSpec>
     description: Components by id
     optional: false
   - name: interfaceMap
-    type: Map<string, InterfaceSpec>
+    type: map<string, InterfaceSpec>
     description: Interfaces by id
     optional: false
   - name: subsystemIds
-    type: Set<string>
+    type: set<string>
     description: Ids of the loaded subsystems
     optional: false
   - name: componentIds
-    type: Set<string>
+    type: set<string>
     description: Ids of the loaded components
     optional: false
   - name: interfaceIds
-    type: Set<string>
+    type: set<string>
     description: Ids of the loaded interfaces
     optional: false
   - name: publicSet
-    type: Map<string, Set<string>>
+    type: map<string, set<string>>
     description: >-
       Per subsystem, the ids of its published components — its OWN component entries only: a
       re-export is a name, not a licence, so a component another subsystem re-exports is still
       depended on through its owning subsystem's publication
     optional: false
   - name: interfacesByComponent
-    type: Map<string, InterfaceSpec[]>
+    type: map<string, list<InterfaceSpec>>
     description: >-
       Interfaces grouped by owning component: the one enumeration of a component's contract methods
       that rules and the walk share
     optional: false
   - name: implementationsByContract
-    type: Map<string, ImplementationSpec[]>
+    type: map<string, list<ImplementationSpec>>
     description: Implementations grouped by contract interface id
     optional: false
   - name: surfaceSnapshots
-    type: SurfaceSnapshot[]
+    type: list<SurfaceSnapshot>
     description: >-
       The foreign surface snapshots (exchanged or authored imports in .wai/surfaces/) the bound root
       holds, which references into a foreign provider are checked against. Only the bound root's
@@ -96,7 +96,7 @@ fields:
       none
     optional: false
   - name: roundTripIssues
-    type: ValidationIssue[]
+    type: list<ValidationIssue>
     description: >-
       The writer's dry-run findings for every in-scope spec, gathered by the validator so the
       round-trip rule does no I/O
@@ -108,23 +108,23 @@ fields:
       selections and their resolution failures
     optional: false
   - name: variants
-    type: VariantDef[]
+    type: list<VariantDef>
     description: The component-variant registry
     optional: false
   - name: lintAllows
-    type: object[]
+    type: list<any>
     description: >-
       Per-spec lint.allow entries ({specId, code, reason, used}): addIssue marks the ones it
       applies, and the lint-allows rule audits them last
     optional: false
   - name: knownIssueCodes
-    type: Set<string>
+    type: set<string>
     description: >-
       Every code a registered rule or declarative assertion can report, gathered by the validator
       for the lint-allow audit
     optional: false
   - name: carriedFindings
-    type: CarriedFindingEntry[]
+    type: list<CarriedFindingEntry>
     description: >-
       The conformance debt register (rules.conformance.carried), flattened to one entry per carried
       finding and carrying its reason group's kind and why. Carrying happens inside addIssue — after
@@ -132,7 +132,7 @@ fields:
       carried-debt rule audits these entries at the end of the run.
     optional: false
   - name: carryableIssueCodes
-    type: Set<string>
+    type: set<string>
     description: >-
       Every issue code a registered rule declares CARRYABLE, gathered by the validator — what the
       debt register's entries are checked against.
@@ -147,7 +147,7 @@ fields:
       identity.
     optional: true
   - name: exportTables
-    type: ResolvedExportTable[]
+    type: list<ResolvedExportTable>
     description: >-
       The resolved export tables — one per loaded subsystem, then the bound root's L0 table, then
       each member project's L0 table — gathered by the validator through the core adapter, so the
@@ -164,14 +164,14 @@ fields:
       on a candidate run.
     optional: true
   - name: exportUsages
-    type: ExportUsage[]
+    type: list<ExportUsage>
     description: >-
       For every (consumer, producer) pair the graph's cross-project references connect, those
       references mapped onto the producer's public names; the unexported ones are
       EXTERNAL_NOT_EXPORTED's facts. Absent on a candidate run.
     optional: true
   - name: pinnedExternals
-    type: PinnedExternal[]
+    type: list<PinnedExternal>
     description: >-
       The bound project's declared externals with their lock entries and pinned snapshots, read by
       the validator from the project's own .wai/externals files: what a reference into a project
@@ -179,7 +179,7 @@ fields:
       root. Empty on a candidate run.
     optional: false
   - name: declaredMembers
-    type: DeclaredMember[]
+    type: list<DeclaredMember>
     description: >-
       The bound root's declared members (project_config.declaredMembers), read by the validator from
       its configuration (stage 8), so the member-declarations rule names a member declared with the
@@ -193,14 +193,22 @@ fields:
       their params contradict. The loaded interfaces and types are already resolved, so these facts
       are the only place the stored form is still visible. Absent on a candidate run.
     optional: true
+  - name: typeSpellingFacts
+    type: TypeSpellingFacts
+    description: >-
+      What the loader's type canonicalisation recorded — the stored positions that are aliases of
+      their canonical spelling, and the ones that are not canonical at all. The loaded interfaces
+      and types already hold canonical text, so these facts are the only place the stored spellings
+      are still visible. Absent on a candidate run.
+    optional: true
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
-    returns: boolean
+    returns: bool
     description: Whether the component or an ancestor is in draft or design status
   - name: isImplementationDraft
     signature: 'isImplementationDraft(impl: ImplementationSpec): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether the implementation, its contract or the contract's component is in draft or design
       status
@@ -212,7 +220,7 @@ methods:
       type
   - name: isTypeResolved
     signature: 'isTypeResolved(ref: string, generics: Set<string>): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a type reference resolves to a builtin, one of the given generic parameters, or a type
       the bound project may name — owner-scoped and explicit, with no family-wide suffix matching
@@ -228,14 +236,14 @@ methods:
       form.
   - name: targetLanguageFor
     signature: 'targetLanguageFor(subsystemId?: string): string | undefined'
-    returns: string | undefined
+    returns: string?
     description: >-
       The effective target language for a subsystem — its own, else the system's — normalized to the
       language-table key (ts → typescript, js or node → javascript, rs → rust, py → python, c# or
       dotnet → csharp, golang → go, else lowercased)
   - name: isSpecInScope
     signature: 'isSpecInScope(specId: string): boolean'
-    returns: boolean
+    returns: bool
     description: Whether a spec is inside the run's subsystem scope; always true for an unscoped run
   - name: addIssue
     signature: >-
@@ -252,7 +260,7 @@ methods:
       resolution a cross-project finding carries.
   - name: isInChainedSubproject
     signature: 'isInChainedSubproject(subsystemId: string): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether the subsystem belongs to a contained member rather than the bound project: its owner
       in the project graph is not the bound root. Nothing about such a spec is judged in this
@@ -272,32 +280,32 @@ methods:
       looked up here.
   - name: interfaceMethodsOf
     signature: 'interfaceMethodsOf(compId: string): MethodSignature[]'
-    returns: MethodSignature[]
+    returns: list<MethodSignature>
     description: >-
       Every contract method across the component's interfaces, memoized: eight rules ask per
       dispatch binding or per narrative step, and the array was rebuilt on every call
   - name: complexityConfigFor
     signature: 'complexityConfigFor(subsystemId?: string): ComplexityRuleConfig | undefined'
-    returns: ComplexityRuleConfig | undefined
+    returns: ComplexityRuleConfig?
     description: >-
       The complexity rule config in force for a subsystem: its profile pack's settings, overlaid
       with the project's own, so a project's explicit value wins over the pack's and the rule's
       default applies only where neither sets one
   - name: documentationConfigFor
     signature: 'documentationConfigFor(subsystemId?: string): DocumentationRuleConfig | undefined'
-    returns: DocumentationRuleConfig | undefined
+    returns: DocumentationRuleConfig?
     description: >-
       The documentation rule config in force for a subsystem: its profile pack's settings, overlaid
       with the project's own, so a project's explicit value wins over the pack's
   - name: isBuiltinType
     signature: 'isBuiltinType(ref: string): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a type identifier is in the language-agnostic builtin vocabulary (string, u64,
       Promise, Map, and the rest), compared ignoring case
   - name: namingConfigFor
     signature: 'namingConfigFor(subsystemId?: string): NamingRuleConfig | undefined'
-    returns: NamingRuleConfig | undefined
+    returns: NamingRuleConfig?
     description: >-
       The naming rule config in force for a subsystem: its profile pack's settings, overlaid with
       the project's own, stereotype patterns merged key by key with the project's key winning
@@ -331,7 +339,7 @@ methods:
       allowedEdges escape that must relax the whole matrix or none of it
   - name: specIds
     signature: 'specIds(): SpecId[]'
-    returns: SpecId[]
+    returns: list<SpecId>
     description: >-
       Every spec id in the tree with the kind label its findings name it by, in subsystem,
       component, interface, implementation, type order, derived on first ask and kept: the id
@@ -339,7 +347,7 @@ methods:
       narratives said
   - name: implementationMethods
     signature: 'implementationMethods(): ResolvedMethod[]'
-    returns: ResolvedMethod[]
+    returns: list<ResolvedMethod>
     description: >-
       Every implementation method whose descent resolves, with the component it realizes, the file
       that realizes it and its draft context, derived on first ask and kept: the six hops a
@@ -350,7 +358,7 @@ methods:
     signature: >-
       resolveCrossProject(specId: string, position: string, reference: string): ReferenceResolution
       | null
-    returns: ReferenceResolution | null
+    returns: ReferenceResolution?
     description: >-
       The owner's resolution of one reference the scan recorded (the project graph's authored
       references), before any severity: null for a reference that stays inside the bound project. A
@@ -371,7 +379,7 @@ methods:
       non-resolved outcome.
   - name: importHint
     signature: 'importHint(name: string): string | null'
-    returns: string | null
+    returns: string?
     description: >-
       For a bare name that resolves nowhere: the declared external or member of the bound project
       whose table (a member's live one, an external's pin) exports a name with the same nameKey
@@ -381,4 +389,4 @@ methods:
       INVALID_DEPENDENCY_REFERENCE, INVALID_TARGET_COMPONENT_REFERENCE) append it to their message.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-03T19:31:38.107Z'
+updatedAt: '2026-10-04T10:21:01.098Z'

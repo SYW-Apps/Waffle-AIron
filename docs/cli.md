@@ -181,6 +181,16 @@ Health check: flags stale generated guides/skills, an unregistered MCP server,
 and spec-tree issues. `--fix` regenerates stale in-project guides/context/skills
 and registers the MCP server.
 
+Among its spec repairs, `--fix` rewrites every stored type position that is an
+alias of its canonical spelling (`string[]` becomes `list<string>`, `boolean`
+becomes `bool`, `T | null` becomes `T?`, `Promise<T>` becomes `async T`) — what
+any later save would write. It never guesses: a `number` position whose name
+says a whole number (`count`, `maxDepth`, `port`) gets `int` *proposed* and
+listed, and every position no rewrite can settle (an inline function type, a
+literal union, a union mixing in a primitive, a `number` with no proposal) is
+listed with its replacement for an author. Plain `wairon doctor` prints the same
+plan without writing it.
+
 ### `wairon list` (alias `ls`) / `wairon show <id>`
 List, or show full details of, the agents resolved from the spec tree
 (`system-architect`, `<subsystem>-owner`, `<component>-implementer`, and owners

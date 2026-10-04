@@ -265,9 +265,13 @@ methods:
         type: local
       - stepNumber: 5
         label: checkHollow
-        description: 'Branch: does the type declare neither fields nor methods?'
+        description: >-
+          Branch: does the type model nothing — no fields, no methods, no enum values, no signature
+          returns and no named scalar holds?
         type: branch
-        condition: the type has no fields (or an empty fields list) and no methods (or an empty methods list)
+        condition: >-
+          the type has no fields, no methods, no values, no returns and no holds (each absent or an
+          empty list)
         onFalseStep: 1
       - stepNumber: 6
         label: typesEnd
@@ -1283,6 +1287,98 @@ methods:
     detail: full
     symbol: check
     exportedVia: signatureSourcesRule
+  - name: typeExpressions
+    sourcePath: src/core/rules/integrity/type-expressions.ts
+    narrative:
+      - stepNumber: 1
+        description: Are there type-spelling facts to judge?
+        type: branch
+        condition: the run carries ctx.typeSpellingFacts (a candidate run does not)
+        onFalseStep: 6
+      - stepNumber: 2
+        description: For each recorded problem
+        type: loop
+        loopKind: forEach
+        over: ctx.typeSpellingFacts.problems, in scope
+        endStep: 3
+      - stepNumber: 3
+        description: >-
+          Report the problem under its own code (TYPE_EXPRESSION_INVALID, TYPE_POSITION_INVALID,
+          TYPE_FORM_UNSUPPORTED or TYPE_NOT_NEUTRAL) on the spec holding it, at the method or field
+          its path names, with the position's text, what is wrong and the replacement it names
+        type: local
+      - stepNumber: 4
+        description: For each recorded respelling
+        type: loop
+        loopKind: forEach
+        over: ctx.typeSpellingFacts.respellings, in scope
+        endStep: 5
+      - stepNumber: 5
+        description: >-
+          Report TYPE_SPELLING_STALE on the spec holding it, at the method or field its path names,
+          with the written and the canonical text, saying any save or doctor --fix rewrites it
+        type: local
+      - stepNumber: 6
+        label: done
+        description: Nothing else to judge
+        type: return
+        outcome: void
+    detail: full
+    symbol: check
+    exportedVia: typeExpressionsRule
+  - name: enumTypes
+    sourcePath: src/core/rules/integrity/enum-types.ts
+    narrative:
+      - stepNumber: 1
+        description: For each loaded type
+        type: loop
+        loopKind: forEach
+        over: ctx.types, in scope
+        endStep: 4
+      - stepNumber: 2
+        description: Is it an enum?
+        type: branch
+        condition: the type's kind is enum
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report ENUM_MEMBERS naming what is wrong: no values; each pair of values equal by nameKey;
+          each member an enum cannot carry — fields, params, returns, invariants, componentClass,
+          database, table, linkedEntity
+        type: local
+      - stepNumber: 4
+        description: On a type of any other kind, report ENUM_MEMBERS when it carries values
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: enumTypesRule
+  - name: namedScalarTypes
+    sourcePath: src/core/rules/integrity/named-scalar-types.ts
+    narrative:
+      - stepNumber: 1
+        description: For each loaded type
+        type: loop
+        loopKind: forEach
+        over: ctx.types, in scope
+        endStep: 4
+      - stepNumber: 2
+        description: Does it declare holds?
+        type: branch
+        condition: the type's holds is set
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report NAMED_SCALAR_MEMBERS naming what is wrong: holds on a kind other than value-object
+          (an entity, an enum or a signature type, where it means nothing); each member a named
+          scalar cannot carry beside it — fields, componentClass, database, table, linkedEntity.
+          Whether holds names a primitive is left to type-expressions
+        type: local
+      - stepNumber: 4
+        description: Nothing to judge on a type without holds
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: namedScalarTypesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-03T20:54:42.859Z'
+updatedAt: '2026-10-04T11:21:55.725Z'

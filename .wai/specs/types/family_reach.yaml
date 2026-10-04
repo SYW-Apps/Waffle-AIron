@@ -14,19 +14,19 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: readable
-    type: string[]
+    type: list<string>
     description: Family record ids with project:read yes
     optional: false
   - name: writable
-    type: string[]
+    type: list<string>
     description: Family record ids with project:write yes
     optional: false
   - name: subsystems
-    type: SubsystemReach[]
+    type: list<SubsystemReach>
     description: >-
       Every subsystem of a family record that carries a setting applying to the principal, with
       project:write resolved at it (yes, or not); empty when no such setting exists
     optional: false
 methods: []
 createdAt: '2026-10-01T16:27:35.796Z'
-updatedAt: '2026-10-03T13:35:42.131Z'
+updatedAt: '2026-10-04T10:20:11.945Z'

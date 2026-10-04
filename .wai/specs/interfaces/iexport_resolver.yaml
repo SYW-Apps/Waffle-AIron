@@ -18,21 +18,21 @@ methods:
       problem — duplicate, cycle, invalid, unconsumable — is returned as a fact on the table it
       concerns.
     signature: >-
-      subsystemTables(subsystems: SubsystemSpec[], components: ComponentSpec[], interfaces:
-      InterfaceSpec[], types: TypeSpec[]): Map<string, ResolvedExportTable>
-    returns: Map<string, ResolvedExportTable>
+      subsystemTables(subsystems: list<SubsystemSpec>, components: list<ComponentSpec>, interfaces:
+      list<InterfaceSpec>, types: list<TypeSpec>): map<string, ResolvedExportTable>
+    returns: map<string, ResolvedExportTable>
     params:
       - name: subsystems
-        type: SubsystemSpec[]
+        type: list<SubsystemSpec>
         description: The project's subsystems, keys qualified
       - name: components
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
         description: The project's components
       - name: interfaces
-        type: InterfaceSpec[]
+        type: list<InterfaceSpec>
         description: The project's interfaces, for narrowed entries
       - name: types
-        type: TypeSpec[]
+        type: list<TypeSpec>
         description: The project's types, subsystem-owned and project-level
     guarantees:
       - idempotent
@@ -52,28 +52,28 @@ methods:
       out, exactly as two wildcards binding one name are: a consumer's bare `use` import compares by
       that key and could not tell them apart. A project with no L0 answers an empty table.
     signature: >-
-      projectTable(system: SystemSpec | null, subsystems: SubsystemSpec[], components:
-      ComponentSpec[], interfaces: InterfaceSpec[], types: TypeSpec[], subsystemTables: Map<string,
-      ResolvedExportTable>, sources: ExportSources): ResolvedExportTable
+      projectTable(system: SystemSpec?, subsystems: list<SubsystemSpec>, components:
+      list<ComponentSpec>, interfaces: list<InterfaceSpec>, types: list<TypeSpec>, subsystemTables:
+      map<string, ResolvedExportTable>, sources: ExportSources): ResolvedExportTable
     returns: ResolvedExportTable
     params:
       - name: system
-        type: SystemSpec | null
+        type: SystemSpec?
         description: The project's own L0, entries qualified into its key; null when it has none
       - name: subsystems
-        type: SubsystemSpec[]
+        type: list<SubsystemSpec>
         description: The project's subsystems
       - name: components
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
         description: The project's components, for legacy source inference
       - name: interfaces
-        type: InterfaceSpec[]
+        type: list<InterfaceSpec>
         description: The project's interfaces, for narrowed entries
       - name: types
-        type: TypeSpec[]
+        type: list<TypeSpec>
         description: The project's types, for own and re-exported type entries
       - name: subsystemTables
-        type: Map<string, ResolvedExportTable>
+        type: map<string, ResolvedExportTable>
         description: The project's subsystem tables, as subsystemTables answered them
       - name: sources
         type: ExportSources
@@ -82,4 +82,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-27T10:34:29.431Z'
-updatedAt: '2026-09-28T17:16:49.271Z'
+updatedAt: '2026-10-04T10:18:43.903Z'

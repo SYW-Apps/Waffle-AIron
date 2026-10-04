@@ -21,8 +21,8 @@ methods:
       path: /operations/health
   - name: getUsage
     description: Return redacted resource usage snapshots.
-    signature: 'getUsage(credential: string, scope?: string): ResourceUsageSnapshot[]'
-    returns: ResourceUsageSnapshot[]
+    signature: 'getUsage(credential: string, scope?: string): list<ResourceUsageSnapshot>'
+    returns: list<ResourceUsageSnapshot>
     params:
       - name: credential
         type: string
@@ -35,8 +35,8 @@ methods:
       path: /operations/usage
   - name: evaluateQuota
     description: Return resource usage snapshots annotated with advisory (observe/warn) quota observations.
-    signature: 'evaluateQuota(credential: string, scope?: string): ResourceUsageSnapshot[]'
-    returns: ResourceUsageSnapshot[]
+    signature: 'evaluateQuota(credential: string, scope?: string): list<ResourceUsageSnapshot>'
+    returns: list<ResourceUsageSnapshot>
     params:
       - name: credential
         type: string
@@ -49,4 +49,4 @@ methods:
       path: /operations/quota
 status: complete
 createdAt: '2026-07-09T09:10:34.177Z'
-updatedAt: '2026-10-03T16:46:51.277Z'
+updatedAt: '2026-10-04T10:19:08.075Z'

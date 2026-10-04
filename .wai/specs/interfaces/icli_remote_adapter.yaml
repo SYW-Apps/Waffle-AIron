@@ -10,13 +10,13 @@ methods:
     description: >-
       Call sdd_host_export_tree on the bound hosted project and return the decoded .waitree archive
       bytes with the envelope facts that came with them. Requires project:read on the far side.
-    signature: 'exportRemoteTree(target: remote_target, allowPartial?: boolean): TreeExportResult'
-    returns: TreeExportResult
+    signature: 'exportRemoteTree(target: remote_target, allowPartial?: bool): async TreeExportResult'
+    returns: async TreeExportResult
     params:
       - name: target
         type: remote_target
       - name: allowPartial
-        type: boolean
+        type: bool
         description: >-
           Ask the remote to pack whatever CAN be packed when a chained subproject cannot be, and
           list the mounts left out, instead of refusing the whole export.
@@ -26,16 +26,16 @@ methods:
       Call sdd_host_import_tree on the bound hosted project with the base64-encoded archive.
       Requires project:admin on the far side; executable content is refused there, not here.
     signature: >-
-      importRemoteTree(target: remote_target, archive: bytes, replaceExisting: boolean):
+      importRemoteTree(target: remote_target, archive: bytes, replaceExisting: bool): async
       TreeImportResult
-    returns: TreeImportResult
+    returns: async TreeImportResult
     params:
       - name: target
         type: remote_target
       - name: archive
         type: bytes
       - name: replaceExisting
-        type: boolean
+        type: bool
   - name: initializeRemoteProject
     description: >-
       Create the destination project on the instance before a first push, through the hosted WEB
@@ -44,8 +44,8 @@ methods:
       Presents the same bearer credential and is gated on project:create over the owner unit by the
       same permission rules. Returns the instance's summary — an approval-gated instance may answer
       that a request was created, which is not a completed project.
-    signature: 'initializeRemoteProject(target: remote_target, ownerUnitId: string): string'
-    returns: string
+    signature: 'initializeRemoteProject(target: remote_target, ownerUnitId: string): async string'
+    returns: async string
     params:
       - name: target
         type: remote_target
@@ -57,8 +57,8 @@ methods:
       `wairon validate` in an attached checkout gates on the tree that actually exists rather than
       on nothing. With family, the call asks for the family run; the instance composes within the
       credential's reach, and asking never widens it. Requires project:read.
-    signature: 'validateRemoteTree(target: remote_target, subsystem?: string, family?: boolean): Json'
-    returns: Json
+    signature: 'validateRemoteTree(target: remote_target, subsystem?: string, family?: bool): async any'
+    returns: async any
     params:
       - name: target
         type: remote_target
@@ -66,15 +66,15 @@ methods:
         type: string
         optional: true
       - name: family
-        type: boolean
+        type: bool
         description: Ask for the family run (`validate --family`)
         optional: true
   - name: getRemoteStatus
     description: >-
       Call sdd_get_status against the bound hosted project and return the completeness dashboard.
       Requires project:read.
-    signature: 'getRemoteStatus(target: remote_target, subsystem?: string): string'
-    returns: string
+    signature: 'getRemoteStatus(target: remote_target, subsystem?: string): async string'
+    returns: async string
     params:
       - name: target
         type: remote_target
@@ -86,11 +86,11 @@ methods:
       Call sdd_host_lock_project against the bound hosted project (or the chained child a qualified
       selector names). Execute-primary: an instance whose policy resolves to approval answers that a
       REQUEST was created, which the caller must report rather than treat as locked.
-    signature: 'lockRemoteProject(target: remote_target): string'
-    returns: string
+    signature: 'lockRemoteProject(target: remote_target): async string'
+    returns: async string
     params:
       - name: target
         type: remote_target
 status: complete
 createdAt: '2026-08-12T18:31:37.284Z'
-updatedAt: '2026-10-03T20:53:54.841Z'
+updatedAt: '2026-10-04T10:32:00.814Z'

@@ -25,7 +25,7 @@ fields:
       apart).
     optional: false
   - name: approved
-    type: boolean
+    type: bool
     description: >-
       Whether the check passes. False exits non-zero. `stale` is false at every strictness;
       `no-tree` and `unlocked` are true unless the caller asked for --strict; `locked` is always
@@ -40,4 +40,4 @@ fields:
 methods: []
 sourcePath: src/commands/lock.ts
 createdAt: '2026-09-19T12:23:49.978Z'
-updatedAt: '2026-09-30T05:57:32.920Z'
+updatedAt: '2026-10-04T10:19:51.493Z'

@@ -17,7 +17,7 @@ fields:
     description: The module specifier the binding came from, exactly as written
     optional: false
   - name: namespace
-    type: boolean
+    type: bool
     description: >-
       True for import * as name from ... — the only binding whose property calls are that module's
       own exports
@@ -31,4 +31,4 @@ fields:
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-19T15:30:44.956Z'
-updatedAt: '2026-09-19T15:30:44.966Z'
+updatedAt: '2026-10-04T10:20:18.922Z'

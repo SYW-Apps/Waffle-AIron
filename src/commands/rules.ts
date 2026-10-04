@@ -12,7 +12,7 @@ import { loadProjectConfig, projectConfigExists, loadProjectExtensions } from '.
 // project-level overrides from rules.sddRuleSeverity.
 // ---------------------------------------------------------------------------
 
-export async function listRules(): Promise<void> {
+export function listRules(): void {
   let overrides: Record<string, 'error' | 'warning' | 'notice' | 'off'> = {};
   if (projectConfigExists()) {
     try {

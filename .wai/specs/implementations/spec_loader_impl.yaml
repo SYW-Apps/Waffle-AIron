@@ -272,8 +272,15 @@ methods:
         type: call
         targetComponent: spec_index
         targetMethod: signatureFacts
+  - name: typeSpellingFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: typeSpellingFacts
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T19:33:04.684Z'
+updatedAt: '2026-10-03T22:05:18.749Z'

@@ -15,7 +15,7 @@ fields:
       stable.
     optional: true
   - name: disabledAliases
-    type: string[]
+    type: list<string>
     description: >-
       Short command names this person has opted OUT of. Every supported alias is active by default,
       so the list names exceptions rather than selections — which is what lets a new alias ship
@@ -25,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/config/userconfig.ts
 createdAt: '2026-09-22T21:17:40.819Z'
-updatedAt: '2026-09-22T21:17:41.070Z'
+updatedAt: '2026-10-04T10:21:25.236Z'

@@ -9,23 +9,23 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: assignments
-    type: PermissionAssignment[]
+    type: list<PermissionAssignment>
     description: Permission assignments in scope for the query (any subject kind).
     optional: false
   - name: roles
-    type: Role[]
+    type: list<Role>
     description: Role definitions referenced by the subject's bindings.
     optional: false
   - name: units
-    type: OrganizationUnitRecord[]
+    type: list<OrganizationUnitRecord>
     description: The organization-unit tree, for the ancestor-chain walk.
     optional: false
   - name: placements
-    type: ProjectPlacement[]
+    type: list<ProjectPlacement>
     description: Project placements, to resolve a project's owning unit.
     optional: false
   - name: parents
-    type: ProjectParentLink[]
+    type: list<ProjectParentLink>
     description: >-
       Every member record's link to its parent record — the project rungs of a member's chain,
       between its own scope and its family root's placement units.
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:29.509Z'
-updatedAt: '2026-10-01T16:55:01.132Z'
+updatedAt: '2026-10-04T10:20:43.463Z'

@@ -6,7 +6,7 @@ description: >-
   if so the pushed commit and the compare URL a human opens the PR from. Never performs the merge.
 fields:
   - name: published
-    type: boolean
+    type: bool
     description: True when the working branch was committed and pushed (git-backed); false for native projects
     optional: false
   - name: commitSha
@@ -20,4 +20,4 @@ fields:
 methods: []
 sourcePath: src/git/types.ts
 createdAt: '2026-07-04T16:31:28.869Z'
-updatedAt: '2026-09-19T11:07:08.169Z'
+updatedAt: '2026-10-04T10:20:14.978Z'

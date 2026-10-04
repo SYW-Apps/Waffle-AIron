@@ -28,7 +28,7 @@ fields:
     description: Related spec id, when the issue concerns a spec node
     optional: true
   - name: draftContext
-    type: Boolean
+    type: bool
     description: >-
       True when the issue was raised on a draft/design spec (or an ancestor) — lets the --ci gate
       waive warnings that merely reflect declared, unfinished work.
@@ -51,4 +51,4 @@ fields:
 methods: []
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-09-28T06:02:04.395Z'
+updatedAt: '2026-10-04T10:21:25.558Z'

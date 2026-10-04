@@ -7,17 +7,17 @@ methods:
     description: >-
       Triggers skill exporting for the passed target types, or the project's enabled targets, and
       returns what was written.
-    signature: 'exportSddSkills(targetTypes?: string[]): SkillsExportResult'
+    signature: 'exportSddSkills(targetTypes?: list<string>): SkillsExportResult'
     returns: SkillsExportResult
     params:
       - name: targetTypes
-        type: string[]
+        type: list<string>
         description: The target types to export into; omitted means the project's enabled targets
         optional: true
   - name: listResources
     description: Publish the built-in SDD skills as MCP resource descriptors for the MCP server.
-    signature: 'listResources(): SkillResourceDescriptor[]'
-    returns: SkillResourceDescriptor[]
+    signature: 'listResources(): list<SkillResourceDescriptor>'
+    returns: list<SkillResourceDescriptor>
     params: []
   - name: readResource
     description: Read one built-in SDD skill's content by MCP resource id for the MCP server.
@@ -36,8 +36,8 @@ methods:
     params: []
   - name: listSkillNames
     description: 'Published read: the names of the built-in SDD skills.'
-    signature: 'listSkillNames(): string[]'
-    returns: string[]
+    signature: 'listSkillNames(): list<string>'
+    returns: list<string>
     params: []
   - name: checkSkillFreshness
     description: >-
@@ -50,4 +50,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:13:55.805Z'
+updatedAt: '2026-10-04T10:19:34.735Z'

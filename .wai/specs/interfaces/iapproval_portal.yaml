@@ -10,7 +10,7 @@ methods:
   - name: readLockRecord
     description: Read the current commit-scoped lock record, or null if the project is unlocked.
     signature: 'readLockRecord(): LockRecord | null'
-    returns: LockRecord | null
+    returns: LockRecord?
   - name: writeLockRecord
     description: Persist a commit-scoped lock record.
     signature: 'writeLockRecord(record: LockRecord): void'
@@ -19,8 +19,8 @@ methods:
     description: >-
       Compute the current state hash of the project at the given root (read-only bind). Pure 1:1
       forward.
-    signature: 'computeStateIdAt(root: string): string | null'
-    returns: string | null
+    signature: 'computeStateIdAt(root: string): string?'
+    returns: string?
     params:
       - name: root
         type: string
@@ -42,8 +42,8 @@ methods:
       narrows the capture to one subsystem, leaving everything outside with whatever approval it
       already had. Records a decision; the caller gates it, and the caller persists it on the lock
       record.
-    signature: 'captureApprovedSpecs(root?: string, scope?: ApprovalScope): Record<string, string>'
-    returns: Record<string, string>
+    signature: 'captureApprovedSpecs(root?: string, scope?: ApprovalScope): map<string, string>'
+    returns: map<string, string>
     params:
       - name: root
         type: string
@@ -66,8 +66,8 @@ methods:
       What differs between this tree and the approval on record: which specs were added, changed or
       removed, and which are untouched. Null when the project was never approved — a different
       answer from approved and drifted.
-    signature: 'diffAgainstApproval(root?: string): ApprovalDiff | null'
-    returns: ApprovalDiff | null
+    signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
+    returns: ApprovalDiff?
     params:
       - name: root
         type: string
@@ -75,8 +75,8 @@ methods:
         optional: true
   - name: approvalRecord
     description: The approval record this project carries, or null when it has none.
-    signature: 'approvalRecord(root?: string): LockRecord | null'
-    returns: LockRecord | null
+    signature: 'approvalRecord(root?: string): LockRecord?'
+    returns: LockRecord?
     params:
       - name: root
         type: string
@@ -88,8 +88,8 @@ methods:
       is no record. Published here because the validator needs it to tell an approved spec from an
       unapproved one, and the validator reaching into the approval module directly would cross a
       subsystem boundary the Portal exists to be.
-    signature: 'settledSpecPaths(root?: string): Set<string> | null'
-    returns: Set<string> | null
+    signature: 'settledSpecPaths(root?: string): set<string>?'
+    returns: set<string>?
     params:
       - name: root
         type: string
@@ -99,11 +99,11 @@ methods:
     description: >-
       What the lock says about the tree as it stands (approval_comparison.verdict), given the pin
       tree the caller obtained from the validator; silent for a project never approved.
-    signature: 'approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict'
+    signature: 'approvalVerdict(approvals?: list<ProjectApproval>): ApprovalVerdict'
     returns: ApprovalVerdict
     params:
       - name: approvals
-        type: ProjectApproval[]
+        type: list<ProjectApproval>
         description: The pin tree from validator_portal.familyApprovals
         optional: true
     guarantees:
@@ -119,4 +119,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-25T17:32:24.931Z'
-updatedAt: '2026-09-30T05:49:42.158Z'
+updatedAt: '2026-10-04T10:18:30.989Z'

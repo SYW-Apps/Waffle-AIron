@@ -21,8 +21,8 @@ methods:
       <base>/application/o/{authorize,token}/ + jwks; generic oidc: <issuer>/{authorize,token}).
       Discovery documents are cached in-adapter (transient, refetchable) so resolution is cheap on
       the hot path. Rejects a config that resolves to no usable authorization or token endpoint.
-    signature: 'resolveEndpoints(config: IdentityProviderConfig): ProviderEndpoints'
-    returns: ProviderEndpoints
+    signature: 'resolveEndpoints(config: IdentityProviderConfig): async ProviderEndpoints'
+    returns: async ProviderEndpoints
     params:
       - name: config
         type: IdentityProviderConfig
@@ -55,8 +55,8 @@ methods:
       verification) carrying no raw access/refresh token or client secret.
     signature: >-
       exchangeCode(config: IdentityProviderConfig, endpoints: ProviderEndpoints, code: string,
-      redirectUri: string): string
-    returns: string
+      redirectUri: string): async string
+    returns: async string
     params:
       - name: config
         type: IdentityProviderConfig
@@ -74,8 +74,8 @@ methods:
       leaking raw provider tokens. Unverifiable metadata is rejected.
     signature: >-
       resolveSubject(config: IdentityProviderConfig, endpoints: ProviderEndpoints, providerMetadata:
-      string): PrincipalSubject
-    returns: PrincipalSubject
+      string): async PrincipalSubject
+    returns: async PrincipalSubject
     params:
       - name: config
         type: IdentityProviderConfig
@@ -91,11 +91,11 @@ methods:
       callers consult resolveGroups only AFTER resolveSubject has succeeded on the SAME summary, so
       the groups are backed by the same verified assertion. A pure parse; performs no provider I/O
       and never surfaces raw provider tokens.
-    signature: 'resolveGroups(providerMetadata: string): string[]'
-    returns: string[]
+    signature: 'resolveGroups(providerMetadata: string): list<string>'
+    returns: list<string>
     params:
       - name: providerMetadata
         type: string
 status: complete
 createdAt: '2026-07-08T22:00:47.217Z'
-updatedAt: '2026-10-03T17:52:42.806Z'
+updatedAt: '2026-10-04T10:32:06.518Z'

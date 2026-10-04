@@ -75,7 +75,7 @@ fields:
     description: The L0 entry's contract stability, on project tables.
     optional: true
   - name: via
-    type: string[]
+    type: list<string>
     description: >-
       The levels the name passed through from the table's owner to the declaring subsystem, in
       order; empty for an own item.
@@ -83,4 +83,4 @@ fields:
 methods: []
 sourcePath: src/models/exports.ts
 createdAt: '2026-09-26T16:07:53.828Z'
-updatedAt: '2026-09-26T16:07:53.830Z'
+updatedAt: '2026-10-04T10:20:58.145Z'

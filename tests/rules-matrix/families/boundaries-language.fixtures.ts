@@ -1,12 +1,10 @@
 /**
  * Target-language hygiene fixtures
- * (src/core/rules/heuristic/signature-language-builtins.ts and
- * narrative-language-constructs.ts).
+ * (src/core/rules/heuristic/narrative-language-constructs.ts). What a
+ * contract may name is the neutral type grammar's, never a language's — the
+ * foreign-builtin check (LANGUAGE_FOREIGN_BUILTIN) is retired.
  *
  * Documented intents pinned here (warnings, opt-in via targetLanguage):
- *  - LANGUAGE_FOREIGN_BUILTIN: builtin types that unambiguously belong to a
- *    DIFFERENT language family are flagged in method signatures (e.g. usize
- *    in a TypeScript system).
  *  - LANGUAGE_FOREIGN_FLOW: narrative flow constructs the target language
  *    lacks are flagged. Two documented gaps exercised: try-regions in Rust
  *    (errors are values, Result + ?) and do-while in Python.
@@ -22,71 +20,6 @@ const ROSTER_COMPONENT = {
 };
 
 export default [
-  // -------------------------------------------------------------------------
-  // LANGUAGE_FOREIGN_BUILTIN
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'LANGUAGE_FOREIGN_BUILTIN',
-    severity: 'warning',
-    anchoredTo: 'iroster_sync',
-    expectFire: true,
-    scenario:
-      'In a TypeScript-targeted system, the roster sync contract declares its batch size as a Rust usize instead of a TypeScript number.',
-    tree: {
-      system: {
-        name: 'MediBook',
-        vision: 'Clinic appointment booking platform covering scheduling and staffing.',
-        targetLanguage: 'typescript',
-      },
-      subsystems: [STAFFING_SUB],
-      components: [ROSTER_COMPONENT],
-      interfaces: [
-        {
-          id: 'iroster_sync',
-          component: 'roster-sync-orchestrator',
-          methods: [
-            {
-              name: 'syncRoster',
-              description: 'Synchronize one batch of roster entries.',
-              signature: 'syncRoster(batchSize: usize): void',
-              params: [{ name: 'batchSize', type: 'usize' }],
-            },
-          ],
-        },
-      ],
-    },
-  }),
-  defineRuleFixture({
-    code: 'LANGUAGE_FOREIGN_BUILTIN',
-    expectFire: false,
-    reason: 'The signature uses the TypeScript-idiomatic builtin (number), so no foreign-language marker appears.',
-    scenario:
-      'In a TypeScript-targeted system, the roster sync contract declares its batch size as a plain number.',
-    tree: {
-      system: {
-        name: 'MediBook',
-        vision: 'Clinic appointment booking platform covering scheduling and staffing.',
-        targetLanguage: 'typescript',
-      },
-      subsystems: [STAFFING_SUB],
-      components: [ROSTER_COMPONENT],
-      interfaces: [
-        {
-          id: 'iroster_sync',
-          component: 'roster-sync-orchestrator',
-          methods: [
-            {
-              name: 'syncRoster',
-              description: 'Synchronize one batch of roster entries.',
-              signature: 'syncRoster(batchSize: number): void',
-              params: [{ name: 'batchSize', type: 'number' }],
-            },
-          ],
-        },
-      ],
-    },
-  }),
-
   // -------------------------------------------------------------------------
   // LANGUAGE_FOREIGN_FLOW — try region in Rust
   // -------------------------------------------------------------------------

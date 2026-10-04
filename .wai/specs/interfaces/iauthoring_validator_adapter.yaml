@@ -30,21 +30,21 @@ methods:
       encode a method it just changed or deleted. Answers empty when the project declares no test
       roots — the search must never be the thing that fails a write.
     signature: >-
-      findTestsReferencing(methods: MethodImplementation[], projectRoot: string, testRoots:
-      string[]): TestsToRevisit[]
-    returns: TestsToRevisit[]
+      findTestsReferencing(methods: list<MethodImplementation>, projectRoot: string, testRoots:
+      list<string>): list<TestsToRevisit>
+    returns: list<TestsToRevisit>
     params:
       - name: methods
-        type: MethodImplementation[]
+        type: list<MethodImplementation>
         description: The methods the write changed or deleted
       - name: projectRoot
         type: string
         description: The root the test roots are resolved within
       - name: testRoots
-        type: string[]
+        type: list<string>
         description: Project-relative test directories from the project's conformance settings
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-18T21:11:59.866Z'
-updatedAt: '2026-09-20T13:26:41.115Z'
+updatedAt: '2026-10-04T10:18:34.145Z'

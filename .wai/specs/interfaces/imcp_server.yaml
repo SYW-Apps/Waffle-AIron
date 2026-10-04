@@ -12,11 +12,11 @@ methods:
       long-lived stdio session that emits list-changed notifications. The MCP portal mounts its own
       surface on top — the skill/agent resources, the prompts, and for a hosted caller the
       advertisement of the hosted data-plane tools.
-    signature: 'create(hostedTools?: boolean): McpServer'
-    returns: McpServer
+    signature: 'create(hostedTools?: bool): McpServerInstance'
+    returns: McpServerInstance
     params:
       - name: hostedTools
-        type: boolean
+        type: bool
         description: >-
           Advertise the seventeen hosted data-plane tools in tools/list — discovery only, and false
           for the stdio server, which cannot serve any of them.
@@ -41,14 +41,14 @@ methods:
       fingerprint that cannot be read cannot rule that out, so writes are refused as well, naming
       why. The answer carries the sentence to show the human, including that only a reconnect (/mcp
       reconnect wairon) clears it.
-    signature: 'assessBuildFreshness(stamp: BuildStamp | null): BuildFreshness'
+    signature: 'assessBuildFreshness(stamp: BuildStamp?): BuildFreshness'
     returns: BuildFreshness
     params:
       - name: stamp
-        type: BuildStamp | null
+        type: BuildStamp?
         description: >-
           The build the server stands for, stamped at startup; null when it could not be stamped,
           which reads as fresh
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T17:55:04.688Z'
+updatedAt: '2026-10-04T10:27:37.996Z'

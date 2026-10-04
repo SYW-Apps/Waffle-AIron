@@ -26,10 +26,10 @@ fields:
     description: MCP resource URI or tool-addressable id used to fetch the skill content.
     optional: false
   - name: defaultForHostedMcp
-    type: boolean
+    type: bool
     description: Whether hosted MCP should advertise this skill by default to connected agents.
     optional: false
 methods: []
 sourcePath: src/core/skills.ts
 createdAt: '2026-07-08T22:01:23.487Z'
-updatedAt: '2026-09-19T11:07:17.263Z'
+updatedAt: '2026-10-04T10:21:07.012Z'

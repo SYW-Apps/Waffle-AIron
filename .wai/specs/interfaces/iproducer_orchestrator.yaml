@@ -11,8 +11,8 @@ methods:
     description: >-
       Project the spec tree and push it to the target, handing the target's adapter the token the
       caller resolved.
-    signature: 'produce(target: string, diagramUrl: string, token: string): void'
-    returns: void
+    signature: 'produce(target: string, diagramUrl: string, token: string): async void'
+    returns: async void
     params:
       - name: target
         type: string
@@ -28,7 +28,7 @@ methods:
   - name: list
     description: List configured producers.
     signature: 'list(): ProducerConfig[]'
-    returns: ProducerConfig[]
+    returns: list<ProducerConfig>
 status: complete
 createdAt: '2026-07-04T17:37:33.877Z'
-updatedAt: '2026-09-25T22:01:48.221Z'
+updatedAt: '2026-10-04T10:32:09.031Z'

@@ -1,0 +1,18 @@
+kind: signature
+id: score_mark
+name: ScoreMark
+description: >-
+  A caller's markup for a completeness score, given the percentage it shows, so the caller grades it
+  however it grades things; the renderer never decides what a number means.
+fields: []
+methods: []
+params:
+  - name: pct
+    type: int
+    description: The completeness percentage, a whole number from 0 to 100
+  - name: text
+    type: string
+    description: The score as the renderer would print it
+returns: string
+createdAt: '2026-10-04T10:27:12.423Z'
+updatedAt: '2026-10-04T10:27:12.424Z'

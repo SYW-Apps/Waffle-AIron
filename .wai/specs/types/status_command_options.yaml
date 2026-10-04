@@ -10,10 +10,10 @@ fields:
     description: Only report this subsystem
     optional: true
   - name: recursive
-    type: boolean
+    type: bool
     description: Recurse into chained subprojects (default true)
     optional: true
 methods: []
 componentClass: cli_runner
 createdAt: '2026-08-12T18:49:18.857Z'
-updatedAt: '2026-08-12T18:49:18.867Z'
+updatedAt: '2026-10-04T10:21:11.325Z'

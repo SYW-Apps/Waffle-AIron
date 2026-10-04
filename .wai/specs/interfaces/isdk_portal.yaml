@@ -12,8 +12,8 @@ methods:
     description: >-
       Scaffold a new pack project (declarative or code) into a directory; returns the created file
       paths.
-    signature: 'scaffoldPack(request: pack_scaffold_request): string[]'
-    returns: string[]
+    signature: 'scaffoldPack(request: pack_scaffold_request): list<string>'
+    returns: list<string>
     params:
       - name: request
         type: pack_scaffold_request
@@ -60,19 +60,19 @@ methods:
   - name: buildTreeArchive
     description: Pack a project's spec tree — the supplied roots' .wai directories — into a .waitree archive.
     signature: >-
-      buildTreeArchive(roots: tree_root_source[], projectName: string, stateId?: string,
-      includeDerived?: boolean): TreeBuildResult
+      buildTreeArchive(roots: list<tree_root_source>, projectName: string, stateId?: string,
+      includeDerived?: bool): TreeBuildResult
     returns: TreeBuildResult
     params:
       - name: roots
-        type: tree_root_source[]
+        type: list<tree_root_source>
       - name: projectName
         type: string
       - name: stateId
         type: string
         optional: true
       - name: includeDerived
-        type: boolean
+        type: bool
         optional: true
     endpoint:
       transport: Custom
@@ -93,7 +93,7 @@ methods:
       optionally refusing executable entries.
     signature: >-
       extractTreeArchive(archive: bytes, destDir: string, limits?: pack_extraction_limits,
-      refuseExecutableEntries?: boolean): TreeExtractionResult
+      refuseExecutableEntries?: bool): TreeExtractionResult
     returns: TreeExtractionResult
     params:
       - name: archive
@@ -104,11 +104,11 @@ methods:
         type: pack_extraction_limits
         optional: true
       - name: refuseExecutableEntries
-        type: boolean
+        type: bool
         optional: true
     endpoint:
       transport: Custom
       address: '@wairon/sdk#extractTreeArchive'
 status: complete
 createdAt: '2026-07-21T18:13:58.018Z'
-updatedAt: '2026-10-03T20:54:07.794Z'
+updatedAt: '2026-10-04T10:19:28.147Z'

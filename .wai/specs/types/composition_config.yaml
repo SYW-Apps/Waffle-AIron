@@ -16,13 +16,13 @@ description: >-
   reads the other.
 fields:
   - name: requirePolicies
-    type: PackRequirement[]
+    type: list<PackRequirement>
     description: >-
       The packs every member below this project (all levels, as far as a family run selects) must
       select, each by semver range and optionally one profile. Empty or absent: nothing is required.
     optional: true
   - name: requireApprovedMembers
-    type: boolean
+    type: bool
     description: >-
       Opt-in, off by default. When true, this project's lock (local and hosted) REFUSES while any
       DIRECT member is drifted or never approved, naming each with its state, and writes nothing.
@@ -34,4 +34,4 @@ methods: []
 sourcePath: src/models/project.ts
 symbol: CompositionConfig
 createdAt: '2026-09-29T15:49:45.020Z'
-updatedAt: '2026-09-30T05:48:04.668Z'
+updatedAt: '2026-10-04T10:20:00.156Z'

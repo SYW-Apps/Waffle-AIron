@@ -13,13 +13,13 @@ description: >-
 subsystem: sdd_validator
 fields:
   - name: all
-    type: DependencyEdge[]
+    type: list<DependencyEdge>
     description: >-
       Every edge, in component order then declaration order — the ones that reached nothing
       included, since a reference finding is exactly what they are for
     optional: false
   - name: matrix
-    type: DependencyEdge[]
+    type: list<DependencyEdge>
     description: >-
       The edges the intra-subsystem stereotype matrix judges: resolved inside one subsystem, both
       ends live, and unlicensed by the governing pack profile. Their target always resolved
@@ -27,4 +27,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T01:06:31.002Z'
-updatedAt: '2026-09-19T11:07:06.799Z'
+updatedAt: '2026-10-04T10:20:02.173Z'

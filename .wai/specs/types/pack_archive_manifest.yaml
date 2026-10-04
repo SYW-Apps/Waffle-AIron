@@ -12,7 +12,7 @@ description: >-
   `name`/`version` must match the inner pack manifest (verified on build and inspect).
 fields:
   - name: formatVersion
-    type: number
+    type: int
     description: Pack-archive format version (currently 1); a newer major is rejected, not silently mis-read
     optional: false
   - name: name
@@ -40,7 +40,7 @@ fields:
     description: Optional integrity digest over the manifest
     optional: true
   - name: entryDigests
-    type: Record<string, string>
+    type: map<string, string>
     description: 'Optional per-entry integrity map: archive path → sha256'
     optional: true
   - name: generatedBy
@@ -54,4 +54,4 @@ fields:
 methods: []
 componentClass: pack_codec
 createdAt: '2026-07-21T18:12:30.258Z'
-updatedAt: '2026-07-21T18:12:30.289Z'
+updatedAt: '2026-10-04T10:29:05.711Z'

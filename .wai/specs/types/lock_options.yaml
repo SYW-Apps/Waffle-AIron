@@ -5,7 +5,7 @@ description: Flags of the local `wairon lock` command.
 subsystem: sdd_cli
 fields:
   - name: 'yes'
-    type: boolean
+    type: bool
     description: Skip the interactive confirmation (scripts / CI).
     optional: true
   - name: subsystem
@@ -16,7 +16,7 @@ fields:
       whole project's.
     optional: true
   - name: recursive
-    type: boolean
+    type: bool
     description: >-
       Accepted for one release and ignored for what is written: a lock approves this project only
       and never writes below it (parent-lock-writes-nothing-below). Each member is locked at its own
@@ -25,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/commands/lock.ts
 createdAt: '2026-07-24T18:06:34.277Z'
-updatedAt: '2026-09-30T05:55:19.194Z'
+updatedAt: '2026-10-04T10:20:24.667Z'

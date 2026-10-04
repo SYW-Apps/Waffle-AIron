@@ -115,6 +115,38 @@ describe('composeAgentBrief (live delegation briefs)', () => {
     'parentSystem: TestSystem',
   ].join('\n');
 
+  it('carries the type mapping of the language its implementations are written in, folded into the instructions', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', SUB);
+    proj.writeSpec('component', 'billing', 'id: billing\nname: Billing\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator');
+    proj.writeSpec('interface', 'ibilling', 'id: ibilling\nname: IBilling\ndescription: d\ncomponent: billing\nmethods: []');
+    proj.writeSpec('implementation', 'billing_impl', 'id: billing_impl\nname: Billing\ndescription: d\ncontract: ibilling\nsourcePath: src/billing.ts\nmethods: []');
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('alpha-owner');
+      expect(brief.typeMapping).toEqual(expect.arrayContaining(['list<T> → T[]', 'T? → T | null', 'async T → Promise<T>']));
+      expect(brief.instructions).toContain('## Types in typescript');
+      expect(brief.instructions).toContain('- list<T> → T[]');
+    } finally { proj.cleanup(); }
+  });
+
+  it('carries no type mapping when the agent implements nothing, or no dialect reads its language', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', SUB);
+    proj.writeSpec('subsystem', 'beta', SUB.replace(/alpha/g, 'beta').replace('Alpha', 'Beta'));
+    proj.writeSpec('component', 'engine', 'id: engine\nname: Engine\ndescription: d\nsubsystem: beta\ncomponentType: Orchestrator');
+    proj.writeSpec('interface', 'iengine', 'id: iengine\nname: IEngine\ndescription: d\ncomponent: engine\nmethods: []');
+    proj.writeSpec('implementation', 'engine_impl', 'id: engine_impl\nname: Engine\ndescription: d\ncontract: iengine\nsourcePath: src/engine.rs\nmethods: []');
+    proj.activate();
+    try {
+      expect(composeAgentBrief('alpha-owner').typeMapping).toBeUndefined();
+      const beta = composeAgentBrief('beta-owner');
+      expect(beta.typeMapping).toBeUndefined();
+      expect(beta.instructions).not.toContain('## Types in');
+      expect(composeAgentBrief('system-architect').typeMapping).toBeUndefined();
+    } finally { proj.cleanup(); }
+  });
+
   it('carries no budget or profile when the project has not opted in', () => {
     const proj = createTempProject();
     proj.writeSpec('subsystem', 'alpha', SUB);

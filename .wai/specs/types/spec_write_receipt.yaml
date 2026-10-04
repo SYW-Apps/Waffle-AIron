@@ -22,32 +22,39 @@ fields:
     description: The spec's display name as written.
     optional: false
   - name: replacedExisting
-    type: boolean
+    type: bool
     description: >-
       True when a spec already held this id and the call re-authored it in place rather than adding
       one.
     optional: false
   - name: status
-    type: string | undefined
+    type: string
     description: >-
       The lifecycle status written — draft, design or complete. Absent for the L0 and for a type,
       neither of which carries one.
     optional: true
   - name: notices
-    type: string[]
+    type: list<string>
     description: >-
       The notice lines the text answer lists, one per entry: what was carried forward, what a
       restatement removed, what an omission cleared, and every gate warning the write raised.
     optional: false
   - name: testsToRevisit
-    type: TestsToRevisit[]
+    type: list<TestsToRevisit>
     description: >-
       The tests that encode a method this write changed or removed, one entry per such method. A
       re-authoring that drops or rewrites a method invalidates its tests as surely as a delta does,
       so the create reports them the same way. Empty for a new spec, when no method changed, when
       the project declares no test roots, or when nothing references them.
     optional: false
+  - name: respellings
+    type: list<TypeRespelling>
+    description: >-
+      Each type position the write normalised: what the input wrote against the canonical spelling
+      stored. Aliases are accepted, never refused, and this list is how an author learns the
+      canonical form. Empty when every position was already canonical.
+    optional: false
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-19T07:48:15.465Z'
-updatedAt: '2026-09-27T15:37:27.514Z'
+updatedAt: '2026-10-04T10:21:10.663Z'

@@ -29,17 +29,17 @@ fields:
       what the pack accounts for).
     optional: false
   - name: doctrine
-    type: DoctrineChange[]
+    type: list<DoctrineChange>
     description: The candidate pack's changes against wairon's defaults (extension_pack.changesAgainst).
     optional: false
   - name: previousDoctrine
-    type: DoctrineChange[]
+    type: list<DoctrineChange>
     description: >-
       On an update: the replaced version's changes against the same defaults, so the report can show
       what the new version adds and drops.
     optional: true
   - name: governing
-    type: string[]
+    type: list<string>
     description: >-
       The pack's profiles that would govern something in this project under the candidate
       configuration: the projectType, and each subsystem profile, that names one.
@@ -72,4 +72,4 @@ methods:
     symbol: impactHeadline
 sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:59.377Z'
-updatedAt: '2026-09-29T21:33:44.248Z'
+updatedAt: '2026-10-04T10:20:39.025Z'

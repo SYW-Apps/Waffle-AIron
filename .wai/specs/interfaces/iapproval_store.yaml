@@ -5,18 +5,18 @@ component: approval_store
 methods:
   - name: load
     description: Load persisted approval requests into the authoritative store representation.
-    signature: 'load(): ApprovalRequest[]'
-    returns: ApprovalRequest[]
+    signature: 'load(): list<ApprovalRequest>'
+    returns: list<ApprovalRequest>
     params: []
   - name: replaceAll
     description: >-
       Replace the store contents with the supplied complete approval-request set after persistence
       has succeeded.
-    signature: 'replaceAll(requests: ApprovalRequest[]): void'
+    signature: 'replaceAll(requests: list<ApprovalRequest>): void'
     returns: void
     params:
       - name: requests
-        type: ApprovalRequest[]
+        type: list<ApprovalRequest>
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -33,4 +33,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T19:30:32.368Z'
-updatedAt: '2026-09-19T21:29:23.654Z'
+updatedAt: '2026-10-04T10:18:31.332Z'

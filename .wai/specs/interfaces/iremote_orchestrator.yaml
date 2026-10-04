@@ -13,8 +13,8 @@ methods:
       project was created and where the hosted side backed up any tree it replaced. When archivePath
       is given the archive is also written there, so the same command produces the artifact an
       air-gapped transfer needs.
-    signature: 'pushTree(target: remote_target, options: remote_transfer_options): RemoteTransferOutcome'
-    returns: RemoteTransferOutcome
+    signature: 'pushTree(target: remote_target, options: remote_transfer_options): async RemoteTransferOutcome'
+    returns: async RemoteTransferOutcome
     params:
       - name: target
         type: remote_target
@@ -27,8 +27,8 @@ methods:
       replaced without replaceExisting, and whatever is replaced is backed up. Local extraction does
       NOT apply the executable-entry guard: the archive came from an instance the operator chose to
       trust, and refusing a bundled code pack on the way OUT would make a hosted project unpullable.
-    signature: 'pullTree(target: remote_target, options: remote_transfer_options): RemoteTransferOutcome'
-    returns: RemoteTransferOutcome
+    signature: 'pullTree(target: remote_target, options: remote_transfer_options): async RemoteTransferOutcome'
+    returns: async RemoteTransferOutcome
     params:
       - name: target
         type: remote_target
@@ -42,8 +42,8 @@ methods:
       user's credential store for that instance, else the token carried on the agent's MCP entry.
       Returns null when nothing resolves — an unattached checkout is a normal state, and the caller
       decides whether that is an error.
-    signature: 'resolveTarget(root: string, overrides: remote_command_options): RemoteTarget | null'
-    returns: RemoteTarget | null
+    signature: 'resolveTarget(root: string, overrides: remote_command_options): RemoteTarget?'
+    returns: RemoteTarget?
     params:
       - name: root
         type: string
@@ -55,8 +55,8 @@ methods:
       resolves — an attach that cannot reach the instance, or is refused by it, fails LOUDLY here
       rather than leaving every later command to fail mysteriously. Stores the credential in the
       user's credential store and the binding (URL + project only) with the project.
-    signature: 'attach(root: string, target: remote_target): RemoteBinding'
-    returns: RemoteBinding
+    signature: 'attach(root: string, target: remote_target): async RemoteBinding'
+    returns: async RemoteBinding
     params:
       - name: root
         type: string
@@ -79,8 +79,8 @@ methods:
       What this checkout is attached to and how it was resolved (explicit binding, or derived from
       the agent's MCP configuration), plus whether a credential is available for that instance —
       never the credential itself.
-    signature: 'describeAttachment(root: string): RemoteBinding | null'
-    returns: RemoteBinding | null
+    signature: 'describeAttachment(root: string): RemoteBinding?'
+    returns: RemoteBinding?
     params:
       - name: root
         type: string
@@ -91,8 +91,8 @@ methods:
       Run validation against the ATTACHED hosted project's tree and return its report, for a
       checkout that has no local tree to validate. With family, ask the instance for the family run
       (`wairon validate --family`); it composes within the credential's reach and never beyond it.
-    signature: 'validateAttached(target: remote_target, subsystem?: string, family?: boolean): Json'
-    returns: Json
+    signature: 'validateAttached(target: remote_target, subsystem?: string, family?: bool): async any'
+    returns: async any
     params:
       - name: target
         type: remote_target
@@ -100,13 +100,13 @@ methods:
         type: string
         optional: true
       - name: family
-        type: boolean
+        type: bool
         description: Ask for the family run explicitly, as `validate --family` does locally
         optional: true
   - name: statusAttached
     description: Read the completeness dashboard of the ATTACHED hosted project's tree.
-    signature: 'statusAttached(target: remote_target, subsystem?: string): string'
-    returns: string
+    signature: 'statusAttached(target: remote_target, subsystem?: string): async string'
+    returns: async string
     params:
       - name: target
         type: remote_target
@@ -117,8 +117,8 @@ methods:
     description: >-
       Freeze the ATTACHED hosted project's tree. Reports an approval-requested outcome as such —
       never as a completed lock.
-    signature: 'lockAttached(target: remote_target): string'
-    returns: string
+    signature: 'lockAttached(target: remote_target): async string'
+    returns: async string
     params:
       - name: target
         type: remote_target
@@ -128,8 +128,8 @@ methods:
       accepts it. Separate from attach on purpose: a credential belongs to the MACHINE and serves
       every checkout, while a binding belongs to ONE project — logging in should not silently bind
       whatever directory you happened to be standing in.
-    signature: 'storeCredential(url: string, token: string, probeProjectId?: string): void'
-    returns: void
+    signature: 'storeCredential(url: string, token: string, probeProjectId?: string): async void'
+    returns: async void
     params:
       - name: url
         type: string
@@ -156,7 +156,7 @@ methods:
   - name: listStoredInstances
     description: The hosted instances this machine holds a credential for — URLs only, never tokens.
     signature: 'listStoredInstances(): string[]'
-    returns: string[]
+    returns: list<string>
     guarantees:
       - idempotent
   - name: storedCredentialFor
@@ -165,8 +165,8 @@ methods:
       registering a hosted MCP entry the agent will present. The MCP config adapter is deliberately
       not permitted to read the credential store itself — an Adapter has no business reaching into
       held state — so the resolution happens here and the token is handed to it.
-    signature: 'storedCredentialFor(url: string): string | null'
-    returns: string | null
+    signature: 'storedCredentialFor(url: string): string?'
+    returns: string?
     params:
       - name: url
         type: string
@@ -174,4 +174,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-08-12T18:31:56.292Z'
-updatedAt: '2026-10-03T20:54:06.908Z'
+updatedAt: '2026-10-04T10:32:12.618Z'

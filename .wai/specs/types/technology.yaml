@@ -16,7 +16,7 @@ fields:
       the same technology share. A bare-string entry is this name alone.
     optional: false
   - name: matches
-    type: string[]
+    type: list<string>
     description: >-
       The tokens the leakage and contract checks match INSTEAD of the name, at least one. Each is
       matched like a name: identifier-aware, 3+ significant characters, a multi-word token matching
@@ -30,7 +30,7 @@ methods:
     symbol: technologyName
   - name: tokens
     signature: 'tokens(): string[]'
-    returns: string[]
+    returns: list<string>
     description: >-
       The tokens the technology-boundaries rule matches for this entry: its `matches` when it
       declares them, else its name alone.
@@ -38,4 +38,4 @@ methods:
 sourcePath: src/models/specs.ts
 symbol: Technology
 createdAt: '2026-10-01T23:44:47.520Z'
-updatedAt: '2026-10-01T23:59:38.823Z'
+updatedAt: '2026-10-04T10:21:16.669Z'

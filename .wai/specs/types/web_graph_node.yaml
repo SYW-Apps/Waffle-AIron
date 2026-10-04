@@ -24,7 +24,7 @@ fields:
       "type".
     optional: false
   - name: level
-    type: number
+    type: int
     description: >-
       Level-of-detail depth of this node: 0 = landscape/organization tier (units, projects), 1 =
       subsystem, 2 = component (L2), 3 = interface/type (L3), 4 = implementation (L4). The client
@@ -49,13 +49,13 @@ fields:
     description: Optional lifecycle/status label for filtering and styling (e.g. spec completeness).
     optional: true
   - name: issueCount
-    type: number
+    type: int
     description: >-
       Number of validator errors and warnings overlaid onto this node (project tier), 0 or absent
       when it has none. Notices are counted apart, in noticeCount.
     optional: true
   - name: actionable
-    type: boolean
+    type: bool
     description: >-
       True when the caller can act on this scope. False/absent on an ancestor-breadcrumb (context)
       unit shown read-only only so the tree stays navigable to a deeper actionable scope (the no@org
@@ -63,7 +63,7 @@ fields:
       node actionable. Carried through from LandscapeNode.actionable on the landscape tier.
     optional: true
   - name: noticeCount
-    type: number
+    type: int
     description: >-
       Number of validator notices overlaid onto this node (project tier), absent when it has none —
       kept apart from issueCount so a node holding only notices is never drawn as failing.
@@ -71,4 +71,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:08.145Z'
-updatedAt: '2026-09-26T14:48:55.416Z'
+updatedAt: '2026-10-04T10:29:26.153Z'

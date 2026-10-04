@@ -1,0 +1,66 @@
+kind: value-object
+id: type_expression_problem
+name: TypeExpressionProblem
+description: >-
+  Why one written type position is not a canonical expression, and what replaces it. Raised by
+  type_expression.parse; once collected over a spec it also says where (spec, path). The authoring
+  seam refuses a write holding one, naming the replacement; the loader keeps it as a fact for the
+  rules, so a tree that held it before the grammar existed still loads, reads the position as opaque
+  any, and is told what to change.
+fields:
+  - name: code
+    type: string
+    description: >-
+      TYPE_EXPRESSION_INVALID (does not parse) | TYPE_POSITION_INVALID (breaks a position rule:
+      misplaced void or async, a non-scalar map key, T??) | TYPE_FORM_UNSUPPORTED (an inline object,
+      inline function type, string-literal union, union mixing in a primitive or collection,
+      intersection, utility type or tuple) | TYPE_NOT_NEUTRAL (number, or a legacy builtin with no
+      neutral meaning)
+    optional: false
+  - name: written
+    type: string
+    description: The position's text as written
+    optional: false
+  - name: detail
+    type: string
+    description: 'What is wrong, in a sentence: the offending part and the rule it breaks'
+    optional: false
+  - name: replacement
+    type: string
+    description: >-
+      What to write instead: "int or float", a named value-object, a signature type, an enum, or the
+      neutral spelling
+    optional: true
+  - name: specId
+    type: string
+    description: The interface or type holding the position, once collected over a spec
+    optional: true
+  - name: kind
+    type: string
+    description: interface | type, once collected over a spec
+    optional: true
+  - name: path
+    type: string
+    description: >-
+      Where in the spec, e.g. methods.save.params.key, methods.save.returns, fields.createdAt,
+      params.listener (a signature type's), once collected over a spec
+    optional: true
+methods:
+  - name: intProposal
+    signature: 'intProposal(): TypeRespelling?'
+    params: []
+    returns: TypeRespelling?
+    description: >-
+      The int this problem's position may take, PROPOSED and never applied: for a `number` position
+      (TYPE_NOT_NEUTRAL, "int or float?") collected over a spec, whose name — the param or field, or
+      for a returns the method whose returns it is — plainly says a whole number (a count, size,
+      length, limit, port, step, index, depth, level, days, minutes, seconds, bytes, version, ...;
+      read word by word over camelCase, snake_case and kebab-case), the respelling of its written
+      text with int for number, in canonical spelling. None for any other problem, for a name that
+      does not say so, or when the respelled text would still not be canonical. What the doctor's
+      type-spelling repair lists and the type-expressions rule mentions; an author confirms it by
+      writing int, or writes float. Pure.
+    symbol: typeProblemIntProposal
+sourcePath: src/models/type-grammar.ts
+createdAt: '2026-10-03T22:02:56.994Z'
+updatedAt: '2026-10-04T00:09:50.884Z'

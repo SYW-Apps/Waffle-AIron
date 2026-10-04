@@ -12,7 +12,7 @@ fields:
     description: The plan, rehearsal dropped
     optional: false
   - name: applied
-    type: boolean
+    type: bool
     description: True only when the transaction committed
     optional: false
   - name: outcome
@@ -20,7 +20,7 @@ fields:
     description: The transaction outcome, absent for a dry run or a refused plan
     optional: true
   - name: recovered
-    type: RecoveredTransaction[]
+    type: list<RecoveredTransaction>
     description: >-
       Every unfinished transaction found under the data directory before planning — a crashed
       upgrade, or a hosted detach or adopt the data directory coordinated — rolled back or cleaned
@@ -28,4 +28,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-10-01T16:27:26.465Z'
-updatedAt: '2026-10-01T18:06:42.950Z'
+updatedAt: '2026-10-04T10:20:29.737Z'

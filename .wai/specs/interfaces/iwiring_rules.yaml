@@ -179,10 +179,11 @@ methods:
   - name: untypedSeams
     description: >-
       Rule untyped-seams. Methods on a subsystem's published components (its public surface) should
-      not take or return bare Json/any/unknown/object, judged through each method's type references
-      so a prose signature is judged like structured params: cross-subsystem contracts are the swap
-      seam and must be typed. Generic-dispatch portals carry per-capability types via their dispatch
-      table instead.
+      not take or return `any` — the one untyped type of the grammar, which object, unknown, json
+      and Json are canonicalised to — judged through each method's named types and parsed
+      expressions so a prose signature is judged like structured params (its tokens still read
+      leniently): cross-subsystem contracts are the swap seam and must be typed. Generic-dispatch
+      portals carry per-capability types via their dispatch table instead.
     signature: 'untypedSeams(ctx: RuleContext): void'
     returns: void
     params:
@@ -327,4 +328,4 @@ methods:
           its own — a whole surface nothing serves
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-03T19:35:31.601Z'
+updatedAt: '2026-10-03T22:10:17.356Z'

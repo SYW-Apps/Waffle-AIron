@@ -161,10 +161,13 @@ interface ProjectConfigStore {
 /**
  * One scalar of the document to replace in place (scalar_edit): where it sits,
  * as a path of keys and sequence indexes from the document root, what it must
- * hold now, and what it holds after.
+ * hold now, and what it holds after. Every segment is a string: where the
+ * document holds a block sequence it is the item's index in decimal digits,
+ * anywhere else a mapping key — the document's own structure says which, so a
+ * mapping key that is all digits stays a key.
  */
 export interface ScalarEdit {
-  path: (string | number)[];
+  path: string[];
   from: string;
   to: string;
 }
@@ -289,8 +292,12 @@ function childrenOf(tokens: LineToken[], index: number): LineToken[] {
   return out;
 }
 
-/** The token holding the scalar at `path`, or why it cannot be addressed precisely. */
-function locateScalar(tokens: LineToken[], path: (string | number)[]): LineToken | string {
+/**
+ * The token holding the scalar at `path`, or why it cannot be addressed
+ * precisely. A region holding block sequence items reads its segment as an
+ * index; any other region reads it as a mapping key.
+ */
+function locateScalar(tokens: LineToken[], path: string[]): LineToken | string {
   let region = tokens;
   for (let k = 0; k < path.length; k += 1) {
     const segment = path[k];
@@ -298,14 +305,16 @@ function locateScalar(tokens: LineToken[], path: (string | number)[]): LineToken
     const base = Math.min(...region.map((t) => t.col));
     const last = k === path.length - 1;
     let at: number;
-    if (typeof segment === 'string') {
+    const items = region.map((t, i) => ({ t, i })).filter(({ t }) => t.kind === 'item' && t.col === base);
+    if (items.length === 0) {
       at = region.findIndex((t) => t.kind === 'key' && t.col === base && t.name === segment);
       if (at < 0) return `no block key "${segment}" at ${path.slice(0, k).join('.') || 'the document root'}`;
       if (last) return region[at].valueStart !== undefined ? region[at] : `"${segment}" holds no inline scalar`;
     } else {
-      const items = region.map((t, i) => ({ t, i })).filter(({ t }) => t.kind === 'item' && t.col === base);
-      if (segment >= items.length) return `no block sequence item ${segment} at ${path.slice(0, k).join('.')}`;
-      at = items[segment].i;
+      if (!/^\d+$/.test(segment)) return `"${segment}" is not a sequence index at ${path.slice(0, k).join('.') || 'the document root'}`;
+      const index = Number(segment);
+      if (index >= items.length) return `no block sequence item ${segment} at ${path.slice(0, k).join('.')}`;
+      at = items[index].i;
       if (last) {
         const value = region[at + 1];
         return value && value.kind === 'scalar' && value.line === region[at].line ? value : `item ${segment} holds no inline scalar`;
@@ -354,9 +363,9 @@ function writeScalar(value: string, style: 'plain' | 'single' | 'double'): strin
 }
 
 /** The document with the value at `path` set, for the proof. */
-function setAt(document: unknown, path: (string | number)[], value: string): void {
-  let node = document as Record<string | number, unknown>;
-  for (const segment of path.slice(0, -1)) node = node[segment] as Record<string | number, unknown>;
+function setAt(document: unknown, path: string[], value: string): void {
+  let node = document as Record<string, unknown>;
+  for (const segment of path.slice(0, -1)) node = node[segment] as Record<string, unknown>;
   node[path[path.length - 1]] = value;
 }
 
@@ -925,16 +934,16 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
           const at = typeof entry.at === 'string' ? entry.at : undefined;
           const covers = Array.isArray(entry.covers) ? entry.covers.filter((u): u is string => typeof u === 'string') : undefined;
           const next = rekeyAnchor(rename, { spec: entry.spec, at, covers });
-          const base = ['rules', 'conformance', 'carried', g, 'findings', f];
+          const base = ['rules', 'conformance', 'carried', String(g), 'findings', String(f)];
           const named = { code: String(entry.code), spec: entry.spec, at: at ?? '' };
-          const change = (path: (string | number)[], field: CarriedRekey['field'], from: string, to: string): void => {
+          const change = (path: string[], field: CarriedRekey['field'], from: string, to: string): void => {
             if (from === to) return;
             edits.push({ path: [...base, ...path], from, to });
             rekeys.push({ ...named, field, from, to });
           };
           change(['spec'], 'spec', entry.spec, next.spec);
           if (at !== undefined) change(['at'], 'at', at, next.at!);
-          (covers ?? []).forEach((unit, u) => change(['covers', u], 'covers', unit, next.covers![u]));
+          (covers ?? []).forEach((unit, u) => change(['covers', String(u)], 'covers', unit, next.covers![u]));
         });
       });
       // A dry run still proves the text can be edited precisely.

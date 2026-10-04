@@ -16,11 +16,11 @@ methods:
       - atomic
   - name: read
     description: Load a captured snapshot by id, or null when absent.
-    signature: 'read(snapshotId: string): ShareSnapshot | null'
-    returns: ShareSnapshot | null
+    signature: 'read(snapshotId: string): ShareSnapshot?'
+    returns: ShareSnapshot?
     params:
       - name: snapshotId
         type: string
 status: complete
 createdAt: '2026-07-17T22:29:21.825Z'
-updatedAt: '2026-07-18T10:10:40.126Z'
+updatedAt: '2026-10-04T10:19:32.539Z'

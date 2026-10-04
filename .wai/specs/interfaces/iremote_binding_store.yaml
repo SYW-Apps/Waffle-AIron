@@ -10,8 +10,8 @@ methods:
     description: >-
       The binding recorded for a project root, or null when the checkout is not attached (including
       when the file is absent or unreadable — unattached is a normal state, not an error).
-    signature: 'read(root: string): RemoteBinding | null'
-    returns: RemoteBinding | null
+    signature: 'read(root: string): RemoteBinding?'
+    returns: RemoteBinding?
     params:
       - name: root
         type: string
@@ -47,8 +47,8 @@ methods:
     description: >-
       The stored bearer credential for an instance URL, or null when none is stored. Keyed by
       instance so one login serves every project on that machine.
-    signature: 'readCredential(url: string): string | null'
-    returns: string | null
+    signature: 'readCredential(url: string): string?'
+    returns: string?
     params:
       - name: url
         type: string
@@ -86,7 +86,7 @@ methods:
       The instance URLs a credential is stored for — what `wairon remote status` shows so a
       developer can see which instances this machine can reach without printing any secret.
     signature: 'listCredentialUrls(): string[]'
-    returns: string[]
+    returns: list<string>
     guarantees:
       - idempotent
     effect: read
@@ -94,4 +94,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-08-12T18:41:53.798Z'
-updatedAt: '2026-10-03T20:54:06.464Z'
+updatedAt: '2026-10-04T10:19:24.902Z'

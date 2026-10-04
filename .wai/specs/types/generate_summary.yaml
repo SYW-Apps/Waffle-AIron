@@ -11,10 +11,10 @@ fields:
     description: The agent these results are for.
     optional: false
   - name: results
-    type: ExportResult[]
+    type: list<ExportResult>
     description: One result per target written, each saying where it landed and whether it changed.
     optional: false
 methods: []
 sourcePath: src/exporters/generate.ts
 createdAt: '2026-09-20T19:47:59.413Z'
-updatedAt: '2026-09-20T19:47:59.425Z'
+updatedAt: '2026-10-04T10:20:13.642Z'

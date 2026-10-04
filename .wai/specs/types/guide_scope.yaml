@@ -1,0 +1,17 @@
+kind: enum
+id: guide_scope
+name: GuideScope
+description: >-
+  Which kind of guide file a wairon guide body is written for: a user-level one or a project's own.
+  The two bodies differ, so the scope is what decides which one inject writes and body answers.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/utils/ai-guide.ts
+values:
+  - name: global
+    description: A user-level guide file, shared by every project the user opens.
+  - name: local
+    description: A project's own guide file.
+createdAt: '2026-10-04T10:26:56.971Z'
+updatedAt: '2026-10-04T10:26:56.974Z'

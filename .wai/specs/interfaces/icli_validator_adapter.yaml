@@ -56,7 +56,7 @@ methods:
     signature: >-
       runValidation(options: { ci?: boolean; subsystem?: string; recursive?: boolean; family?:
       boolean }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: computeGateStateId
     description: >-
       Forward to validator_portal.computeGateStateId: the gate identity a lock records and every
@@ -81,11 +81,11 @@ methods:
       Forward to validator_portal.familyApprovals: the bound project's pin tree — its own approval
       state and each member's within `depth` levels, each computed at that project's own root. The
       local lock asks with depth 1; `wairon status` asks for every level.
-    signature: 'familyApprovals(depth?: number): ProjectApproval[]'
-    returns: ProjectApproval[]
+    signature: 'familyApprovals(depth?: int): list<ProjectApproval>'
+    returns: list<ProjectApproval>
     params:
       - name: depth
-        type: number
+        type: int
         description: 'Member levels to include: 1 = direct members, omitted = every level'
         optional: true
     guarantees:
@@ -94,11 +94,11 @@ methods:
     description: >-
       Forward to validator_portal.familyRelations: the bound family's relation health, for `wairon
       diagram` to colour the canvas's consumption edges.
-    signature: 'familyRelations(): ProjectRelations[]'
-    returns: ProjectRelations[]
+    signature: 'familyRelations(): list<ProjectRelations>'
+    returns: list<ProjectRelations>
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T12:15:23.460Z'
+updatedAt: '2026-10-04T10:28:17.158Z'

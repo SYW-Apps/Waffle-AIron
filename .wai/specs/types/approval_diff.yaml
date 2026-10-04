@@ -8,29 +8,29 @@ description: >-
   the whole approval, not only its edges.
 fields:
   - name: added
-    type: string[]
+    type: list<string>
     description: Spec paths present now that the approval does not cover.
     optional: false
   - name: changed
-    type: string[]
+    type: list<string>
     description: Spec paths the approval covers whose content digest no longer matches.
     optional: false
   - name: removed
-    type: string[]
+    type: list<string>
     description: Spec paths the approval covers that are no longer on disk.
     optional: false
   - name: unchangedPaths
-    type: string[]
+    type: list<string>
     description: Spec paths whose digest still matches what was approved.
     optional: false
 methods:
   - name: diffSize
     signature: 'diffSize(): number'
-    returns: number
+    returns: int
     description: >-
       How many specs moved: added plus changed plus removed, ignoring what stayed put. Pure
       arithmetic over the type's own fields, so it lives here rather than on the component that
       builds it — a caller holding a diff should not have to reach for a service to count it.
 sourcePath: src/core/approval.ts
 createdAt: '2026-09-20T15:19:14.692Z'
-updatedAt: '2026-09-20T15:19:14.708Z'
+updatedAt: '2026-10-04T10:28:44.725Z'

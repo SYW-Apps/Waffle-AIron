@@ -28,8 +28,8 @@ methods:
     description: >-
       The rehearsal's difference from the live family after a verb wrote into it: the plan's file
       changes. Writes nothing.
-    signature: 'diff(rehearsal: Rehearsal): FileChange[]'
-    returns: FileChange[]
+    signature: 'diff(rehearsal: Rehearsal): list<FileChange>'
+    returns: list<FileChange>
     params:
       - name: rehearsal
         type: Rehearsal
@@ -43,14 +43,14 @@ methods:
       digest, then swap under the journals and mark the coordinator committed. On any failure before
       the commit point, restore every backup and answer what failed and whether everything was
       restored. The rehearsal is dropped either way.
-    signature: 'commit(rehearsal: Rehearsal, changes: FileChange[], verb: string): TransactionOutcome'
+    signature: 'commit(rehearsal: Rehearsal, changes: list<FileChange>, verb: string): TransactionOutcome'
     returns: TransactionOutcome
     params:
       - name: rehearsal
         type: Rehearsal
         description: The rehearsal the changes were computed on
       - name: changes
-        type: FileChange[]
+        type: list<FileChange>
         description: The confirmed plan's file changes
       - name: verb
         type: string
@@ -77,11 +77,11 @@ methods:
       naming the files that could not be restored. Answers those files; empty means the family is
       byte-identical to before. Safe to repeat: every step is keyed on the journal, not on how far a
       swap got.
-    signature: 'restore(journals: TransactionJournal[]): string[]'
-    returns: string[]
+    signature: 'restore(journals: list<TransactionJournal>): list<string>'
+    returns: list<string>
     params:
       - name: journals
-        type: TransactionJournal[]
+        type: list<TransactionJournal>
         description: Every owner's journal of one transaction
     guarantees:
       - idempotent
@@ -91,14 +91,14 @@ methods:
       coordinator's phase: committed → remove the transaction directories; anything else → restore
       every owner, then remove them. A coordinator or owner out of reach, or a missing backup,
       refuses that transaction and names it. Without fix, only reports.
-    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
-    returns: RecoveredTransaction[]
+    signature: 'recover(root: string, fix: bool): list<RecoveredTransaction>'
+    returns: list<RecoveredTransaction>
     params:
       - name: root
         type: string
         description: The project root doctor runs at
       - name: fix
-        type: boolean
+        type: bool
         description: Resolve (true) or only report (false)
     guarantees:
       - idempotent
@@ -110,14 +110,14 @@ methods:
       target's; each journal then reads staged. Throws StagingError naming the file when a live file
       moved since the rehearsal or a swap would cross volumes. Answers the journals, the
       coordinator's (the family root's) first.
-    signature: 'stage(rehearsal: Rehearsal, changes: FileChange[], verb: string): TransactionJournal[]'
-    returns: TransactionJournal[]
+    signature: 'stage(rehearsal: Rehearsal, changes: list<FileChange>, verb: string): list<TransactionJournal>'
+    returns: list<TransactionJournal>
     params:
       - name: rehearsal
         type: Rehearsal
         description: The rehearsal the changes were computed on
       - name: changes
-        type: FileChange[]
+        type: list<FileChange>
         description: The file changes
       - name: verb
         type: string
@@ -129,12 +129,12 @@ methods:
       deleted files removed and emptied directories pruned — and each owner's journal records the
       directories it created and removed. Throws SwapError naming the file and operation on the
       first failure; the caller restores.
-    signature: 'swap(journals: TransactionJournal[]): void'
+    signature: 'swap(journals: list<TransactionJournal>): void'
     returns: void
     params:
       - name: journals
-        type: TransactionJournal[]
+        type: list<TransactionJournal>
         description: The staged journals, the coordinator's first
 status: complete
 createdAt: '2026-09-30T20:28:28.502Z'
-updatedAt: '2026-10-01T17:03:23.666Z'
+updatedAt: '2026-10-04T10:18:46.856Z'

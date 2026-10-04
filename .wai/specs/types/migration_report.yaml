@@ -7,14 +7,14 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: findings
-    type: MigrationFinding[]
+    type: list<MigrationFinding>
     description: Every legacy shape found, in migration order.
     optional: false
   - name: applied
-    type: boolean
+    type: bool
     description: True when the findings were applied, false for a dry-run report.
     optional: false
 methods: []
 sourcePath: src/server/migration.ts
 createdAt: '2026-09-25T22:56:13.300Z'
-updatedAt: '2026-09-25T22:56:13.302Z'
+updatedAt: '2026-10-04T10:20:32.890Z'

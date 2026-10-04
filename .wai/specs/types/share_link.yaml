@@ -35,7 +35,7 @@ fields:
     description: '''snapshot'' (default) | ''live''.'
     optional: false
   - name: enabled
-    type: boolean
+    type: bool
     description: A disabled link refuses all access.
     optional: false
   - name: expiresAt
@@ -43,15 +43,15 @@ fields:
     description: ISO-8601 expiry; absent = no expiry.
     optional: true
   - name: allowDownloadHtml
-    type: boolean
+    type: bool
     description: Permit downloading the standalone HTML export.
     optional: false
   - name: allowDownloadOpenapi
-    type: boolean
+    type: bool
     description: Permit downloading the OpenAPI document.
     optional: false
   - name: frameAncestors
-    type: string[]
+    type: list<string>
     description: CSP frame-ancestors embedding allowlist (empty = not embeddable).
     optional: false
   - name: createdBy
@@ -63,4 +63,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-17T22:32:28.008Z'
-updatedAt: '2026-07-17T22:32:28.020Z'
+updatedAt: '2026-10-04T10:21:03.438Z'

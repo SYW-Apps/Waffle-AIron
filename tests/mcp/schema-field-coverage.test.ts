@@ -272,6 +272,24 @@ describe('MCP write-tool schema field coverage', () => {
     }
   });
 
+  // Stage 2 type grammar: the enum kind and its values are EXPRESSED by
+  // sdd_add_type — never update_spec-only (stage-2-type-grammar.md, section 7).
+  it('the enum kind and its values are expressed by sdd_add_type, never update_spec-only', () => {
+    const typeProps = toolProps['sdd_add_type'] ?? {};
+    expect(typeProps.kind?.enum).toContain('enum');
+    expect(Object.keys(typeProps)).toContain('values');
+    const valueItem = typeProps.values?.items ?? {};
+    expect(Object.keys(valueItem.properties ?? {})).toEqual(expect.arrayContaining(['name', 'description']));
+    expect(KINDS.type.updateSpecOnly.values).toBeUndefined();
+  });
+
+  // A named scalar's holds is EXPRESSED by sdd_add_type, never update_spec-only.
+  it("a named scalar's holds is expressed by sdd_add_type, never update_spec-only", () => {
+    const typeProps = toolProps['sdd_add_type'] ?? {};
+    expect(Object.keys(typeProps)).toContain('holds');
+    expect(KINDS.type.updateSpecOnly.holds).toBeUndefined();
+  });
+
   // A subsystem's publicInterfaces entry is its export table's row: an own item
   // or a re-export (from / typeDef / as). The item schema is hand-copied into
   // both tools that write it, and a field missing there is stripped by the SDK

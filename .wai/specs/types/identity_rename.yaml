@@ -12,17 +12,17 @@ description: >-
 subsystem: sdd_core
 fields:
   - name: specs
-    type: SpecIdentityMove[]
+    type: list<SpecIdentityMove>
     description: >-
       Spec ids that change: a component rename's component, i<id> and <id>_impl; a method move's
       source contract and implementations, each limited to the moved methods' sites
     optional: true
   - name: components
-    type: ComponentIdentityMove[]
+    type: list<ComponentIdentityMove>
     description: Component ids that change, wherever a covered unit or an edge site names one
     optional: true
   - name: methods
-    type: MethodIdentityMove[]
+    type: list<MethodIdentityMove>
     description: 'Contract methods whose identity changes: renamed, or moved to another component'
     optional: true
 methods:
@@ -45,4 +45,4 @@ methods:
       another.
 sourcePath: src/models/identity-rename.ts
 createdAt: '2026-09-26T10:58:55.833Z'
-updatedAt: '2026-09-26T10:58:55.835Z'
+updatedAt: '2026-10-04T10:20:18.255Z'

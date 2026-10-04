@@ -6,100 +6,100 @@ methods:
   - name: loadSystemSpec
     description: Loads the system spec
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: loadSubsystemSpecs
     description: Loads subsystem specs
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadComponentSpecs
     description: Loads component specs
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadInterfaceSpecs
     description: Loads interface specs
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadImplementationSpecs
     description: Loads implementation specs
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: loadSubsystemSpec
     description: Loads a single subsystem spec by id
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
+    returns: SubsystemSpec?
   - name: loadComponentSpec
     description: Loads a single component spec by id
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
-    returns: ComponentSpec | null
+    returns: ComponentSpec?
   - name: loadInterfaceSpec
     description: Loads a single interface spec by id
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
-    returns: InterfaceSpec | null
+    returns: InterfaceSpec?
   - name: loadImplementationSpec
     description: Loads a single implementation spec by id
     signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
-    returns: ImplementationSpec | null
+    returns: ImplementationSpec?
   - name: renderDiagram
     description: >-
       Render the current project's spec tree into the requested diagram format and return the
       artifact string; the canvas draws the relation health passed in.
-    signature: 'renderDiagram(format: string, relations?: ProjectRelations[]): string'
+    signature: 'renderDiagram(format: string, relations?: list<ProjectRelations>): string'
     returns: string
     params:
       - name: format
         type: string
         description: canvas | mermaid | drawio | excalidraw
       - name: relations
-        type: ProjectRelations[]
+        type: list<ProjectRelations>
         description: The family's relation health for the canvas; omitted, the canvas says it was not checked
         optional: true
   - name: loadTypeSpecs
     description: Loads type specs
     signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    returns: list<TypeSpec>
   - name: dryRunSerializeSpecs
     description: >-
       Re-serialize every loaded spec in memory through the exact save-path pipeline (relativization
       + writer schema, no I/O) and return the refusal issues (ROUNDTRIP_SERIALIZATION). Accepts an
       optional scope predicate so scoped validation skips out-of-scope specs before serializing.
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
-    returns: ValidationIssue[]
+    returns: list<ValidationIssue>
   - name: buildProjectGraph
     description: >-
       Project the current project's spec tree into a level-filtered WebGraphModel and return it (the
       live JSON graph the hosting server serves to the web UI).
-    signature: 'buildProjectGraph(level: number): WebGraphModel'
+    signature: 'buildProjectGraph(level: int): WebGraphModel'
     returns: WebGraphModel
     params:
       - name: level
-        type: number
+        type: int
   - name: resolveChainingParent
     description: >-
       Report the chaining-mount context of the bound root (parent root + mounting subsystem id), or
       null — including when the bound request may not read above its root. Pure 1:1 forward.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    returns: ChainingParentRef?
   - name: exportSpecTree
     description: >-
       Packs the bound project's whole spec tree (its own .wai plus every chained subproject) into a
       .waitree archive with provenance
-    signature: 'exportSpecTree(includeDerived?: boolean): TreeExportResult'
+    signature: 'exportSpecTree(includeDerived?: bool): TreeExportResult'
     returns: TreeExportResult
     params:
       - name: includeDerived
-        type: boolean
+        type: bool
         optional: true
   - name: resolveSubprojectForNamespace
     description: Resolve a chained mount's namespace to its project root, or null. Pure 1:1 forward.
-    signature: 'resolveSubprojectForNamespace(namespace: string): string | null'
-    returns: string | null
+    signature: 'resolveSubprojectForNamespace(namespace: string): string?'
+    returns: string?
     params:
       - name: namespace
         type: string
   - name: listDirectChainedSubprojects
     description: 'Published read: the direct chained subprojects of a project root, one level deep.'
-    signature: 'listDirectChainedSubprojects(projectRoot: string): ChainedSubprojectDir[]'
-    returns: ChainedSubprojectDir[]
+    signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
+    returns: list<ChainedSubprojectDir>
     params:
       - name: projectRoot
         type: string
@@ -110,13 +110,13 @@ methods:
     description: >-
       Forward to core_orchestrator.consumedContractInputs: the consumed contract inputs a verdict at
       the bound project can consult — its own root's, never a member's
-    signature: 'consumedContractInputs(): string[]'
-    returns: string[]
+    signature: 'consumedContractInputs(): list<string>'
+    returns: list<string>
     params: []
   - name: loadTypeSpec
     description: Read one type specification by id.
-    signature: 'loadTypeSpec(id: string): TypeSpec | null'
-    returns: TypeSpec | null
+    signature: 'loadTypeSpec(id: string): TypeSpec?'
+    returns: TypeSpec?
     params:
       - name: id
         type: string
@@ -140,8 +140,8 @@ methods:
     description: >-
       Published read: every spec file path inside a scope, for an approval taken over part of a
       tree. Forwarded to the spec loader.
-    signature: 'specPathsInScope(scopeSubsystem: string): string[]'
-    returns: string[]
+    signature: 'specPathsInScope(scopeSubsystem: string): list<string>'
+    returns: list<string>
     params:
       - name: scopeSubsystem
         type: string
@@ -153,11 +153,9 @@ methods:
       Load one spec of the named kind by id, or null when none is stored — for a caller that holds
       the kind as data. Routed through the core orchestrator.
     signature: >-
-      loadSpec(kind: string, id: string): SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
-      | ImplementationSpec | TypeSpec | null
-    returns: >-
-      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
-      null
+      loadSpec(kind: string, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec)?
+    returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
     params:
       - name: kind
         type: string
@@ -171,8 +169,8 @@ methods:
       walking up from it below an optional ceiling. Unlike resolveChainingParent it answers for any
       root the caller names and does NOT consult the request's reach, so a caller must gate on its
       own reach before it calls and pass the root it may not climb above as the ceiling.
-    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef?'
+    returns: ChainingParentRef?
     params:
       - name: childRoot
         type: string
@@ -196,8 +194,8 @@ methods:
     description: >-
       Published read: the loader's diagnostics for the bound tree — the files that failed their
       schema or could not be parsed while it was read.
-    signature: 'getLoaderIssues(): ValidationIssue[]'
-    returns: ValidationIssue[]
+    signature: 'getLoaderIssues(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
     params: []
   - name: clearLoaderIssues
     description: >-
@@ -221,11 +219,11 @@ methods:
     description: >-
       Published read: the canvas model renderDiagram('canvas') draws, returned as data for a client
       that mounts the shared renderer itself.
-    signature: 'buildCanvasDataModel(relations?: ProjectRelations[]): CanvasModel'
+    signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
     returns: CanvasModel
     params:
       - name: relations
-        type: ProjectRelations[]
+        type: list<ProjectRelations>
         description: The family's relation health to carry on the model; omitted, it carries none
         optional: true
   - name: resolveSubsystemExports
@@ -288,8 +286,8 @@ methods:
       source.path, a git source materialized in the fetch cache, or the hosted lookup, with the
       project's references into each producer by public name. Read-only; the caller's binding is
       restored before it answers.
-    signature: 'resolveExternals(): ExternalBinding[]'
-    returns: ExternalBinding[]
+    signature: 'resolveExternals(): list<ExternalBinding>'
+    returns: list<ExternalBinding>
     params: []
   - name: excerptParent
     description: >-
@@ -317,21 +315,31 @@ methods:
       each params-bearing method its derived text, and the facts beside them. Pure: nothing is read
       or written.
     signature: >-
-      resolveSignatures(interfaces: InterfaceSpec[], components: ComponentSpec[], types:
-      TypeSpec[]): SignatureResolution
+      resolveSignatures(interfaces: list<InterfaceSpec>, components: list<ComponentSpec>, types:
+      list<TypeSpec>): SignatureResolution
     returns: SignatureResolution
     params:
       - name: interfaces
-        type: InterfaceSpec[]
+        type: list<InterfaceSpec>
         description: The interfaces to resolve, stored or already resolved
       - name: components
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
         description: The components a method source's head is read against
       - name: types
-        type: TypeSpec[]
+        type: list<TypeSpec>
         description: The types, the signature types among them
+    guarantees:
+      - idempotent
+  - name: typeSpellingFacts
+    description: >-
+      What the current scan's type canonicalisation recorded: every stored type position that is an
+      alias of its canonical spelling, and every one that is not canonical at all
+      (spec_loader.typeSpellingFacts). A passthrough read of the spec repository.
+    signature: 'typeSpellingFacts(): TypeSpellingFacts'
+    returns: TypeSpellingFacts
+    params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T20:28:43.231Z'
+updatedAt: '2026-10-04T10:28:37.325Z'

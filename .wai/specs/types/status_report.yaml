@@ -16,7 +16,7 @@ fields:
       load is exactly when somebody is asking after its status.
     optional: false
   - name: failed
-    type: boolean
+    type: bool
     description: >-
       Whether the tree could be reported on at all: false for a normal report, true when a spec file
       would not parse or there is no L0 system. A script running `wairon status` over a broken tree
@@ -25,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/core/status.ts
 createdAt: '2026-09-23T15:17:35.871Z'
-updatedAt: '2026-09-23T15:17:41.147Z'
+updatedAt: '2026-10-04T10:21:11.974Z'

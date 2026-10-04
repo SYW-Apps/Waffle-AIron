@@ -7,7 +7,7 @@ description: >-
   blocked, or needs automatic pack/profile changes.
 fields:
   - name: compliant
-    type: boolean
+    type: bool
     description: Whether the project satisfies the active instance policy.
     optional: false
   - name: mode
@@ -15,23 +15,23 @@ fields:
     description: 'Policy mode that produced the result: "warn", "block", or "auto_reconcile".'
     optional: false
   - name: missingPackNames
-    type: string[]
+    type: list<string>
     description: Required/default packs absent from the project or global scope.
     optional: false
   - name: blockedPackNames
-    type: string[]
+    type: list<string>
     description: Blocked packs found in the project or requested selection.
     optional: false
   - name: missingProfileIds
-    type: string[]
+    type: list<string>
     description: Required profile ids absent from the project selection.
     optional: false
   - name: messages
-    type: string[]
+    type: list<string>
     description: Human-readable warnings or blocking reasons.
     optional: false
   - name: unresolvedPacks
-    type: string[]
+    type: list<string>
     description: >-
       Required/default packs the active instance pack set cannot resolve at all — absent from BOTH
       server-global tiers (or a directory/name-mismatch the resolver cannot map). Distinct from
@@ -49,7 +49,7 @@ fields:
       recorded selection, while this is what the validator really enforces.
     optional: true
   - name: unappliedProfileIds
-    type: string[]
+    type: list<string>
     description: >-
       Profile ids present in the project's recorded profileSelection that are not the governing
       projectType. Empty for an init-request evaluation. A non-empty list is the honest report of
@@ -59,7 +59,7 @@ fields:
       left alone.
     optional: false
   - name: impacts
-    type: PackImpact[]
+    type: list<PackImpact>
     description: >-
       Per pack a reconcile applies (or, from an evaluation, would apply under auto_reconcile): its
       impact on the project, measured before the write against the configuration as it stood
@@ -68,7 +68,7 @@ fields:
       what it changed. Empty when nothing is, or would be, applied.
     optional: true
   - name: doctrine
-    type: PackDoctrine[]
+    type: list<PackDoctrine>
     description: >-
       evaluateInitRequest only: per required/default pack the init would apply, what it changes
       against wairon's defaults — the doctrine half ALONE. There is deliberately no finding diff:
@@ -78,4 +78,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:58:56.094Z'
-updatedAt: '2026-09-29T16:14:34.984Z'
+updatedAt: '2026-10-04T10:20:45.603Z'

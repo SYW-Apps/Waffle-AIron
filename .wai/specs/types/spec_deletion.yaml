@@ -17,11 +17,11 @@ fields:
     description: The id the spec was stored under
     optional: false
   - name: deleted
-    type: boolean
+    type: bool
     description: 'False when no spec held the id: nothing was removed'
     optional: false
   - name: testsToRevisit
-    type: TestsToRevisit[]
+    type: list<TestsToRevisit>
     description: >-
       The tests that encode a method this deletion removed, one entry per such method. Empty when
       the spec held no methods, when the project declares no test roots, or when nothing references
@@ -30,4 +30,4 @@ fields:
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:44.394Z'
-updatedAt: '2026-09-24T22:26:11.955Z'
+updatedAt: '2026-10-04T10:21:07.984Z'

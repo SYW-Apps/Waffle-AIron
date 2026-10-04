@@ -30,7 +30,7 @@ fields:
       recorded path, never discovered.
     optional: false
   - name: owners
-    type: string[]
+    type: list<string>
     description: 'Coordinator only: every owner''s root relative to the coordinator.'
     optional: false
   - name: phase
@@ -42,17 +42,17 @@ fields:
       every live file is back.
     optional: false
   - name: entries
-    type: FileChange[]
+    type: list<FileChange>
     description: This owner's file changes, in swap order.
     optional: false
   - name: dirsCreated
-    type: string[]
+    type: list<string>
     description: >-
       Directories the swap created under the owner, deepest last, so a rollback removes them deepest
       first.
     optional: false
   - name: dirsRemoved
-    type: string[]
+    type: list<string>
     description: Directories the swap left empty and removed, so a rollback recreates them.
     optional: false
   - name: startedAt
@@ -60,7 +60,7 @@ fields:
     description: ISO time the transaction was staged.
     optional: false
   - name: unrestored
-    type: string[]
+    type: list<string>
     description: >-
       Files a restore could not put back, named by the restore that left this journal for `wairon
       doctor --fix`; absent until a restore has run.
@@ -68,4 +68,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:30.949Z'
-updatedAt: '2026-09-30T21:33:02.555Z'
+updatedAt: '2026-10-04T10:21:18.292Z'

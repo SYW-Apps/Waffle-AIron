@@ -27,18 +27,18 @@ fields:
     description: The site inside that spec the carried finding names.
     optional: false
   - name: covers
-    type: string[]
+    type: list<string>
     description: The units the entry carries; empty when the finding it names is one indivisible fact.
     optional: false
   - name: fired
-    type: boolean
+    type: bool
     description: A finding with this code, spec and site fired this run.
     optional: false
   - name: seen
-    type: Set<string>
+    type: set<string>
     description: Which of covers that finding actually reported — a listed unit missing from it has been paid.
     optional: false
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-19T19:04:18.420Z'
-updatedAt: '2026-09-19T19:04:18.433Z'
+updatedAt: '2026-10-04T10:19:56.155Z'

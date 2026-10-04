@@ -124,7 +124,7 @@ export function buildReferenceFamily(): ReferenceFamily {
   // ── shared: the vocabulary member (legacy mount) ─────────────────────────
   projectYaml(shared, ['id: shared', 'name: Shared', 'externals:', '  core: {}']);
   system(shared, 'Shared', [{ typeDef: 'host-var-values', audience: 'project' }]);
-  type(specs(shared, 'types', 'host-var-values.yaml'), 'host-var-values', [{ name: 'values', type: 'string[]' }]);
+  type(specs(shared, 'types', 'host-var-values.yaml'), 'host-var-values', [{ name: 'values', type: 'list<string>' }]);
   // shared -> core: one edge of the cycle.
   type(specs(shared, 'types', 'host-binding.yaml'), 'host-binding', [{ name: 'mode', type: 'core::engine-mode' }]);
   // A duplicate type id: two files of one project declare `mode`.

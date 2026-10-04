@@ -11,6 +11,8 @@ import {
   deriveMethodSignature,
   storedMethodSignature,
   storedTypeMethod,
+  type StoredInterfaceSpec,
+  type StoredTypeSpec,
   type ComponentSpec,
   type ImplementationSpec,
   type InterfaceSpec,
@@ -20,6 +22,13 @@ import {
   type SystemSpec,
   type TypeSpec,
 } from '../models/specs.js';
+import {
+  interfaceCanonicalTypes,
+  typeCanonicalTypes,
+  type TypeCanonicalization,
+  type TypeExpressionProblem,
+  type TypeRespelling,
+} from '../models/type-grammar.js';
 import type { RulesConfig } from '../models/project.js';
 import type { MethodMoveReport, SpecChangeReport, SpecWriteHooks, WritableSpecKind } from './specs.js';
 // authoring_core_adapter and authoring_validator_adapter — every hop out of the
@@ -119,6 +128,8 @@ export interface SpecRestatementApplication {
   notices: string[];
   /** The methods the candidate changes or removes against the stored spec. */
   changedMethods: string[];
+  /** Each type position of the candidate whose written text was an alias, now holding its canonical spelling. */
+  respellings: TypeRespelling[];
 }
 
 /** sdd_authoring::SpecDeletion — what a delete answers with, as data. */
@@ -148,6 +159,13 @@ export interface SpecWriteReceipt {
   status?: SpecStatus;
   /** Carried, removed and cleared fields, gate warnings and placement notices — one per entry. */
   notices: string[];
+  /**
+   * Each type position the write normalised: what the input wrote against the
+   * canonical spelling stored. Aliases are accepted, never refused; this list
+   * is how an author learns the canonical form. Empty when every position was
+   * already canonical.
+   */
+  respellings: TypeRespelling[];
   /** The tests that encode a method this write changed or removed. */
   testsToRevisit: TestsToRevisit[];
 }
@@ -188,6 +206,7 @@ function noticesFrom(verdict: CandidateVerdict): string[] {
 export function componentCandidateGate(
   options: { rules?: RulesConfig; projectType?: string } = candidateOptions(),
   storedOwner?: string,
+  stored?: Spec | null,
 ): SpecWriteHooks {
   return {
     gate: (kind, merged) => {
@@ -196,12 +215,48 @@ export function componentCandidateGate(
       // its source: params or returns beside it are ones the delta stated.
       const restated = kind === 'interface' ? restatedSources((merged as { methods?: unknown }).methods) : [];
       if (restated.length) throw new Error(`${restatedSourceRefusal(String((merged as { id?: string }).id), restated)} Nothing was written.`);
+      // A type position the delta WROTE that is not canonical is refused; one
+      // the stored spec already held is not judged, so it stays repairable.
+      const written = deltaWrittenTypeProblems(kind, merged, stored ?? null);
+      if (written.length) throw new Error(`${typeProblemRefusal(kind, String((merged as { id?: string }).id), written)} Nothing was written.`);
       if (kind !== 'component') return;
       const verdict = validateComponentCandidate(merged as ComponentSpec, options);
       if (verdict.errors.length) throw new Error(formatCandidateRefusal(verdict));
       return noticesFrom(verdict);
     },
   };
+}
+
+/** An interface's or a type's type positions read under the grammar; null for any other kind. */
+function canonicalTypesOf(kind: WritableSpecKind, spec: unknown): TypeCanonicalization<unknown> | null {
+  if (!spec || typeof spec !== 'object') return null;
+  if (kind === 'interface') return interfaceCanonicalTypes(spec as StoredInterfaceSpec);
+  if (kind === 'type') return typeCanonicalTypes(spec as StoredTypeSpec);
+  return null;
+}
+
+/**
+ * The type positions of a merged spec that are not canonical and that the
+ * delta wrote: every problem the merged spec holds that the stored spec does
+ * not hold at the same path with the same text.
+ */
+function deltaWrittenTypeProblems(kind: WritableSpecKind, merged: unknown, stored: Spec | null): TypeExpressionProblem[] {
+  const now = canonicalTypesOf(kind, merged)?.problems ?? [];
+  if (now.length === 0) return [];
+  const before = new Set((canonicalTypesOf(kind, stored)?.problems ?? []).map((p) => `${p.path}|${p.written}`));
+  return now.filter((p) => !before.has(`${p.path}|${p.written}`));
+}
+
+/**
+ * The sentence a non-canonical type position is refused with: each position,
+ * its code, what is wrong and what to write instead. Aliases are never here:
+ * they are respelled and reported, not refused.
+ */
+function typeProblemRefusal(kind: WritableSpecKind, id: string, problems: TypeExpressionProblem[]): string {
+  const lines = problems.map((p) => `${p.code} at ${p.path}: ${p.detail}${p.replacement ? ` — write ${p.replacement} instead` : ''}.`);
+  return `Refusing to write ${kind} "${id}": ${problems.length === 1 ? 'a type position is' : `${problems.length} type positions are`} not in the `
+    + `neutral type grammar. ${lines.join(' ')} Aliases (string[], T | null, boolean, Promise<T>, ...) are accepted and `
+    + 'respelled; these forms have no canonical spelling.';
 }
 
 /** A stated method as the signature checks read it. */
@@ -418,6 +473,13 @@ export function applyRestatement(
       + `${unsigned.length === 1 ? 'states' : 'state'} neither params${restatement.kind === 'interface' ? ', a signatureFrom' : ''} nor a prose signature, `
       + 'so nothing says what the method takes. Nothing was written.');
   }
+  // Every type position read under the grammar: an alias is respelled and
+  // reported, a position with no canonical spelling refused with its replacement.
+  const types = canonicalTypesOf(restatement.kind, candidate);
+  if (types && types.problems.length) {
+    return refused(restatement, replacedExisting, `${typeProblemRefusal(restatement.kind, String(candidate.id), types.problems)} Nothing was written.`);
+  }
+  if (types) Object.assign(candidate, types.spec);
   const derivedNotices = deriveStatedTexts(restatement.kind, candidate);
 
   const labelErrors = resolveLabelsOf(restatement.kind, candidate);
@@ -432,6 +494,7 @@ export function applyRestatement(
     replacedExisting,
     notices: [...(existing ? rewriteNotices(restatement.kind, existing, candidate, carried, cleared) : []), ...derivedNotices],
     changedMethods: changedMethodsOf(restatement.kind, existing, candidate),
+    respellings: types?.respellings ?? [],
   };
 }
 
@@ -489,7 +552,7 @@ function parseCandidate(kind: WritableSpecKind, candidate: Record<string, unknow
 
 /** An application that may not be written, carrying the sentence that says why. */
 function refused(restatement: SpecRestatement, replacedExisting: boolean, refusal: string): SpecRestatementApplication {
-  return { spec: restatement.spec, refusal, replacedExisting, notices: [], changedMethods: [] };
+  return { spec: restatement.spec, refusal, replacedExisting, notices: [], changedMethods: [], respellings: [] };
 }
 
 /**
@@ -752,6 +815,7 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
     replacedExisting: application.replacedExisting,
     ...(application.status ? { status: application.status } : {}),
     notices: [...gateNotices, ...persisted.notices, ...application.notices],
+    respellings: application.respellings,
     testsToRevisit,
   };
 }
@@ -913,7 +977,7 @@ export function updateSpecGated(
   const testRoots = bound.rules?.conformance?.testRoots ?? [];
   const stored = loadSpec(kind, id);
   // Step 3: the judgement as a write hook over those same settings.
-  const gate = componentCandidateGate(bound, (stored as { subsystem?: string } | null)?.subsystem);
+  const gate = componentCandidateGate(bound, (stored as { subsystem?: string } | null)?.subsystem, stored as Spec | null);
   // Step 4: apply the delta with the hook injected, so the judgement runs on
   // the merged spec at the last point before anything reaches disk.
   const report = updateSpec(kind, id, delta, gate, dryRun);

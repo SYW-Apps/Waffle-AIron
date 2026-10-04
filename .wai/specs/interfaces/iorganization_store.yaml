@@ -18,13 +18,13 @@ methods:
     description: >-
       Atomically swap both in-memory collections to the supplied complete unit and placement sets
       after the registry has persisted them.
-    signature: 'replaceAll(units: OrganizationUnitRecord[], placements: ProjectPlacement[]): void'
+    signature: 'replaceAll(units: list<OrganizationUnitRecord>, placements: list<ProjectPlacement>): void'
     returns: void
     params:
       - name: units
-        type: OrganizationUnitRecord[]
+        type: list<OrganizationUnitRecord>
       - name: placements
-        type: ProjectPlacement[]
+        type: list<ProjectPlacement>
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -41,4 +41,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:05:39.438Z'
-updatedAt: '2026-09-19T21:29:23.980Z'
+updatedAt: '2026-10-04T10:19:09.340Z'

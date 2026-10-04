@@ -40,6 +40,9 @@ export {
   // for specs read outside the scan (a part's pinned parent excerpt).
   signatureFacts,
   resolveSignatures,
+  // What the scan's type canonicalisation recorded: the stored aliases and
+  // the positions that are not canonical.
+  typeSpellingFacts,
   // The pack loader over a candidate configuration, and one entry's manifest:
   // what the pack impact's dry run and the family's adoption checks read.
   loadExtensionsFor,

@@ -6,7 +6,7 @@ description: >-
   with a stated reason. Used by both the forbidden and discouraged lists of a ProfileDef.
 fields:
   - name: types
-    type: string[]
+    type: list<string>
     description: Stereotype names this constraint applies to (e.g. Actor, Supervisor).
     optional: false
   - name: reason
@@ -15,4 +15,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-14T18:56:11.004Z'
-updatedAt: '2026-07-14T18:56:11.075Z'
+updatedAt: '2026-10-04T10:21:12.987Z'

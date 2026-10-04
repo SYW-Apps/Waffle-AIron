@@ -227,8 +227,10 @@ describe('canonical digests', () => {
       ],
       exportedTypes: [{ id: 'host-record', type: 'host-record', audience: 'project' }],
     });
-    expect(canonicalTypeRef(snapshot, 'Promise<IndexValue | null>')).toBe('promise<index-value | null>');
-    expect(canonicalTypeRef(snapshot, 'shared.index-value[]')).toBe('index-value[]');
+    // Stage 2: the canonical expression, so an alias and its canonical spelling digest alike.
+    expect(canonicalTypeRef(snapshot, 'Promise<IndexValue | null>')).toBe('async index-value?');
+    expect(canonicalTypeRef(snapshot, 'async IndexValue?')).toBe('async index-value?');
+    expect(canonicalTypeRef(snapshot, 'shared.index-value[]')).toBe('list<index-value>');
     expect(canonicalTypeRef(snapshot, 'other::thing')).toBe('other::thing');
     const respelled = { ...snapshot, types: snapshot.types.map((t) => (t.id === 'host-record' ? { ...t, fields: [{ name: 'index', type: 'IndexValue' }] } : t)) };
     const reworded = { ...snapshot, types: snapshot.types.map((t) => ({ ...t, name: `${t.name} (renamed)`, fields: t.fields.map((fl) => ({ ...fl, description: 'reworded' })) })) };

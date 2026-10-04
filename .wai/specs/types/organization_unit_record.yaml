@@ -51,7 +51,7 @@ fields:
       cross-tenant visibility exists only through exposeTo grants (fail-closed).
     optional: true
   - name: exposeTo
-    type: string[]
+    type: list<string>
     description: >-
       Organization unit ids granted visibility into this unit's subtree placements — the allow-list
       that punches holes through a closed posture and the ONLY path across tenant roots. No
@@ -78,4 +78,4 @@ methods:
     symbol: validateUnitHierarchy
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:11.067Z'
-updatedAt: '2026-10-03T17:53:21.305Z'
+updatedAt: '2026-10-04T10:20:35.693Z'

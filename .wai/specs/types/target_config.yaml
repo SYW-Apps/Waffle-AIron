@@ -19,10 +19,10 @@ fields:
     description: Where the generated files land, relative to the project root.
     optional: false
   - name: enabled
-    type: boolean
+    type: bool
     description: Whether this target is written on a generate run; true unless the project says otherwise.
     optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-20T19:47:35.866Z'
-updatedAt: '2026-09-20T19:47:35.878Z'
+updatedAt: '2026-10-04T10:21:16.343Z'

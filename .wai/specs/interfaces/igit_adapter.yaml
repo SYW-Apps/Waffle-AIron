@@ -37,11 +37,11 @@ methods:
       swept into the commit); returns the new commit SHA, or null when nothing under the pathspecs
       changed (a clean scope never produces an empty commit). One pathspec is a project's .wai/;
       several are one family commit covering every member a family migration touched.
-    signature: 'commitScoped(subpaths: string[], message: string): string | null'
-    returns: string | null
+    signature: 'commitScoped(subpaths: list<string>, message: string): string?'
+    returns: string?
     params:
       - name: subpaths
-        type: string[]
+        type: list<string>
         description: >-
           Pathspecs relative to the repo root, e.g. ['.wai/'], ['.wai/specs/<subsystem>/'] or
           ['.wai/', 'services/billing/.wai/']; never empty
@@ -52,8 +52,8 @@ methods:
     description: >-
       True when the given subpath holds no uncommitted changes (scoped `status --porcelain --
       <subpath>`), backing the periodic sweep's skip-if-clean check.
-    signature: 'isClean(subpath: string): boolean'
-    returns: boolean
+    signature: 'isClean(subpath: string): bool'
+    returns: bool
     params:
       - name: subpath
         type: string
@@ -70,4 +70,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-04T16:31:59.438Z'
-updatedAt: '2026-10-03T20:52:10.947Z'
+updatedAt: '2026-10-04T10:18:48.164Z'

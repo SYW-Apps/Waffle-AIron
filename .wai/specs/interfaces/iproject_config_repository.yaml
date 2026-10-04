@@ -185,12 +185,12 @@ methods:
       reads and writes the configuration under rootDir. Binding to a root is a real operation — a
       provisioner writes a project it is not bound to, and a test reads a fixture tree — so it is
       part of the contract rather than a second way in.
-    signature: 'at(rootDir: string): object'
-    returns: object
+    signature: 'at(rootDir: string): any'
+    returns: any
     params:
       - name: rootDir
         type: string
         description: The project root whose .wai/project.yaml the answer reads and writes.
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-10-03T21:10:12.045Z'
+updatedAt: '2026-10-04T10:19:19.621Z'

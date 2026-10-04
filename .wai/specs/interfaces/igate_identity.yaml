@@ -22,8 +22,8 @@ methods:
       between re-locks; until then this project shows that member as drifted. Pure: the same inputs
       always give the same identity.
     signature: >-
-      compute(content: StateId, doctrine: LoadedExtensions, builtinRules: SddRule[], inputs:
-      string[], gate: GateConfig, members: Record<string, string>): StateId
+      compute(content: StateId, doctrine: LoadedExtensions, builtinRules: list<SddRule>, inputs:
+      list<string>, gate: GateConfig, members: map<string, string>): StateId
     returns: StateId
     params:
       - name: content
@@ -33,16 +33,16 @@ methods:
         type: LoadedExtensions
         description: The governing extensions
       - name: builtinRules
-        type: SddRule[]
+        type: list<SddRule>
         description: The built-in rule sequence; the rules that judge code are filtered out here
       - name: inputs
-        type: string[]
+        type: list<string>
         description: The project's own consumed contract inputs, as canonical content keys
       - name: gate
         type: GateConfig
         description: The project's type, rule tuning and composition block
       - name: members
-        type: Record<string, string>
+        type: map<string, string>
         description: >-
           Each direct member's alias → its composition subject (the stateId its own lock record
           carries, rendered `<algorithm>:<digest>`), or `never` when the member carries no lock or
@@ -57,11 +57,11 @@ methods:
       Exactly the half compute leaves out, projected with the same discipline (codepoint sort,
       canonical JSON, sha256 in hex), so AnalyzerIdentity.doctrineDigest moves when the analyzer's
       rule set or tuning does, and the gate identity does not.
-    signature: 'analyzer(builtinRules: SddRule[], gate: GateConfig): string'
+    signature: 'analyzer(builtinRules: list<SddRule>, gate: GateConfig): string'
     returns: string
     params:
       - name: builtinRules
-        type: SddRule[]
+        type: list<SddRule>
         description: The built-in rule sequence; only the rules that judge code are projected
       - name: gate
         type: GateConfig
@@ -70,4 +70,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-15T10:53:01.174Z'
-updatedAt: '2026-09-30T06:03:05.714Z'
+updatedAt: '2026-10-04T10:18:47.689Z'

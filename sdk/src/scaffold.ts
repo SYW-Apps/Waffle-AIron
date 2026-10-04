@@ -99,7 +99,6 @@ function declarativeManifest(name: string, version: string): string {
     '# languages:',
     '#   rust:',
     '#     unsupportedFlow: {}',
-    '#     foreignBuiltins: []',
     'languages: {}',
     '',
     '# Reusable, versioned architecture patterns:',

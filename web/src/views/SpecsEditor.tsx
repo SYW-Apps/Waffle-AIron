@@ -69,17 +69,20 @@ const EXTERNAL_LINK_TYPE = ['implementation', 'informative'];
 const AUTH_SCHEME = ['none', 'apiKey', 'bearer', 'basic', 'oauth2', 'openIdConnect', 'custom'];
 const AUTH_IN = ['header', 'query', 'cookie'];
 const OAUTH_FLOW = ['authorizationCode', 'clientCredentials', 'implicit', 'password'];
-const TYPE_KIND = ['entity', 'value-object'];
+const TYPE_KIND = ['entity', 'value-object', 'enum'];
 const TYPE_FIELD_KEY = ['primary', 'unique', 'foreign'];
+/** The primitives a named scalar may hold (type_spec.holds): every primitive but void and any. */
+const HOLDABLE_PRIMITIVES = ['string', 'int', 'float', 'bool', 'bytes', 'date', 'datetime', 'duration'];
 const BUILTIN_GUARANTEES = ['idempotent', 'atomic', 'transactional', 'exactly-once'];
 const PROJECT_KINDS = ['fullstack', 'system-of-systems', 'monorepo'];
 const BUILTIN_PROFILES = [
   'backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os',
   'game-ecs', 'realtime-embedded', 'plc-cyclic',
 ];
+/** The neutral type grammar's primitives and common shapes — the canonical spellings a write stores. */
 const PRIMITIVES = [
-  'string', 'number', 'boolean', 'void', 'null', 'undefined', 'any', 'unknown',
-  'object', 'Date', 'bigint', 'Buffer', 'Promise<void>',
+  'string', 'int', 'float', 'bool', 'bytes', 'date', 'datetime', 'duration', 'void', 'any',
+  'list<string>', 'map<string, string>', 'string?', 'async void',
 ];
 
 /** Top-level scalar/enum fields editable per kind (values only). */
@@ -745,6 +748,17 @@ function implMethodsDelta(orig: any, draft: any): any[] {
   return out;
 }
 
+/** Enum value deltas (merged by name): a value's description; its name is its identity. */
+function enumValuesDelta(orig: any, draft: any): any[] {
+  const out: any[] = [];
+  for (const dv of draft.values ?? []) {
+    const ov = (orig.values ?? []).find((v: any) => v.name === dv.name);
+    if (!ov) continue;
+    if ((dv.description ?? '') !== (ov.description ?? '')) out.push({ name: dv.name, description: dv.description ?? '' });
+  }
+  return out;
+}
+
 /** Type field value deltas (merged by name). */
 function typeFieldsDelta(orig: any, draft: any): any[] {
   const out: any[] = [];
@@ -832,8 +846,15 @@ function buildDelta(kind: SpecKind, orig: any, draft: any): Record<string, unkno
     if (md.length) delta.methods = md;
   }
   if (kind === 'type') {
+    // A named scalar's holds: set, changed, or cleared (an unset, since '' would be a type position).
+    if ((draft.holds ?? '') !== (orig.holds ?? '')) {
+      if (draft.holds) delta.holds = draft.holds;
+      else delta.unset = ['holds'];
+    }
     const fd = typeFieldsDelta(orig, draft);
     if (fd.length) delta.fields = fd;
+    const vd = enumValuesDelta(orig, draft);
+    if (vd.length) delta.values = vd;
   }
   if (kind === 'subsystem' || kind === 'system') {
     const pd = piDelta(orig, draft, kind);
@@ -1242,7 +1263,7 @@ function SpecForm(props: {
         </div>
       )}
 
-      {/* ── Type (entity / value-object) ── */}
+      {/* ── Type (entity / value-object / enum / signature) ── */}
       {sel.kind === 'type' && (
         <div className="panel stack-lg">
           <div className="row-form">
@@ -1251,10 +1272,28 @@ function SpecForm(props: {
           </div>
           {draft.kind === 'signature' && (
             <Field label="Signature (derived from params and returns)">
-              <TextInput value={`(${(draft.params ?? []).map((p: any) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${draft.returns ?? 'unknown'}`} onChange={() => undefined} disabled />
+              <TextInput value={`(${(draft.params ?? []).map((p: any) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${draft.returns ?? 'any'}`} onChange={() => undefined} disabled />
             </Field>
           )}
           <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          {draft.kind === 'value-object' && (draft.fields ?? []).length === 0 && (
+            <Field label="Holds" fieldKey="holds" highlight={flagFor('holds')} hint="A named scalar: one primitive under this name, in place of fields (a newtype or type alias in every language).">
+              <EnumSelect value={draft.holds} onChange={(v) => set('holds', v || undefined)} options={HOLDABLE_PRIMITIVES} allowNone noneLabel="(not a named scalar)" />
+            </Field>
+          )}
+          {draft.kind === 'enum' && (draft.values ?? []).length > 0 && (
+            <div className="stack-lg">
+              <span className="field-label">Values (in declared order)</span>
+              {draft.values.map((v: any, i: number) => (
+                <div key={v.name} className="sub-card">
+                  <code className="subtle">{v.name}</code>
+                  <div className="row-form">
+                    <Field label="Description"><TextInput value={v.description ?? ''} onChange={(val) => setArrItem('values', i, { description: val })} /></Field>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {(draft.fields ?? []).length > 0 && (
             <div className="stack-lg">
               <span className="field-label">Fields</span>

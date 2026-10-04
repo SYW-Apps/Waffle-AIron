@@ -62,7 +62,7 @@ fields:
       configuration, externals, packs). Ignored for a part, which has none.
     optional: true
   - name: rehearse
-    type: boolean
+    type: bool
     description: >-
       false: plan without rehearsing — the edits and refusals only, no file changes and nothing to
       apply. doctor's summary line uses it, since it prints counts and never applies. Absent or
@@ -73,7 +73,7 @@ fields:
     description: 'attach: what the member is to the bound project, written into its `members` entry.'
     optional: true
   - name: widen
-    type: boolean
+    type: bool
     description: >-
       detach: widen to the instance audience exactly the member's exports a family project uses and
       the member exports only to the family, instead of refusing audience-too-narrow — each widening
@@ -96,4 +96,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:03.011Z'
-updatedAt: '2026-10-02T20:45:48.335Z'
+updatedAt: '2026-10-04T10:20:33.263Z'

@@ -248,7 +248,7 @@ describe('OpenAPI import (authored 3rd-party surfaces)', () => {
     expect(snapshot.version).toBe('2.1.0');
     const m = snapshot.interfaces[0].methods.find(mm => mm.name === 'createInvoice')!;
     expect(m.returns).toBe('Invoice');
-    expect(m.params.map(p => `${p.name}:${p.type}`).sort()).toEqual(['amount:number', 'customer:Customer']);
+    expect(m.params.map(p => `${p.name}:${p.type}`).sort()).toEqual(['amount:float', 'customer:Customer']);
     expect(m.endpoint).toEqual({ transport: 'HTTP', method: 'POST', path: '/invoices' });
     expect(snapshot.types.map(t => t.id).sort()).toEqual(['Customer', 'Invoice']);
 

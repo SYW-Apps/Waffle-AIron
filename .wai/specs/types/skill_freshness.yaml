@@ -6,22 +6,22 @@ description: >-
   missing on disk, those that differ, and those that match.
 fields:
   - name: dir
-    type: string | null
+    type: string?
     description: The target's skills directory, or null when the target has none
     optional: false
   - name: missing
-    type: string[]
+    type: list<string>
     description: Skills missing on disk
     optional: false
   - name: stale
-    type: string[]
+    type: list<string>
     description: Skills present but differing from what an export would write
     optional: false
   - name: ok
-    type: string[]
+    type: list<string>
     description: Skills present and identical to what an export would write
     optional: false
 methods: []
 sourcePath: src/core/skills.ts
 createdAt: '2026-09-25T21:13:41.731Z'
-updatedAt: '2026-09-25T21:13:41.735Z'
+updatedAt: '2026-10-04T10:21:06.688Z'

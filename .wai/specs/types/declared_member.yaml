@@ -38,7 +38,7 @@ fields:
       that is neither `*` nor a public name of [a-z0-9-_]+.
     optional: true
   - name: use
-    type: string[]
+    type: list<string>
     description: >-
       The long form's `use` as written, deduplicated in first-seen order; empty for the shorthand
       and when it imports nothing.
@@ -60,7 +60,7 @@ fields:
       one set field. Shown on the canvas as the part's storage badge.
     optional: false
   - name: deprecatedPath
-    type: boolean
+    type: bool
     description: >-
       Whether the entry used the deprecated long-form `path` key (DEPRECATED_MOUNT_FORM; `doctor
       --fix` rewrites it).
@@ -68,4 +68,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:33.853Z'
-updatedAt: '2026-10-02T20:44:53.094Z'
+updatedAt: '2026-10-04T10:20:01.505Z'

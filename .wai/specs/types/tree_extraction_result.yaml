@@ -16,14 +16,14 @@ fields:
     description: The archive's parsed envelope
     optional: false
   - name: roots
-    type: string[]
+    type: list<string>
     description: Project-relative roots recreated under destDir
     optional: false
   - name: writtenPaths
-    type: string[]
+    type: list<string>
     description: Archive-relative paths written
     optional: false
 methods: []
 componentClass: tree_codec
 createdAt: '2026-08-12T17:18:28.131Z'
-updatedAt: '2026-08-12T17:19:26.818Z'
+updatedAt: '2026-10-04T10:21:20.248Z'

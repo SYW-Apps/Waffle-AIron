@@ -12,10 +12,10 @@ fields:
     description: Raw archive entry path (as stored, pre-normalization)
     optional: false
   - name: uncompressedSize
-    type: number
+    type: int
     optional: false
   - name: compressedSize
-    type: number
+    type: int
     optional: false
   - name: kind
     type: string
@@ -24,4 +24,4 @@ fields:
 methods: []
 componentClass: pack_archive_adapter
 createdAt: '2026-07-21T18:13:01.742Z'
-updatedAt: '2026-07-21T18:13:01.875Z'
+updatedAt: '2026-10-04T10:28:45.547Z'

@@ -9,19 +9,19 @@ methods:
   - name: buildTreeArchive
     description: Pack the supplied tree roots' .wai directories into .waitree archive bytes (SDK forward).
     signature: >-
-      buildTreeArchive(roots: tree_root_source[], projectName: string, stateId?: string,
-      includeDerived?: boolean): TreeBuildResult
+      buildTreeArchive(roots: list<tree_root_source>, projectName: string, stateId?: string,
+      includeDerived?: bool): TreeBuildResult
     returns: TreeBuildResult
     params:
       - name: roots
-        type: tree_root_source[]
+        type: list<tree_root_source>
       - name: projectName
         type: string
       - name: stateId
         type: string
         optional: true
       - name: includeDerived
-        type: boolean
+        type: bool
         optional: true
   - name: inspectTreeArchive
     description: >-
@@ -38,7 +38,7 @@ methods:
       optionally refusing executable entries (SDK forward). Callers extract into a staging
       directory, never into a live tree.
     signature: >-
-      extractTreeArchive(archive: bytes, destDir: string, refuseExecutableEntries?: boolean):
+      extractTreeArchive(archive: bytes, destDir: string, refuseExecutableEntries?: bool):
       TreeExtractionResult
     returns: TreeExtractionResult
     params:
@@ -47,14 +47,14 @@ methods:
       - name: destDir
         type: string
       - name: refuseExecutableEntries
-        type: boolean
+        type: bool
         optional: true
   - name: hasSpecTree
     description: >-
       Whether a project root already holds a spec tree (a .wai directory carrying a project config).
       Drives the BACKUP decision — whatever is there is preserved, bootstrap or not.
-    signature: 'hasSpecTree(root: string): boolean'
-    returns: boolean
+    signature: 'hasSpecTree(root: string): bool'
+    returns: bool
     params:
       - name: root
         type: string
@@ -81,8 +81,8 @@ methods:
       Returns the backup directory path, or an empty string when nothing was replaced. The last step
       of an import and the only one that mutates the live tree.
     signature: >-
-      commitStagedTree(stagingDir: string, destDir: string, roots: string[], backupExisting:
-      boolean): string
+      commitStagedTree(stagingDir: string, destDir: string, roots: list<string>, backupExisting:
+      bool): string
     returns: string
     params:
       - name: stagingDir
@@ -90,9 +90,9 @@ methods:
       - name: destDir
         type: string
       - name: roots
-        type: string[]
+        type: list<string>
       - name: backupExisting
-        type: boolean
+        type: bool
   - name: discardStagingDir
     description: >-
       Remove a staging directory and everything under it. Best-effort cleanup after a committed or
@@ -113,8 +113,8 @@ methods:
       is created, so treating "has a tree" as "has a design" would make importing into a fresh
       project impossible without an override — turning the guard into noise everyone routinely
       overrides. A bootstrap tree is not a design; anything authored on top of it is.
-    signature: 'hasAuthoredSpecs(root: string): boolean'
-    returns: boolean
+    signature: 'hasAuthoredSpecs(root: string): bool'
+    returns: bool
     params:
       - name: root
         type: string
@@ -122,4 +122,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-08-12T17:24:09.167Z'
-updatedAt: '2026-10-03T20:54:09.110Z'
+updatedAt: '2026-10-04T10:19:43.569Z'

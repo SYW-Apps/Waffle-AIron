@@ -12,19 +12,19 @@ fields:
     description: backend-like | frontend-like | neutral — opts into built-in stereotype fencing.
     optional: false
   - name: forbiddenStereotypes
-    type: StereotypeConstraint[]
+    type: list<StereotypeConstraint>
     description: Stereotypes this profile forbids (PROFILE_FORBIDDEN_STEREOTYPE, error).
     optional: false
   - name: discouragedStereotypes
-    type: StereotypeConstraint[]
+    type: list<StereotypeConstraint>
     description: Stereotypes this profile discourages (PROFILE_DISCOURAGED_STEREOTYPE, warning).
     optional: false
   - name: rules
-    type: Json
+    type: any
     description: Optional partial RulesConfig overrides (rule severities etc.) the profile applies.
     optional: true
   - name: allowedEdges
-    type: AllowedEdge[]
+    type: list<AllowedEdge>
     description: >-
       Edge licenses (the allow half of the profile-scoped dependency matrix): intra-subsystem
       dependsOn edges the built-in stereotype matrix refuses, licensed for components this profile
@@ -34,4 +34,4 @@ fields:
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:56:48.916Z'
-updatedAt: '2026-09-19T11:07:13.863Z'
+updatedAt: '2026-10-04T10:20:47.972Z'

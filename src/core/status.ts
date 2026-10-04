@@ -65,8 +65,8 @@ export interface StatusReport {
 export interface StatusOptions {
   /** Report on one subsystem rather than the whole tree. Accepts a namespaced id. */
   subsystem?: string;
-  /** How far into members to follow. Absent means all the way down. */
-  recursive?: boolean | number;
+  /** How many member levels to follow: absent, all the way down; 0, the bound project alone; n, that many levels. */
+  memberDepth?: number;
   /**
    * The pin tree to print, computed by the validator at each project's own
    * root (validator_portal.familyApprovals) and handed in — core cannot compute
@@ -173,7 +173,7 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   const mark = fillDecor(decor);
 
   // Step 1: load the tree, following members as far as the options allow
-  scanAllSpecs({ recursive: options.recursive ?? true });
+  scanAllSpecs({ memberDepth: options.memberDepth });
 
   const system = loadSystemSpec();
   const loaderErrors = getLoaderIssues();

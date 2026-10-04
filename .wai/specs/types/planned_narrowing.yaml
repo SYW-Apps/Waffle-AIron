@@ -15,11 +15,11 @@ fields:
     description: The credential id
     optional: false
   - name: before
-    type: string[]
+    type: list<string>
     description: The stored narrowing
     optional: false
   - name: after
-    type: string[]
+    type: list<string>
     description: 'The rewritten narrowing: record ids only, no qualifier'
     optional: false
   - name: widening
@@ -28,4 +28,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-10-01T16:27:13.765Z'
-updatedAt: '2026-10-01T16:55:18.072Z'
+updatedAt: '2026-10-04T10:20:44.881Z'

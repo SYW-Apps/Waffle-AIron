@@ -17,7 +17,7 @@ description: >-
   list instead, so a nested typo still comes back named rather than stripped in silence.
 fields:
   - name: patch
-    type: object
+    type: any
     description: >-
       The fields to change, shaped like the spec. Identity-keyed arrays merge element by element at
       EVERY depth — methods, params and fields by name, switch cases by value, try catches by error,
@@ -32,4 +32,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-09-18T21:41:16.851Z'
-updatedAt: '2026-09-19T00:30:20.782Z'
+updatedAt: '2026-10-04T10:21:08.309Z'

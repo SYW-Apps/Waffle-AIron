@@ -10,7 +10,7 @@ export const typeDeclarationsRule: SddRule = {
   name: 'type-declarations',
   judges: 'design',
   description:
-    'A type owned by a subsystem must reference an existing one, and a type declaring neither fields nor methods is a placeholder that can inform neither implementers nor the ERD.',
+    'A type owned by a subsystem must reference an existing one, and a type declaring neither fields nor methods (nor, for an enum, values, nor, for a signature type, returns, nor, for a named scalar, the primitive it holds) is a placeholder that can inform neither implementers nor the ERD.',
   codes: [
     { code: 'INVALID_SUBSYSTEM_REFERENCE', defaultSeverity: 'error', summary: 'Type references a non-existent owning subsystem' },
     { code: 'HOLLOW_TYPE', defaultSeverity: 'warning', summary: 'Type declares no fields and no methods — a placeholder that informs neither implementers nor the ERD' },
@@ -31,8 +31,13 @@ export const typeDeclarationsRule: SddRule = {
 
       // A type with neither fields nor methods carries a name and nothing
       // else — it can't inform implementers, can't participate in the ERD,
-      // and usually marks a post-hoc "make validation pass" placeholder.
-      if ((!t.fields || t.fields.length === 0) && (!t.methods || t.methods.length === 0)) {
+      // and usually marks a post-hoc "make validation pass" placeholder. An
+      // enum's members are its values and a signature type's are its params
+      // and returns: either is what that kind models, so it is not hollow.
+      // Neither is a named scalar: the primitive it holds is its whole shape.
+      const models = (t.fields?.length ?? 0) > 0 || (t.methods?.length ?? 0) > 0
+        || (t.values?.length ?? 0) > 0 || t.returns !== undefined || t.holds !== undefined;
+      if (!models) {
         ctx.addIssue(
           'warning',
           'HOLLOW_TYPE',

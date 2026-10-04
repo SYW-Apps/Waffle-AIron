@@ -25,24 +25,24 @@ fields:
     description: The live top root the layout is mirrored from.
     optional: false
   - name: roots
-    type: Map<string, string>
+    type: map<string, string>
     description: Each copied project's live root → its rehearsal root.
     optional: false
   - name: baseDigests
-    type: Map<string, string>
+    type: map<string, string>
     description: >-
       Each copied live file (absolute) → sha256 of its bytes when copied: the base every FileChange
       is planned against.
     optional: false
   - name: areas
-    type: string[]
+    type: list<string>
     description: >-
       The scope's areas when it named any (the hosted member upgrade: the host store files): only
       these, per copied owner, are compared. Absent for a family migration, which compares every
       .wai tree.
     optional: true
   - name: whole
-    type: string[]
+    type: list<string>
     description: >-
       The scope's owners copied whole (a relocated project's old directory and its new root): every
       file under them, whatever the file, is compared, so a move reads as deletes at the old place
@@ -58,4 +58,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:23.894Z'
-updatedAt: '2026-10-02T23:57:59.113Z'
+updatedAt: '2026-10-04T10:20:55.819Z'

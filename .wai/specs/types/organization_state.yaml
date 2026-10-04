@@ -8,14 +8,14 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: units
-    type: OrganizationUnitRecord[]
+    type: list<OrganizationUnitRecord>
     description: All hosted organization unit records.
     optional: false
   - name: placements
-    type: ProjectPlacement[]
+    type: list<ProjectPlacement>
     description: All hosted project placement records.
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T22:05:31.307Z'
-updatedAt: '2026-09-19T11:07:11.836Z'
+updatedAt: '2026-10-04T10:20:35.368Z'

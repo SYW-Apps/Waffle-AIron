@@ -36,22 +36,6 @@ methods:
         summary: >-
           Component with excessive dependency fan-out; not reported on a routing table, which
           reaches every collaborator it has only through single hand-offs
-  - name: signatureLanguageBuiltins
-    description: >-
-      Rule signature-language-builtins. Contracts must speak the declared target language: builtin
-      types that unambiguously belong to another language family are flagged in method signatures
-      (e.g. `usize` in a TypeScript system, `Promise` in a Rust one). Set targetLanguage on the
-      system (L0) or override per subsystem (L1).
-    signature: 'signatureLanguageBuiltins(ctx: RuleContext): void'
-    returns: void
-    params:
-      - name: ctx
-        type: RuleContext
-        description: The validation run's shared read model and issue sink
-    findings:
-      - code: LANGUAGE_FOREIGN_BUILTIN
-        severity: warning
-        summary: Signature uses a builtin from a different language family
   - name: narrativeLanguageConstructs
     description: >-
       Rule narrative-language-constructs. Narratives must describe flows the declared target
@@ -264,4 +248,4 @@ methods:
           could name them as their signatureFrom
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-10-03T19:43:49.218Z'
+updatedAt: '2026-10-03T22:06:47.538Z'

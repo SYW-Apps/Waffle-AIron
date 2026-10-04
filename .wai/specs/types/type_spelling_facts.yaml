@@ -1,0 +1,24 @@
+kind: value-object
+id: type_spelling_facts
+name: TypeSpellingFacts
+description: >-
+  What one scan's type canonicalisation recorded, for the rules and the doctor repair to read: every
+  stored type position that is an alias of its canonical spelling, and every one that is not
+  canonical at all. The loaded specs hold canonical text already, so these facts are the only place
+  the stored spellings are still visible — the same reason stage 1's signature facts exist.
+subsystem: sdd_core
+fields:
+  - name: respellings
+    type: list<TypeRespelling>
+    description: One per stored position whose text is an alias (TYPE_SPELLING_STALE)
+    optional: false
+  - name: problems
+    type: list<TypeExpressionProblem>
+    description: >-
+      One per stored position that is not canonical (TYPE_EXPRESSION_INVALID, TYPE_POSITION_INVALID,
+      TYPE_FORM_UNSUPPORTED, TYPE_NOT_NEUTRAL)
+    optional: false
+methods: []
+sourcePath: src/models/type-grammar.ts
+createdAt: '2026-10-03T22:03:20.274Z'
+updatedAt: '2026-10-04T10:21:23.583Z'

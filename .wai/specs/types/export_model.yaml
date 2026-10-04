@@ -8,7 +8,7 @@ description: >-
   nowhere to put.
 fields:
   - name: system
-    type: object
+    type: any
     description: The system's name, for the diagram title.
     optional: false
   - name: generatedAt
@@ -16,20 +16,20 @@ fields:
     description: When the export was produced, stamped into the artifact.
     optional: false
   - name: subsystems
-    type: object[]
+    type: list<any>
     description: Each subsystem's id and name.
     optional: false
   - name: components
-    type: object[]
+    type: list<any>
     description: >-
       Each component's id, name, subsystem, componentType, portalType, whether it is public, the
       pattern that owns it, and what it owns.
     optional: false
   - name: edges
-    type: object[]
+    type: list<any>
     description: Dependency edges as from/to ids, each flagged when it crosses a subsystem boundary.
     optional: false
 methods: []
 sourcePath: src/core/diagram-export.ts
 createdAt: '2026-09-20T16:40:55.173Z'
-updatedAt: '2026-09-20T16:40:55.189Z'
+updatedAt: '2026-10-04T10:20:06.558Z'

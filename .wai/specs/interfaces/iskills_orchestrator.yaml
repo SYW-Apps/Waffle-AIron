@@ -7,17 +7,17 @@ methods:
     description: >-
       Export the built-in SDD skills via the exporter, for the passed target types or the project's
       enabled targets, returning what was written.
-    signature: 'export(targetTypes?: string[]): SkillsExportResult'
+    signature: 'export(targetTypes?: list<string>): SkillsExportResult'
     returns: SkillsExportResult
     params:
       - name: targetTypes
-        type: string[]
+        type: list<string>
         description: The target types to export into; omitted means the project's enabled targets
         optional: true
   - name: listNames
     description: The names of the built-in SDD skills, forwarded to the exporter.
-    signature: 'listNames(): string[]'
-    returns: string[]
+    signature: 'listNames(): list<string>'
+    returns: list<string>
     params: []
   - name: checkFreshness
     description: >-
@@ -30,4 +30,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:33:51.181Z'
+updatedAt: '2026-10-04T10:19:34.232Z'

@@ -353,6 +353,45 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
+  // PARAM_NAME_MISMATCH — fire through the dialect: the contract's canonical
+  // list<string> and the code's TypeScript string[] are one type.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'PARAM_NAME_MISMATCH',
+    severity: 'warning',
+    anchoredTo: 'consumption_rater_impl',
+    expectFire: true,
+    scenario:
+      'The consumption rater\'s contract takes the tariff bands as a list<string> it calls the bands, and the function realizing it takes the same string[] under the name tiers — the TypeScript spelling read through the dialect is the contract\'s type, so this is a rename.',
+    tree: raterTree([CONNECTION, { name: 'bands', type: 'list<string>' }], [
+      'export function rateConsumption(connectionId: string, tiers: string[]): number {',
+      '  return connectionId.length * tiers.length;',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
+  // PARAM_NAME_MISMATCH — control: read through the dialect the two types
+  // differ (a set is not a list), so the different name is a different
+  // argument, not a rename.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'PARAM_NAME_MISMATCH',
+    expectFire: false,
+    reason:
+      'The code takes a Set<string>, which the TypeScript dialect reads as set<string>, not the contract\'s list<string>: with the types disagreeing the differing name is a substitution, and nothing is said about it.',
+    scenario:
+      'The consumption rater\'s contract takes the tariff bands as a list<string>, and the function realizing it takes a Set<string> of tiers in that position.',
+    tree: raterTree([CONNECTION, { name: 'bands', type: 'list<string>' }], [
+      'export function rateConsumption(connectionId: string, tiers: Set<string>): number {',
+      '  return connectionId.length * tiers.size;',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+
+  // -------------------------------------------------------------------------
   // PARAM_OPTIONALITY — fire: the contract lets a caller leave an argument
   // out and the code demands it.
   // -------------------------------------------------------------------------

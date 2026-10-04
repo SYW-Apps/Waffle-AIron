@@ -15,19 +15,19 @@ fields:
     description: The key of the project whose table is resolved ('' for the bound root).
     optional: false
   - name: aliases
-    type: Map<string, string>
+    type: map<string, string>
     description: >-
       The project's alias table: each member or declared external alias mapped to the key of the
       project it names in the scan. An alias with no entry is an external the scan did not read.
     optional: false
   - name: producerTables
-    type: Map<string, ResolvedExportTable | null>
+    type: map<string, ResolvedExportTable?>
     description: >-
       Each named producer's resolved project table by key; null for a producer still being resolved
       on this path (a cycle).
     optional: false
   - name: audienceOf
-    type: Map<string, string>
+    type: map<string, string>
     description: >-
       For each producer key, the audience it shows this project: project for a family producer
       (every entry is visible), instance for one found only by source.path.
@@ -35,4 +35,4 @@ fields:
 methods: []
 sourcePath: src/core/exports.ts
 createdAt: '2026-09-27T10:34:11.718Z'
-updatedAt: '2026-09-27T10:34:11.719Z'
+updatedAt: '2026-10-04T10:20:07.638Z'

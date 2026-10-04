@@ -9,17 +9,17 @@ description: >-
   write as it was judged before subsystem rules existed.
 fields:
   - name: unwritableRoots
-    type: string[]
+    type: list<string>
     description: Roots of family records whose project rung does not give the request project:write
     optional: false
   - name: subsystems
-    type: SubsystemWriteRule[]
+    type: list<SubsystemWriteRule>
     description: The subsystems decided at their own rung, writable or not
     optional: false
 methods:
   - name: permits
     signature: 'permits(root: string, subsystemId: string | null): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a spec owned by this subsystem of this root (null for a spec that belongs to no
       subsystem: the L0, a system-level type, project configuration) may be changed: a subsystem
@@ -27,7 +27,7 @@ methods:
       its root is not unwritable.
   - name: denials
     signature: 'denials(root: string): SubsystemWriteRule[]'
-    returns: SubsystemWriteRule[]
+    returns: list<SubsystemWriteRule>
     description: >-
       The subsystems of this root the request may not change — what a whole-tree write (a family
       migration, a lock) must name when it refuses.
@@ -41,4 +41,4 @@ lint:
         registry's save/delete and the family migration's rehearse read it through its permits and
         denials methods, named in their narratives.
 createdAt: '2026-10-03T13:35:37.708Z'
-updatedAt: '2026-10-03T13:41:36.274Z'
+updatedAt: '2026-10-04T10:21:29.527Z'

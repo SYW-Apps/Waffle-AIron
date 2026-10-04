@@ -12,10 +12,10 @@ fields:
     description: The version this configuration was written under, so a migration can tell what it is reading.
     optional: false
   - name: domains
-    type: Domain[]
+    type: list<Domain>
     description: The declared domains, each with its id and the path it owns.
     optional: false
 methods: []
 sourcePath: src/models/domain.ts
 createdAt: '2026-09-20T20:41:24.411Z'
-updatedAt: '2026-09-20T20:41:24.420Z'
+updatedAt: '2026-10-04T10:21:17.961Z'

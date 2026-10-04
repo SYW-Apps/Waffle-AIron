@@ -21,8 +21,8 @@ methods:
       mutable instance directory — and return their union as descriptors, each tagged with its tier;
       an image pack shadowed by a same-named instance pack is marked shadowed (the instance copy is
       the effective one), so drift is visible in the listing.
-    signature: 'listGlobalPacks(): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listGlobalPacks(): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params: []
   - name: installGlobalPack
     description: >-
@@ -55,8 +55,8 @@ methods:
       selection resolved through the project's committed bundle, or a legacy path ref — against the
       bound project root. The caller supplies the configuration; the store never reads project.yaml.
       An absent configuration registers no packs.
-    signature: 'listProjectPacks(config?: ProjectConfig): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listProjectPacks(config?: ProjectConfig): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: config
         type: ProjectConfig
@@ -100,15 +100,15 @@ methods:
       read used by internal health and policy flows (no credential: the caller has already enforced
       authorization).
     signature: 'storeListGlobalPacks(): PackDescriptor[]'
-    returns: PackDescriptor[]
+    returns: list<PackDescriptor>
   - name: executeApprovedListProjectPacks
     description: >-
       Pre-authorized entry for the approval workflow and internal policy flows: bind the project's
       isolated root and probe the packs the given configuration registers, WITHOUT authentication —
       the caller has already enforced approval-based or permission-rules authorization and loaded
       the configuration. Never exposed on any portal.
-    signature: 'executeApprovedListProjectPacks(project: string, config?: ProjectConfig): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'executeApprovedListProjectPacks(project: string, config?: ProjectConfig): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: project
         type: string
@@ -180,11 +180,11 @@ methods:
       with no server-global match in either tier. This is the single resolution seam the project
       policy orchestrator uses to apply required/default packs, so a name it cannot resolve is
       REPORTED (never silently skipped).
-    signature: 'executeApprovedResolveGlobalPacks(names: string[]): PackResolution'
+    signature: 'executeApprovedResolveGlobalPacks(names: list<string>): PackResolution'
     returns: PackResolution
     params:
       - name: names
-        type: string[]
+        type: list<string>
         description: >-
           Policy-supplied pack names (file stems or manifest names) to resolve against the
           server-global set.
@@ -196,8 +196,8 @@ methods:
       every profile contributed by the server-global packs across both tiers (source = the
       contributing pack's name), deduped. Never throws for a bad pack — a pack that fails to load
       simply contributes no profiles.
-    signature: 'storeListAvailableProfiles(): AvailableProfile[]'
-    returns: AvailableProfile[]
+    signature: 'storeListAvailableProfiles(): list<AvailableProfile>'
+    returns: list<AvailableProfile>
     params: []
   - name: executeApprovedListProjectProfiles
     description: >-
@@ -214,8 +214,8 @@ methods:
       bad pack: a pack that fails to load simply contributes no profiles.
     signature: >-
       executeApprovedListProjectProfiles(project: string, config?: ProjectConfig):
-      AvailableProfile[]
-    returns: AvailableProfile[]
+      list<AvailableProfile>
+    returns: list<AvailableProfile>
     params:
       - name: project
         type: string
@@ -261,4 +261,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T18:42:41.273Z'
-updatedAt: '2026-09-17T16:34:45.870Z'
+updatedAt: '2026-10-04T10:19:11.725Z'

@@ -9,28 +9,28 @@ description: >-
 subsystem: sdd_migrations
 fields:
   - name: members
-    type: PlannedMember[]
+    type: list<PlannedMember>
     description: The mounts to move, parents in walk order, each parent's mounts in declaration order.
     optional: false
   - name: rewrites
-    type: PlannedRewrite[]
+    type: list<PlannedRewrite>
     description: The references to rewrite, projects in walk order, then spec, then position.
     optional: false
   - name: findings
-    type: ChainingMigrationFinding[]
+    type: list<ChainingMigrationFinding>
     description: >-
       Every mount field that stops the move, every reference with no rewrite, every absent member,
       in the order found.
     optional: false
   - name: imports
-    type: PlannedImport[]
+    type: list<PlannedImport>
     description: >-
       Stage 4's positional imports, one per (consumer, alias, public name), each with every bare
       reference it resolves and whether the producer needs the export and the consumer the external
       — which the chaining migration plans with its own entries and declarations
     optional: false
   - name: locations
-    type: string[]
+    type: list<string>
     description: >-
       Stage 8's one doctor step: every member declared with the deprecated long-form `path`, as
       `<declaring project key>/<alias>`, whose entry is rewritten to the one location key — the
@@ -40,4 +40,4 @@ fields:
 methods: []
 sourcePath: src/migrations/position-migration.ts
 createdAt: '2026-09-27T10:44:31.358Z'
-updatedAt: '2026-10-02T20:45:23.783Z'
+updatedAt: '2026-10-04T10:20:46.951Z'

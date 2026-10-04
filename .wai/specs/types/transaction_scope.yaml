@@ -13,20 +13,20 @@ fields:
     description: The live top root, absolute.
     optional: false
   - name: projects
-    type: string[]
+    type: list<string>
     description: >-
       Each project root to copy, absolute; every one lies within familyRoot (containment is decided
       against the declaring root, so this holds for every member and every adoptable path).
     optional: false
   - name: areas
-    type: string[]
+    type: list<string>
     description: >-
       Paths relative to each owner root to copy, compare and swap, forward slashes; absent means
       ['.wai'] (every family migration). A file named here that does not exist is a create when the
       rehearsal writes it. .wai/transactions/ is never an area.
     optional: true
   - name: whole
-    type: string[]
+    type: list<string>
     description: >-
       Owner roots copied, compared and swapped IN FULL (every file under them, .wai/transactions/
       excluded): the relocated member's old directory, whose files leave as deletes, and its new
@@ -44,4 +44,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:56.008Z'
-updatedAt: '2026-10-02T23:57:57.494Z'
+updatedAt: '2026-10-04T10:21:18.945Z'

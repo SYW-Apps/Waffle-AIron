@@ -36,11 +36,11 @@ fields:
     description: The branch the backup commits to.
     optional: false
   - name: periodicSyncMinutes
-    type: number
+    type: int
     description: Interval for the periodic backup sweep; absent = manual sync only.
     optional: true
   - name: skipIfClean
-    type: boolean
+    type: bool
     description: The sweep skips the commit when the mirrored content is unchanged (default true).
     optional: true
   - name: lastSyncAt
@@ -56,4 +56,4 @@ fields:
     optional: false
 methods: []
 createdAt: '2026-07-16T15:37:56.601Z'
-updatedAt: '2026-07-16T15:37:56.662Z'
+updatedAt: '2026-10-04T10:28:54.146Z'

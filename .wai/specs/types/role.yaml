@@ -26,7 +26,7 @@ fields:
     description: What this role is for.
     optional: true
   - name: permissions
-    type: RolePermission[]
+    type: list<RolePermission>
     description: The capability→value defaults this role confers.
     optional: false
   - name: createdAt
@@ -40,7 +40,7 @@ fields:
 methods:
   - name: isBuiltinId
     signature: 'isBuiltinId(roleId: string): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a role id is one of the reserved built-in role ids: the built-in roles are code
       constants, so no stored role may take one of their ids and role CRUD refuses to create, edit
@@ -49,4 +49,4 @@ methods:
     symbol: isBuiltinRoleId
 sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:10.998Z'
-updatedAt: '2026-10-03T17:57:20.969Z'
+updatedAt: '2026-10-04T10:20:59.781Z'

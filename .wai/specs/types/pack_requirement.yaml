@@ -35,7 +35,7 @@ fields:
 methods:
   - name: admits
     signature: 'admits(version: string): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether a concrete pack version satisfies this requirement's range: true when it matches any
       `||` alternative, each alternative being the conjunction of its comparators (caret, tilde and
@@ -45,11 +45,11 @@ methods:
       semver dependency.
   - name: rangeProblem
     signature: 'rangeProblem(): string | null'
-    returns: string | null
+    returns: string?
     description: >-
       Why the range cannot be read — the first token that is neither a version, an x-range nor a
       comparator — or null when it parses. What POLICY_REQUIREMENT_INVALID quotes.
 sourcePath: src/models/project.ts
 symbol: PackRequirement
 createdAt: '2026-09-29T15:49:40.299Z'
-updatedAt: '2026-09-29T16:09:08.868Z'
+updatedAt: '2026-10-04T10:20:39.674Z'

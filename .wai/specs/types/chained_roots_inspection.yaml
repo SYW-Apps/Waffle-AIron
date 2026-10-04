@@ -7,11 +7,11 @@ description: >-
 subsystem: sdd_core
 fields:
   - name: roots
-    type: string[]
+    type: list<string>
     description: Project-relative member roots in walk order, parents before their own members.
     optional: false
   - name: skipped
-    type: object[]
+    type: list<any>
     description: >-
       Members that cannot be followed, each { mount: the member's key, alias: as its parent declares
       it, form: members | mount, projectPath: the path as declared, reason: escapes | missing |
@@ -21,4 +21,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-12T17:38:03.363Z'
-updatedAt: '2026-09-27T10:47:58.740Z'
+updatedAt: '2026-10-04T10:19:56.851Z'

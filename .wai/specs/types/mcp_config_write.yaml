@@ -17,25 +17,25 @@ fields:
     description: The configuration file the entry goes into
     optional: false
   - name: outsideProject
-    type: boolean
+    type: bool
     description: >-
       Whether that file lies outside the bound project root — a machine-wide configuration every
       project on the machine shares
     optional: false
   - name: before
-    type: json
+    type: any
     description: The wairon entry the file holds now; absent when it holds none (or the file does not exist)
     optional: true
   - name: after
-    type: json
+    type: any
     description: The wairon entry the install would write
     optional: false
   - name: upToDate
-    type: boolean
+    type: bool
     description: Whether the file already holds exactly that entry, so the install writes nothing
     optional: false
 methods: []
 componentClass: cli_mcp_adapter
 sourcePath: src/commands/mcp.ts
 createdAt: '2026-10-01T23:45:59.829Z'
-updatedAt: '2026-10-01T23:45:59.831Z'
+updatedAt: '2026-10-04T10:20:25.670Z'

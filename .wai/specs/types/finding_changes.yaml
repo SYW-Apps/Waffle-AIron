@@ -10,18 +10,18 @@ description: >-
   nothing; identical findings are matched as a multiset.
 fields:
   - name: introduced
-    type: ValidationIssue[]
+    type: list<ValidationIssue>
     description: Reported by the second run only, at the second run's severity.
     optional: false
   - name: resolved
-    type: ValidationIssue[]
+    type: list<ValidationIssue>
     description: Reported by the first run only, at the first run's severity.
     optional: false
   - name: regraded
-    type: RegradedFinding[]
+    type: list<RegradedFinding>
     description: Reported by both, at different severities (including a code turned to notice).
     optional: false
 methods: []
 sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:09.077Z'
-updatedAt: '2026-09-29T16:41:17.050Z'
+updatedAt: '2026-10-04T10:20:12.274Z'

@@ -167,13 +167,14 @@ describe('the type kinds and type-method params', () => {
     expect(TypeSpecSchema.safeParse(type({ methods: [{ name: 'm', returns: 'boolean' }] })).success).toBe(false);
   });
 
-  it('reads a type method\'s params as its type references', () => {
-    expect(methodTypeRefs({ params: [{ name: 'ref', type: 'billing.Invoice' }], returns: 'boolean' })).toEqual(['billing.Invoice', 'boolean']);
+  it('reads a type method\'s params as its type references — the named types only (stage 2: primitives name nothing)', () => {
+    expect(methodTypeRefs({ params: [{ name: 'ref', type: 'billing.Invoice' }], returns: 'boolean' })).toEqual(['billing.Invoice']);
   });
 
   it('reads a signature type\'s params and returns as its type references, and none from a data type', () => {
+    // Result is a legacy builtin (TYPE_NOT_NEUTRAL), not a named type: only Ack is referenced.
     expect(signatureTypeRefs({ kind: 'signature', params: [{ name: 'e', type: 'ChangeEvent' }, { name: 'c', type: 'Context' }], returns: 'Result<Ack>' }))
-      .toEqual(['ChangeEvent', 'Context', 'Result', 'Ack']);
+      .toEqual(['ChangeEvent', 'Context', 'Ack']);
     expect(signatureTypeRefs({ kind: 'entity', params: [{ name: 'e', type: 'ChangeEvent' }] })).toEqual([]);
   });
 

@@ -14,7 +14,7 @@ import {
   SurfaceSnapshot,
   SurfaceRefResolution,
   CodeModel,
-  BUILTIN_TYPES,
+  isTypeVocabulary,
   isProvidedBy,
   sameContract,
   typeMatchesRef,
@@ -258,6 +258,8 @@ export interface BuildContextOptions {
   exportUsages?: import('../../models/exports.js').ExportUsage[];
   /** What the loader's signature resolution recorded (see RuleContext.signatureFacts); absent on a candidate run. */
   signatureFacts?: import('../signature-sources.js').SignatureFacts;
+  /** What the loader's type canonicalisation recorded (see RuleContext.typeSpellingFacts); absent on a candidate run. */
+  typeSpellingFacts?: import('../../models/type-grammar.js').TypeSpellingFacts;
   /** The bound project's declared externals with their lock entries and pinned snapshots (see RuleContext.pinnedExternals). */
   pinnedExternals?: PinnedExternal[];
   /** Source-code model for structural conformance; empty when not built. */
@@ -494,7 +496,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
 
   const isTypeResolved = (ref: string, generics: Set<string>): boolean => {
     const refLower = ref.toLowerCase();
-    if (BUILTIN_TYPES.has(refLower)) return true;
+    if (isTypeVocabulary(refLower)) return true;
     if (generics.has(refLower)) return true;
     // Local first: the bound project's own types, compared by nameKey per segment.
     if (ownTypes.some(spec => typeMatchesRef(spec, ref))) return true;
@@ -730,7 +732,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     return projectNaming;
   };
 
-  const isBuiltinType = (ref: string): boolean => BUILTIN_TYPES.has(ref.toLowerCase());
+  const isBuiltinType = (ref: string): boolean => isTypeVocabulary(ref);
 
   const getRuleSeverity = (
     ruleCode: string,
@@ -1000,7 +1002,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     documentationConfigFor,
     namingConfigFor,
     isBuiltinType,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [] },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [], deprecations: extensions.deprecations ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots,
     ...(opts.projectIdentity ? { projectIdentity: opts.projectIdentity } : {}),
@@ -1009,6 +1011,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ...(opts.projectFamily ? { projectFamily: opts.projectFamily } : {}),
     ...(opts.exportUsages ? { exportUsages: opts.exportUsages } : {}),
     ...(opts.signatureFacts ? { signatureFacts: opts.signatureFacts } : {}),
+    ...(opts.typeSpellingFacts ? { typeSpellingFacts: opts.typeSpellingFacts } : {}),
     pinnedExternals,
     codeModel: opts.codeModel ?? emptyCodeModel(),
     roundTripIssues: opts.roundTripIssues,

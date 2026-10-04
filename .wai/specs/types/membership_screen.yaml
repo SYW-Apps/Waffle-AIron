@@ -20,11 +20,11 @@ fields:
       recreated"
     optional: true
   - name: reachChanges
-    type: ReachComparison[]
+    type: list<ReachComparison>
     description: The rows whose before and after differ
     optional: false
   - name: carried
-    type: CarriedSubsystemRule[]
+    type: list<CarriedSubsystemRule>
     description: >-
       Promote and an externalize as a project: every subsystem setting of the bound project the move
       carries onto the new project — carried, collapsed (most restrictive wins), or a role binding
@@ -32,4 +32,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-01T16:55:21.624Z'
-updatedAt: '2026-10-03T14:20:06.012Z'
+updatedAt: '2026-10-04T10:20:26.699Z'

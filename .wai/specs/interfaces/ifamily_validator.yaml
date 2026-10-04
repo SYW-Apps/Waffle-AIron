@@ -10,25 +10,25 @@ methods:
   - name: run
     description: >-
       Validate the bound project's family: the bound root and its members (all levels, or as many as
-      a numeric `recursive` bounds), each by its own gate under its own configuration and prefixed
-      with its project key, verbatim; then the composition findings of each project's externals;
-      then the family checks; then the governance checks (checkPolicies). A plain run narrows the
-      request's reach to the bound root before any read, so an external whose producer lies above
-      the family is not composed and is counted in a one-line hint instead; with `family` set the
-      reach stays the request's (locally an explicit walk up, hosted the credential's), never
-      widened. A requirement placed by a project above the bound root is not in the selection and is
-      not judged: governance, like composition, sees only what the run reaches. The result is valid
-      when no project's gate and no family or governance finding holds an error, and lists each
-      project's totals.
+      `memberDepth` bounds), each by its own gate under its own configuration and prefixed with its
+      project key, verbatim; then the composition findings of each project's externals; then the
+      family checks; then the governance checks (checkPolicies). A plain run narrows the request's
+      reach to the bound root before any read, so an external whose producer lies above the family
+      is not composed and is counted in a one-line hint instead; with `family` set the reach stays
+      the request's (locally an explicit walk up, hosted the credential's), never widened. A
+      requirement placed by a project above the bound root is not in the selection and is not
+      judged: governance, like composition, sees only what the run reaches. The result is valid when
+      no project's gate and no family or governance finding holds an error, and lists each project's
+      totals.
     signature: 'run(options: ValidationOptions): ValidationResult'
     returns: ValidationResult
     params:
       - name: options
         type: ValidationOptions
         description: >-
-          The run's switches: family (walk up explicitly), recursive (a number bounds the member
-          depth), scopeSubsystem (a member key narrows the run to that member), treatAllAsComplete
-          and pre-loaded packs, passed to every project's own gate
+          The run's switches: family (walk up explicitly), memberDepth (bounds the member levels;
+          absent, all), scopeSubsystem (a member key narrows the run to that member),
+          treatAllAsComplete and pre-loaded packs, passed to every project's own gate
   - name: compose
     description: >-
       With one project's root bound: compare each of its externals — and each of its referenced
@@ -82,8 +82,8 @@ methods:
       parent that wants its own lock to refuse sets composition.requireApprovedMembers. A member
       drifted only by the stage-5 identity upgrade says so in the message. Each finding's severity
       is the root's rules.sddRuleSeverity override, else the default.
-    signature: 'checkMembers(family: ProjectFamily): ValidationIssue[]'
-    returns: ValidationIssue[]
+    signature: 'checkMembers(family: ProjectFamily): list<ValidationIssue>'
+    returns: list<ValidationIssue>
     params:
       - name: family
         type: ProjectFamily
@@ -128,8 +128,8 @@ methods:
       defaults, so a pack's loosening is never reported (pack-loosening-is-never-a-finding); and
       nothing here depends on what the machine has installed, so the family verdict is the same from
       every machine (location-independent).
-    signature: 'checkPolicies(family: ProjectFamily): ValidationIssue[]'
-    returns: ValidationIssue[]
+    signature: 'checkPolicies(family: ProjectFamily): list<ValidationIssue>'
+    returns: list<ValidationIssue>
     params:
       - name: family
         type: ProjectFamily
@@ -152,9 +152,9 @@ methods:
       compared by `deviations` (POLICY_DEVIATION). Answered at the default severities, stamped with
       the member's key; checkPolicies applies the requiring project's overrides.
     signature: >-
-      adoption(requiring: string, member: string, requirements: PackRequirement[]):
-      ValidationIssue[]
-    returns: ValidationIssue[]
+      adoption(requiring: string, member: string, requirements: list<PackRequirement>):
+      list<ValidationIssue>
+    returns: list<ValidationIssue>
     params:
       - name: requiring
         type: string
@@ -165,7 +165,7 @@ methods:
         type: string
         description: The key of the bound member, stamped on each finding as its project
       - name: requirements
-        type: PackRequirement[]
+        type: list<PackRequirement>
         description: The requiring project's valid requirements
     findings:
       - code: POLICY_NOT_ADOPTED
@@ -188,8 +188,8 @@ methods:
       and the requirement it concerns.
     signature: >-
       deviations(member: string, requirement: PackRequirement, settings: PackSettings):
-      ValidationIssue[]
-    returns: ValidationIssue[]
+      list<ValidationIssue>
+    returns: list<ValidationIssue>
     params:
       - name: member
         type: string
@@ -222,11 +222,11 @@ methods:
       lock records as the part's MemberPin. A declared member with no project on disk is `never`.
       Reads each project's own tree once and writes nothing; the caller must gate on reach itself
       before it asks about a family.
-    signature: 'approvals(depth?: number): ProjectApproval[]'
-    returns: ProjectApproval[]
+    signature: 'approvals(depth?: int): list<ProjectApproval>'
+    returns: list<ProjectApproval>
     params:
       - name: depth
-        type: number
+        type: int
         description: >-
           How many member levels below the bound root to include: 1 = the direct members (what a
           lock records), omitted = every level (what status prints)
@@ -251,11 +251,11 @@ methods:
       are the declaring project's own, so their consumption is in that project's statuses. Writes
       nothing and judges nothing of its own (no findings, no severities); the caller grants the
       reach before it asks, as for approvals.
-    signature: 'relations(): ProjectRelations[]'
-    returns: ProjectRelations[]
+    signature: 'relations(): list<ProjectRelations>'
+    returns: list<ProjectRelations>
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-03T12:25:38.468Z'
+updatedAt: '2026-10-04T10:54:12.937Z'

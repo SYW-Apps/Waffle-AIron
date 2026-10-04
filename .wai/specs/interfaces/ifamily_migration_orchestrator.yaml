@@ -65,14 +65,14 @@ methods:
       - idempotent
   - name: recover
     description: Report (fix false) or resolve (fix true) the unfinished transactions under a project root.
-    signature: 'recover(root: string, fix: boolean): RecoveredTransaction[]'
-    returns: RecoveredTransaction[]
+    signature: 'recover(root: string, fix: bool): list<RecoveredTransaction>'
+    returns: list<RecoveredTransaction>
     params:
       - name: root
         type: string
         description: The project root
       - name: fix
-        type: boolean
+        type: bool
         description: Resolve, or only report
     guarantees:
       - idempotent
@@ -93,4 +93,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:35:39.470Z'
-updatedAt: '2026-10-03T13:40:54.761Z'
+updatedAt: '2026-10-04T10:18:46.432Z'

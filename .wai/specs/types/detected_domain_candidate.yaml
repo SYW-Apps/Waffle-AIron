@@ -25,7 +25,7 @@ fields:
     description: What kind of area this looks like.
     optional: false
   - name: alreadyTracked
-    type: boolean
+    type: bool
     description: >-
       Whether a registered domain already covers this path — shown rather than hidden, so a scan can
       say "this one is handled" instead of appearing to have missed it.
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/models/domain.ts
 createdAt: '2026-09-20T22:07:14.140Z'
-updatedAt: '2026-09-20T22:07:14.155Z'
+updatedAt: '2026-10-04T10:20:02.529Z'

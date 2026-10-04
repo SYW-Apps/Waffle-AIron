@@ -9,18 +9,18 @@ methods:
     description: >-
       Load all persisted browser sessions into the authoritative store representation and return
       them.
-    signature: 'load(): WebSession[]'
-    returns: WebSession[]
+    signature: 'load(): list<WebSession>'
+    returns: list<WebSession>
     params: []
   - name: replaceAll
     description: >-
       Replace the store contents with the supplied complete session set after persistence has
       succeeded.
-    signature: 'replaceAll(sessions: WebSession[]): void'
+    signature: 'replaceAll(sessions: list<WebSession>): void'
     returns: void
     params:
       - name: sessions
-        type: WebSession[]
+        type: list<WebSession>
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -37,4 +37,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-11T11:32:40.618Z'
-updatedAt: '2026-09-19T21:29:24.379Z'
+updatedAt: '2026-10-04T10:19:49.832Z'

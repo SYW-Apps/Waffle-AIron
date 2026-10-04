@@ -240,7 +240,7 @@ methods:
       exposed on any portal.
     signature: >-
       repairGoverningProfile(projectId: string, root: string, policy: InstancePackPolicy, config:
-      ProjectConfig, catalog: AvailableProfile[], principal: Principal): ProfileRepair
+      ProjectConfig, catalog: list<AvailableProfile>, principal: Principal): ProfileRepair
     returns: ProfileRepair
     params:
       - name: projectId
@@ -258,7 +258,7 @@ methods:
           The project's configuration as the pack half left it — its projectType and recorded
           selection
       - name: catalog
-        type: AvailableProfile[]
+        type: list<AvailableProfile>
         description: >-
           The profiles selectable for this project, which decide what resolves and what can repair
           it
@@ -279,4 +279,4 @@ methods:
         description: The redacted event to append
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-09-29T21:59:28.518Z'
+updatedAt: '2026-10-04T10:19:21.512Z'

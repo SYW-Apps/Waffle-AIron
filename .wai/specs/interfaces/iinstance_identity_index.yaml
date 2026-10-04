@@ -7,9 +7,9 @@ methods:
     description: >-
       Return the persisted instance identity (the boot-reserved built-in subject UUIDs), or null
       when the instance has never been seeded.
-    signature: 'get(): InstanceIdentity | null'
-    returns: InstanceIdentity | null
+    signature: 'get(): InstanceIdentity?'
+    returns: InstanceIdentity?
     params: []
 status: complete
 createdAt: '2026-07-16T00:24:13.420Z'
-updatedAt: '2026-07-16T07:27:54.399Z'
+updatedAt: '2026-10-04T10:18:56.522Z'

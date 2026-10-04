@@ -54,8 +54,8 @@ methods:
     description: >-
       Flip every pending request whose expiresAt is at or before the supplied now-timestamp to
       expired and return the number expired.
-    signature: 'expirePending(now: string): number'
-    returns: number
+    signature: 'expirePending(now: string): int'
+    returns: int
     params:
       - name: now
         type: string
@@ -78,4 +78,4 @@ methods:
       - atomic
 status: complete
 createdAt: '2026-07-09T19:30:39.410Z'
-updatedAt: '2026-09-30T16:35:36.520Z'
+updatedAt: '2026-10-04T10:28:12.657Z'

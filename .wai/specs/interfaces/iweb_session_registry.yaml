@@ -42,8 +42,8 @@ methods:
     description: >-
       Delete every session whose expiresAt is at or before the supplied instant and return the
       number removed.
-    signature: 'pruneExpired(now: string): number'
-    returns: number
+    signature: 'pruneExpired(now: string): int'
+    returns: int
     params:
       - name: now
         type: string
@@ -54,8 +54,8 @@ methods:
       Remove every session belonging to the given user id and return the number removed; used for
       correlated revocation when a user is deactivated so no live browser session outlives the
       deactivation. A user with no sessions is a no-op returning zero.
-    signature: 'removeAllForSubject(userId: string): number'
-    returns: number
+    signature: 'removeAllForSubject(userId: string): int'
+    returns: int
     params:
       - name: userId
         type: string
@@ -63,4 +63,4 @@ methods:
       - atomic
 status: complete
 createdAt: '2026-07-11T11:32:46.115Z'
-updatedAt: '2026-07-11T13:17:32.321Z'
+updatedAt: '2026-10-04T10:28:41.837Z'

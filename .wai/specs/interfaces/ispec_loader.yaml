@@ -6,7 +6,7 @@ methods:
   - name: loadSystemSpec
     description: Loads L0 system specification from system.yaml
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: saveSystemSpec
     description: Saves L0 system specification to system.yaml
     signature: 'saveSystemSpec(spec: SystemSpec): void'
@@ -14,19 +14,19 @@ methods:
   - name: loadSubsystemSpecs
     description: Loads all L1 subsystem specifications from subsystems/*.yaml
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadSubsystemSpec
     description: Loads a single subsystem specification by id
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
+    returns: SubsystemSpec?
   - name: loadComponentSpecs
     description: Loads all L2 component specifications from components/*.yaml
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadComponentSpec
     description: Loads a single component specification by id
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
-    returns: ComponentSpec | null
+    returns: ComponentSpec?
   - name: saveComponentSpec
     description: >-
       Saves a component specification. A spec arriving at draft, or without a status, keeps the
@@ -36,11 +36,11 @@ methods:
   - name: loadInterfaceSpecs
     description: Loads all L3 interface specifications from interfaces/*.yaml
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadInterfaceSpec
     description: Loads a single interface specification by id
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
-    returns: InterfaceSpec | null
+    returns: InterfaceSpec?
   - name: saveInterfaceSpec
     description: >-
       Saves an interface specification. A spec arriving at draft, or without a status, keeps the
@@ -50,11 +50,11 @@ methods:
   - name: loadImplementationSpecs
     description: Loads all L4 implementation specifications from implementations/*.yaml
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: loadImplementationSpec
     description: Loads a single implementation specification by id
     signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
-    returns: ImplementationSpec | null
+    returns: ImplementationSpec?
   - name: saveImplementationSpec
     description: >-
       Saves an implementation specification. A spec arriving at draft, or without a status, keeps
@@ -63,8 +63,8 @@ methods:
     returns: void
   - name: loadTypeSpecs
     description: Loads all type specifications (entities and value-objects) from types/*.yaml
-    signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    signature: 'loadTypeSpecs(): list<TypeSpec>'
+    returns: list<TypeSpec>
     params: []
   - name: dryRunSerializeSpecs
     description: >-
@@ -77,7 +77,7 @@ methods:
       field path; never throws for an unserializable spec. Guarantees validate predicts every
       refusal lock or any save would raise.
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
-    returns: ValidationIssue[]
+    returns: list<ValidationIssue>
     guarantees:
       - idempotent
   - name: findChainingParent
@@ -91,7 +91,7 @@ methods:
       parent through resolveChainingParent, which checks the request's reach before reading anything
       above the bound root.
     signature: 'findChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    returns: ChainingParentRef?
   - name: invalidateCache
     description: >-
       Drop the cached spec index, for callers that changed the tree on disk outside the save paths
@@ -239,6 +239,14 @@ methods:
     signatureFrom: spec_index.signatureFacts
     guarantees:
       - idempotent
+  - name: typeSpellingFacts
+    description: >-
+      What the current scan's type canonicalisation recorded (spec_index.typeSpellingFacts): every
+      stored type position that is an alias of its canonical spelling, and every one that is not
+      canonical at all.
+    signatureFrom: spec_index.typeSpellingFacts
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T21:10:52.124Z'
+updatedAt: '2026-10-04T10:19:37.579Z'

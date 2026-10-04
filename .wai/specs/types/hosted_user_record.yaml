@@ -40,7 +40,7 @@ fields:
       home unit subtree.
     optional: true
   - name: roleBindings
-    type: RoleBinding[]
+    type: list<RoleBinding>
     description: >-
       Roles bound to this user, optionally scoped to a unit/project subtree; combined with direct
       permission assignments and everyone-defaults during hierarchical resolution. Authorization is
@@ -65,4 +65,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:35.627Z'
-updatedAt: '2026-09-19T11:07:08.667Z'
+updatedAt: '2026-10-04T10:20:16.288Z'

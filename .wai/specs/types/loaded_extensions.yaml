@@ -8,58 +8,58 @@ description: >-
   load contributes an EXTENSION_LOAD_ERROR rather than being silently skipped.
 fields:
   - name: packNames
-    type: string[]
+    type: list<string>
     description: Names of the successfully loaded packs.
     optional: false
   - name: packs
-    type: PackProvenance[]
+    type: list<PackProvenance>
     description: Per-pack provenance (name, resolved ref, scope).
     optional: false
   - name: rules
-    type: SddRule[]
+    type: list<SddRule>
     description: Programmatic rules, run after the built-in registry.
     optional: false
   - name: profiles
-    type: ProfileDef[]
+    type: list<ProfileDef>
     description: Merged pack-registered profiles, keyed by id.
     optional: false
   - name: languages
-    type: LanguagePackDef[]
+    type: list<LanguagePackDef>
     description: Merged pack-registered language tables, keyed by language.
     optional: false
   - name: skills
-    type: LoadedPackSkill[]
+    type: list<LoadedPackSkill>
     description: Merged pack-provided skills across all loaded packs, each tagged with the pack that ships it.
     optional: false
   - name: patterns
-    type: PatternDef[]
+    type: list<PatternDef>
     description: Merged pack-registered pattern definitions.
     optional: false
   - name: errors
-    type: string[]
+    type: list<string>
     description: Pack load failures, surfaced as EXTENSION_LOAD_ERROR.
     optional: false
   - name: guarantees
-    type: string[]
+    type: list<string>
     description: >-
       Merged pack-declared guarantee tokens (deduped across packs) — the extension half of the
       guarantee vocabulary the guarantee-token rule accepts.
     optional: false
   - name: assertions
-    type: PackAssertion[]
+    type: list<PackAssertion>
     description: >-
       Merged declarative assertions across all loaded packs, each tagged with pack provenance and
       its namespaced finding code (<PACK>_<CODE>).
     optional: false
   - name: instructions
-    type: LoadedInstructionBlock[]
+    type: list<LoadedInstructionBlock>
     description: >-
       Merged pack-contributed instruction blocks across all loaded packs, each tagged with its pack
       provenance, preserved in pack LOAD ORDER (load order is append order in the composed
       instructions).
     optional: false
   - name: selectionFailures
-    type: PackSelectionFailure[]
+    type: list<PackSelectionFailure>
     description: >-
       Declared by-name SELECTIONS that could not be resolved, each carrying the code the conformance
       gate reports it under (absent / wrong version / wrong content / store drift). Kept separate
@@ -68,7 +68,14 @@ fields:
       carries its own severity: every code is an error except PACK_STORE_DRIFT, a warning under
       which the pack still applies.
     optional: false
+  - name: deprecations
+    type: list<string>
+    description: >-
+      Each deprecated field a loaded pack still declares, as `<pack>: <path> — <what replaces it>`
+      (today: a language's foreignBuiltins, whose check is retired); accepted and ignored, and
+      reported as a notice so a pack author learns it before the field is removed
+    optional: false
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:57:07.906Z'
-updatedAt: '2026-10-03T17:04:25.893Z'
+updatedAt: '2026-10-04T10:20:23.314Z'

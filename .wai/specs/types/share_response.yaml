@@ -9,7 +9,7 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: status
-    type: number
+    type: int
     description: >-
       The HTTP status: 200, 404 for an unknown, disabled or expired link, 403 for a download the
       link does not permit.
@@ -23,7 +23,7 @@ fields:
     description: 'The response body: the shared page, the model JSON, the viewer page or the artifact.'
     optional: false
   - name: frameAncestors
-    type: string[]
+    type: list<string>
     description: The link's embedding allowlist; absent or empty forbids framing entirely.
     optional: true
   - name: filename
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/server/sharehttp.ts
 createdAt: '2026-10-03T17:53:31.661Z'
-updatedAt: '2026-10-03T17:53:31.662Z'
+updatedAt: '2026-10-04T10:29:16.172Z'

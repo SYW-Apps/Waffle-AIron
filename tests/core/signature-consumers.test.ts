@@ -134,6 +134,63 @@ describe('surface snapshots carry resolved signatures', () => {
   });
 });
 
+describe('surface snapshots carry an enum (stage 2)', () => {
+  /** change-event gains a field typed by an enum, reached through the signature type's param. */
+  function withEnum(values: { name: string; description?: string }[]): void {
+    saveTypeSpec({
+      kind: 'value-object', id: 'change-event', name: 'ChangeEvent',
+      fields: [{ name: 'path', type: 'string', optional: false }, { name: 'kind', type: 'change-kind', optional: false }],
+      methods: [], createdAt: now, updatedAt: now,
+    } as TypeSpec);
+    saveTypeSpec({ kind: 'enum', id: 'change-kind', name: 'ChangeKind', description: 'What changed.', fields: [], methods: [], values, createdAt: now, updatedAt: now } as TypeSpec);
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+  }
+
+  it('follows a field into an enum and carries its values in declared order', () => {
+    buildTree();
+    withEnum([{ name: 'added', description: 'A new entry.' }, { name: 'removed' }]);
+    const kind = projectOwnSurface('external').types.find((t) => t.id === 'change-kind')!;
+    expect(kind).toMatchObject({ kind: 'enum', values: [{ name: 'added', description: 'A new entry.' }, { name: 'removed' }] });
+  });
+
+  it('moves the digest when a value is added or reordered, and not when only a description changes', () => {
+    buildTree();
+    withEnum([{ name: 'added' }, { name: 'removed' }]);
+    const base = memberDigest(projectOwnSurface('external'), 'events', 'subscribe');
+    withEnum([{ name: 'added', description: 'prose only' }, { name: 'removed' }]);
+    expect(memberDigest(projectOwnSurface('external'), 'events', 'subscribe')).toBe(base);
+    withEnum([{ name: 'removed' }, { name: 'added' }]);
+    expect(memberDigest(projectOwnSurface('external'), 'events', 'subscribe')).not.toBe(base);
+    withEnum([{ name: 'added' }, { name: 'removed' }, { name: 'moved' }]);
+    expect(memberDigest(projectOwnSurface('external'), 'events', 'subscribe')).not.toBe(base);
+  });
+});
+
+describe('surface snapshots carry a named scalar', () => {
+  /** change-event gains a field typed by a named scalar, reached through the signature type's param. */
+  function withScalar(holds: string): void {
+    saveTypeSpec({
+      kind: 'value-object', id: 'change-event', name: 'ChangeEvent',
+      fields: [{ name: 'path', type: 'entry-path', optional: false }],
+      methods: [], createdAt: now, updatedAt: now,
+    } as TypeSpec);
+    saveTypeSpec({ kind: 'value-object', id: 'entry-path', name: 'EntryPath', description: 'Where the entry lives.', fields: [], methods: [], holds, createdAt: now, updatedAt: now } as TypeSpec);
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+  }
+
+  it('follows a field into a named scalar, carries what it holds, and moves the digest when that changes', () => {
+    buildTree();
+    withScalar('string');
+    const surface = projectOwnSurface('external');
+    expect(surface.types.find((t) => t.id === 'entry-path')).toMatchObject({ kind: 'value-object', fields: [], holds: 'string' });
+    const base = memberDigest(surface, 'events', 'subscribe');
+    withScalar('bytes');
+    expect(memberDigest(projectOwnSurface('external'), 'events', 'subscribe')).not.toBe(base);
+  });
+});
+
 describe('OpenAPI codec — signature types', () => {
   it('renders a signature type with no type constraint, a function-type description and x-wairon-signature', () => {
     buildTree();
@@ -172,7 +229,7 @@ describe('OpenAPI codec — signature types', () => {
       } },
     };
     const visitor = fromOpenApi(JSON.stringify(doc), 'third').types.find((t) => t.id === 'visitor')!;
-    expect(visitor).toMatchObject({ kind: 'signature', params: [{ name: 'item', type: 'thing', optional: true }], returns: 'boolean' });
+    expect(visitor).toMatchObject({ kind: 'signature', params: [{ name: 'item', type: 'thing', optional: true }], returns: 'bool' });
   });
 });
 

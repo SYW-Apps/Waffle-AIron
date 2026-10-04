@@ -25,25 +25,25 @@ methods:
       where it is shown (type_spec.derivedSignature). Answers the resolved specs and the facts; the
       specs it is handed are not mutated.
     signature: >-
-      resolveTree(interfaces: InterfaceSpec[], components: ComponentSpec[], types: TypeSpec[],
-      references?: AuthoredReference[]): SignatureResolution
+      resolveTree(interfaces: list<InterfaceSpec>, components: list<ComponentSpec>, types:
+      list<TypeSpec>, references?: list<AuthoredReference>): SignatureResolution
     returns: SignatureResolution
     params:
       - name: interfaces
-        type: InterfaceSpec[]
+        type: list<InterfaceSpec>
         description: Every interface of the scan, keyed and with its references bound
       - name: components
-        type: ComponentSpec[]
+        type: list<ComponentSpec>
         description: Every component of the scan, to read a source's head against
       - name: types
-        type: TypeSpec[]
+        type: list<TypeSpec>
         description: Every type of the scan, the signature types among them
       - name: references
-        type: AuthoredReference[]
+        type: list<AuthoredReference>
         description: >-
           The references the scan bound as written (every root's authored references): where an
           `alias::name` type reading lands. Omitted, a qualified type reading is matched as written
         optional: true
 status: complete
 createdAt: '2026-10-03T19:32:09.206Z'
-updatedAt: '2026-10-03T21:11:49.233Z'
+updatedAt: '2026-10-04T10:19:32.956Z'

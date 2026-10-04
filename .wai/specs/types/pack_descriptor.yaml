@@ -19,15 +19,15 @@ fields:
     description: The resolved pack ref (global file path, or the project-relative .wai/packs/... registration)
     optional: false
   - name: profiles
-    type: number
+    type: int
     description: Count of architectural profiles the pack contributes
     optional: false
   - name: languages
-    type: number
+    type: int
     description: Count of language/platform tables the pack contributes
     optional: false
   - name: rules
-    type: number
+    type: int
     description: Count of programmatic rules the pack contributes (always 0 for declarative packs)
     optional: false
   - name: error
@@ -42,24 +42,24 @@ fields:
       for project-scoped packs.
     optional: true
   - name: shadowed
-    type: boolean
+    type: bool
     description: >-
       True for an image-tier pack that is shadowed by a same-named instance pack (the instance copy
       is the effective one). Reported as drift; absent/false otherwise.
     optional: true
   - name: profileIds
-    type: string[]
+    type: list<string>
     description: >-
       The ids of the architectural profiles this pack contributes (the same profiles the `profiles`
       count summarizes) — lets a UI offer a pack's profiles as structured choices instead of a bare
       count. Absent on a pack that failed to load.
     optional: true
   - name: languageIds
-    type: string[]
+    type: list<string>
     description: The ids of the language/platform tables this pack contributes. Absent on a load failure.
     optional: true
   - name: ruleIds
-    type: string[]
+    type: list<string>
     description: >-
       The ids/codes of the programmatic rules this pack contributes (empty for a declarative pack).
       Absent on a load failure.
@@ -67,4 +67,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T18:42:23.978Z'
-updatedAt: '2026-09-19T11:07:12.183Z'
+updatedAt: '2026-10-04T10:29:06.916Z'

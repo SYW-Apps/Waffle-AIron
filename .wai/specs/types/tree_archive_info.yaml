@@ -12,18 +12,18 @@ fields:
     description: The parsed, version-checked envelope
     optional: false
   - name: entryCount
-    type: number
+    type: int
     description: Number of file entries the archive carries
     optional: false
   - name: totalUncompressedBytes
-    type: number
+    type: int
     description: Total inflated size the archive would produce
     optional: false
   - name: compatible
-    type: boolean
+    type: bool
     description: Whether formatVersion and minWaironVersion are compatible with the running wairon
     optional: false
 methods: []
 componentClass: tree_codec
 createdAt: '2026-08-12T17:18:20.118Z'
-updatedAt: '2026-08-12T17:18:20.126Z'
+updatedAt: '2026-10-04T10:29:20.561Z'

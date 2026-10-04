@@ -30,14 +30,14 @@ fields:
     description: The key of the member project.
     optional: false
   - name: carried
-    type: PlannedExport[]
+    type: list<PlannedExport>
     description: >-
       The member's new L0 entries, one per entry of the mount's publicInterfaces: `{ from: <the
       subsystem owning the component>, component, interface?, type, details, audience: project }` —
       the family could reach it through the mount, so the member now exports it to the family.
     optional: false
   - name: retired
-    type: string[]
+    type: list<string>
     description: >-
       Mount fields that retire with the mount because nothing in the member can hold them and
       nothing is lost: an empty publicInterfaces or trustedLinks, and lint allows (they silenced
@@ -46,4 +46,4 @@ fields:
 methods: []
 sourcePath: src/migrations/position-migration.ts
 createdAt: '2026-09-27T10:44:23.135Z'
-updatedAt: '2026-09-30T21:05:09.897Z'
+updatedAt: '2026-10-04T10:20:44.538Z'

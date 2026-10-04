@@ -25,11 +25,11 @@ fields:
     description: Domain the agent belongs to (absent = global root)
     optional: true
   - name: ownedPaths
-    type: string[]
+    type: list<string>
     description: Glob patterns of the files this agent owns
     optional: false
   - name: tags
-    type: string[]
+    type: list<string>
     description: Classification tags (meta, guardian, architect, …)
     optional: false
   - name: variantGuidance
@@ -56,7 +56,7 @@ fields:
     description: When this agent was last written. Store-managed.
     optional: false
   - name: delegatesTo
-    type: string[]
+    type: list<string>
     description: >-
       A member project's delegating owner only: the ids of the member's own agents, each qualified
       by the alias this project declares the member under (`<alias>::<agentId>`), resolved from the
@@ -73,22 +73,22 @@ fields:
     description: The bundle this agent was created as part of, if any.
     optional: true
   - name: readPaths
-    type: string[]
+    type: list<string>
     description: 'Paths this agent may read but does not own (default: an empty list).'
     optional: false
   - name: writePaths
-    type: string[]
+    type: list<string>
     description: 'Paths this agent may write to but does not own (default: an empty list).'
     optional: false
   - name: dependencies
-    type: string[]
+    type: list<string>
     description: 'Ids of related agents this agent should be aware of (default: an empty list).'
     optional: false
   - name: targets
-    type: string[]
+    type: list<string>
     description: 'The output targets that receive this agent''s generated file (default: claude).'
     optional: false
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-03T17:05:06.333Z'
+updatedAt: '2026-10-04T10:19:50.489Z'

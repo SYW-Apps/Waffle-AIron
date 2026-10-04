@@ -24,14 +24,6 @@ fields:
     type: string
     description: Narrow the run to one subsystem's slice of the tree. Omitted, the whole tree is judged.
     optional: true
-  - name: recursive
-    type: boolean | number
-    description: >-
-      At a project that declares members: whether the run is the family run over it and its members
-      (true, the default), how many member levels that family run selects (a number), or the owner's
-      gate alone (false). The owner's gate reads its contained members' export tables whatever this
-      says — its own references into them are judged there — and never judges a member's specs.
-    optional: true
   - name: extensions
     type: LoadedExtensions
     description: >-
@@ -40,7 +32,7 @@ fields:
       without passing anything.
     optional: true
   - name: treatAllAsComplete
-    type: boolean
+    type: bool
     description: >-
       Judge at full strictness: every spec is treated as complete, so the completeness rules that
       relax while a spec is draft apply as errors. This is the as-complete gate behind `wairon
@@ -48,7 +40,7 @@ fields:
       status set beforehand.
     optional: true
   - name: family
-    type: boolean
+    type: bool
     description: >-
       Ask for the family run explicitly (`validate --family`, MCP `family: true`). At a member this
       is the one way to compose its externals against their live producers: the walk up to them is
@@ -57,7 +49,7 @@ fields:
       owner's gate.
     optional: true
   - name: packSelections
-    type: PackSelection[]
+    type: list<PackSelection>
     description: >-
       The by-name pack selections the pack rules (pack-resolution, pack-reproducibility) judge.
       Omitted, the project's own stored selections are read. Given only by a dry run that judges a
@@ -65,16 +57,26 @@ fields:
       candidate's rules, projectType and loaded extensions, so every configuration input of the run
       is the candidate's and the verdict equals the one the write would then produce.
     optional: true
+  - name: memberDepth
+    type: int
+    description: >-
+      At a project that declares members: how many member levels the run reaches. Absent, every
+      level — the family run over the project and all its members (the default); 0, none — the
+      owner's gate alone; n, the family run selecting that many member levels. The owner's gate
+      reads its contained members' export tables whatever this says — its own references into them
+      are judged there — and never judges a member's specs. The CLI's --no-recursive and the MCP
+      tools' `recursive: false` are 0 at the edge.
+    optional: true
 methods:
   - name: selectsFamily
     signature: 'selectsFamily(declaresMembers: boolean): boolean'
-    returns: boolean
+    returns: bool
     description: >-
       Whether these options ask for the family run rather than the owner's gate: true when `family`
-      is set, or when the bound project declares members and `recursive` is not false. The one
-      reading of the flags every caller (CLI validate, the MCP validate tool, doctor) shares, so the
-      choice cannot drift between them.
+      is set, or when the bound project declares members and `memberDepth` is not 0. The one reading
+      of the flags every caller (CLI validate, the MCP validate tool, doctor) shares, so the choice
+      cannot drift between them.
     sourcePath: src/models/validation-options.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-09-20T14:26:35.723Z'
-updatedAt: '2026-09-29T15:50:02.555Z'
+updatedAt: '2026-10-04T10:53:59.173Z'

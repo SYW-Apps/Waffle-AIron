@@ -431,7 +431,11 @@ methods:
       the keys are the members — and on through a composition the same file writes out
       (`Base.extend({…})` on a schema constant it declares), the extension's keys laid over the
       base's. A shape that extends another is judged on what it shows and never on what it omits,
-      since its inherited members are not in this file to count.
+      since its inherited members are not in this file to count. A NAMED SCALAR (a value-object
+      declaring `holds`) has no field list: its shape is the primitive it holds, compared with the
+      right side of the type alias the file declares under its name, read through the file's dialect
+      (`type PackPath = string` agrees with holds string); an object shape under that name, or an
+      alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH.
     signature: 'typeShape(ctx: RuleContext): void'
     returns: void
     params:
@@ -455,6 +459,12 @@ methods:
         summary: >-
           A type spec and the shape at its sourcePath disagree about whether a field may be absent —
           one of them is telling a reader the data is guaranteed when it is not, or the reverse
+      - code: TYPE_HOLDS_MISMATCH
+        severity: warning
+        summary: >-
+          A named scalar's holds disagrees with what its sourcePath declares under its name — an
+          alias of another type, or a record — so every reader is told one value of it is something
+          the code says it is not
   - name: paramConformance
     description: >-
       Rule param-conformance. Code-to-contract for the SIGNATURE, the last of the three readings a
@@ -465,11 +475,15 @@ methods:
       contract's version. Parameters are matched by POSITION against the tail of the realization's
       list, and the declared type is what tells a rename from a dropped argument: `seed(config:
       HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one parameter under two
-      names, which anything matching on names alone reads as a parameter the code lost. What a
-      realization takes BEFORE the contract's own parameters is wiring, and it is declared on the
-      implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be
-      told from a renamed first argument. A method the named file only CALLS is left to
-      `methodRealization`, which already reports that the body is not here.
+      names, which anything matching on names alone reads as a parameter the code lost. Types agree
+      when the code's annotation, read through the dialect of the language the file was analyzed as
+      (type_dialect.agrees), is the contract's canonical type — so `string[]` in the code agrees
+      with `list<string>` in the contract, TypeScript's `number` with int and float alike, and an
+      annotation the dialect cannot read agrees with nothing. What a realization takes BEFORE the
+      contract's own parameters is wiring, and it is declared on the implementation as
+      `injectedParams` rather than inferred, because an inferred prefix cannot be told from a
+      renamed first argument. A method the named file only CALLS is left to `methodRealization`,
+      which already reports that the body is not here.
     signature: 'paramConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -554,6 +568,56 @@ methods:
         summary: >-
           A runtime import crosses into another subsystem through a file that realizes none of its
           published components
+  - name: enumValues
+    description: >-
+      Rule enum-values. Code-to-contract for an ENUM: an enum type's values are compared, name by
+      name, with the values the declaration at its sourcePath holds — a string-literal union alias,
+      the array a z.enum constant holds, or a string enum's member values
+      (source_file_facts.enumValues). `typeRealization` already asks whether the declaration exists;
+      nothing asked whether it holds the values the design lists, and an enum is read by every
+      diagram, OpenAPI document and brief as the closed set it claims. Exact grade only; a
+      declaration the analyzer reads no values from is typeRealization's question, never this
+      rule's. Order is not judged: languages differ on whether declaration order is observable.
+    signature: 'enumValues(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNREALIZED_ENUM_VALUE
+        severity: warning
+        summary: >-
+          An enum type lists a value the declaration at its sourcePath does not hold — the design
+          promises a value the code would reject
+      - code: UNDECLARED_ENUM_VALUE
+        severity: warning
+        summary: >-
+          The declaration at an enum type's sourcePath holds a value the enum does not list — a
+          value the design never described
+  - name: asyncConformance
+    description: >-
+      Rule async-conformance. Code-to-contract for ASYNC: a contract method whose returns is `async
+      T` is realized by a function that completes later, and one whose returns is not, by one that
+      completes now — every caller in every language with async/await is shaped by the difference,
+      so a contract that hides it misleads every implementer and translation built from it. Compared
+      with source_file_facts.asyncFunctions for the method's realizing function (under its
+      `symbol`), at exact grade only; where a name has several bodies only what they all agree on is
+      reported, as param-conformance does. A method whose file only calls the function is
+      methodRealization's finding.
+    signature: 'asyncConformance(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ASYNC_MISMATCH
+        severity: warning
+        summary: >-
+          A contract method and the function realizing it disagree about whether the call completes
+          later: the returns says `async T` and the code completes now, or the code is async and the
+          returns does not say so
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-03T20:38:11.425Z'
+updatedAt: '2026-10-04T10:52:59.984Z'
