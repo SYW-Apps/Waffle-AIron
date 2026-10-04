@@ -2504,13 +2504,18 @@ methods:
         targetMethod: rekeyCarried
       - stepNumber: 12
         description: >-
-          Rewrite every reference to the type across the bound tree with the provisioning rewriter,
-          at every type position of the reference-field table: contract method params and returns,
-          type fields, type-method params and returns, signature-type params and returns, a
-          signatureFrom read as a type reference, and an L1 or L0 export entry's typeDef — an entry
-          that states no `as` first getting `as: <its public name>`, recorded as kept. Rename traces
-          are never rewritten. Then rekey every lint allow naming the type
-          (identity_rename.rekeyAnchor). Record the specs either changed
+          Rewrite every reference to the type across the bound tree with a type-expression walk over
+          the raw spec files (the shared reference-field table reads a position whole and never
+          covered contract or type-method returns or typeDef, so it is left to the boundary moves):
+          in every type position — contract method params and returns, type fields, type-method
+          params and returns, signature-type params and returns — the named members of the
+          expression that read as this type (type_spec.matchesRef; when another type reads the same,
+          only in a spec of the type's own owner) are respelled in the style they were written, and
+          a params-derived signature text is re-derived; a signatureFrom, a table type's
+          linkedEntity, a field's references and an L1 or L0 export entry's typeDef naming the type
+          follow too — an export entry that states no `as` first getting `as: <its public name>`,
+          recorded as kept. Rename traces are never rewritten. Then rekey every lint allow naming
+          the type (identity_rename.rekeyAnchor). Record the specs either changed
         type: local
       - stepNumber: 13
         description: Drop the cached spec index, so the save below reads the rewritten tree
@@ -2544,4 +2549,4 @@ methods:
         outcome: renamed
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T13:56:28.584Z'
+updatedAt: '2026-10-04T17:30:03.722Z'

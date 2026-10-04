@@ -25,4 +25,7 @@ export {
   loadSubsystemSpecs,
   loadImplementationSpecs,
   resolveSubsystemExports,
+  // The project graph, whose direct project members the design export lists
+  // as dependencies (their L0 tables read through resolveProjectExports).
+  projectFamily,
 } from '../index.js';

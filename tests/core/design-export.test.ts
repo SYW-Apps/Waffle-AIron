@@ -23,8 +23,8 @@ vi.mock('../../src/core/adapters/surfaces-core.js', async (importOriginal) => {
     loadInterfaceSpecs: () => maybeReversed(real.loadInterfaceSpecs()),
     loadImplementationSpecs: () => maybeReversed(real.loadImplementationSpecs()),
     loadTypeSpecs: () => maybeReversed(real.loadTypeSpecs()),
-    resolveProjectExports: () => {
-      const t = real.resolveProjectExports();
+    resolveProjectExports: (project?: string) => {
+      const t = real.resolveProjectExports(project);
       return { ...t, entries: maybeReversed(t.entries) };
     },
     resolveSubsystemExports: (id: string) => {

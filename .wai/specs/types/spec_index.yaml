@@ -65,7 +65,8 @@ methods:
       writer and the rename tools ask it before giving an id to a new spec, and refuse with
       id-retired naming the holder — a consumer holding the old key would otherwise read the new
       spec as the renamed one.
+    sourcePath: src/models/specs.ts
     symbol: specIndexRetiredBy
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-10-04T14:06:55.547Z'
+updatedAt: '2026-10-04T17:29:51.962Z'

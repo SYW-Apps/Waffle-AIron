@@ -19,6 +19,9 @@ import {
   DispatchBindingSchema,
   EnumValueSchema,
   EventBindingSchema,
+  ExternalLinkSchema,
+  PatternRefSchema,
+  PortalMountSchema,
   InvariantSchema,
   LifecycleEntrypointSchema,
   MethodSignatureSchema,
@@ -191,6 +194,12 @@ export const DesignComponentSchema = z.object({
   auth: PortalAuthSchema.passthrough().optional(),
   basePath: z.string().optional(),
   dispatch: z.array(DispatchBindingSchema.passthrough()),
+  /** A listener's mounts as declared, each portal as a key: entrypoint facts. */
+  mounts: z.array(PortalMountSchema.passthrough()),
+  /** The pack-declared patterns the component realizes, as declared. */
+  patterns: z.array(PatternRefSchema.passthrough()),
+  /** The opaque external references the component documents, as declared. */
+  externalLinks: z.array(ExternalLinkSchema.passthrough()),
   formerly: z.array(z.string()),
   ext: ExtSchema.optional(),
 }).passthrough();

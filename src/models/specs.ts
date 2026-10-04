@@ -536,6 +536,46 @@ export const PreviousIdsSchema = z.array(z.string().min(1));
  */
 export const PreviousNamesSchema = z.array(z.string().min(1));
 
+/** The holders spec_index.retiredBy reads: each kind's specs with their rename traces. */
+export interface RenameTraceHolders {
+  components: ReadonlyArray<{ id: string; previousIds?: string[] }>;
+  interfaces: ReadonlyArray<{ id: string; previousIds?: string[] }>;
+  implementations: ReadonlyArray<{ id: string; previousIds?: string[] }>;
+  types: ReadonlyArray<{ id: string; subsystem?: string; previousIds?: string[] }>;
+}
+
+/**
+ * spec_index.retiredBy — the spec of this kind whose rename trace
+ * (previousIds) lists `id`, or none: the holder that retired it, named by its
+ * key (a subsystem-owned type by `subsystem::id`). A trace entry is read
+ * within its holder's own namespace — a type's within its owner, a member's
+ * spec within its member — so a bare entry is qualified as the holder's own id
+ * is. The writer and the rename tools ask it before giving an id to a new
+ * spec, and refuse with id-retired naming the holder. Pure, so every
+ * subsystem that holds an index asks it the same way.
+ */
+export function specIndexRetiredBy(index: RenameTraceHolders, kind: string, id: string): string | undefined {
+  const holders: ReadonlyArray<{ id: string; subsystem?: string; previousIds?: string[] }> =
+    kind === 'component' ? index.components
+      : kind === 'interface' ? index.interfaces
+        : kind === 'implementation' ? index.implementations
+          : kind === 'type' ? index.types
+            : [];
+  for (const holder of holders) {
+    if (!holder.previousIds?.length) continue;
+    const key = kind === 'type' && holder.subsystem && !holder.id.startsWith(`${holder.subsystem}::`)
+      ? `${holder.subsystem}::${holder.id}`
+      : holder.id;
+    const cut = key.lastIndexOf('::');
+    const namespace = cut >= 0 ? key.slice(0, cut + 2) : '';
+    for (const previous of holder.previousIds) {
+      const previousKey = previous.includes('::') ? previous : namespace + previous;
+      if (previousKey === id) return key;
+    }
+  }
+  return undefined;
+}
+
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),

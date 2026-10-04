@@ -329,6 +329,23 @@ SYW/light themes, presentation mode, per-view layout persistence,
 narrative flowcharts with call drill-down, and an Export menu
 (PNG / draw.io / Excalidraw) capturing the current view and layout.
 
+### `wairon export [--out <file>]`
+The whole design, resolved, as one JSON document for generators,
+translators and documentation tools (format `wairon-design`; the
+[format page](design-export.md) describes every field, the compatibility
+promise and how a consumer follows renames).
+
+- It first decides the approval verdict exactly as `wairon lock-check` does
+  (not strict) and stamps it as `source.approval` (`locked`, `stale` or
+  `unlocked`) and `source.approved`. An unapproved tree is exported too,
+  carrying its state.
+- Without `--out` it prints the JSON to stdout and nothing else, so it pipes
+  cleanly (`wairon export | jq .components`). With `--out` it writes the file
+  and reports the path and the approval state.
+- Deterministic: the same tree and verdict give byte-identical output.
+- A tree without an L0 is refused. The JSON Schema ships in the package as
+  `schemas/design-export-1.json`, and the library twin is `exportDesign()`.
+
 ---
 
 ## Members

@@ -1450,6 +1450,8 @@ methods:
       - stepNumber: 7
         description: 'Done: every conflict reported'
         type: return
-status: design
+    symbol: check
+    exportedVia: renameTracesRule
+status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-04T13:58:13.569Z'
+updatedAt: '2026-10-04T17:40:03.823Z'

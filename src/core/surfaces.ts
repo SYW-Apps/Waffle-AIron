@@ -196,8 +196,10 @@ function contractEntry(entry: ResolvedExport, comp: ComponentSpec, interfaces: I
     .flatMap(i => i.methods)
     // The loaded tree carries every method resolved: a sourced method already
     // holds its source's params and returns inline, so the snapshot drops the
-    // signatureFrom — it names no producer-internal method.
-    .map(({ signatureFrom: _source, ...method }) => method);
+    // signatureFrom — it names no producer-internal method. A rename trace
+    // never enters a snapshot either: a renamed method moves no digest beyond
+    // the name it changed.
+    .map(({ signatureFrom: _source, previousNames: _trace, ...method }) => method);
   return {
     id: entry.publicName,
     name: entry.name ?? comp.name,

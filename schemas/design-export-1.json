@@ -437,6 +437,75 @@
                   "additionalProperties": true
                 }
               },
+              "mounts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "portal": {
+                      "type": "string"
+                    },
+                    "prefixes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "via": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "portal",
+                    "prefixes"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "patterns": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "externalLinks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "implementation",
+                        "informative"
+                      ],
+                      "default": "informative"
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": true
+                }
+              },
               "formerly": {
                 "type": "array",
                 "items": {
@@ -459,6 +528,9 @@
               "emits",
               "subscribesTo",
               "dispatch",
+              "mounts",
+              "patterns",
+              "externalLinks",
               "formerly"
             ],
             "additionalProperties": true

@@ -41,7 +41,9 @@ import {
   type DesignType,
   type DesignTypeRef,
   type ExternalBinding,
+  type ExternalsLock,
   type ImplementationSpec,
+  type ProjectFamily,
   type InterfaceSpec,
   type MethodParam,
   type NarrativeStep,
@@ -65,7 +67,10 @@ import {
   loadProjectConfig,
   resolveExternals,
   computeStateId,
+  projectFamily,
 } from './adapters/surfaces-core.js';
+// externals_repository: the pinned digest of each dependency (the externals lock).
+import { externalsRepository } from './externals.js';
 
 /** Refusal raised when the tree has no L0 to export (`no-system`). */
 export class NoSystemSpecError extends Error {
@@ -83,8 +88,21 @@ const isOwn = (spec: { id: string }): boolean => !spec.id.includes('::');
 const byKey = <T extends { key: string }>(a: T, b: T): number => compareOrdinal(a.key, b.key);
 
 /**
+ * One direct project member's published names: the bound key of every item
+ * its L0 exports (as the loader keys a reference into it) mapped to the
+ * stable `alias::publicName` a consumer resolves.
+ */
+export interface MemberPublicNames {
+  alias: string;
+  projectId: string;
+  names: Map<string, string>;
+}
+
+/**
  * The keys and lookups one projection resolves references against: the
- * bound project's own components, interfaces and types.
+ * bound project's own components, interfaces and types, and the public names
+ * of its direct members — a reference into another project is written as
+ * `alias::publicName`, never as the loader's in-memory key.
  */
 class KeyTable {
   private readonly components = new Set<string>();
@@ -92,8 +110,13 @@ class KeyTable {
   private readonly interfacesOf = new Map<string, InterfaceSpec[]>();
   private readonly types: TypeSpec[];
   private readonly typeRefCache = new Map<string, string | null>();
+  /** bound key → `alias::publicName`, over every direct member. */
+  private readonly publicNames = new Map<string, string>();
+  /** alias → the public names this projection wrote a reference to. */
+  readonly used = new Map<string, Set<string>>();
 
-  constructor(components: ComponentSpec[], interfaces: InterfaceSpec[], types: TypeSpec[]) {
+  constructor(components: ComponentSpec[], interfaces: InterfaceSpec[], types: TypeSpec[], members: MemberPublicNames[] = []) {
+    for (const m of members) for (const [bound, name] of m.names) if (!this.publicNames.has(bound)) this.publicNames.set(bound, name);
     for (const c of components) this.components.add(c.id);
     for (const i of [...interfaces].sort((a, b) => compareOrdinal(a.id, b.id))) {
       const list = this.interfacesOf.get(i.component) ?? [];
@@ -144,8 +167,32 @@ class KeyTable {
     if (dot > 0) {
       const head = this.typeKey(ref.slice(0, dot), owner);
       if (head) return `${head}.${ref.slice(dot + 1)}`;
+      const outside = this.external(ref.slice(0, dot));
+      if (outside !== ref.slice(0, dot)) return `${outside}.${ref.slice(dot + 1)}`;
     }
-    return ref;
+    return this.external(ref);
+  }
+
+  /**
+   * A reference as a consumer resolves it: a bound key of an item a direct
+   * member exports as `alias::publicName` (recorded as used), anything else as
+   * written — an own key, an external's reference (already `alias::name`), or
+   * one binding no exported name, which the gate reports.
+   */
+  external(ref: string): string {
+    const name = this.publicNames.get(ref);
+    if (name === undefined) return ref;
+    const cut = name.indexOf('::');
+    const alias = name.slice(0, cut);
+    const set = this.used.get(alias) ?? new Set<string>();
+    set.add(name.slice(cut + 2));
+    this.used.set(alias, set);
+    return name;
+  }
+
+  /** A component reference: an own component's key, or another project's item by its public name. */
+  componentRef(ref: string): string {
+    return this.components.has(ref) ? ref : this.external(ref);
   }
 }
 
@@ -153,12 +200,12 @@ class KeyTable {
 function resolveExpression(expr: TypeExpression, keys: KeyTable, owner?: string): TypeExpression {
   const args = expr.args.map((a) => resolveExpression(a, keys, owner));
   if ((expr.form === 'named' || expr.form === 'applied') && expr.name !== undefined) {
-    return { form: expr.form, name: keys.typeKey(expr.name, owner) ?? expr.name, args };
+    return { form: expr.form, name: keys.typeKey(expr.name, owner) ?? keys.external(expr.name), args };
   }
   return expr.name !== undefined ? { form: expr.form, name: expr.name, args } : { form: expr.form, args };
 }
 
-/** Step 17: one type position as a DesignTypeRef — canonical text and the resolved parse, or the text alone when the grammar cannot read it. */
+/** Step 20: one type position as a DesignTypeRef — canonical text and the resolved parse, or the text alone when the grammar cannot read it. */
 function typeRef(text: string, position: TypePosition, keys: KeyTable, owner?: string): DesignTypeRef {
   const parse = parseTypeExpression(text, position);
   if (!parse.expression) return { text };
@@ -178,10 +225,10 @@ function projectParams(params: MethodParam[] | undefined, position: TypePosition
 /** One row of a resolved export table, its target as a key. */
 function exportEntry(e: ResolvedExport, keys: KeyTable): DesignExportEntry {
   const target = e.kind === 'type'
-    ? { targetKind: 'type', target: keys.typeKey(String(e.typeDef), e.source) ?? String(e.typeDef) }
+    ? { targetKind: 'type', target: keys.typeKey(String(e.typeDef), e.source) ?? keys.external(String(e.typeDef)) }
     : e.interface
-      ? { targetKind: 'interface', target: e.interface }
-      : { targetKind: 'component', target: String(e.component) };
+      ? { targetKind: 'interface', target: keys.external(e.interface) }
+      : { targetKind: 'component', target: keys.componentRef(String(e.component)) };
   return {
     publicName: e.publicName,
     ...target,
@@ -201,7 +248,7 @@ function exportRows(entries: ResolvedExport[], keys: KeyTable): DesignExportEntr
 const boundaryText = (b: BoundaryItem): string => (typeof b === 'string' ? b : b.description ? `${b.name}: ${b.description}` : b.name);
 const requirementText = (r: RequirementItem): string => (typeof r === 'string' ? r : r.description);
 
-/** Step 18: the L0 as DesignProject, with the resolved project export table. */
+/** Step 21: the L0 as DesignProject, with the resolved project export table. */
 function projectSection(system: SystemSpec, table: ResolvedExport[], keys: KeyTable): DesignExport['project'] {
   return {
     name: system.name,
@@ -213,17 +260,67 @@ function projectSection(system: SystemSpec, table: ResolvedExport[], keys: KeyTa
   };
 }
 
-/** Step 18: one externals binding as a DesignDependency (the pinned digest is not on the core binding). */
-function dependency(binding: ExternalBinding): DesignDependency {
+/** Step 23: one externals binding as a DesignDependency, with the digest its lock entry pins. */
+function dependency(binding: ExternalBinding, lock: ExternalsLock | null, keys: KeyTable): DesignDependency {
+  const alias = binding.external.alias;
+  const digest = lock?.externals[alias]?.digest;
   return {
-    alias: binding.external.alias,
+    alias,
     projectId: binding.external.project,
     role: binding.external.role,
-    uses: [...new Set((binding.usage?.used ?? []).map((u) => u.publicName))].sort(compareOrdinal),
+    ...(digest !== undefined ? { digest } : {}),
+    uses: [...new Set([...(binding.usage?.used ?? []).map((u) => u.publicName), ...(keys.used.get(alias) ?? [])])].sort(compareOrdinal),
   };
 }
 
-/** Step 19: one subsystem, its lifecycle roots, L1 table and trusted links. */
+/** Step 23: one direct project member not among the externals, as a DesignDependency (role member). */
+function memberDependency(member: MemberPublicNames, lock: ExternalsLock | null, keys: KeyTable): DesignDependency {
+  const digest = lock?.externals[member.alias]?.digest;
+  return {
+    alias: member.alias,
+    projectId: member.projectId,
+    role: 'member',
+    ...(digest !== undefined ? { digest } : {}),
+    uses: [...(keys.used.get(member.alias) ?? [])].sort(compareOrdinal),
+  };
+}
+
+/**
+ * Steps 14-16: the bound project's direct project members — each node of the
+ * graph whose parent is the bound root, an in-tree subdirectory member and a
+ * legacy mount included (a part is no node: its subsystems are this
+ * project's own) — each with its L0 table's bound keys mapped to
+ * `alias::publicName`.
+ */
+function directMembers(family: ProjectFamily): MemberPublicNames[] {
+  return family.nodes
+    .filter((n) => n.parent === '' && n.namespace !== '')
+    .map((n) => {
+      const alias = n.mountAlias ?? n.namespace;
+      const names = new Map<string, string>();
+      const bound = (key: string): string[] => {
+        const local = key.startsWith(`${n.namespace}::`) ? key : `${n.namespace}::${key}`;
+        const last = `${n.namespace}::${key.split('::').pop() ?? key}`;
+        return [...new Set([local, last])];
+      };
+      const rows = [...resolveProjectExports(n.namespace).entries]
+        .sort((a, b) => compareOrdinal(a.publicName, b.publicName));
+      for (const e of rows) {
+        const name = `${alias}::${e.publicName}`;
+        const targets = e.kind === 'type'
+          ? [e.typeDef]
+          : e.interface !== undefined ? [e.interface, e.component] : [e.component];
+        for (const target of targets) {
+          if (target === undefined) continue;
+          for (const key of bound(target)) if (!names.has(key)) names.set(key, name);
+        }
+      }
+      return { alias, projectId: n.id ?? alias, names };
+    })
+    .sort((a, b) => compareOrdinal(a.alias, b.alias));
+}
+
+/** Step 21: one subsystem, its lifecycle roots, L1 table and trusted links. */
 function subsystemSection(s: SubsystemSpec, table: ResolvedExport[], keys: KeyTable): DesignSubsystem {
   return {
     key: s.id,
@@ -232,15 +329,15 @@ function subsystemSection(s: SubsystemSpec, table: ResolvedExport[], keys: KeyTa
     status: s.status,
     ...(s.profile !== undefined ? { profile: s.profile } : {}),
     ...(s.targetLanguage !== undefined ? { targetLanguage: s.targetLanguage } : {}),
-    lifecycle: (s.lifecycle ?? []).map((l) => ({ ...l })),
+    lifecycle: (s.lifecycle ?? []).map((l) => ({ ...l, component: keys.componentRef(l.component) })),
     exports: exportRows(table, keys),
     trustedLinks: s.trustedLinks.map((t) => t.subsystem),
     ...(s.ext !== undefined ? { ext: s.ext } : {}),
   };
 }
 
-/** Step 20: one component, its edges as keys. */
-function componentSection(c: ComponentSpec): DesignComponent {
+/** Step 21: one component, its edges as keys. */
+function componentSection(c: ComponentSpec, keys: KeyTable): DesignComponent {
   return {
     key: c.id,
     name: c.name,
@@ -252,19 +349,22 @@ function componentSection(c: ComponentSpec): DesignComponent {
     ...(c.dependencyClass !== undefined ? { dependencyClass: c.dependencyClass } : {}),
     ...(c.durability !== undefined ? { durability: c.durability } : {}),
     ...(c.portalType !== undefined ? { portalType: c.portalType } : {}),
-    owns: [...c.owns],
-    dependsOn: [...c.dependsOn],
+    owns: c.owns.map((o) => keys.componentRef(o)),
+    dependsOn: c.dependsOn.map((d) => keys.componentRef(d)),
     emits: (c.emits ?? []).map((e) => ({ ...e })),
     subscribesTo: (c.subscribesTo ?? []).map((e) => ({ ...e })),
     ...(c.auth !== undefined ? { auth: c.auth } : {}),
     ...(c.basePath !== undefined ? { basePath: c.basePath } : {}),
-    dispatch: (c.dispatch ?? []).map((d) => ({ ...d })),
+    dispatch: (c.dispatch ?? []).map((d) => ({ ...d, component: keys.componentRef(d.component) })),
+    mounts: (c.mounts ?? []).map((m) => ({ ...m, portal: keys.componentRef(m.portal) })),
+    patterns: (c.patterns ?? []).map((p) => ({ ...p })),
+    externalLinks: (c.externalLinks ?? []).map((l) => ({ ...l })),
     formerly: [...(c.previousIds ?? [])],
     ...(c.ext !== undefined ? { ext: c.ext } : {}),
   };
 }
 
-/** Step 21: one contract method, its signature resolved and inlined. */
+/** Step 22: one contract method, its signature resolved and inlined. */
 function contractMethod(intf: InterfaceSpec, m: InterfaceSpec['methods'][number], keys: KeyTable, owner?: string): DesignMethod {
   // A sourced method arrives with its source's params and returns already
   // inlined by the loader; only a signature TYPE is named, so a generator can
@@ -296,7 +396,7 @@ function endpointFields(endpoint: object): Record<string, string> {
   return out;
 }
 
-/** Step 21: one interface and its methods. */
+/** Step 22: one interface and its methods. */
 function interfaceSection(intf: InterfaceSpec, keys: KeyTable, owner?: string): DesignInterface {
   return {
     key: intf.id,
@@ -310,10 +410,16 @@ function interfaceSection(intf: InterfaceSpec, keys: KeyTable, owner?: string): 
   };
 }
 
-/** A narrative step as stored, its call, register and dispatch targets as keys. */
+/** A narrative step as stored, its call, register and dispatch targets and its credential source as keys. */
 function stepWithKeys(step: NarrativeStep, keys: KeyTable): NarrativeStep {
-  if (step.targetMethod === undefined) return { ...step };
-  return { ...step, targetMethod: keys.methodKey(step.targetComponent, step.targetMethod) };
+  const out: NarrativeStep = { ...step };
+  if (step.targetMethod !== undefined) out.targetMethod = keys.methodKey(step.targetComponent, step.targetMethod);
+  if (step.targetComponent !== undefined) out.targetComponent = keys.componentRef(step.targetComponent);
+  const from = step.auth?.from;
+  if (from !== undefined && from.startsWith('component:')) {
+    out.auth = { ...step.auth!, from: `component:${keys.componentRef(from.slice('component:'.length))}` };
+  }
+  return out;
 }
 
 /** A declared `calls` entry (`<component>.<method>`) as the method's key. */
@@ -321,7 +427,7 @@ function callKey(ref: string, keys: KeyTable): string {
   const dot = ref.lastIndexOf('.');
   if (dot <= 0) return ref;
   const key = keys.methodKey(ref.slice(0, dot), ref.slice(dot + 1));
-  return key.includes('.') ? key : ref;
+  return key.includes('.') ? key : `${keys.componentRef(ref.slice(0, dot))}.${ref.slice(dot + 1)}`;
 }
 
 /** Step 22: one implementation, its method bodies with targets as keys. */
@@ -353,7 +459,7 @@ function implementationSection(
   };
 }
 
-/** Step 23: one type, every position canonical and parsed. */
+/** Step 22: one type, every position canonical and parsed. */
 function typeSection(t: TypeSpec, keys: KeyTable): DesignType {
   const key = qualifiedTypeId(t);
   const owner = t.subsystem;
@@ -385,10 +491,10 @@ function typeSection(t: TypeSpec, keys: KeyTable): DesignType {
     values: (t.values ?? []).map((v) => ({ ...v })),
     ...(t.holds !== undefined ? { holds: t.holds } : {}),
     invariants: (t.invariants ?? []).map((i) => ({ ...i })),
-    ...(t.componentClass !== undefined ? { componentClass: t.componentClass } : {}),
+    ...(t.componentClass !== undefined ? { componentClass: keys.componentRef(t.componentClass) } : {}),
     ...(t.database !== undefined ? { database: t.database } : {}),
     ...(t.table !== undefined ? { table: t.table } : {}),
-    ...(t.linkedEntity !== undefined ? { linkedEntity: keys.typeKey(t.linkedEntity, owner) ?? t.linkedEntity } : {}),
+    ...(t.linkedEntity !== undefined ? { linkedEntity: keys.typeKey(t.linkedEntity, owner) ?? keys.external(t.linkedEntity) } : {}),
     formerly: [...(t.previousIds ?? [])],
     ...(t.ext !== undefined ? { ext: t.ext } : {}),
   };
@@ -441,12 +547,23 @@ export function exportDesign(approval?: DesignApproval): DesignExport {
   const projectTable = resolveProjectExports();
   const subsystemTables = new Map(subsystems.map((s) => [s.id, resolveSubsystemExports(s.id).entries]));
 
-  // Steps 12-14: the project's id, its dependencies, its content identity.
+  // Steps 12-13: the project's id and its externals.
   const projectId = projectIdOf(system);
   const bindings = resolveExternals();
+  // Steps 14-16: its direct project members and the names each publishes.
+  const members = directMembers(projectFamily());
+  // Step 17: the externals lock, for each dependency's pinned digest; one
+  // that is absent or cannot be read pins nothing.
+  let lock: ExternalsLock | null = null;
+  try {
+    lock = externalsRepository.readLock();
+  } catch {
+    lock = null;
+  }
+  // Step 18: the content identity.
   const stateId = computeStateId();
 
-  // Step 15: the source — the caller's verdict stamped, never decided here.
+  // Step 19: the source — the caller's verdict stamped, never decided here.
   const state: DesignApproval = approval ?? 'unjudged';
   const source = {
     projectId,
@@ -455,32 +572,46 @@ export function exportDesign(approval?: DesignApproval): DesignExport {
     approved: state === 'locked',
   };
 
-  // Steps 16-23: key, resolve and project every element.
-  const keys = new KeyTable(components, interfaces, types);
+  // Steps 20-23: key, resolve and project every element, then the dependencies.
+  const keys = new KeyTable(components, interfaces, types, members);
   const componentById = new Map(components.map((c) => [c.id, c]));
   const interfaceById = new Map(interfaces.map((i) => [i.id, i]));
   const ownerOf = (componentId: string | undefined): string | undefined =>
     componentId !== undefined ? componentById.get(componentId)?.subsystem : undefined;
+
+  // Every section that writes references comes first, so the dependencies
+  // read the public names the projection actually used.
+  const project = projectSection(system, projectTable.entries, keys);
+  const subsystemSections = subsystems.map((s) => subsystemSection(s, subsystemTables.get(s.id) ?? [], keys)).sort(byKey);
+  const componentSections = components.map((c) => componentSection(c, keys)).sort(byKey);
+  const interfaceSections = interfaces.map((i) => interfaceSection(i, keys, ownerOf(i.component))).sort(byKey);
+  const implementationSections = implementations
+    .map((impl) => {
+      const contract = interfaceById.get(impl.contract);
+      return implementationSection(impl, contract, contract ? componentById.get(contract.component) : undefined, keys);
+    })
+    .sort(byKey);
+  const typeSections = types.map((t) => typeSection(t, keys)).sort(byKey);
+  const externalAliases = new Set(bindings.map((b) => b.external.alias));
+  const dependencies = [
+    ...bindings.map((b) => dependency(b, lock, keys)),
+    ...members.filter((m) => !externalAliases.has(m.alias)).map((m) => memberDependency(m, lock, keys)),
+  ].sort((a, b) => compareOrdinal(a.alias, b.alias));
 
   const design: DesignExport = {
     format: DESIGN_FORMAT,
     formatVersion: DESIGN_FORMAT_VERSION,
     generator: WAIRON_VERSION,
     source,
-    project: projectSection(system, projectTable.entries, keys),
-    dependencies: bindings.map(dependency).sort((a, b) => compareOrdinal(a.alias, b.alias)),
-    subsystems: subsystems.map((s) => subsystemSection(s, subsystemTables.get(s.id) ?? [], keys)).sort(byKey),
-    components: components.map(componentSection).sort(byKey),
-    interfaces: interfaces.map((i) => interfaceSection(i, keys, ownerOf(i.component))).sort(byKey),
-    implementations: implementations
-      .map((impl) => {
-        const contract = interfaceById.get(impl.contract);
-        return implementationSection(impl, contract, contract ? componentById.get(contract.component) : undefined, keys);
-      })
-      .sort(byKey),
-    types: types.map((t) => typeSection(t, keys)).sort(byKey),
+    project,
+    dependencies,
+    subsystems: subsystemSections,
+    components: componentSections,
+    interfaces: interfaceSections,
+    implementations: implementationSections,
+    types: typeSections,
   };
 
-  // Steps 25-26: sorted keys throughout, and the export.
+  // Steps 24-25: what is left out was never projected; sorted keys throughout, and the export.
   return sortedKeys(design);
 }

@@ -57,6 +57,7 @@ import {
   listDirectChainedSubprojects,
   renameComponent,
   renameMethod,
+  renameType,
   loadProjectConfig,
   getStatusReport,
   approvalVerdict,
@@ -1060,6 +1061,7 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_rename_member_alias',
   'sdd_rename_component',
   'sdd_rename_method',
+  'sdd_rename_type',
   'sdd_add_component',
   'sdd_define_interface',
   'sdd_set_endpoints',
@@ -1947,6 +1949,28 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // mcp_orchestrator.renameMethod: resolve the id in the bound tree,
         // rename through the core adapter, and return the report as the result.
         return json(renameMethod(qualifiedComponentId(id), method, newName, pinSymbol));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string; newId: string }>(server,
+    'sdd_rename_type',
+    {
+      description: 'Rename a type and rewrite every reference to it in the bound tree: every type position naming it (contract and type-method params and returns, fields, signature-type params and returns), a signatureFrom naming it as a signature type, and an L1 or L0 export entry\'s typeDef. Only the named members of a type expression that name this type are respelled, in the style they were written (`Invoice` → `Bill`, `invoice` → `bill`); the rest of the text stays as written. The type moves to the new id and file under the same owner, and its old id joins its rename trace (previousIds) so a consumer of the design export reads the rename as a rename; an export entry that derived its public name from the old id gets `as: <that name>` first, so the published name and every consumer\'s pin stay. Rename traces are never rewritten. Findings keyed on the type follow it: lint allows naming it, and every debt-register entry anchored on it, rewritten in place (a register that cannot be rewritten that precisely is refused before the first write). The display name is left as it is. Refuses, writing nothing: a type that does not exist (type-missing), one in another project (chained-type), a new id that is not a lowercase identifier (invalid-id), and a new id another type of the same owner holds (id-taken) or retired (id-retired — unsetting the holder\'s previousIds releases it). Returns from and to, the specs rewritten, keptPublicNames and `carried`: each register edit.',
+      inputSchema: {
+        id: z.string().describe('The type to rename (qualified by its owning subsystem if needed, `subsystem::id`)'),
+        newId: z.string().describe('Its new id: a lowercase identifier with no namespace separator'),
+      },
+    },
+    ({ id, newId }) => {
+      try {
+        // mcp_orchestrator.renameType: resolve the id in the bound tree,
+        // rename through the core adapter, and return the report as the result.
+        const bare = id.startsWith('::') ? id.slice(2) : id;
+        const resolved = loadTypeSpec(bare) ? bare : id;
+        return json(renameType(resolved, newId));
       } catch (e) {
         return errText(String(e));
       }

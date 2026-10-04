@@ -20,6 +20,6 @@ methods:
         optional: true
     guarantees:
       - idempotent
-status: design
+status: complete
 createdAt: '2026-10-04T13:53:56.292Z'
-updatedAt: '2026-10-04T14:04:56.675Z'
+updatedAt: '2026-10-04T17:32:47.222Z'

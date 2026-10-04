@@ -28,12 +28,19 @@ methods:
     params: []
   - name: resolveProjectExports
     description: >-
-      Forward to spec_tree_portal.resolveProjectExports: the project's resolved L0 export table —
-      every public name bound to its canonical target, with its audience — which the projector
-      flattens into a snapshot.
-    signature: 'resolveProjectExports(): ResolvedExportTable'
+      Forward to spec_tree_portal.resolveProjectExports: a project's resolved L0 export table —
+      every public name bound to its canonical target, with its audience. The bound project's when
+      no project is named, which the snapshot projector flattens; a member's, by its namespace,
+      which the design export reads to write a reference into that member as `alias::publicName`.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
     returns: ResolvedExportTable
-    params: []
+    params:
+      - name: project
+        type: string
+        description: >-
+          The namespace of a project the scan read (a member's alias key); the bound project when
+          omitted
+        optional: true
     guarantees:
       - idempotent
   - name: loadProjectConfig
@@ -92,6 +99,16 @@ methods:
         description: The subsystem whose table to resolve
     guarantees:
       - idempotent
+  - name: projectFamily
+    description: >-
+      Forward to spec_tree_portal.projectFamily: the project graph of the current scan — every
+      project root it read with its alias, id and parent — from which the design export lists the
+      bound project's direct project members as dependencies.
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-04T15:37:49.961Z'
+updatedAt: '2026-10-04T17:32:06.662Z'

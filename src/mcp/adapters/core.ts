@@ -21,6 +21,7 @@ export {
   listDirectChainedSubprojects,
   renameComponent,
   renameMethod,
+  renameType,
   loadProjectConfig,
   getStatusReport,
   approvalVerdict,

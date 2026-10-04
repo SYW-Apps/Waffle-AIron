@@ -51,6 +51,7 @@ const REFUSALS: [string, Record<string, unknown>][] = [
   ['sdd_internalize_member', { alias: 'nowhere' }],
   ['sdd_rename_component', { id: 'nowhere', newId: 'somewhere' }],
   ['sdd_rename_method', { id: 'shop_portal', method: 'nothing', newName: 'something' }],
+  ['sdd_rename_type', { id: 'nowhere', newId: 'somewhere' }],
   ['sdd_move_methods', { from: 'shop_portal', to: 'shop_api', methods: ['nothing'] }],
   ['sdd_set_endpoints', { interface: 'inowhere', endpoints: [] }],
   ['sdd_delete_spec', { kind: 'component', id: 'nowhere' }],

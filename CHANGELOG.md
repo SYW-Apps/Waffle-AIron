@@ -1167,6 +1167,37 @@ from where its files live.
   master credential's whole-instance reach. Other formats are unchanged, and the
   signed view link still renders with health "not checked".
 
+### The design export, and renames that leave a trace
+
+A project's whole design can now be handed to another tool as one versioned, deterministic
+document, and a rename no longer reads as a delete plus an add.
+
+- **`wairon export [--out <file>]` and `exportDesign()`.** One JSON document (format
+  `wairon-design`, `formatVersion` 1.0) holding the resolved design: subsystems, components,
+  contracts with their signatures inlined, implementations with flat narratives, and types with
+  every position as canonical text plus a parsed expression. Every element is keyed and every
+  reference is a key; a reference into another project is written `alias::publicName`, the
+  stable name a consumer resolves. Dependencies (contained members and externals) are listed with
+  the public names used and the digest their pin records, never inlined. The source carries the
+  tree's StateId and the approval verdict `lock-check` gives. The same tree gives byte-identical
+  output. The format page is `docs/design-export.md`, and a JSON Schema generated from the
+  format's schema ships as `schemas/design-export-1.json`.
+- **No "executable or library" kind.** The export carries the facts a consumer decides that
+  from — lifecycle roots, endpoints and transports, listener mounts, the export table — and each
+  consumer decides for its own target.
+- **Rename traces.** Renaming a component, an interface or implementation named after it, a
+  type, or a contract method records the old key (`previousIds`, `previousNames`), shown as
+  `formerly` in the export, so a consumer can follow the rename. A retired id or method name
+  cannot be taken again (`id-retired`, `name-retired`), and a hand-edited trace that collides
+  with a live key or with another trace is `RENAME_TRACE_CONFLICT` (warning). A re-authoring
+  carries the traces; unsetting one releases its names.
+- **`sdd_rename_type`.** Renames a type and respells every type position, signature source and
+  export entry naming it.
+- **A published name survives a rename.** Renaming a component or type that backs an export
+  entry without `as` now writes `as: <old name>`, so consumers' pins keep resolving;
+  `renameComponent` and `renameType` report each kept name, and `renameMethod` reports the
+  export entries publishing the method it renamed.
+
 ### Types speak one language
 
 Every structured type position (a param's type, a method's returns, a field's type, a type
