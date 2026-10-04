@@ -20,4 +20,9 @@ export {
   resolveExternals,
   // A part's excerpt of its parent, for `wairon externals pin` at a part (stage 8).
   excerptParent,
+  // The design export's reads (stage 4-5): every subsystem and implementation,
+  // and each subsystem's resolved L1 export table.
+  loadSubsystemSpecs,
+  loadImplementationSpecs,
+  resolveSubsystemExports,
 } from '../index.js';

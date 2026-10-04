@@ -14,3 +14,4 @@ export * from './surface-references.js';
 export * from './exports.js';
 export * from './project-family.js';
 export * from './validation-options.js';
+export * from './design-export.js';

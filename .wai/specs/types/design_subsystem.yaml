@@ -47,5 +47,6 @@ fields:
     description: Pack extension data, passed through
     optional: true
 methods: []
+sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:08.217Z'
-updatedAt: '2026-10-04T13:53:08.219Z'
+updatedAt: '2026-10-04T15:39:09.150Z'

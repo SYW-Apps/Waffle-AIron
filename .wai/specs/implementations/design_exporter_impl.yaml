@@ -59,101 +59,112 @@ methods:
       - stepNumber: 9
         description: >-
           Read the resolved project export table: each public name bound to its canonical target,
-          with audience, version and stability, and the subsystem tables it was resolved from
+          with audience, version and stability
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveProjectExports
       - stepNumber: 10
+        description: For each subsystem, its own export table
+        type: loop
+        loopKind: forEach
+        over: the loaded subsystems
+        endStep: 11
+      - stepNumber: 11
+        description: Read the subsystem's resolved L1 export table
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveSubsystemExports
+      - stepNumber: 12
         description: Read the project configuration for the project's effective id
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Read the project's externals and referenced project members, each bound to its producer,
           with the public names this project's references use
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
-      - stepNumber: 12
+      - stepNumber: 14
         description: Compute the tree's StateId, the source's content identity
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: computeStateId
-      - stepNumber: 13
+      - stepNumber: 15
         description: >-
           Build the source: the project id, the StateId as `sha256:<digest>`, approval = the
           lock-check state the caller handed in (unjudged when none), and approved = that state is
           locked — the same verdict lock-check and status give, never recomputed here from per-spec
           digests
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         description: >-
-          Key every element: a subsystem, component, interface and implementation by its id, a type
+          Key every element — a subsystem, component, interface and implementation by its id, a type
           by `subsystem::id` when a subsystem owns it and by its bare id otherwise, a contract
           method by `<interface key>.<name>` and a type method by `<type key>.<name>`; anything in
-          another project stays `alias::publicName`
+          another project stays as the loader bound it — and project each type position as a
+          DesignTypeRef: its parse (type_expression.parse) with each named member's name replaced by
+          the key of the type it resolves to (same subsystem first, then system-level), and the
+          canonical text of that resolved parse; a position the grammar cannot read keeps its text
+          and no expression
         type: local
-      - stepNumber: 15
-        description: >-
-          Project each type position as a DesignTypeRef: its canonical text, and its parse
-          (type_expression.parse) with each named member's name replaced by the key of the type it
-          resolves to; a position the grammar cannot read keeps its text and no expression
-        type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           Project the L0 into DesignProject (boundaries and requirements as text) with the resolved
           project export table as DesignExportEntry rows (target as a key), and each externals
-          binding into a DesignDependency (alias, project id, member or external, pinned digest when
-          pinned, used public names sorted)
+          binding into a DesignDependency (alias, project id, member or external, used public names
+          sorted). The pinned digest lives in the surfaces plane's externals lock, not on the core
+          binding this projector reads, so it is left out (the field is optional)
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           Project each subsystem: its lifecycle roots with component keys, its resolved L1 export
           table, its trusted links as keys
         type: local
-      - stepNumber: 18
+      - stepNumber: 19
         description: >-
           Project each component: stereotype, variant, dependency class, durability, portal type,
           owns and dependsOn as keys, emitted and subscribed topics, a Portal's auth, base path and
           dispatch table with targets as keys, its previousIds as formerly
         type: local
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           Project each interface and its methods: params and returns as DesignTypeRefs, the derived
           signature text, signatureType when the method names a signature type (a method source is
           inlined, never named), effect, guarantees, invokedBy, the endpoint as declared,
           previousNames and previousIds as formerly
         type: local
-      - stepNumber: 20
+      - stepNumber: 21
         description: >-
           Project each implementation: contract and component keys, technologies by name,
           sourcePath, and per method its detail (after the stereotype default), intent, declared
           calls as keys and its narrative steps as stored with call, register and dispatch targets
           resolved to keys
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         description: >-
           Project each type: kind, fields, pure methods, a signature's params and returns, an enum's
           values in order, a named scalar's holds, invariants, componentClass as a key, its
           persistence mapping, previousIds as formerly
         type: local
-      - stepNumber: 22
-        description: >-
-          Leave out what is not design: lint allows, conformance tiers, symbol and exportedVia
-          bindings, simPath, finding declarations, createdAt and updatedAt; keep ext untouched under
-          each pack's key
-        type: local
       - stepNumber: 23
+        description: >-
+          Leave out what is not this project's design: a member project's specs the scan read (their
+          ids carry the member's namespace, `ns::id`; the member is a dependency, never inlined),
+          lint allows, conformance tiers, symbol and exportedVia bindings, simPath, finding
+          declarations, createdAt and updatedAt; keep ext untouched under each pack's key
+        type: local
+      - stepNumber: 24
         description: >-
           Sort every element list and the dependencies by key, keep every inner list in declared
           order, and stamp format `wairon-design`, the current formatVersion and the generating
           wairon version
         type: local
-      - stepNumber: 24
+      - stepNumber: 25
         description: Return the design export
         type: return
         outcome: DesignExport
 status: design
 createdAt: '2026-10-04T13:54:26.399Z'
-updatedAt: '2026-10-04T14:02:52.759Z'
+updatedAt: '2026-10-04T15:48:39.402Z'

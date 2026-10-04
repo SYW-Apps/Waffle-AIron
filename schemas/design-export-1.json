@@ -1,0 +1,1096 @@
+{
+  "$id": "https://github.com/SYW-Apps/Waffle-AIron/schemas/design-export-1.json",
+  "title": "wairon design export, format 1.x",
+  "description": "One project's whole design, resolved (format `wairon-design`). A MINOR formatVersion only adds a field or a member of a closed set, and consumers ignore what they do not know; a MAJOR removes, renames or changes a meaning and is named in the CHANGELOG. Generated from the zod schema in src/models/design-export.ts — never edit by hand.",
+  "$ref": "#/definitions/DesignExport",
+  "definitions": {
+    "DesignExport": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "type": "string",
+          "const": "wairon-design"
+        },
+        "formatVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$"
+        },
+        "generator": {
+          "type": "string"
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string"
+            },
+            "stateId": {
+              "type": "string"
+            },
+            "approved": {
+              "type": "boolean"
+            },
+            "approval": {
+              "type": "string",
+              "enum": [
+                "locked",
+                "stale",
+                "unlocked",
+                "unjudged"
+              ]
+            }
+          },
+          "required": [
+            "projectId",
+            "stateId",
+            "approved",
+            "approval"
+          ],
+          "additionalProperties": true
+        },
+        "project": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "vision": {
+              "type": "string"
+            },
+            "boundaries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "requirements": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "targetLanguage": {
+              "type": "string"
+            },
+            "exports": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "publicName": {
+                    "type": "string"
+                  },
+                  "targetKind": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "audience": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "stability": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "publicName",
+                  "targetKind",
+                  "target"
+                ],
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": [
+            "name",
+            "vision",
+            "boundaries",
+            "requirements",
+            "exports"
+          ],
+          "additionalProperties": true
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "alias": {
+                "type": "string"
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "member",
+                  "external"
+                ]
+              },
+              "digest": {
+                "type": "string"
+              },
+              "uses": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "alias",
+              "projectId",
+              "role",
+              "uses"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "subsystems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "profile": {
+                "type": "string"
+              },
+              "targetLanguage": {
+                "type": "string"
+              },
+              "lifecycle": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "phase": {
+                      "type": "string",
+                      "enum": [
+                        "init",
+                        "shutdown",
+                        "cyclic",
+                        "interrupt",
+                        "scheduled"
+                      ]
+                    },
+                    "component": {
+                      "type": "string"
+                    },
+                    "method": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "phase",
+                    "component",
+                    "method"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "exports": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/DesignExport/properties/project/properties/exports/items"
+                }
+              },
+              "trustedLinks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ext": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "description",
+              "status",
+              "lifecycle",
+              "exports",
+              "trustedLinks"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "subsystem": {
+                "type": "string"
+              },
+              "stereotype": {
+                "type": "string"
+              },
+              "variant": {
+                "type": "string"
+              },
+              "dependencyClass": {
+                "type": "string"
+              },
+              "durability": {
+                "type": "string"
+              },
+              "portalType": {
+                "type": "string"
+              },
+              "owns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "emits": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "topic": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "topic"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "subscribesTo": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "topic": {
+                      "$ref": "#/definitions/DesignExport/properties/components/items/properties/emits/items/properties/topic"
+                    },
+                    "event": {
+                      "$ref": "#/definitions/DesignExport/properties/components/items/properties/emits/items/properties/event"
+                    },
+                    "description": {
+                      "$ref": "#/definitions/DesignExport/properties/components/items/properties/emits/items/properties/description"
+                    }
+                  },
+                  "required": [
+                    "topic"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "auth": {
+                "type": "object",
+                "properties": {
+                  "scheme": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "apiKey",
+                      "bearer",
+                      "basic",
+                      "oauth2",
+                      "openIdConnect",
+                      "custom"
+                    ]
+                  },
+                  "in": {
+                    "type": "string",
+                    "enum": [
+                      "header",
+                      "query",
+                      "cookie"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "bearerFormat": {
+                    "type": "string"
+                  },
+                  "authorizationUrl": {
+                    "type": "string"
+                  },
+                  "tokenUrl": {
+                    "type": "string"
+                  },
+                  "refreshUrl": {
+                    "type": "string"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "description"
+                      ],
+                      "additionalProperties": true
+                    }
+                  },
+                  "flow": {
+                    "type": "string",
+                    "enum": [
+                      "authorizationCode",
+                      "clientCredentials",
+                      "implicit",
+                      "password"
+                    ]
+                  },
+                  "openIdConnectUrl": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "example": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scheme"
+                ],
+                "additionalProperties": true
+              },
+              "basePath": {
+                "type": "string"
+              },
+              "dispatch": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "capability": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "component": {
+                      "type": "string"
+                    },
+                    "method": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "capability",
+                    "component",
+                    "method"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "formerly": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ext": {
+                "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "description",
+              "status",
+              "subsystem",
+              "stereotype",
+              "owns",
+              "dependsOn",
+              "emits",
+              "subscribesTo",
+              "dispatch",
+              "formerly"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "component": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "params": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "object",
+                            "properties": {
+                              "text": {
+                                "type": "string"
+                              },
+                              "expression": {
+                                "type": "object",
+                                "properties": {
+                                  "form": {
+                                    "type": "string",
+                                    "enum": [
+                                      "primitive",
+                                      "named",
+                                      "list",
+                                      "set",
+                                      "map",
+                                      "optional",
+                                      "union",
+                                      "async",
+                                      "applied"
+                                    ]
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "args": {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items/properties/type/properties/expression"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "form",
+                                  "args"
+                                ],
+                                "additionalProperties": true
+                              }
+                            },
+                            "required": [
+                              "text"
+                            ],
+                            "additionalProperties": true
+                          },
+                          "optional": {
+                            "type": "boolean"
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "optional"
+                        ],
+                        "additionalProperties": true
+                      }
+                    },
+                    "returns": {
+                      "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items/properties/type"
+                    },
+                    "signature": {
+                      "type": "string"
+                    },
+                    "signatureType": {
+                      "type": "string"
+                    },
+                    "effect": {
+                      "type": "string"
+                    },
+                    "guarantees": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "invokedBy": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "runtime",
+                            "external",
+                            "sibling-subsystem"
+                          ]
+                        },
+                        "caller": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "endpoint": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "formerly": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ext": {
+                      "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "params",
+                    "returns",
+                    "signature",
+                    "guarantees",
+                    "formerly"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "formerly": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ext": {
+                "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+              }
+            },
+            "required": [
+              "key",
+              "component",
+              "name",
+              "description",
+              "status",
+              "methods",
+              "formerly"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "implementations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "contract": {
+                "type": "string"
+              },
+              "component": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "technologies": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "sourcePath": {
+                "type": "string"
+              },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "method": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "intent": {
+                      "type": "string"
+                    },
+                    "calls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "narrative": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "stepNumber": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "label": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "local",
+                              "call",
+                              "dispatch",
+                              "register",
+                              "branch",
+                              "switch",
+                              "loop",
+                              "try",
+                              "parallel",
+                              "jump",
+                              "return",
+                              "throw"
+                            ]
+                          },
+                          "targetComponent": {
+                            "type": "string"
+                          },
+                          "targetMethod": {
+                            "type": "string"
+                          },
+                          "capability": {
+                            "type": "string"
+                          },
+                          "auth": {
+                            "type": "object",
+                            "properties": {
+                              "from": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "from"
+                            ],
+                            "additionalProperties": true
+                          },
+                          "assertsGuarantees": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "assertsInvariants": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "condition": {
+                            "type": "string"
+                          },
+                          "onTrueStep": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "onFalseStep": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "on": {
+                            "type": "string"
+                          },
+                          "cases": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": "string"
+                                },
+                                "step": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "step"
+                              ],
+                              "additionalProperties": true
+                            }
+                          },
+                          "defaultStep": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "loopKind": {
+                            "type": "string",
+                            "enum": [
+                              "forEach",
+                              "for",
+                              "while",
+                              "doWhile"
+                            ]
+                          },
+                          "over": {
+                            "type": "string"
+                          },
+                          "endStep": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "catches": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "error": {
+                                  "type": "string"
+                                },
+                                "step": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0
+                                }
+                              },
+                              "required": [
+                                "error",
+                                "step"
+                              ],
+                              "additionalProperties": true
+                            }
+                          },
+                          "finallyStep": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "branches": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "step": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "step"
+                              ],
+                              "additionalProperties": true
+                            }
+                          },
+                          "toStep": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "detach": {
+                            "type": "boolean"
+                          },
+                          "outcome": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "stepNumber",
+                          "description",
+                          "type"
+                        ],
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "method",
+                    "detail",
+                    "calls",
+                    "narrative"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "formerly": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ext": {
+                "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+              }
+            },
+            "required": [
+              "key",
+              "contract",
+              "component",
+              "name",
+              "description",
+              "status",
+              "technologies",
+              "methods",
+              "formerly"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items/properties/type"
+                    },
+                    "optional": {
+                      "type": "boolean"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "references": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "optional"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "methods": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items"
+                }
+              },
+              "params": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items"
+                }
+              },
+              "returns": {
+                "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items/properties/type"
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "holds": {
+                "type": "string"
+              },
+              "invariants": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9-_]+$"
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "description"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "componentClass": {
+                "type": "string"
+              },
+              "database": {
+                "type": "string"
+              },
+              "table": {
+                "type": "string"
+              },
+              "linkedEntity": {
+                "type": "string"
+              },
+              "formerly": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ext": {
+                "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+              }
+            },
+            "required": [
+              "key",
+              "kind",
+              "name",
+              "fields",
+              "methods",
+              "params",
+              "values",
+              "invariants",
+              "formerly"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "format",
+        "formatVersion",
+        "generator",
+        "source",
+        "project",
+        "dependencies",
+        "subsystems",
+        "components",
+        "interfaces",
+        "implementations",
+        "types"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

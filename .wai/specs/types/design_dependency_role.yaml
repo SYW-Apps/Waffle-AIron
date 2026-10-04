@@ -5,10 +5,11 @@ description: How an exported project relates to a project it depends on.
 subsystem: sdd_surfaces
 fields: []
 methods: []
+sourcePath: src/models/design-export.ts
 values:
   - name: member
     description: A project member of this project's family, reached through its members alias
   - name: external
     description: A declared external, reached through its pinned snapshot
 createdAt: '2026-10-04T13:52:31.112Z'
-updatedAt: '2026-10-04T13:52:31.114Z'
+updatedAt: '2026-10-04T15:39:07.992Z'

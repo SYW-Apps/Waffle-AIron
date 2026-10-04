@@ -26,5 +26,6 @@ fields:
     description: The public names this project's references use, sorted
     optional: false
 methods: []
+sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:52:55.779Z'
-updatedAt: '2026-10-04T13:52:55.781Z'
+updatedAt: '2026-10-04T15:39:07.561Z'

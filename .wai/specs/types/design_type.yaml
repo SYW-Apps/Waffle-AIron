@@ -72,5 +72,6 @@ fields:
     type: map<string, any>
     optional: true
 methods: []
+sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:30.105Z'
-updatedAt: '2026-10-04T13:53:30.107Z'
+updatedAt: '2026-10-04T15:39:15.829Z'

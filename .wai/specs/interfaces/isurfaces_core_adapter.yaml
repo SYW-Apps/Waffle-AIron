@@ -80,6 +80,18 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: resolveSubsystemExports
+    description: >-
+      Forward to spec_tree_portal.resolveSubsystemExports: one subsystem's resolved L1 export table,
+      which the design export carries on each subsystem
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The subsystem whose table to resolve
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-04T14:02:37.257Z'
+updatedAt: '2026-10-04T15:37:49.961Z'

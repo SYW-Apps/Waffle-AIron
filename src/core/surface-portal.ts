@@ -13,6 +13,8 @@ import * as surfaceOrchestrator from './surfaces.js';
 import * as pinWrites from './externals.js';
 import type { FamilyPin, SurfaceExportResult } from './surfaces.js';
 import type {
+  DesignApproval,
+  DesignExport,
   ExternalListing,
   ExternalPin,
   ExternalStatus,
@@ -24,6 +26,16 @@ import type {
 
 export function exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string): SurfaceExportResult {
   return surfaceOrchestrator.exportSurface(maxAudience, format, outPath, portalId);
+}
+
+/**
+ * isurface_portal.exportDesign — the bound project's design export, written to
+ * outPath when given; the approval is the lock-check state the caller decided
+ * (unjudged when omitted). Published on the package's library entry as
+ * `exportDesign()`.
+ */
+export function exportDesign(outPath?: string, approval?: DesignApproval): DesignExport {
+  return surfaceOrchestrator.exportDesign(outPath, approval);
 }
 
 export function importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot {

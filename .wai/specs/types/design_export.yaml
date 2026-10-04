@@ -56,5 +56,6 @@ fields:
     type: list<DesignType>
     optional: false
 methods: []
+sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:37.463Z'
-updatedAt: '2026-10-04T13:53:40.564Z'
+updatedAt: '2026-10-04T15:39:04.032Z'

@@ -1,13 +1,17 @@
+import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import { assertProjectInitialized } from '../config/paths.js';
 import {
+  exportDesign,
   exportSurface,
   importSurface,
   listSnapshots,
 } from './adapters/surfaces.js';
-import { SURFACE_AUDIENCES, SurfaceOrigin } from '../models/index.js';
+// cli_lock_adapter.checkApproval: the one approval verdict the tool has (lock-check's).
+import { checkApproval } from './lock.js';
+import { SURFACE_AUDIENCES, SurfaceOrigin, type DesignApproval } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // `wairon surface` (sdd_cli → sdd_surfaces, through the surfaces client adapter)
@@ -110,4 +114,44 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
     default:
       throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list). \`surface pin\` and \`surface externals\` are gone: declare the producer under \`externals\` in .wai/project.yaml and use \`wairon externals pin|status|list\`.`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// `wairon export [--out <file>]` (cli_runner.runExport → sdd_surfaces)
+//
+// The bound project's whole design, resolved, as one JSON document (the design
+// export). Its approval verdict is the one `wairon lock-check` exits on, decided
+// FIRST against the gate identity (not strict) and handed to the export: an
+// unapproved tree still exports, carrying its state (stale, unlocked) for the
+// consumer to judge. A repository with no spec tree is refused — there is no
+// design to export, and an empty document would read as one.
+//
+// Without --out the JSON goes to stdout and NOTHING else does, so it pipes into
+// a generator.
+// ---------------------------------------------------------------------------
+
+export async function runExport(out?: string): Promise<void> {
+  // Step 1: the lock-check verdict, not strict.
+  const verdict = checkApproval(false);
+  if (verdict.state === 'no-tree') {
+    throw new WaironError(
+      'Nothing to export: there is no SDD spec tree here (.wai/specs holds no L0 system spec). '
+        + 'Run `wairon init` to start one, or run `wairon export` from a project root.',
+    );
+  }
+  const approval: DesignApproval = verdict.state;
+
+  // Step 2: the export, with that verdict's state, written to --out when given.
+  const design = exportDesign(out, approval);
+
+  // Steps 3-4: the path written and whether the exported design is approved.
+  if (out) {
+    logger.success(
+      `Design export of "${design.project.name}" written to ${path.resolve(out)} `
+        + `(${design.components.length} component(s), ${design.types.length} type(s); approval: ${design.source.approval}).`,
+    );
+    return;
+  }
+  // Step 5: the deterministic JSON on stdout, and nothing else.
+  process.stdout.write(`${JSON.stringify(design, null, 2)}\n`);
 }

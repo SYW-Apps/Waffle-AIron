@@ -30,5 +30,6 @@ fields:
       intent-level method
     optional: false
 methods: []
+sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:19.761Z'
-updatedAt: '2026-10-04T13:53:19.762Z'
+updatedAt: '2026-10-04T15:39:15.335Z'

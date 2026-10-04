@@ -83,6 +83,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadImplementationSpecs
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Call resolveSubsystemExports on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveSubsystemExports
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-10-04T14:02:38.286Z'
+updatedAt: '2026-10-04T15:37:51.134Z'

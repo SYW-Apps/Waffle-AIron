@@ -48,7 +48,7 @@ import {
   runHostPacks,
 } from '../commands/host.js';
 import { runProduce } from '../commands/produce.js';
-import { runSurface } from '../commands/surface.js';
+import { runSurface, runExport } from '../commands/surface.js';
 import { runExternals } from '../commands/externals.js';
 import {
   runRemote,
@@ -932,6 +932,18 @@ program
       origin: opts.origin,
       portal: opts.portal,
     });
+  });
+
+// ---------------------------------------------------------------------------
+// export — the design export (cli_runner.runExport → sdd_surfaces)
+// ---------------------------------------------------------------------------
+
+program
+  .command('export')
+  .description('the whole design, resolved, as one JSON document (format wairon-design) for generators and translators; stamped with the lock-check approval verdict. Prints to stdout unless --out names a file')
+  .option('--out <file>', 'write the JSON to this file (else print it to stdout, and nothing else)')
+  .action(async (opts) => {
+    await runExport(opts.out);
   });
 
 // ---------------------------------------------------------------------------

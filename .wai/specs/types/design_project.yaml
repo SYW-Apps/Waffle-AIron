@@ -29,5 +29,6 @@ fields:
     description: 'The resolved L0 export table: everything the project shares with other projects'
     optional: false
 methods: []
+sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:02.328Z'
-updatedAt: '2026-10-04T13:53:02.329Z'
+updatedAt: '2026-10-04T15:39:05.980Z'

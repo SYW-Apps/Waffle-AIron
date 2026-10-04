@@ -29,5 +29,6 @@ fields:
     type: string
     optional: true
 methods: []
+sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:52:52.929Z'
-updatedAt: '2026-10-04T13:52:52.930Z'
+updatedAt: '2026-10-04T15:39:06.405Z'

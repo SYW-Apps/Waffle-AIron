@@ -20,5 +20,6 @@ fields:
       has the text only and treats it as opaque, never as an invented shape
     optional: true
 methods: []
+sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:52:34.772Z'
-updatedAt: '2026-10-04T13:52:34.773Z'
+updatedAt: '2026-10-04T15:39:13.419Z'

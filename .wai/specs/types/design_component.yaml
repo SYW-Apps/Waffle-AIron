@@ -49,12 +49,12 @@ fields:
     description: Keys of its collaborators; `alias::publicName` across projects
     optional: false
   - name: emits
-    type: list<string>
-    description: The topics it publishes
+    type: list<EventBinding>
+    description: The topics it publishes, each with its event when declared, in declared order
     optional: false
   - name: subscribesTo
-    type: list<string>
-    description: The topics it consumes
+    type: list<EventBinding>
+    description: The topics it consumes, each with its event when declared, in declared order
     optional: false
   - name: auth
     type: PortalAuth
@@ -75,5 +75,6 @@ fields:
     type: map<string, any>
     optional: true
 methods: []
+sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:13.764Z'
-updatedAt: '2026-10-04T13:53:13.765Z'
+updatedAt: '2026-10-04T15:39:09.886Z'
