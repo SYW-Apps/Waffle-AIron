@@ -188,8 +188,11 @@ function storeOver(adapter: ProjectConfigFsAdapter, root: string): ProjectConfig
         throw new WaironError(`Refusing to write an invalid .wai/project.yaml at ${root}: ${checked.error.message}`);
       }
       // A part's configuration is its schema version and partOf alone (stage 8).
-      const document = config.partOf !== undefined ? { schemaVersion: config.schemaVersion, partOf: config.partOf } : config;
-      adapter.writeDocument(overlayKnownFields(ProjectConfigSchema, document, currentDocument()));
+      const onDisk = currentDocument();
+      const document = config.partOf !== undefined
+        ? { schemaVersion: config.schemaVersion, partOf: config.partOf }
+        : withoutDefaultedMaterialization(config, onDisk);
+      adapter.writeDocument(overlayKnownFields(ProjectConfigSchema, document, onDisk));
     },
     exists() {
       return adapter.documentExists();
@@ -773,6 +776,23 @@ function withInferredMaterialization(document: ProjectConfigDocument | null, roo
   if (rules !== undefined && hasOwn(rules, 'materializeAgentFiles')) return document;
   if (!holdsMaterializedAgentFiles(document, root)) return document;
   return { ...document, rules: { ...(rules ?? {}), materializeAgentFiles: true } };
+}
+
+/**
+ * The configuration a save writes, for a document on disk that never states
+ * rules.materializeAgentFiles: a false there is only the schema default (no
+ * agent files were visible where it was read), so it is left unstated and the
+ * setting stays inferred from the agent files at the project's own root. A save
+ * that cannot see them (a migration rehearses in a copy holding .wai/ alone)
+ * would otherwise record a false the next lock acts on by deleting committed
+ * agent files. A true, and any value on a new or stating document, is written.
+ */
+function withoutDefaultedMaterialization(config: ProjectConfig, onDisk: ProjectConfigDocument | null): ProjectConfig {
+  if (!isPlainObject(onDisk) || config.rules?.materializeAgentFiles !== false) return config;
+  const stated = isPlainObject(onDisk.rules) && hasOwn(onDisk.rules, 'materializeAgentFiles');
+  if (stated) return config;
+  const { materializeAgentFiles: _defaulted, ...rules } = config.rules;
+  return { ...config, rules } as ProjectConfig;
 }
 
 function parseConfig(document: ProjectConfigDocument | null, root: string): ProjectConfig {

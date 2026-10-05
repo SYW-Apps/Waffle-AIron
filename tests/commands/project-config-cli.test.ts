@@ -185,6 +185,30 @@ describe('pack bundle', () => {
     ]);
     expect(fs.existsSync(path.join(dir, '.wai', 'packs', 'beta', '2.0.0', 'pack.yaml'))).toBe(true);
   });
+
+  it('bundles a legacy single-file store pack as a pack directory that resolves without the store, and reports no drift', async () => {
+    useStore();
+    // What an older `packs add --global` left: a bare pack file in the machine-wide folder.
+    const body = ['name: legacy-doctrine', 'profiles:', '  legacy-profile:', '    family: neutral', ''].join('\n');
+    fs.writeFileSync(path.join(process.env.WAIRON_PACKS_DIR!, 'legacy-doctrine.yaml'), body);
+    const dir = project({ extensions: { useGlobalPacks: false, packs: [{ name: 'legacy-doctrine' }] } });
+
+    await bundlePack(undefined, { all: true });
+
+    expect(process.exitCode ?? 0).toBe(0);
+    const entry = path.join(dir, '.wai', 'packs', 'legacy-doctrine', '0.0.0-unversioned', 'pack.yaml');
+    expect(fs.readFileSync(entry, 'utf8')).toBe(body);
+    const { loadProjectExtensions } = await import('../../src/core/extensions.js');
+    // Same machine: the bundle and the store hold the same content.
+    const here = loadProjectExtensions();
+    expect(here.selectionFailures).toEqual([]);
+    // A fresh machine (an empty store): the committed bundle alone applies the pack.
+    useStore();
+    invalidateSpecCache();
+    const fresh = loadProjectExtensions();
+    expect(fresh.selectionFailures).toEqual([]);
+    expect(Object.keys(fresh.profiles ?? {})).toContain('legacy-profile');
+  });
 });
 
 describe('execution set-tier', () => {

@@ -345,24 +345,15 @@ function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
     const scriptPath = process.argv[1] ? path.resolve(process.argv[1]).replace(/\\/g, '/') : null;
     const useDirectNode = !isPackaged && scriptPath && (scriptPath.endsWith('.js') || scriptPath.endsWith('.ts'));
 
-    // Project-local installs know the exact project, so pin it: the server then
-    // attaches deterministically regardless of the cwd the host spawns it with,
-    // and never silently climbs to an ancestor .wai (e.g. a parent repo's tree).
-    // Global installs are intentionally shared across projects, so they stay
-    // unpinned and rely on MCP roots / cwd to scope per session.
-    const env: Record<string, string> = useGlobal
-      ? {}
-      : { WAIRON_PROJECT_DIR: process.cwd().replace(/\\/g, '/') };
-
     // A HOSTED registration points the agent at an INSTANCE rather than at this
     // checkout: the same http endpoint, bearer and project selector the CLI's
     // remote surface uses, so `wairon remote` can read this entry back and the
     // agent and CLI provably work on the same project.
     const desiredEntry: Record<string, unknown> = options.hostedUrl
       ? hostedMcpEntry(options)
-      : useDirectNode
-        ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env }
-        : { command: 'wairon', args: ['mcp', 'serve'], env };
+      : useGlobal
+        ? machineEntry(useDirectNode ? scriptPath : null)
+        : projectEntry(root, useDirectNode ? scriptPath : null);
 
     const existingEntry = mcpServers['wairon'];
     return {
@@ -377,6 +368,34 @@ function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
       useGlobal,
     };
   });
+}
+
+/**
+ * The entry of a machine-wide (user-scope) registration: machine-specific by
+ * nature, so it names the running CLI by its absolute path when it runs as a
+ * script, and stays unpinned — it is shared across projects and scopes per
+ * session through MCP roots and the cwd.
+ */
+function machineEntry(scriptPath: string | null): Record<string, unknown> {
+  return scriptPath
+    ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env: {} }
+    : { command: 'wairon', args: ['mcp', 'serve'], env: {} };
+}
+
+/**
+ * The entry of a project-scoped registration (.mcp.json, .gemini/settings.json).
+ * That file is committed and shared, so it holds nothing machine-specific: the
+ * CLI by a path relative to the project when the running script lives inside it
+ * (a checkout of wairon itself), else `wairon` on the PATH. It carries no
+ * absolute project pin either: the host starts a project's server in that
+ * project, where the server attaches to the cwd's own .wai.
+ */
+function projectEntry(root: string, scriptPath: string | null): Record<string, unknown> {
+  if (scriptPath && !isOutsideRoot(root, scriptPath)) {
+    const relative = path.relative(root, scriptPath).replace(/\\/g, '/');
+    return { command: 'node', args: [`./${relative}`, 'mcp', 'serve'] };
+  }
+  return { command: 'wairon', args: ['mcp', 'serve'] };
 }
 
 /**

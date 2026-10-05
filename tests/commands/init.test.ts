@@ -221,6 +221,9 @@ describe('cli_runner.runInit: registers only what a selected tool reads (real CL
 
     const init = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], { cwd: rootDir, env, timeout: 180_000 });
     expect(fs.existsSync(path.join(rootDir, '.mcp.json'))).toBe(true);
+    // The committed registration is portable: nothing of this machine's paths in it.
+    expect(JSON.parse(fs.readFileSync(path.join(rootDir, '.mcp.json'), 'utf8')).mcpServers.wairon)
+      .toEqual({ command: 'wairon', args: ['mcp', 'serve'] });
     expect(fs.existsSync(path.join(rootDir, '.gemini', 'settings.json'))).toBe(false);
     expect(init.stdout).toContain('wairon mcp install --backend gemini --global');
     expect(`${init.stdout}${init.stderr}`).not.toContain('not this project file');

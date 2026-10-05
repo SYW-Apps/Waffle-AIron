@@ -20,7 +20,7 @@ read back into a tree.
 
 | Where | How |
 |---|---|
-| CLI | `wairon export` prints the JSON to stdout, and nothing else. `wairon export --out design.json` writes the file and reports the path and the approval state. See [cli.md](cli.md#wairon-export---out-file). |
+| CLI | `wairon export` prints the JSON to stdout, and nothing else. `wairon export --out design.json` writes the file and reports the path and the approval state. A project with member projects names them (on stderr without `--out`, when it holds no design of its own): they are dependencies, exported from their own roots. See [cli.md](cli.md#wairon-export---out-file). |
 | Library | `const { exportDesign } = require('@wairon/cli')` (or `import` from an ES module), then `exportDesign(outPath?, approval?)`, which returns the document and writes it when `outPath` is given. The package ships TypeScript declarations for the library entry (`dist/index.d.ts`, the `types` field), so `DesignExport` and `exportDesign` are typed. |
 | JSON Schema | `schemas/design-export-1.json`, shipped in the package (`require.resolve('@wairon/cli/schemas/design-export-1.json')`). It is a JSON Schema draft-07 document (it declares `$schema`) and carries no `$id`: reference it by its path in the package. It is generated from the zod schema in `src/models/design-export.ts` at build time, and a test fails if the two drift. |
 

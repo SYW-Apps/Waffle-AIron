@@ -9,7 +9,7 @@
 
 - **[`wrapper/`](wrapper/)** — a product built ON wairon: extension packs
   (custom profile + language table + injected rule), the installer such a
-  product ships (`install.js` → `wairon packs add`), an advanced
+  product ships (`install.js` → `wairon pack add`), an advanced
   library-embedding demo (`wrapper.js`), and a CI-clean spec-only demo
   project governed by the doctrine. Guarded by
   `tests/examples/wrapper-example.test.ts`, so it stays conformance-true.

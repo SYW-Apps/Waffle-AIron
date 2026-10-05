@@ -82,8 +82,8 @@ last.
 
    **Committed agent files are kept.** A `project.yaml` that never set
    `rules.materializeAgentFiles` reads as `true` while wairon-managed agent files are
-   present, and the first save writes `true`. Projects without agent files get live
-   briefs instead.
+   present, so the first lock keeps them. A save at the project's root writes `true`
+   down. Projects without agent files get live briefs instead.
 6. **Make the pack selections reproducible for CI.** CI has no pack store, so a
    declared pack it cannot get is `PACK_NOT_INSTALLED`, and every command refuses.
    Either:
@@ -114,11 +114,16 @@ last.
    - **Supervisors.** A Supervisor narrative that calls shared data must call methods
      tagged `effect: read` or `effect: lifecycle`. Move each write into an
      Orchestrator.
+
+   Write these through the MCP tools, which regenerate a method's signature text. A
+   type you change by editing the spec file leaves `SIGNATURE_TEXT_STALE` until you
+   run `wairon doctor --fix` again.
 8. **Run `wairon validate --ci` and work through the findings** (`--all` prints every
    one). Most are covered by the codes table below. The usual remedies:
    - Split a coarse `lint.allow` into one allow per site (`at:`). The
      `UNUSED_LINT_ALLOW` finding lists the sites.
-   - Delete allows that name retired codes.
+   - Delete allows that name retired codes, and allows whose finding no longer
+     fires (`UNUSED_LINT_ALLOW` says "no such finding fired").
    - Write a method's `calls` where its narrative shows no steps.
    - Declare `mounts` on the listener Portal that serves each HTTP Portal.
    - Make a member's parent-relative `sourcePath`s relative to the member.
@@ -508,16 +513,39 @@ design as one deterministic JSON document (`wairon-design` 1.0,
   - A unit removal refuses a missing or unknown disposition.
   - `pack remove` takes the name the listing shows.
   - A producer-run failure answers its own HTTP status instead of 500.
-- **Hosted CLI.** `wairon host unit`, `host key` and `host permission` behave as the
-  hosted quick start documents them.
-- **`wairon dev`.** A stale or expired session no longer strands it on a sign-in
-  screen.
+- **Hosted CLI.**
+  - `wairon host unit`, `host key` and `host permission` behave as the hosted
+    quick start documents them.
+  - `host unit create` without `--parent` creates a `business_entity`, the only
+    kind a top-level unit can be (it defaulted to `team`). Under a parent the
+    default stays `team`.
+  - `host key mint` refuses a project that no hosted record holds, and mints
+    nothing.
+  - Granting `project:write` to a user who cannot read that scope, or minting a
+    token for an owner who cannot read its project, warns and names the
+    `project:read` grant that fixes it.
+- **`wairon dev`.**
+  - A stale or expired session no longer strands it on a sign-in screen.
+  - It places its project at startup, so it no longer warns that a
+    permission-model migration is pending.
 - **`wairon update`.** The stable channel no longer installs dev builds.
 - **`wairon init`.**
   - It keeps an existing configuration.
   - It writes no agent file.
+  - For an Antigravity (`agy`) target it no longer writes a project
+    `.gemini/settings.json`, which Antigravity ignores. It prints the command that
+    registers the server machine-wide instead.
   - It refuses clearly without a terminal (use `-y`).
   - Provisioning and externalizing never overwrite an existing `project.yaml`.
+- **MCP registration.** A project-scoped registration (`.mcp.json`,
+  `.gemini/settings.json`), written by `init`, `mcp install` or `doctor --fix`, holds
+  nothing machine-specific. It runs `wairon mcp serve` from the PATH (or the CLI by a
+  project-relative path when the CLI is installed inside the project) and pins no
+  project directory. `doctor --fix` rewrites an older entry that named absolute
+  paths. A `--global` registration is machine-wide and still names the CLI by its
+  absolute path.
+- **`wairon doctor`.** On a machine without Antigravity it reports nothing to
+  register, instead of a missing registration.
 - **`wairon generate`.**
   - It keeps the derived context documents current.
   - It prints what it reconciled.
@@ -545,13 +573,35 @@ design as one deterministic JSON document (`wairon-design` 1.0,
   - Self-qualified invariant references are migrated.
   - `EXPORT_INVALID` names a duplicate export id.
   - `lock` says when it replaces an older approval.
+  - A family migration no longer writes `materializeAgentFiles: false` into a
+    `project.yaml` that never set it. The migration rehearses in a copy that has no
+    agent files, so the default was recorded and the next lock deleted the
+    committed agent files.
+- **Packs.** `pack bundle` of a pack installed as a single file by an older
+  `packs add --global` writes a pack directory that resolves without the store. It
+  used to write the file where the directory belongs, so a clone and CI still
+  reported `PACK_NOT_INSTALLED`. Such a bundle no longer reports `PACK_STORE_DRIFT`
+  against the file it came from.
 - **Messages and tools.**
-  - `sdd_get_spec` infers the kind from a unique id.
-  - `sdd_set_endpoints` accepts the Portal's transport naming.
-  - A family migration's plan no longer prints an empty list of projects to re-lock.
-  - `lock-check` at a parent names the member whose approval moved.
-  - The design export can be matched to the lock record's state id.
-  - The design-export schema has a resolvable `$id` and declares its `$schema`.
+  - `sdd_get_spec` infers the kind from a unique id, and refuses an id that names
+    specs of several kinds.
+  - `sdd_set_endpoints` accepts the Portal's transport naming (`HTTP_API`, stored as
+    `HTTP`) and refuses a transport the Portal's `portalType` does not imply.
+  - A family migration's re-lock list names the project it ran in as
+    `this project (.)`, where it printed a bare `.` that read as an empty list.
+  - `lock-check` on a stale lock says what moved: how many of the project's own spec
+    files changed, and which direct member's approval moved, was added or was
+    removed.
+  - The design export's `source.stateId` and the lock record's `stateId` are
+    different digests by design. `docs/design-export.md` now says so: `stateId` is
+    the content id to cache on, and `source.approval` relates an export to its
+    approval.
+  - `wairon export` at a project with member projects names them. Members are
+    listed under `dependencies` and never inlined, so the top of a family that holds
+    no design of its own exports no components. That export no longer reads as
+    empty without a reason.
+  - The design-export schema declares its `$schema` and no longer carries an `$id`
+    that did not resolve.
 - **Packages.** The library entry ships TypeScript declarations, and the npm package
   and release binaries ship the web app (the build fails without it).
 

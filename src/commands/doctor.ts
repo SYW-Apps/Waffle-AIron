@@ -127,8 +127,10 @@ function mcpEntryHealth(settingsPath: string): { mark: Mark; note: string } {
   }
   if (!entry) return { mark: 'warn', note: 'not registered' };
   if (entry.command === 'node' && Array.isArray(entry.args) && typeof entry.args[0] === 'string') {
+    // A project-scoped entry names the CLI relative to the project (the host
+    // starts it there); a machine-wide one by its absolute path.
     const scriptPath = entry.args[0];
-    if (!fs.existsSync(scriptPath)) {
+    if (!fs.existsSync(path.resolve(getProjectRoot(), scriptPath))) {
       return { mark: 'error', note: `registered but the server path is missing — ${scriptPath}` };
     }
   }

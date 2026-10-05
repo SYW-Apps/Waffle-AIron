@@ -163,6 +163,46 @@ describe('design export delivery', () => {
       expect(stdout).not.toContain('"format"');
     });
 
+    it("at a family's top with no design of its own, lists the member as a dependency and says so off stdout", async () => {
+      // The member: a project of its own (an id and an L0) holding the design.
+      buildProject(path.join(root, 'core'));
+      // The top: an L0 and a member, and no subsystem of its own.
+      fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), JSON.stringify({
+        schemaVersion: '1.0.0', id: 'top', name: 'top-system', projectType: 'backend', members: { core: 'core' },
+        targets: [], rules: {}, createdAt: now, updatedAt: now,
+      }));
+      setProjectRoot(root);
+      saveSystemSpec({
+        schemaVersion: '1.0.0', name: 'top-system', vision: 'a family', boundaries: [], globalRequirements: [], databases: [],
+        createdAt: now, updatedAt: now,
+      });
+      invalidateSpecCache();
+      setProjectRoot(root);
+      let stderr = '';
+      const err = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+        stderr += String(chunk);
+        return true;
+      }) as typeof process.stderr.write);
+      try {
+        await runExport();
+      } finally {
+        err.mockRestore();
+      }
+      // Correct per the format: the member is a dependency, never inlined.
+      const design = JSON.parse(stdout) as DesignExport;
+      expect(design.components).toEqual([]);
+      expect(design.dependencies.map((d) => [d.alias, d.role])).toEqual([['core', 'member']]);
+      // ...and the empty-looking export says why, on stderr only.
+      expect(stderr).toMatch(/1 member project\(s\) are listed under `dependencies`, not inlined \(core\): run `wairon export` in a member's own root/);
+
+      // With --out the report names the member too.
+      stdout = '';
+      await runExport(path.join(out, 'top.json'));
+      expect(stdout).toContain('0 component(s)');
+      expect(stdout).toMatch(/1 member project\(s\) are listed under `dependencies`/);
+    });
+
     it('refuses a repository with no spec tree', async () => {
       fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
       setProjectRoot(root);

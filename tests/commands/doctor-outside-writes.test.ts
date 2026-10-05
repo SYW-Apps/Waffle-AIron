@@ -150,5 +150,36 @@ describe('doctor --fix: writes outside the project root are planned, confirmed a
     const moved = fs.readdirSync(configDir).filter((f) => f.startsWith('wairon-plugin.wairon-backup-'));
     expect(moved).toHaveLength(1);
     expect(fs.readFileSync(path.join(configDir, moved[0], 'plugin.json'), 'utf8')).toBe('{"name":"wairon"}');
+    // The machine-wide registration is machine-specific by nature: the CLI by its absolute path.
+    expect(path.isAbsolute(after.mcpServers.wairon.args?.[0] ?? '')).toBe(true);
+  }, 240_000);
+
+  it("rewrites a project .mcp.json that names this machine's paths into a portable one, other servers kept", async () => {
+    const { home, project } = setup();
+    // What an earlier doctor or init wrote: the CLI and the project by absolute paths.
+    const mcpJson = path.join(project, '.mcp.json');
+    fs.writeFileSync(mcpJson, JSON.stringify({
+      mcpServers: {
+        other: { command: 'other-server' },
+        wairon: {
+          command: 'node',
+          args: ['C:/Users/someone/AppData/Roaming/npm/node_modules/@wairon/cli/dist/cli/index.js', 'mcp', 'serve'],
+          env: { WAIRON_PROJECT_DIR: project.replace(/\\/g, '/') },
+        },
+      },
+    }, null, 2));
+
+    const out = (await runDoctor(project, home, '--yes')).stdout ?? '';
+
+    const written = JSON.parse(fs.readFileSync(mcpJson, 'utf8')) as { mcpServers: Record<string, unknown> };
+    expect(written.mcpServers.other).toEqual({ command: 'other-server' });
+    // The CLI runs from outside the project, so the committed entry names `wairon` on the PATH
+    // and pins no directory: the host starts the server in the project.
+    expect(written.mcpServers.wairon).toEqual({ command: 'wairon', args: ['mcp', 'serve'] });
+    const text = fs.readFileSync(mcpJson, 'utf8');
+    expect(text).not.toContain(project.replace(/\\/g, '/'));
+    expect(text).not.toContain('WAIRON_PROJECT_DIR');
+    // ...and doctor reads the portable registration back as healthy.
+    expect(out).toMatch(/Claude \(project \.mcp\.json\): registered/);
   }, 240_000);
 });

@@ -66,4 +66,28 @@ describe('materializeAgentFiles on a configuration that predates it', () => {
     expect(text).toMatch(/materializeAgentFiles: true/);
     expect(text).not.toMatch(/materializeAgentFiles: false/);
   });
+
+  it('a save that cannot see the agent files leaves the setting unstated, so the project root still reads true', () => {
+    // A family migration rehearses in a copy holding .wai/ alone, then copies
+    // the configuration back: the copy must not record the schema default.
+    const root = project();
+    agentFile(root, '.cursor/rules', 'billing-owner.md');
+    const rehearsal = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mat-copy-'));
+    roots.push(rehearsal);
+    fs.mkdirSync(path.join(rehearsal, '.wai'), { recursive: true });
+    fs.copyFileSync(path.join(root, '.wai', 'project.yaml'), path.join(rehearsal, '.wai', 'project.yaml'));
+    expect(projectConfigRepositoryAt(rehearsal).setId('legacy')).toBe(true);
+    const written = fs.readFileSync(path.join(rehearsal, '.wai', 'project.yaml'), 'utf8');
+    expect(written).toMatch(/^id: legacy$/m);
+    expect(written).not.toMatch(/materializeAgentFiles/);
+    // Applied back to the project, it reads true from the files there.
+    fs.copyFileSync(path.join(rehearsal, '.wai', 'project.yaml'), path.join(root, '.wai', 'project.yaml'));
+    expect(projectConfigRepositoryAt(root).load()!.rules.materializeAgentFiles).toBe(true);
+  });
+
+  it('a project with no agent files keeps a stated false', () => {
+    const root = project(['materializeAgentFiles: false']);
+    projectConfigRepositoryAt(root).setProjectType('library');
+    expect(fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8')).toMatch(/materializeAgentFiles: false/);
+  });
 });

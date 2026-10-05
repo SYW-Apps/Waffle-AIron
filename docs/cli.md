@@ -425,6 +425,11 @@ promise and how a consumer follows renames).
 - Without `--out` it prints the JSON to stdout and nothing else, so it pipes
   cleanly (`wairon export | jq .components`). With `--out` it writes the file
   and reports the path and the approval state.
+- Member projects are listed under `dependencies`, never inlined: export each
+  from its own root. So the top of a family that holds no design of its own
+  exports no components. It names its members (on stderr without `--out`), so
+  that does not read as an empty design. A part's subsystems are the project's
+  own and are exported with it.
 - Deterministic: the same tree and verdict give byte-identical output.
 - A tree without an L0 is refused. The JSON Schema ships in the package as
   `schemas/design-export-1.json`, and the library twin is `exportDesign()`.
@@ -587,6 +592,12 @@ and author specs directly.
 | `wairon mcp install [--global] [--config-dir <path>] [--backend claude\|gemini]` | Register the server. Default: project-local. `--global` uses the home config (respects `CLAUDE_CONFIG_DIR`/`GEMINI_CONFIG_DIR`); `--config-dir` installs into an explicit, validated config dir (requires `--backend`) |
 | `wairon mcp install --hosted <url> [--project <id>] [--token <token>]` | Register a **hosted** entry against an instance instead of the local stdio server; the token defaults to the credential stored by `wairon login` |
 | `wairon mcp status` | Show whether the server is registered |
+
+A project-local registration (`.mcp.json`, `.gemini/settings.json`) is committed with the
+project, so it holds nothing machine-specific: it runs `wairon mcp serve` from the PATH (or
+`node ./<path>` when the CLI lives inside the project, as in a checkout of wairon itself),
+and the server attaches to the project it is started in. A `--global` registration is
+machine-wide and names the running CLI by its absolute path.
 
 The local server offers 37 tools:
 

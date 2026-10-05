@@ -749,7 +749,14 @@ function writeBundle(root: string, resolved: InstalledPack): string {
   const dest = path.join(root, '.wai', 'packs', resolved.name, resolved.version);
   fs.rmSync(dest, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.cpSync(resolved.path, dest, { recursive: true });
+  if (fs.statSync(resolved.path).isFile()) {
+    // A legacy single-file pack (a bare .yaml/.cjs in the machine-wide folder):
+    // the bundle is a pack DIRECTORY, so the file becomes its entry file.
+    fs.mkdirSync(dest, { recursive: true });
+    fs.copyFileSync(resolved.path, path.join(dest, `pack${path.extname(resolved.path).toLowerCase()}`));
+  } else {
+    fs.cpSync(resolved.path, dest, { recursive: true });
+  }
   return dest;
 }
 
