@@ -661,7 +661,25 @@ describe('project config registry — rekeyCarried (F78)', () => {
     // names its component bare or behind a step number (`3:component.method`).
     const root = tempRoot();
     fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
-    const real = fs.readFileSync(path.resolve(process.cwd(), '.wai', 'project.yaml'));
+    // The register shrinks as debt is paid, so the group carrying a
+    // component-keyed unit is laid into it here, in the register's own layout
+    // and line endings, rather than hoped for among whatever is left.
+    const live = fs.readFileSync(path.resolve(process.cwd(), '.wai', 'project.yaml'), 'utf8');
+    const eol = live.includes('\r\n') ? '\r\n' : '\n';
+    const group = [
+      '      # 1 finding(s), 1 unit(s).',
+      '      - kind: drift',
+      '        why: >-',
+      '          A group in this register\'s own layout, carrying a step-numbered unit.',
+      '        findings:',
+      '          - code: CALL_STEP_UNREALIZED',
+      '            spec: core_portal_impl',
+      "            at: 'loadX'",
+      '            covers:',
+      "              - '1:core_portal.loadX'",
+    ].join(eol);
+    expect(live).toContain(`    carried:${eol}`);
+    const real = Buffer.from(live.replace(`    carried:${eol}`, `    carried:${eol}${group}${eol}`), 'utf8');
     fs.writeFileSync(configFile(root), real);
     const text = real.toString('utf8');
     const target = /spec: (\w+_impl)\n\s+at: '(\w+)'\n\s+covers:\n\s+- '(?:\d+:)?(\w+)\.\w+'/.exec(text.replace(/\r\n/g, '\n'));

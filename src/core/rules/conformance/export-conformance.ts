@@ -253,7 +253,7 @@ export const exportConformanceRule: SddRule = {
       const facts = code.factsAt(file);
       if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
       for (const binding of facts.reexportBindings ?? []) {
-        const target = resolveImport(file, binding.from, code.paths);
+        const target = resolveImport(file, binding.from, code.paths, code.packages);
         const methods = target ? typeMethodsAt.get(target) : undefined;
         if (!methods) continue;
         if (binding.local === '*') {
@@ -290,7 +290,7 @@ export const exportConformanceRule: SddRule = {
     // reached through the namespace.
     const takenFrom = new Map<string, Map<string, Set<string>>>();
     const take = (consumer: string, writtenIn: string, specifier: string, names: (string | undefined)[]): void => {
-      const target = resolveImport(writtenIn, specifier, code.paths);
+      const target = resolveImport(writtenIn, specifier, code.paths, code.packages);
       if (!target) return;
       let byName = takenFrom.get(target);
       if (!byName) takenFrom.set(target, (byName = new Map<string, Set<string>>()));

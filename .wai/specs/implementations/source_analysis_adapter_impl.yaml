@@ -32,16 +32,31 @@ methods:
           mirroring the projectPath rule) and nonexistent files as missing
         type: local
       - stepNumber: 3
-        description: Read each remaining file as text, classifying binary or unreadable content as unreadable
+        label: readLocalPackages
+        description: >-
+          Read the repository's own packages: the root package.json and every workspace it declares
+          (a plain directory, or one trailing /* level), refusing any that escapes the project root
+          or sits under node_modules. For each package read its name and its entry points — the
+          `exports` main entry and plain subpath exports (string targets, or the first of the
+          types/import/require/default conditions), else module, main and types — and map each to
+          the source file it was built from: the file itself when it is a source file, else, under
+          the package tsconfig's outDir, the same relative path under its rootDir with the build
+          extension (.js, .d.ts, .mjs, .cjs) swapped for .ts or .tsx. Record each specifier (`name`,
+          `name/sub`) whose entry maps to an existing file inside the project as its canonical key;
+          a package or entry that cannot be read or mapped records nothing, so its imports stay
+          unresolved exactly as a third-party package's do
         type: local
       - stepNumber: 4
+        description: Read each remaining file as text, classifying binary or unreadable content as unreadable
+        type: local
+      - stepNumber: 5
         description: >-
           Select the analyzer per file: exact AST when the TypeScript compiler module resolves
           dynamically for ts/js (analyzed project's node_modules first, wairon's own installation
           second, never bundled); else the file language's declarative pattern table (built-in
           tables merged under extension-pack registrations); else the generic word-boundary scan
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Extract per-file facts: declaration-tier names (named declarations at any nesting depth,
           destructuring bindings, object-literal keys, import bindings, export specifiers), weak
@@ -50,42 +65,56 @@ methods:
           module each came from, which were bound as a whole namespace, which the import renamed),
           the runtime RE-EXPORT bindings name by name (a named export-from with both sides of its
           rename, a star with * on both sides), which is what lets a reader follow a republished
-          name — aliased or not — to the module that wrote it, the module each TYPE-ONLY binding
-          came from, kept apart because a type binding can never be a call origin though it is what
-          a declared type resolves through, the type names each instance FIELD is declared with from
+          name — aliased or not — to the module that wrote it, the EXPORT ALIASES the file publishes
+          with no specifier of its own (each runtime `export { local as exported }` specifier, and
+          each identifier-valued property `{ exported: local }` or `{ exported }` of an exported
+          top-level object literal under that object's name), the module each TYPE-ONLY binding came
+          from, kept apart because a type binding can never be a call origin though it is what a
+          declared type resolves through, the type names each instance FIELD is declared with from
           class property declarations and constructor parameter properties, the type names each
           locally BOUND name is declared with from parameters and annotated variable declarations,
           both recording nothing where the declaration names no type outright, since an inferred
           type is not a declared one and a destructured binding binds the type's properties rather
-          than the type, the call SITES of each named function-like with the shape each call was
-          written in — a bare name, a plain-identifier receiver, the this.<field> receiver whose
-          declared type can be followed, or the new Class(...) receiver whose class name can be —
-          unioned per name AND kept body by body with where each body is bound (module scope, a
+          than the type, the type each named function-like RETURNS where the code settles it (a
+          return annotation naming a type outright, Promise unwrapped, else one return statement
+          constructing a plainly named class; disagreeing same-named functions record nothing), the
+          call SITES of each named function-like with the shape each call was written in — a bare
+          name, a plain-identifier receiver, the this.<field> receiver whose declared type can be
+          followed, the new Class(...) receiver whose class name can be, the fn(...) receiver whose
+          function's return can be, or the this receiver inside a top-level named class's own method
+          — unioned per name AND kept body by body with where each body is bound (module scope, a
           member of a top-level named class or of an object literal a top-level variable is bound
           to, or nested), so same-named functions in one file stay apart, and, before any
           republication is folded in, whether the file declared nothing of its own and only
           re-exported, which is what makes it a pure re-export barrel
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         label: chaseReexports
         description: >-
-          Chase the re-export barrels through their relative specifiers with a visited set: merge
-          every export-* target's exported names into the declaration tier, and carry the measured
-          BODY — complexity and call sites, and the module-scope body itself, since an export names
-          the module binding and never a member — of every name a barrel republishes, named
-          re-export and star alike, since the two spellings republish the same way. A carried site
-          keeps the file it was READ in, so its bare names and receivers resolve in the real
-          module's scope and never in the barrel's
+          Chase the re-export barrels through their relative specifiers, and their package
+          specifiers through the local-package map, with a visited set: merge every export-*
+          target's exported names into the declaration tier, and carry the measured BODY —
+          complexity and call sites, and the module-scope body itself, since an export names the
+          module binding and never a member — of every name a barrel republishes, named re-export
+          and star alike, since the two spellings republish the same way. Carry each EXPORT ALIAS's
+          body onto the name it publishes the same way, but only where its local name settles on
+          exactly one: a module-scope body of this file with no nested same-named one, or a runtime
+          non-namespace import binding whose module holds such a body under the imported name; a
+          property alias carries it as a member of its object, which is what an exportedVia handle
+          reaches. A local name that settles on nothing leaves the published name bodiless rather
+          than guessed. A carried site keeps the file it was READ in, so its bare names and
+          receivers resolve in the real module's scope and never in the barrel's
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Degrade any file whose exact analysis throws to the generic scan, recording the grade per
           file — a single file never aborts the run
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
-          Return the assembled CodeModel: per-file facts, the resolved project root, and the walked
-          root-file list the unclaimed-source rule judges
+          Return the assembled CodeModel: per-file facts, the resolved project root, the walked
+          root-file list the unclaimed-source rule judges, and the local-package map every import
+          resolution reads
         type: return
         outcome: CodeModel
   - name: findTestsReferencing
@@ -144,4 +173,4 @@ methods:
         outcome: found
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-04T22:32:52.722Z'
+updatedAt: '2026-10-05T00:39:10.484Z'

@@ -7,6 +7,7 @@ import {
   pathKey,
   type CallSiteFact,
   type CodeModel,
+  type ExportAliasFact,
   type FunctionBodyFact,
   type ImplementationSpec,
   type ImportBindingFact,
@@ -347,6 +348,20 @@ interface ExactFacts {
    * the barrel publishes.
    */
   namedReexports: { exported: string; local: string; from: string }[];
+  /**
+   * The forwarding bindings the file publishes with no specifier of its own
+   * (see SourceFileFacts.exportAliases): runtime export specifiers, and the
+   * identifier-valued properties of exported top-level object literals. The
+   * barrel chase carries each one's body onto the published name where the
+   * local name settles on exactly one.
+   */
+  exportAliases: ExportAliasFact[];
+  /**
+   * The type each named function-like returns, where the code settles it
+   * (see SourceFileFacts.returnTypes); `null` marks a name whose same-named
+   * bodies disagree, which records nothing.
+   */
+  returnTypes: Map<string, string | null>;
   /** Cyclomatic complexity per named function-like (max across same-named). */
   complexity: Map<string, number>;
   /**
@@ -446,6 +461,10 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexports = new Set<string>();
   const starExports: string[] = [];
   const namedReexports: { exported: string; local: string; from: string }[] = [];
+  const exportAliases: ExportAliasFact[] = [];
+  /** Property aliases of top-level object literals, kept until the walk knows which objects are exported. */
+  const propertyAliases: ExportAliasFact[] = [];
+  const returnTypes = new Map<string, string | null>();
   const complexity = new Map<string, number>();
   const calls = new Map<string, Map<string, CallSiteFact>>();
   const bodies = new Map<string, FunctionBodyFact[]>();
@@ -475,7 +494,10 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
    * questions they are.
    */
   const receiverKey = (site: CallSiteFact): string =>
-    site.via ?? (site.field ? `this.${site.field}` : site.constructed ? `new ${site.constructed}` : '');
+    site.via ?? (site.field ? `this.${site.field}`
+      : site.constructed ? `new ${site.constructed}`
+        : site.returnedBy ? `${site.returnedBy}()`
+          : site.enclosingClass ? `this:${site.enclosingClass}` : '');
   const siteKey = (site: CallSiteFact): string =>
     `${site.member ? 'm' : 'b'}:${receiverKey(site)}:${site.name}`;
 
@@ -644,6 +666,62 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     return undefined;
   };
 
+  // The top-level named class a `this` written at `node` IS: walk out through
+  // arrow functions (which keep `this`) to the first construct that binds it.
+  // A method, accessor, constructor or property initializer of a top-level
+  // named class answers that class; a function expression or declaration, an
+  // object-literal method, a class expression or a nested class rebinds
+  // `this` to something this model does not name, and answers nothing.
+  const enclosingClassOf = (node: import('typescript').Node): string | undefined => {
+    let at: import('typescript').Node | undefined = node.parent;
+    while (at) {
+      if (ts.isFunctionExpression(at) || ts.isFunctionDeclaration(at) || ts.isClassExpression(at)) return undefined;
+      if ((ts.isMethodDeclaration(at) || ts.isGetAccessorDeclaration(at) || ts.isSetAccessorDeclaration(at))
+        && at.parent && ts.isObjectLiteralExpression(at.parent)) return undefined;
+      if (ts.isClassDeclaration(at)) {
+        return at.name && at.parent && ts.isSourceFile(at.parent) ? at.name.text : undefined;
+      }
+      at = at.parent;
+    }
+    return undefined;
+  };
+
+  // What a function-like RETURNS, where the code settles it: a return
+  // annotation that names a type outright (a Promise of one unwrapped, since
+  // the receiver of an awaited call is what it resolves to), else — only when
+  // nothing is annotated — the class its ONE return statement constructs. A
+  // generic, union or literal annotation, several returns, and a return of
+  // anything but `new Class(…)` settle nothing: what an initializer or a
+  // returned variable infers is not what the code declares.
+  const returnedTypeOf = (fn: import('typescript').Node & { body?: import('typescript').Node }): string | undefined => {
+    const annotated = (fn as import('typescript').SignatureDeclarationBase).type;
+    if (annotated) {
+      if (!ts.isTypeReferenceNode(annotated)) return undefined;
+      if (ts.isIdentifier(annotated.typeName) && annotated.typeName.text === 'Promise'
+        && annotated.typeArguments?.length === 1) {
+        const inner = annotated.typeArguments[0];
+        return ts.isTypeReferenceNode(inner) && !inner.typeArguments ? typeReferenceName(inner) : undefined;
+      }
+      return annotated.typeArguments ? undefined : typeReferenceName(annotated);
+    }
+    const constructedClass = (expression: import('typescript').Expression | undefined): string | undefined => {
+      let node = expression;
+      while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node))) node = node.expression;
+      return node && ts.isNewExpression(node) && ts.isIdentifier(node.expression) ? node.expression.text : undefined;
+    };
+    if (!fn.body) return undefined;
+    if (!ts.isBlock(fn.body)) return constructedClass(fn.body as import('typescript').Expression);
+    const returns: import('typescript').ReturnStatement[] = [];
+    const collect = (node: import('typescript').Node): void => {
+      // A nested function's returns are its own.
+      if (ts.isFunctionLike(node)) return;
+      if (ts.isReturnStatement(node)) returns.push(node);
+      ts.forEachChild(node, collect);
+    };
+    ts.forEachChild(fn.body, collect);
+    return returns.length === 1 ? constructedClass(returns[0].expression) : undefined;
+  };
+
   // WHERE a named function-like's body is bound — the identity that tells
   // same-named bodies in one file apart (see FunctionBodyFact). Module scope
   // is a top-level function declaration or a top-level variable's function
@@ -747,6 +825,16 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
             // `new ApprovalRegistry(store).create()` — only a plainly named
             // class, since `new ns.Registry()` is a property of a value again.
             addSite({ name, member: true, constructed: receiver.expression.text });
+          } else if (ts.isCallExpression(receiver) && ts.isIdentifier(receiver.expression)) {
+            // `current().updateSpec()` — the RESULT of a plainly named
+            // function, followed through what the code says that function
+            // returns. `ns.make().x()` is a property of a value again.
+            addSite({ name, member: true, returnedBy: receiver.expression.text });
+          } else if (receiver.kind === ts.SyntaxKind.ThisKeyword) {
+            // `this.loadSpec()` inside a class's own method: the class the
+            // file declares, when `this` provably is one.
+            const owner = enclosingClassOf(node);
+            addSite(owner !== undefined ? { name, member: true, enclosingClass: owner } : { name, member: true });
           } else addSite({ name, member: true });
         }
       }
@@ -928,6 +1016,11 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       // return a Promise. One entry per body, beside the one signature per
       // body above, so a name's bodies are judged on what they all say.
       if (completesLater(node)) asyncFunctions.push(fnName);
+      // What THIS body returns, where the code settles it. Same-named bodies
+      // that disagree — or one that settles nothing beside one that does —
+      // leave the name unsettled, so the fact records nothing for it.
+      const returned = returnedTypeOf(node as { body?: import('typescript').Node } & import('typescript').Node) ?? null;
+      returnTypes.set(fnName, returnTypes.has(fnName) && returnTypes.get(fnName) !== returned ? null : returned);
       // The routes the body's guards serve. Only a name with at least one
       // gets an entry: "no entry" is how a reader tells a router it could not
       // read from one it read, so an empty map is never written.
@@ -998,6 +1091,28 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       && !schemaConstants.has(node.name.text)) {
       schemaConstants.set(node.name.text, node.initializer);
     }
+    // The forwards an adapter OBJECT is assembled from: each property of a
+    // top-level object literal whose value is a plain name of this file's
+    // scope — `{ publish: publishRepo }` or the shorthand `{ publish }`. Kept
+    // until the walk knows which objects the file exports; a property whose
+    // value is a function carries its own body already.
+    if (isTopLevelVariable(node) && node.initializer) {
+      let literal: import('typescript').Expression = node.initializer;
+      while (ts.isAsExpression(literal) || ts.isSatisfiesExpression(literal) || ts.isParenthesizedExpression(literal)) {
+        literal = literal.expression;
+      }
+      if (ts.isObjectLiteralExpression(literal)) {
+        const container = (node.name as import('typescript').Identifier).text;
+        for (const property of literal.properties) {
+          if (ts.isShorthandPropertyAssignment(property)) {
+            propertyAliases.push({ exported: property.name.text, local: property.name.text, container });
+          } else if (ts.isPropertyAssignment(property) && ts.isIdentifier(property.initializer)) {
+            const key = propertyNameText(property.name);
+            if (key) propertyAliases.push({ exported: key, local: property.initializer.text, container });
+          }
+        }
+      }
+    }
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)
       || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isModuleDeclaration(node)) {
       const name = node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
@@ -1057,9 +1172,13 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         for (const el of node.exportClause.elements) {
           declared.add(el.name.text);
           exported.add(el.name.text);
-          if (spec && !node.isTypeOnly && !el.isTypeOnly) {
-            namedReexports.push({ exported: el.name.text, local: (el.propertyName ?? el.name).text, from: spec });
-          }
+          if (node.isTypeOnly || el.isTypeOnly) continue;
+          const local = (el.propertyName ?? el.name).text;
+          if (spec) namedReexports.push({ exported: el.name.text, local, from: spec });
+          // No specifier: the file publishes a name of its OWN scope under
+          // this one — `export { bootstrapInstance as init }` — which the
+          // chase follows to the body the local name settles on.
+          else exportAliases.push({ exported: el.name.text, local });
         }
       } else if (!node.exportClause && spec) {
         starExports.push(spec);
@@ -1171,7 +1290,30 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  // Only an EXPORTED object is an adapter a consumer reaches through: its
+  // property aliases join the specifier aliases.
+  for (const alias of propertyAliases) if (exported.has(alias.container!)) exportAliases.push(alias);
+
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
+}
+
+/**
+ * The local packages of the analyzed repository, by specifier, as ABSOLUTE
+ * source paths (see readLocalPackages) — what the barrel chase resolves a
+ * package specifier through. Empty resolves no package at all, which is the
+ * old relative-only behaviour.
+ */
+type LocalPackages = ReadonlyMap<string, string>;
+const NO_PACKAGES: LocalPackages = new Map<string, string>();
+
+/**
+ * Resolve an import specifier to a real file: a relative one by .js → .ts
+ * mapping and index files, a package one through the repository's own
+ * packages. A third-party package resolves to nothing.
+ */
+function resolveModule(fromFile: string, specifier: string, packages: LocalPackages): string | null {
+  if (!specifier.startsWith('.')) return packages.get(specifier) ?? null;
+  return resolveRelativeModule(fromFile, specifier);
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -1203,8 +1345,9 @@ function reexportTarget(
   projectRoot: string,
   visited: Set<string>,
   exactCache: Map<string, ExactFacts | null>,
+  packages: LocalPackages,
 ): { path: string; facts: ExactFacts } | null {
-  const target = resolveRelativeModule(filePath, specifier);
+  const target = resolveModule(filePath, specifier, packages);
   // containment: never chase outside the analyzed project
   if (!target || path.relative(projectRoot, target).startsWith('..')) return null;
   let targetFacts = exactCache.get(target);
@@ -1219,7 +1362,7 @@ function reexportTarget(
   if (!targetFacts) return null;
   if (!visited.has(target)) {
     visited.add(target);
-    chaseReexports(ts, targetFacts, target, projectRoot, visited, exactCache);
+    chaseReexports(ts, targetFacts, target, projectRoot, visited, exactCache, packages);
   }
   return { path: target, facts: targetFacts };
 }
@@ -1263,6 +1406,44 @@ function carryBody(
 }
 
 /**
+ * Carry the ONE body an export alias's local name settles on onto the name it
+ * publishes — under its object as a member for a property alias, at module
+ * scope for an export specifier. `from` is set only when the body was read
+ * in another file, whose scope its sites resolve in.
+ *
+ * A local name settles only on module-scope bodies with no nested same-named
+ * body beside them: a nested one could be the binding the name means where it
+ * sits, and a member is never what a bare name binds. Anything else carries
+ * nothing, and the published name stays bodiless rather than guessed.
+ */
+function carryAliasBody(
+  facts: ExactFacts,
+  source: ExactFacts,
+  from: string | undefined,
+  local: string,
+  alias: ExportAliasFact,
+): void {
+  const sourceBodies = source.bodies.get(local) ?? [];
+  if (!sourceBodies.length || sourceBodies.some(b => b.nested)) return;
+  const moduleScope = sourceBodies.filter(b => b.container === undefined);
+  if (!moduleScope.length) return;
+  const score = source.complexity.get(local);
+  if (score !== undefined) {
+    facts.complexity.set(alias.exported, Math.max(facts.complexity.get(alias.exported) ?? 0, score));
+  }
+  const relocate = (site: CallSiteFact): CallSiteFact => (from !== undefined ? { ...site, from: site.from ?? from } : site);
+  const sites = facts.calls.get(alias.exported) ?? new Map<string, CallSiteFact>();
+  const carried = facts.bodies.get(alias.exported) ?? [];
+  for (const body of moduleScope) {
+    const moved = body.sites.map(relocate);
+    for (const site of moved) sites.set(`${from ?? ''}|${alias.container ?? ''}|${JSON.stringify(site)}`, site);
+    carried.push(alias.container !== undefined ? { container: alias.container, sites: moved } : { sites: moved });
+  }
+  facts.calls.set(alias.exported, sites);
+  facts.bodies.set(alias.exported, carried);
+}
+
+/**
  * Chase re-export barrels: merge the (transitive) exported names of every
  * relative star-export target into the facts, and carry the measured body of
  * every name a barrel republishes — star or named alike — so a pure re-export
@@ -1276,13 +1457,14 @@ function chaseReexports(
   projectRoot: string,
   visited: Set<string>,
   exactCache: Map<string, ExactFacts | null>,
+  packages: LocalPackages = NO_PACKAGES,
 ): void {
   for (const re of facts.namedReexports) {
-    const target = reexportTarget(ts, filePath, re.from, projectRoot, visited, exactCache);
+    const target = reexportTarget(ts, filePath, re.from, projectRoot, visited, exactCache, packages);
     if (target) carryBody(facts, target.facts, target.path, re.local, re.exported, projectRoot);
   }
   for (const spec of facts.starExports) {
-    const target = reexportTarget(ts, filePath, spec, projectRoot, visited, exactCache);
+    const target = reexportTarget(ts, filePath, spec, projectRoot, visited, exactCache, packages);
     if (!target) continue;
     for (const name of target.facts.exported) {
       facts.exported.add(name);
@@ -1290,6 +1472,204 @@ function chaseReexports(
       carryBody(facts, target.facts, target.path, name, name, projectRoot);
     }
   }
+  // The forwards written with no specifier: the name a local alias binds is
+  // either an import — the body lives in the module it came from, under the
+  // name it was imported by — or this file's own declaration. An unrenamed
+  // export specifier of the file's own function already has its body here.
+  for (const alias of facts.exportAliases) {
+    const binding = facts.importBindings.get(alias.local);
+    if (binding) {
+      if (binding.namespace) continue;
+      const target = reexportTarget(ts, filePath, binding.from, projectRoot, visited, exactCache, packages);
+      if (!target) continue;
+      const from = pathKey(path.relative(projectRoot, target.path));
+      carryAliasBody(facts, target.facts, from, binding.imported ?? alias.local, alias);
+    } else if (alias.container !== undefined || alias.local !== alias.exported) {
+      carryAliasBody(facts, facts, undefined, alias.local, alias);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The repository's own packages
+// ---------------------------------------------------------------------------
+
+/** The build-output extensions an entry point is written in, longest first. */
+const BUILD_EXTENSIONS = ['.d.mts', '.d.cts', '.d.ts', '.mjs', '.cjs', '.jsx', '.js'];
+/** The source extensions a build entry can have been compiled from, in preference order. */
+const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
+/** The export conditions read for an entry, in order; any other condition is read after them. */
+const ENTRY_CONDITIONS = ['types', 'import', 'require', 'default'];
+
+/** A file inside the project that no dependency installation wrote. */
+function isOwnFile(projectRoot: string, absolute: string): boolean {
+  const rel = path.relative(projectRoot, absolute);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return false;
+  return !pathKey(rel).split('/').includes('node_modules');
+}
+
+function isFile(absolute: string): boolean {
+  try {
+    return fs.statSync(absolute).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** A JSON file's value, or undefined when it cannot be read or parsed — a tsconfig through the compiler's own reader when it resolves, since tsconfig allows comments. */
+function readJsonFile(file: string, ts: TsModule | null): unknown {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return undefined;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (!ts) return undefined;
+    const parsed = ts.parseConfigFileTextToJson(file, text);
+    return parsed.error ? undefined : parsed.config;
+  }
+}
+
+/** Every string target an export condition object names, in condition order (nested conditions flattened). */
+function conditionTargets(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const record = value as Record<string, unknown>;
+  const keys = [...ENTRY_CONDITIONS.filter(k => k in record), ...Object.keys(record).filter(k => !ENTRY_CONDITIONS.includes(k))];
+  return keys.flatMap(k => conditionTargets(record[k]));
+}
+
+/**
+ * A package's entry points by subpath (`.` for the main one), each with the
+ * targets to try in order: its `exports` — a string, a condition object, or
+ * a subpath map whose plain (wildcard-free) keys are read — else its module,
+ * main and types fields for the main entry.
+ */
+function packageEntries(pkg: Record<string, unknown>): Map<string, string[]> {
+  const entries = new Map<string, string[]>();
+  const exportsField = pkg.exports;
+  if (exportsField !== undefined && exportsField !== null) {
+    const isSubpathMap = typeof exportsField === 'object' && !Array.isArray(exportsField)
+      && Object.keys(exportsField as object).some(k => k.startsWith('.'));
+    if (isSubpathMap) {
+      for (const [subpath, value] of Object.entries(exportsField as Record<string, unknown>)) {
+        if (!subpath.startsWith('.') || subpath.includes('*')) continue;
+        const targets = conditionTargets(value);
+        if (targets.length) entries.set(subpath, targets);
+      }
+    } else {
+      const targets = conditionTargets(exportsField);
+      if (targets.length) entries.set('.', targets);
+    }
+    return entries;
+  }
+  const fallbacks = ['module', 'main', 'types'].map(k => pkg[k]).filter((v): v is string => typeof v === 'string');
+  if (fallbacks.length) entries.set('.', fallbacks);
+  return entries;
+}
+
+/**
+ * The source file an entry target was built from: the target itself when it
+ * is a source file the analyzer reads (a declaration file never is), else —
+ * under the package tsconfig's outDir — the same relative path under its
+ * rootDir, the build extension swapped for a source one. Null when neither
+ * exists inside the project.
+ */
+function entrySource(
+  packageDir: string,
+  target: string,
+  compiler: { outDir?: string; rootDir?: string },
+  projectRoot: string,
+): string | null {
+  const absolute = path.resolve(packageDir, target);
+  if (!isOwnFile(projectRoot, absolute)) return null;
+  const isDeclaration = /\.d\.[cm]?ts$/.test(absolute);
+  if (!isDeclaration && languageOfSourcePath(absolute) && isFile(absolute)
+    && !(compiler.outDir && !path.relative(compiler.outDir, absolute).startsWith('..'))) {
+    return absolute;
+  }
+  if (!compiler.outDir || !compiler.rootDir) return null;
+  const inOut = path.relative(compiler.outDir, absolute);
+  if (inOut.startsWith('..') || path.isAbsolute(inOut)) return null;
+  const extension = BUILD_EXTENSIONS.find(ext => inOut.endsWith(ext));
+  const stem = extension ? inOut.slice(0, -extension.length) : inOut;
+  for (const ext of SOURCE_EXTENSIONS) {
+    const candidate = path.join(compiler.rootDir, stem + ext);
+    if (isOwnFile(projectRoot, candidate) && isFile(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * The packages of THIS repository, by the specifier that names them, each
+ * mapped to the ABSOLUTE source file it resolves to: the root package and
+ * every workspace the root package.json declares — a plain directory, or one
+ * trailing `/*` level — that stays inside the project and outside
+ * node_modules. A package or entry that cannot be read or mapped records
+ * nothing, so its imports stay unresolved exactly as a third-party one's do.
+ * Deterministic: the first package to claim a specifier keeps it.
+ */
+function readLocalPackages(projectRoot: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const ts = resolveTypeScript(projectRoot);
+  const root = readJsonFile(path.join(projectRoot, 'package.json'), null);
+  if (!root || typeof root !== 'object' || Array.isArray(root)) return out;
+  const rootPkg = root as Record<string, unknown>;
+  const declared = Array.isArray(rootPkg.workspaces) ? rootPkg.workspaces
+    : rootPkg.workspaces && typeof rootPkg.workspaces === 'object'
+      && Array.isArray((rootPkg.workspaces as Record<string, unknown>).packages)
+      ? (rootPkg.workspaces as { packages: unknown[] }).packages : [];
+  const dirs: string[] = [projectRoot];
+  for (const entry of declared) {
+    if (typeof entry !== 'string') continue;
+    const key = pathKey(entry).replace(/\/+$/, '');
+    if (!key || path.isAbsolute(key)) continue;
+    if (key.endsWith('/*')) {
+      const base = path.resolve(projectRoot, key.slice(0, -2));
+      if (base.includes('*') || !isOwnFile(projectRoot, base)) continue;
+      let children: fs.Dirent[];
+      try {
+        children = fs.readdirSync(base, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const child of children.slice().sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+        if (child.isDirectory() && child.name !== 'node_modules' && !child.name.startsWith('.')) {
+          dirs.push(path.join(base, child.name));
+        }
+      }
+    } else if (!key.includes('*')) {
+      const dir = path.resolve(projectRoot, key);
+      if (isOwnFile(projectRoot, dir)) dirs.push(dir);
+    }
+  }
+  for (const dir of dirs) {
+    const pkg = dir === projectRoot ? rootPkg : readJsonFile(path.join(dir, 'package.json'), null);
+    if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg)) continue;
+    const name = (pkg as Record<string, unknown>).name;
+    if (typeof name !== 'string' || !name) continue;
+    const tsconfig = readJsonFile(path.join(dir, 'tsconfig.json'), ts) as { compilerOptions?: Record<string, unknown> } | undefined;
+    const options = tsconfig?.compilerOptions ?? {};
+    const compiler = {
+      outDir: typeof options.outDir === 'string' ? path.resolve(dir, options.outDir) : undefined,
+      rootDir: typeof options.rootDir === 'string' ? path.resolve(dir, options.rootDir) : undefined,
+    };
+    for (const [subpath, targets] of packageEntries(pkg as Record<string, unknown>)) {
+      const specifier = subpath === '.' ? name : `${name}/${subpath.replace(/^\.\//, '')}`;
+      if (out.has(specifier)) continue;
+      for (const target of targets) {
+        const source = entrySource(dir, target, compiler, projectRoot);
+        if (source) {
+          out.set(specifier, source);
+          break;
+        }
+      }
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -1401,6 +1781,11 @@ export function buildCodeModel(
   const seen = new Set<string>();
   const exactCache = new Map<string, ExactFacts | null>();
   const rootFiles = walkDeclaredRoots(sourceRoots, exclude, projectRoot);
+  // The repository's own packages, read once: what lets a package specifier
+  // naming one of them resolve like a relative import.
+  const localPackages = readLocalPackages(projectRoot);
+  const packages: Record<string, string> = {};
+  for (const [specifier, absolute] of localPackages) packages[specifier] = pathKey(path.relative(projectRoot, absolute));
 
   // Every source file an implementation names (its own path, then each
   // method's), plus the simPath: the integration-conformance rule needs sim
@@ -1464,7 +1849,7 @@ export function buildCodeModel(
       if (ts) {
         try {
           const facts = walkExact(ts, text, absolute);
-          chaseReexports(ts, facts, absolute, projectRoot, new Set([absolute]), exactCache);
+          chaseReexports(ts, facts, absolute, projectRoot, new Set([absolute]), exactCache, localPackages);
           analyzed = {
             analysisGrade: 'exact',
             declaredNames: [...facts.declared],
@@ -1476,6 +1861,10 @@ export function buildCodeModel(
               ...facts.namedReexports.map(({ exported, local, from }) => ({ exported, local, from })),
               ...facts.starExports.map((from) => ({ exported: '*', local: '*', from })),
             ],
+            exportAliases: facts.exportAliases.map(alias => ({ ...alias })),
+            returnTypes: Object.fromEntries(
+              [...facts.returnTypes].filter((entry): entry is [string, string] => entry[1] !== null),
+            ),
             functionComplexity: Object.fromEntries(facts.complexity),
             functionCallSites: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v.values()]])),
             functionBodies: Object.fromEntries(facts.bodies),
@@ -1509,7 +1898,7 @@ export function buildCodeModel(
     files.push({ path: sourcePath, status: 'analyzed', language, ...analyzed });
   }
 
-  return { files, projectRoot, rootFiles };
+  return { files, projectRoot, rootFiles, packages };
 }
 
 // ---------------------------------------------------------------------------

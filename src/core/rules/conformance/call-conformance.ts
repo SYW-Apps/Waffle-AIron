@@ -173,13 +173,13 @@ function invokedAs(code: CodeIndex, site: CallSiteFact, file: string): Forwarded
   if (!site.member) {
     const binding = importBindingOf(facts, site.name);
     if (!binding || binding.namespace) return [];
-    const module = resolveImport(scope, binding.from, code.paths);
+    const module = resolveImport(scope, binding.from, code.paths, code.packages);
     return module ? code.forwardsOf(module, binding.imported ?? site.name) : [];
   }
   if (!site.via) return [];
   const receiver = importBindingOf(facts, site.via);
   if (!receiver?.namespace) return [];
-  const module = resolveImport(scope, receiver.from, code.paths);
+  const module = resolveImport(scope, receiver.from, code.paths, code.packages);
   return module ? code.forwardsOf(module, site.name) : [];
 }
 
@@ -255,6 +255,8 @@ function describeSite(site: CallSiteFact): string {
   if (site.via) return `${site.via}.${site.name}(…)`;
   if (site.field) return `this.${site.field}.${site.name}(…)`;
   if (site.constructed) return `new ${site.constructed}(…).${site.name}(…)`;
+  if (site.returnedBy) return `${site.returnedBy}(…).${site.name}(…)`;
+  if (site.enclosingClass) return `this.${site.name}(…)`;
   return `<receiver>.${site.name}(…)`;
 }
 
@@ -270,7 +272,7 @@ export const callConformanceRule: SddRule = {
   name: 'call-conformance',
   judges: 'code',
   description:
-    'Code↔spec Level 3: the CLAIMED call ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. A method claims a call two ways and they face one check: a narrative `call` step, and an entry of the declared `calls` a narrative-less method reaches its collaborators through. They assert the same thing, and the step number is no part of the claim — this check never reads order, so it is only how a finding points at one. Forward: every claim must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS NAME came from, and a plain `<name>.<method>()` receiver through the type the file ANNOTATES that name with — a parameter\'s, or an annotated variable\'s, which is how a module that wires its collaborators as closures writes every one of its calls. A matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN tier so that widening what a call reached can accept a claim but never accuse one, and a target that names no file of its own falls back to name membership. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the method must claim it — in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported. A method that claims nothing at all is judged in neither direction: what it leaves unsaid is UNUSED_*\'s subject. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are no claim about a call site, a malformed declared reference is MALFORMED_DECLARED_CALL\'s finding and names no target here, the conformance dial (off) skips, and weaker analysis grades never guess.',
+    'Code↔spec Level 3: the CLAIMED call ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. A method claims a call two ways and they face one check: a narrative `call` step, and an entry of the declared `calls` a narrative-less method reaches its collaborators through. They assert the same thing, and the step number is no part of the claim — this check never reads order, so it is only how a finding points at one. Forward: every claim must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS NAME came from, a plain `<name>.<method>()` receiver through the type the file ANNOTATES that name with — a parameter\'s, or an annotated variable\'s, which is how a module that wires its collaborators as closures writes every one of its calls — a `fn(...).<method>()` receiver through the type fn RETURNS where the code settles it, and a `this.<method>()` receiver through the class whose own method it sits in; a package specifier naming a package of this repository resolves like a relative one, and an export alias (`export { a as b }`, an adapter object property `{ b: a }`) forwards by identity like a re-export. A matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN tier so that widening what a call reached can accept a claim but never accuse one, and a target that names no file of its own falls back to name membership. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the method must claim it — in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported; a function forwarding by identity to a modelled method written in another file IS that method, so what it calls is that method\'s subject. A method that claims nothing at all is judged in neither direction: what it leaves unsaid is UNUSED_*\'s subject. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are no claim about a call site, a malformed declared reference is MALFORMED_DECLARED_CALL\'s finding and names no target here, the conformance dial (off) skips, and weaker analysis grades never guess.',
   codes: [
     { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step or declared call realized by no call that resolves to the target method\'s own source file — the call is absent, or it lands in another module', carryable: true },
     { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step or declared call whose target name IS called, but only from call sites written in a shape this analysis cannot resolve to a file — the claim was not checked, and is neither proven realized nor accused', carryable: true },
@@ -370,7 +372,7 @@ export const callConformanceRule: SddRule = {
         // the realized symbol forwards that way to the target's own file under
         // a name the target is realized by, facade and target are one
         // function and the claim is realized by identity.
-        if (isTarget(code.forwardsOf(file, fnSymbol), target)) continue;
+        if (isTarget(code.forwardsOf(file, fnSymbol, implMethod.exportedVia), target)) continue;
 
         const matching = sites.filter(s => target.accepted.has(s.name));
         const ref = `${claim.component}.${claim.method}`;
@@ -439,7 +441,7 @@ export const callConformanceRule: SddRule = {
         ctx.addIssue(
           'warning',
           'CALL_ORIGIN_UNRESOLVED',
-          `Method "${implMethod.name}" in implementation "${impl.id}": ${unresolved.length} ${claimNoun(implMethod)} ARE called by name inside the function "${fnSymbol}" in "${file}", but every site calling them is written in a shape this analysis cannot resolve to a file — ${unresolved.map(describeMiss).join('; ')}. What resolves is a name bound to a module of THIS project: a bare or namespaced call through such an import binding, a \`this.<field>\` receiver whose declared type names one, a \`new Class(…)\` receiver whose class does, and a receiver NAME the file annotates with a type that does. What does not: an import from a PACKAGE specifier, a receiver holding a value the module assembled, a receiver this model records no name for, and one the file annotates with nothing. This reports what was not checked, not what is wrong — the claim is neither proven realized nor accused of being missing, and no working call is asked to be rewritten to suit the reader.`,
+          `Method "${implMethod.name}" in implementation "${impl.id}": ${unresolved.length} ${claimNoun(implMethod)} ARE called by name inside the function "${fnSymbol}" in "${file}", but every site calling them is written in a shape this analysis cannot resolve to a file — ${unresolved.map(describeMiss).join('; ')}. What resolves is a name bound to a module of THIS project: a bare or namespaced call through such an import binding (a package of this repository included), a \`this.<field>\` receiver whose declared type names one, a \`new Class(…)\` receiver whose class does, a receiver NAME the file annotates with a type that does, a \`fn(…)\` receiver whose function's return the code settles on a type with that method's body, and \`this\` inside a class's own method that has it. What does not: an import from a third-party PACKAGE, a receiver holding a value the module assembled, a receiver this model records no name for, and one the file annotates with nothing. This reports what was not checked, not what is wrong — the claim is neither proven realized nor accused of being missing, and no working call is asked to be rewritten to suit the reader.`,
           impl.id,
           entry.draftContext,
           undefined,
@@ -469,7 +471,14 @@ export const callConformanceRule: SddRule = {
         reached.set(site, owner);
         return owner !== undefined;
       };
-      for (const site of closedCallSites(code, file, fnSymbol, stopAtModelled, implMethod.exportedVia) ?? []) {
+      // A function that forwards by identity to a modelled method written in
+      // ANOTHER file is that method: the body read here was carried across
+      // the forwarding, and what it calls is that method's narrative's
+      // subject, exactly as the walk stops AT a colocated modelled method.
+      const forwardsToModelled = code.forwardsOf(file, fnSymbol, implMethod.exportedVia)
+        .some(p => p.file !== here && modelledAt.get(p.file)?.byName.has(p.name));
+      const conversed = forwardsToModelled ? [] : closedCallSites(code, file, fnSymbol, stopAtModelled, implMethod.exportedVia) ?? [];
+      for (const site of conversed) {
         const owner = reached.get(site);
         if (!owner || owner.component === component.id) continue;
         const ref = `${owner.component}.${owner.method}`;

@@ -19,6 +19,13 @@ fields:
       The paths analyzed at exact AST grade: the only files an import graph may accuse from, a
       measured function be read in, or a module-scope binding be judged in
     optional: false
+  - name: packages
+    type: map<string, string>
+    description: >-
+      The model's local-package map (code_model.packages, empty when it has none) — handed to every
+      import resolution the index and the rules make, so a specifier naming a package of this
+      repository resolves like a relative one
+    optional: false
 methods:
   - name: factsAt
     signature: 'factsAt(path: string): SourceFileFacts | undefined'
@@ -64,35 +71,54 @@ methods:
     returns: set<string>
     description: >-
       Every file the function a call site invokes CAN have been written in: the proven origins,
-      widened for the three receivers the code writes down. A this.<field>.<method>() site widens by
+      widened for the five receivers the code writes down. A this.<field>.<method>() site widens by
       the modules that declare the field's declared TYPE (its type-only or runtime import binding,
       else this file when it declares that name); a new Class(...).<method>() site widens by the
       module the CLASS NAME came from (its runtime import binding — a constructed class is a value,
       never a type-only one — else this file when it declares that class); a plain <name>.<method>()
       site widens by the modules that declare the type the file ANNOTATES that name with — a
       parameter's annotation or an annotated variable declaration's, resolved exactly as a field's
-      declared type is, which is how a module that wires its collaborators as closures writes every
-      call it makes. All three are possibilities and not facts: a declared type says what a
-      collaborator is and never which class ships the body, a constructed class says where the class
-      was written and never where a method it INHERITS from a base was, and an annotated name is
-      read per FILE, so same-named bindings in different functions union their declared types. What
-      a type name LEADS TO is the question and what it expands to is not, so an alias is never
-      unwrapped. Empty for a field or a name the file annotates with nothing and for a class name it
-      cannot place, exactly as the proven tier is. A widened answer may only ACCEPT a call as
-      realized; naming a file a call landed in stays the proven tier's word alone, since a
-      possibility can never accuse
+      declared type is; a fn(...).<method>() site widens by the module that declares the type fn
+      RETURNS (source_file_facts.returnTypes, read in the file fn's own origin is, the type name
+      resolved there) — but only where that module holds a BODY under the invoked name, so an
+      interface's signature never counts; and a this.<method>() site inside a class's own method
+      widens by this file when the class holds a body under the invoked name. All are possibilities
+      and not facts: a declared type says what a collaborator is and never which class ships the
+      body, a constructed class says where the class was written and never where a method it
+      INHERITS from a base was, a subclass may override what this.<method>() reaches, and an
+      annotated name is read per FILE, so same-named bindings in different functions union their
+      declared types. What a type name LEADS TO is the question and what it expands to is not, so an
+      alias is never unwrapped. Empty for a field or a name the file annotates with nothing, for a
+      function whose return the code does not settle, and for a class name it cannot place, exactly
+      as the proven tier is. A widened answer may only ACCEPT a call as realized; naming a file a
+      call landed in stays the proven tier's word alone, since a possibility can never accuse
   - name: forwardsOf
-    signature: 'forwardsOf(path: string, name: string): ForwardedName[]'
+    signature: 'forwardsOf(path: string, name: string, container?: string): list<ForwardedName>'
+    params:
+      - name: path
+        type: string
+      - name: name
+        type: string
+      - name: container
+        type: string
+        description: >-
+          The exported object the name is a property of — an anchor's exportedVia handle — so a
+          property alias of that object is followed
+        optional: true
     returns: list<ForwardedName>
     description: >-
-      What a name a file publishes IS, followed through every re-export: the pair itself, then for
-      each export-from that republishes the name — named or star, aliased or not (`export { a as b }
-      from 'm'` makes the file's `b` m's `a`) — the module it comes from under the name that module
-      publishes it by, transitively; a star forwards only a name its module actually exports, and
-      never a default. An aliased re-export forwards exactly as an unaliased one does: the spelling
-      differs, the identity does not. Specifiers outside the closed path set, files below exact
-      grade (which record no re-export names) and cycles end the walk. PROVEN: every pair is written
-      down in the code
+      What a name a file publishes IS, followed through every forwarding the code writes down: the
+      pair itself, then for each export-from that republishes the name — named or star, aliased or
+      not (`export { a as b } from 'm'` makes the file's `b` m's `a`) — the module it comes from
+      under the name that module publishes it by; for each export alias publishing it with no
+      specifier (`export { a as b }`, or with `container` a property `{ b: a }` of that exported
+      object) the file's own local name, and where that local name is a runtime, non-namespace
+      import binding, the module it came from under the name it was imported by — transitively. A
+      star forwards only a name its module actually exports, and never a default. An aliased
+      forwarding forwards exactly as an unaliased one does: the spelling differs, the identity does
+      not. Specifiers outside the closed path set (local packages resolving through the package
+      map), files below exact grade (which record no forwarding names) and cycles end the walk.
+      PROVEN: every pair is written down in the code
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:08.829Z'
-updatedAt: '2026-10-04T10:19:58.493Z'
+updatedAt: '2026-10-05T00:38:28.046Z'
