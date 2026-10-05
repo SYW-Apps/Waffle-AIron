@@ -24,10 +24,13 @@ import { activeTargetTypes } from '../models/project.js';
 import type { AgentRecord } from '../models/agent.js';
 import type { ProjectConfig } from '../models/project.js';
 
+/** The extensions the built-in exporters write agent files with: markdown (claude, cursor, copilot, codex, custom) and yaml (gemini, agy). */
+const AGENT_FILE_EXTENSION = /\.(md|ya?ml)$/;
+
 /** Filenames that only wairon's topology produces (architect / owners /
  *  implementers). Used as the migration fallback when reconciling a dir whose
  *  pre-existing files predate the managed marker. */
-const WAIRON_AGENT_FILE = /-(owner|implementer|architect)\.md$/;
+const WAIRON_AGENT_FILE = /-(owner|implementer|architect)\.(md|ya?ml)$/;
 
 /**
  * Reconcile the managed output dirs against the EXPECTED file set — the paths
@@ -35,7 +38,9 @@ const WAIRON_AGENT_FILE = /-(owner|implementer|architect)\.md$/;
  * agent files that wairon owns but that are no longer expected. A file is
  * "wairon-owned" if it carries the managed marker OR matches the generated
  * agent-file naming (the latter migrates dirs written before the marker
- * existed). Hand-authored files that satisfy neither are never touched.
+ * existed). Hand-authored files that satisfy neither are never touched. Every
+ * extension a built-in exporter writes is reconciled (.md, and .yaml for the
+ * gemini/agy agents), so no target's managed files outlive the topology.
  * Returns the number of files pruned.
  *
  * `scanDirs` overrides which directories are reconciled — needed when the
@@ -57,7 +62,7 @@ export function pruneStaleAgents(expectedPaths: Set<string>, scanDirs?: Iterable
       continue;
     }
     for (const name of entries) {
-      if (!name.endsWith('.md')) continue;
+      if (!AGENT_FILE_EXTENSION.test(name)) continue;
       const full = path.resolve(dir, name);
       if (expectedPaths.has(full)) continue; // part of the current topology
       let owned = WAIRON_AGENT_FILE.test(name);

@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 
 // ---------------------------------------------------------------------------
@@ -26,6 +27,16 @@ function project(rules: string[] = []): string {
 function agentFile(root: string, dir: string, name: string, body = '# agent\n'): void {
   fs.mkdirSync(path.join(root, dir), { recursive: true });
   fs.writeFileSync(path.join(root, dir, name), body);
+}
+
+function git(root: string, ...args: string[]): void {
+  execFileSync('git', args, { cwd: root, stdio: 'ignore', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+}
+function gitRepo(root: string): void {
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'test');
+  git(root, 'config', 'user.email', 'test@localhost');
+  git(root, 'config', 'core.autocrlf', 'false');
 }
 
 afterEach(() => {
@@ -89,5 +100,60 @@ describe('materializeAgentFiles on a configuration that predates it', () => {
     const root = project(['materializeAgentFiles: false']);
     projectConfigRepositoryAt(root).setProjectType('library');
     expect(fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8')).toMatch(/materializeAgentFiles: false/);
+  });
+});
+
+describe('materializeAgentFiles inference counts only the agent files git tracks', () => {
+  it('a committed managed agent file reads true', () => {
+    const root = project();
+    gitRepo(root);
+    agentFile(root, '.claude/agents', 'billing-owner.md');
+    git(root, 'add', '-A');
+    git(root, 'commit', '-q', '-m', 'agents');
+    expect(projectConfigRepositoryAt(root).load()!.rules.materializeAgentFiles).toBe(true);
+  });
+
+  it('a staged (not yet committed) managed agent file reads true', () => {
+    const root = project();
+    gitRepo(root);
+    agentFile(root, '.github/prompts', 'billing.prompt.md', '<!-- wairon:managed -->\nbody\n');
+    git(root, 'add', '--', '.github/prompts');
+    expect(projectConfigRepositoryAt(root).load()!.rules.materializeAgentFiles).toBe(true);
+  });
+
+  it('an ignored leftover does not switch materialization on, and a save leaves it unstated', () => {
+    const root = project();
+    gitRepo(root);
+    fs.writeFileSync(path.join(root, '.gitignore'), '.claude/\n');
+    agentFile(root, '.claude/agents', 'billing-owner.md');
+    const repo = projectConfigRepositoryAt(root);
+    expect(repo.load()!.rules.materializeAgentFiles).toBe(false);
+    repo.setProjectType('library');
+    expect(fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8')).not.toMatch(/materializeAgentFiles/);
+  });
+
+  it('an untracked managed agent file does not switch materialization on', () => {
+    const root = project();
+    gitRepo(root);
+    agentFile(root, '.cursor/rules', 'billing-owner.md');
+    agentFile(root, '.github/prompts', 'billing.prompt.md', '<!-- wairon:managed -->\nbody\n');
+    expect(projectConfigRepositoryAt(root).load()!.rules.materializeAgentFiles).toBe(false);
+  });
+
+  it('a tracked hand-written file beside an untracked managed one still reads false', () => {
+    const root = project();
+    gitRepo(root);
+    agentFile(root, '.claude/agents', 'my-notes.md', '# written by a person\n');
+    git(root, 'add', '-A');
+    git(root, 'commit', '-q', '-m', 'notes');
+    agentFile(root, '.claude/agents', 'billing-owner.md');
+    expect(projectConfigRepositoryAt(root).load()!.rules.materializeAgentFiles).toBe(false);
+  });
+
+  it('outside any git work tree, presence decides (the files may be all a person has)', () => {
+    const root = project();
+    expect(fs.existsSync(path.join(root, '.git'))).toBe(false);
+    agentFile(root, '.claude/agents', 'billing-owner.md');
+    expect(projectConfigRepositoryAt(root).load()!.rules.materializeAgentFiles).toBe(true);
   });
 });

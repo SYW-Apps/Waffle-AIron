@@ -82,8 +82,10 @@ last.
 
    **Committed agent files are kept.** A `project.yaml` that never set
    `rules.materializeAgentFiles` reads as `true` while wairon-managed agent files are
-   present, so the first lock keeps them. A save at the project's root writes `true`
-   down. Projects without agent files get live briefs instead.
+   committed (or staged) in git, so the first lock keeps them. A save at the project's
+   root writes `true` down. Ignored or untracked leftovers (a gitignored `.claude/`)
+   do not count: such a project gets live briefs, and the lock writes no agent files.
+   Outside a git repository every managed agent file present counts.
 6. **Make the pack selections reproducible for CI.** CI has no pack store, so a
    declared pack it cannot get is `PACK_NOT_INSTALLED`, and every command refuses.
    Either:
