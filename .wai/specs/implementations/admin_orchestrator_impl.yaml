@@ -68,15 +68,23 @@ methods:
         outcome: rejected — *:* keys are not mintable
       - stepNumber: 6
         description: >-
+          Admit the project the key is narrowed to through the project repository: a project no
+          hosted record holds (or a member-qualified entry naming no member) refuses the mint before
+          anything is generated, so a key is never minted for a project that does not exist
+        type: call
+        targetComponent: project_repository
+        targetMethod: admitNarrowing
+      - stepNumber: 7
+        description: >-
           Generate a random API key and its salted hash; assemble an ApiKeyRecord bound to the
           project and role
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Persist the credential
         type: call
         targetComponent: credential_repository
         targetMethod: create
-      - stepNumber: 8
+      - stepNumber: 9
         description: Return the plaintext key (shown once)
         type: return
         outcome: plaintext key
@@ -1226,4 +1234,4 @@ methods:
     symbol: hostedApprover
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-10-03T17:58:48.202Z'
+updatedAt: '2026-10-05T17:30:14.316Z'

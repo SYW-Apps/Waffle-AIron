@@ -2474,10 +2474,10 @@ methods:
           - value: set
             step: 3
           - value: list
-            step: 6
-          - value: remove
             step: 8
-        defaultStep: 10
+          - value: remove
+            step: 10
+        defaultStep: 12
       - stepNumber: 3
         label: set
         description: >-
@@ -2491,10 +2491,25 @@ methods:
         targetComponent: cli_host_adapter
         targetMethod: setAssignment
       - stepNumber: 5
+        description: Does the assignment grant project:write (yes or approval)?
+        type: branch
+        condition: the capability is project:write and the value grants it
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Explain the user's project:read at the same scope via the host adapter and warn when it is
+          not yes: read and write are separate capabilities, so a subject granted write without read
+          cannot open the project its write covers — the warning names the grant that would fix it.
+          A user with no record, or an explanation that fails, warns nothing
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: explain
+      - stepNumber: 7
         description: Return after set
         type: return
         outcome: assigned
-      - stepNumber: 6
+      - stepNumber: 8
         label: list
         description: >-
           List the assignments narrowed by scope (a subsystem scope included) and user via the host
@@ -2502,21 +2517,21 @@ methods:
         type: call
         targetComponent: cli_host_adapter
         targetMethod: listAssignments
-      - stepNumber: 7
+      - stepNumber: 9
         description: Return after list
         type: return
         outcome: listed
-      - stepNumber: 8
+      - stepNumber: 10
         label: remove
         description: Remove the assignment via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: removeAssignment
-      - stepNumber: 9
+      - stepNumber: 11
         description: Return after remove
         type: return
         outcome: removed
-      - stepNumber: 10
+      - stepNumber: 12
         label: unknown
         description: Refuse an unknown action
         type: throw
@@ -2918,17 +2933,17 @@ methods:
           - value: mint
             step: 3
           - value: revoke
-            step: 8
+            step: 9
           - value: list
-            step: 10
-        defaultStep: 12
+            step: 11
+        defaultStep: 13
       - stepNumber: 3
         label: mint
         description: Is an owner named?
         type: branch
         condition: '--owner is given'
         onTrueStep: 4
-        onFalseStep: 6
+        onFalseStep: 7
       - stepNumber: 4
         label: mint_owned
         description: >-
@@ -2938,40 +2953,50 @@ methods:
         targetComponent: cli_host_adapter
         targetMethod: mintToken
       - stepNumber: 5
+        description: >-
+          For a token narrowed to one project, explain the owner's project:read there via the host
+          adapter and warn when it is not yes — the token acts as its owner's live permission, so an
+          owner who cannot read the project mints a token that cannot read it either; seeding the
+          owner's authority with `host permission set` fixes it. An owner with no user record, or an
+          explanation that fails, warns nothing
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: explain
+      - stepNumber: 6
         description: Return after mint
         type: return
         outcome: minted
-      - stepNumber: 6
+      - stepNumber: 7
         label: mint_ownerless
         description: Mint an ownerless key via the host adapter, warning that it resolves to no permissions
         type: call
         targetComponent: cli_host_adapter
         targetMethod: mintKey
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return after mint
         type: return
         outcome: minted
-      - stepNumber: 8
+      - stepNumber: 9
         label: revoke
         description: Revoke a key via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: revokeKey
-      - stepNumber: 9
+      - stepNumber: 10
         description: Return after revoke
         type: return
         outcome: revoked
-      - stepNumber: 10
+      - stepNumber: 11
         label: list
         description: List keys via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: listKeys
-      - stepNumber: 11
+      - stepNumber: 12
         description: Return after list
         type: return
         outcome: listed
-      - stepNumber: 12
+      - stepNumber: 13
         label: unknown
         description: Refuse an unknown action
         type: throw
@@ -2993,7 +3018,10 @@ methods:
         defaultStep: 6
       - stepNumber: 3
         label: create
-        description: Derive the unit's qualified id from its parent and slug
+        description: >-
+          Derive the unit's qualified id from its parent and slug, and its kind: --kind when given,
+          else business_entity for a top-level unit (the only kind the org-unit hierarchy admits at
+          the root) and team under a parent
         type: local
       - stepNumber: 4
         description: Create the unit via the host adapter
@@ -3397,4 +3425,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-05T06:49:34.014Z'
+updatedAt: '2026-10-05T17:30:57.373Z'

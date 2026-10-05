@@ -21,8 +21,8 @@ read back into a tree.
 | Where | How |
 |---|---|
 | CLI | `wairon export` prints the JSON to stdout, and nothing else. `wairon export --out design.json` writes the file and reports the path and the approval state. See [cli.md](cli.md#wairon-export---out-file). |
-| Library | `const { exportDesign } = require('@wairon/cli')` (or `import` from an ES module), then `exportDesign(outPath?, approval?)`, which returns the document and writes it when `outPath` is given. The package ships no TypeScript declarations; a TypeScript consumer declares the module itself or types the document from the JSON Schema. |
-| JSON Schema | `schemas/design-export-1.json`, shipped in the package. It is generated from the zod schema in `src/models/design-export.ts` at build time, and a test fails if the two drift. |
+| Library | `const { exportDesign } = require('@wairon/cli')` (or `import` from an ES module), then `exportDesign(outPath?, approval?)`, which returns the document and writes it when `outPath` is given. The package ships TypeScript declarations for the library entry (`dist/index.d.ts`, the `types` field), so `DesignExport` and `exportDesign` are typed. |
+| JSON Schema | `schemas/design-export-1.json`, shipped in the package (`require.resolve('@wairon/cli/schemas/design-export-1.json')`). It is a JSON Schema draft-07 document (it declares `$schema`) and carries no `$id`: reference it by its path in the package. It is generated from the zod schema in `src/models/design-export.ts` at build time, and a test fails if the two drift. |
 
 The CLI decides the approval verdict first, the same way `wairon lock-check` does (not strict),
 and stamps it. It also exports a tree that is not approved, stamped with its state.
@@ -53,11 +53,18 @@ spec files sit in on disk.
   fields, enum values, narrative steps, lifecycle roots and `formerly`.
 - **The document has no timestamp.** Equal `source.stateId`s with equal approvals mean equal
   documents, so a consumer can cache on `stateId`.
-- **`source.stateId` is a content id of the exported design, not the lock's gate identity.**
-  It is a different digest from the `stateId` in `.wai/lock.json`, which also covers the
-  doctrine, the declared inputs and the members' approvals. To relate an export to an
-  approval, read `source.approval`: it is `locked` exactly when that lock record covers this
-  tree.
+- **`source.stateId` is a content id, not the lock's gate identity.** The two are different
+  digests by design, and never compare equal:
+  - `source.stateId` (`sha256:<digest>`) hashes the parsed spec tree the export was read
+    from, every spec the scan loads, timestamps left out and specs in id order. Snapshots and
+    archives carry the same id. It changes exactly when the specs change.
+  - The lock's `stateId` in `.wai/lock.json` (`sha256+content+doctrine+inputs+members:<digest>`)
+    is the gate identity. It hashes this project's own specs together with the governing
+    doctrine, the declared inputs, `composition` and each direct member's composition subject,
+    so it also moves when a rule, an input or a member's approval moves.
+
+  To relate an export to an approval, read `source.approval`: it is `locked` exactly when
+  that lock record covers this tree.
 
 ## Keys
 

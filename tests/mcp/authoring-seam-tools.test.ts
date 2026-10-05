@@ -137,10 +137,32 @@ describe('sdd_set_endpoints — one gated delta, answered with the change report
     const { call } = await bound();
     await seed(call);
     await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'HTTP', httpMethod: 'POST', path: '/pay' }] });
+    // A transport follows the Portal's portalType: retype the Portal, then rebind.
+    await call('sdd_update_spec', { kind: 'component', id: 'shop_portal', delta: { portalType: 'CLI' } });
     const rebound = await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'CLI', command: 'shop pay' }] });
     expect(rebound.isError ?? false, textOf(rebound)).toBe(false);
     invalidateSpecCache();
     expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toEqual({ transport: 'CLI', command: 'shop pay' });
+  });
+
+  it('takes the portalType spelling of a transport and stores the endpoint\'s (HTTP_API is HTTP)', async () => {
+    const { call } = await bound();
+    await seed(call);
+    const result = await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'HTTP_API', httpMethod: 'POST', path: '/pay' }] });
+    expect(result.isError ?? false, textOf(result)).toBe(false);
+    expect(textOf(result)).toContain('pay→HTTP');
+    invalidateSpecCache();
+    expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toEqual({ transport: 'HTTP', method: 'POST', path: '/pay' });
+  });
+
+  it('refuses a transport the Portal\'s portalType does not imply, naming the one it does, before anything is written', async () => {
+    const { call } = await bound();
+    await seed(call);
+    const result = await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'CLI', command: 'shop pay' }] });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('transport "CLI" does not match shop_portal\'s portalType HTTP_API, which implies transport "HTTP"');
+    invalidateSpecCache();
+    expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toBeUndefined();
   });
 
   it('refuses a method the contract does not declare, before anything is written', async () => {
@@ -330,5 +352,38 @@ describe('sdd_delete_spec — the deletion as data', () => {
     const result = await call('sdd_delete_spec', { kind: 'component', id: 'nowhere' });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toBe('Error: Spec of kind "component" with ID "nowhere" could not be deleted (file may not exist).');
+  });
+});
+
+describe('sdd_get_spec — the kind inferred from the id when it is omitted', () => {
+  it('reads the one spec an id names, answering with the kind it inferred', async () => {
+    const { call } = await bound();
+    await seed(call);
+    const result = await call('sdd_get_spec', { id: 'ishop_portal' });
+    expect(result.isError ?? false, textOf(result)).toBe(false);
+    expect(result.structuredContent.kind).toBe('interface');
+    expect(result.structuredContent.spec.component).toBe('shop_portal');
+    const system = await call('sdd_get_spec', { id: 'system' });
+    expect(system.structuredContent.kind).toBe('system');
+  });
+
+  it('refuses an id that names specs of more than one kind, naming the candidates', async () => {
+    const { call } = await bound();
+    await seed(call);
+    const ok = await call('sdd_add_component', { id: 'shop', name: 'Shop Desk', description: 'a component named like its subsystem', subsystem: 'shop', componentType: 'Orchestrator' });
+    expect(ok.isError ?? false, textOf(ok)).toBe(false);
+    const result = await call('sdd_get_spec', { id: 'shop' });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('The ID "shop" names specs of more than one kind (subsystem, component). Pass "kind" to choose one.');
+    const chosen = await call('sdd_get_spec', { kind: 'component', id: 'shop' });
+    expect(chosen.structuredContent.spec.name).toBe('Shop Desk');
+  });
+
+  it('refuses an id no spec has', async () => {
+    const { call } = await bound();
+    await seed(call);
+    const result = await call('sdd_get_spec', { id: 'nowhere' });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('No spec of any kind has the ID "nowhere".');
   });
 });

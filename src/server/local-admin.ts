@@ -52,7 +52,7 @@ export {
 } from './packs.js';
 
 // Permission assignments (permission_admin_orchestrator).
-export { setAssignment, removeAssignment, listAssignments } from './permissionadmin.js';
+export { setAssignment, removeAssignment, listAssignments, explain } from './permissionadmin.js';
 
 // Owner-bound API tokens (identity_orchestrator).
 export { mintToken } from './identity.js';

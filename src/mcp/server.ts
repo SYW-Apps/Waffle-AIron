@@ -441,6 +441,35 @@ function renderChangeReport(report: SpecChangeReport): string {
 
 /** The kinds a spec write addresses, as the receipt and the change report name them. */
 const SPEC_KINDS = ['system', 'subsystem', 'component', 'interface', 'implementation', 'type'] as const;
+type SpecKind = typeof SPEC_KINDS[number];
+
+/**
+ * The kinds whose loader holds this id — how sdd_get_spec infers an omitted kind.
+ * The L0 is a singleton read by its name or by "system".
+ */
+function specKindsHolding(id: string): SpecKind[] {
+  const system = loadSystemSpec();
+  const held: Record<SpecKind, boolean> = {
+    system: !!system && (id === 'system' || id === system.name),
+    subsystem: !!loadSubsystemSpec(id),
+    component: !!loadComponentSpec(id),
+    interface: !!loadInterfaceSpec(id),
+    implementation: !!loadImplementationSpec(id),
+    type: !!loadTypeSpec(id),
+  };
+  return SPEC_KINDS.filter((k) => held[k]);
+}
+
+/**
+ * A Portal's portalType → the endpoint transport its methods bind with: the two
+ * vocabularies name one set, and only HTTP is spelled differently (HTTP_API).
+ * The same table the gate's portal-endpoints rule checks bindings against;
+ * Custom is free-form and implies none.
+ */
+const PORTAL_TYPE_TRANSPORT: Record<string, string | undefined> = {
+  HTTP_API: 'HTTP', gRPC: 'gRPC', GraphQL: 'GraphQL', MessageBus: 'MessageBus',
+  NamedPipe: 'NamedPipe', IPC: 'IPC', CLI: 'CLI', Custom: undefined,
+};
 
 /**
  * The lifecycle statuses a tool's input may state, as the zod vocabulary its
@@ -2185,12 +2214,14 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
+  /** The endpoint vocabulary a binding is stored in. */
+  type StoredTransport = 'HTTP' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'Custom';
   // One generic tool for ALL public-facing wire endpoints — HTTP, gRPC, GraphQL,
   // MessageBus, NamedPipe, IPC, CLI, Custom — binding each interface method to a
   // concrete `endpoint`. This is what a Portal needs to satisfy the gate's
   // MISSING_ENDPOINT / ENDPOINT_TRANSPORT_MISMATCH rules. Run it after
   // sdd_define_interface (the methods must already exist).
-  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'Custom'; httpMethod?: string; path?: string; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; address?: string }> }>(server,
+  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'Custom'; httpMethod?: string; path?: string; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; address?: string }> }>(server,
     'sdd_set_endpoints',
     {
       description: 'Bind concrete wire endpoints to existing L3 interface methods (required for every Portal). Pick `transport` and fill that transport\'s address fields. Run after sdd_define_interface. Written through the authoring seam as one gated delta, and answered with the change report — every binding set or changed, or that nothing changed — as structured content beside the sentence.',
@@ -2198,7 +2229,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
         endpoints: z.array(z.object({
           method: z.string().describe('The NAME of the interface method to bind (not the HTTP verb)'),
-          transport: z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'Custom']).describe('Wire protocol; must match the Portal\'s portalType'),
+          transport: z.enum(['HTTP', 'HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'Custom']).describe('Wire protocol; must be the one the Portal\'s portalType implies. Either vocabulary is accepted: the endpoint\'s (HTTP) or the portalType\'s (HTTP_API), stored as HTTP; any other transport is refused, naming the one the portalType implies'),
           httpMethod: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']).optional().describe('HTTP: verb'),
           path: z.string().optional().describe('HTTP: route path, e.g. "/v1/checkout"'),
           service: z.string().optional().describe('gRPC: service name'),
@@ -2222,9 +2253,14 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // mcp_orchestrator.setEndpoints step 1: the contract the bindings attach to.
         const intf = loadInterfaceSpec(interfaceId);
         if (!intf) return errText(`Interface "${interfaceId}" does not exist.`);
+        // Step 2: the Portal the contract belongs to, for the transport its portalType implies.
+        const owner = intf.component ? loadComponentSpec(intf.component) : null;
+        const implied = owner?.componentType === 'Portal' && owner.portalType
+          ? PORTAL_TYPE_TRANSPORT[owner.portalType]
+          : undefined;
 
-        const buildRaw = (e: typeof endpoints[number]): Record<string, unknown> => {
-          switch (e.transport) {
+        const buildRaw = (e: typeof endpoints[number], transport: StoredTransport): Record<string, unknown> => {
+          switch (transport) {
             case 'HTTP':       return { transport: 'HTTP', method: e.httpMethod, path: e.path };
             case 'gRPC':       return { transport: 'gRPC', service: e.service, method: e.rpcMethod };
             case 'GraphQL':    return { transport: 'GraphQL', operation: e.operation, field: e.field };
@@ -2244,13 +2280,21 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         for (const e of endpoints) {
           const m = intf.methods.find(x => x.name === e.method);
           if (!m) return errText(`Method "${e.method}" not found on interface "${interfaceId}". Define it via sdd_define_interface first.`);
-          const parsed = EndpointSchema.safeParse(buildRaw(e));
+          // Step 3: one vocabulary — a portalType spelling maps to the endpoint's.
+          const transport: StoredTransport = e.transport === 'HTTP_API' ? 'HTTP' : e.transport;
+          if (implied && transport !== implied) {
+            return errText(
+              `Method "${e.method}": transport "${e.transport}" does not match ${owner!.id}'s portalType `
+              + `${owner!.portalType}, which implies transport "${implied}". Bind it as "${implied}", or change the Portal's portalType.`,
+            );
+          }
+          const parsed = EndpointSchema.safeParse(buildRaw(e, transport));
           if (!parsed.success) {
             const detail = parsed.error.issues.map(i => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
-            return errText(`Invalid ${e.transport} endpoint for method "${e.method}": ${detail}`);
+            return errText(`Invalid ${transport} endpoint for method "${e.method}": ${detail}`);
           }
           methods.push({ name: e.method, endpoint: parsed.data as Endpoint });
-          bound.push(`${e.method}→${e.transport}`);
+          bound.push(`${e.method}→${transport}`);
         }
         // Step 3: one delta naming each method with its endpoint, through the
         // authoring seam. Step 4: the change report.
@@ -2537,19 +2581,32 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; methods?: string[] }>(server,
+  reg<{ kind?: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; methods?: string[] }>(server,
     'sdd_get_spec',
     {
       description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. Pass "methods" to read only the named methods of a contract, an implementation or a type — a 45-method spec fetched whole to look at one of them is the read side of the same waste a restatement is on the write side; the answer then carries a "partialResult" marker naming what was left out, and must never be re-authored from. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back. A contract\'s methods come back in their STORED form — a method that takes its signature from a source carries its signatureFrom, not the params the loader resolves into it — so the answer can be re-authored from as it is; the resolved params, returns and text of each such method come back as a derived, read-only "resolvedSignatures" marker. The structured content carries the same answer with the derived markers KEPT SEPARATE from the stored spec ({kind, id, spec, partialResult?, variantGuidance?, resolvedSignatures?}), so nothing derived can be mistaken for something stored; the text block folds them in as it always has.',
       inputSchema: {
-        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of specification'),
+        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).optional().describe('The kind of specification. Omit it to infer the kind from the id: the read is refused, naming the candidate kinds, when the id names specs at more than one level (an interface and an implementation sharing an id, say), or at none'),
         id: z.string().describe('The identifier of the spec to fetch (the L0 system spec is a singleton — pass the system name or "system")'),
         methods: z.array(z.string().min(1)).optional().describe('Return only these methods by name; every other field of the spec comes back unchanged. Only an interface, an implementation or a type declares methods — asking for one elsewhere is refused, as is a name the spec does not declare (the answer names the ones it does). Omit it for the whole spec.'),
       },
       outputSchema: getSpecOutput,
     },
-    ({ kind, id, methods }) => {
+    ({ kind: askedKind, id, methods }) => {
       try {
+        // mcp_orchestrator.getSpec steps 1-4: no kind asked for — infer it from the id.
+        let kind: SpecKind;
+        if (askedKind) {
+          kind = askedKind;
+        } else {
+          const holders = specKindsHolding(id);
+          if (holders.length !== 1) {
+            return errText(holders.length === 0
+              ? `No spec of any kind has the ID "${id}".`
+              : `The ID "${id}" names specs of more than one kind (${holders.join(', ')}). Pass "kind" to choose one.`);
+          }
+          kind = holders[0];
+        }
         let result: unknown = null;
         /** The filter marker, when `methods` narrowed the read; null when it read whole. */
         let partial: { shown: string[]; omitted: number; warning: string } | null = null;

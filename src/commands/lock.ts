@@ -140,9 +140,9 @@ export function checkApproval(strict: boolean): ApprovalCheck {
       return {
         state: 'stale',
         approved: false,
-        message: 'The design, or something it was approved under (doctrine, declared inputs, `composition`, '
-          + 'a direct member\'s approval), changed after it was approved '
+        message: 'The design, or something it was approved under, changed after it was approved '
           + `(the approval on record is ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}). `
+          + `${whatMoved(record!)} `
           + 'Nothing says a human has seen what is about to merge. '
           + 'Fix: run `wairon lock` on this branch and commit the updated .wai/lock.json.',
       };
@@ -158,6 +158,37 @@ export function checkApproval(strict: boolean): ApprovalCheck {
             + 'on, or pass --strict to fail here instead.',
       };
   }
+}
+
+/**
+ * What moved past a stale approval, named: how many own spec files changed, and
+ * each direct project member whose approval moved since this one was taken (its
+ * pin), that is no longer approved at its own root, or that was added or removed.
+ * When none of those moved, what did is an input the gate identity covers beside
+ * the specs — the doctrine, the declared inputs or `composition`.
+ */
+function whatMoved(record: LockRecord): string {
+  const diff = diffAgainstApproval();
+  const own = diff ? diffSize(diff) : null;
+  const members = familyApprovals(1).filter((a) => a.parent === '' && a.as !== 'part');
+  const named: string[] = [];
+  for (const m of members) {
+    const name = m.alias ?? m.key;
+    if (m.pinned === 'unpinned') named.push(`${name} (added since the approval)`);
+    else if (m.pinned === 'moved') named.push(`${name} (its approval moved since this one was taken${m.state === 'approved' ? '' : `; now ${m.state}`})`);
+    else if (m.state !== 'approved') named.push(`${name} (${m.state} at its own root)`);
+  }
+  const current = new Set(members.map((m) => m.alias ?? m.key));
+  for (const alias of Object.keys(record.members ?? {})) {
+    if (!current.has(alias)) named.push(`${alias} (removed since the approval)`);
+  }
+  const parts: string[] = [];
+  if (own !== null && own > 0) parts.push(`${own} own spec file(s) changed since the approval`);
+  if (named.length > 0) parts.push(`direct member(s): ${named.join(', ')}`);
+  if (parts.length > 0) return `What moved: ${parts.join('; ')}.`;
+  return own === null
+    ? 'This approval predates per-spec digests, so which spec moved cannot be said.'
+    : "No own spec file and no direct member's approval moved, so what changed is the doctrine, a declared input or `composition`.";
 }
 
 /** The gate-identity upgrade verdict: stale, said plainly, with the one remedy. */

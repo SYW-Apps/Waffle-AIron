@@ -16,9 +16,14 @@ fields:
   - name: stateId
     type: string
     description: >-
-      `sha256:<digest>`, the content identity of the tree (the same StateId snapshots and archives
-      are stamped with): equal state ids mean equal documents, so it doubles as a consumer's cache
-      key
+      `sha256:<digest>`, the CONTENT identity of the parsed spec tree the export was read from (the
+      same StateId snapshots and archives are stamped with: every spec the scan loads, volatile
+      timestamps excluded, in id order). It is the consumer's cache key: equal state ids with equal
+      approvals mean equal documents. It is NOT the lock's gate identity: `.wai/lock.json` records
+      `sha256+content+doctrine+inputs+members:<digest>`, which hashes only the project's OWN specs
+      plus the governing doctrine, the declared inputs, `composition` and each direct member's
+      composition subject — so the two digests never compare equal, and an export is related to its
+      approval through `approval`, never by comparing ids
     optional: false
   - name: approved
     type: bool
@@ -37,4 +42,4 @@ fields:
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:52:58.934Z'
-updatedAt: '2026-10-04T15:39:04.820Z'
+updatedAt: '2026-10-05T17:31:51.862Z'

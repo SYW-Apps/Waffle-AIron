@@ -74,6 +74,7 @@ const PORTAL_SOURCES: Record<string, string> = {
   setAssignment: 'permissionadmin',
   removeAssignment: 'permissionadmin',
   listAssignments: 'permissionadmin',
+  explain: 'permissionadmin',
   existingProjectRoot: 'projects',
   AdminAuthError: 'errors',
   mintToken: 'identity',

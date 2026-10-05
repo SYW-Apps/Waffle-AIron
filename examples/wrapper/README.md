@@ -20,7 +20,8 @@ install.js                the installer a wrapper actually ships: injects
 wrapper.js                ADVANCED: embedding wairon as a library to build
                           a branded gate binary (most wrappers skip this)
 demo-project/             a spec-only project governed by the doctrine —
-                          CI-clean; its .wai/project.yaml lists the packs
+                          CI-clean (`wairon validate --ci` passes); its
+                          .wai/project.yaml lists the packs
                           (the post-`install.js` end state, committed)
 ```
 

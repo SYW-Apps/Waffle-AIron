@@ -23,7 +23,11 @@ export function designExportJsonSchema(DesignExportSchema, formatVersion) {
   const major = formatVersion.split('.')[0];
   const generated = zodToJsonSchema(DesignExportSchema, { name: 'DesignExport', target: 'jsonSchema7', removeAdditionalStrategy: 'strict' });
   return {
-    $id: `https://github.com/SYW-Apps/Waffle-AIron/schemas/design-export-${major}.json`,
+    // The draft the generator targets, declared so a validator picks the right one.
+    // No $id: no URL resolves to this file for every published version, and an
+    // $id that 404s pretends to be a reference it is not. Consumers address the
+    // schema by its path in the package (schemas/design-export-<major>.json).
+    $schema: 'http://json-schema.org/draft-07/schema#',
     title: `wairon design export, format ${major}.x`,
     description:
       'One project\'s whole design, resolved (format `wairon-design`). A MINOR formatVersion only adds a field '

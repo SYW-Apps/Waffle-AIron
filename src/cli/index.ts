@@ -739,7 +739,7 @@ hostCmd
   .description('create an organization unit (projects are placed into units at creation)')
   .option('--slug <slug>', 'unit slug (REQUIRED for create; a root unit\'s id IS its slug)')
   .option('--name <name>', 'display name (defaults to the slug)')
-  .option('--kind <kind>', 'unit kind (business_entity | department | team | …)', 'team')
+  .option('--kind <kind>', 'unit kind (business_entity | department | team | …); default business_entity for a top-level unit, team under --parent')
   .option('--parent <unitId>', 'qualified id of the parent unit (omit for a root unit)')
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {

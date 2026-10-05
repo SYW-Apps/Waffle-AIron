@@ -649,7 +649,7 @@ Every project lives in an **organization unit**, and access is a grid of
 project on a new instance:
 
 ```sh
-wairon host unit create --slug acme --kind business_entity        # a root unit
+wairon host unit create --slug acme                               # a root unit (business_entity)
 wairon host project create --id shop --unit acme
 wairon host permission set --user alice --capability project:read  --project shop
 wairon host permission set --user alice --capability project:write --project shop
@@ -657,19 +657,22 @@ wairon host key mint --project shop --owner alice                 # → wk_… (
 ```
 
 `project:write` does not include `project:read`: a key whose owner can only
-write is refused every read tool. An owner needs no user record — an id with no
-record acts as a service principal.
+write is refused every read tool. `host permission set` warns when it grants
+`project:write` to a user who cannot read that scope, and `host key mint --owner`
+warns when the owner cannot read the project — each naming the grant that fixes
+it. An owner needs no user record — an id with no record acts as a service
+principal.
 
 | Command | Description |
 |---------|-------------|
-| `wairon host unit create --slug <slug> [--kind <kind>] [--name <name>] [--parent <unitId>]` | Create an organization unit. A root unit (no `--parent`) must be `--kind business_entity`; below it, `department`, `team`, … |
+| `wairon host unit create --slug <slug> [--kind <kind>] [--name <name>] [--parent <unitId>]` | Create an organization unit. A root unit (no `--parent`) must be a `business_entity`, which is its default kind; under `--parent` the default is `team`, and `department`, … are allowed where the hierarchy admits them |
 | `wairon host project create --id <id> --unit <unitId>` | Provision a new isolated project (its own `.wai/` tree) in a unit |
 | `wairon host project list` | List hosted projects |
 | `wairon host project destroy --id <id>` | Remove a project and its tree |
 | `wairon host demo [--id <id>] [--unit <unitId>] [--force]` | Provision a project seeded with an example spec tree (default id and unit `demo`; the unit is created if absent), so the canvas has content |
 | `wairon host permission set --user <userId> --capability <cap> [--value yes\|approval\|no\|inherit] [--project <id> [--subsystem <id>] \| --unit <unitId> \| --instance]` | Set one assignment. Capabilities: `project:read`, `project:create`, `project:write`, `project:admin`, `approval:decide`. The scope defaults to the instance |
 | `wairon host permission list [--user <userId>] [scope flags]` / `remove --id <assignmentId>` | List or remove assignments |
-| `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). A token naming a project covers its members. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
+| `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
 | `wairon host doctor [--fix]` | Inspect the data dir and, with `--fix`, migrate it: roll back a transaction a crash left unfinished there, apply the permission-model migration, then register every hosted family's members as records of their own (no grant written — access is inherited through the parent chain — and every member-qualified key entry rewritten to a record id), all or nothing, audited |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |

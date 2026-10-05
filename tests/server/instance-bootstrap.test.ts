@@ -3,7 +3,9 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { getInstanceIdentity } from '../../src/server/instance.js';
-import { getOrganizationUnit } from '../../src/server/organization.js';
+import { getOrganizationUnit, listProjectPlacements } from '../../src/server/organization.js';
+import { registerProjectRecord } from '../../src/server/projects.js';
+import { migratePermissionModel } from '../../src/server/migration.js';
 import { bootstrapInstance, DEV_UNIT_ID } from '../../src/server/instance-bootstrap.js';
 import type { HostConfig } from '../../src/server/types.js';
 
@@ -63,5 +65,34 @@ describe('instance bootstrap (sdd_host)', () => {
     bootstrapInstance(devCfg);
     expect(getInstanceIdentity(dataDir)).toEqual(before);
     expect(getOrganizationUnit(dataDir, DEV_UNIT_ID)?.createdAt).toBe(unit?.createdAt);
+  });
+  it('under devMode it places the dev project in the local unit, so its own data dir never reads as unmigrated', () => {
+    const devCfg: HostConfig = { ...cfg, authEnabled: false, devMode: true };
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-bootstrap-root-'));
+    try {
+      registerProjectRecord(dataDir, 'local', root);
+      expect(migratePermissionModel(dataDir, false).findings.map((f) => f.area)).toContain('projects');
+
+      bootstrapInstance(devCfg);
+      expect(listProjectPlacements(dataDir, 'local')).toEqual([expect.objectContaining({ projectId: 'local', unitId: DEV_UNIT_ID, role: 'owner' })]);
+      expect(migratePermissionModel(dataDir, false).findings).toEqual([]);
+
+      // A later boot places nothing twice.
+      bootstrapInstance(devCfg);
+      expect(listProjectPlacements(dataDir, 'local')).toHaveLength(1);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("a hosted boot places nothing: placement is the operator's", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-bootstrap-root-'));
+    try {
+      registerProjectRecord(dataDir, 'shop', root);
+      bootstrapInstance(cfg);
+      expect(listProjectPlacements(dataDir)).toEqual([]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

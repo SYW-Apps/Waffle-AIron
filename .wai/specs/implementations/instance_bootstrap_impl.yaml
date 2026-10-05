@@ -3,7 +3,7 @@ name: Instance Bootstrap Implementation
 description: >-
   One-time boot initialization of a hosted instance, run before its listeners bind: seeds or loads
   the persisted instance identity and, under devMode, creates the synthetic local development unit
-  when it is missing.
+  when it is missing and places every unplaced project into it.
 contract: iinstance_bootstrap
 sourcePath: src/server/instance-bootstrap.ts
 methods:
@@ -23,7 +23,7 @@ methods:
         type: branch
         condition: config.devMode is enabled
         onTrueStep: 3
-        onFalseStep: 6
+        onFalseStep: 10
       - stepNumber: 3
         description: Look up the synthetic local development unit
         type: call
@@ -43,6 +43,34 @@ methods:
         targetComponent: organization_repository
         targetMethod: createUnit
       - stepNumber: 6
+        label: records
+        description: >-
+          List the project records the dev data dir holds (the one `wairon dev` registered at the
+          working directory)
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 7
+        description: List the placements already recorded, so a placed project is never placed twice
+        type: call
+        targetComponent: organization_repository
+        targetMethod: listPlacements
+      - stepNumber: 8
+        description: For each record no placement holds
+        type: loop
+        loopKind: forEach
+        over: the records no placement holds
+        endStep: 9
+      - stepNumber: 9
+        label: place
+        description: >-
+          Place it in the synthetic local development unit as its owner — so the dev server's own
+          data dir never reads as unmigrated at its next boot
+        type: call
+        targetComponent: organization_repository
+        targetMethod: placeProject
+      - stepNumber: 10
+        label: seeded
         description: Return once the instance is seeded
         type: return
         outcome: seeded
@@ -50,4 +78,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-09-15T17:53:59.683Z'
-updatedAt: '2026-09-18T20:21:30.083Z'
+updatedAt: '2026-10-05T17:30:31.439Z'

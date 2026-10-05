@@ -409,6 +409,22 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     expect(lockUpgraded(lock)).toBe(false);
   });
 
+  it('lock-check at a parent names the direct member whose approval moved, and an own edit by its count', async () => {
+    fam = buildApprovalFamily();
+    await lockAll(fam);
+    fam.touch(fam.mid, 'edited');
+    await lockAt(fam.mid);
+    bind(fam.top);
+    const check = checkApproval(false);
+    expect(check.state).toBe('stale');
+    expect(check.message).toContain('What moved: direct member(s): mid (its approval moved since this one was taken).');
+    expect(check.message).not.toContain('sib');
+
+    fam.touch(fam.sib, 'edited');
+    bind(fam.sib);
+    expect(checkApproval(false).message).toContain('What moved: 1 own spec file(s) changed since the approval.');
+  });
+
   it('the pin tree marks a format-1 member upgraded and reads its parent\'s legacy `children` as the pin', async () => {
     fam = buildApprovalFamily();
     await lockAt(fam.sib);

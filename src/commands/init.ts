@@ -464,15 +464,23 @@ async function executeInit(
     }
   }
 
-  // Register MCP server for Antigravity (agy) target — project-local only.
-  // Global registration ($HOME) is opt-in via `wairon mcp install --global`.
-  if (targetTypes.includes('gemini') || targetTypes.includes('agy')) {
+  // Register only what a selected tool reads. The project .gemini/settings.json
+  // is the Gemini CLI's; Antigravity (agy) reads MCP servers ONLY from its
+  // machine-wide mcp_config.json, which init never writes (global registration
+  // is opt-in) — so for an agy target, say how to register instead of writing a
+  // project file it ignores and then warning that it is ignored.
+  if (targetTypes.includes('gemini')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
       runMcpInstall({ backend: 'gemini', global: false });
     } catch (err) {
-      logger.warn(`Failed to automatically register MCP server for Antigravity: ${err}`);
+      logger.warn(`Failed to automatically register MCP server for the Gemini CLI: ${err}`);
     }
+  } else if (targetTypes.includes('agy')) {
+    logger.info(
+      'Antigravity (agy) reads MCP servers only from its machine-wide ~/.gemini/antigravity-cli/mcp_config.json, '
+        + `which init does not write. To give it the wairon tools: ${chalk.bold('wairon mcp install --backend gemini --global')}`,
+    );
   }
 
   // Seed the context directory with auto-generated files (domains.md + wairon-guide.md)

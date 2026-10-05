@@ -528,9 +528,16 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   if (wantGemini) {
     // Antigravity loads MCP from its GLOBAL mcp_config.json — that's the file that
     // actually controls whether the agy agent sees the sdd_* tools.
-    const globalCfg = path.join(os.homedir(), '.gemini', 'antigravity-cli', 'mcp_config.json');
-    const hg = mcpEntryHealth(globalCfg);
-    line(tally, hg.mark, `Antigravity (global mcp_config.json): ${hg.note}${hg.mark === 'ok' ? '' : ' — run `wairon mcp install --backend gemini --global`'}`);
+    const agyHome = path.join(os.homedir(), '.gemini', 'antigravity-cli');
+    if (!fs.existsSync(agyHome)) {
+      // No Antigravity on this machine: nothing reads that file, so a missing
+      // registration is not something to fix here.
+      line(tally, 'ok', `Antigravity: not installed on this machine (no ${agyHome}) — nothing to register. `
+        + 'Once it is: `wairon mcp install --backend gemini --global`');
+    } else {
+      const hg = mcpEntryHealth(path.join(agyHome, 'mcp_config.json'));
+      line(tally, hg.mark, `Antigravity (global mcp_config.json): ${hg.note}${hg.mark === 'ok' ? '' : ' — run `wairon mcp install --backend gemini --global`'}`);
+    }
     // The project .gemini/settings.json is the Gemini-CLI convention; Antigravity ignores it.
     const projPath = fromProjectRoot('.gemini', 'settings.json');
     if (fs.existsSync(projPath)) {

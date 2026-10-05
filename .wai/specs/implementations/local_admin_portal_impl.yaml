@@ -311,7 +311,14 @@ methods:
         type: return
         outcome: MemberUpgradeReport (dry run)
     symbol: upgradeMemberRecords
+  - name: explain
+    narrative:
+      - stepNumber: 1
+        description: Forward to the permission admin orchestrator
+        type: call
+        targetComponent: permission_admin_orchestrator
+        targetMethod: explain
 detail: calls-only
 status: complete
 createdAt: '2026-09-25T22:40:16.874Z'
-updatedAt: '2026-10-01T18:09:29.212Z'
+updatedAt: '2026-10-05T17:30:38.840Z'
