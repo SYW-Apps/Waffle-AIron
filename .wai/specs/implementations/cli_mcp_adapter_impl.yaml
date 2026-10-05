@@ -120,9 +120,11 @@ methods:
         toStep: 10
       - stepNumber: 9
         description: >-
-          Build the LOCAL stdio entry, pinned to this project via WAIRON_PROJECT_DIR for a
-          project-scoped install so the server never silently climbs to an ancestor .wai; a global
-          install stays unpinned and scopes per session.
+          Build the LOCAL stdio entry. A project-scoped entry is portable — it names the CLI as
+          `wairon` on PATH, or by a project-relative path when the CLI lives inside the project, and
+          pins no absolute project directory (the server attaches to the working directory's .wai),
+          so a committed project config works on every machine; a global entry names the CLI by
+          absolute path, unpinned, and scopes per session.
         type: local
       - stepNumber: 10
         label: merge
@@ -196,4 +198,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-10-01T23:46:17.286Z'
+updatedAt: '2026-10-05T20:55:09.608Z'
