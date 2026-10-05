@@ -141,7 +141,7 @@ function exposurePolicyPath(dataDir: string): string {
  *  unified web UI OFF — a NEW public surface stays opt-in, so an existing
  *  instance is entirely unaffected until an operator turns it on. */
 const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
-  adminApiMode: 'local_only',
+  adminApiMode: 'enabled',
   adminUiEnabled: true,
   identityApiEnabled: true,
   landscapeApiEnabled: true,
@@ -153,9 +153,12 @@ const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
 };
 
 /** The effective exposure posture for a partial override: each flag the
- *  override sets wins, and every unset flag keeps the compatible default. */
+ *  override sets wins, and every unset flag keeps the compatible default. Any
+ *  adminApiMode but disabled reads as enabled: the retired local_only,
+ *  private_network and public each only ever meant "served". */
 export function effectiveExposure(override?: Partial<HostExposurePolicy> | null): HostExposurePolicy {
-  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+  const merged = { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+  return { ...merged, adminApiMode: merged.adminApiMode === 'disabled' ? 'disabled' : 'enabled' };
 }
 
 /**

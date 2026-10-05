@@ -523,8 +523,9 @@ export interface ResourceUsageSnapshot {
   quotaMessages: string[];
 }
 
-/** How an exceeded quota limit is reported. */
-export type QuotaMode = 'observe' | 'warn' | 'block';
+/** How an exceeded quota limit is labelled. The quota policy is advisory: neither
+ *  mode blocks or throttles. A configured 'block' is read as observe (deprecated). */
+export type QuotaMode = 'observe' | 'warn';
 
 /** Advisory quota policy protecting the instance; observe/warn only. */
 export interface ResourceQuotaPolicy {
@@ -533,7 +534,6 @@ export interface ResourceQuotaPolicy {
   maxMcpRequestsPerMinute?: number;
   maxProjectBytes?: number;
   maxAuditEventsPerDay?: number;
-  /** 'block' is accepted, and evaluated as observe: the quota policy is advisory. */
   mode: QuotaMode;
 }
 
@@ -548,8 +548,9 @@ export interface InstanceHealthReport {
   usage?: ResourceUsageSnapshot[];
 }
 
-/** How much of an audit event's metadata is persisted. */
-export type AuditMetadataMode = 'none' | 'redacted' | 'full-redacted';
+/** How much of an audit event's metadata is persisted. A configured 'full-redacted'
+ *  is read as redacted (deprecated): the two were never different. */
+export type AuditMetadataMode = 'none' | 'redacted';
 
 /** Instance-level durable audit capture and retention policy. */
 export interface AuditRetentionPolicy {
@@ -1340,9 +1341,10 @@ export interface GovernedProjectCreation {
   profileImpact?: PackImpact;
 }
 
-/** How the admin API is exposed. Only disabled changes what is mounted today: every
- *  other mode serves the admin listener wherever the host binds it. */
-export type AdminApiMode = 'disabled' | 'local_only' | 'private_network' | 'public';
+/** Whether the admin API is served. Where it listens is the host's adminHost. A stored
+ *  or submitted local_only, private_network or public is read as enabled (deprecated):
+ *  each only ever meant "served". */
+export type AdminApiMode = 'disabled' | 'enabled';
 
 /** Runtime exposure posture for a hosted instance: which control-plane surfaces
  *  are bound over HTTP versus local/CLI-only. Mirrors

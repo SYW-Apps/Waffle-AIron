@@ -338,8 +338,8 @@ export function evaluateUsage(
 ): ResourceUsageSnapshot[] {
   if (!policy.enabled) return snapshots;
 
-  // Non-enforcing: a would-be 'block' outcome is downgraded to an observation.
-  const advisory = policy.mode === 'block' ? 'observe' : policy.mode || 'observe';
+  // Non-enforcing: the mode only labels an exceeded limit.
+  const advisory = policy.mode || 'observe';
 
   return snapshots.map((snapshot) => {
     const messages: string[] = [];
@@ -520,6 +520,9 @@ export function setExposurePolicy(
 ): HostExposurePolicy {
   const principal = requireInstanceExposureAdmin(cfg, credential);
   const stored = setExposurePolicyRecord(cfg.dataDir, effectiveExposure(policy));
+  // A retired adminApiMode (local_only, private_network, public) is stored as
+  // enabled; the audit event says so, naming the old and the new value.
+  const submitted = (policy as { adminApiMode?: unknown }).adminApiMode;
   const event: AuditEvent = {
     id: '',
     timestamp: '',
@@ -530,6 +533,9 @@ export function setExposurePolicy(
     actor: principalSubject(principal),
     target: 'exposure-policy',
   };
+  if (submitted !== undefined && submitted !== stored.adminApiMode) {
+    event.metadata = `adminApiMode "${String(submitted)}" is deprecated and was stored as "${stored.adminApiMode}"`;
+  }
   if (principal.tokenId) event.tokenId = principal.tokenId;
   tryAppendAudit(cfg, event);
   return stored;

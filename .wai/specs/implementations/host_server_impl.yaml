@@ -45,29 +45,35 @@ methods:
         targetComponent: member_registration
         targetMethod: pending
       - stepNumber: 6
-        description: Bind the data-plane listener and route /mcp, /healthz, /readyz to the host HTTP portal
+        description: >-
+          When the exposure policy names a retired adminApiMode (local_only, private_network,
+          public), log one line that it is deprecated and reads as enabled, and that where the admin
+          API listens is the admin bind address; reads only, and any failure is swallowed
         type: local
       - stepNumber: 7
+        description: Bind the data-plane listener and route /mcp, /healthz, /readyz to the host HTTP portal
+        type: local
+      - stepNumber: 8
         description: >-
           Bind the admin-plane listener (separate, loopback-by-default bind); then, when
-          adminApiMode is not 'disabled', mount the control-plane routers on it per the resolved
-          exposure policy: the existing admin API (/admin/*), and — each only when its exposure flag
-          enables it — the identity/audit API, the project-policy API (/projects and /instance), the
+          adminApiMode is enabled, mount the control-plane routers on it per the resolved exposure
+          policy: the existing admin API (/admin/*), and — each only when its exposure flag enables
+          it — the identity/audit API, the project-policy API (/projects and /instance), the
           landscape API, the operations API (/operations/*), the approvals API, and the optional
           browser admin UI; a surface whose flag is disabled is not mounted and answers
           404/disabled. When adminApiMode is 'disabled', no control-plane router is mounted.
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: Begin accepting connections on both listeners
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Start the periodic backup schedule (git-bound project sweep + container-level backing
           sweep, ticking every 60 seconds), passing the running instance's configuration
         type: call
         targetComponent: backup_schedule
         targetMethod: start
-      - stepNumber: 10
+      - stepNumber: 11
         description: Return the running server handle
         type: return
         outcome: running
@@ -108,4 +114,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-10-01T18:09:33.410Z'
+updatedAt: '2026-10-05T00:08:06.057Z'

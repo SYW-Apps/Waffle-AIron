@@ -2,20 +2,17 @@ kind: enum
 id: admin_api_mode
 name: AdminApiMode
 description: >-
-  How a hosted instance exposes its admin API. Only disabled changes what is mounted today: every
-  other mode serves the admin listener wherever the host binds it (the network scoping the other
-  modes name is not implemented).
+  Whether a hosted instance serves its admin API. Where it listens is the host's admin bind address
+  (--admin-host, loopback by default), not this mode. A stored or submitted local_only,
+  private_network or public — retired values that each only ever meant served — reads as enabled,
+  with a deprecation notice.
 fields: []
 methods: []
 sourcePath: src/server/types.ts
 values:
   - name: disabled
     description: 'Nothing on the admin listener is mounted: every admin surface answers 404'
-  - name: local_only
-    description: Served on the admin listener (the default; it binds to loopback by default)
-  - name: private_network
-    description: Served on the admin listener; meant for a private network
-  - name: public
-    description: Served on the admin listener; meant for public exposure
+  - name: enabled
+    description: The admin listener serves the control-plane surfaces the exposure flags enable (the default)
 createdAt: '2026-10-04T23:53:11.363Z'
-updatedAt: '2026-10-04T23:53:12.003Z'
+updatedAt: '2026-10-05T00:07:41.539Z'

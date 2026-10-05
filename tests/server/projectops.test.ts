@@ -58,6 +58,16 @@ describe('exposure-policy administration (operations orchestrator)', () => {
     expect(events[0].level).toBe('security');
   });
 
+  it('stores a retired adminApiMode as enabled, and the audit event names the old and new value', () => {
+    const initial = getExposurePolicy(cfg, MASTER);
+    const stored = setExposurePolicy(cfg, MASTER, { ...initial, adminApiMode: 'private_network' as typeof initial.adminApiMode });
+    expect(stored.adminApiMode).toBe('enabled');
+    expect(getExposurePolicy(cfg, MASTER).adminApiMode).toBe('enabled');
+    const events = queryAuditEvents(dataDir, { action: 'exposure.set' });
+    expect(events).toHaveLength(1);
+    expect(events[0].metadata).toBe('adminApiMode "private_network" is deprecated and was stored as "enabled"');
+  });
+
   it('requires instance-level project:admin — a unit-scoped admin is refused', () => {
     const unit = seedUnit(dataDir, 'team');
     allow(dataDir, 'u-adm', 'project:admin', 'unit', unit.id);

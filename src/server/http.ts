@@ -708,6 +708,22 @@ export function warnIfDataDirUnmigrated(cfg: HostConfig): void {
 }
 
 /**
+ * Log one line when the exposure policy names an adminApiMode that no longer
+ * exists (local_only, private_network, public): it reads as enabled, since each
+ * only ever meant "served" and where the admin API listens is adminHost. Reads
+ * only; a failure never prevents the server from starting.
+ */
+function warnIfAdminApiModeRetired(cfg: HostConfig): void {
+  try {
+    const stored = (cfg.exposurePolicy ?? readExposurePolicyFile(cfg.dataDir))?.adminApiMode as string | undefined;
+    if (stored === undefined || stored === 'disabled' || stored === 'enabled') return;
+    console.error(`[wairon exposure] adminApiMode "${stored}" is deprecated and reads as "enabled" — set "enabled" (or "disabled"); where the admin API listens is --admin-host.`);
+  } catch {
+    /* a diagnostic never stops the server */
+  }
+}
+
+/**
  * Count the hosted families' members that hold no record yet and, when any do,
  * log one line saying how many await `wairon host doctor --fix` (until then
  * they are reached only through the deprecated member-qualified selectors).
@@ -765,6 +781,8 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   memberRegistration.recoverData(cfg, true);
   // Step 5: members that hold no record yet await `wairon host doctor --fix`.
   warnIfMembersPending(cfg);
+  // A stored exposure policy still naming a retired adminApiMode reads as enabled.
+  warnIfAdminApiModeRetired(cfg);
 
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));
   const adminServer = http.createServer((req, res) => {

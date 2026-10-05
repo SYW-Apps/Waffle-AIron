@@ -110,6 +110,25 @@ function resolveHostConfig(options: HostOptions): HostConfig {
   return cfg;
 }
 
+/**
+ * Policy values that no longer exist, each with the value it now reads as. Each
+ * stood for no behaviour of its own: full-redacted persisted exactly what
+ * redacted did, and an advisory quota policy never blocked anything. They are
+ * accepted for one release with a warning naming the replacement.
+ */
+const DEPRECATED_POLICY_VALUES: Record<string, Record<string, string>> = {
+  metadataMode: { 'full-redacted': 'redacted' },
+  mode: { block: 'observe' },
+};
+
+/** The value a policy field reads as, warning when it is a deprecated one. */
+function retireValue(variable: string, key: string, value: unknown): unknown {
+  const replacement = typeof value === 'string' ? DEPRECATED_POLICY_VALUES[key]?.[value] : undefined;
+  if (replacement === undefined) return value;
+  logger.warn(`${variable} field "${key}": "${String(value)}" is deprecated and reads as "${replacement}" — set "${replacement}" instead.`);
+  return replacement;
+}
+
 /** The fields WAIRON_AUDIT_POLICY may set, each with the check its value must pass. */
 const AUDIT_POLICY_FIELDS: Record<keyof AuditRetentionPolicy, { expects: string; accepts: (v: unknown) => boolean }> = {
   enabled: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
@@ -124,7 +143,8 @@ const AUDIT_POLICY_FIELDS: Record<keyof AuditRetentionPolicy, { expects: string;
   },
   includeReadEvents: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
   metadataMode: {
-    expects: 'one of "none", "redacted", "full-redacted"',
+    expects: 'one of "none", "redacted"',
+    // "full-redacted" is still accepted, and read as redacted (see DEPRECATED_POLICY_VALUES).
     accepts: (v) => typeof v === 'string' && ['none', 'redacted', 'full-redacted'].includes(v),
   },
 };
@@ -157,7 +177,7 @@ export function parseAuditPolicyEnv(raw: string): Partial<AuditRetentionPolicy> 
     if (!field.accepts(value)) {
       throw new WaironError(`WAIRON_AUDIT_POLICY field "${key}" must be ${field.expects}.`);
     }
-    policy[key] = value;
+    policy[key] = retireValue('WAIRON_AUDIT_POLICY', key, value);
   }
   return policy as Partial<AuditRetentionPolicy>;
 }
@@ -171,9 +191,9 @@ const NON_NEGATIVE_INTEGER = {
 /** The fields WAIRON_QUOTA_POLICY may set, each with the check its value must pass. */
 const QUOTA_POLICY_FIELDS: Record<keyof ResourceQuotaPolicy, { expects: string; accepts: (v: unknown) => boolean }> = {
   enabled: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
-  // 'block' is accepted, and evaluation still downgrades it to an observation.
   mode: {
-    expects: 'one of "observe", "warn", "block"',
+    expects: 'one of "observe", "warn"',
+    // "block" is still accepted, and read as observe (see DEPRECATED_POLICY_VALUES).
     accepts: (v) => typeof v === 'string' && ['observe', 'warn', 'block'].includes(v),
   },
   maxProjectsPerUser: NON_NEGATIVE_INTEGER,
@@ -210,7 +230,7 @@ export function parseQuotaPolicyEnv(raw: string): Partial<ResourceQuotaPolicy> {
     if (!field.accepts(value)) {
       throw new WaironError(`WAIRON_QUOTA_POLICY field "${key}" must be ${field.expects}.`);
     }
-    policy[key] = value;
+    policy[key] = retireValue('WAIRON_QUOTA_POLICY', key, value);
   }
   return policy as Partial<ResourceQuotaPolicy>;
 }
@@ -335,7 +355,7 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   // on 127.0.0.1). devMode independently forces the web UI on in http.ts, so this is
   // belt-and-suspenders; requireTls:false keeps the dev cookie non-Secure over http.
   const exposurePolicy: HostExposurePolicy = {
-    adminApiMode: 'local_only',
+    adminApiMode: 'enabled',
     adminUiEnabled: true,
     identityApiEnabled: true,
     landscapeApiEnabled: true,

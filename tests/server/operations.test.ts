@@ -233,10 +233,10 @@ describe('quota specialist (pure, advisory)', () => {
     expect(out[0].quotaMessages[0]).toMatch(/^\[observe\] projectBytes 100 exceeds limit 10$/);
   });
 
-  it('evaluateUsage: block mode is downgraded to an advisory [observe] (never blocks)', () => {
+  it('evaluateUsage: an exceeded limit is only ever annotated, never blocked', () => {
     const out = evaluateUsage(
       [snapshot({ mcpRequestsLastMinute: 50, auditEventsToday: 500 })],
-      { enabled: true, mode: 'block', maxMcpRequestsPerMinute: 10, maxAuditEventsPerDay: 100 },
+      { enabled: true, mode: 'observe', maxMcpRequestsPerMinute: 10, maxAuditEventsPerDay: 100 },
     );
     expect(out[0].quotaMessages).toHaveLength(2);
     expect(out[0].quotaMessages.every((m) => m.startsWith('[observe]'))).toBe(true);

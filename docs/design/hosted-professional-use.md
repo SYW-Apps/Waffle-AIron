@@ -64,7 +64,7 @@ listening on the network*.
 | Plane | Portal (draft unless noted) | `HostExposurePolicy` switch | Default |
 |---|---|---|---|
 | Data (MCP `sdd_*` + discovery + self-service) | `host_http_portal` *(complete)* | always on | **exposed** |
-| Existing admin | `admin_portal` *(complete)* | `adminApiMode` | `local_only` |
+| Existing admin | `admin_portal` *(complete)* | `adminApiMode` | `enabled` (was `local_only`) |
 | Identity & audit | `identity_portal` | `identityApiEnabled` | **off** |
 | Landscape & organization | `landscape_portal` | `landscapeApiEnabled` | **off** |
 | Project policy & profiles | `project_policy_portal` | `projectPolicyApiEnabled` | **off** |

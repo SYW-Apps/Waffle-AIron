@@ -45,12 +45,12 @@ fields:
     description: >-
       Hosted quota/rate policy, as overrides of the disabled default: each field set here wins and
       every unset field keeps the default (see effectiveQuotaPolicy). The serve command sets it from
-      WAIRON_QUOTA_POLICY, a JSON object of these fields — enabled (boolean), mode (observe | warn |
-      block), and the non-negative integer limits maxProjectsPerUser, maxMcpRequestsPerMinute,
-      maxProjectBytes and maxAuditEventsPerDay — refusing invalid JSON, an unknown field or a wrong
-      type at startup, so a misspelt policy never silently runs as the default. Evaluated for
-      advisory (observe/warn) reporting only; it does not yet block or throttle project, token, or
-      MCP usage, and a block mode is downgraded to an observation.
+      WAIRON_QUOTA_POLICY, a JSON object of these fields — enabled (boolean), mode (observe | warn;
+      a retired block reads as observe, with a deprecation warning), and the non-negative integer
+      limits maxProjectsPerUser, maxMcpRequestsPerMinute, maxProjectBytes and maxAuditEventsPerDay —
+      refusing invalid JSON, an unknown field or a wrong type at startup, so a misspelt policy never
+      silently runs as the default. Evaluated for advisory (observe/warn) reporting only; it does
+      not yet block or throttle project, token, or MCP usage.
     optional: true
   - name: devMode
     type: bool
@@ -99,4 +99,4 @@ methods:
     sourcePath: src/server/operations.ts
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:58:10.758Z'
-updatedAt: '2026-10-04T10:28:57.048Z'
+updatedAt: '2026-10-05T00:07:48.701Z'

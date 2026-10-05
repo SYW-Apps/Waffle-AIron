@@ -28,9 +28,9 @@ fields:
     optional: true
   - name: mode
     type: QuotaMode
-    description: 'How an exceeded limit is reported (advisory: block is evaluated as observe).'
+    description: 'How an exceeded limit is labelled (advisory: neither mode blocks).'
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T09:08:07.406Z'
-updatedAt: '2026-10-04T23:53:25.986Z'
+updatedAt: '2026-10-05T00:07:45.941Z'
