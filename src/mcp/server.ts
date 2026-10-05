@@ -846,9 +846,12 @@ function storedContractAnswer(loaded: InterfaceSpec): { spec: InterfaceSpec; res
 // data.
 // ---------------------------------------------------------------------------
 
+/** Whether the build on disk is still the one this server runs, and whether its schemas moved. */
+export type BuildFreshnessState = 'fresh' | 'build-changed' | 'schema-changed' | 'unreadable';
+
 /** Whether this server still runs the build on disk, and whether a spec write through it may proceed. */
 export interface BuildFreshness {
-  state: 'fresh' | 'build-changed' | 'schema-changed' | 'unreadable';
+  state: BuildFreshnessState;
   writesRefused: boolean;
   reason: string;
 }

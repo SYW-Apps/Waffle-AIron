@@ -90,20 +90,20 @@ methods:
       tree declares no such subsystem is kept and listed with scopeNote "subsystem not found", so a
       stale rule never sits there silently.
     signature: >-
-      listAssignments(credential: string, scopeKind?: string, scopeId?: string, subjectKind?:
-      string, subjectId?: string): list<PermissionAssignment>
+      listAssignments(credential: string, scopeKind?: ScopeKind, scopeId?: string, subjectKind?:
+      AssignmentSubjectKind, subjectId?: string): list<PermissionAssignment>
     returns: list<PermissionAssignment>
     params:
       - name: credential
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
         optional: true
       - name: scopeId
         type: string
         optional: true
       - name: subjectKind
-        type: string
+        type: AssignmentSubjectKind
         optional: true
       - name: subjectId
         type: string
@@ -115,7 +115,7 @@ methods:
       scope} binding to the target user's roleBindings (idempotent) through the user repository, and
       audit. A role bound at a subsystem confers only its project:write there.
     signature: >-
-      bindRole(credential: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
+      bindRole(credential: string, userId: string, roleId: string, scopeKind?: ScopeKind, scopeId?:
       string): HostedUserRecord
     returns: HostedUserRecord
     params:
@@ -126,7 +126,7 @@ methods:
       - name: roleId
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
         optional: true
       - name: scopeId
         type: string
@@ -138,8 +138,8 @@ methods:
       Authenticate, require project:admin over the binding's scope, remove the matching {roleId,
       scope} binding from the target user's roleBindings through the user repository, and audit.
     signature: >-
-      unbindRole(credential: string, userId: string, roleId: string, scopeKind?: string, scopeId?:
-      string): HostedUserRecord
+      unbindRole(credential: string, userId: string, roleId: string, scopeKind?: ScopeKind,
+      scopeId?: string): HostedUserRecord
     returns: HostedUserRecord
     params:
       - name: credential
@@ -149,7 +149,7 @@ methods:
       - name: roleId
         type: string
       - name: scopeKind
-        type: string
+        type: ScopeKind
         optional: true
       - name: scopeId
         type: string
@@ -162,7 +162,7 @@ methods:
       every gate takes. A subsystem scope its project's tree does not declare is labelled scopeNote
       "subsystem not found". A read; not audited.
     signature: >-
-      explain(credential: string, userId: string, capability: string, scopeKind: string, scopeId:
+      explain(credential: string, userId: string, capability: string, scopeKind: ScopeKind, scopeId:
       string): EffectivePermission
     returns: EffectivePermission
     params:
@@ -174,8 +174,8 @@ methods:
       - name: capability
         type: string
       - name: scopeKind
-        type: string
-        description: instance | unit | project | subsystem
+        type: ScopeKind
+        description: The kind of scope to explain the permission at
       - name: scopeId
         type: string
         description: The unit or project id, `<projectId>/<subsystemId>`, or empty for the instance
@@ -183,4 +183,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-15T22:00:18.881Z'
-updatedAt: '2026-10-04T10:19:12.521Z'
+updatedAt: '2026-10-04T23:38:23.172Z'

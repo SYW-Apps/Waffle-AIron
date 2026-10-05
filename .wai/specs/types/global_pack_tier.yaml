@@ -1,0 +1,14 @@
+kind: enum
+id: global_pack_tier
+name: GlobalPackTier
+description: The server-global tier a policy-supplied pack name resolved from.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: instance
+    description: Packs the instance administrator installed
+  - name: image
+    description: Packs baked into the server image
+createdAt: '2026-10-04T23:18:10.977Z'
+updatedAt: '2026-10-04T23:18:11.365Z'

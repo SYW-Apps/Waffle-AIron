@@ -1,0 +1,21 @@
+kind: enum
+id: analysis_grade_label
+name: AnalysisGradeLabel
+description: >-
+  The weakest analysis grade a run applied to any source file it analyzed, or none when it analyzed
+  no source file. The weakest, because a clean result is only as strong as the least exact file it
+  read.
+fields: []
+methods: []
+sourcePath: src/models/lock.ts
+values:
+  - name: exact
+    description: Every analyzed file was parsed into an AST
+  - name: pattern
+    description: At least one file was read only through a language pattern table
+  - name: generic
+    description: At least one file was read only by a word-boundary scan
+  - name: none
+    description: No source file was analyzed
+createdAt: '2026-10-04T23:13:21.812Z'
+updatedAt: '2026-10-04T23:13:22.214Z'

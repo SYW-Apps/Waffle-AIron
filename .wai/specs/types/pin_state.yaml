@@ -1,0 +1,18 @@
+kind: enum
+id: pin_state
+name: PinState
+description: How the parent's lock pinned a member.
+fields: []
+methods: []
+sourcePath: src/models/lock.ts
+values:
+  - name: matches
+    description: >-
+      The parent's record carries this member's subject (its members entry, or for one release its
+      legacy children entry)
+  - name: moved
+    description: The parent recorded another subject, so the parent's own lock is stale until it re-locks
+  - name: unpinned
+    description: The parent has no lock, or its lock names no pin for this alias
+createdAt: '2026-10-04T23:13:10.734Z'
+updatedAt: '2026-10-04T23:13:11.118Z'

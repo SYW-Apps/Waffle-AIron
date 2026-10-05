@@ -18,10 +18,10 @@ fields:
     type: int
     optional: false
   - name: kind
-    type: string
-    description: '"file" | "dir" | "symlink"'
+    type: ArchiveEntryKind
+    description: What the entry is.
     optional: false
 methods: []
 componentClass: pack_archive_adapter
 createdAt: '2026-07-21T18:13:01.742Z'
-updatedAt: '2026-10-04T10:28:45.547Z'
+updatedAt: '2026-10-04T23:38:45.696Z'

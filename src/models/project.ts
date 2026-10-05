@@ -1008,12 +1008,15 @@ export interface ProjectIdentityProblem {
   detail: string;
 }
 
+/** Where a project's effective id came from. */
+export type ProjectIdSource = 'declared' | 'defaulted' | 'none';
+
 /** project_identity — a project's resolved identity and what is wrong with it. */
 export interface ProjectIdentity {
   /** The effective id; absent when there is no declared id and the name yields no slug. */
   id?: string;
   /** Where the effective id came from. */
-  source: 'declared' | 'defaulted' | 'none';
+  source: ProjectIdSource;
   /** The display name, as configured. */
   name: string;
   /** The id the current lock approved, when one was given. */
@@ -1150,6 +1153,9 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Par
 
 /** contained | path | git | hosted: where a member's files live (stage 8). */
 export type MemberStorage = 'contained' | 'path' | 'git' | 'hosted';
+
+/** What a member is, as its content makes it (stage 8): a part of its parent, or a project of its own. */
+export type MemberKind = 'part' | 'project';
 
 /** A full git commit: 40 (sha1) or 64 (sha256) hex digits. */
 export const FULL_COMMIT_RE = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;

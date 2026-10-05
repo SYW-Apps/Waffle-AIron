@@ -10,8 +10,9 @@ import * as positionReader from './position-reader.js';
 import type { PositionalMatch } from './position-reader.js';
 import { exportTargetKey, type ResolvedExportTable } from '../models/exports.js';
 import type { ComponentSpec, PublicInterface, SubsystemSpec, TypeSpec } from '../models/specs.js';
-import type { ChainingMigrationFinding, ChainingMigrationPlan, PlannedExport, ProjectMigration } from './chaining-migration.js';
+import type { ChainingFindingKind, ChainingMigrationFinding, ChainingMigrationPlan, PlannedExport, ProjectMigration } from './chaining-migration.js';
 import { rehearsalRoot, type Rehearsal } from './types.js';
+import type { WritableSpecKind } from '../core/specs.js';
 
 // ---------------------------------------------------------------------------
 // position_migration_orchestrator — the stage-3 share of a family's chaining
@@ -62,12 +63,15 @@ export interface PlannedMember {
   retired: string[];
 }
 
+/** The deprecated reference forms a migration rewrites to canonical text. */
+export type RewrittenForm = 'leading' | 'super' | 'path' | 'self-prefix';
+
 /** planned_rewrite — one reference rewritten from a deprecated form to its canonical text. */
 export interface PlannedRewrite {
   /** The key of the project whose file holds the reference. */
   project: string;
-  /** subsystem, component, interface, implementation or type. */
-  kind: string;
+  /** The kind of the spec holding it (never the L0). */
+  kind: WritableSpecKind;
   /** The spec's in-memory key from the family's top root. */
   specId: string;
   /** Where in the spec (as AuthoredReference.position). */
@@ -76,8 +80,7 @@ export interface PlannedRewrite {
   from: string;
   /** What apply writes instead. */
   to: string;
-  /** leading | super | path | self-prefix. */
-  form: string;
+  form: RewrittenForm;
 }
 
 /** planned_import — one `use` entry the positional step adds to a consumer. */
@@ -204,7 +207,7 @@ function planMount(family: ProjectFamily, node: ProjectNode, out: PositionMigrat
   out.members.push(planned);
 }
 
-function block(out: PositionMigrationPlan, kind: string, project: string, detail: string): void {
+function block(out: PositionMigrationPlan, kind: ChainingFindingKind, project: string, detail: string): void {
   out.findings.push({ kind, project, detail, blocking: true });
 }
 
@@ -297,7 +300,7 @@ function reportAbsentMembers(family: ProjectFamily, out: PositionMigrationPlan):
 }
 
 /** Where each reference position can sit, first match wins. */
-const KINDS_AT: Record<string, string[]> = {
+const KINDS_AT: Record<string, WritableSpecKind[]> = {
   dependsOn: ['component'], owns: ['component'], dispatch: ['component'], mounts: ['component'],
   lifecycle: ['subsystem'], publicInterfaces: ['subsystem'], trustedLinks: ['subsystem'],
   contract: ['implementation', 'interface'], narrative: ['implementation'], calls: ['implementation'], auth: ['implementation'],
@@ -305,8 +308,8 @@ const KINDS_AT: Record<string, string[]> = {
 };
 
 /** The kind of the spec holding a reference, read off where it sits. */
-function kindOf(ref: AuthoredReference): string {
-  const kinds = KINDS_AT[ref.position] ?? ['component', 'interface', 'implementation', 'type', 'subsystem'];
+function kindOf(ref: AuthoredReference): WritableSpecKind {
+  const kinds: WritableSpecKind[] = KINDS_AT[ref.position] ?? ['component', 'interface', 'implementation', 'type', 'subsystem'];
   return kinds.find((k) => core.loadSpec(k as 'component', ref.specId) !== null) ?? kinds[0];
 }
 

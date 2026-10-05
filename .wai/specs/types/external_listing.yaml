@@ -16,12 +16,12 @@ fields:
     description: The producer id declared.
     optional: false
   - name: sourceKind
-    type: string
-    description: family | path | unresolved.
+    type: ExternalSourceKind
+    description: Where the external's producer was found.
     optional: false
   - name: relation
-    type: string
-    description: parent | sibling | member | family, for a family producer.
+    type: ExternalRelation
+    description: 'For a family producer: how it stands to the consumer.'
     optional: true
   - name: directory
     type: string
@@ -42,4 +42,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:47:20.318Z'
-updatedAt: '2026-09-26T17:47:20.320Z'
+updatedAt: '2026-10-04T23:39:37.101Z'

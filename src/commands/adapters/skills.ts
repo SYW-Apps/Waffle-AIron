@@ -3,4 +3,4 @@
 // re-exports of the skills portal. `generate` and `init` export through here,
 // `wairon skills` lists through here, and `doctor` checks freshness here.
 // ---------------------------------------------------------------------------
-export { exportSddSkills, listSkillNames, checkSkillFreshness } from '../../core/skills.js';
+export { exportSddSkills, listSkillNames, checkSkillFreshness } from '../../core/skills-portal.js';

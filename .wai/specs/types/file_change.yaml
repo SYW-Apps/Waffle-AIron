@@ -17,8 +17,8 @@ fields:
     description: The file, relative to the owner's root, forward slashes (always under .wai/).
     optional: false
   - name: action
-    type: string
-    description: write (replace an existing file) | create | delete.
+    type: FileChangeAction
+    description: What the migration does to the file.
     optional: false
   - name: baseDigest
     type: string
@@ -31,4 +31,4 @@ fields:
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:16.215Z'
-updatedAt: '2026-09-30T21:33:05.330Z'
+updatedAt: '2026-10-04T23:39:44.145Z'

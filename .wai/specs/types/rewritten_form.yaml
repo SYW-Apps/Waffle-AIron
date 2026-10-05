@@ -1,0 +1,21 @@
+kind: enum
+id: rewritten_form
+name: RewrittenForm
+description: The deprecated reference forms a migration rewrites to their canonical text.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/position-migration.ts
+values:
+  - name: leading
+    description: 'A leading ::'
+  - name: super
+    description: 'super:: climbing containing projects'
+  - name: path
+    description: A member path from the bound root
+  - name: self-prefix
+    description: >-
+      The referring project's own id used as a prefix, rewritten to the bare local id by the
+      positional step
+createdAt: '2026-10-04T23:24:35.518Z'
+updatedAt: '2026-10-04T23:24:36.032Z'

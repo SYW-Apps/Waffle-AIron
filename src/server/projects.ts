@@ -717,7 +717,7 @@ function entryCovers(records: HostedProjectRecord[], entryId: string, target: Ho
  * holds a project whose id is the record's. Returns null — with no existence
  * leak — for anything outside the authorized set, unknown or inactive.
  */
-export function resolveProjectBinding(
+function indexResolveBinding(
   dataDir: string,
   principal: Principal,
   selector?: string | null,
@@ -758,12 +758,30 @@ export function resolveProjectBinding(
 
 /**
  * Resolve the root of the authorized record — the rootPath projection of
- * resolveProjectBinding, for callers that need only the root.
+ * the index's binding resolution, for callers that need only the root.
  */
+function indexResolveRoot(
+  dataDir: string,
+  principal: Principal,
+  selector?: string | null,
+): string | null {
+  return indexResolveBinding(dataDir, principal, selector)?.rootPath ?? null;
+}
+
+/** project_repository.resolveBinding — forwarded 1:1 to the project index. */
+export function resolveProjectBinding(
+  dataDir: string,
+  principal: Principal,
+  selector?: string | null,
+): ProjectBinding | null {
+  return indexResolveBinding(dataDir, principal, selector);
+}
+
+/** project_repository.resolveRoot — forwarded 1:1 to the project index. */
 export function resolveProjectRoot(
   dataDir: string,
   principal: Principal,
   selector?: string | null,
 ): string | null {
-  return resolveProjectBinding(dataDir, principal, selector)?.rootPath ?? null;
+  return indexResolveRoot(dataDir, principal, selector);
 }

@@ -5,6 +5,7 @@ import * as os from 'os';
 import { validateProject } from '../../src/core/validation.js';
 import { buildCodeModel } from '../../src/core/source-analysis.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { bodySitesOf } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
 // L5 semantic lints — spec-level bug detection, restricted to what structure
@@ -816,5 +817,103 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
       expect(calleeNames(model.files[0], 'outer')).not.toContain('inner');
       expect(calleeNames(model.files[0], 'nested')).toEqual(['inner']);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('same-named functions in one file are judged as the bodies they are', () => {
+  const mkTemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-bodies-'));
+  const impl = (sourcePath: string) => ({
+    id: 'impl-x', name: 'x', description: 'd', contract: 'ix',
+    sourcePath, methods: [], status: 'complete' as const,
+    createdAt: '2026-07-18T10:00:00Z', updatedAt: '2026-07-18T10:00:00Z',
+  });
+  const names = (body: { sites: { name: string }[] } | undefined): string[] => (body?.sites ?? []).map((s) => s.name).sort();
+
+  it('keeps a module function, a class member and an object member of one name apart, and unions only where the code cannot say', () => {
+    const dir = mkTemp();
+    try {
+      fs.writeFileSync(path.join(dir, 'a.ts'), [
+        'declare function a(): void; declare function b(): void; declare function c(): void; declare function d(): void;',
+        'export function save(): void { a(); }',
+        'export class Workspace { save(): void { b(); } }',
+        'export const store = { save(): void { c(); } } as const;',
+        'export function holder(): void { const local = { load(): void { d(); } }; local.load(); }',
+        'export function load(): void { a(); }',
+      ].join('\n'));
+      const facts = buildCodeModel([impl('a.ts')], [], dir).files[0];
+      // The bare name binds the module function; a member only through its container.
+      expect(names(bodySitesOf(facts, 'save'))).toEqual(['a']);
+      expect(bodySitesOf(facts, 'save')!.key).toBe('save');
+      expect(names(bodySitesOf(facts, 'save', 'Workspace'))).toEqual(['b']);
+      expect(names(bodySitesOf(facts, 'save', 'store'))).toEqual(['c']);
+      // A receiver the file binds no container to holds a value the model cannot follow: the union, as before.
+      expect(names(bodySitesOf(facts, 'save', 'somethingElse', true))).toEqual(['a', 'b', 'c']);
+      // A nested body of the name could shadow it where it sits, so the bare name stays the union.
+      expect(names(bodySitesOf(facts, 'load'))).toEqual(['a', 'd']);
+      expect(bodySitesOf(facts, 'load')!.key).toBe('*load');
+      // The name-keyed union is unchanged.
+      expect((facts.functionCallSites ?? {}).save.map((s) => s.name).sort()).toEqual(['a', 'b', 'c']);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  /** A loader whose exported `saveThing` forwards to the workspace member of the same name, beside the registry it may call. */
+  const facadeProject = (loaderNarrative: string[], module: string[]) => {
+    const proj = createTempProject();
+    proj.component('loader-a', 'Orchestrator', 'dependsOn: [registry-a]');
+    proj.contract('loader-a', ['saveThing']);
+    proj.component('registry-a', 'Registry');
+    proj.contract('registry-a', ['invalidate']);
+    proj.impl('registry-a', 'sourcePath: src/specs.ts\nmethods:\n  - name: invalidate\n    symbol: registryInvalidate\n    detail: intent\n    intent: Drops every cached entry so the next read goes back to the files; never fails.');
+    proj.impl('loader-a', ['sourcePath: src/specs.ts', 'methods:', '  - name: saveThing', '    narrative:', ...loaderNarrative].join('\n'));
+    proj.source('src/specs.ts', module.join('\n'));
+    return proj;
+  };
+  const LOCAL_STEP = '      - { stepNumber: 1, description: Hand the thing to the current workspace, type: local }';
+  const CALL_STEP = '      - { stepNumber: 1, description: Invalidate the registry, type: call, targetComponent: registry-a, targetMethod: invalidate }';
+  /** The member of the facade's name makes the registry call; the facade only forwards. */
+  const MEMBER_CALLS = [
+    'export function registryInvalidate(): void {}',
+    'class Workspace { saveThing(): void { registryInvalidate(); } }',
+    'const current = (): Workspace => new Workspace();',
+    'export function saveThing(): void { current().saveThing(); }',
+  ];
+
+  it('does not read the facade as making the same-named member\'s colocated call (the old union accused it)', () => {
+    const proj = facadeProject([LOCAL_STEP], MEMBER_CALLS);
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'UNDECLARED_COLOCATED_CALL')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('judges the function on its own body: a call only an unrelated same-named member makes does not realize its step (the old union accepted it)', () => {
+    // The module function never reaches the member: it records the save and
+    // returns. Only the Audit class's own `saveThing` invalidates.
+    const proj = facadeProject([CALL_STEP], [
+      'export function registryInvalidate(): void {}',
+      'declare function record(): void;',
+      'class Audit { saveThing(): void { registryInvalidate(); } }',
+      'export function saveThing(): void { record(); }',
+      'export const audit = new Audit();',
+    ]);
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('"saveThing"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('still accuses the facade when it makes the colocated call itself', () => {
+    const proj = facadeProject([LOCAL_STEP], [
+      'export function registryInvalidate(): void {}',
+      'class Workspace { saveThing(): void {} }',
+      'const current = (): Workspace => new Workspace();',
+      'export function saveThing(): void { current().saveThing(); registryInvalidate(); }',
+    ]);
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'UNDECLARED_COLOCATED_CALL')).toHaveLength(1);
+    } finally { proj.cleanup(); }
   });
 });

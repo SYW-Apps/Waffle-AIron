@@ -69,7 +69,10 @@ methods:
         type: throw
         error: Forbidden — exposure administration requires instance-level project:admin
       - stepNumber: 5
-        description: Replace the exposure policy wholesale through the policy repository
+        description: >-
+          Replace the exposure policy wholesale through the policy repository, normalized over the
+          compatible default: a retired adminApiMode (local_only, private_network, public) is stored
+          as enabled
         type: call
         targetComponent: policy_repository
         targetMethod: setExposurePolicy
@@ -83,7 +86,8 @@ methods:
       - stepNumber: 7
         description: >-
           Append the redacted exposure.set audit event (security level) under the active retention
-          policy
+          policy; when the submitted adminApiMode was a retired one, its metadata names the old
+          value and the value stored
         type: call
         targetComponent: audit_repository
         targetMethod: append
@@ -100,4 +104,4 @@ methods:
         outcome: stored exposure policy
 status: complete
 createdAt: '2026-09-13T12:09:16.058Z'
-updatedAt: '2026-10-03T16:39:43.000Z'
+updatedAt: '2026-10-05T00:07:55.081Z'

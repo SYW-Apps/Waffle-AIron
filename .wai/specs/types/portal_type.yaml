@@ -1,0 +1,26 @@
+kind: enum
+id: portal_type
+name: PortalType
+description: The wire flavour of a Portal.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: HTTP_API
+    description: An HTTP API
+  - name: gRPC
+    description: A gRPC service
+  - name: GraphQL
+    description: A GraphQL endpoint
+  - name: MessageBus
+    description: Messages on a bus or queue
+  - name: CLI
+    description: A command line
+  - name: NamedPipe
+    description: A named pipe
+  - name: IPC
+    description: Another inter-process channel
+  - name: Custom
+    description: Any other wire
+createdAt: '2026-10-04T23:11:57.694Z'
+updatedAt: '2026-10-04T23:11:58.070Z'

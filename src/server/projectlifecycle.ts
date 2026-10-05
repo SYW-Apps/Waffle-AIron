@@ -22,6 +22,7 @@ import type {
   ApprovalRequest,
   ApprovalDecision,
   AuditEvent,
+  AuditLevel,
   GovernedProjectCreation,
   HostConfig,
   Principal,
@@ -130,7 +131,7 @@ function isOriginalRequester(principal: Principal, req: ApprovalRequest): boolea
 function buildAuditEvent(
   principal: Principal,
   action: string,
-  level: string,
+  level: AuditLevel,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {
   const event: AuditEvent = {

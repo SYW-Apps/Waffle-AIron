@@ -1,0 +1,19 @@
+kind: enum
+id: project_relation_status
+name: ProjectRelationStatus
+description: >-
+  Where a cross-project relation stands. Only an active relation confers reachability; a relation
+  written without a status is active.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: active
+    description: 'In force: confers reachability'
+  - name: suspended
+    description: Kept, temporarily without effect
+  - name: retired
+    description: Kept for the record, permanently without effect
+createdAt: '2026-10-04T23:52:58.199Z'
+updatedAt: '2026-10-04T23:52:58.739Z'

@@ -19,8 +19,8 @@ fields:
     description: Display name when the source carries one separately from the id.
     optional: true
   - name: source
-    type: string
-    description: '"git" | "hosted" | "os" | "legacy" — how the identity was established.'
+    type: ApproverSource
+    description: How the identity was established.
     optional: false
 methods:
   - name: label
@@ -36,4 +36,4 @@ methods:
     symbol: describeApprover
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-12T00:19:23.550Z'
-updatedAt: '2026-09-23T12:57:14.938Z'
+updatedAt: '2026-10-04T23:38:44.357Z'

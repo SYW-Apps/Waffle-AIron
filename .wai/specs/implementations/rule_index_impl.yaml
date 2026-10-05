@@ -13,6 +13,7 @@ methods:
       Read the rule store's rules in registration order (built-ins, then pack rules) and return them
       as the run sequence with the lint-allows rule moved to the end, so its audit sees every allow
       the pack rules consumed. A read-only projection sharing the store's references.
+    symbol: indexRuleSequence
   - name: knownIssueCodes
     narrative: []
     intent: >-
@@ -21,15 +22,17 @@ methods:
       from the store.
     calls:
       - rule_store.list
+    symbol: indexKnownIssueCodes
   - name: specScopedRules
     narrative: []
     intent: >-
       Read the run sequence and keep, in order, the rules whose scope is spec: the rules that read
       only one spec's own fields, which the write gate runs on a candidate before saving it. A rule
       that declares no scope is a tree rule and is never included. Read-only.
+    symbol: indexSpecScopedRules
 detail: intent
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T19:17:48.847Z'
-updatedAt: '2026-09-19T21:26:58.332Z'
+updatedAt: '2026-10-04T19:42:20.258Z'

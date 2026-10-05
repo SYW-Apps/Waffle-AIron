@@ -1,6 +1,7 @@
 import type { LockRecord } from '../core/lockfile.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
 import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
+import type { ProfileFamily } from '../core/extensions.js';
 import type { GitPublish } from '../git/types.js';
 import type { MigrationPlan, TransactionOutcome } from '../migrations/types.js';
 
@@ -18,7 +19,7 @@ export type DisplayRole = 'editor' | 'admin';
 // Hierarchical permission model (roles + assignments + permission rules)
 // ---------------------------------------------------------------------------
 
-/** The five capabilities the hierarchical permission model gates. There is NO
+/** The six capabilities the hierarchical permission model gates. There is NO
  *  '*' capability: the instance-admin bypass is env-anchored to the built-in
  *  super-admin/master and is never granted through the assignment grid. */
 export type Capability =
@@ -35,7 +36,7 @@ export type Capability =
 export type PermissionValue = 'yes' | 'approval' | 'no' | 'inherit';
 
 /** The value an effective resolution can settle on — `inherit` is consumed by the walk. */
-export type EffectiveValue = Extract<PermissionValue, 'yes' | 'approval' | 'no'>;
+export type EffectiveValue = 'yes' | 'approval' | 'no';
 
 /** The scope tiers permissions may be anchored at. A subsystem scope
  *  (`<projectId>/<subsystemId>`) sits below its project and carries only
@@ -96,13 +97,15 @@ export interface Role {
   createdBy?: PrincipalSubject;
 }
 
+/** Who a permission assignment is for: one user, or everyone (a scope-wide default). */
+export type AssignmentSubjectKind = 'user' | 'everyone';
+
 /** One (subject × scope × capability → value) binding — the atom of the grid.
  *  Roles are NOT assignment subjects: a role's values live on Role.permissions
  *  and apply through the user's RoleBindings, anchored at the binding's scope. */
 export interface PermissionAssignment {
   id: string;
-  /** user | everyone (a scope-wide default). */
-  subjectKind: 'user' | 'everyone';
+  subjectKind: AssignmentSubjectKind;
   /** The user id; absent when subjectKind is 'everyone'. */
   subjectId?: string;
   scopeKind: ScopeKind;
@@ -222,6 +225,12 @@ export interface MembershipScreen {
   carried?: CarriedSubsystemRule[];
 }
 
+/** What a carried subsystem setting was: a permission assignment, or a role binding. */
+export type CarriedRuleKind = 'assignment' | 'role';
+
+/** What became of a carried subsystem setting. */
+export type CarriedRuleNote = 'carried' | 'most restrictive wins' | 'not carried (can only narrow)';
+
 /**
  * One subsystem setting a promote or an externalize moves out of its parent, as
  * the plan lists it and reconcile carries it: carried with its value, collapsed
@@ -236,10 +245,10 @@ export interface CarriedSubsystemRule {
   to: string;
   /** The user id, or `everyone` for an everyone-default. */
   subject: string;
-  kind: 'assignment' | 'role';
+  kind: CarriedRuleKind;
   /** The project:write value carried (yes | no), or the role id for a role binding. */
   value: string;
-  note: 'carried' | 'most restrictive wins' | 'not carried (can only narrow)';
+  note: CarriedRuleNote;
 }
 
 /** What reconciling a hosted family's member records with the family on disk did. */
@@ -303,22 +312,27 @@ export interface RepositoryScope {
   pathspecs: string[];
 }
 
+/** Which source decided an effective permission. */
+export type PermissionSource = 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default';
+
 /** The resolved effective permission for one (subject, capability, target). */
 export interface EffectivePermission {
   value: EffectiveValue;
-  /** instance-admin | user | role | everyone-default | instance-default. */
-  source: 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default';
+  source: PermissionSource;
   decidedScopeKind?: ScopeKind;
   decidedScopeId?: string;
   /** Set by the permission explanation only: "subsystem not found" for a subsystem its project does not declare. */
   scopeNote?: string;
 }
 
+/** The scope kinds a visibility view lists: the instance is never one of them. */
+export type VisibleScopeKind = 'unit' | 'project' | 'subsystem';
+
 /** One scope in a subject's visibility view: actionable, or an ancestor shown
  *  only as a navigation breadcrumb. Never an ancestor's other children. */
 export interface VisibleScope {
   /** A subsystem appears only in a project:write view, and only when it carries a setting of its own. */
-  scopeKind: 'unit' | 'project' | 'subsystem';
+  scopeKind: VisibleScopeKind;
   scopeId: string;
   value: EffectiveValue;
   /** True when shown only as an ancestor breadcrumb (not directly actionable). */
@@ -437,19 +451,23 @@ export interface HostedUserRecord {
   roleBindings?: RoleBinding[];
 }
 
+/** An audit event's level, lowest first; the retention policy's minimum compares in this order. */
+export type AuditLevel = 'debug' | 'info' | 'warning' | 'error' | 'security';
+
+/** How an audited action ended. */
+export type AuditOutcome = 'success' | 'denied' | 'failed' | 'skipped';
+
 /** A durable, redacted audit event: who acted, through which token, on what, with what outcome.
  *  Never contains raw bearer tokens, secrets, or full spec bodies. */
 export interface AuditEvent {
   id: string;
   timestamp: string;
-  /** 'debug' | 'info' | 'warning' | 'error' | 'security' */
-  level: string;
+  level: AuditLevel;
   /** e.g. 'auth' | 'mcp' | 'admin' | 'project' | 'lock' | 'pack' | 'producer' | 'audit' */
   category: string;
   /** Canonical action name, e.g. 'mcp.tool.call', 'token.mint', 'user.create'. */
   action: string;
-  /** 'success' | 'denied' | 'failed' | 'skipped' */
-  outcome: string;
+  outcome: AuditOutcome;
   /** Resolved identity responsible for the action. */
   actor: PrincipalSubject;
   /** Credential id used for the request — never the raw token. */
@@ -481,11 +499,13 @@ export interface AuditQuery {
   limit?: number;
 }
 
+/** How one diagnostic check came out; a fail makes the instance unhealthy, a warn degraded. */
+export type DiagnosticStatus = 'pass' | 'warn' | 'fail';
+
 /** One diagnostic check outcome inside an instance health report. */
 export interface DiagnosticCheckResult {
   id: string;
-  /** 'pass' | 'warn' | 'fail' */
-  status: string;
+  status: DiagnosticStatus;
   message: string;
   observedAt: string;
   details?: string;
@@ -503,6 +523,10 @@ export interface ResourceUsageSnapshot {
   quotaMessages: string[];
 }
 
+/** How an exceeded quota limit is labelled. The quota policy is advisory: neither
+ *  mode blocks or throttles. A configured 'block' is read as observe (deprecated). */
+export type QuotaMode = 'observe' | 'warn';
+
 /** Advisory quota policy protecting the instance; observe/warn only. */
 export interface ResourceQuotaPolicy {
   enabled: boolean;
@@ -510,32 +534,40 @@ export interface ResourceQuotaPolicy {
   maxMcpRequestsPerMinute?: number;
   maxProjectBytes?: number;
   maxAuditEventsPerDay?: number;
-  /** 'observe' | 'warn' */
-  mode: string;
+  mode: QuotaMode;
 }
+
+/** An instance's overall health. */
+export type InstanceHealthStatus = 'ok' | 'degraded' | 'unhealthy';
 
 /** The assembled read-only instance health report. */
 export interface InstanceHealthReport {
-  /** 'ok' | 'degraded' | 'unhealthy' */
-  status: string;
+  status: InstanceHealthStatus;
   generatedAt: string;
   checks: DiagnosticCheckResult[];
   usage?: ResourceUsageSnapshot[];
 }
 
+/** How much of an audit event's metadata is persisted. A configured 'full-redacted'
+ *  is read as redacted (deprecated): the two were never different. */
+export type AuditMetadataMode = 'none' | 'redacted';
+
 /** Instance-level durable audit capture and retention policy. */
 export interface AuditRetentionPolicy {
   enabled: boolean;
   /** Lowest event level that is captured at all. */
-  minimumLevel: string;
+  minimumLevel: AuditLevel;
   retentionDays: number;
   /** Optional longer retention for 'security'-level events. */
   securityRetentionDays?: number;
   /** Whether read-only actions are captured (high volume). */
   includeReadEvents: boolean;
-  /** 'none' | 'redacted' | 'full-redacted' — how much metadata is persisted. */
-  metadataMode: string;
+  /** How much event metadata is persisted. */
+  metadataMode: AuditMetadataMode;
 }
+
+/** Where an approval request stands. */
+export type ApprovalRequestStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'completed' | 'cancelled';
 
 /** A durable request for a privileged hosted action, awaiting an authorized decision.
  *  The payload is redacted — never raw secrets or bearer tokens. */
@@ -543,8 +575,7 @@ export interface ApprovalRequest {
   id: string;
   /** Requested action kind: 'project:init' | 'project:lock' (more later). */
   kind: string;
-  /** 'pending' | 'approved' | 'denied' | 'expired' | 'completed' | 'cancelled' */
-  status: string;
+  status: ApprovalRequestStatus;
   /** Identity that requested the action. */
   requestedBy: PrincipalSubject;
   /** Credential id the request came through, when via MCP/HTTP auth. */
@@ -612,6 +643,9 @@ export interface ProjectInitRequest {
   profileSelection?: ProjectProfileSelection;
 }
 
+/** How the instance pack policy is enforced on a project. */
+export type PackEnforcementMode = 'warn' | 'block' | 'auto_reconcile';
+
 /** The hosted instance's pack/profile policy governing project initialization. */
 export interface InstancePackPolicy {
   id: string;
@@ -625,7 +659,7 @@ export interface InstancePackPolicy {
   requireProfileSelection: boolean;
   /** 'warn' (findings surface, actions proceed) | 'block' (violations reject) |
    *  'auto_reconcile' (like warn, and reconcileProjectPolicy may install missing packs). */
-  enforcementMode: string;
+  enforcementMode: PackEnforcementMode;
   updatedAt: string;
   updatedBy?: PrincipalSubject;
 }
@@ -634,7 +668,7 @@ export interface InstancePackPolicy {
 export interface PolicyEvaluationResult {
   compliant: boolean;
   /** The enforcement mode the evaluation ran under. */
-  mode: string;
+  mode: PackEnforcementMode;
   missingPackNames: string[];
   blockedPackNames: string[];
   missingProfileIds: string[];
@@ -669,6 +703,9 @@ export interface PolicyEvaluationResult {
   doctrine?: PackDoctrine[];
 }
 
+/** The server-global pack tier a pack resolved from. */
+export type GlobalPackTier = 'instance' | 'image';
+
 /** A server-global declarative pack resolved to its content for vendoring into a
  *  project, carrying its canonical identity so a project's compliance is checked
  *  and reported on the same key it is installed under. */
@@ -680,7 +717,7 @@ export interface ResolvedGlobalPack {
   /** The pack's serialized declarative content, ready to vendor. */
   content: string;
   /** The server-global tier it resolved from. */
-  tier: 'instance' | 'image';
+  tier: GlobalPackTier;
 }
 
 /** The outcome of resolving policy-supplied pack names against the server-global
@@ -745,6 +782,9 @@ export interface OrganizationState {
   placements: ProjectPlacement[];
 }
 
+/** What happens to a removed organization unit's content. */
+export type UnitDispositionKind = 'migrate' | 'alternative' | 'absorb' | 'cascade';
+
 /** The chosen resolution when removing an organization unit — a unit is never
  *  silently cascade-deleted; the caller picks what happens to its child units
  *  and project placements. Every non-cascade disposition is an explicit move
@@ -754,7 +794,7 @@ export interface UnitDisposition {
    *  new sibling newSlug/newName and move content in — how a rename/replace is
    *  expressed) | 'absorb' (content → the parent unit) | 'cascade' (delete this
    *  unit with its entire subtree and their placements). */
-  kind: 'migrate' | 'alternative' | 'absorb' | 'cascade';
+  kind: UnitDispositionKind;
   /** Required for kind='migrate': the existing destination unit that adopts this
    *  unit's children/placements. Must exist and must not be this unit or one of
    *  its own descendants. */
@@ -847,6 +887,12 @@ export interface ShareSnapshot {
   openapiSet?: NamedOpenApiSpec[];
 }
 
+/** How one access to a share link ended. */
+export type ShareAccessOutcome = 'served' | 'denied-disabled' | 'denied-expired' | 'not-found' | 'denied-download';
+
+/** How resolving a share token for its view ended (a view is never a download, so it is never denied-download). */
+export type ShareViewOutcome = 'served' | 'denied-disabled' | 'denied-expired' | 'not-found';
+
 /** One recorded access to a share link on the public surface. */
 export interface ShareAccessEntry {
   id: string;
@@ -855,8 +901,7 @@ export interface ShareAccessEntry {
   ip: string;
   userAgent: string;
   referer?: string;
-  /** served | denied-disabled | denied-expired | not-found | denied-download. */
-  outcome: string;
+  outcome: ShareAccessOutcome;
 }
 
 /** The owner's request to create a share link. */
@@ -897,7 +942,7 @@ export interface ShareRequestMeta {
 /** Outcome of resolving a share token — the snapshot model + download perms. */
 export interface SharedViewResult {
   found: boolean;
-  outcome: string;
+  outcome: ShareViewOutcome;
   link?: ShareLink;
   /** Serialized snapshot canvas model, on success. */
   model?: string;
@@ -911,7 +956,7 @@ export interface SharedViewResult {
 /** Outcome of a share artifact download. */
 export interface ShareArtifactResult {
   found: boolean;
-  outcome: string;
+  outcome: ShareAccessOutcome;
   kind?: string;
   content?: string;
   contentType?: string;
@@ -934,6 +979,9 @@ export interface RemotePublicInterfaceRef {
   reason: string;
 }
 
+/** Where a cross-project relation stands. */
+export type ProjectRelationStatus = 'active' | 'suspended' | 'retired';
+
 /** A directed cross-project relation: source consumes target's public interface. */
 export interface ProjectRelationRecord {
   id: string;
@@ -943,8 +991,8 @@ export interface ProjectRelationRecord {
   kind: string;
   targetPublicInterface: RemotePublicInterfaceRef;
   reason: string;
-  /** 'active' | 'suspended' | 'retired' — only active relations confer reachability. */
-  status: string;
+  /** Only an active relation confers reachability. */
+  status: ProjectRelationStatus;
   /** Recorded by the server when the relation is first created; kept on update. */
   createdAt: string;
   /** Recorded by the server from the creating principal; kept on update. */
@@ -982,10 +1030,13 @@ export interface VisibilityResolution {
   visibleProjects: { projectId: string; distance: 'department' | 'instance' | 'partner'; via: string }[];
 }
 
+/** How far an observer stands from a project in the unit graph, nearest first. */
+export type AudienceDistance = 'department' | 'instance' | 'partner';
+
 /** One entry of the visibility-resolved discovery catalog (listVisibleSurfaces). */
 export interface VisibleSurfaceEntry {
   projectId: string;
-  distance: string;
+  distance: AudienceDistance;
   /** Redacted catalog summaries, already audience-filtered for this observer. */
   interfaces: PublicInterfaceSummary[];
 }
@@ -1009,12 +1060,14 @@ export interface ReachableProjectRef {
   publicInterfaceIds: string[];
 }
 
+/** What a landscape node stands for. */
+export type LandscapeNodeKind = 'orgUnit' | 'project' | 'publicInterface';
+
 /** A node of the hosted landscape graph (unit, project, or public interface). */
 export interface LandscapeNode {
   id: string;
   label: string;
-  /** 'unit' | 'project' | 'interface' */
-  nodeKind: string;
+  nodeKind: LandscapeNodeKind;
   projectId?: string;
   unitId?: string;
   publicInterfaceId?: string;
@@ -1026,12 +1079,14 @@ export interface LandscapeNode {
   actionable?: boolean;
 }
 
+/** What a landscape edge says about its two ends. */
+export type LandscapeEdgeKind = 'contains' | 'owns' | 'shared_with' | 'publishes' | 'consumes' | 'depends_on' | 'mirrors';
+
 /** A directed edge of the hosted landscape graph. */
 export interface LandscapeEdge {
   from: string;
   to: string;
-  /** 'hierarchy' | 'placement' | 'relation' */
-  edgeKind: string;
+  edgeKind: LandscapeEdgeKind;
   relationId?: string;
   label?: string;
 }
@@ -1044,12 +1099,15 @@ export interface LandscapeGraphModel {
   scope?: string;
 }
 
+/** The identity provider kinds an operator can configure. keycloak and authentik have
+ *  endpoint templates of their own; every other kind resolves as generic OIDC. */
+export type IdentityProviderType = 'oidc' | 'keycloak' | 'authentik' | 'google_workspace' | 'entra_id';
+
 /** An OIDC/SSO identity provider configuration. Never carries a raw client secret —
  *  clientSecretRef points into the host secret mechanism. */
 export interface IdentityProviderConfig {
   id: string;
-  /** e.g. 'oidc' | 'authentik' | 'keycloak' | 'google' | 'entra' */
-  providerType: string;
+  providerType: IdentityProviderType;
   /** Optional admin-set human label, shown on the login screen's
    *  "Sign in with <displayName>" button. Defaults to the provider id when
    *  unset. Presentation only — never used for provider resolution. */
@@ -1130,12 +1188,14 @@ export interface WebSession {
   tokenId?: string;
 }
 
+/** What a node of the web UI's architecture graph stands for. */
+export type WebGraphNodeKind = 'unit' | 'project' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
+
 /** One node of the web UI's level-of-detail architecture graph. */
 export interface WebGraphNode {
   id: string;
   label: string;
-  /** 'unit' | 'project' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' */
-  kind: string;
+  kind: WebGraphNodeKind;
   /** Detail level: lower = higher-level (landscape/subsystem), deeper = L2/L3/L4
    *  (0 unit/project, 1 subsystem, 2 component, 3 interface/type, 4 implementation). */
   level: number;
@@ -1246,11 +1306,14 @@ export interface WebContext {
   local?: boolean;
 }
 
+/** A hosted project's lifecycle status. */
+export type HostedProjectStatus = 'active' | 'disabled';
+
 /** A registered hosted project mapped to its isolated .wai/ root. */
 export interface HostedProjectRecord {
   id: string;
   rootPath: string;
-  status: 'active' | 'disabled';
+  status: HostedProjectStatus;
   createdAt: string;
   /** Derived (not persisted on the record): the project's home unit — its
    *  'owner' placement — populated when the record is listed for display. */
@@ -1278,12 +1341,16 @@ export interface GovernedProjectCreation {
   profileImpact?: PackImpact;
 }
 
+/** Whether the admin API is served. Where it listens is the host's adminHost. A stored
+ *  or submitted local_only, private_network or public is read as enabled (deprecated):
+ *  each only ever meant "served". */
+export type AdminApiMode = 'disabled' | 'enabled';
+
 /** Runtime exposure posture for a hosted instance: which control-plane surfaces
  *  are bound over HTTP versus local/CLI-only. Mirrors
  *  .wai/specs/types/host_exposure_policy.yaml. */
 export interface HostExposurePolicy {
-  /** 'disabled' | 'local_only' | 'private_network' | 'public'. */
-  adminApiMode: string;
+  adminApiMode: AdminApiMode;
   /** Whether the optional browser admin UI is served. */
   adminUiEnabled: boolean;
   /** Whether the draft identity/audit control-plane API is served over HTTP. */
@@ -1359,14 +1426,20 @@ export interface InstanceIdentity {
   createdAt: string;
 }
 
+/** Whether a project lifecycle action ran, or waits on an approval request. */
+export type ProjectActionStatus = 'completed' | 'pending-approval';
+
+/** The project lifecycle actions that run execute-primary. */
+export type ProjectAction = 'project:init' | 'project:lock';
+
 /** The standardized result of a project lifecycle action (initialize/lock).
  *  EXECUTE-PRIMARY: when the caller is authorized the action RUNS and status is
  *  'completed' with the natural result; when their effective permission is
  *  'approval' the action is not run and status is 'pending-approval' carrying
  *  the created request. A 'no' permission never returns this — it raises Forbidden. */
 export interface ProjectActionOutcome {
-  status: 'completed' | 'pending-approval';
-  action: 'project:init' | 'project:lock';
+  status: ProjectActionStatus;
+  action: ProjectAction;
   /** Human-readable outcome: the result detail when completed, or that a
    *  request was submitted when pending-approval. */
   summary: string;
@@ -1436,8 +1509,8 @@ export interface AvailableProfile {
   /** Where the profile comes from: "builtin" for a wairon built-in profile,
    *  otherwise the name of the server-global pack that contributes it. */
   source: string;
-  /** The profile's doctrine family when known (backend-like | frontend-like | neutral). */
-  family?: string;
+  /** The profile's doctrine family, when known. */
+  family?: ProfileFamily;
   /** Optional human-readable summary of the profile for the picker. */
   description?: string;
   /** Whether this profile can already govern the project it was listed for:

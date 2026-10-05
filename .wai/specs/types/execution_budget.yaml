@@ -9,13 +9,13 @@ description: >-
   decision — an exporter must omit the field, not substitute a default.
 fields:
   - name: modelTier
-    type: string
+    type: ModelTier
     description: >-
       The capability tier this agent runs on, named as a tier and never as a model. Absent means
       express no model choice at all.
     optional: true
   - name: effort
-    type: string
+    type: EffortTier
     description: How much effort it may spend within that tier. Absent means the host's own default.
     optional: true
   - name: maxTurns
@@ -26,8 +26,8 @@ fields:
       parent's context.
     optional: true
   - name: toolClass
-    type: string
-    description: 'Which grant of tools the agent gets: read-only, implement, orchestrate or full.'
+    type: ToolClass
+    description: Which grant of tools the agent gets.
     optional: false
   - name: allowNestedDelegation
     type: bool
@@ -36,8 +36,8 @@ fields:
       enforcement, so no instruction text has to be carried and re-read to achieve it.
     optional: false
   - name: mcp
-    type: string
-    description: 'How much of the MCP surface it loads: none, project or all.'
+    type: McpAccess
+    description: How much of the MCP surface it loads.
     optional: false
 methods:
   - name: summarize
@@ -52,4 +52,4 @@ methods:
       global.
 sourcePath: src/models/execution.ts
 createdAt: '2026-09-20T19:47:48.244Z'
-updatedAt: '2026-10-04T10:28:51.977Z'
+updatedAt: '2026-10-04T23:39:31.061Z'

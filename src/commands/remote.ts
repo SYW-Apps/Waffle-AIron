@@ -54,9 +54,12 @@ export interface RemoteTransferOptions {
   destDir?: string;
 }
 
+/** Which way a remote transfer moves a tree: local to hosted, or hosted to local. */
+export type TransferDirection = 'push' | 'pull';
+
 /** What one migration actually moved. */
 export interface RemoteTransferOutcome {
-  direction: 'push' | 'pull';
+  direction: TransferDirection;
   url: string;
   projectId: string;
   projectName: string;

@@ -679,7 +679,7 @@ function failureAt(ref: AuthoredReference, failures: ValidationIssue[]): Validat
 
 /** Step 11: one contained member's relation, from the consumer's own gate findings on its references into it. */
 function containedStatus(child: ProjectNode, refs: AuthoredReference[], failures: ValidationIssue[]): ExternalStatus {
-  const base = { alias: child.mountAlias!, project: child.id ?? child.namespace, sourceKind: 'family', pinned: false };
+  const base = { alias: child.mountAlias!, project: child.id ?? child.namespace, sourceKind: 'family' as const, pinned: false };
   const unreachable = outsideReach(child);
   if (unreachable) {
     const uses = [...new Set(refs.map(referenceUse))].map((name) => ({ publicName: name, state: 'unavailable' as const, code: 'EXTERNAL_CHECK_UNAVAILABLE', detail: unreachable }));

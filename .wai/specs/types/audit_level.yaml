@@ -1,0 +1,16 @@
+kind: enum
+id: audit_level
+name: AuditLevel
+description: An audit event's level, lowest first; a retention policy's minimum compares in this order.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: debug
+  - name: info
+  - name: warning
+  - name: error
+  - name: security
+    description: Security-relevant; may be retained longer than the rest
+createdAt: '2026-10-04T23:18:21.134Z'
+updatedAt: '2026-10-04T23:18:21.539Z'

@@ -629,17 +629,7 @@ methods:
         type: return
         outcome: DesignExport
 lint:
-  allow:
-    - code: UNDECLARED_COLOCATED_CALL
-      at: listFamilyPins
-      covers:
-        - surface_store.list
-      reason: >-
-        The narrative's surface_repository.listSnapshots read and surface_store.list are one
-        function in src/core/surfaces.ts (listSnapshots): the facade has no body of its own apart
-        from the store, so the call the narrative names is the call the code makes. The same shape
-        its siblings getSnapshot and listMountSnapshots carry in the debt register; listFamilyPins
-        replaced listExternalInterfaces, whose entry for it was retired with it.
+  allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-04T13:54:56.892Z'
+updatedAt: '2026-10-04T22:35:17.223Z'

@@ -1,0 +1,14 @@
+kind: enum
+id: typed_spec_kind
+name: TypedSpecKind
+description: The spec kinds that hold method signatures and type positions.
+fields: []
+methods: []
+sourcePath: src/models/type-grammar.ts
+values:
+  - name: interface
+    description: 'A contract: its methods'' params and returns'
+  - name: type
+    description: 'A type: its fields, its pure methods, a signature''s params and returns, a named scalar''s holds'
+createdAt: '2026-10-04T23:33:36.098Z'
+updatedAt: '2026-10-04T23:33:36.573Z'

@@ -56,9 +56,9 @@ describe('resolveExposurePolicy', () => {
     return { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true, ...over };
   }
 
-  it('with no policy and no file → the compatible default (all surfaces on, adminApiMode local_only)', () => {
+  it('with no policy and no file → the compatible default (all surfaces on, adminApiMode enabled)', () => {
     const p = resolveExposurePolicy(cfg());
-    expect(p.adminApiMode).toBe('local_only');
+    expect(p.adminApiMode).toBe('enabled');
     expect(p.identityApiEnabled).toBe(true);
     expect(p.landscapeApiEnabled).toBe(true);
     expect(p.projectPolicyApiEnabled).toBe(true);
@@ -73,7 +73,16 @@ describe('resolveExposurePolicy', () => {
     const p = resolveExposurePolicy(cfg());
     expect(p.identityApiEnabled).toBe(false);
     expect(p.operationsApiEnabled).toBe(true); // untouched flag stays on
-    expect(p.adminApiMode).toBe('local_only');
+    expect(p.adminApiMode).toBe('enabled');
+  });
+
+  it('a retired adminApiMode (local_only, private_network, public) reads as enabled; disabled stays disabled', () => {
+    for (const retired of ['local_only', 'private_network', 'public']) {
+      writePolicyFile(dataDir, { adminApiMode: retired as HostExposurePolicy['adminApiMode'] });
+      expect(resolveExposurePolicy(cfg()).adminApiMode).toBe('enabled');
+    }
+    writePolicyFile(dataDir, { adminApiMode: 'disabled' });
+    expect(resolveExposurePolicy(cfg()).adminApiMode).toBe('disabled');
   });
 
   it('an explicit HostConfig.exposurePolicy wins over the file', () => {
@@ -171,6 +180,21 @@ describe('exposure gating: data plane unaffected (startHostServer)', () => {
     } catch {
       /* windows file locks */
     }
+  });
+
+  it('a stored retired adminApiMode logs one deprecation line at startup, and the admin plane is served', async () => {
+    writePolicyFile(dataDir, { adminApiMode: 'public' as HostExposurePolicy['adminApiMode'] });
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { errors.push(args.join(' ')); });
+    const port = await freePort();
+    const adminPort = await freePort();
+    const cfg: HostConfig = { host: '127.0.0.1', port, adminHost: '127.0.0.1', adminPort, dataDir, authEnabled: true };
+    handles.push(startHostServer(cfg));
+    spy.mockRestore();
+    expect(errors.filter((e) => e.includes('adminApiMode "public" is deprecated and reads as "enabled"'))).toHaveLength(1);
+    const res = await fetch(`http://127.0.0.1:${adminPort}/admin/projects`, { headers: { Authorization: `Bearer ${MASTER}` } });
+    await res.text();
+    expect(res.status).toBe(200);
   });
 
   it('adminApiMode "disabled": admin plane 404s but /healthz on the data plane is still 200', async () => {

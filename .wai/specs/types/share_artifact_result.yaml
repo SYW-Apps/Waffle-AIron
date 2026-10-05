@@ -10,8 +10,8 @@ fields:
     type: bool
     optional: false
   - name: outcome
-    type: string
-    description: served | denied-disabled | denied-expired | not-found | denied-download.
+    type: ShareAccessOutcome
+    description: How the download ended.
     optional: false
   - name: kind
     type: string
@@ -29,4 +29,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-07-17T22:32:54.133Z'
-updatedAt: '2026-10-04T10:21:03.079Z'
+updatedAt: '2026-10-04T23:40:35.733Z'

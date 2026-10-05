@@ -1,0 +1,26 @@
+kind: enum
+id: budget_tier
+name: BudgetTier
+description: How hard execution budgets optimize, each tier naming what it costs in quality.
+fields: []
+methods: []
+sourcePath: src/models/execution.ts
+values:
+  - name: 'off'
+    description: >-
+      No budget emitted: generated agent files carry name and description only, as before budgets
+      existed
+  - name: free
+    description: >-
+      Structural constraints only (tool classes, MCP scoping, nested-delegation control); no quality
+      tradeoff
+  - name: default
+    description: Adds capability-tier selection per role and turn ceilings
+  - name: trade
+    description: >-
+      Adds effort reduction on mechanical work and pushes standard work down a tier; a bounded
+      quality cost
+  - name: aggressive
+    description: Small tier for everything but deep reasoning, tight turn ceilings; expect partial results
+createdAt: '2026-10-04T23:12:40.566Z'
+updatedAt: '2026-10-04T23:12:40.956Z'

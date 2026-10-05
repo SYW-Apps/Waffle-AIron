@@ -30,9 +30,7 @@ methods:
           limit
         type: local
       - stepNumber: 5
-        description: >-
-          Keep messages non-enforcing: downgrade any would-be 'block' outcome to an advisory
-          observation
+        description: 'Keep messages non-enforcing: the mode only labels each exceeded limit (observe by default)'
         type: local
       - stepNumber: 6
         description: Return the annotated usage snapshots
@@ -41,4 +39,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-10T11:27:18.012Z'
-updatedAt: '2026-09-15T20:47:09.436Z'
+updatedAt: '2026-10-05T00:07:53.377Z'

@@ -12,8 +12,8 @@ fields:
     description: Stable identity provider config id.
     optional: false
   - name: providerType
-    type: string
-    description: 'Provider kind: "oidc", "google_workspace", "entra_id", "keycloak", "authentik", or "local".'
+    type: IdentityProviderType
+    description: Provider kind.
     optional: false
   - name: issuerUrl
     type: string
@@ -96,4 +96,4 @@ methods:
     symbol: isInAdminGroup
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-10-04T10:20:17.912Z'
+updatedAt: '2026-10-04T23:53:31.265Z'

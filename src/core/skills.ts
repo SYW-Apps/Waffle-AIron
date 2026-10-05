@@ -249,10 +249,10 @@ export function activeTargetTypes(): string[] {
 // exportSddSkills copies to disk (src/templates/skills/*.md) into MCP-safe
 // descriptors and markdown content.
 //
-// Layering (folded into this module, mirroring exportSddSkills):
+// Layering (mirroring exportSddSkills):
 //   skill_resources             → listSkillResources / readSkillResource (pure)
 //   skills_resource_orchestrator→ validation + dispatch (inside readResource)
-//   skills_portal               → listResources / readResource (adapter entry)
+//   skills_portal               → ./skills-portal.ts, forwarding to listResources / readResource
 // ---------------------------------------------------------------------------
 
 /** MCP resource URI scheme for a built-in SDD skill (e.g. wairon-skill://sdd-architect). */
@@ -343,15 +343,15 @@ export function readSkillResource(resourceId: string): string {
   return fs.readFileSync(skillTemplatePath(resourceId), 'utf-8');
 }
 
-// ── skills_resource_orchestrator → skills_portal ───────────────────────────
+// ── skills_resource_orchestrator (the portal forwards from ./skills-portal.ts) ─
 
-/** Portal: list the built-in SDD skills as MCP resource descriptors. */
+/** skills_resource_orchestrator.list: the built-in SDD skills as MCP resource descriptors. */
 export function listResources(): SkillResourceDescriptor[] {
   return listSkillResources();
 }
 
 /**
- * Orchestrator + Portal: compose the `instructions` the MCP server returns on
+ * skills_resource_orchestrator.buildServerInstructions: compose the `instructions` the MCP server returns on
  * the initialize handshake, through server_instructions. (That module
  * imports back into this one — see the note in core/instructions.ts.)
  */
@@ -360,7 +360,7 @@ export function buildServerInstructions(): string {
 }
 
 /**
- * Portal: read one built-in SDD skill's content by MCP resource id. Rejects an
+ * skills_resource_orchestrator.read: one built-in SDD skill's content by MCP resource id. Rejects an
  * unknown id — validated against the listed descriptors — before reading.
  */
 export function readResource(resourceId: string): string {

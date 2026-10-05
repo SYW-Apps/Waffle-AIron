@@ -18,7 +18,7 @@ import {
   exportSurface,
   importSurface,
   listSnapshots,
-  saveSnapshot,
+  surfaceRepository,
   removeSnapshot,
   listFamilyPins,
 } from '../../src/core/surfaces.js';
@@ -418,7 +418,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     // The child holds a stage-1 sibling pin of the parent's core-sub, as
     // `surface pin` once wrote it (stage 3 retired the writer; the pins a child
     // holds are still consulted until stage 4).
-    saveSnapshot(SurfaceSnapshotSchema.parse({
+    surfaceRepository.saveSnapshot(SurfaceSnapshotSchema.parse({
       projectName: 'root-system::core-sub', origin: 'generated', stateId: 'sha256:pinned', generatedAt: now, types: [],
       interfaces: [{
         id: 'gateway-portal', name: 'gateway-portal', audience: 'project', type: 'REST', component: 'gateway-portal', details: 'api',
@@ -594,7 +594,7 @@ describe('cross-tree references are matched by the provider they name', () => {
       }],
       status: 'complete', createdAt: now, updatedAt: now,
     } as ImplementationSpec);
-    runWithProjectRoot(kidDir, () => { for (const snapshot of pins) saveSnapshot(snapshot); });
+    runWithProjectRoot(kidDir, () => { for (const snapshot of pins) surfaceRepository.saveSnapshot(snapshot); });
     invalidateSpecCache();
     return { root, kidDir };
   }
@@ -708,9 +708,9 @@ describe('stage-1 family pins + computeStateIdAt', () => {
       projectName, origin, stateId: 'sha256:pinned', generatedAt: now, types: [], interfaces: [],
     });
     runWithProjectRoot(childDir, () => {
-      saveSnapshot(snap('root-system', 'generated'));
-      saveSnapshot(snap('root-system::core-sub', 'generated'));
-      saveSnapshot(snap('stripe', 'authored'));
+      surfaceRepository.saveSnapshot(snap('root-system', 'generated'));
+      surfaceRepository.saveSnapshot(snap('root-system::core-sub', 'generated'));
+      surfaceRepository.saveSnapshot(snap('stripe', 'authored'));
     });
     invalidateSpecCache();
     return childDir;

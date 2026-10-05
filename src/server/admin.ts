@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import type { DiagramFormat } from '../core/diagram.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
@@ -769,7 +770,8 @@ export function generateDiagram(cfg: HostConfig, credential: string | null, proj
   // its externals name are in reach.
   const relations = format === 'canvas' ? instanceRelations(cfg, project, root) : undefined;
   // Step 7.
-  return runWithProjectRoot(root, () => hostCore.renderDiagram(format, relations));
+  // renderDiagram refuses a format outside the set, so the raw string is handed on as is.
+  return runWithProjectRoot(root, () => hostCore.renderDiagram(format as DiagramFormat, relations));
 }
 
 /** The family's relation health over a bound root, read with the whole instance in reach (the master credential's). */

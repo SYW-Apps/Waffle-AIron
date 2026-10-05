@@ -2,7 +2,7 @@ id: skills_portal_impl
 name: Skills Portal Implementation
 description: Concrete implementation forwarding portal requests to skills orchestrator.
 contract: iskills_portal
-sourcePath: src/core/skills.ts
+sourcePath: src/core/skills-portal.ts
 methods:
   - name: exportSddSkills
     narrative:
@@ -48,4 +48,4 @@ methods:
         targetMethod: checkFreshness
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:13:57.657Z'
+updatedAt: '2026-10-04T19:57:21.870Z'

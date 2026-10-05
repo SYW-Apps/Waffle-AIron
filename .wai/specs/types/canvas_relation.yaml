@@ -24,11 +24,10 @@ fields:
       parent declares it by.
     optional: false
   - name: health
-    type: string
+    type: RelationHealth
     description: >-
-      ok | drifted | incompatible | unavailable — ExternalStatus.health(), or unavailable when the
-      consumer's statuses could not be read or name no such alias. Never ok for anything that was
-      not compared.
+      ExternalStatus.health(), or unavailable when the consumer's statuses could not be read or name
+      no such alias. Never ok for anything that was not compared.
     optional: false
   - name: uses
     type: list<any>
@@ -59,4 +58,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-10-03T12:14:20.817Z'
-updatedAt: '2026-10-04T10:28:49.393Z'
+updatedAt: '2026-10-04T23:38:53.148Z'

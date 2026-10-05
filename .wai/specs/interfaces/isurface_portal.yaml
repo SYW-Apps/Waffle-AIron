@@ -13,13 +13,13 @@ methods:
       (renderedSet); a project with a single gateway portal yields a single document (also surfaced
       as `rendered`).
     signature: >-
-      exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string):
-      SurfaceSnapshot
+      exportSurface(maxAudience: SurfaceAudience, format: string, outPath?: string, portalId?:
+      string): SurfaceSnapshot
     returns: SurfaceSnapshot
     params:
       - name: maxAudience
-        type: string
-        description: 'Audience ceiling: project | department | instance | partner | external'
+        type: SurfaceAudience
+        description: 'Audience ceiling: only what is published to this audience or a narrower one is exported'
       - name: format
         type: string
         description: native | openapi
@@ -36,14 +36,14 @@ methods:
     description: >-
       Import a foreign surface document (native snapshot YAML or OpenAPI) and store it with the
       given origin (exchanged | authored).
-    signature: 'importSurface(sourcePath: string, origin: string): SurfaceSnapshot'
+    signature: 'importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot'
     returns: SurfaceSnapshot
     params:
       - name: sourcePath
         type: string
       - name: origin
-        type: string
-        description: exchanged | authored
+        type: SurfaceOrigin
+        description: Provenance of the imported snapshot (exchanged or authored; an import is never generated)
   - name: listSnapshots
     description: >-
       All stored surface snapshots available to this project (imported plus received
@@ -125,4 +125,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-04T18:29:31.130Z'
+updatedAt: '2026-10-04T23:38:35.672Z'

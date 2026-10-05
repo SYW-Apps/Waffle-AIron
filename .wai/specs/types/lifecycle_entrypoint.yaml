@@ -9,8 +9,8 @@ description: >-
   (INVALID_LIFECYCLE_ENTRYPOINT when the target does not exist).
 fields:
   - name: phase
-    type: string
-    description: init | shutdown — which lifecycle flow this roots
+    type: LifecyclePhase
+    description: Which lifecycle or execution flow this roots
     optional: false
   - name: component
     type: string
@@ -27,4 +27,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T18:47:29.021Z'
-updatedAt: '2026-09-19T11:07:10.145Z'
+updatedAt: '2026-10-04T23:39:50.536Z'

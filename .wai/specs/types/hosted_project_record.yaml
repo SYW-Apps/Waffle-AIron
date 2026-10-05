@@ -26,8 +26,8 @@ fields:
       through the containment guard, so moving a family's directory moves its members with it.
     optional: false
   - name: status
-    type: string
-    description: 'Lifecycle status: "active" or "disabled"'
+    type: HostedProjectStatus
+    description: Lifecycle status
     optional: false
   - name: createdAt
     type: string
@@ -74,4 +74,4 @@ methods:
     symbol: isValidProjectId
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-10-04T10:20:15.954Z'
+updatedAt: '2026-10-04T23:38:34.071Z'

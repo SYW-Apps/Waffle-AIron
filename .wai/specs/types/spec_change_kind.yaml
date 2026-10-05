@@ -1,0 +1,24 @@
+kind: enum
+id: spec_change_kind
+name: SpecChangeKind
+description: >-
+  What a write did at one path of a stored spec. A narrative is compared by step identity, which
+  adds renumbered and relocated.
+fields: []
+methods: []
+sourcePath: src/core/specs.ts
+values:
+  - name: set
+    description: A value set
+  - name: added
+    description: A key or element added
+  - name: removed
+    description: A key or element removed
+  - name: cleared
+    description: A list cleared
+  - name: renumbered
+    description: A run of unchanged steps an insert or delete shifted (before and after name the ranges)
+  - name: relocated
+    description: A jump field that followed its target to the target's new number
+createdAt: '2026-10-04T23:33:34.350Z'
+updatedAt: '2026-10-04T23:33:34.966Z'

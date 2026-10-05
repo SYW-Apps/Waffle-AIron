@@ -1,0 +1,21 @@
+kind: enum
+id: permission_source
+name: PermissionSource
+description: Which source decided an effective permission.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: instance-admin
+    description: The env-anchored built-in super-admin bypass
+  - name: user
+    description: A direct assignment to the user
+  - name: role
+    description: A role bound to the user
+  - name: everyone-default
+    description: A scope's everyone assignment
+  - name: instance-default
+    description: Nothing decided; the instance default applied
+createdAt: '2026-10-04T23:18:07.111Z'
+updatedAt: '2026-10-04T23:18:07.504Z'

@@ -1,0 +1,15 @@
+kind: enum
+id: hosted_project_status
+name: HostedProjectStatus
+description: A hosted project's lifecycle status.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: active
+    description: Served
+  - name: disabled
+    description: Kept, but not served
+createdAt: '2026-10-04T23:18:15.327Z'
+updatedAt: '2026-10-04T23:18:15.742Z'

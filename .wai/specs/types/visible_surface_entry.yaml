@@ -13,8 +13,8 @@ fields:
     optional: false
     key: primary
   - name: distance
-    type: string
-    description: 'Audience distance class: department | instance | partner.'
+    type: AudienceDistance
+    description: The observer's audience distance from the project.
     optional: false
   - name: interfaces
     type: list<PublicInterfaceSummary>
@@ -23,4 +23,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-11T09:38:08.814Z'
-updatedAt: '2026-10-04T10:21:27.200Z'
+updatedAt: '2026-10-04T23:53:30.671Z'

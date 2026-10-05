@@ -1,0 +1,19 @@
+kind: enum
+id: lock_state
+name: LockState
+description: Whether the tree's lock record still covers the design.
+fields: []
+methods: []
+sourcePath: src/core/specs.ts
+values:
+  - name: unlocked
+    description: No record
+  - name: locked
+    description: A record whose gate identity still matches
+  - name: stale
+    description: >-
+      A record the design, its governing doctrine, its declared inputs, its composition or a direct
+      member's composition subject have moved past, or one taken under an earlier gate identity
+      algorithm
+createdAt: '2026-10-04T23:13:03.768Z'
+updatedAt: '2026-10-04T23:13:04.163Z'

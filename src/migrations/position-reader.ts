@@ -30,6 +30,9 @@ import {
 // re-run after apply decides, so the migration it plans is idempotent.
 // ---------------------------------------------------------------------------
 
+/** What a bare reference matched by position in the family. */
+export type PositionalMatchKind = 'import' | 'self-prefix' | 'ambiguous' | 'none';
+
 /**
  * positional_match — what one unresolved reference matched by position, and
  * the explicit form that replaces it.
@@ -43,8 +46,7 @@ export interface PositionalMatch {
   position: string;
   /** The reference as written. */
   authored: string;
-  /** import | self-prefix | ambiguous | none */
-  kind: 'import' | 'self-prefix' | 'ambiguous' | 'none';
+  kind: PositionalMatchKind;
   /** For import: the producer's key. */
   producer?: string;
   /** For import: `<producer id>::<local id>`; for self-prefix: the local id. */

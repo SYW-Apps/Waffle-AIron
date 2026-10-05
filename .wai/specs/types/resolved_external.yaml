@@ -21,19 +21,12 @@ fields:
     description: The producer id the declaration names (its `project`, else the alias).
     optional: false
   - name: sourceKind
-    type: string
-    description: >-
-      family | path | git | hosted | unresolved: found in the family, found only through source.path
-      outside the family, found through source.git in the fetch cache, found through source.hosted
-      on the hosting server, or not found (a source.hosted read outside a hosted server, or out of
-      the request's reach, is unresolved; a git source that cannot be fetched stays git with its
-      directory absent and a problem, so a pin is still judged).
+    type: ExternalSourceKind
+    description: Where the producer was found.
     optional: false
   - name: relation
-    type: string
-    description: >-
-      For a family producer, how it stands to the consumer: parent | sibling | member | family (any
-      other project of the family).
+    type: ExternalRelation
+    description: 'For a family producer: how it stands to the consumer.'
     optional: true
   - name: producer
     type: string
@@ -65,13 +58,11 @@ fields:
     description: The source.hosted record id the declaration names, resolved or not.
     optional: true
   - name: role
-    type: string
+    type: ExternalRole
     description: >-
-      external | member: declared under `externals`, or a referenced project member (declared under
-      `members` with a `../`, git or hosted source, its content a project's). Both are judged by the
-      owner's gate against their pins and composed by the family run per use; a member is also part
-      of the family's composition (its own gate runs in the family run, its approval is recorded by
-      the parent's lock), an external only consumed.
+      How it is declared. Both are judged by the owner's gate against their pins and composed by the
+      family run per use; a member is also part of the family's composition (its own gate runs in
+      the family run, its approval is recorded by the parent's lock), an external only consumed.
     optional: false
   - name: commit
     type: string
@@ -86,4 +77,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:40.205Z'
-updatedAt: '2026-10-02T23:58:42.421Z'
+updatedAt: '2026-10-04T23:39:39.852Z'

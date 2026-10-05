@@ -13,8 +13,8 @@ fields:
     description: The interface or type holding the position
     optional: false
   - name: kind
-    type: string
-    description: interface | type
+    type: TypedSpecKind
+    description: The kind of the spec holding it.
     optional: false
   - name: path
     type: string
@@ -31,4 +31,4 @@ fields:
 methods: []
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:03:02.731Z'
-updatedAt: '2026-10-03T22:21:51.533Z'
+updatedAt: '2026-10-04T23:40:41.169Z'

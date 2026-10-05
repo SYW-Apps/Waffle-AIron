@@ -140,12 +140,14 @@ methods:
       answer with the change report — what changed, every path the delta named that the write did
       not act on, or that nothing changed and nothing was written. A dry run runs the whole write,
       gate included, and writes nothing.
-    signature: 'updateSpec(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
+    signature: >-
+      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
-        type: string
-        description: 'The spec kind to patch: system, subsystem, component, interface, implementation or type'
+        type: WritableSpecKind
+        description: The spec kind to patch
       - name: id
         type: string
         description: The stored spec's id, namespaced if needed
@@ -208,12 +210,12 @@ methods:
       never reads as a method with no content; a narrowed answer carries the partial-result marker,
       because the write tools REPLACE a method list and re-authoring from a partial read would
       delete every method left out.
-    signature: 'getSpec(kind: string, id: string, methods?: list<string>): SpecReadResult'
+    signature: 'getSpec(kind: WritableSpecKind, id: string, methods?: list<string>): SpecReadResult'
     returns: SpecReadResult
     params:
       - name: kind
-        type: string
-        description: 'The kind of spec to read: system, subsystem, component, interface, implementation or type'
+        type: WritableSpecKind
+        description: The kind of spec to read
       - name: id
         type: string
         description: The id to read it by; the L0 system spec is a singleton
@@ -267,12 +269,12 @@ methods:
       document was actually removed. A spec that was not there answers false rather than throwing,
       so a repeated delete is not an error — but the caller is told which of the two happened,
       because "deleted" and "was never there" are different answers to the same request.
-    signature: 'deleteSpec(kind: string, id: string): SpecDeletion'
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion'
     returns: SpecDeletion
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
       - name: id
         type: string
         description: The spec's id (namespaced if needed)
@@ -347,4 +349,4 @@ methods:
         description: Its new id
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-04T13:57:02.875Z'
+updatedAt: '2026-10-04T23:37:38.691Z'

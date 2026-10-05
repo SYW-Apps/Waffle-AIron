@@ -8,24 +8,27 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      Reads and schema-parses every YAML file under .wai/surfaces/ into SurfaceSnapshot values,
-      returning an empty list when the directory is absent. A malformed file is surfaced as a
-      loader-style issue and skipped rather than aborting the whole read.
-    symbol: loadSurfaceSnapshots
+      Reads and schema-parses every YAML file under .wai/surfaces/ at the bound root into
+      SurfaceSnapshot values, returning an empty list when the directory is absent. A malformed file
+      is skipped rather than aborting the whole read.
+    exportedVia: surfaceFsAdapter
   - name: writeSnapshot
     narrative: []
     detail: intent
     intent: >-
-      Serializes the snapshot to YAML and writes it to .wai/surfaces/<projectName>.yaml, creating
-      the directory when missing and overwriting an existing file atomically.
-    symbol: saveSnapshot
+      Schema-parses the snapshot and writes it as YAML to .wai/surfaces/<sanitized
+      projectName>.yaml, creating the directory when missing, and answers the file's path. A file
+      whose content (provenance stripped) already matches is left untouched, so a re-pin of an
+      unchanged contract rewrites no bytes; an unreadable existing file is rewritten.
+    exportedVia: surfaceFsAdapter
   - name: deleteSnapshot
     narrative: []
     detail: intent
     intent: >-
-      Removes .wai/surfaces/<projectName>.yaml and reports whether a file existed; cleans up an
-      emptied surfaces directory.
-    symbol: removeSnapshot
+      Removes .wai/surfaces/<sanitized projectName>.yaml and reports whether a file existed; failing
+      that, finds a legacy file written under the raw project name by the key stored inside it,
+      skipping malformed files.
+    exportedVia: surfaceFsAdapter
 status: complete
 createdAt: '2026-07-10T23:15:41.510Z'
-updatedAt: '2026-09-26T18:11:39.337Z'
+updatedAt: '2026-10-04T22:34:26.921Z'

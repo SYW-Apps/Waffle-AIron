@@ -1,6 +1,6 @@
 import { setSecret } from '../utils/secrets.js';
 import { upsertIdentityProviderRecord } from './policy.js';
-import type { HostConfig, IdentityProviderConfig } from './types.js';
+import type { HostConfig, IdentityProviderConfig, IdentityProviderType } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Identity Provider Bootstrap (sdd_host)
@@ -64,7 +64,8 @@ export function seedDefaultProvider(cfg: HostConfig): IdentityProviderConfig | n
 function defaultProviderFromEnv(issuer: string, clientSecretRef: string | undefined): IdentityProviderConfig {
   const config: IdentityProviderConfig = {
     id: DEFAULT_PROVIDER_ID,
-    providerType: envTrim('WAIRON_OIDC_PROVIDER_TYPE') ?? 'oidc',
+    // The environment names the kind as is; a kind without a template resolves as generic OIDC.
+    providerType: (envTrim('WAIRON_OIDC_PROVIDER_TYPE') ?? 'oidc') as IdentityProviderType,
     issuerUrl: issuer,
     enabled: true,
     updatedAt: '', // stamped server-side by the policy registry

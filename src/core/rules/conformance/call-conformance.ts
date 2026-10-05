@@ -1,5 +1,5 @@
 import {
-  callSitesOf,
+  bodySitesOf,
   defaultConformanceTier,
   importBindingOf,
   methodSourceFile,
@@ -59,6 +59,7 @@ import { CodeIndex, ForwardedName, RuleContext, SddRule } from '../types.js';
 // MALFORMED_DECLARED_CALL's finding and never a silent acceptance here.
 // ---------------------------------------------------------------------------
 
+
 /**
  * Every call site the function makes, closed transitively over the named
  * helpers it calls (so extract-helper refactors stay clean), each carrying the
@@ -66,40 +67,61 @@ import { CodeIndex, ForwardedName, RuleContext, SddRule } from '../types.js';
  * — the answer METHOD_BODY_NOT_FOUND reports, and never confused with an empty
  * list, which is a body that calls nothing.
  *
- * `stopAt` names the callees the walk RECORDS but does not descend into: a
- * modelled method's own callees belong to its own narrative, so the converse
- * direction stops there instead of attributing them to the caller.
+ * The function is read as the ONE body its anchor means — `container` is the
+ * anchor's `exportedVia` handle — and each hop as the one body its call
+ * reaches, told apart from same-named neighbours by where each is bound
+ * (bodySitesOf). Where the code does not settle which body a name means, the
+ * walk reads every body of that name, as it always has.
+ *
+ * `stopAt` says which callees the walk RECORDS but does not descend into — a
+ * modelled method, whose own callees belong to its own narrative, so the
+ * converse direction stops there instead of attributing them to the caller. It
+ * is asked with the site and the identity of the body the site resolved to.
  */
 export function closedCallSites(
   code: CodeIndex,
   file: string,
   fn: string,
-  stopAt?: ReadonlySet<string>,
+  stopAt?: (site: CallSiteFact, bodyKey: string | undefined) => boolean,
+  container?: string,
 ): CallSiteFact[] | undefined {
   const facts = code.factsAt(file);
-  const direct = facts && callSitesOf(facts, fn);
+  const direct = facts && bodySitesOf(facts, fn, container);
   if (!direct) return undefined;
   const here = pathKey(file);
   const out: CallSiteFact[] = [];
-  const descended = new Set<string>([`${here}|${fn}`]);
-  const queue: CallSiteFact[] = direct.map(s => ({ ...s, from: s.from ?? here }));
+  const descended = new Set<string>([`${here}|${direct.key}`]);
+  const queue: CallSiteFact[] = direct.sites.map(s => ({ ...s, from: s.from ?? here }));
   while (queue.length) {
     const site = queue.pop()!;
     out.push(site);
-    if (stopAt?.has(site.name)) continue;
-    const key = `${site.from}|${site.name}`;
+    // Descend into the body the scope file holds under that name — a member
+    // call's plain-identifier receiver naming the container it may reach: the one
+    // the call reaches where the code settles it, every one where it does
+    // not. The union is permissive on purpose — a wider callee set can only
+    // make the forward direction ACCEPT more, never accuse — so a
+    // `this.helper()` hop into a same-file method stays closed over, as it
+    // always was.
+    const scope = code.factsAt(site.from!);
+    const next = scope ? bodySitesOf(scope, site.name, site.via, site.member) : undefined;
+    if (stopAt?.(site, next?.key)) continue;
+    if (!next) continue;
+    const key = `${site.from}|${next.key}`;
     if (descended.has(key)) continue;
     descended.add(key);
-    // Descend into whatever body the scope file holds under that name. This
-    // is permissive on purpose — a wider callee set can only make the forward
-    // direction ACCEPT more, never accuse — so a `this.helper()` hop into a
-    // same-file method stays closed over, as it always was.
-    const scope = code.factsAt(site.from!);
-    const next = scope && callSitesOf(scope, site.name);
-    if (!next) continue;
-    queue.push(...next.map(s => ({ ...s, from: s.from ?? site.from })));
+    queue.push(...next.sites.map(s => ({ ...s, from: s.from ?? site.from })));
   }
   return out;
+}
+
+/** A modelled method's identity in its file: `<exportedVia>.<symbol>` when it is reached through a handle, else its symbol. */
+const anchorKey = (symbol: string, exportedVia: string | undefined): string =>
+  (exportedVia !== undefined ? `${exportedVia}.${symbol}` : symbol);
+
+/** A modelled method, as the converse direction names the component it belongs to. */
+interface Owner {
+  component: string;
+  method: string;
 }
 
 /** What a claim's target is in code: the names that realize it, and the files they are written in. */
@@ -267,13 +289,20 @@ export const callConformanceRule: SddRule = {
     // Which modelled method each realizing symbol IS, per file — the converse
     // direction's whole subject, read off the same descent so a component and
     // its colocated neighbour come from one walk.
-    const modelledAt = new Map<string, Map<string, { component: string; method: string }>>();
+    // Keyed two ways: by the body identity an anchor names (its symbol,
+    // qualified by its exportedVia handle), which is what a site resolved to
+    // one body is matched against; and by bare name, which is what a site
+    // whose body the code does not settle falls back to, as it always did.
+    const modelledAt = new Map<string, { byKey: Map<string, Owner>; byName: Map<string, Owner> }>();
     for (const entry of methods) {
       if (!entry.sourceFile) continue;
       const file = pathKey(entry.sourceFile);
-      const byName = modelledAt.get(file) ?? new Map<string, { component: string; method: string }>();
-      byName.set(entry.method.symbol ?? entry.method.name, { component: entry.component.id, method: entry.method.name });
-      modelledAt.set(file, byName);
+      const at = modelledAt.get(file) ?? { byKey: new Map<string, Owner>(), byName: new Map<string, Owner>() };
+      const symbol = entry.method.symbol ?? entry.method.name;
+      const owner: Owner = { component: entry.component.id, method: entry.method.name };
+      at.byKey.set(anchorKey(symbol, entry.method.exportedVia), owner);
+      at.byName.set(symbol, owner);
+      modelledAt.set(file, at);
     }
 
     for (const entry of methods) {
@@ -296,14 +325,23 @@ export const callConformanceRule: SddRule = {
 
       const here = pathKey(file);
       const fnSymbol = implMethod.symbol ?? implMethod.name;
-      const colocated = modelledAt.get(here) ?? new Map<string, { component: string; method: string }>();
+      const colocated = modelledAt.get(here) ?? { byKey: new Map<string, Owner>(), byName: new Map<string, Owner>() };
+      // Which modelled method a site reaches: the one anchored to the body it
+      // resolved to in THIS file, else, where the code does not settle the
+      // body (or the site was read in another file), whichever is anchored
+      // under the bare name, as before.
+      const ownerOf = (site: CallSiteFact, bodyKey: string | undefined): Owner | undefined => {
+        const inHere = pathKey(site.from ?? here) === here;
+        if (inHere && bodyKey !== undefined && !bodyKey.startsWith('*')) return colocated.byKey.get(bodyKey);
+        return colocated.byName.get(site.name);
+      };
       // The two directions close over different walks, and the difference is
       // doctrine rather than reuse. Forward closes over EVERYTHING the
       // function reaches: a wider callee set can only accept more, and a step
       // realized through a neighbour's method is still realized. The converse
       // stops AT a colocated modelled method, because what that method goes on
       // to call belongs to its own narrative, not to this caller's.
-      const sites = closedCallSites(code, file, fnSymbol);
+      const sites = closedCallSites(code, file, fnSymbol, undefined, implMethod.exportedVia);
       // The realized function has no body here: UNREALIZED_METHOD's find when
       // the name is absent altogether, METHOD_BODY_NOT_FOUND's when it is a
       // bodyless declaration. Either way, not ours.
@@ -425,8 +463,14 @@ export const callConformanceRule: SddRule = {
         if (parsed) declared.add(`${parsed.compId}.${parsed.methodName}`);
       }
       const crossings = new Map<string, string>();
-      for (const site of closedCallSites(code, file, fnSymbol, new Set(colocated.keys())) ?? []) {
-        const owner = colocated.get(site.name);
+      const reached = new Map<CallSiteFact, Owner | undefined>();
+      const stopAtModelled = (site: CallSiteFact, bodyKey: string | undefined): boolean => {
+        const owner = ownerOf(site, bodyKey);
+        reached.set(site, owner);
+        return owner !== undefined;
+      };
+      for (const site of closedCallSites(code, file, fnSymbol, stopAtModelled, implMethod.exportedVia) ?? []) {
+        const owner = reached.get(site);
         if (!owner || owner.component === component.id) continue;
         const ref = `${owner.component}.${owner.method}`;
         if (declared.has(ref) || crossings.has(ref)) continue;

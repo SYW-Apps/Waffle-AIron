@@ -122,6 +122,9 @@ export function rekeyAnchor(rename: IdentityRename, anchor: RekeyedAnchor): Reke
   };
 }
 
+/** The key of a carried finding an identity rename re-keyed: the anchoring spec, the site, or one covered unit. */
+export type RekeyedField = 'spec' | 'at' | 'covers';
+
 /**
  * One edit an identity move made to the debt register (carried_rekey): which
  * carried finding, which of its keys, and the value before and after. The
@@ -132,8 +135,8 @@ export interface CarriedRekey {
   code: string;
   spec: string;
   at: string;
-  /** The key the edit changed: the anchoring spec, the site, or one covered unit. */
-  field: 'spec' | 'at' | 'covers';
+  /** The key the edit changed. */
+  field: RekeyedField;
   from: string;
   to: string;
 }

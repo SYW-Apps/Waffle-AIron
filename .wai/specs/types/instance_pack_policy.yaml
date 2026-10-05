@@ -40,15 +40,12 @@ fields:
     description: Whether hosted project initialization must ask for and record an explicit profile selection.
     optional: false
   - name: enforcementMode
-    type: string
+    type: PackEnforcementMode
     description: >-
-      Enforcement posture, validated against a CLOSED SET at setPackPolicy time (an unknown value is
-      rejected — never silently treated as non-enforcing): "warn" (initialize even if non-compliant
-      and attach findings), "block" (reject a non-compliant initialization), or "auto_reconcile"
-      (initialize and permit AUTOMATIC application of missing required/default packs). NOTE: the
-      explicit reconcileProjectPolicy action applies resolvable missing required/default packs
-      regardless of this mode; enforcementMode governs init-time blocking and automatic
-      reconciliation only.
+      Enforcement posture, validated at setPackPolicy time (an unknown value is rejected, never
+      silently treated as non-enforcing). The explicit reconcileProjectPolicy action applies
+      resolvable missing required/default packs regardless of this mode; enforcementMode governs
+      init-time blocking and automatic reconciliation only.
     optional: false
   - name: updatedAt
     type: string
@@ -61,4 +58,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:58:41.777Z'
-updatedAt: '2026-10-04T10:20:19.922Z'
+updatedAt: '2026-10-04T23:53:27.927Z'

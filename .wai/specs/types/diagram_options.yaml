@@ -52,12 +52,10 @@ fields:
       health; Mermaid, draw.io and Excalidraw ignore it.
     optional: true
   - name: format
-    type: string
-    description: >-
-      The output format by name: mermaid | canvas | drawio | excalidraw. An alias for the boolean
-      flags.
+    type: DiagramFormat
+    description: The output format by name. An alias for the boolean flags.
     optional: true
 methods: []
 sourcePath: src/commands/diagram.ts
 createdAt: '2026-09-20T16:42:26.894Z'
-updatedAt: '2026-10-04T10:28:51.097Z'
+updatedAt: '2026-10-04T23:38:20.031Z'

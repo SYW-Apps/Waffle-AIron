@@ -4,9 +4,11 @@ import { getSnapshot, getSnapshotArtifact } from './sharesnapshots.js';
 import { appendAccess } from './shareaccesslog.js';
 import type {
   HostConfig,
+  ShareAccessOutcome,
   ShareArtifactResult,
   ShareLink,
   ShareRequestMeta,
+  ShareViewOutcome,
   SharedViewResult,
 } from './types.js';
 
@@ -19,7 +21,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 /** Record one access attempt (best-effort — logging never blocks serving). */
-function record(dataDir: string, linkId: string, meta: ShareRequestMeta, outcome: string): void {
+function record(dataDir: string, linkId: string, meta: ShareRequestMeta, outcome: ShareAccessOutcome): void {
   try {
     appendAccess(dataDir, {
       id: '',
@@ -36,7 +38,7 @@ function record(dataDir: string, linkId: string, meta: ShareRequestMeta, outcome
 }
 
 /** null when the link is unusable (with the refusal outcome), else the link. */
-function usable(link: ShareLink | null): { link: ShareLink } | { outcome: string } {
+function usable(link: ShareLink | null): { link: ShareLink } | { outcome: Exclude<ShareViewOutcome, 'served'> } {
   if (!link) return { outcome: 'not-found' };
   if (!link.enabled) return { outcome: 'denied-disabled' };
   if (link.expiresAt && Date.parse(link.expiresAt) <= Date.now()) return { outcome: 'denied-expired' };

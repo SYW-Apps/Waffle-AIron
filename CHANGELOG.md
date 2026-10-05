@@ -1301,6 +1301,19 @@ same thing to every implementation language, and every consumer reads one spelli
   `languages.<id>.foreignBuiltins` is accepted and ignored for one release: a pack that
   still declares it gets `PACK_FIELD_DEPRECATED` (notice), and the field goes in the
   release after.
+- **wairon's own tree uses enums.** The fields and params of wairon's own specs whose closed
+  set of values was listed only in prose are now typed by enums, each bound to the code's
+  literal union or `z.enum`, so the enum-values check guards them. Its design export,
+  surface snapshots and briefs show those positions as enums instead of `string`.
+- **Behaviour change (hosted): three settings offer only what they do.** The exposure
+  policy's `adminApiMode` is `disabled` or `enabled` (where the admin API listens stays
+  `--admin-host`); the audit policy's `metadataMode` is `none` or `redacted`; the quota
+  policy's `mode` is `observe` or `warn`. The retired values had no behaviour of their own and
+  still load for one release, mapped with a warning that names the old and new value:
+  `local_only`, `private_network` and `public` read as `enabled` (a startup line for a stored
+  policy, the audit event's metadata for an admin write), `full-redacted` as `redacted` and
+  `block` as `observe` (a startup warning for `WAIRON_AUDIT_POLICY` / `WAIRON_QUOTA_POLICY`).
+  The admin UI offers only the new values.
 
 **Upgrading.** Run `wairon doctor --fix` once: it rewrites every stored type position that
 is an alias into its canonical spelling (plain `wairon doctor` prints the plan first). Then

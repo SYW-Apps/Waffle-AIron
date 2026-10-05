@@ -13,8 +13,8 @@ fields:
     description: The key of the contract method it realizes
     optional: false
   - name: detail
-    type: string
-    description: full, calls-only or intent, after the stereotype default is applied
+    type: NarrativeDetail
+    description: Narrative detail, after the stereotype default is applied
     optional: false
   - name: intent
     type: string
@@ -32,4 +32,4 @@ fields:
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:19.761Z'
-updatedAt: '2026-10-04T15:39:15.335Z'
+updatedAt: '2026-10-04T23:39:22.481Z'

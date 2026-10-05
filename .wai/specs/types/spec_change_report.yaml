@@ -7,8 +7,8 @@ description: >-
   for both outcomes is what let a delta that landed nowhere read as a completed edit.
 fields:
   - name: kind
-    type: string
-    description: 'The spec kind written: system, subsystem, component, interface, implementation or type.'
+    type: WritableSpecKind
+    description: The spec kind written.
     optional: false
   - name: id
     type: string
@@ -74,4 +74,4 @@ fields:
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-10-04T10:21:07.659Z'
+updatedAt: '2026-10-04T23:37:53.379Z'

@@ -12,75 +12,22 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Derive the authorized project set and the wildcard flag from the principal's project
-          narrowing
-        type: local
+          Resolve the authorized binding for the selector — the same narrowing rules: a selector
+          never widens scope, a wildcard or multi-project caller must name a project, and an
+          unknown, inactive or out-of-scope project resolves to nothing
+        type: call
+        targetComponent: project_index
+        targetMethod: resolveBinding
       - stepNumber: 2
-        description: Is a project selector named?
-        type: branch
-        condition: a selector is named
-        onTrueStep: 3
-        onFalseStep: 5
-      - stepNumber: 3
-        description: A selector can never widen scope past a non-wildcard narrowing
-        type: branch
-        condition: the caller is not wildcard and the selector is outside the authorized set
-        onTrueStep: 4
-        onFalseStep: 6
-      - stepNumber: 4
-        description: 'Refuse: the selector is out of scope'
+        description: Return the binding's root path, or null when nothing resolved (no existence leak)
         type: return
-        outcome: null — selector cannot widen scope
-      - stepNumber: 5
-        description: Without a selector, only a single-project non-wildcard caller has an implicit target
-        type: branch
-        condition: no wildcard and exactly one authorized project
-        onTrueStep: 6
-        onFalseStep: 8
-      - stepNumber: 6
-        description: Fix the target project id (the named selector, or the single authorized project)
-        type: local
-      - stepNumber: 7
-        description: Continue with the fixed target, skipping the no-implicit-target refusal
-        type: jump
-        toStep: 9
-      - stepNumber: 8
-        description: 'Refuse: a wildcard or multi-project caller must name a project'
-        type: return
-        outcome: null — no implicit target
-      - stepNumber: 9
-        description: Reject a syntactically invalid project id
-        type: branch
-        condition: the target id is not a valid project id
-        onTrueStep: 10
-        onFalseStep: 11
-      - stepNumber: 10
-        description: 'Refuse: invalid project id'
-        type: return
-        outcome: null — invalid id
-      - stepNumber: 11
-        description: Load the project records and look up the target record
-        type: local
-      - stepNumber: 12
-        description: Only an existing ACTIVE project resolves
-        type: branch
-        condition: the record is missing or not active
-        onTrueStep: 13
-        onFalseStep: 14
-      - stepNumber: 13
-        description: 'Refuse: unknown or inactive project (no existence leak)'
-        type: return
-        outcome: null — unknown or inactive
-      - stepNumber: 14
-        description: Return the project's isolated root path
-        type: return
-        outcome: the isolated root path
+        outcome: root path or null
     intent: >-
       Given an authenticated principal and an optional selector, returns the isolated root path of
       the target project: the sole authorized project when the token scopes exactly one, or the
       selector only when it lies within the principal's authorized set. Returns null for any project
       outside that set — the selector can never widen scope.
-    symbol: resolveProjectRoot
+    symbol: indexResolveRoot
   - name: list
     narrative: []
     intent: >-
@@ -180,7 +127,7 @@ methods:
         type: return
         outcome: ProjectBinding or null
     detail: full
-    symbol: resolveProjectBinding
+    symbol: indexResolveBinding
   - name: family
     narrative: []
     intent: >-
@@ -270,4 +217,4 @@ methods:
     symbol: assertMintableNarrowingEntry
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-10-03T17:57:37.481Z'
+updatedAt: '2026-10-04T19:56:25.886Z'

@@ -14,10 +14,10 @@ fields:
     description: Stable id of the credential that authenticated, used for audit correlation; never the raw key.
     optional: false
   - name: role
-    type: string
+    type: DisplayRole
     description: >-
-      Coarse compatibility role such as "editor" or "admin", projected for display only — NOT an
-      authorization source (authorization resolves from permissionSubject).
+      Coarse compatibility role, projected for display only — NOT an authorization source
+      (authorization resolves from permissionSubject).
     optional: false
   - name: projects
     type: list<string>
@@ -60,4 +60,4 @@ methods:
     sourcePath: src/server/authorization.ts
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-10-04T10:20:47.639Z'
+updatedAt: '2026-10-04T23:40:18.446Z'

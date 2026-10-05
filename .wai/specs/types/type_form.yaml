@@ -1,0 +1,28 @@
+kind: enum
+id: type_form
+name: TypeForm
+description: The node kinds of a parsed type expression in the neutral type grammar.
+fields: []
+methods: []
+sourcePath: src/models/type-grammar.ts
+values:
+  - name: primitive
+    description: string, int, float, bool, bytes, date, datetime, duration, any or void
+  - name: named
+    description: A defined type, local or alias::name
+  - name: list
+    description: 'list<T>: ordered, duplicates allowed'
+  - name: set
+    description: 'set<T>: unordered, unique'
+  - name: map
+    description: 'map<K, V>: keyed lookup'
+  - name: optional
+    description: 'T?: T, or no value'
+  - name: union
+    description: 'A | B: exactly one of the named types'
+  - name: async
+    description: 'async T: completes later with T (returns only)'
+  - name: applied
+    description: A named generic applied to arguments
+createdAt: '2026-10-04T23:13:33.213Z'
+updatedAt: '2026-10-04T23:13:33.589Z'

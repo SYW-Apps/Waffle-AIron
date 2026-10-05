@@ -54,7 +54,7 @@ methods:
         description: The owner project's root
   - name: putFile
     description: Store bytes durably in an owner's transaction area (staged or backup).
-    signature: 'putFile(owner: string, id: string, area: string, path: string, bytes: bytes): void'
+    signature: 'putFile(owner: string, id: string, area: TransactionArea, path: string, bytes: bytes): void'
     returns: void
     params:
       - name: owner
@@ -64,8 +64,8 @@ methods:
         type: string
         description: The transaction id
       - name: area
-        type: string
-        description: staged | backup
+        type: TransactionArea
+        description: Which of the transaction's areas
       - name: path
         type: string
         description: The file, relative to the owner's root
@@ -74,7 +74,7 @@ methods:
         description: The content
   - name: readFile
     description: The bytes held in an owner's transaction area for a file, or null.
-    signature: 'readFile(owner: string, id: string, area: string, path: string): bytes?'
+    signature: 'readFile(owner: string, id: string, area: TransactionArea, path: string): bytes?'
     returns: bytes?
     params:
       - name: owner
@@ -84,14 +84,14 @@ methods:
         type: string
         description: The transaction id
       - name: area
-        type: string
-        description: staged | backup
+        type: TransactionArea
+        description: Which of the transaction's areas
       - name: path
         type: string
         description: The file, relative to the owner's root
   - name: locate
     description: The absolute path of a file in an owner's transaction area.
-    signature: 'locate(owner: string, id: string, area: string, path: string): string'
+    signature: 'locate(owner: string, id: string, area: TransactionArea, path: string): string'
     returns: string
     params:
       - name: owner
@@ -101,8 +101,8 @@ methods:
         type: string
         description: The transaction id
       - name: area
-        type: string
-        description: staged | backup
+        type: TransactionArea
+        description: Which of the transaction's areas
       - name: path
         type: string
         description: The file, relative to the owner's root
@@ -124,4 +124,4 @@ methods:
         description: The transaction id
 status: complete
 createdAt: '2026-09-30T20:26:08.028Z'
-updatedAt: '2026-10-04T10:19:42.896Z'
+updatedAt: '2026-10-04T23:38:40.430Z'

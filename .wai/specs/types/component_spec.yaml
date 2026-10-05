@@ -21,17 +21,15 @@ fields:
     description: Owning subsystem id
     optional: false
   - name: componentType
-    type: string
+    type: ComponentType
     description: >-
-      Stereotype. Blocks: Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry,
-      Adapter, Observer, and the UI block View; patterns: Repository, and the UI patterns
-      FeatureComponent and RouterComponent. Specialist and Gateway are retired (STEREOTYPE_RETIRED):
-      logic is an Orchestrator with a dependencyClass, and a gateway is a Portal with the gateway
-      variant
+      Stereotype: a building block, a pattern that owns blocks, or a UI block or pattern. Specialist
+      and Gateway are retired (STEREOTYPE_RETIRED): logic is an Orchestrator with a dependencyClass,
+      and a gateway is a Portal with the gateway variant
     optional: false
   - name: portalType
-    type: string
-    description: Wire flavour when componentType is Portal (HTTP_API, gRPC, …)
+    type: PortalType
+    description: Wire flavour when componentType is Portal
     optional: true
   - name: owns
     type: list<string>
@@ -42,8 +40,8 @@ fields:
     description: Collaborator component ids
     optional: false
   - name: status
-    type: string
-    description: draft | design | complete (an omitted status is parsed as complete)
+    type: SpecStatus
+    description: How far it is through design (an omitted status is parsed as complete)
     optional: false
   - name: dispatch
     type: list<DispatchBinding>
@@ -55,12 +53,10 @@ fields:
       audit then expires automatically.
     optional: true
   - name: durability
-    type: string
+    type: Durability
     description: >-
-      Store-only: durable | read-through | ram-projection | cache. A durable Store's writes need a
-      hydration read-back reachable from a lifecycle init entrypoint (MISSING_HYDRATION);
-      read-through reads its backing on every access; ram-projection is rebuilt, not restored; cache
-      is evictable and loss-safe.
+      Store-only: how the Store's state survives a restart (MISSING_DURABILITY when a Store declares
+      none)
     optional: true
   - name: patterns
     type: list<PatternRef>
@@ -102,12 +98,10 @@ fields:
     description: Opaque external references; an implementation link stands in for a local source path
     optional: true
   - name: dependencyClass
-    type: string
+    type: DependencyClass
     description: >-
-      Orchestrator-only: pure | read, enforced as a Store's durability is. pure depends only on pure
-      Orchestrators; read also depends on read Orchestrators and on Repositories, Indexes and
-      Adapters, whose write methods it never calls (judged once facade methods carry effect tags);
-      unset means a workflow (DEPENDENCY_CLASS_VIOLATION, DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR)
+      Orchestrator-only: what it may depend on, enforced as a Store's durability is; unset means a
+      workflow (DEPENDENCY_CLASS_VIOLATION, DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR)
     optional: true
   - name: lint
     type: LintConfig
@@ -199,4 +193,4 @@ methods:
       diagrams, "cli_packs_adapter" about packs. Empty when every word names a block.
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T13:51:42.697Z'
+updatedAt: '2026-10-04T23:38:02.642Z'

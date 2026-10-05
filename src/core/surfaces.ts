@@ -311,26 +311,14 @@ function canonicalReferences(snapshot: SurfaceSnapshot): SurfaceSnapshot {
 
 // ---------------------------------------------------------------------------
 // Stored snapshots (surface_repository over .wai/surfaces/)
+//
+// Three components, one file (N:1), each an object over the one below it:
+//   surface_fs_adapter  — the only block that touches .wai/surfaces/;
+//   surface_store       — read-through state: every read is the file read,
+//                         nothing is held in memory, so a CLI that pins and a
+//                         hosted server that reads always see the same files;
+//   surface_repository  — the facade consumers use, forwarding 1:1.
 // ---------------------------------------------------------------------------
-
-export function listSnapshots(): SurfaceSnapshot[] {
-  const dir = surfacesDir(getProjectRoot());
-  if (!fs.existsSync(dir)) return [];
-  const out: SurfaceSnapshot[] = [];
-  for (const file of fs.readdirSync(dir)) {
-    if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
-    try {
-      out.push(SurfaceSnapshotSchema.parse(readYamlFile(path.join(dir, file))));
-    } catch {
-      // A malformed snapshot never aborts the read — it is simply not available.
-    }
-  }
-  return out;
-}
-
-export function getSnapshot(projectName: string): SurfaceSnapshot | null {
-  return listSnapshots().find(s => s.projectName === projectName) ?? null;
-}
 
 /** Snapshot filename for a storage key. The key itself (projectName, possibly
  *  '<systemName>::<subsystemId>' for sibling surfaces) lives IN the document —
@@ -377,42 +365,125 @@ function writeSnapshotIfChanged(
   return { path: p, changed: true };
 }
 
-export function saveSnapshot(snapshot: SurfaceSnapshot): string {
-  return writeSnapshotIfChanged(snapshot, getProjectRoot()).path;
+// ── surface_fs_adapter ──────────────────────────────────────────────────────
+
+/** isurface_fs_adapter. */
+export interface SurfaceFsAdapter {
+  readAllSnapshots(): SurfaceSnapshot[];
+  writeSnapshot(snapshot: SurfaceSnapshot): string;
+  deleteSnapshot(projectName: string): boolean;
 }
 
-export function removeSnapshot(projectName: string): boolean {
-  const dir = surfacesDir(getProjectRoot());
-  const direct = path.join(dir, snapshotFilename(projectName));
-  if (fs.existsSync(direct)) {
-    fs.unlinkSync(direct);
-    return true;
-  }
-  // Legacy files written before filename sanitization (raw project names):
-  // locate by the snapshot's stored key, not the filename.
-  if (!fs.existsSync(dir)) return false;
-  for (const file of fs.readdirSync(dir)) {
-    if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
-    const p = path.join(dir, file);
-    try {
-      const snap = SurfaceSnapshotSchema.parse(readYamlFile(p));
-      if (snap.projectName === projectName) {
-        fs.unlinkSync(p);
-        return true;
+export const surfaceFsAdapter: SurfaceFsAdapter = {
+  readAllSnapshots() {
+    const dir = surfacesDir(getProjectRoot());
+    if (!fs.existsSync(dir)) return [];
+    const out: SurfaceSnapshot[] = [];
+    for (const file of fs.readdirSync(dir)) {
+      if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
+      try {
+        out.push(SurfaceSnapshotSchema.parse(readYamlFile(path.join(dir, file))));
+      } catch {
+        // A malformed snapshot never aborts the read — it is simply not available.
       }
-    } catch {
-      // A malformed snapshot is not the one we were asked to remove.
     }
-  }
-  return false;
+    return out;
+  },
+  writeSnapshot(snapshot) {
+    return writeSnapshotIfChanged(snapshot, getProjectRoot()).path;
+  },
+  deleteSnapshot(projectName) {
+    const dir = surfacesDir(getProjectRoot());
+    const direct = path.join(dir, snapshotFilename(projectName));
+    if (fs.existsSync(direct)) {
+      fs.unlinkSync(direct);
+      return true;
+    }
+    // Legacy files written before filename sanitization (raw project names):
+    // locate by the snapshot's stored key, not the filename.
+    if (!fs.existsSync(dir)) return false;
+    for (const file of fs.readdirSync(dir)) {
+      if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
+      const p = path.join(dir, file);
+      try {
+        const snap = SurfaceSnapshotSchema.parse(readYamlFile(p));
+        if (snap.projectName === projectName) {
+          fs.unlinkSync(p);
+          return true;
+        }
+      } catch {
+        // A malformed snapshot is not the one we were asked to remove.
+      }
+    }
+    return false;
+  },
+};
+
+// ── surface_store ───────────────────────────────────────────────────────────
+
+/** isurface_store — read-through: each method is one file operation. */
+export interface SurfaceStore {
+  put(snapshot: SurfaceSnapshot): string;
+  get(projectName: string): SurfaceSnapshot | null;
+  list(): SurfaceSnapshot[];
+  remove(projectName: string): boolean;
 }
 
-/**
- * surface_fs_adapter.readAllSnapshots (and the registry's and repository's
- * hydrate, which read through it) — every stored snapshot of the bound root.
- */
-export function loadSurfaceSnapshots(): SurfaceSnapshot[] {
-  return listSnapshots();
+export const surfaceStore: SurfaceStore = {
+  put(snapshot) {
+    return surfaceFsAdapter.writeSnapshot(snapshot);
+  },
+  get(projectName) {
+    return surfaceFsAdapter.readAllSnapshots().find(s => s.projectName === projectName) ?? null;
+  },
+  list() {
+    return surfaceFsAdapter.readAllSnapshots();
+  },
+  remove(projectName) {
+    return surfaceFsAdapter.deleteSnapshot(projectName);
+  },
+};
+
+// ── surface_repository ──────────────────────────────────────────────────────
+
+/** isurface_repository — the facade: each method one call to the store. */
+export interface SurfaceRepository {
+  saveSnapshot(snapshot: SurfaceSnapshot): string;
+  getSnapshot(projectName: string): SurfaceSnapshot | null;
+  listSnapshots(): SurfaceSnapshot[];
+  removeSnapshot(projectName: string): boolean;
+}
+
+export const surfaceRepository: SurfaceRepository = {
+  saveSnapshot(snapshot) {
+    return surfaceStore.put(snapshot);
+  },
+  getSnapshot(projectName) {
+    return surfaceStore.get(projectName);
+  },
+  listSnapshots() {
+    return surfaceStore.list();
+  },
+  removeSnapshot(projectName) {
+    return surfaceStore.remove(projectName);
+  },
+};
+
+// ── surface_orchestrator: the stored-snapshot reads and removal ─────────────
+
+/** surface_orchestrator.listSnapshots — every snapshot the bound root holds. */
+export function listSnapshots(): SurfaceSnapshot[] {
+  return surfaceRepository.listSnapshots();
+}
+
+/** surface_orchestrator.getSnapshot — the named project's snapshot, or null. */
+export function getSnapshot(projectName: string): SurfaceSnapshot | null {
+  return surfaceRepository.getSnapshot(projectName);
+}
+
+/** surface_orchestrator.removeSnapshot — remove the named project's snapshot; whether one existed. */
+export function removeSnapshot(projectName: string): boolean {
+  return surfaceRepository.removeSnapshot(projectName);
 }
 
 /**
@@ -613,7 +684,7 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
     snapshot = SurfaceSnapshotSchema.parse(parseYaml(body, resolved));
     snapshot = { ...snapshot, origin };
   }
-  saveSnapshot(snapshot);
+  surfaceRepository.saveSnapshot(snapshot);
   return snapshot;
 }
 
@@ -624,6 +695,9 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
 // them all.
 // ---------------------------------------------------------------------------
 
+/** Whose surface a stage-1 family pin holds: the parent's family surface, or one sibling's published surface. */
+export type FamilyPinRole = 'parent' | 'sibling';
+
 /**
  * family_pin — one stage-1 family pin a project root still holds in
  * .wai/surfaces/: its storage key, whether it pins the parent's family surface
@@ -632,8 +706,7 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
 export interface FamilyPin {
   /** The snapshot's storage key: the parent's system name, or `<system>::<subsystem>` for a sibling pin. */
   key: string;
-  /** parent | sibling */
-  role: 'parent' | 'sibling';
+  role: FamilyPinRole;
   /** When the pin was written. */
   generatedAt?: string;
 }

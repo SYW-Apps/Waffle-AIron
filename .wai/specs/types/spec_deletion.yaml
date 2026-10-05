@@ -9,8 +9,8 @@ description: >-
 subsystem: sdd_authoring
 fields:
   - name: kind
-    type: string
-    description: 'The spec kind deleted: subsystem, component, interface, implementation or type'
+    type: WritableSpecKind
+    description: The spec kind deleted (never system).
     optional: false
   - name: id
     type: string
@@ -30,4 +30,4 @@ fields:
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:44.394Z'
-updatedAt: '2026-10-04T10:21:07.984Z'
+updatedAt: '2026-10-04T23:37:53.890Z'

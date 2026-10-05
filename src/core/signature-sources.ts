@@ -10,6 +10,7 @@ import {
   type StoredTypeSpec,
   type TypeSpec,
 } from '../models/index.js';
+import type { TypedSpecKind } from '../models/type-grammar.js';
 
 // ---------------------------------------------------------------------------
 // signature_resolver — every method signature of one scan, resolved.
@@ -28,6 +29,12 @@ import {
 // resolved, so these facts are the one place the stored form stays visible.
 // ---------------------------------------------------------------------------
 
+/** Which reading of a signatureFrom resolved: a contract method, or a signature type. */
+export type SignatureSourceForm = 'method' | 'signature';
+
+/** What resolving one signatureFrom found. */
+export type SignatureSourceOutcome = 'resolved' | 'unresolved' | 'ambiguous' | 'chained' | 'restated';
+
 /** signature_source_fact — what resolving one contract method's signatureFrom found. */
 export interface SignatureSourceFact {
   /** The contract declaring the method, keyed as the index keys it. */
@@ -38,12 +45,11 @@ export interface SignatureSourceFact {
   method: string;
   /** The signatureFrom as the file wrote it. */
   source: string;
-  /** method | signature — which reading resolved; absent when neither or both did. */
-  form?: 'method' | 'signature';
+  /** Which reading resolved; absent when neither or both did. */
+  form?: SignatureSourceForm;
   /** `<component key>.<method>` for a method source, the type's qualified id for a signature source. */
   target?: string;
-  /** resolved | unresolved | ambiguous | chained | restated. */
-  outcome: 'resolved' | 'unresolved' | 'ambiguous' | 'chained' | 'restated';
+  outcome: SignatureSourceOutcome;
   /** The kind of the type found, the source's own source, or the restated difference. */
   detail?: string;
   /** On a restated outcome: whether the stated params or returns differ from the source's. */
@@ -56,8 +62,7 @@ export interface SignatureSourceFact {
 export interface StaleSignatureText {
   /** The interface or type holding the method. */
   specId: string;
-  /** interface | type. */
-  kind: 'interface' | 'type';
+  kind: TypedSpecKind;
   /** The method whose text is stale. */
   method: string;
   /** The text the file holds. */

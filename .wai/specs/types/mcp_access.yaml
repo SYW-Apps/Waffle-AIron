@@ -1,0 +1,16 @@
+kind: enum
+id: mcp_access
+name: McpAccess
+description: How much of the MCP surface an agent loads.
+fields: []
+methods: []
+sourcePath: src/models/execution.ts
+values:
+  - name: none
+    description: No MCP servers at all
+  - name: project
+    description: The project's own MCP surface
+  - name: all
+    description: Every MCP server the host has configured
+createdAt: '2026-10-04T23:12:37.950Z'
+updatedAt: '2026-10-04T23:12:52.289Z'

@@ -1,0 +1,16 @@
+kind: enum
+id: diagram_line_style
+name: DiagramLineStyle
+description: How the canvas routes its edges.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: bezier
+    description: Curved (the default)
+  - name: straight
+    description: Straight lines
+  - name: taxi
+    description: Orthogonal, right-angled routing
+createdAt: '2026-10-04T23:32:51.533Z'
+updatedAt: '2026-10-04T23:32:52.021Z'

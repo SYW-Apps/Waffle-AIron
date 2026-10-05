@@ -1,0 +1,30 @@
+kind: enum
+id: resolution_outcome
+name: ResolutionOutcome
+description: >-
+  How the owner's gate resolved one cross-project reference, decided before any severity from the
+  referring project's own files.
+fields: []
+methods: []
+sourcePath: src/models/project-family.ts
+values:
+  - name: resolved
+    description: >-
+      One public name whose audience covers the referrer, in a contained member's live export table
+      or a declared external's pinned snapshot
+  - name: missing
+    description: The producer does not export that name or member (EXTERNAL_NOT_EXPORTED)
+  - name: ambiguous
+    description: >-
+      Two imports supply one bare name (IMPORT_AMBIGUOUS), or several foreign snapshots expose it
+      with different contracts (SURFACE_REF_AMBIGUOUS)
+  - name: unavailable
+    description: >-
+      Nothing to judge against: no pin, an unreadable pin, a member absent on disk, or a deprecated
+      form naming no alias (EXTERNAL_CHECK_UNAVAILABLE, never a pass)
+  - name: forbidden
+    description: >-
+      It reaches a project the referrer does not declare, or a trusted link crosses into another
+      project (EXTERNAL_UNDECLARED, TRUSTED_LINK_CROSSES_PROJECT)
+createdAt: '2026-10-04T23:33:12.779Z'
+updatedAt: '2026-10-04T23:33:13.312Z'

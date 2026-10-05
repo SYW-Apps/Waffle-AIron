@@ -8,21 +8,12 @@ description: >-
   governs.
 fields:
   - name: axis
-    type: string
-    description: rule | concept.
+    type: DoctrineAxis
+    description: What the change is about.
     optional: false
   - name: change
-    type: string
-    description: >-
-      For a rule: loosened (a lower severity than the default), raised (a higher one), off (turned
-      off), added (a code wairon does not have: an assertion or a programmatic rule), depth (the
-      profile's designDepth differs from narratives), inert (a profile severity for a code no loaded
-      rule reports, which therefore changes nothing — a family-run code included). For a concept:
-      added (a profile, pattern, guarantee token or language table wairon does not have), redefined
-      (a profile carrying a builtin profile's id), removed (a stereotype the profile forbids),
-      discouraged (a stereotype the profile discourages), licensed (a dependency edge the builtin
-      matrix refuses and the profile allows), gated (a flow construct the language table marks
-      unsupported).
+    type: DoctrineChangeKind
+    description: How the pack changes doctrine against the default.
     optional: false
   - name: subject
     type: string
@@ -53,4 +44,4 @@ fields:
 methods: []
 sourcePath: src/models/pack-impact.ts
 createdAt: '2026-09-29T15:50:33.272Z'
-updatedAt: '2026-09-29T16:41:15.301Z'
+updatedAt: '2026-10-04T23:39:28.090Z'

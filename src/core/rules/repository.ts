@@ -388,13 +388,13 @@ function clear(): void {
 }
 
 /** rule_registry: seed the built-in SDD rule set, starting from an empty set so a repeated run never holds a rule twice. */
-export function registerBuiltinRules(): void {
+function registryRegisterBuiltinRules(): void {
   clear();
   for (const rule of SDD_RULES) addRule(rule);
 }
 
 /** rule_registry: register programmatic pack rules after the built-ins (project pack order is precedence). */
-export function registerPackRules(packRules: SddRule[]): void {
+function registryRegisterPackRules(packRules: SddRule[]): void {
   for (const rule of packRules) addRule(rule);
 }
 
@@ -404,7 +404,7 @@ export function registerPackRules(packRules: SddRule[]): void {
  * Both read what the earlier rules did, so a pack rule registered after the
  * built-ins must still run before them.
  */
-export function ruleSequence(): SddRule[] {
+function indexRuleSequence(): SddRule[] {
   const audits = [carriedDebtRule, lintAllowsRule].filter(r => ruleSet.includes(r));
   return [...ruleSet.filter(r => !audits.includes(r)), ...audits];
 }
@@ -417,11 +417,41 @@ export function ruleSequence(): SddRule[] {
  * rule that has not declared itself intrinsic is never handed a one-spec
  * context. Pack rules participate on the same terms.
  */
-export function specScopedRules(): SddRule[] {
-  return ruleSequence().filter(r => r.scope === 'spec');
+function indexSpecScopedRules(): SddRule[] {
+  return indexRuleSequence().filter(r => r.scope === 'spec');
 }
 
 /** rule_index: every issue code any registered rule can emit — the lint.allow validation set. */
-export function knownIssueCodes(): RuleCode[] {
+function indexKnownIssueCodes(): RuleCode[] {
   return listRules().flatMap(r => r.codes);
+}
+
+// ── rule_repository: the facade (1:1 forwarding) ───────────────────────────
+// The only names this module exports for the rule set. Each forwards to its
+// member, so the repository -> registry/index hop is a call the facade's
+// narrative names rather than the member's own body.
+
+/** Seed the built-in rule set through the repository facade. */
+export function registerBuiltinRules(): void {
+  registryRegisterBuiltinRules();
+}
+
+/** Register pack rules after the built-ins through the repository facade. */
+export function registerPackRules(packRules: SddRule[]): void {
+  registryRegisterPackRules(packRules);
+}
+
+/** The ordered run sequence, through the repository facade. */
+export function ruleSequence(): SddRule[] {
+  return indexRuleSequence();
+}
+
+/** The spec-intrinsic rules, through the repository facade. */
+export function specScopedRules(): SddRule[] {
+  return indexSpecScopedRules();
+}
+
+/** Every issue code a registered rule can emit, through the repository facade. */
+export function knownIssueCodes(): RuleCode[] {
+  return indexKnownIssueCodes();
 }

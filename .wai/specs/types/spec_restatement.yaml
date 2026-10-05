@@ -11,8 +11,8 @@ description: >-
 subsystem: sdd_authoring
 fields:
   - name: kind
-    type: string
-    description: system, subsystem, component, interface, implementation or type
+    type: WritableSpecKind
+    description: The kind of spec restated.
     optional: false
   - name: spec
     type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
@@ -33,10 +33,10 @@ fields:
       from the stored method of the same name
     optional: true
   - name: status
-    type: string
+    type: SpecStatus
     description: >-
-      The lifecycle status the caller stated: draft, design or complete. Absent keeps the stored
-      status, and draft for a new spec
+      The lifecycle status the caller stated. Absent keeps the stored status, and draft for a new
+      spec
     optional: true
 methods:
   - name: parent
@@ -89,4 +89,4 @@ methods:
     symbol: applyRestatement
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:24.425Z'
-updatedAt: '2026-10-04T13:57:53.144Z'
+updatedAt: '2026-10-04T23:37:57.091Z'

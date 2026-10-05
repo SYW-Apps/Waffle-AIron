@@ -34,8 +34,10 @@ fields:
     description: Human-readable reason for the cross-project relation.
     optional: false
   - name: status
-    type: string
-    description: 'Lifecycle status: "draft", "active", "deprecated", or "removed".'
+    type: ProjectRelationStatus
+    description: >-
+      Lifecycle status; only an active relation confers reachability, and a relation written without
+      one is active.
     optional: false
   - name: createdAt
     type: string
@@ -50,4 +52,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:25.097Z'
-updatedAt: '2026-10-03T17:03:41.245Z'
+updatedAt: '2026-10-04T23:53:29.268Z'

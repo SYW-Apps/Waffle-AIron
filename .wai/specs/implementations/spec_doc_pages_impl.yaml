@@ -27,54 +27,46 @@ methods:
         targetComponent: producer_core_adapter
         targetMethod: loadInterfaceSpecs
       - stepNumber: 5
-        description: Load implementation specs
-        type: call
-        targetComponent: producer_core_adapter
-        targetMethod: loadImplementationSpecs
-      - stepNumber: 6
         description: Load type specs, for the signature types the pages list
         type: call
         targetComponent: producer_core_adapter
         targetMethod: loadTypeSpecs
-      - stepNumber: 7
-        description: Render the Mermaid component diagram
+      - stepNumber: 6
+        description: >-
+          Render the Mermaid component diagram; a tree with no components yet renders none and the
+          page carries no diagram
         type: call
         targetComponent: producer_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 8
+      - stepNumber: 7
         description: >-
           Build the root 'wairon specs' DocPage: system overview, the Mermaid code block, the
           optional canvas link, and a section listing each signature type with its derived text
           (type_spec.derivedSignature)
         type: local
-      - stepNumber: 9
+      - stepNumber: 8
         description: >-
           Add a child DocPage per subsystem; under each, a page per component rendering its
           interfaces and methods, each method with the signature text the loaded tree carries and,
           when it names a signatureFrom, the source beside it ("from X")
         type: local
-      - stepNumber: 10
+      - stepNumber: 9
         description: Return the DocPage tree
         type: return
         outcome: DocPage tree
   - name: projectGraph
     narrative:
       - stepNumber: 1
-        description: Load subsystem specs
-        type: call
-        targetComponent: producer_core_adapter
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 2
         description: Load component specs
         type: call
         targetComponent: producer_core_adapter
         targetMethod: loadComponentSpecs
-      - stepNumber: 3
+      - stepNumber: 2
         description: >-
-          Build GraphNodes from the components (id, label, subsystem, type) and GraphEdges from
-          their dependsOn
+          Build GraphNodes from the components (id, label, the subsystem each component names, type)
+          and GraphEdges from their dependsOn, keeping only edges whose target is a loaded component
         type: local
-      - stepNumber: 4
+      - stepNumber: 3
         description: Return the GraphModel
         type: return
         outcome: GraphModel
@@ -82,4 +74,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T17:39:59.030Z'
-updatedAt: '2026-10-03T21:04:23.043Z'
+updatedAt: '2026-10-04T19:59:50.542Z'

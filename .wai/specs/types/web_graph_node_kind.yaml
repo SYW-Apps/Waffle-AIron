@@ -1,0 +1,17 @@
+kind: enum
+id: web_graph_node_kind
+name: WebGraphNodeKind
+description: What a node of the web UI's level-of-detail architecture graph stands for, coarsest first.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: unit
+  - name: project
+  - name: subsystem
+  - name: component
+  - name: interface
+  - name: implementation
+  - name: type
+createdAt: '2026-10-04T23:18:29.485Z'
+updatedAt: '2026-10-04T23:18:29.912Z'

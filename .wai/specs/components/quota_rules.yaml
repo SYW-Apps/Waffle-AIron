@@ -1,11 +1,10 @@
 id: quota_rules
 name: Quota Rules
 description: >-
-  Pure logic that evaluates resource usage snapshots against ResourceQuotaPolicy and returns
-  observe/warn/block decisions without owning durable state. In this draft the evaluation is
-  advisory only: nothing in the data plane consults it, so even a 'block' outcome is observational
-  (observe/warn). Actual blocking or throttling enforcement requires a future data-plane integration
-  and is explicitly out of scope for now.
+  Pure logic that evaluates resource usage snapshots against ResourceQuotaPolicy and labels each
+  exceeded limit observe or warn, without owning durable state. The evaluation is advisory only:
+  nothing in the data plane consults it. Actual blocking or throttling enforcement requires a future
+  data-plane integration and is explicitly out of scope for now; until then there is no block mode.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -14,4 +13,4 @@ dependencyClass: pure
 variant: arbiter
 status: complete
 createdAt: '2026-07-09T09:09:10.171Z'
-updatedAt: '2026-09-15T20:46:10.560Z'
+updatedAt: '2026-10-05T00:07:50.281Z'

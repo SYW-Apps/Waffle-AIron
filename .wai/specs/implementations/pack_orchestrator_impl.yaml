@@ -38,10 +38,12 @@ methods:
         type: throw
         error: Forbidden — managing server-global packs requires instance-level project:admin
       - stepNumber: 5
-        description: List the server-global packs
+        description: >-
+          List the server-global packs through the store's pre-authorized read (the caller is
+          authorized above)
         type: call
         targetComponent: pack_store
-        targetMethod: listGlobalPacks
+        targetMethod: storeListGlobalPacks
       - stepNumber: 6
         description: Return the global pack descriptors
         type: return
@@ -656,4 +658,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T18:47:13.157Z'
-updatedAt: '2026-09-29T21:38:54.569Z'
+updatedAt: '2026-10-04T19:54:35.046Z'

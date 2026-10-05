@@ -54,6 +54,9 @@ export type TypePosition =
 /** The four codes a position that is not canonical is reported under. */
 export type TypeProblemCode = 'TYPE_EXPRESSION_INVALID' | 'TYPE_POSITION_INVALID' | 'TYPE_FORM_UNSUPPORTED' | 'TYPE_NOT_NEUTRAL';
 
+/** The spec kinds that hold method signatures and type positions: an interface (its contract methods) or a type. */
+export type TypedSpecKind = 'interface' | 'type';
+
 /** type_expression_problem — why one written type position is not canonical, and what replaces it. */
 export interface TypeExpressionProblem {
   code: TypeProblemCode;
@@ -65,8 +68,8 @@ export interface TypeExpressionProblem {
   replacement?: string;
   /** The interface or type holding the position, once collected over a spec. */
   specId?: string;
-  /** interface | type, once collected over a spec. */
-  kind?: 'interface' | 'type';
+  /** Set once collected over a spec. */
+  kind?: TypedSpecKind;
   /** Where in the spec (methods.save.params.key, fields.createdAt, ...), once collected over a spec. */
   path?: string;
 }
@@ -84,7 +87,7 @@ export interface TypeParse {
 /** type_respelling — one position whose written text is an alias of its canonical spelling. */
 export interface TypeRespelling {
   specId: string;
-  kind: 'interface' | 'type';
+  kind: TypedSpecKind;
   path: string;
   written: string;
   stored: string;
@@ -107,7 +110,7 @@ export interface TypeSpellingFacts {
 /** type_spelling_repair — one spec the doctor's type-spelling repair plans for. */
 export interface TypeSpellingRepair {
   specId: string;
-  kind: 'interface' | 'type';
+  kind: TypedSpecKind;
   rewritten: TypeRespelling[];
   proposals: TypeRespelling[];
   authorNeeded: TypeExpressionProblem[];

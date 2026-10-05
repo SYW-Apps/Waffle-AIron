@@ -36,8 +36,8 @@ fields:
     description: The key of the named signature type it takes its signature from, when it does
     optional: true
   - name: effect
-    type: string
-    description: read, write or lifecycle
+    type: MethodEffect
+    description: What the method does to its component's held state
     optional: true
   - name: guarantees
     type: list<string>
@@ -64,4 +64,4 @@ fields:
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:52:48.585Z'
-updatedAt: '2026-10-04T15:39:11.435Z'
+updatedAt: '2026-10-04T23:39:17.577Z'

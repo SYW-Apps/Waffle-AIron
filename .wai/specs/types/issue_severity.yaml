@@ -1,0 +1,20 @@
+kind: enum
+id: issue_severity
+name: IssueSeverity
+description: >-
+  How severe a validation finding is. A project moves a code between them through
+  rules.sddRuleSeverity.
+fields: []
+methods: []
+sourcePath: src/core/rules/types.ts
+values:
+  - name: error
+    description: Makes the result invalid and fails the gate
+  - name: warning
+    description: Reported; fails only validate --ci (draft-related warnings excepted)
+  - name: notice
+    description: >-
+      Reported on every surface beside errors and warnings, but never makes a result invalid and
+      never fails the --ci gate
+createdAt: '2026-10-04T23:13:01.725Z'
+updatedAt: '2026-10-04T23:13:02.106Z'

@@ -42,6 +42,7 @@ import {
   rewriteSpecRefs,
   type RefPosition,
   type SpecRefKind,
+  type WritableSpecKind,
   assertSpecsInReach,
 } from './specs.js';
 import { aiPathsAt } from '../config/paths.js';
@@ -51,7 +52,7 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import { admits, declaredMembers, DesignDepthSchema, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { admits, declaredMembers, DesignDepthSchema, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type MemberKind, type MemberStorage, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 // extension_orchestrator: the installed packs a member's required packs are pinned from.
 import { listInstalledPacks, loadProjectExtensions } from './extensions.js';
 // The built-in subsystem profiles, so internalize stamps only a profile a subsystem can hold.
@@ -354,10 +355,10 @@ export interface MemberCreation {
   adopted: PackSelection[];
   unadopted: PackRequirement[];
   projectType?: string;
-  /** part | project: what was created (stage 8; a part by default). */
-  as: string;
-  /** contained | path | git: where its files live. */
-  storage: string;
+  /** What was created (stage 8; a part by default). */
+  as: MemberKind;
+  /** Where its files live: contained, path or git, never hosted. */
+  storage: MemberStorage;
   /** git: the commit the member was pinned at. */
   commit?: string;
 }
@@ -434,8 +435,8 @@ export function createMember(alias: string, source: string, description?: string
   const memberDir = parsed.storage === 'contained' ? assertContainedProjectPath(root, relPath) : path.resolve(root, relPath);
   // Step 10: a part (the default) or a project?
   const created = as === 'project'
-    ? { ...scaffoldMemberProject(alias, memberDir, description), as: 'project' }
-    : { ...scaffoldPart(alias, memberDir, parsed.storage === 'contained'), as: 'part' };
+    ? { ...scaffoldMemberProject(alias, memberDir, description), as: 'project' as const }
+    : { ...scaffoldPart(alias, memberDir, parsed.storage === 'contained'), as: 'part' as const };
   // Step 23: declare it by the shorthand — the long form only for a description.
   projectConfigRepository.declareMember(alias, { source: relPath, ...(description !== undefined ? { description } : {}) });
   invalidateSpecCache();
@@ -599,7 +600,7 @@ export function declareMember(alias: string, declaration: MemberDeclaration): bo
  * writing nothing, when an edit's text is not there. Returns whether the
  * stored text changed.
  */
-export function rewriteReferences(kind: string, id: string, edits: ReferenceEdit[]): boolean {
+export function rewriteReferences(kind: WritableSpecKind, id: string, edits: ReferenceEdit[]): boolean {
   // Step 1.
   return rewriteSpecReferences(kind, id, edits);
 }
@@ -2135,9 +2136,12 @@ function patchSubsystemIndex(indexPath: string, mutate: (spec: any) => void): vo
 // the author's to change.
 // ---------------------------------------------------------------------------
 
+/** The spec kinds a component rename moves to a new id. */
+export type RenamedSpecKind = 'component' | 'interface' | 'implementation';
+
 /** One spec a component rename moved to a new id (spec_rename). */
 export interface SpecRename {
-  kind: 'component' | 'interface' | 'implementation';
+  kind: RenamedSpecKind;
   /** The id before the rename. */
   from: string;
   /** The id after the rename. */
@@ -2997,7 +3001,7 @@ export function moveMountToMembers(alias: string): boolean {
  * every reference in its canonical stage-3 form through the spec repository;
  * targets never change.
  */
-export function normalizeReferences(kind: string, id: string): boolean {
+export function normalizeReferences(kind: WritableSpecKind, id: string): boolean {
   // Step 1.
   return normalizeSpecReferences(kind, id);
 }

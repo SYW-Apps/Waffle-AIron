@@ -287,7 +287,9 @@ methods:
       yet (a login start, a sign-out by session id), which records the anonymous local service
       actor. The web plane records its browser sign-in events through it, so a sign-in event is
       built in one place.
-    signature: 'auditSignIn(actor: PrincipalSubject?, action: string, level: string, over?: AuditEvent): void'
+    signature: >-
+      auditSignIn(actor: PrincipalSubject?, action: string, level: AuditLevel, over?: AuditEvent):
+      void
     returns: void
     params:
       - name: actor
@@ -297,7 +299,7 @@ methods:
         type: string
         description: The audited action, e.g. web.signin.
       - name: level
-        type: string
+        type: AuditLevel
         description: The event level.
       - name: over
         type: AuditEvent
@@ -307,4 +309,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-04T10:32:04.360Z'
+updatedAt: '2026-10-04T23:41:17.317Z'

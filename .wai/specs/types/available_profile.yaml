@@ -20,8 +20,8 @@ fields:
       the server-global pack that contributes it.
     optional: false
   - name: family
-    type: string
-    description: The profile's doctrine family when known (backend-like | frontend-like | neutral).
+    type: ProfileFamily
+    description: The profile's doctrine family, when known.
     optional: true
   - name: description
     type: string
@@ -39,4 +39,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-22T19:11:42.715Z'
-updatedAt: '2026-10-04T10:19:53.500Z'
+updatedAt: '2026-10-04T23:38:49.533Z'

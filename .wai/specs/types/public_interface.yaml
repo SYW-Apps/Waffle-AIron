@@ -12,10 +12,10 @@ description: >-
   depends on the owning subsystem's published component.
 fields:
   - name: type
-    type: string
+    type: PublicInterfaceType
     description: >-
-      Transport kind of an own item: REST | GraphQL | MessageBus | RPC | Custom. Required on an own
-      component item; a re-export inherits its target's.
+      Transport kind of an own item. Required on an own component item; a re-export inherits its
+      target's.
     optional: true
   - name: details
     type: string
@@ -70,4 +70,4 @@ methods:
     symbol: isOwnComponentEntry
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-10-04T10:20:53.508Z'
+updatedAt: '2026-10-04T23:40:25.629Z'

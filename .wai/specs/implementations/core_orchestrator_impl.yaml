@@ -626,18 +626,30 @@ methods:
       - stepNumber: 1
         description: >-
           Bind the given root READ-ONLY for the duration of this computation, remembering the
-          previous binding; a root with no loadable spec tree short-circuits to null
+          previous binding, and drop that root's cached index so the read below comes fresh from
+          disk
         type: local
       - stepNumber: 2
+        description: Read the bound root's system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 3
+        description: 'A root with no loadable spec tree is not digested: its answer is null'
+        type: branch
+        condition: the root holds a loadable spec tree (a system spec was read)
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
         description: Digest the bound tree into its deterministic StateId
         type: call
         targetComponent: state_hash
         targetMethod: compute
-      - stepNumber: 3
+      - stepNumber: 5
         description: Restore the previous root binding unconditionally (also on failure paths)
         type: local
-      - stepNumber: 4
-        description: Return the computed state hash
+      - stepNumber: 6
+        description: Return the computed state hash, or null when the root holds no loadable spec tree
         type: return
         outcome: StateId or null
   - name: resolveSubprojectForNamespace
@@ -2549,4 +2561,4 @@ methods:
         outcome: renamed
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T17:30:03.722Z'
+updatedAt: '2026-10-04T19:54:01.406Z'

@@ -32,13 +32,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpecs
-  - name: loadImplementationSpecs
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: loadImplementationSpecs
   - name: renderDiagram
     narrative:
       - stepNumber: 1
@@ -55,4 +48,4 @@ methods:
         targetMethod: loadTypeSpecs
 status: complete
 createdAt: '2026-07-04T17:39:19.585Z'
-updatedAt: '2026-10-03T21:04:20.403Z'
+updatedAt: '2026-10-04T20:00:08.969Z'

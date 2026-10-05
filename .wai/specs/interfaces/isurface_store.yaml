@@ -1,18 +1,20 @@
 id: isurface_store
 name: Surface Store Interface
-description: Authoritative in-memory snapshot state (ram-projection rebuilt from files).
+description: >-
+  Read-through state contract for this project's stored surface snapshots: every read is the file
+  read, every write the file write.
 component: surface_store
 methods:
   - name: put
-    description: Hold or replace a parsed snapshot keyed by producing project.
-    signature: 'put(snapshot: SurfaceSnapshot): void'
-    returns: void
+    description: Persist or replace a snapshot keyed by its producing project; answers where it was persisted.
+    signature: 'put(snapshot: SurfaceSnapshot): string'
+    returns: string
     params:
       - name: snapshot
         type: SurfaceSnapshot
     effect: write
   - name: get
-    description: Held snapshot by project name, or null.
+    description: The stored snapshot for a project name, or null.
     signature: 'get(projectName: string): SurfaceSnapshot?'
     returns: SurfaceSnapshot?
     params:
@@ -20,38 +22,19 @@ methods:
         type: string
     effect: read
   - name: list
-    description: All held snapshots.
-    signature: 'list(): SurfaceSnapshot[]'
+    description: Every stored snapshot at the bound root.
+    signature: 'list(): list<SurfaceSnapshot>'
     returns: list<SurfaceSnapshot>
+    params: []
     effect: read
   - name: remove
-    description: Drop the held snapshot for a project.
+    description: Remove the stored snapshot for a project; whether one existed.
     signature: 'remove(projectName: string): bool'
     returns: bool
     params:
       - name: projectName
         type: string
     effect: write
-lint:
-  allow:
-    - code: UNUSED_METHOD
-      at: get
-      reason: >-
-        N:1 identity with the index: in src/core/surfaces.ts getSnapshot realizes BOTH
-        surface_store.get and surface_index.byProject (both specs name that symbol). The read the
-        model puts in two layers is one function, so nothing distinct calls the store side —
-        declaring the call would declare a function calling itself. The conformance debt register
-        already carries this family's collapse as drift. Splitting the layer in code, or collapsing
-        it in the spec, is the decision owed.
-    - code: UNUSED_METHOD
-      at: list
-      reason: >-
-        N:1 identity with the index: in src/core/surfaces.ts listSnapshots realizes BOTH
-        surface_store.list and surface_index.all (both specs name that symbol), and it is also what
-        surface_registry.hydrateFromFiles and the repository read through. One function, two
-        modelled layers, so nothing distinct calls the store side. The debt register already carries
-        surface_store.list as drift under surface_orchestrator, surface_portal, surface_repository
-        and surface_registry.
 status: complete
 createdAt: '2026-07-10T23:13:31.819Z'
-updatedAt: '2026-10-04T10:19:41.875Z'
+updatedAt: '2026-10-04T22:34:17.918Z'

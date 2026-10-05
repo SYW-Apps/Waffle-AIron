@@ -1,0 +1,23 @@
+kind: enum
+id: identity_provider_type
+name: IdentityProviderType
+description: >-
+  The identity provider kinds an operator can configure. The kind only chooses the last-resort
+  endpoint template: explicit endpoint overrides and OIDC discovery come first.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: oidc
+    description: 'Generic OIDC (the default): /authorize and /token under the issuer'
+  - name: keycloak
+    description: Keycloak's openid-connect endpoint template
+  - name: authentik
+    description: authentik's application endpoint template
+  - name: google_workspace
+    description: Google Workspace, resolved as generic OIDC
+  - name: entra_id
+    description: Microsoft Entra ID, resolved as generic OIDC
+createdAt: '2026-10-04T23:53:03.299Z'
+updatedAt: '2026-10-04T23:53:03.929Z'

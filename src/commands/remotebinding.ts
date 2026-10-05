@@ -20,12 +20,15 @@ import { aiPathsAt } from '../config/paths.js';
 // "nothing stored" — an unattached checkout is a normal state, not an error.
 // ---------------------------------------------------------------------------
 
+/** Where a recorded remote binding was resolved from. */
+export type RemoteBindingSource = 'binding-file' | 'mcp-config';
+
 /** A checkout's standing attachment to one hosted project (never a credential). */
 export interface RemoteBinding {
   url: string;
   projectId: string;
-  /** Where the binding was resolved from: 'flags' | 'binding-file' | 'mcp-config'. */
-  source: string;
+  /** Where the binding was resolved from (explicit flags yield a target, never a binding). */
+  source: RemoteBindingSource;
   attachedAt?: string;
 }
 

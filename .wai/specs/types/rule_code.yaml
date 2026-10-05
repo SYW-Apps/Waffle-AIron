@@ -11,10 +11,10 @@ fields:
     description: Stable issue code, e.g. UNKNOWN_PATTERN_REF.
     optional: false
   - name: defaultSeverity
-    type: string
+    type: IssueSeverity
     description: >-
-      error | warning | notice (before user severity overrides). A code that defaults to notice is
-      reported but never fails the gate, until a project raises it through rules.sddRuleSeverity.
+      The severity before user overrides. A code that defaults to notice is reported but never fails
+      the gate, until a project raises it through rules.sddRuleSeverity.
     optional: false
   - name: summary
     type: string
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:14.460Z'
-updatedAt: '2026-10-04T10:21:00.766Z'
+updatedAt: '2026-10-04T23:39:47.166Z'

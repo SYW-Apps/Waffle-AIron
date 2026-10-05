@@ -17,6 +17,7 @@ import {
   type MigrationPlan,
   type MigrationRequest,
   type PlannedEdit,
+  type PlannedEditKind,
   type RecoveredTransaction,
   type Rehearsal,
   type TransactionScope,
@@ -144,7 +145,7 @@ function fromChaining(request: MigrationRequest, plan: ChainingMigrationPlan): M
 function chainingEdits(plan: ChainingMigrationPlan): PlannedEdit[] {
   const edits: PlannedEdit[] = [];
   for (const p of plan.projects) {
-    const add = (kind: string, detail: string): void => { edits.push({ project: p.project, kind, detail }); };
+    const add = (kind: PlannedEditKind, detail: string): void => { edits.push({ project: p.project, kind, detail }); };
     if (p.idToWrite !== undefined) add('id', `id: ${p.idToWrite}`);
     if (p.createsSystem) add('export', 'a minimal L0');
     for (const e of p.exports) add('export', `export ${e.component ?? e.typeDef} as ${e.publicName}`);

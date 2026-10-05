@@ -168,15 +168,15 @@ methods:
     description: >-
       Published write: put the wairon guide into a tool's configuration file, replacing any section
       already there. Forwarded to the tool guide.
-    signature: 'injectGuide(filePath: string, scope: string): void'
+    signature: 'injectGuide(filePath: string, scope: GuideScope): void'
     returns: void
     params:
       - name: filePath
         type: string
         description: The configuration file to write
       - name: scope
-        type: string
-        description: '`global` or `local`'
+        type: GuideScope
+        description: 'Which kind of guide file it is: a user-level one or a project''s own'
     effect: write
   - name: writeRootGuideDelegator
     description: >-
@@ -246,4 +246,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:13.399Z'
-updatedAt: '2026-10-04T10:18:28.825Z'
+updatedAt: '2026-10-04T23:38:21.171Z'

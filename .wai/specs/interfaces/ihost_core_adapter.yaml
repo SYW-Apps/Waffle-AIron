@@ -31,12 +31,12 @@ methods:
     description: >-
       Render the bound project's spec tree into a diagram artifact string; the canvas draws the
       relation health passed in.
-    signature: 'renderDiagram(format: string, relations?: list<ProjectRelations>): string'
+    signature: 'renderDiagram(format: DiagramFormat, relations?: list<ProjectRelations>): string'
     returns: string
     params:
       - name: format
-        type: string
-        description: canvas | mermaid | drawio | excalidraw
+        type: DiagramFormat
+        description: The format to render
       - name: relations
         type: list<ProjectRelations>
         description: The family's relation health for the canvas; omitted, none
@@ -309,4 +309,4 @@ lint:
         instead of reached by a guess.
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-10-04T10:28:23.560Z'
+updatedAt: '2026-10-04T23:38:11.127Z'

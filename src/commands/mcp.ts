@@ -137,10 +137,12 @@ export interface McpInstallOptions {
   hostedToken?: string;
 }
 
+/** What kind of wairon server an agent's MCP configuration is attached to. */
+export type McpSourceKind = 'local' | 'hosted';
+
 /** What the agent's own MCP configuration says wairon is attached to. */
 export interface DetectedMcpSource {
-  /** 'local' (stdio over this checkout) or 'hosted' (http on an instance). */
-  kind: 'local' | 'hosted';
+  kind: McpSourceKind;
   /** The config file the entry was read from — named in output so a surprise is traceable. */
   configPath: string;
   url?: string;
@@ -244,6 +246,9 @@ export function normalizeBackend(input: string): 'claude' | 'gemini' {
   );
 }
 
+/** The AI assistants an MCP install writes a server entry for. */
+export type McpBackend = 'claude' | 'gemini';
+
 /**
  * mcp_config_write — one write an MCP install would make, stated before it is
  * made: the backend, the file, whether that file lies outside the project root
@@ -251,7 +256,7 @@ export function normalizeBackend(input: string): 'claude' | 'gemini' {
  * the file holds now beside the one it would hold.
  */
 export interface McpConfigWrite {
-  backend: 'claude' | 'gemini';
+  backend: McpBackend;
   path: string;
   outsideProject: boolean;
   /** The wairon entry the file holds now; undefined when none (or no readable file). */

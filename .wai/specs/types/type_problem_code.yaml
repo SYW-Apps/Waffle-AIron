@@ -1,0 +1,20 @@
+kind: enum
+id: type_problem_code
+name: TypeProblemCode
+description: The finding code a type-expression problem maps to.
+fields: []
+methods: []
+sourcePath: src/models/type-grammar.ts
+values:
+  - name: TYPE_EXPRESSION_INVALID
+    description: Does not parse
+  - name: TYPE_POSITION_INVALID
+    description: 'Breaks a position rule: misplaced void or async, a non-scalar map key, T??'
+  - name: TYPE_FORM_UNSUPPORTED
+    description: >-
+      An inline object, inline function type, string-literal union, union mixing in a primitive or
+      collection, intersection, utility type or tuple
+  - name: TYPE_NOT_NEUTRAL
+    description: number, or a legacy builtin with no neutral meaning
+createdAt: '2026-10-04T23:13:38.747Z'
+updatedAt: '2026-10-04T23:13:39.151Z'

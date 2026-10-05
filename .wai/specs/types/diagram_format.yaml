@@ -1,0 +1,20 @@
+kind: enum
+id: diagram_format
+name: DiagramFormat
+description: >-
+  The formats the architecture diagram renders to. Each is self-contained; only the canvas draws
+  relation health.
+fields: []
+methods: []
+sourcePath: src/core/diagram.ts
+values:
+  - name: canvas
+    description: The interactive standalone HTML canvas, with the validation overlay and relation health
+  - name: mermaid
+    description: A Mermaid component diagram, as Markdown
+  - name: drawio
+    description: A draw.io document
+  - name: excalidraw
+    description: An Excalidraw scene
+createdAt: '2026-10-04T23:32:49.785Z'
+updatedAt: '2026-10-04T23:32:50.227Z'

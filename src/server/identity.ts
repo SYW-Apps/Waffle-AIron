@@ -1,5 +1,4 @@
 import * as crypto from 'crypto';
-import type { IncomingMessage, ServerResponse } from 'http';
 import { authenticateCredential, signSsoState, verifySsoState } from './auth.js';
 import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
@@ -31,10 +30,10 @@ import {
 } from './authorization.js';
 import { isReservedSubject } from './auth.js';
 import { SSO_ADMIN_ROLE_ID } from './types.js';
-import { sendJson } from './httpio.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
+  AuditLevel,
   AuditQuery,
   HostConfig,
   HostedUserRecord,
@@ -45,20 +44,20 @@ import type {
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Identity Orchestrator + Portal (sdd_host)
+// Identity Orchestrator (sdd_host)
 //
 // The identity control-plane workflows: authenticate the caller credential
 // (bootstrap master or user-bound token) via authentication, resolve the
 // caller's permission through the authorization seam, then manage user-bound
 // MCP/API tokens, hosted users, and audit access. Exported as plain functions so
-// both the HTTP identity portal (handleIdentityRequest, below) and any
-// in-process caller reach the same logic — mirroring admin.ts. Every audit
+// both the HTTP identity portal (./identity-portal.ts) and any in-process caller
+// reach the same logic — mirroring admin.ts. Every audit
 // append is best-effort: an append failure is recorded as a server diagnostic
 // and never fails the primary action.
 //
 // Phase 1 exposure decision: the identity control plane rides the ADMIN-plane
 // listener (127.0.0.1 by default) until HostExposurePolicy lands in a later
-// phase and gives it its own `identityApiEnabled` switch. See handleIdentityRequest.
+// phase and gives it its own `identityApiEnabled` switch. See ./identity-portal.ts.
 // ---------------------------------------------------------------------------
 
 /** Authorized request to mint a user-bound MCP/API token. Mirrors
@@ -178,7 +177,7 @@ function auditActor(principal: Principal): PrincipalSubject {
 function buildAuditEvent(
   principal: Principal,
   action: string,
-  level: string,
+  level: AuditLevel,
   category: string,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {
@@ -207,7 +206,7 @@ const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'serv
 function buildSsoAuditEvent(
   actor: PrincipalSubject,
   action: string,
-  level: string,
+  level: AuditLevel,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {
   return {
@@ -232,7 +231,7 @@ export function auditSignIn(
   cfg: HostConfig,
   actor: PrincipalSubject | null,
   action: string,
-  level: string,
+  level: AuditLevel,
   over: Partial<AuditEvent> = {},
 ): void {
   tryAppendAudit(cfg, buildSsoAuditEvent(actor ?? ANONYMOUS_SSO_ACTOR, action, level, over));
@@ -913,139 +912,4 @@ export function countAuditEvents(
   if (view.all) return auditRepo.countAuditEvents(cfg.dataDir, query);
   // A count ignores the query limit; scope the query to the in-view projects.
   return scopedAuditEvents(cfg, view, { ...query, limit: undefined }).length;
-}
-
-// ── Identity Portal (HTTP) ──────────────────────────────────────────────────
-//
-// Forwarding to the orchestrator functions above. The router is async because the
-// SSO callback awaits completeSsoLogin (the provider code exchange is network I/O);
-// every route is wrapped in the same error → status mapping, so an awaited
-// rejection is caught here too and never escapes as an unhandled promise. Phase 1
-// decision: these routes ride the ADMIN-plane listener (127.0.0.1 bind) until
-// HostExposurePolicy / `identityApiEnabled` lands in a later phase to give the
-// identity plane its own exposure switch. The credential is extracted the same way
-// admin routes do (the caller passes the bearer token); the unauthenticated SSO
-// start/complete pair ignores it. Endpoints match iidentity_portal exactly.
-
-function auditQueryFromParams(sp: URLSearchParams): AuditQuery {
-  const q: AuditQuery = {};
-  const projectId = sp.get('projectId');
-  if (projectId) q.projectId = projectId;
-  const actorUserId = sp.get('actorUserId');
-  if (actorUserId) q.actorUserId = actorUserId;
-  const tokenId = sp.get('tokenId');
-  if (tokenId) q.tokenId = tokenId;
-  const category = sp.get('category');
-  if (category) q.category = category;
-  const action = sp.get('action');
-  if (action) q.action = action;
-  const outcome = sp.get('outcome');
-  if (outcome) q.outcome = outcome;
-  const minimumLevel = sp.get('minimumLevel');
-  if (minimumLevel) q.minimumLevel = minimumLevel;
-  const from = sp.get('from');
-  if (from) q.from = from;
-  const to = sp.get('to');
-  if (to) q.to = to;
-  const limit = sp.get('limit');
-  if (limit !== null && limit !== '') q.limit = Number(limit);
-  return q;
-}
-
-/**
- * Route one identity control-plane request to the orchestrator and write the HTTP
- * response. Owns its own error → status mapping (401 unauthenticated, 403 forbidden,
- * 400 otherwise) so it never depends on the admin-plane catch. Called by http.ts
- * when the admin listener sees an `/identity/*` path; body is the parsed request body.
- */
-export async function handleIdentityRequest(
-  cfg: HostConfig,
-  credential: string | null,
-  req: IncomingMessage,
-  res: ServerResponse,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  body: any,
-  url: URL,
-): Promise<void> {
-  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['identity', ...]
-  try {
-    // ── headless SSO login (unauthenticated: no credential) ──────────────────
-    // POST /identity/sso/start  { providerId, redirectUri }
-    if (req.method === 'POST' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'start') {
-      const url_ = await startSsoLogin(cfg, body.providerId as string, body.redirectUri as string);
-      return sendJson(res, 200, { url: url_ });
-    }
-    // GET /identity/sso/callback?state=&code=
-    // Headless flow: returns the minted token as JSON. A browser-facing UI would
-    // render/exchange this into a session instead of showing it raw — UX watch-item.
-    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'callback') {
-      const token = await completeSsoLogin(
-        cfg,
-        url.searchParams.get('state') ?? '',
-        url.searchParams.get('code') ?? '',
-      );
-      return sendJson(res, 200, { token });
-    }
-
-    // ── identity-provider (SSO) administration (instance-admin only) ─────────
-    // GET /identity/providers
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'providers') {
-      return sendJson(res, 200, listProviders(cfg, credential));
-    }
-    // PUT /identity/providers/{id}
-    if (req.method === 'PUT' && parts.length === 3 && parts[1] === 'providers') {
-      const config = { ...(body as IdentityProviderConfig), id: parts[2] };
-      return sendJson(res, 200, upsertProvider(cfg, credential, config));
-    }
-    // DELETE /identity/providers/{id}
-    if (req.method === 'DELETE' && parts.length === 3 && parts[1] === 'providers') {
-      removeProvider(cfg, credential, parts[2]);
-      return sendJson(res, 200, { ok: true });
-    }
-    // GET /identity/audit/count
-    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'audit' && parts[2] === 'count') {
-      return sendJson(res, 200, { count: countAuditEvents(cfg, credential, auditQueryFromParams(url.searchParams)) });
-    }
-
-    // POST /identity/tokens
-    if (req.method === 'POST' && parts.length === 2 && parts[1] === 'tokens') {
-      {
-        assertNarrowingGiven(body ?? {});
-        const minted = mintToken(cfg, credential, body as TokenMintRequest);
-        return sendJson(res, 201, { key: minted.token, mapped: minted.mapped });
-      }
-    }
-    // DELETE /identity/tokens/{id}
-    if (req.method === 'DELETE' && parts.length === 3 && parts[1] === 'tokens') {
-      revokeToken(cfg, credential, parts[2]);
-      return sendJson(res, 200, { ok: true });
-    }
-    // GET /identity/users?project=
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'users') {
-      return sendJson(res, 200, listUsers(cfg, credential, url.searchParams.get('project') ?? undefined));
-    }
-    // PUT /identity/users/{id}/status
-    if (req.method === 'PUT' && parts.length === 4 && parts[1] === 'users' && parts[3] === 'status') {
-      return sendJson(res, 200, setUserStatus(cfg, credential, parts[2], body.status as string));
-    }
-    // PUT /identity/users/{id}
-    if (req.method === 'PUT' && parts.length === 3 && parts[1] === 'users') {
-      const record = { ...(body as HostedUserRecord), id: parts[2] };
-      return sendJson(res, 200, upsertUser(cfg, credential, record));
-    }
-    // GET /identity/audit/events
-    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'audit' && parts[2] === 'events') {
-      return sendJson(res, 200, queryAuditEvents(cfg, credential, auditQueryFromParams(url.searchParams)));
-    }
-    // POST /identity/audit/prune
-    if (req.method === 'POST' && parts.length === 3 && parts[1] === 'audit' && parts[2] === 'prune') {
-      return sendJson(res, 200, { pruned: pruneAuditEvents(cfg, credential) });
-    }
-
-    sendJson(res, 404, { error: 'not found' });
-  } catch (err) {
-    if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
-    if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
-    sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
-  }
 }

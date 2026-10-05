@@ -7,12 +7,14 @@ methods:
     description: >-
       Forward a delta to authoring_portal.updateSpecGated: merged, judged and written, or with
       dryRun judged and not written; answers the change report.
-    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
+    signature: >-
+      updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The stored spec's id
@@ -33,4 +35,4 @@ methods:
         description: The spec as the migration states it
 status: complete
 createdAt: '2026-09-30T20:45:34.881Z'
-updatedAt: '2026-10-04T10:19:05.182Z'
+updatedAt: '2026-10-04T23:37:41.640Z'

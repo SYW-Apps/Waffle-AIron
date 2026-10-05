@@ -188,12 +188,12 @@ methods:
       Published write: re-save one spec with every reference in its canonical stage-3 form, targets
       unchanged; idempotent. Routed through the core orchestrator. Returns whether the stored text
       changed.
-    signature: 'normalizeReferences(kind: string, id: string): bool'
+    signature: 'normalizeReferences(kind: WritableSpecKind, id: string): bool'
     returns: bool
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names (the L0 holds no references to normalize)
       - name: id
         type: string
         description: The spec's in-memory key, from the family's top root
@@ -226,12 +226,12 @@ methods:
       Published write: respell references at parsed positions of one spec of the family, each edit
       replacing exactly its text at exactly its position; refused whole when an edit's text is not
       there. Answers whether the stored text changed. Routed through the core orchestrator.
-    signature: 'rewriteReferences(kind: string, id: string, edits: list<ReferenceEdit>): bool'
+    signature: 'rewriteReferences(kind: WritableSpecKind, id: string, edits: list<ReferenceEdit>): bool'
     returns: bool
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The spec's in-memory key, from the family's top root
@@ -330,4 +330,4 @@ methods:
     signatureFrom: core_orchestrator.renameType
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-04T13:56:56.513Z'
+updatedAt: '2026-10-04T23:37:45.691Z'

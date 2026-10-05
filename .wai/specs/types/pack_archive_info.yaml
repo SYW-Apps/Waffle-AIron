@@ -14,8 +14,8 @@ fields:
     type: string
     optional: false
   - name: kind
-    type: string
-    description: '"declarative" | "code"'
+    type: PackKind
+    description: The pack variant.
     optional: false
   - name: entry
     type: string
@@ -44,4 +44,4 @@ fields:
 methods: []
 componentClass: sdk_orchestrator
 createdAt: '2026-07-21T18:12:35.741Z'
-updatedAt: '2026-10-04T10:29:05.206Z'
+updatedAt: '2026-10-04T23:39:57.184Z'

@@ -18,7 +18,7 @@ import {
 } from '../../src/core/specs.js';
 import { diffAgainstApproval } from '../../src/core/approval.js';
 import { writeLegacyMount } from '../helpers/legacy-mount.js';
-import { saveSnapshot } from '../../src/core/surfaces.js';
+import { surfaceRepository } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import { runLock } from '../../src/commands/lock.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
@@ -254,7 +254,7 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery 
 
     // The child imports its own (stage 3 retired `surface pin`; a child's own
     // .wai/surfaces holds whatever it imported)…
-    runWithProjectRoot(kidDir, () => saveSnapshot(SurfaceSnapshotSchema.parse({
+    runWithProjectRoot(kidDir, () => surfaceRepository.saveSnapshot(SurfaceSnapshotSchema.parse({
       projectName: 'root-system', origin: 'generated', stateId: 'sha256:pinned', generatedAt: new Date().toISOString(), interfaces: [], types: [],
     })));
     setProjectRoot(null);

@@ -53,18 +53,18 @@ methods:
       one is given (stage 8: "part of <parent>" for a member retired as a part). A member that left
       its family is disabled, never deleted, so its grants and audit trail stay for an operator.
       Setting it active clears the reason. Refuses an unknown id.
-    signature: 'setStatus(id: string, status: string, reason?: string): HostedProjectRecord'
+    signature: 'setStatus(id: string, status: HostedProjectStatus, reason?: string): HostedProjectRecord'
     returns: HostedProjectRecord
     params:
       - name: id
         type: string
       - name: status
-        type: string
-        description: active | disabled
+        type: HostedProjectStatus
+        description: The new lifecycle status
       - name: reason
         type: string
         description: Why it is disabled (recorded as disabledReason)
         optional: true
 status: complete
 createdAt: '2026-07-19T09:00:02.108Z'
-updatedAt: '2026-10-02T23:58:09.766Z'
+updatedAt: '2026-10-04T23:38:33.209Z'

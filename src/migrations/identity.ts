@@ -1,10 +1,11 @@
 import * as path from 'path';
+import type { WritableSpecKind } from '../core/specs.js';
 import * as core from './adapters/core.js';
 import * as surfaces from './adapters/surfaces.js';
 import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import { EXTERNAL_ALIAS_RE, PROJECT_ID_RE, type ProjectConfig } from '../models/project.js';
 import { familyNode, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
-import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedWrite, type Rehearsal } from './types.js';
+import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
 
 // ---------------------------------------------------------------------------
 // identity_migration — a project's id, or one alias of the bound project,
@@ -36,7 +37,7 @@ const label = (key: string): string => (key === '' ? 'the top project' : `"${key
 const refuse = (plan: MigrationPlan, code: string, project: string, detail: string): void => {
   plan.refusals.push({ code, project, detail });
 };
-const edit = (plan: MigrationPlan, project: string, kind: string, detail: string, write: PlannedWrite, reference?: ReferenceEdit): void => {
+const edit = (plan: MigrationPlan, project: string, kind: PlannedEditKind, detail: string, write: PlannedWrite, reference?: ReferenceEdit): void => {
   plan.edits.push({ project, kind, detail, ...(reference ? { reference } : {}), write });
 };
 
@@ -52,7 +53,7 @@ function configAt(dir: string): ProjectConfig | null {
 }
 
 /** The positions a reference may stand at, by the kinds of spec that hold them. */
-const KINDS_AT: Record<string, string[]> = {
+const KINDS_AT: Record<string, WritableSpecKind[]> = {
   dependsOn: ['component'], owns: ['component'], dispatch: ['component'], mounts: ['component'],
   lifecycle: ['subsystem'], publicInterfaces: ['subsystem'], trustedLinks: ['subsystem'],
   contract: ['implementation', 'interface'], narrative: ['implementation'], calls: ['implementation'], auth: ['implementation'],
@@ -60,8 +61,8 @@ const KINDS_AT: Record<string, string[]> = {
 };
 
 /** The kind of the spec holding a reference, read off where it sits (under the top root's binding). */
-function kindOf(ref: AuthoredReference): string {
-  const kinds = KINDS_AT[ref.position] ?? ['component', 'interface', 'implementation', 'type', 'subsystem'];
+function kindOf(ref: AuthoredReference): WritableSpecKind {
+  const kinds: WritableSpecKind[] = KINDS_AT[ref.position] ?? ['component', 'interface', 'implementation', 'type', 'subsystem'];
   return kinds.find((k) => core.loadSpec(k as 'component', ref.specId) !== null) ?? kinds[0];
 }
 
@@ -258,7 +259,7 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   if (unknown) throw new Error(`identity_migration makes no "${unknown.write.call}" write`);
   // Steps 1-2: with the top root bound, each spec's reference edits in one call, before any alias moves.
   for (const [spec, edits] of referencesBySpec(planned)) {
-    const [kind, id] = spec.split('\n');
+    const [kind, id] = spec.split('\n') as [WritableSpecKind, string];
     runWithProjectRoot(rehearsalRoot(rehearsal, plan.familyRoot), () => core.rewriteReferences(kind, id, edits));
   }
   // Steps 3-4: each holder's aliases rekeyed and externals repointed.

@@ -1,0 +1,18 @@
+kind: enum
+id: type_kind
+name: TypeKind
+description: What a type declares.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: entity
+    description: Data with identity, owned by a subsystem
+  - name: value-object
+    description: Data without identity, or a named scalar that holds one primitive
+  - name: signature
+    description: 'A named function type: params and returns, nothing else'
+  - name: enum
+    description: A closed, ordered set of named values
+createdAt: '2026-10-04T23:12:18.274Z'
+updatedAt: '2026-10-04T23:12:18.650Z'

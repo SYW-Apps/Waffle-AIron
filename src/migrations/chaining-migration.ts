@@ -48,6 +48,19 @@ import { liveName, rehearsalRoot, type Rehearsal } from './types.js';
 // a refusal included. The caller must gate on reach itself.
 // ---------------------------------------------------------------------------
 
+/** What a chaining-migration finding is about. */
+export type ChainingFindingKind =
+  | 'id-ambiguous' | 'id-locked' | 'declaration-orphaned' | 'target-unpublished' | 'target-missing' | 'name-taken'
+  | 'narrowed' | 'subsystem-reference' | 'alias-invalid' | 'alias-taken' | 'project-absent' | 'member-absent'
+  | 'family-partial' | 'mount-field-conflict' | 'mount-field-unhomed' | 'rewrite-unavailable'
+  | 'positional-ambiguous' | 'import-shadowed' | 'import-collision';
+
+/** Why a migration plans an L0 export. */
+export type PlannedExportReason = 'reference' | 'mount' | 'positional';
+
+/** Why a migration plans an external declaration. */
+export type PlannedExternalReason = 'reference' | 'legacy-pin' | 'positional';
+
 /** chaining_migration_finding — something the migration will not do for a person. */
 export interface ChainingMigrationFinding {
   /**
@@ -58,7 +71,7 @@ export interface ChainingMigrationFinding {
    * rewrite-unavailable | positional-ambiguous | import-shadowed |
    * import-collision
    */
-  kind: string;
+  kind: ChainingFindingKind;
   /** The namespace of the project it concerns ('' is the family's top root). */
   project: string;
   /** What is wrong and what a person does about it. */
@@ -91,8 +104,7 @@ export interface PlannedExport {
   type?: string;
   /** The details a carried mount entry declared. */
   details?: string;
-  /** reference | mount | positional */
-  reason: string;
+  reason: PlannedExportReason;
   /** A carried entry whose component its member subsystem does not publish yet: apply publishes it at L1 first. */
   publishAtL1?: boolean;
 }
@@ -105,8 +117,7 @@ export interface PlannedExternal {
   project: string;
   /** The producer's namespace in the family graph. */
   producer: string;
-  /** reference | legacy-pin | positional */
-  reason: string;
+  reason: PlannedExternalReason;
 }
 
 /** project_migration — what the migration writes into one project of the family. */
@@ -406,7 +417,7 @@ interface ReferenceTarget {
 type EntryOutcome = 'planned' | 'present' | 'refused';
 
 /** Steps 13-15 for one reference. */
-function planEntry(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, table: ResolvedExportTable, reason: string): EntryOutcome {
+function planEntry(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, table: ResolvedExportTable, reason: PlannedExportReason): EntryOutcome {
   // Step 13: the spec the reference targets, for the subsystem that owns it.
   const target = targetOf(ref);
   if (!target) {
@@ -434,7 +445,7 @@ function targetOf(ref: CrossProjectReference): ReferenceTarget | null {
 }
 
 /** Step 15 for a project-level type: its own `{ typeDef }` entry, the crate-root `pub struct`. */
-function decideOwnType(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, target: ReferenceTarget, table: ResolvedExportTable, reason: string): EntryOutcome {
+function decideOwnType(ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, target: ReferenceTarget, table: ResolvedExportTable, reason: PlannedExportReason): EntryOutcome {
   const key = targetKey(target);
   if (table.entries.some((e) => exportTargetKey(e) === key)) return 'present';
   const local = localIn(producer.namespace, target.id);
@@ -450,7 +461,7 @@ function decideOwnType(ctx: Planning, producer: ProjectNode, ref: CrossProjectRe
 /** Step 15: plan or merge the producer's entry for the reference, or report why not. */
 function decideEntry(
   ctx: Planning, producer: ProjectNode, ref: CrossProjectReference, target: ReferenceTarget,
-  table: ResolvedExportTable, published: ResolvedExportTable, reason: string,
+  table: ResolvedExportTable, published: ResolvedExportTable, reason: PlannedExportReason,
 ): EntryOutcome {
   const key = targetKey(target);
   const at = published.entries.filter((e) => exportTargetKey({ ...e, interface: undefined }) === key);
@@ -493,7 +504,7 @@ function localIn(namespace: string, id: string): string {
 
 function mergeEntry(
   entry: ProjectMigration, target: ReferenceTarget, from: string | undefined, item: string, publicName: string,
-  ref: CrossProjectReference, reason: string,
+  ref: CrossProjectReference, reason: PlannedExportReason,
 ): void {
   let planned = entry.exports.find((e) => e.from === from && e.interface === undefined && (target.kind === 'type' ? e.typeDef : e.component) === item);
   if (!planned) {
@@ -515,7 +526,7 @@ function addSorted(list: string[], value: string): void {
   }
 }
 
-function report(ctx: Planning, kind: string, ref: CrossProjectReference, detail: string): 'refused' {
+function report(ctx: Planning, kind: ChainingFindingKind, ref: CrossProjectReference, detail: string): 'refused' {
   ctx.findings.push({ kind, project: ref.producer, detail, reference: ref, blocking: false });
   return 'refused';
 }
@@ -525,9 +536,9 @@ function report(ctx: Planning, kind: string, ref: CrossProjectReference, detail:
  * planned id. An existing declaration that names that id already is the
  * declaration: it starts resolving once the id is written.
  */
-function planExternal(ctx: Planning, consumer: ProjectNode, producer: string, reason: string): { alias: string; planned: boolean } | undefined {
+function planExternal(ctx: Planning, consumer: ProjectNode, producer: string, reason: PlannedExternalReason): { alias: string; planned: boolean } | undefined {
   const alias = idOf(ctx, producer);
-  const refuse = (kind: string, detail: string): undefined => {
+  const refuse = (kind: ChainingFindingKind, detail: string): undefined => {
     ctx.findings.push({ kind, project: consumer.namespace, blocking: false, detail });
     return undefined;
   };

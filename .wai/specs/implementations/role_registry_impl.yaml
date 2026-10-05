@@ -19,7 +19,7 @@ methods:
     calls:
       - role_store.load
       - role_store.replaceAll
-    symbol: createRole
+    symbol: registryCreate
   - name: update
     narrative: []
     intent: >-
@@ -29,7 +29,7 @@ methods:
     calls:
       - role_store.load
       - role_store.replaceAll
-    symbol: updateRole
+    symbol: registryUpdate
   - name: delete
     narrative: []
     intent: >-
@@ -39,8 +39,8 @@ methods:
     calls:
       - role_store.load
       - role_store.replaceAll
-    symbol: deleteRole
+    symbol: registryDelete
 detail: intent
 status: complete
 createdAt: '2026-07-15T20:28:40.375Z'
-updatedAt: '2026-09-23T21:20:01.242Z'
+updatedAt: '2026-10-04T19:41:10.544Z'

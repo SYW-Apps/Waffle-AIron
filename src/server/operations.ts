@@ -1,8 +1,6 @@
-import type { IncomingMessage, ServerResponse } from 'http';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { listProjectRecords } from './projects.js';
-import { sendJson } from './httpio.js';
 import { authorize, visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
 import {
   effectiveExposure,
@@ -340,8 +338,8 @@ export function evaluateUsage(
 ): ResourceUsageSnapshot[] {
   if (!policy.enabled) return snapshots;
 
-  // Non-enforcing: a would-be 'block' outcome is downgraded to an observation.
-  const advisory = policy.mode === 'block' ? 'observe' : policy.mode || 'observe';
+  // Non-enforcing: the mode only labels an exceeded limit.
+  const advisory = policy.mode || 'observe';
 
   return snapshots.map((snapshot) => {
     const messages: string[] = [];
@@ -522,6 +520,9 @@ export function setExposurePolicy(
 ): HostExposurePolicy {
   const principal = requireInstanceExposureAdmin(cfg, credential);
   const stored = setExposurePolicyRecord(cfg.dataDir, effectiveExposure(policy));
+  // A retired adminApiMode (local_only, private_network, public) is stored as
+  // enabled; the audit event says so, naming the old and the new value.
+  const submitted = (policy as { adminApiMode?: unknown }).adminApiMode;
   const event: AuditEvent = {
     id: '',
     timestamp: '',
@@ -532,51 +533,10 @@ export function setExposurePolicy(
     actor: principalSubject(principal),
     target: 'exposure-policy',
   };
+  if (submitted !== undefined && submitted !== stored.adminApiMode) {
+    event.metadata = `adminApiMode "${String(submitted)}" is deprecated and was stored as "${stored.adminApiMode}"`;
+  }
   if (principal.tokenId) event.tokenId = principal.tokenId;
   tryAppendAudit(cfg, event);
   return stored;
-}
-
-// ── Operations Portal (HTTP) ─────────────────────────────────────────────────
-//
-// Pure forwarding to the orchestrator functions above. Rides the ADMIN-plane
-// listener (mirroring identity.ts / landscape.ts), owning its own error → status
-// mapping (401/403/404/400) so faults never fall through to the admin-plane
-// catch. Endpoints match ioperations_portal exactly. Called by http.ts when the
-// admin listener sees an `/operations/*` path AND the exposure policy enables it.
-
-/**
- * Route one operations control-plane request to the orchestrator and write the
- * HTTP response. Read-only: three GET endpoints (health, usage, quota), each
- * taking an optional `scope` query selector.
- */
-export function handleOperationsRequest(
-  cfg: HostConfig,
-  credential: string | null,
-  req: IncomingMessage,
-  res: ServerResponse,
-  url: URL,
-): void {
-  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['operations', ...]
-  const scope = url.searchParams.get('scope') ?? undefined;
-  try {
-    // GET /operations/health
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'health') {
-      return sendJson(res, 200, getHealthReport(cfg, credential, scope));
-    }
-    // GET /operations/usage
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'usage') {
-      return sendJson(res, 200, getUsage(cfg, credential, scope));
-    }
-    // GET /operations/quota
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'quota') {
-      return sendJson(res, 200, evaluateQuota(cfg, credential, scope));
-    }
-
-    sendJson(res, 404, { error: 'not found' });
-  } catch (err) {
-    if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
-    if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
-    sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
-  }
 }

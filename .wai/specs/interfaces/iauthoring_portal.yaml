@@ -19,12 +19,14 @@ methods:
       which of the delta's paths changed nothing, or that nothing did and nothing was written. A dry
       run runs the whole write, gate included, and answers with the report it would have produced
       without touching disk. Routed to the gated workflow.
-    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
+    signature: >-
+      updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The stored spec's id
@@ -77,15 +79,15 @@ methods:
     description: >-
       Delete one spec of the named kind, answering with whether anything was removed and the tests
       that encode a method the deletion took away. Routed to the gated workflow.
-    signature: 'deleteSpec(kind: string, id: string): SpecDeletion'
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion'
     returns: SpecDeletion
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
       - name: id
         type: string
         description: The spec id
 status: complete
 createdAt: '2026-09-18T21:41:27.211Z'
-updatedAt: '2026-10-04T10:18:33.804Z'
+updatedAt: '2026-10-04T23:37:32.091Z'

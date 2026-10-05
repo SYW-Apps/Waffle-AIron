@@ -1,0 +1,23 @@
+kind: enum
+id: upgrade_reason
+name: UpgradeReason
+description: Why an upgrade changes a finding's verdict.
+subsystem: sdd_cli
+fields: []
+methods: []
+sourcePath: src/commands/verdict-changes.ts
+values:
+  - name: escalated
+    description: >-
+      A stage-2 notice that is an error since stage 4 (EXTERNAL_NOT_EXPORTED, EXPORT_INVALID,
+      EXPORT_UNCONSUMABLE, TRUSTED_LINK_CROSSES_PROJECT, EXTERNAL_UNDECLARED)
+  - name: pinned
+    description: >-
+      A cross-project reference now judged against the project's own pin, where it used to be judged
+      through the parent's live tree
+  - name: positional
+    description: >-
+      A reference the family's top matches only by position, which now needs a use import or loses
+      its self-prefix
+createdAt: '2026-10-04T23:34:12.049Z'
+updatedAt: '2026-10-04T23:34:12.467Z'

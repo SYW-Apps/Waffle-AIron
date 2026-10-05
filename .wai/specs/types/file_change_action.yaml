@@ -1,0 +1,17 @@
+kind: enum
+id: file_change_action
+name: FileChangeAction
+description: What a migration does to one file in an owner project.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/types.ts
+values:
+  - name: write
+    description: Replace an existing file
+  - name: create
+    description: Create a new file
+  - name: delete
+    description: Delete a file
+createdAt: '2026-10-04T23:24:28.400Z'
+updatedAt: '2026-10-04T23:24:28.833Z'

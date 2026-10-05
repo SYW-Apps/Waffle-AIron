@@ -28,10 +28,8 @@ fields:
     description: The project's effective id, when it has a usable one.
     optional: true
   - name: state
-    type: string
-    description: >-
-      approved (its lock matches its gate identity) | drifted (it has a lock and its gate identity
-      moved since) | never (no lock, or no project on disk at the declared path).
+    type: ProjectApprovalState
+    description: Its approval, judged at its own root.
     optional: false
   - name: subject
     type: string
@@ -47,18 +45,14 @@ fields:
       says nothing about whether the design moved.
     optional: true
   - name: pinned
-    type: string
-    description: >-
-      How the parent's lock pinned this member: matches (the parent's record carries this subject —
-      its `members` entry, or for one release its legacy `children` entry), moved (the parent
-      recorded another subject, so the parent's own lock is stale until it re-locks), unpinned (the
-      parent has no lock, or its lock names no pin for this alias). Absent on the root's own entry.
+    type: PinState
+    description: How the parent's lock pinned this member. Absent on the root's own entry.
     optional: true
   - name: as
-    type: string
+    type: MemberKind
     description: >-
-      part | project (stage 8). A part's state is its declaring project's, and it has no subject of
-      its own.
+      What the member is (stage 8). A part's state is its declaring project's, and it has no subject
+      of its own.
     optional: true
   - name: contentDigest
     type: string
@@ -74,4 +68,4 @@ fields:
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-10-04T10:20:48.630Z'
+updatedAt: '2026-10-04T23:39:15.562Z'

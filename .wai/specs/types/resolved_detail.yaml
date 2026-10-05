@@ -6,8 +6,8 @@ description: >-
   implementation rather than defaulted from its component's type.
 fields:
   - name: level
-    type: string
-    description: full | calls-only | intent
+    type: NarrativeDetail
+    description: The detail level in force.
     optional: false
   - name: explicit
     type: bool
@@ -18,4 +18,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-14T06:03:29.922Z'
-updatedAt: '2026-10-04T10:20:57.801Z'
+updatedAt: '2026-10-04T23:39:25.018Z'

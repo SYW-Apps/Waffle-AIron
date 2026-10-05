@@ -20,10 +20,10 @@ fields:
       subsystem's id.
     optional: false
   - name: form
-    type: string
-    description: 'members | mount: which form the parent declares it in.'
+    type: MountForm
+    description: Which form the parent declares it in.
     optional: false
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-07-24T17:53:35.762Z'
-updatedAt: '2026-09-27T10:33:59.676Z'
+updatedAt: '2026-10-04T23:38:58.693Z'

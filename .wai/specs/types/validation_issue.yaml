@@ -4,12 +4,12 @@ name: ValidationIssue
 description: A single validation finding produced by the spec validator
 fields:
   - name: severity
-    type: string
+    type: IssueSeverity
     description: >-
-      Issue severity after project overrides — error, warning or notice. A notice is reported on
-      every surface that lists findings, beside errors and warnings and never mixed into them, but
-      never makes a result invalid and never fails the --ci gate; a project raises a code from
-      notice to warning or error, or lowers one to notice, through rules.sddRuleSeverity.
+      Issue severity after project overrides. A notice is reported on every surface that lists
+      findings, beside errors and warnings and never mixed into them, but never makes a result
+      invalid and never fails the --ci gate; a project raises a code from notice to warning or
+      error, or lowers one to notice, through rules.sddRuleSeverity.
     optional: false
   - name: code
     type: string
@@ -51,4 +51,4 @@ fields:
 methods: []
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T10:21:25.558Z'
+updatedAt: '2026-10-04T23:39:48.102Z'

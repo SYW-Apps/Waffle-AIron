@@ -18,13 +18,13 @@ methods:
       gates a write from above without the store ever calling the rule engine that reads it. A
       mechanical write passes no hooks and stays ungated. Routed through the core orchestrator.
     signature: >-
-      updateSpec(kind: string, id: string, delta: SpecDelta, hooks?: SpecWriteHooks, dryRun?: bool):
-      SpecChangeReport
+      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, hooks?: SpecWriteHooks,
+      dryRun?: bool): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The stored spec's id; informational for the singleton L0
@@ -73,13 +73,13 @@ methods:
       authoring seam judges before it calls this, and a mechanical write calls it without judgement.
       Routed through the core orchestrator.
     signature: >-
-      saveSpec(kind: string, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec |
-      ImplementationSpec | TypeSpec): list<string>
+      saveSpec(kind: WritableSpecKind, spec: SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec): list<string>
     returns: list<string>
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: spec
         type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
         description: The spec to persist, of that kind
@@ -87,15 +87,15 @@ methods:
     description: >-
       Delete one spec document of the named kind. False when it was not there; the L0 cannot be
       deleted. Routed through the core orchestrator.
-    signature: 'deleteSpec(kind: string, id: string): bool'
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string): bool'
     returns: bool
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
       - name: id
         type: string
         description: The spec id (namespaced if needed)
 status: complete
 createdAt: '2026-09-25T17:33:00.554Z'
-updatedAt: '2026-10-04T10:19:38.573Z'
+updatedAt: '2026-10-04T23:37:49.691Z'

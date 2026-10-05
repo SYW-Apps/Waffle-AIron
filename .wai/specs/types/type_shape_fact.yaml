@@ -15,10 +15,8 @@ description: >-
 subsystem: sdd_validator
 fields:
   - name: origin
-    type: string
-    description: >-
-      How the members were read: 'declared' when the shape lists them itself, 'derived' when an
-      alias was followed one hop to the value its shape comes from
+    type: ShapeOrigin
+    description: How the members were read
     optional: false
   - name: fields
     type: list<ShapeMemberFact>
@@ -40,4 +38,4 @@ fields:
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-23T18:11:29.597Z'
-updatedAt: '2026-10-04T10:21:22.878Z'
+updatedAt: '2026-10-04T23:40:51.131Z'

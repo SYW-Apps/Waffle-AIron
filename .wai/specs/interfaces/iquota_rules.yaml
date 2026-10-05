@@ -8,8 +8,8 @@ methods:
   - name: evaluateUsage
     description: >-
       Evaluate resource usage snapshots against the advisory ResourceQuotaPolicy and return them
-      annotated with observe/warn quota messages. Advisory only: even a policy 'block' mode yields
-      an observational message and never blocks or throttles.
+      annotated with observe/warn quota messages, labelled by the policy's mode. Advisory only:
+      never blocks or throttles.
     signature: >-
       evaluateUsage(snapshots: list<ResourceUsageSnapshot>, policy: ResourceQuotaPolicy):
       list<ResourceUsageSnapshot>
@@ -21,4 +21,4 @@ methods:
         type: ResourceQuotaPolicy
 status: complete
 createdAt: '2026-07-09T09:09:54.317Z'
-updatedAt: '2026-10-04T10:19:24.457Z'
+updatedAt: '2026-10-05T00:07:51.594Z'

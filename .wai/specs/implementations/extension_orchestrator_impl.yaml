@@ -187,18 +187,28 @@ methods:
         description: Machine-wide packs only participate when the project opted in.
         type: branch
         condition: the project applies machine-wide packs
-        onFalseStep: 8
+        onFalseStep: 10
       - stepNumber: 7
-        description: >-
-          Collect the machine-wide packs that apply, so a dependency on machine state is visible
-          rather than assumed.
-        type: local
+        description: Resolve the machine-wide packs directory through the pack source.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: globalPacksDir
       - stepNumber: 8
+        description: List that directory's pack refs through the pack source.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: discoverPacks
+      - stepNumber: 9
+        description: >-
+          Collect the machine-wide packs that apply — each discovered ref matched against what is
+          installed — so a dependency on machine state is visible rather than assumed.
+        type: local
+      - stepNumber: 10
         description: >-
           Everything installed that neither a selection nor an opt-in applies is reported as
           installed-but-unapplied — the migration set when the project never declared a position.
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         description: >-
           Return the diagnosis. Every failure degrades to an empty diagnosis instead of throwing: a
           health check must never itself break.
@@ -517,4 +527,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-10-03T22:10:48.860Z'
+updatedAt: '2026-10-04T19:55:36.739Z'

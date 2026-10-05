@@ -13,8 +13,8 @@ fields:
     optional: false
     key: primary
   - name: level
-    type: string
-    description: subsystem | project
+    type: ExportTableLevel
+    description: Whose table it is.
     optional: false
   - name: entries
     type: list<ResolvedExport>
@@ -30,4 +30,4 @@ fields:
 methods: []
 sourcePath: src/models/exports.ts
 createdAt: '2026-09-26T16:08:00.499Z'
-updatedAt: '2026-10-04T10:20:58.473Z'
+updatedAt: '2026-10-04T23:40:28.871Z'

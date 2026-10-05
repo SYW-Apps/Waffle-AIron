@@ -40,7 +40,7 @@ fields:
       agent context. Empty when none.
     optional: true
   - name: status
-    type: string
+    type: AgentStatus
     description: >-
       Whether this agent is active or retired. Always present — a record written without one is
       active, so the absence of a decision is never mistaken for a retirement.
@@ -91,4 +91,4 @@ fields:
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T10:19:50.489Z'
+updatedAt: '2026-10-04T23:40:55.617Z'

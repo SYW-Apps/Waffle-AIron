@@ -1,0 +1,28 @@
+kind: enum
+id: type_position
+name: TypePosition
+description: >-
+  Where a type expression stands, which decides the position rules it is judged by (void and async
+  only in a returns, a named scalar's holds a primitive).
+fields: []
+methods: []
+sourcePath: src/models/type-grammar.ts
+values:
+  - name: param
+    description: A contract method's parameter
+  - name: returns
+    description: A contract method's returns
+  - name: field
+    description: A type's field
+  - name: type-method-param
+    description: A pure type method's parameter
+  - name: type-method-returns
+    description: A pure type method's returns
+  - name: signature-param
+    description: A signature type's parameter
+  - name: signature-returns
+    description: A signature type's returns
+  - name: holds
+    description: A named scalar's one primitive
+createdAt: '2026-10-04T23:13:36.122Z'
+updatedAt: '2026-10-04T23:13:36.506Z'

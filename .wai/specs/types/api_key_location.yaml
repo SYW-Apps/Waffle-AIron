@@ -1,0 +1,13 @@
+kind: enum
+id: api_key_location
+name: ApiKeyLocation
+description: Where an apiKey security scheme's key travels.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: header
+  - name: query
+  - name: cookie
+createdAt: '2026-10-04T23:32:57.428Z'
+updatedAt: '2026-10-04T23:32:57.853Z'

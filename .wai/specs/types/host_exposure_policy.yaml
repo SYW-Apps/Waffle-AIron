@@ -10,8 +10,8 @@ description: >-
   surface exposed by default.
 fields:
   - name: adminApiMode
-    type: string
-    description: 'Admin API exposure mode: "disabled", "local_only", "private_network", or "public".'
+    type: AdminApiMode
+    description: Admin API exposure mode.
     optional: false
   - name: adminUiEnabled
     type: bool
@@ -71,4 +71,4 @@ methods:
     symbol: effectiveExposure
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:28.871Z'
-updatedAt: '2026-10-04T10:20:16.943Z'
+updatedAt: '2026-10-04T23:53:34.408Z'

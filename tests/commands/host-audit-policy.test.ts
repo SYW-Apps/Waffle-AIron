@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { logger } from '../../src/utils/logger.js';
 import { parseAuditPolicyEnv } from '../../src/commands/host.js';
 import { effectiveAuditPolicy } from '../../src/server/audit.js';
 
@@ -18,6 +19,17 @@ describe('WAIRON_AUDIT_POLICY', () => {
       includeReadEvents: true,
       metadataMode: 'none',
     });
+  });
+
+  it('reads the retired full-redacted as redacted, with a deprecation warning naming both values', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    try {
+      expect(parseAuditPolicyEnv('{"metadataMode":"full-redacted"}')).toEqual({ metadataMode: 'redacted' });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toMatch(/WAIRON_AUDIT_POLICY field "metadataMode": "full-redacted" is deprecated and reads as "redacted"/);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('accepts an empty object, which keeps the secure default', () => {

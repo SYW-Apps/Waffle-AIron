@@ -1104,7 +1104,9 @@ methods:
           Resolve the instance URL, project selector and bearer credential for this command:
           explicit flags, then the environment, then this checkout's recorded binding, then the
           agent's own MCP configuration. Refuse with actionable guidance when nothing resolves.
-        type: local
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: resolveTarget
       - stepNumber: 2
         description: Route on the remote action
         type: switch
@@ -1120,7 +1122,7 @@ methods:
             step: 9
           - value: status
             step: 11
-        defaultStep: 13
+        defaultStep: 14
       - stepNumber: 3
         description: >-
           Migrate the local spec tree into the hosted project (creating it first when --unit was
@@ -1131,7 +1133,7 @@ methods:
       - stepNumber: 4
         description: Report what was pushed
         type: jump
-        toStep: 14
+        toStep: 15
       - stepNumber: 5
         description: Migrate the hosted spec tree into this checkout.
         type: call
@@ -1140,7 +1142,7 @@ methods:
       - stepNumber: 6
         description: Report what was pulled
         type: jump
-        toStep: 14
+        toStep: 15
       - stepNumber: 7
         description: >-
           Record a standing binding for this checkout, after verifying it resolves against the
@@ -1152,7 +1154,7 @@ methods:
         label: attachReported
         description: Report what is now attached
         type: jump
-        toStep: 14
+        toStep: 15
       - stepNumber: 9
         description: Remove the binding, returning the checkout to purely local operation.
         type: call
@@ -1161,7 +1163,7 @@ methods:
       - stepNumber: 10
         description: Report the detachment
         type: jump
-        toStep: 14
+        toStep: 15
       - stepNumber: 11
         description: >-
           Describe what this checkout is attached to and how it resolved — never printing the
@@ -1170,14 +1172,21 @@ methods:
         targetComponent: remote_orchestrator
         targetMethod: describeAttachment
       - stepNumber: 12
+        description: >-
+          When the checkout is not attached, list the instances this machine holds a credential for
+          — URLs only, never tokens.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: listStoredInstances
+      - stepNumber: 13
         description: Report the attachment
         type: jump
-        toStep: 14
-      - stepNumber: 13
+        toStep: 15
+      - stepNumber: 14
         description: Reject an unknown remote action, naming the supported ones.
         type: throw
         error: 'Unknown remote action (supported: push, pull, attach, detach, status)'
-      - stepNumber: 14
+      - stepNumber: 15
         label: outcome
         description: >-
           Print the outcome: for a migration, direction, instance and project, roots and file count,
@@ -3304,4 +3313,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T18:16:32.700Z'
+updatedAt: '2026-10-04T19:57:54.630Z'

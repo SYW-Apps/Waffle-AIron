@@ -1,0 +1,21 @@
+kind: enum
+id: relation_health
+name: RelationHealth
+description: >-
+  A relation's health in one word, the same on the canvas's edges and the hosted Relations tab. A
+  known break outranks the unknown, and the unknown outranks a benign change, so nothing that could
+  not be checked ever reads as ok.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: ok
+    description: Compared, and nothing the consumer uses moved
+  - name: drifted
+    description: Something moved, but nothing known to break the consumer
+  - name: incompatible
+    description: 'A known break: something the consumer uses changed or disappeared'
+  - name: unavailable
+    description: 'Not compared: the statuses could not be read, or name no such alias'
+createdAt: '2026-10-04T23:11:21.448Z'
+updatedAt: '2026-10-04T23:11:34.201Z'

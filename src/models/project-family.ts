@@ -2,7 +2,7 @@ import * as path from 'path';
 import type { ExportUsage } from './exports.js';
 import type { SubsystemSpec } from './specs.js';
 // TYPE-ONLY: a part is recorded by the scan that read it (spec_index), and the graph carries it as read.
-import type { ScannedPart } from '../core/specs.js';
+import type { ScannedPart, WritableSpecKind } from '../core/specs.js';
 
 // ---------------------------------------------------------------------------
 // The project graph: every project root one scan read, the project that owns
@@ -62,6 +62,9 @@ export interface AuthoredReference {
   hint?: string;
 }
 
+/** How the owner's gate resolved one cross-project reference. */
+export type ResolutionOutcome = 'resolved' | 'missing' | 'ambiguous' | 'unavailable' | 'forbidden';
+
 /**
  * reference_resolution — how one cross-project reference was resolved by the
  * owner's gate, decided BEFORE any severity, from the referring project's own
@@ -69,8 +72,7 @@ export interface AuthoredReference {
  * lock and its pinned snapshots).
  */
 export interface ReferenceResolution {
-  /** resolved | missing | ambiguous | unavailable | forbidden */
-  outcome: 'resolved' | 'missing' | 'ambiguous' | 'unavailable' | 'forbidden';
+  outcome: ResolutionOutcome;
   /** The referring project's id (its key when it has no usable id): the one project whose gate judges it. */
   owner: string;
   /** Where the reference is written: the referring spec id and the position in it. */
@@ -105,6 +107,15 @@ export interface CrossProjectReference {
   publicName?: string;
 }
 
+/** Where a declared external's producer was found. */
+export type ExternalSourceKind = 'family' | 'path' | 'git' | 'hosted' | 'unresolved';
+
+/** How a family producer stands to its consumer. */
+export type ExternalRelation = 'parent' | 'sibling' | 'member' | 'family';
+
+/** How an external is declared: under externals, or as a referenced project member. */
+export type ExternalRole = 'external' | 'member';
+
 /**
  * resolved_external — one declared external of a project, bound to its
  * producer. The family sees `project`, any other source sees `instance`.
@@ -113,10 +124,9 @@ export interface ResolvedExternal {
   alias: string;
   /** The producer id the declaration names (its `project`, else the alias). */
   project: string;
-  /** family | path | git | hosted | unresolved */
-  sourceKind: 'family' | 'path' | 'git' | 'hosted' | 'unresolved';
-  /** For a family producer: parent | sibling | member | family. */
-  relation?: 'parent' | 'sibling' | 'member' | 'family';
+  sourceKind: ExternalSourceKind;
+  /** For a family producer: how it stands to the consumer. */
+  relation?: ExternalRelation;
   /** The producer's key in the family graph, for a family producer. */
   producer?: string;
   /** The producer's root directory, absolute. */
@@ -132,10 +142,16 @@ export interface ResolvedExternal {
    * project member — declared under `members` with a `../`, git or hosted
    * source, its content a project's — bound and judged exactly as an external.
    */
-  role: 'external' | 'member';
+  role: ExternalRole;
   /** git: the commit the directory holds — a member's pinned commit, an external's ref head when resolved. */
   commit?: string;
 }
+
+/** Where a family node's id came from. */
+export type ProjectIdOrigin = 'declared' | 'name' | 'none';
+
+/** How a parent declares a member root: a members entry, or a legacy L1 mount subsystem. */
+export type MountForm = 'members' | 'mount';
 
 /** project_node — one project root of the family the scan read, keyed by its in-memory key. */
 export interface ProjectNode {
@@ -143,16 +159,15 @@ export interface ProjectNode {
   namespace: string;
   /** The effective project id (declared, else the name slug); absent when none can be made. */
   id?: string;
-  /** declared | name | none */
-  idSource: 'declared' | 'name' | 'none';
+  idSource: ProjectIdOrigin;
   /** The display name, absent when the root has no readable configuration. */
   name?: string;
   /** The key of the project that declares this one as a member; absent for the bound root. */
   parent?: string;
   /** The alias the parent declares it under; absent for the bound root. */
   mountAlias?: string;
-  /** members | mount: how the parent declares it; absent for the bound root. */
-  mountForm?: 'members' | 'mount';
+  /** How the parent declares it; absent for the bound root. */
+  mountForm?: MountForm;
   /** The legacy L1 mount subsystem as its parent wrote it; null otherwise. */
   legacyMount: SubsystemSpec | null;
   /** What the parent's declaration says the member is (the `members` description, or a legacy mount's); shown on its canvas node. */
@@ -181,21 +196,27 @@ export interface ProjectNode {
   parts: ScannedPart[];
 }
 
+/** Which section of a project's configuration declares an alias. */
+export type ImportSection = 'externals' | 'members';
+
 /** project_import — one alias's `use` imports, as the project's configuration declares them. */
 export interface ProjectImport {
   alias: string;
-  /** externals | members: where the alias is declared. */
-  section: 'externals' | 'members';
+  /** Where the alias is declared. */
+  section: ImportSection;
   /** The `use` entries, deduplicated in first-seen order; `*` stays `*`. */
   use: string[];
 }
+
+/** What a family identity or membership problem is. */
+export type FamilyProblemKind = 'id-collision' | 'no-id' | 'defaulted' | 'member-absent' | 'alias-conflict' | 'duplicate-spec' | 'part-unavailable' | 'kind-mismatch';
 
 /**
  * project_family_problem — a fact about the family's identities and membership
  * no single project can see alone. Reported, never judged.
  */
 export interface ProjectFamilyProblem {
-  kind: 'id-collision' | 'no-id' | 'defaulted' | 'member-absent' | 'alias-conflict' | 'duplicate-spec' | 'part-unavailable' | 'kind-mismatch';
+  kind: FamilyProblemKind;
   /** The colliding id; the alias to declare (defaulted); the alias (member-absent, alias-conflict); the key (duplicate-spec). */
   id?: string;
   /** The keys of the projects concerned ('' is the bound root). */
@@ -495,7 +516,7 @@ function shortestPath(from: string, to: string, members: Set<string>, edges: Map
 /** reference_edit — one reference respelled at its parsed position (stage 6 family migrations). */
 export interface ReferenceEdit {
   /** The kind of the spec holding the reference. */
-  kind: string;
+  kind: WritableSpecKind;
   /** The spec's id. */
   specId: string;
   /** Where in the spec (as AuthoredReference.position). */

@@ -10,7 +10,6 @@ export {
   loadSubsystemSpecs,
   loadComponentSpecs,
   loadInterfaceSpecs,
-  loadImplementationSpecs,
   loadTypeSpecs,
   renderDiagram,
 } from '../core/index.js';

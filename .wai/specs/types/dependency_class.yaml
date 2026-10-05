@@ -1,0 +1,19 @@
+kind: enum
+id: dependency_class
+name: DependencyClass
+description: >-
+  What an Orchestrator may depend on, enforced as a Store's durability is
+  (DEPENDENCY_CLASS_VIOLATION, DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR). Unset, the Orchestrator is a
+  workflow.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: pure
+    description: 'Depends only on pure Orchestrators: computes over what it is handed (an arbiter, a codec)'
+  - name: read
+    description: >-
+      Also depends on read Orchestrators and on Repositories, Indexes and Adapters, whose write
+      methods it never calls
+createdAt: '2026-10-04T23:11:55.113Z'
+updatedAt: '2026-10-04T23:11:55.504Z'

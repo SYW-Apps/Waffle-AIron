@@ -31,7 +31,10 @@ import type { WebGraphModel, WebGraphNode, LandscapeEdge } from '../server/types
 // all formats are self-contained.
 // ---------------------------------------------------------------------------
 
-export function renderDiagram(format: string, relations?: ProjectRelations[]): string {
+/** The formats the architecture diagram renders to. */
+export type DiagramFormat = 'canvas' | 'mermaid' | 'drawio' | 'excalidraw';
+
+export function renderDiagram(format: DiagramFormat, relations?: ProjectRelations[]): string {
   switch (format) {
     // Only the canvas carries relation health; the other formats ignore it.
     case 'canvas':     return renderCanvasHtml(buildCanvasModel(diagramIssues(), relations));

@@ -7,6 +7,7 @@ import {
   pathKey,
   type CallSiteFact,
   type CodeModel,
+  type FunctionBodyFact,
   type ImplementationSpec,
   type ImportBindingFact,
   type MethodImplementation,
@@ -355,6 +356,12 @@ interface ExactFacts {
    * nothing — see SourceFileFacts.functionCallSites.
    */
   calls: Map<string, Map<string, CallSiteFact>>;
+  /**
+   * The same sites body by body, each with where the body is bound — see
+   * SourceFileFacts.functionBodies: what keeps a facade `save` and the
+   * class member `save` it forwards to from being read as one function.
+   */
+  bodies: Map<string, FunctionBodyFact[]>;
   /** Runtime (value) import bindings by local name. */
   importBindings: Map<string, ImportBindingFact>;
   /** Module specifier of each TYPE-ONLY import binding, by local name. */
@@ -441,6 +448,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const namedReexports: { exported: string; local: string; from: string }[] = [];
   const complexity = new Map<string, number>();
   const calls = new Map<string, Map<string, CallSiteFact>>();
+  const bodies = new Map<string, FunctionBodyFact[]>();
   const importBindings = new Map<string, ImportBindingFact>();
   const typeOnlyBindings = new Map<string, string>();
   const fieldTypes = new Map<string, Set<string>>();
@@ -634,6 +642,45 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       }
     }
     return undefined;
+  };
+
+  // WHERE a named function-like's body is bound — the identity that tells
+  // same-named bodies in one file apart (see FunctionBodyFact). Module scope
+  // is a top-level function declaration or a top-level variable's function
+  // initializer; a member is a member of a top-level named class, or a
+  // property of an object literal a top-level variable is bound to (through
+  // `as` / `satisfies` / parentheses, which change no binding). Anything
+  // else is nested: bound somewhere this model does not name.
+  const isTopLevelVariable = (decl: import('typescript').Node): decl is import('typescript').VariableDeclaration =>
+    ts.isVariableDeclaration(decl) && ts.isIdentifier(decl.name)
+    && !!decl.parent && ts.isVariableDeclarationList(decl.parent)
+    && !!decl.parent.parent && ts.isVariableStatement(decl.parent.parent)
+    && !!decl.parent.parent.parent && ts.isSourceFile(decl.parent.parent.parent);
+  const containerOf = (owner: import('typescript').Node | undefined): string | undefined => {
+    if (!owner) return undefined;
+    if (ts.isClassDeclaration(owner)) {
+      return owner.name && owner.parent && ts.isSourceFile(owner.parent) ? owner.name.text : undefined;
+    }
+    if (!ts.isObjectLiteralExpression(owner)) return undefined;
+    let slot: import('typescript').Node | undefined = owner.parent;
+    while (slot && (ts.isAsExpression(slot) || ts.isSatisfiesExpression(slot) || ts.isParenthesizedExpression(slot))) {
+      slot = slot.parent;
+    }
+    return slot && isTopLevelVariable(slot) ? (slot.name as import('typescript').Identifier).text : undefined;
+  };
+  const bindingOf = (node: import('typescript').Node): Pick<FunctionBodyFact, 'container' | 'nested'> => {
+    const nested = { nested: true } as const;
+    if (ts.isFunctionDeclaration(node)) return node.parent && ts.isSourceFile(node.parent) ? {} : nested;
+    let owner: import('typescript').Node | undefined;
+    if (ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)) {
+      owner = node.parent;
+    } else {
+      const slot = node.parent;
+      if (slot && ts.isVariableDeclaration(slot)) return isTopLevelVariable(slot) ? {} : nested;
+      if (slot && (ts.isPropertyAssignment(slot) || ts.isPropertyDeclaration(slot))) owner = slot.parent;
+    }
+    const container = containerOf(owner);
+    return container !== undefined ? { container } : nested;
   };
 
   // What a function-like DECLARES it takes, in order — the other half of the
@@ -863,6 +910,11 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       const sites = calls.get(fnName) ?? new Map<string, CallSiteFact>();
       for (const [key, site] of facts.callees) sites.set(key, site);
       calls.set(fnName, sites);
+      // And this body's own sites, under where it is bound, so a reader can
+      // tell it from the other bodies of its name.
+      const named = bodies.get(fnName) ?? [];
+      named.push({ ...bindingOf(node), sites: [...facts.callees.values()] });
+      bodies.set(fnName, named);
       // The signature a caller reaches, recorded inside the WITH-A-BODY guard
       // this block already is: an overload's signatures have no body, so the
       // implementation signature is the only one collected. EVERY body under
@@ -1119,7 +1171,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /** Resolve a relative export-* specifier to a real file (.js → .ts mapping, index files). */
@@ -1195,6 +1247,19 @@ function carryBody(
   const sites = facts.calls.get(exported) ?? new Map<string, CallSiteFact>();
   for (const [key, site] of targetCalls) sites.set(carriedFrom + '|' + key, { ...site, from: site.from ?? carriedFrom });
   facts.calls.set(exported, sites);
+  // The barrel publishes the target's MODULE binding of the name — never a
+  // member, which no export names — so that is the body it carries. A
+  // target holding none (or a nested one beside it) leaves the name to the
+  // union, exactly as the target itself would answer.
+  const targetBodies = target.bodies.get(local) ?? [];
+  if (targetBodies.some(b => b.nested)) return;
+  const moduleScope = targetBodies.filter(b => b.container === undefined);
+  if (!moduleScope.length) return;
+  const carried = facts.bodies.get(exported) ?? [];
+  for (const body of moduleScope) {
+    carried.push({ sites: body.sites.map(site => ({ ...site, from: site.from ?? carriedFrom })) });
+  }
+  facts.bodies.set(exported, carried);
 }
 
 /**
@@ -1413,6 +1478,7 @@ export function buildCodeModel(
             ],
             functionComplexity: Object.fromEntries(facts.complexity),
             functionCallSites: Object.fromEntries([...facts.calls].map(([k, v]) => [k, [...v.values()]])),
+            functionBodies: Object.fromEntries(facts.bodies),
             importBindings: Object.fromEntries(facts.importBindings),
             typeOnlyBindings: Object.fromEntries(facts.typeOnlyBindings),
             fieldTypes: Object.fromEntries([...facts.fieldTypes].map(([k, v]) => [k, [...v]])),

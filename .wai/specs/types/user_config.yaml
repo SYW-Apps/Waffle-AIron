@@ -9,10 +9,8 @@ description: >-
   belongs in the credential store beside it.
 fields:
   - name: channel
-    type: string
-    description: >-
-      Which release channel `wairon update` tracks: stable, beta, preview or dev. Absent means
-      stable.
+    type: UpdateChannel
+    description: Which release channel `wairon update` tracks. Absent means stable.
     optional: true
   - name: disabledAliases
     type: list<string>
@@ -25,4 +23,4 @@ fields:
 methods: []
 sourcePath: src/config/userconfig.ts
 createdAt: '2026-09-22T21:17:40.819Z'
-updatedAt: '2026-10-04T10:21:25.236Z'
+updatedAt: '2026-10-04T23:40:53.576Z'

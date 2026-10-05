@@ -22,14 +22,10 @@ fields:
     description: The producer's namespace in the family graph.
     optional: false
   - name: reason
-    type: string
-    description: >-
-      reference | legacy-pin | positional: the consumer's references cross into the producer, the
-      consumer held a stage-1 family pin of its parent that this declaration replaces, or the
-      consumer's bare references reached the producer only by position and now import from it (stage
-      4).
+    type: PlannedExternalReason
+    description: Why the declaration is planned.
     optional: false
 methods: []
 sourcePath: src/migrations/chaining-migration.ts
 createdAt: '2026-09-26T21:11:44.325Z'
-updatedAt: '2026-09-30T21:05:08.291Z'
+updatedAt: '2026-10-04T23:40:14.816Z'

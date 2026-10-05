@@ -288,6 +288,9 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
   logger.info(`${describe(probe)} — commit .wai/ so CI and every clone enforce it.`);
 }
 
+/** The two kinds of extension pack: declarative content only, or code built against @wairon/sdk. */
+export type PackKind = 'declarative' | 'code';
+
 /**
  * `wairon pack init <name>` — scaffold a new pack project (declarative or code
  * variant, optional skill stub) via the SDK portal, then print the created
@@ -296,7 +299,7 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
  */
 export function initPack(
   name: string,
-  options: { kind?: 'declarative' | 'code'; dir?: string; skill?: boolean } = {},
+  options: { kind?: PackKind; dir?: string; skill?: boolean } = {},
 ): void {
   const kind = options.kind === 'code' ? 'code' : 'declarative';
   const targetDir = options.dir ?? `./${name}`;

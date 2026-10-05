@@ -1,0 +1,20 @@
+kind: enum
+id: approver_source
+name: ApproverSource
+description: >-
+  How an approver's identity was established — a different claim from who they are, recorded so the
+  lock record is honest about how much it proves.
+fields: []
+methods: []
+sourcePath: src/models/lock.ts
+values:
+  - name: git
+    description: 'Self-declared: the machine''s git author'
+  - name: hosted
+    description: Authenticated by the instance that issued the caller's credential
+  - name: os
+    description: 'Self-declared: the OS username'
+  - name: legacy
+    description: 'A record written before the source was recorded: an opaque string'
+createdAt: '2026-10-04T23:24:19.102Z'
+updatedAt: '2026-10-04T23:24:19.501Z'

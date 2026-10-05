@@ -105,7 +105,7 @@ methods:
           workspace itself — a caller holding a workspace reference (tests, the hosted server's
           per-project scopes) must keep receiving invalidations
         type: local
-    symbol: invalidateSpecCache
+    symbol: registryInvalidateCache
   - name: save
     narrative:
       - stepNumber: 1
@@ -263,4 +263,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-10-03T22:07:57.874Z'
+updatedAt: '2026-10-04T19:53:48.152Z'

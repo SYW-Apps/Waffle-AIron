@@ -49,6 +49,9 @@ export interface UpgradeReportProject {
   predatesStage4: boolean;
 }
 
+/** Why an upgrade changes a finding's verdict. */
+export type UpgradeReason = 'escalated' | 'pinned' | 'positional';
+
 /** upgrade_report_entry — one finding of today's owner's gate that stage 4 changed, with why. */
 export interface UpgradeReportEntry {
   /** The key of the project whose gate reported it ('' for the bound root). */
@@ -56,8 +59,7 @@ export interface UpgradeReportEntry {
   code: string;
   severity: string;
   specId?: string;
-  /** escalated | pinned | positional */
-  reason: 'escalated' | 'pinned' | 'positional';
+  reason: UpgradeReason;
   /** For a positional finding: what the family's top matched it to, `<producer id>::<id>`. */
   resolvedAs?: string;
   /** For a positional finding: what the positional migration writes. */

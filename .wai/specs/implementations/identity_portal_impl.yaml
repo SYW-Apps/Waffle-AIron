@@ -2,9 +2,10 @@ id: identity_portal_impl
 name: Identity Portal Implementation
 description: >-
   Control-plane HTTP boundary for hosted identity: forwards each token, user-grant, and audit
-  operation to the identity orchestrator.
+  operation to the identity orchestrator, from a module of its own so the portal-to-orchestrator hop
+  is a real import edge rather than the orchestrator's own functions.
 contract: iidentity_portal
-sourcePath: src/server/identity.ts
+sourcePath: src/server/identity-portal.ts
 injectedParams:
   - cfg
 methods:
@@ -120,4 +121,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T17:41:06.029Z'
-updatedAt: '2026-10-03T17:08:00.355Z'
+updatedAt: '2026-10-04T19:46:11.503Z'

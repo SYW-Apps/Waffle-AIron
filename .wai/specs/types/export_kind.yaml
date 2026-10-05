@@ -1,0 +1,14 @@
+kind: enum
+id: export_kind
+name: ExportKind
+description: What an export binds a public name to.
+fields: []
+methods: []
+sourcePath: src/models/exports.ts
+values:
+  - name: component
+    description: A component, with its contract
+  - name: type
+    description: A type
+createdAt: '2026-10-04T23:34:15.378Z'
+updatedAt: '2026-10-04T23:34:15.837Z'

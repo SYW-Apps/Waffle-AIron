@@ -18,12 +18,14 @@ methods:
       nothing did and nothing was written — the respellings applied, and every key the stored file
       carries that the schema will drop (strippedKeys), so no write loses data unannounced. A dry
       run forwards the caller's request to be told what the delta would do without writing it.
-    signature: 'updateSpecGated(kind: string, id: string, delta: SpecDelta, dryRun?: bool): SpecChangeReport'
+    signature: >-
+      updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
-        type: string
-        description: system, subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: The kind of spec the id names
       - name: id
         type: string
         description: The stored spec's id
@@ -87,15 +89,15 @@ methods:
     description: >-
       Delete one spec of the named kind and report the tests that encode a method the deletion took
       away. The L0 cannot be deleted.
-    signature: 'deleteSpec(kind: string, id: string): SpecDeletion'
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion'
     returns: SpecDeletion
     params:
       - name: kind
-        type: string
-        description: subsystem, component, interface, implementation or type
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
       - name: id
         type: string
         description: The spec id
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-10-04T10:18:33.467Z'
+updatedAt: '2026-10-04T23:37:30.604Z'

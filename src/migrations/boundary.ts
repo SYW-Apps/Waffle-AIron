@@ -1,4 +1,5 @@
 import * as path from 'path';
+import type { WritableSpecKind } from '../core/specs.js';
 import * as core from './adapters/core.js';
 import * as surfaces from './adapters/surfaces.js';
 // family_file_adapter: where a path lands and whether a project is there — a planner touches no file itself.
@@ -7,7 +8,7 @@ import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import { memberLocationOf, type InternalizeDestination, type ProjectConfig } from '../models/project.js';
 import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SystemSpec } from '../models/specs.js';
-import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedWrite, type Rehearsal } from './types.js';
+import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
 
 // ---------------------------------------------------------------------------
 // boundary_migration — internalize and externalize: specs crossing a project
@@ -39,7 +40,7 @@ const label = (key: string): string => (key === '' ? 'the top project' : `"${key
 const refuse = (plan: MigrationPlan, code: string, project: string, detail: string): void => {
   plan.refusals.push({ code, project, detail });
 };
-const edit = (plan: MigrationPlan, project: string, kind: string, detail: string, write: PlannedWrite, reference?: ReferenceEdit): void => {
+const edit = (plan: MigrationPlan, project: string, kind: PlannedEditKind, detail: string, write: PlannedWrite, reference?: ReferenceEdit): void => {
   plan.edits.push({ project, kind, detail, ...(reference ? { reference } : {}), write });
 };
 
@@ -55,7 +56,7 @@ function configAt(dir: string): ProjectConfig | null {
 }
 
 /** The positions a reference may stand at, by the kinds of spec that hold them. */
-const KINDS_AT: Record<string, string[]> = {
+const KINDS_AT: Record<string, WritableSpecKind[]> = {
   dependsOn: ['component'], owns: ['component'], dispatch: ['component'], mounts: ['component'],
   lifecycle: ['subsystem'], publicInterfaces: ['subsystem'], trustedLinks: ['subsystem'],
   contract: ['implementation', 'interface'], narrative: ['implementation'], calls: ['implementation'], auth: ['implementation'],
@@ -63,8 +64,8 @@ const KINDS_AT: Record<string, string[]> = {
 };
 
 /** The kind of the spec holding a reference, read off where it sits (under the top root's binding). */
-function kindOf(ref: AuthoredReference): string {
-  const kinds = KINDS_AT[ref.position] ?? ['component', 'interface', 'implementation', 'type', 'subsystem'];
+function kindOf(ref: AuthoredReference): WritableSpecKind {
+  const kinds: WritableSpecKind[] = KINDS_AT[ref.position] ?? ['component', 'interface', 'implementation', 'type', 'subsystem'];
   return kinds.find((k) => core.loadSpec(k as 'component', ref.specId) !== null) ?? kinds[0];
 }
 
@@ -570,7 +571,7 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   if (plan.request.verb === 'internalize') {
     // Step 3: the consumers' references first, from the top root, while the member's keys still exist.
     for (const [spec, edits] of referencesBySpec(planned)) {
-      const [kind, id] = spec.split('\n');
+      const [kind, id] = spec.split('\n') as [WritableSpecKind, string];
       runWithProjectRoot(rehearsalRoot(rehearsal, plan.familyRoot), () => core.rewriteReferences(kind, id, edits));
     }
     // Step 4: the core's internalize — a core refusal propagates.

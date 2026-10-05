@@ -16,7 +16,7 @@ import {
 } from '../ui';
 import type { IdentityProviderConfig } from '../types';
 
-const PROVIDER_TYPES = ['oidc', 'keycloak', 'authentik', 'google', 'entra'];
+const PROVIDER_TYPES = ['oidc', 'keycloak', 'authentik', 'google_workspace', 'entra_id'];
 
 const csvToList = (s: string): string[] => s.split(',').map((x) => x.trim()).filter(Boolean);
 const listToCsv = (l?: string[]): string => (l ?? []).join(', ');

@@ -15,8 +15,8 @@ fields:
     optional: false
     key: primary
   - name: origin
-    type: string
-    description: 'Provenance: generated | exchanged | authored.'
+    type: SurfaceOrigin
+    description: Provenance.
     optional: false
   - name: stateId
     type: string
@@ -120,4 +120,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-04T10:51:34.102Z'
+updatedAt: '2026-10-04T23:38:39.341Z'

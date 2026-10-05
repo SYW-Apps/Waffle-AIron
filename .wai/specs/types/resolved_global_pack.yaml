@@ -25,10 +25,10 @@ fields:
       vendor via executeApprovedInstallProjectPack.
     optional: false
   - name: tier
-    type: string
-    description: 'The server-global tier it resolved from: "instance" or "image".'
+    type: GlobalPackTier
+    description: The server-global tier it resolved from.
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-22T17:27:36.292Z'
-updatedAt: '2026-09-19T11:07:16.003Z'
+updatedAt: '2026-10-04T23:40:29.833Z'

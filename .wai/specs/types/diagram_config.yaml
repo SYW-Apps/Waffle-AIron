@@ -6,12 +6,12 @@ description: >-
   feature toggles for the canvas output.
 fields:
   - name: lineStyle
-    type: string
-    description: 'Line routing style: bezier, straight, or taxi (orthogonal)'
+    type: DiagramLineStyle
+    description: Line routing style
     optional: true
   - name: defaultView
-    type: string
-    description: 'Default view mode: architecture, types, or databases'
+    type: DiagramView
+    description: Default view mode
     optional: true
   - name: showDatabases
     type: bool
@@ -20,4 +20,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T20:47:29.113Z'
-updatedAt: '2026-10-04T10:20:02.855Z'
+updatedAt: '2026-10-04T23:39:26.599Z'

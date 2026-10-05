@@ -20,7 +20,7 @@ import {
 import { familyNode, type ProjectFamily, type ProjectNode } from '../models/project-family.js';
 import { SURFACE_AUDIENCES } from '../models/specs.js';
 import type { ResolvedExportTable } from '../models/exports.js';
-import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedWrite, type Rehearsal } from './types.js';
+import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
 
 // ---------------------------------------------------------------------------
 // membership_migration — attach, detach and adopt: a project entering or
@@ -58,7 +58,7 @@ const posix = (p: string): string => p.split(path.sep).join('/');
 const refuse = (plan: MigrationPlan, code: string, project: string, detail: string): void => {
   plan.refusals.push({ code, project, detail });
 };
-const edit = (plan: MigrationPlan, project: string, kind: string, detail: string, write: PlannedWrite): void => {
+const edit = (plan: MigrationPlan, project: string, kind: PlannedEditKind, detail: string, write: PlannedWrite): void => {
   plan.edits.push({ project, kind, detail, write });
 };
 const label = (key: string): string => (key === '' ? 'the top project' : `"${key}"`);

@@ -9,15 +9,14 @@ description: >-
   and optional.
 fields:
   - name: scheme
-    type: string
+    type: PortalAuthScheme
     description: >-
-      Discriminant selecting the security scheme kind: none | apiKey | bearer | basic | oauth2 |
-      openIdConnect | custom. 'none' (or an omitted PortalAuth) means no security is required and
-      none is emitted.
+      Discriminant selecting the security scheme kind. 'none' (or an omitted PortalAuth) means no
+      security is required and none is emitted.
     optional: false
   - name: in
-    type: string
-    description: 'apiKey only: where the key travels — header | query | cookie.'
+    type: ApiKeyLocation
+    description: 'apiKey only: where the key travels.'
     optional: true
   - name: name
     type: string
@@ -44,8 +43,8 @@ fields:
     description: 'oauth2 only: the offered scopes; each element is { name: string, description: string }.'
     optional: true
   - name: flow
-    type: string
-    description: 'oauth2 only: the flow kind — authorizationCode | clientCredentials | implicit | password.'
+    type: OAuthFlow
+    description: 'oauth2 only: the flow kind.'
     optional: true
   - name: openIdConnectUrl
     type: string
@@ -62,4 +61,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-23T15:53:47.353Z'
-updatedAt: '2026-10-04T10:20:45.935Z'
+updatedAt: '2026-10-04T23:40:15.926Z'

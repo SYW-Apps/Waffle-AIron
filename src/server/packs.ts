@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import type { ProfileFamily } from '../core/extensions.js';
 import * as path from 'path';
 import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
 import { parseYaml } from '../utils/yaml.js';
@@ -200,7 +201,7 @@ export function storeListGlobalPacks(): PackDescriptor[] {
 
 /** One profile a pack contributes: its id, the pack's CANONICAL name (the value
  *  an AvailableProfile.source carries), and its ProfileDef family. */
-type ProfileContribution = { id: string; source: string; family?: string };
+type ProfileContribution = { id: string; source: string; family?: ProfileFamily };
 
 /**
  * Collect every profile contributed by the SERVER-GLOBAL packs across BOTH tiers
@@ -276,7 +277,7 @@ function scanProjectPackProfiles(config?: ProjectConfig | null): ProfileContribu
 export function storeListAvailableProfiles(): AvailableProfile[] {
   const out: AvailableProfile[] = [];
   const seen = new Set<string>();
-  const emit = (id: string, source: string, family?: string): void => {
+  const emit = (id: string, source: string, family?: ProfileFamily): void => {
     const key = JSON.stringify([id, source]); // dedup by (id, source), collision-safe
     if (seen.has(key)) return;
     seen.add(key);
@@ -309,7 +310,7 @@ export function storeListAvailableProfiles(): AvailableProfile[] {
 function storeListProjectProfiles(config?: ProjectConfig | null): AvailableProfile[] {
   const out: AvailableProfile[] = [];
   const seen = new Set<string>();
-  const emit = (id: string, source: string, installed: boolean, family?: string): void => {
+  const emit = (id: string, source: string, installed: boolean, family?: ProfileFamily): void => {
     const key = JSON.stringify([id, source]); // dedup by (id, source), collision-safe
     if (seen.has(key)) return;
     seen.add(key);

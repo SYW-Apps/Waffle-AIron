@@ -11,8 +11,8 @@ fields:
     description: Whether the project satisfies the active instance policy.
     optional: false
   - name: mode
-    type: string
-    description: 'Policy mode that produced the result: "warn", "block", or "auto_reconcile".'
+    type: PackEnforcementMode
+    description: Policy mode that produced the result.
     optional: false
   - name: missingPackNames
     type: list<string>
@@ -78,4 +78,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:58:56.094Z'
-updatedAt: '2026-10-04T10:20:45.603Z'
+updatedAt: '2026-10-04T23:53:26.905Z'
