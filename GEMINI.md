@@ -1,6 +1,6 @@
 # Wairon SDD Project
 <!-- wairon-guide-start -->
-<!-- wairon-version: 5.1.1-dev.89 -->
+<!-- wairon-version: 5.1.1-dev.101 -->
 ## Wairon — Spec-Driven Development (you are operating inside it)
 
 This project uses **wairon**. System specs live under `.wai/specs/` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → Narrative); agent topology and code are derived from it.
@@ -17,7 +17,8 @@ This project uses **wairon**. System specs live under `.wai/specs/` (L0 System �
   - **`alias::name`**: An id without `::` is local to the project that writes it. Anything another project provides is referenced as `alias::name` — the alias is one of your members or declared `externals`, the name a public name in that project's L0 export table. A reference to something it does not export is reported (`EXTERNAL_NOT_EXPORTED`).
   - **Deprecated forms** (they still resolve for one release, are reported, and `wairon doctor --fix` rewrites them): a leading `::` (`::shared::error-type`), `super::` (`super::sibling_comp`), member paths (`billing::invoice::invoice_portal`), and an L1 subsystem carrying `projectPath` (`DEPRECATED_MOUNT_FORM`).
 - **Do not run the `wairon` CLI**: Use `sdd_validate_tree` and `sdd_get_status` instead of CLI commands.
-- **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run `wairon lock` to confirm and freeze them."* No session restart is needed after the lock — delegate implementation right away via the `sdd-delegate` skill.
+- **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run `wairon lock` to approve them, and commit `.wai/lock.json`."* The lock records the approval; it does not rewrite spec files or their `status`. No session restart is needed after the lock — delegate implementation right away via the `sdd-delegate` skill.
+- **Approval, not status**: a design is ready to implement when it is APPROVED — `sdd_get_status` reports the approval state (approved, or which specs changed since), and `wairon lock-check` gives the same verdict in CI. A spec's `status` (draft/design/complete) is authoring readiness only; never wait for it to become `complete`.
 - **To implement code**: Delegate via the `sdd-delegate` skill: fetch the component's live brief with the `sdd_get_agent_brief` MCP tool (or the `wairon-agent://` resource) and spawn a subagent from it. Briefs are composed per call from the current spec tree, so they are always current — never wait for a restart. Implementations must match L3 interfaces and L5 narratives exactly. Generated agent files under `.claude/agents/` are an optional materialized view of the same topology — the live briefs are canonical.
 
 ### Rules (enforced by `sdd_validate_tree`)
