@@ -11,7 +11,7 @@ import {
 } from './adapters/surfaces.js';
 // cli_lock_adapter.checkApproval: the one approval verdict the tool has (lock-check's).
 import { checkApproval } from './lock.js';
-import { SURFACE_AUDIENCES, SurfaceOrigin, type DesignApproval } from '../models/index.js';
+import { SURFACE_AUDIENCES, SurfaceOrigin, type DesignApproval, type DesignExport } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // `wairon surface` (sdd_cli → sdd_surfaces, through the surfaces client adapter)
@@ -145,13 +145,31 @@ export async function runExport(out?: string): Promise<void> {
   const design = exportDesign(out, approval);
 
   // Steps 3-4: the path written and whether the exported design is approved.
+  const members = memberNote(design);
   if (out) {
     logger.success(
       `Design export of "${design.project.name}" written to ${path.resolve(out)} `
         + `(${design.components.length} component(s), ${design.types.length} type(s); approval: ${design.source.approval}).`,
     );
+    if (members) logger.info(members);
     return;
   }
-  // Step 5: the deterministic JSON on stdout, and nothing else.
+  // Step 5: the deterministic JSON on stdout, and nothing else. A project that
+  // holds no design of its own but has members says why on stderr, so a pipe
+  // still reads only the JSON.
   process.stdout.write(`${JSON.stringify(design, null, 2)}\n`);
+  if (members && design.components.length === 0 && design.types.length === 0) process.stderr.write(`${members}\n`);
+}
+
+/**
+ * The member projects an export lists under `dependencies` and never inlines
+ * (each is a project of its own, exported from its own root), named so the
+ * export of a family's top that holds no design of its own does not read as
+ * empty by mistake. Null when the project has no member projects.
+ */
+function memberNote(design: DesignExport): string | null {
+  const members = design.dependencies.filter((d) => d.role === 'member').map((d) => d.alias);
+  if (members.length === 0) return null;
+  return `${members.length} member project(s) are listed under \`dependencies\`, not inlined (${members.join(', ')}): `
+    + 'run `wairon export` in a member\'s own root for its design.';
 }

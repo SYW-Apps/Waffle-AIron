@@ -50,6 +50,7 @@ vi.mock('../../src/commands/validate.js', async (importOriginal) => {
     ...actual,
     computeGateStateId: vi.fn(actual.computeGateStateId),
     validateProject: vi.fn(actual.validateProject),
+    validateFamily: vi.fn(actual.validateFamily),
   };
 });
 
@@ -168,7 +169,7 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     // Routed through the CLI core and validator adapters, not a direct core import.
     expect(vi.mocked(subsystemAdapter.projectConfigExists)).toHaveBeenCalled();
     expect(vi.mocked(subsystemAdapter.retireSpecialists)).toHaveBeenCalledWith(false);
-    expect(vi.mocked(validateAdapter.validateProject)).toHaveBeenCalled();
+    expect(vi.mocked(validateAdapter.validateFamily)).toHaveBeenCalled();
   });
 
   it('the Project check reports "not a wairon project" through the CLI core adapter, for a folder with no configuration', async () => {

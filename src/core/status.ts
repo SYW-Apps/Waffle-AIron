@@ -418,7 +418,7 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   // normal state of a tree still being designed, not news (the verdict agrees).
   const own = options.approvals?.find((a) => a.key === '');
   const hasMembers = (options.approvals ?? []).some((a) => a.key !== '' && a.as !== 'part');
-  if (own && (own.state !== 'never' || hasMembers)) output += `${mark.layer('system', 'Approval:')} this project is ${own.state}${own.upgraded ? ' (locked under the pre-stage-5 gate identity — re-lock once)' : ''}\n`;
+  if (own && (own.state !== 'never' || hasMembers)) output += `${mark.layer('system', 'Approval:')} this project is ${own.state}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}\n`;
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP
   // client and a test all read the same account rather than three renderings

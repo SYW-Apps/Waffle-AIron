@@ -398,4 +398,21 @@ describe('stale-agent reconciliation (pruneStaleAgents)', () => {
     expect(fs.existsSync(path.join(dir, 'my-notes.md'))).toBe(true);        // hand-authored, kept
     expect(fs.existsSync(path.join(dir, 'keep.txt'))).toBe(true);           // not .md, kept
   });
+
+  it('prunes the yaml agent files the gemini/agy exporters write, by marker or name, never hand-written yaml', async () => {
+    const { pruneStaleAgents } = await import('../../src/commands/generate.js');
+    const { WAIRON_MANAGED_MARKER } = await import('../../src/exporters/base.js');
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-prune-yaml-'));
+    const w = (name: string, body: string) => fs.writeFileSync(path.join(dir, name), body);
+    w('billing-owner.yaml', 'name: Billing Owner' + String.fromCharCode(10));
+    w('system-architect.yaml', `system_prompt: |` + String.fromCharCode(10) + `  <!-- ${WAIRON_MANAGED_MARKER} -->` + String.fromCharCode(10));
+    w('settings.yaml', 'theme: dark' + String.fromCharCode(10));
+    w('notes.yml', 'hand: written' + String.fromCharCode(10));
+
+    expect(pruneStaleAgents(new Set(), [dir])).toBe(2);
+    expect(fs.existsSync(path.join(dir, 'billing-owner.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'system-architect.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'settings.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'notes.yml'))).toBe(true);
+  });
 });

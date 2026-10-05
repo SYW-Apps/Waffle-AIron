@@ -106,7 +106,8 @@ describe('cli_runner.runGenerate: scoped runs prune against the full topology (r
 
   it('default (materializeAgentFiles off): removes leftover managed files with a notice, never touching hand-authored files, guides, or .wai/agents/', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gen-reconcile-'));
-    buildTwoDomainProject(rootDir); // rules: {} — materializeAgentFiles defaults false
+    // Stated off: a configuration that never states it reads true while managed agent files are present (an upgrade keeps them).
+    buildTwoDomainProject(rootDir, { materializeAgentFiles: false });
     const agentsDir = path.join(rootDir, '.claude', 'agents');
 
     // Leftovers from an earlier materialized run...
@@ -160,6 +161,61 @@ describe('cli_runner.runGenerate: scoped runs prune against the full topology (r
 // resolveExpectedOutputPaths — the expected-file set pruning reconciles against.
 // Derived from the topology (agent × matching target), never from a written set.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// --target names a configured target, or the run refuses. An unknown name used
+// to match nothing and exit 0 silently, so a typo read exactly like a clean run.
+// And a default run (agent files off) says what it did at default verbosity.
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runGenerate: --target and the default-verbosity summary (real CLI)', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  const runCli = (cwd: string, ...args: string[]) =>
+    execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'generate', ...args], { cwd, timeout: 180_000 }).then(
+      (r) => ({ code: 0, out: r.stdout + r.stderr }),
+      (e: { code?: number; stdout?: string; stderr?: string }) => ({ code: e.code ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` }),
+    );
+
+  it('refuses an unknown --target, exits non-zero and names the configured targets', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gen-target-'));
+    buildTwoDomainProject(rootDir, { materializeAgentFiles: true });
+
+    const res = await runCli(rootDir, '--target', 'bogus');
+
+    expect(res.code).not.toBe(0);
+    expect(res.out).toContain('Unknown target "bogus"');
+    expect(res.out).toContain('claude');
+    expect(fs.existsSync(path.join(rootDir, '.claude', 'agents', 'dom-a-owner.md'))).toBe(false);
+  }, 180_000);
+
+  it('accepts a configured --target', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gen-target-ok-'));
+    buildTwoDomainProject(rootDir, { materializeAgentFiles: true });
+
+    const res = await runCli(rootDir, '--target', 'claude');
+
+    expect(res.code).toBe(0);
+    expect(fs.existsSync(path.join(rootDir, '.claude', 'agents', 'dom-a-owner.md'))).toBe(true);
+  }, 180_000);
+
+  it('a default run with agent files off says so instead of printing nothing', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gen-quiet-'));
+    buildTwoDomainProject(rootDir);
+
+    const res = await runCli(rootDir);
+
+    expect(res.code).toBe(0);
+    expect(res.out).toContain('Agent files: off (rules.materializeAgentFiles)');
+    expect(res.out).toContain('Guides, skills and context reconciled for: claude');
+  }, 180_000);
+});
 
 describe('resolveExpectedOutputPaths (full-topology expected set)', () => {
   const agent = (id: string, targets: AgentRecord['targets']): AgentRecord => ({

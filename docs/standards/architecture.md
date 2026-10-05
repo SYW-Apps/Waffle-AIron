@@ -389,11 +389,12 @@ every implementation language:
 |---|---|
 | `string`, `int`, `float`, `bool`, `bytes` | the scalar primitives (`int` and `float` are distinct; width is an L4 concern) |
 | `date`, `datetime`, `duration` | a calendar day, an instant, an elapsed time |
-| `void`, `any` | no value (a whole returns only), and an unconstrained value |
+| `void`, `any` | no value (a whole returns only; `()` is another spelling), and an unconstrained value |
 | `list<T>`, `set<T>`, `map<K, V>` | ordered, unique, keyed; a map key is `string`, `int` or an enum |
 | `T?` | T, or no value |
 | `A \| B` | exactly one of the named types (a primitive or collection never joins a union) |
 | `async T` | completes later with T — at the top of a returns only (`async void`) |
+| `result<T, E>` | completes with T or fails with E — a whole returns only, or under its `async`; T may be `void` |
 | `Invoice`, `billing::invoice`, `Page<T>` | a named type: an entity, value-object, enum or signature type |
 
 "No value" (`T?`) belongs to a type; "may be left out" belongs to a position
@@ -418,13 +419,22 @@ draws it compactly with no edge to it, OpenAPI renders it as its primitive's
 schema under its name, and type-shape conformance compares it with the code's
 alias through the language's dialect (`TYPE_HOLDS_MISMATCH`).
 
+`result<T, E>` is the success-or-failure type the mainstream languages with
+typed failures share (Rust's and Swift's `Result`, Kotlin's `Result`, F#'s
+`Result`). In a language without typed failures it is written as its success
+type: in TypeScript the function returns T and throws E, so code conformance
+compares the annotation with T and never with E.
+
 TypeScript spellings (`string[]`, `boolean`, `T | null`, `Promise<T>`,
-`Record<K, V>`) are accepted as input and stored in the canonical spelling; the
-write answers with each respelling. `number` is not accepted ("int or
-float?"). Inline object shapes, inline function types, string-literal unions,
-intersections, utility types and unions mixing in a primitive are not in the
-grammar: each has a named replacement (a value-object, a signature type, an
-enum). How each form is written in a given language is in
+`Record<K, V>`) and Rust's `Result<T, E>` and `()` are accepted as input and
+stored in the canonical spelling; the write answers with each respelling.
+`number` is not accepted ("int or float?"). Inline object shapes, inline
+function types, string-literal unions, intersections, utility types and unions
+mixing in a primitive are not in the grammar: each has a named replacement (a
+value-object, a signature type, an enum). The writer refuses each of them; a
+tree that already holds one still loads and stays lockable, with a warning per
+position, and `wairon doctor --fix` rewrites every alias and proposes an `int`
+or an enum where it can. How each form is written in a given language is in
 [Language bindings](language-bindings.md#type-mapping).
 
 ---
@@ -610,6 +620,34 @@ an Orchestrator. **When you are tempted to nest a pattern inside a
 component, promote it to a subsystem (L1)** — composition of *patterns* is an L1
 concern. A **Saga** is therefore an L1-level arrangement (an Orchestrator + an
 Observer + a sibling Repository for its persisted progress), not an L2 pattern.
+
+### Crossing a subsystem boundary: published surfaces and their consumers
+A component in another subsystem may depend only on what that subsystem
+**publishes** in its `publicInterfaces` (`CROSS_SUBSYSTEM_PRIVATE_ACCESS`
+otherwise), and the hop enters through a Portal (`CROSS_SUBSYSTEM_TARGET_NON_PORTAL`).
+An entry may narrow who may use it with **`consumers`**: a list of subsystem ids.
+Without it, any subsystem may depend on the entry; with it, only those listed
+may — a dependency from any other subsystem is `CROSS_SUBSYSTEM_UNLISTED_CONSUMER`
+(an error). When several entries publish the same component, each naming
+consumers, the union of their lists is the whole set.
+
+### Listeners mount Portals
+A Portal's routes are its methods' endpoint bindings; the **listener** that
+hands the Portal its requests declares that with **`mounts`** on its own L2
+spec — each mount names the `portal`, the path `prefixes` it routes there, and
+optionally `via`, the router entry the Portal's file exports for it. An HTTP
+Portal that no listener mounts, and that declares no `mounts` itself (which
+marks it as a listener, even with `mounts: []`), is `UNMOUNTED_PORTAL`: nothing
+would ever reach it. A prefix matches whole path segments (`/web` covers
+`/web/admin`, not `/webhooks`). Only HTTP endpoints are judged.
+
+### Forwarding a contract: `signatureFrom`
+A method that takes its params and returns from somewhere else names the source
+in **`signatureFrom`** instead of restating them: a signature type
+(`billing.change_listener`, or `alias::name` across projects), or a contract
+method `component.method` that its component reaches along a `dependsOn` or
+`owns` edge — the shape of a facade or a forwarding Portal. The loader resolves
+the source on every read, so the forwarding method can never drift from it.
 
 ---
 

@@ -156,3 +156,81 @@ describe('cli_runner.runInit: no agent file, and the L0 core bootstraps (real CL
     expect.soft(notes).toContain('materializeAgentFiles');
   }, 180_000);
 });
+
+// ---------------------------------------------------------------------------
+// `wairon init` without --yes on a stdin that is not a terminal (CI, a pipe):
+// it used to die inside inquirer with an ERR_USE_AFTER_CLOSE stack trace. It
+// must refuse plainly, name --yes, and write nothing.
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runInit: a non-interactive shell without --yes (real CLI)', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  it('refuses with a clear message naming --yes, no stack trace, and writes nothing', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-notty-'));
+
+    const outcome = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init'], {
+      cwd: rootDir, timeout: 180_000,
+    }).then(
+      (r) => ({ code: 0, out: r.stdout + r.stderr }),
+      (e: { code?: number; stdout?: string; stderr?: string }) => ({ code: e.code ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` }),
+    );
+
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.out).toContain('Non-interactive shell');
+    expect(outcome.out).toContain('--yes');
+    expect(outcome.out).not.toContain('ERR_USE_AFTER_CLOSE');
+    expect(outcome.out).not.toMatch(/\n\s+at /);
+    expect(fs.existsSync(path.join(rootDir, '.wai'))).toBe(false);
+  }, 180_000);
+});
+// ---------------------------------------------------------------------------
+// Antigravity (agy) reads MCP servers only from its machine-wide
+// mcp_config.json, which init never writes. init used to register the Gemini
+// CLI's project file for an agy target and then warn that agy ignores it; it
+// now registers only what a selected tool reads, and doctor reports a machine
+// without Antigravity as nothing to register.
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runInit: registers only what a selected tool reads (real CLI)', () => {
+  let base: string;
+
+  afterEach(() => {
+    try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  it('an agy target writes no project .gemini/settings.json and says how to register it; doctor calls a missing Antigravity nothing to fix', async () => {
+    base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-agy-'));
+    const rootDir = path.join(base, 'proj');
+    const home = path.join(base, 'home');
+    fs.mkdirSync(rootDir, { recursive: true });
+    fs.mkdirSync(home, { recursive: true });
+    const env = {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+      APPDATA: path.join(home, 'AppData', 'Roaming'),
+      LOCALAPPDATA: path.join(home, 'AppData', 'Local'),
+      WAIRON_CACHE_DIR: path.join(base, 'cache'),
+    };
+    delete (env as Record<string, string | undefined>).GEMINI_CONFIG_DIR;
+
+    const init = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], { cwd: rootDir, env, timeout: 180_000 });
+    expect(fs.existsSync(path.join(rootDir, '.mcp.json'))).toBe(true);
+    // The committed registration is portable: nothing of this machine's paths in it.
+    expect(JSON.parse(fs.readFileSync(path.join(rootDir, '.mcp.json'), 'utf8')).mcpServers.wairon)
+      .toEqual({ command: 'wairon', args: ['mcp', 'serve'] });
+    expect(fs.existsSync(path.join(rootDir, '.gemini', 'settings.json'))).toBe(false);
+    expect(init.stdout).toContain('wairon mcp install --backend gemini --global');
+    expect(`${init.stdout}${init.stderr}`).not.toContain('not this project file');
+
+    const doctor = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'doctor'], { cwd: rootDir, env, timeout: 180_000 })
+      .catch((e: { stdout: string; stderr: string }) => e);
+    expect(doctor.stdout).toContain('Antigravity: not installed on this machine');
+    expect(doctor.stdout).not.toContain('Antigravity (global mcp_config.json): not registered');
+  }, 360_000);
+});

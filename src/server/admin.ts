@@ -26,6 +26,7 @@ import {
   existingProjectRoot,
   listFamilyRecords,
   projectRepositoryScope,
+  assertMintableNarrowingEntry,
 } from './projects.js';
 import * as hostCore from './adapters/core.js';
 import * as hostGit from './adapters/git.js';
@@ -204,12 +205,16 @@ export function mintKey(cfg: HostConfig, credential: string | null, project: str
       'instance-wide super-admin (*:*) keys cannot be minted — the built-in admin account (WAIRON_ADMIN_USER) is the only super-admin',
     );
   }
+  // A key narrowed to a project no hosted record holds is refused before anything
+  // is generated: minting it would hand out a credential for nothing, and the
+  // project created later under that id would inherit it silently.
+  const narrowed = assertMintableNarrowingEntry(cfg.dataDir, project);
   const token = 'wk_' + crypto.randomBytes(24).toString('hex');
   const record: ApiKeyRecord = {
     id: crypto.randomBytes(6).toString('hex'),
     keyHash: hashToken(token),
     role,
-    projects: project === '*' ? ['*'] : [project],
+    projects: [narrowed],
     createdAt: new Date().toISOString(),
   };
   createCredential(cfg.dataDir, record);
@@ -394,7 +399,7 @@ function refuseUnapprovedMembers(required: boolean, members: ProjectApproval[]):
   const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
   if (!required || unapproved.length === 0) return;
   const named = unapproved.map((m) => `${m.alias ?? m.key} (${m.state}${
-    m.upgraded ? ' — approved under the pre-stage-5 identity, re-lock it once' : ''})`);
+    m.upgraded ? ' — approved under an earlier gate identity, re-lock it once' : ''})`);
   throw new LockRefusedError(
     `composition.requireApprovedMembers: direct member(s) not approved — ${named.join(', ')}. `
       + 'Lock each at its own root first; a parent never approves below itself. Nothing was written.',

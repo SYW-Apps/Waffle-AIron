@@ -335,7 +335,7 @@ function settle(owner: string, level: 'subsystem' | 'project', candidates: Candi
     });
   }
   // Two public names bound to different targets that share one nameKey
-  // (`waffler-error`, `waffler_error`) are a duplicate too: a consumer's bare
+  // (`shared-error`, `shared_error`) are a duplicate too: a consumer's bare
   // `use` import compares by that key and could not tell them apart.
   const byKey = new Map<string, ResolvedExport[]>();
   for (const e of entries) byKey.set(nameKey(e.publicName), [...(byKey.get(nameKey(e.publicName)) ?? []), e]);
@@ -513,6 +513,22 @@ function classifySource(world: ExportWorld, sourceId: string | 'own' | undefined
   };
 }
 
+/**
+ * Step 10 for an entry with no source at all whose public name another entry
+ * of the table also declares: what it most likely is — a stray copy of that
+ * entry — said with both entry numbers, so the remedy is in the finding. Null
+ * when the entry names a source, or no other entry shares its name.
+ */
+function duplicateDetail(entries: SystemPublicInterface[], index: number): string | null {
+  const e = entries[index];
+  if (e.from !== undefined || e.component !== undefined || e.interface !== undefined || e.typeDef !== undefined) return null;
+  const name = e.as ?? e.id;
+  if (name === undefined) return null;
+  const other = entries.findIndex((x, i) => i !== index && (x.as ?? x.id) === name);
+  if (other === -1) return null;
+  return `has a duplicate entry "${name}": entry #${index + 1} names no source and no item, while entry #${other + 1} declares the same id — delete the copy (entry #${index + 1}), or give it a source and an item under an id of its own`;
+}
+
 /** Bind an own project-level type: the crate-root `pub struct`. */
 function bindOwnType(world: ExportWorld, owner: string, e: SystemPublicInterface, problems: ExportProblem[]): ResolvedExport | undefined {
   const type = (world.types.get(e.typeDef!) ?? []).find((t) => !t.subsystem);
@@ -623,7 +639,8 @@ export function resolveProjectTable(
   const problems: ExportProblem[] = [];
   const candidates: Candidate[] = [];
   // Steps 4-11: each entry, followed by its source's kind.
-  (system.publicInterfaces ?? []).forEach((e, index) => {
+  const entries = system.publicInterfaces ?? [];
+  entries.forEach((e, index) => {
     const label = e.as ?? e.id ?? e.interface ?? e.component ?? e.typeDef ?? `#${index + 1}`;
     const source = classifySource(world, sourceOf(world, e), label, sources);
     switch (source.kind) {
@@ -649,7 +666,7 @@ export function resolveProjectTable(
         return;
       }
       default:
-        problems.push({ kind: 'invalid', owner, publicName: label, detail: source.detail });
+        problems.push({ kind: 'invalid', owner, publicName: label, detail: duplicateDetail(entries, index) ?? source.detail });
     }
   });
   // Steps 12-13: settled as a subsystem table is settled.

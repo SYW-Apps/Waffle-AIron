@@ -183,7 +183,7 @@ methods:
             step: 7
           - value: stale
             step: 8
-        defaultStep: 12
+        defaultStep: 14
       - stepNumber: 7
         label: verdict-locked
         description: >-
@@ -194,8 +194,8 @@ methods:
       - stepNumber: 8
         label: upgrade-only
         description: >-
-          Is the staleness only the stage-5 identity upgrade (LockStatus.upgraded: the record's
-          algorithm is an earlier gate marker)?
+          Is the staleness only the gate-identity upgrade of wairon 6.0.0 (LockStatus.upgraded: the
+          record's algorithm is an earlier gate marker)?
         type: branch
         condition: the lock status is upgraded
         onTrueStep: 9
@@ -212,20 +212,39 @@ methods:
         label: verdict-upgraded
         description: >-
           Refuse (the old identity cannot be recomputed, so nothing proves the design unchanged),
-          saying it plainly: "the approval on record was taken under an earlier gate identity — the
-          gate identity gained inputs in stage 5 (each direct member's composition subject,
-          `composition`) and code conformance moved beside the claim", whether any own spec file
-          changed since, and the remedy: re-lock once and commit .wai/lock.json.
+          saying it plainly: "the approval on record was taken under an earlier gate identity —
+          since wairon 6.0.0 the gate identity also covers each direct member's composition subject
+          and `composition`, and code conformance is recorded beside the claim", whether any own
+          spec file changed since, and the remedy: re-lock once and commit .wai/lock.json.
         type: return
         outcome: stale (identity upgraded)
       - stepNumber: 11
+        label: stale-own-diff
+        description: >-
+          Compare the own spec files with the approval's per-spec digests, so the verdict can say
+          how many own spec files moved since the approval
+        type: call
+        targetComponent: approval_portal
+        targetMethod: diffAgainstApproval
+      - stepNumber: 12
+        label: stale-members
+        description: >-
+          Read each DIRECT member's approval state and pin (depth 1), so the verdict names WHICH
+          member's approval moved since this one was taken, or is no longer approved at its own root
+        type: call
+        targetComponent: validator_portal
+        targetMethod: familyApprovals
+      - stepNumber: 13
         label: verdict-stale
         description: >-
           The design, or something it was approved under, moved past the approval: refuse at every
-          strictness, naming the remedy — re-run the lock and commit the updated record.
+          strictness, naming what moved — the count of own spec files changed, each direct member
+          whose pin moved or that is no longer approved, and, when neither moved, that the doctrine,
+          the declared inputs or `composition` did — and the remedy: re-run the lock and commit the
+          updated record.
         type: return
         outcome: stale
-      - stepNumber: 12
+      - stepNumber: 14
         label: verdict-unlocked
         description: >-
           Never approved: the opt-in seam. Pass with a notice by default so an upgrading project
@@ -234,4 +253,4 @@ methods:
         outcome: unlocked
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-02T20:51:15.745Z'
+updatedAt: '2026-10-05T17:31:11.742Z'

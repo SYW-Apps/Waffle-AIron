@@ -6,6 +6,10 @@ warnings left are exactly the code that does not exist yet (listed under "Valida
 no migration run, not locked. Context: [direction.md](direction.md), stage 2; it builds on
 [stage-1-signatures.md](stage-1-signatures.md) (derived signature text, signature types).
 
+**Revised 2026-10-05 (release readiness), decided by the maintainer** — see "M4–M6" in section 6:
+the grammar gains `result<T, E>` and `()` as void; every type-expression code is a warning on load
+(still refused at write); and the doctor proposes an enum for a string-literal union.
+
 ## What this stage does
 
 1. Every **type position** gets one small, language-neutral grammar: a param's `type`, a method's
@@ -142,10 +146,14 @@ type-position = [ "async" ] type ;            (* "async" only at the top of a re
 type          = member { "|" member } ;
 member        = primary [ "?" ] ;
 primary       = name [ "<" type { "," type } ">" ]
-              | "(" type ")" ;
+              | "(" type ")"
+              | "(" ")" ;                       (* the unit type: another spelling of void *)
 name          = ident { ( "::" | "." ) ident } ;
 ident         = letter { letter | digit | "_" | "-" } ;
 ```
+
+`result<T, E>` is written with the generic syntax (`name "<" type "," type ">"`): it is a generic
+form of the grammar, like `list<T>` and `map<K, V>`, not a user generic.
 
 Whitespace is free. A position is read as a whole: anything left over after the grammar finishes is
 `TYPE_EXPRESSION_INVALID`, so no trailing prose, comments or asides are allowed. The 0 occurrences
@@ -163,6 +171,7 @@ above say nothing relies on them, and a description field already exists for pro
 | `T?` | T, or no value | `?` after the member; a union with none becomes `(A \| B)?` |
 | `A \| B` | exactly one of the named types (rules below) | members in written order |
 | `async T` | the call completes later with T; returns only | `async T`, `async void` |
+| `result<T, E>` | the call completes with T or fails with E; a whole returns, or under its `async` | `result<T, E>`, `async result<void, E>` |
 | A user generic `Page<T>` | a named type applied to arguments | as today. Declaring type parameters stays in the type's name, which is unchanged |
 
 **Primitives:** `string`, `int`, `float`, `bool`, `bytes`, `date`, `datetime`, `duration`, `void`,
@@ -189,6 +198,9 @@ its own meaning. Neither appears in this tree.
 - `async` only at the top of a returns: a method's, a type method's or a signature type's. The tree
   has 0 promises in fields or params, and a stored pending computation is a runtime construct, not
   a design one.
+- `result<T, E>` only as a whole returns or directly under its `async`, never optional; its T may
+  be `void` (`result<void, E>`, Rust's `Result<(), E>`), its E may not. A success-or-failure is
+  what a call answers, not a value a field or a param holds.
 - A map key must be `string`, `int` or an enum. Every key in the tree is `string`. Scalar keys are
   what JSON, OpenAPI and the ERD can carry. Hashing a structured key is a per-language mechanism.
 - `T??` is refused. `any?` normalises to `any`, because `any` already admits no value.
@@ -273,12 +285,13 @@ The alias table is the one place that knows TypeScript's spellings. On input it 
 | `Date`, `timestamp` | `datetime` |
 | `object`, `unknown`, `json`, `Json` | `any` |
 | `str`; `vec`, `vector`, `List`; `dict`, `dictionary`, `HashMap` | `string`; `list`; `map` |
+| `Result<T, E>`, `()` | `result<T, E>`, `void` (M4: Rust's spellings of a form the grammar has) |
 | `number` | not an alias (M2): refused at write ("int or float?"), reported on load, read as `float` until fixed |
 
 Two kinds of name are not aliases:
 
 - **Names with no neutral meaning** that today's builtin vocabulary accepts: `uuid`, `decimal`,
-  `char`, `byte`, `time`, `tuple`, `result`, `error`, `never`, `box`, `arc`, `rc`, `ref`, `cell`,
+  `char`, `byte`, `time`, `tuple`, `error`, `never`, `box`, `arc`, `rc`, `ref`, `cell`,
   `refcell`, `mutex`, `rwlock`, `std`, `mcpserver`. These are `TYPE_NOT_NEUTRAL`: refused at write,
   a warning on load, and the message names the replacement. A tree that validated yesterday still
   loads.
@@ -534,8 +547,8 @@ first.
 
 | Code | Severity | Rule | Raised when |
 |---|---|---|---|
-| `TYPE_EXPRESSION_INVALID` | error; refused at write | integrity `type-expressions` | A structured position does not parse under the grammar |
-| `TYPE_POSITION_INVALID` | error; refused at write | integrity `type-expressions` | `async` outside a returns, misplaced `void`, a map key that is not `string`, `int` or an enum, or `T??` |
+| `TYPE_EXPRESSION_INVALID` | warning on load (M5; was an error); refused at write | integrity `type-expressions` | A structured position does not parse under the grammar |
+| `TYPE_POSITION_INVALID` | warning on load (M5; was an error); refused at write | integrity `type-expressions` | `async` or `result` outside a returns, misplaced `void`, a map key that is not `string`, `int` or an enum, or `T??` |
 | `TYPE_FORM_UNSUPPORTED` | warning on load; refused at write | integrity `type-expressions` | An inline object, inline function type, string-literal union, union mixing in a primitive or collection (M3), intersection, utility type or tuple. The message names the replacement |
 | `TYPE_NOT_NEUTRAL` | warning on load; refused at write | integrity `type-expressions` | `number` ("int or float?", M2), or a legacy builtin with no neutral meaning (`uuid`, `decimal`, `tuple`, `box`, ...). The message names the replacement |
 | `TYPE_SPELLING_STALE` | warning; any save or `doctor --fix` repairs | integrity `type-expressions` | A stored position is an alias of its canonical spelling (M1) |
@@ -554,8 +567,13 @@ Registration order in `rule_registry.registerBuiltinRules`:
 
 Where the loader meets a form it cannot normalise, it is a warning, not an error, so that a tree
 that validated yesterday still passes its gate the day this ships. Consumers treat an unreadable
-or unsupported position as opaque `any`, which never invents a shape. The two errors cover only what
-no real tree holds: 0 structured positions in wairon's tree fail to parse or break a position rule.
+or unsupported position as opaque `any`, which never invents a shape. The design first kept two
+errors for what "no real tree holds" — a text that does not parse, a broken position rule — on the
+evidence of wairon's own tree (0 such positions). An upgraded real-world tree held 1,720 of them
+(`Result<(), E>` returns, which did not parse because `()` was no type), and an error on load kept
+it from locking at all. So (M5) every type-expression code is a warning on load: the tree stays
+lockable with its debt visible, the writer still refuses each of them, and consumers read the
+position as opaque `any` as before.
 
 Two existing rules change meaning without changing codes:
 
@@ -575,7 +593,14 @@ Two existing rules change meaning without changing codes:
   derived signature texts follow from the canonical types.
 - **Proposals, never applied.** A `number` position whose name plainly says an integer gets `int`
   proposed in the report. An author confirms by writing it (an `sdd_update_spec` delta, or by
-  hand). A `number` with no such name gets no proposal.
+  hand). A `number` with no such name gets no proposal. A string-literal union (`'a' | 'b'`, with
+  or without a none) gets an **enum** proposed (M6, `type_expression_problem.enumProposal`): the
+  enum id from the position's name in kebab-case and the values in written order. An author
+  confirms by defining the enum and writing its id; until then it stays `TYPE_FORM_UNSUPPORTED`.
+- **Families.** At a family's top, `doctor --fix` cascades the per-project repairs (Specialists,
+  step fields, signatures, type spellings, pack selections) into every member inside the root,
+  after the chaining migration, and names a member outside the root with the command to run there;
+  the plain report counts every member's findings and lists each member with repairs pending.
 - **Author needed.** Every position no rewrite can settle is listed with its replacement. Re-saving
   a spec that holds one leaves that position as written.
 - **Report.** Plain `doctor` prints the plan: each spec it would rewrite, then the proposals, then
@@ -597,6 +622,20 @@ Two existing rules change meaning without changing codes:
   a count, size, port, step and the like; an author confirms.
 - **M3: unions of named types only.** `?` is the only way a non-named member joins; a union mixing
   in a primitive or a collection is `TYPE_FORM_UNSUPPORTED`.
+
+### Decided by the maintainer (2026-10-05, release readiness)
+
+- **M4: `result<T, E>` joins the grammar**, and `()` reads as `void`. Success-or-failure is a
+  mainstream concept (Rust's and Swift's `Result`, Kotlin's `Result`, F#'s `Result`); Rust's
+  `Result<T, E>` is an alias, so `doctor --fix` respells `Result<(), E>` to `result<void, E>`
+  mechanically. `result` is no longer a legacy name with no neutral meaning. The TypeScript
+  dialect writes `result<T, E>` as T, with E as the error the function throws; TypeScript has no
+  typed failure, so conformance compares a code annotation with T and never with E — an annotation
+  of T agrees with `result<T, E>`, and nothing about E can produce a finding on TypeScript code. The
+  OpenAPI codec documents the success body (the failure is the operation's error response), the ERD
+  reads a result as its success type, and `result<void, E>` answers nothing like `void`.
+- **M5: every type-expression code is a warning on load**, still refused at write (above).
+- **M6: doctor proposes an enum for a string-literal union**, never applied (above).
 
 ### Decided in the design (each with its reason above)
 

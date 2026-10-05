@@ -1031,6 +1031,23 @@ function verifyIntegrity(
  * `<name>/` carries no version and is skipped: there is nothing unambiguous to
  * compare it against.
  */
+/**
+ * Whether a bundle is the committed copy of a legacy single-file store pack: the
+ * bundle directory holds that file's bytes as its entry file and nothing else.
+ * The two digests differ only by the entry's name, which is not a difference in
+ * content.
+ */
+function bundlesSingleFile(bundleDir: string, storePath: string): boolean {
+  try {
+    if (!fs.statSync(storePath).isFile()) return false;
+    const entry = packDirEntry(bundleDir);
+    if (!entry || fs.readdirSync(bundleDir).length !== 1) return false;
+    return fs.readFileSync(entry).equals(fs.readFileSync(storePath));
+  } catch {
+    return false;
+  }
+}
+
 function detectBundleStoreDrift(
   selection: PackSelection,
   bundleDir: string,
@@ -1042,6 +1059,7 @@ function detectBundleStoreDrift(
   const bundleDigest = computePackDigest(bundleDir);
   const storeDigest = computePackDigest(installed.path);
   if (bundleDigest === storeDigest) return undefined;
+  if (bundlesSingleFile(bundleDir, installed.path)) return undefined;
 
   return {
     code: 'PACK_STORE_DRIFT',

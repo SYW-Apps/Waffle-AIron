@@ -206,7 +206,7 @@ function normalizePart(part: string): string {
 /**
  * reference_resolution.nameKey — the one key a bare name is compared by,
  * locally and through imports alike: lower-cased, every character outside
- * [a-z0-9] removed, so `WafflerError`, `waffler-error` and `waffler_error` are
+ * [a-z0-9] removed, so `SharedError`, `shared-error` and `shared_error` are
  * one name. It is normalizePart, the per-segment normalization
  * type_spec.matchesRef already applies.
  */

@@ -28,9 +28,14 @@ methods:
     detail: intent
     intent: >-
       Serializes the given document in the spec storage format and writes it to the given path,
-      creating parent directories as needed; filesystem failures propagate to the caller. The path
-      is the caller's — the registry resolves a spec's home, a part's folder included (stage 8), and
-      never hands it a path inside the git fetch cache, which is read-only.
+      creating parent directories as needed; filesystem failures propagate to the caller. The file
+      keeps its line endings: a document already on disk is rewritten with the ones it holds (CRLF
+      stays CRLF), and a new one takes the project's convention — an `eol` the nearest
+      .gitattributes sets for it, else the endings most files beside it (or in the folders above it,
+      up to the project) already use, else LF — so a re-save, a doctor repair or a migration never
+      turns a file into a whole-file diff. The shared file helper every .wai writer goes through
+      does the same. The path is the caller's — the registry resolves a spec's home, a part's folder
+      included, and never hands it a path inside the git fetch cache, which is read-only.
     symbol: writeSpecFile
   - name: listTree
     sourcePath: src/core/spec-files.ts
@@ -100,4 +105,4 @@ methods:
     symbol: removeSpecFile
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-10-02T20:51:40.052Z'
+updatedAt: '2026-10-05T06:49:47.366Z'

@@ -13,6 +13,7 @@ import {
   specPathsInScope,
   loadSystemSpec,
   readLockState,
+  readLockRecord,
   loadProjectConfig,
   type LockRecord,
   type MemberPin,
@@ -121,7 +122,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   const lock = readLockState(computeGateStateId());
   const record = lock.record;
 
-  // A stale verdict that is only the stage-5 identity upgrade still refuses —
+  // A stale verdict that is only the v6 gate-identity upgrade still refuses —
   // the old identity cannot be recomputed, so nothing proves the design
   // unchanged — but it says so plainly, with whether any own spec file moved.
   // (LockStatus.upgraded: stale, and the record's algorithm is not the current one.)
@@ -139,9 +140,9 @@ export function checkApproval(strict: boolean): ApprovalCheck {
       return {
         state: 'stale',
         approved: false,
-        message: 'The design, or something it was approved under (doctrine, declared inputs, `composition`, '
-          + 'a direct member\'s approval), changed after it was approved '
+        message: 'The design, or something it was approved under, changed after it was approved '
           + `(the approval on record is ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}). `
+          + `${whatMoved(record!)} `
           + 'Nothing says a human has seen what is about to merge. '
           + 'Fix: run `wairon lock` on this branch and commit the updated .wai/lock.json.',
       };
@@ -159,7 +160,38 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   }
 }
 
-/** The stage-5 upgrade verdict: stale, said plainly, with the one remedy. */
+/**
+ * What moved past a stale approval, named: how many own spec files changed, and
+ * each direct project member whose approval moved since this one was taken (its
+ * pin), that is no longer approved at its own root, or that was added or removed.
+ * When none of those moved, what did is an input the gate identity covers beside
+ * the specs — the doctrine, the declared inputs or `composition`.
+ */
+function whatMoved(record: LockRecord): string {
+  const diff = diffAgainstApproval();
+  const own = diff ? diffSize(diff) : null;
+  const members = familyApprovals(1).filter((a) => a.parent === '' && a.as !== 'part');
+  const named: string[] = [];
+  for (const m of members) {
+    const name = m.alias ?? m.key;
+    if (m.pinned === 'unpinned') named.push(`${name} (added since the approval)`);
+    else if (m.pinned === 'moved') named.push(`${name} (its approval moved since this one was taken${m.state === 'approved' ? '' : `; now ${m.state}`})`);
+    else if (m.state !== 'approved') named.push(`${name} (${m.state} at its own root)`);
+  }
+  const current = new Set(members.map((m) => m.alias ?? m.key));
+  for (const alias of Object.keys(record.members ?? {})) {
+    if (!current.has(alias)) named.push(`${alias} (removed since the approval)`);
+  }
+  const parts: string[] = [];
+  if (own !== null && own > 0) parts.push(`${own} own spec file(s) changed since the approval`);
+  if (named.length > 0) parts.push(`direct member(s): ${named.join(', ')}`);
+  if (parts.length > 0) return `What moved: ${parts.join('; ')}.`;
+  return own === null
+    ? 'This approval predates per-spec digests, so which spec moved cannot be said.'
+    : "No own spec file and no direct member's approval moved, so what changed is the doctrine, a declared input or `composition`.";
+}
+
+/** The gate-identity upgrade verdict: stale, said plainly, with the one remedy. */
 function upgradedCheck(record: LockRecord): ApprovalCheck {
   const diff = diffAgainstApproval();
   const specs = !diff
@@ -171,8 +203,8 @@ function upgradedCheck(record: LockRecord): ApprovalCheck {
     state: 'stale',
     approved: false,
     message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}) was taken under an `
-      + 'earlier gate identity — the gate identity gained inputs in stage 5: members\' composition subjects, '
-      + '`composition`; code conformance moved beside the claim. '
+      + `earlier gate identity (written by wairon ${record.validatorVersion}). Since wairon 6.0.0 the gate identity `
+      + 'also covers members\' composition subjects and `composition`, and code conformance is recorded beside the claim. '
       + `${specs} Fix: re-lock once (\`wairon lock\`) and commit the updated .wai/lock.json.`,
   };
 }
@@ -190,7 +222,7 @@ class LockRefusedError extends WaironError {
 
 /** A direct member that is not approved at its own root, named with its state. */
 function describeMemberState(entry: ProjectApproval): string {
-  return `${entry.alias ?? entry.key} (${entry.state}${entry.upgraded ? ' — approved under the pre-stage-5 identity, re-lock it once' : ''})`;
+  return `${entry.alias ?? entry.key} (${entry.state}${entry.upgraded ? ' — approved under an earlier gate identity, re-lock it once' : ''})`;
 }
 
 /** The code line a lock prints beside its claim. */
@@ -209,9 +241,20 @@ function summarize(gate: ValidationResult, members: ProjectApproval[]): void {
   // existed — both say so rather than inventing a diff.
   const diff = diffAgainstApproval();
   if (!diff) {
-    logger.info('First approval of this tree — the whole spec tree becomes the approved baseline.');
+    // No per-spec digests to compare with: either there is no record at all
+    // (a true first approval), or the record predates per-spec digests (an
+    // upgrade). Only the first is a "first approval" — saying so over an
+    // existing record would tell the human nothing was approved before.
+    const previous = readLockRecord();
+    if (previous) {
+      logger.info(`Replacing the approval on record (${previous.lockedAt} by ${describeApprover(previous.lockedBy)}, `
+        + `wairon ${previous.validatorVersion ?? 'unknown'}). It records no per-spec digests, so the whole spec tree `
+        + 'becomes the approved baseline.');
+    } else {
+      logger.info('First approval of this tree — the whole spec tree becomes the approved baseline.');
+    }
   } else if (diffSize(diff) === 0) {
-    logger.info('Nothing has changed since the last approval — this will re-validate and regenerate the agent topology.');
+    logger.info('Nothing has changed since the last approval — this re-records the approval and refreshes the generated outputs of this project (guides, skills, and agent files when materialized).');
   } else {
     logger.info(`${diffSize(diff)} spec(s) changed since the last approval:`);
     for (const p of diff.changed) logger.info(`  ~ ${p}`);
@@ -221,7 +264,7 @@ function summarize(gate: ValidationResult, members: ProjectApproval[]): void {
   logger.info(codeLine(gate.analysis));
   // A member's own edits never show up in this project's spec diff: what this
   // project reviews is the member's APPROVAL — its state, and whether its pin moved.
-  // A part's specs ARE in the diff above (stage 8); a part stored elsewhere is
+  // A part's specs ARE in the diff above; a part stored elsewhere is
   // named with the commit being approved.
   for (const m of members) {
     if (m.as === 'part') {
@@ -229,7 +272,7 @@ function summarize(gate: ValidationResult, members: ProjectApproval[]): void {
       continue;
     }
     const pin = m.pinned === 'moved' ? ' — its pin moved since the last approval' : '';
-    logger.info(`  member ${m.alias ?? m.key}: ${m.state}${m.upgraded ? ' (pre-stage-5 lock, re-lock once)' : ''}${pin}`);
+    logger.info(`  member ${m.alias ?? m.key}: ${m.state}${m.upgraded ? ' (approved under an earlier gate identity, re-lock once)' : ''}${pin}`);
   }
 }
 
@@ -253,7 +296,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
 
   // Steps 4-6: the configuration, and a parent that requires approved members.
   const config = loadProjectConfig();
-  // A PROJECT member only: a part has no approval of its own — this lock is its approval (stage 8).
+  // A PROJECT member only: a part has no approval of its own — this lock is its approval.
   const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
   if (config?.composition?.requireApprovedMembers && unapproved.length > 0) {
     throw new LockRefusedError(
@@ -262,7 +305,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     );
   }
   logger.blank();
-  logger.warn('This records the current design as approved and (re)generates the agent topology.');
+  logger.warn('This records the current design as approved in .wai/lock.json (no spec file is rewritten) and refreshes the generated outputs of this project.');
 
   // --- Confirm (the "are you sure?" gate) ---
   if (!options.yes) {
@@ -274,7 +317,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
       {
         type: 'confirm',
         name: 'confirmed',
-        message: 'Approve this design and generate the agent topology?',
+        message: 'Approve this design?',
         default: false,
       },
     ]);
@@ -286,7 +329,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   // for a decision that changed no design — so that later validate runs would
   // stop relaxing completeness findings. The lock record carries that fact now,
   // per spec, so an edit after approval returns that spec to draft context on
-  // its own instead of staying frozen complete.
+  // its own instead of staying marked complete.
 
   // A scoped approval covers only its subsystem; everything else keeps the
   // approval it already had.
@@ -303,7 +346,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   // The GATE identity from the validator portal, not the content one: the
   // record certifies "this design passed THIS gate under THESE inputs", so the
   // governing doctrine, the inputs, `composition` and the members' subjects
-  // are part of what is frozen.
+  // are part of what is recorded.
   //
   // `specs` is the approval itself: one digest per spec file, so `wairon status`
   // can name what moved instead of printing a banner, and validate can tell
@@ -331,7 +374,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   const design = designOnly(gate);
   const count = (severity: string): number => design.issues.filter((i) => i.severity === severity).length;
   const record: LockRecord = {
-    // The record format: 2 from stage 5 on (members, code, no children).
+    // The record format: 2 since wairon 6.0.0 (members, code, no children).
     format: 2,
     stateId: captured,
     lockedAt: new Date().toISOString(),

@@ -14,25 +14,172 @@ export function ensureDir(dirPath: string): void {
 }
 
 /**
- * Write a file, ensuring the parent directory exists first.
+ * Write a file, ensuring the parent directory exists first. The text keeps the
+ * file's line endings (see withLineEndings): CRLF stays CRLF, and a new file
+ * follows the convention around it.
  */
 export function writeFile(filePath: string, content: string): void {
   ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, content, 'utf-8');
+  fs.writeFileSync(filePath, withLineEndings(filePath, content), 'utf-8');
 }
 
 /**
  * Write a file only if the content differs from what is already on disk.
  * Returns true if the file was written (new or changed), false if unchanged.
+ * Compared after the line endings are applied, so a file differing only in
+ * them is not rewritten.
  */
 export function writeFileIfChanged(filePath: string, content: string): boolean {
+  const text = withLineEndings(filePath, content);
   if (fs.existsSync(filePath)) {
     const existing = fs.readFileSync(filePath, 'utf-8');
-    if (existing === content) return false;
+    if (existing === text) return false;
   }
   ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, content, 'utf-8');
+  fs.writeFileSync(filePath, text, 'utf-8');
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Line endings
+//
+// A file wairon rewrites keeps the line endings it has: a spec, project.yaml or
+// lock record checked out with CRLF (git's autocrlf on Windows, or an `eol`
+// attribute) must not come back as LF, or one re-save turns every line into a
+// diff. A NEW file takes the convention around it: the `eol` the nearest
+// .gitattributes sets for its name, else the endings most text files beside it
+// (or in the folders above it, up to the project or repository root) already
+// use, else LF.
+// ---------------------------------------------------------------------------
+
+type LineEnding = '\r\n' | '\n';
+
+/** How many bytes of a file are read to decide its line endings. */
+const EOL_SAMPLE_BYTES = 64 * 1024;
+
+/** The line endings a text uses, by majority; null when it has no line break. */
+function endingsOf(text: string): LineEnding | null {
+  const crlf = text.split('\r\n').length - 1;
+  const lf = text.split('\n').length - 1 - crlf;
+  if (crlf === 0 && lf === 0) return null;
+  return crlf > lf ? '\r\n' : '\n';
+}
+
+/** The first bytes of a file as text, or null when it cannot be read. */
+function sampleOf(file: string): string | null {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buffer = Buffer.alloc(EOL_SAMPLE_BYTES);
+    const read = fs.readSync(fd, buffer, 0, EOL_SAMPLE_BYTES, 0);
+    return buffer.subarray(0, read).toString('utf-8');
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+/** Whether a .gitattributes pattern names a file (by its path relative to the attributes file's folder). */
+function attributeMatches(pattern: string, relative: string): boolean {
+  const glob = pattern.replace(/^\//, '');
+  const target = glob.includes('/') ? relative : path.posix.basename(relative);
+  const source = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*\//g, '\u0000').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]').replace(/\u0000/g, '(?:.*/)?');
+  return new RegExp(`^${source}$`).test(target);
+}
+
+/** The `eol` one .gitattributes file sets for a file: its last matching line's, or null. */
+function attributeEol(attributesFile: string, file: string): LineEnding | null {
+  const text = readFileOrNull(attributesFile);
+  if (text === null) return null;
+  const relative = path.relative(path.dirname(attributesFile), file).split(path.sep).join('/');
+  let eol: LineEnding | null = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line === '' || line.startsWith('#')) continue;
+    const [pattern, ...attrs] = line.split(/\s+/);
+    if (!attributeMatches(pattern, relative)) continue;
+    for (const attr of attrs) {
+      if (attr === 'eol=crlf') eol = '\r\n';
+      else if (attr === 'eol=lf') eol = '\n';
+      else if (attr === '-text' || attr === 'binary') eol = null;
+    }
+  }
+  return eol;
+}
+
+/** The folders a new file's convention is read from: its own, then each above it up to the project or repository root (none past it). */
+function conventionFolders(dir: string): string[] {
+  const folders: string[] = [];
+  let at = path.resolve(dir);
+  for (let depth = 0; depth < 8; depth++) {
+    folders.push(at);
+    if (fs.existsSync(path.join(at, '.git')) || fs.existsSync(path.join(at, '.wai'))) return folders;
+    const parent = path.dirname(at);
+    if (parent === at) break;
+    at = parent;
+  }
+  // No project or repository above it: its own folder is the only convention there is.
+  return folders.slice(0, 1);
+}
+
+/** The line endings most text files in one folder use (same extension first); null when none says. */
+function folderEndings(folder: string, ext: string, exclude: string): LineEnding | null {
+  let names: string[];
+  try {
+    names = fs.readdirSync(folder);
+  } catch {
+    return null;
+  }
+  const candidates = names
+    .filter((n) => path.join(folder, n) !== exclude && /\.(ya?ml|json|md|ts|js|txt)$/i.test(n))
+    .sort((a, b) => Number(path.extname(b) === ext) - Number(path.extname(a) === ext))
+    .slice(0, 24);
+  let crlf = 0;
+  let lf = 0;
+  for (const name of candidates) {
+    const full = path.join(folder, name);
+    try {
+      if (!fs.statSync(full).isFile()) continue;
+    } catch {
+      continue;
+    }
+    const sample = sampleOf(full);
+    const endings = sample === null ? null : endingsOf(sample);
+    if (endings === '\r\n') crlf++;
+    else if (endings === '\n') lf++;
+  }
+  if (crlf === lf) return null;
+  return crlf > lf ? '\r\n' : '\n';
+}
+
+/**
+ * The line endings a file is written with: an existing file's own (by
+ * majority); for a new one the `eol` the nearest .gitattributes sets for it,
+ * else the majority of the text files beside it or in the folders above it up
+ * to the project or repository root, else LF.
+ */
+export function lineEndingFor(filePath: string): LineEnding {
+  const own = sampleOf(filePath);
+  const existing = own === null ? null : endingsOf(own);
+  if (existing) return existing;
+  const folders = conventionFolders(path.dirname(filePath));
+  for (const folder of folders) {
+    const eol = attributeEol(path.join(folder, '.gitattributes'), filePath);
+    if (eol) return eol;
+  }
+  const ext = path.extname(filePath);
+  for (const folder of folders) {
+    const endings = folderEndings(folder, ext, path.resolve(filePath));
+    if (endings) return endings;
+  }
+  return '\n';
+}
+
+/** A text with the line endings its file is written with (lineEndingFor): every break normalised, then converted. */
+export function withLineEndings(filePath: string, content: string): string {
+  const normalised = content.replace(/\r\n/g, '\n');
+  return lineEndingFor(filePath) === '\r\n' ? normalised.replace(/\n/g, '\r\n') : normalised;
 }
 
 /**

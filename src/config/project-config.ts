@@ -3,6 +3,8 @@ import * as path from 'path';
 import * as YAML from 'yaml';
 import { z } from 'zod';
 import { getProjectRoot } from '../utils/fs.js';
+import { DEFAULT_TARGET_DIRS } from './defaults.js';
+import * as gitSource from '../core/adapters/git-source.js';
 import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { readFileOrNull, writeFile } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
@@ -187,8 +189,11 @@ function storeOver(adapter: ProjectConfigFsAdapter, root: string): ProjectConfig
         throw new WaironError(`Refusing to write an invalid .wai/project.yaml at ${root}: ${checked.error.message}`);
       }
       // A part's configuration is its schema version and partOf alone (stage 8).
-      const document = config.partOf !== undefined ? { schemaVersion: config.schemaVersion, partOf: config.partOf } : config;
-      adapter.writeDocument(overlayKnownFields(ProjectConfigSchema, document, currentDocument()));
+      const onDisk = currentDocument();
+      const document = config.partOf !== undefined
+        ? { schemaVersion: config.schemaVersion, partOf: config.partOf }
+        : withoutDefaultedMaterialization(config, onDisk);
+      adapter.writeDocument(overlayKnownFields(ProjectConfigSchema, document, onDisk));
     },
     exists() {
       return adapter.documentExists();
@@ -722,9 +727,106 @@ function asReadable(document: ProjectConfigDocument | null): ProjectConfigDocume
   return { name: '', createdAt: PART_EPOCH, updatedAt: PART_EPOCH, ...document };
 }
 
+/** What marks an agent file wairon generated: the managed banner's marker (exporters/base.ts), or a role-suffixed agent name. */
+const MANAGED_AGENT_MARKER = 'wairon:managed';
+const MANAGED_AGENT_NAME = /-(owner|implementer|architect)\.(md|ya?ml)$/;
+
+/**
+ * Whether committed wairon-managed agent files sit in the project: in any
+ * built-in target's default output directory or a configured target's own,
+ * inside the project root only. Read only for a document that never states
+ * rules.materializeAgentFiles.
+ *
+ * Only a file the project's git index tracks (committed or staged) counts: an
+ * ignored or untracked leftover in a gitignored agents folder is not a
+ * committed agent file, and must not switch materialization on for a project
+ * that runs on live briefs. With no git to ask (no work tree, or git not
+ * installed) every managed file present counts, since treating a non-git
+ * project's agent files as disposable would have the next lock delete them.
+ */
+function holdsMaterializedAgentFiles(document: Record<string, unknown>, root: string): boolean {
+  const dirs = new Set(Object.values(DEFAULT_TARGET_DIRS));
+  for (const target of Array.isArray(document.targets) ? document.targets : []) {
+    const outputDir = isPlainObject(target) ? target.outputDir : undefined;
+    if (typeof outputDir === 'string') dirs.add(outputDir);
+  }
+  const base = path.resolve(root);
+  const inside: string[] = [];
+  for (const dir of dirs) {
+    const rel = path.relative(base, path.resolve(base, dir));
+    if (rel.startsWith('..') || path.isAbsolute(rel)) continue;
+    let present = false;
+    try {
+      present = fs.statSync(path.join(base, rel)).isDirectory();
+    } catch {
+      present = false;
+    }
+    if (present) inside.push(rel === '' ? '.' : rel.split(path.sep).join('/'));
+  }
+  if (inside.length === 0) return false;
+  const tracked = gitSource.trackedFiles(base, inside);
+  const candidates: string[] = [];
+  if (tracked === null) {
+    for (const dir of inside) {
+      let names: string[];
+      try {
+        names = fs.readdirSync(path.join(base, dir));
+      } catch {
+        continue;
+      }
+      for (const name of names) candidates.push(path.posix.join(dir, name));
+    }
+  } else {
+    // A target folder holds its agent files directly; deeper tracked files are not agent files.
+    const folders = new Set(inside.map((dir) => path.posix.normalize(dir)));
+    for (const file of tracked) if (folders.has(path.posix.dirname(file))) candidates.push(file);
+  }
+  for (const file of candidates) {
+    const head = readFileOrNull(path.join(base, file));
+    if (head === null) continue; // a directory, or a tracked file deleted from the work tree
+    if (MANAGED_AGENT_NAME.test(path.posix.basename(file))) return true;
+    if (head.slice(0, 4096).includes(MANAGED_AGENT_MARKER)) return true;
+  }
+  return false;
+}
+
+/**
+ * A document that never states rules.materializeAgentFiles was written before
+ * agent files became opt-in, when they were always materialized: it reads true
+ * while committed wairon-managed agent files are present (tracked by git, or
+ * merely present where there is no git; see holdsMaterializedAgentFiles), so an
+ * upgrade keeps them and the first save writes the setting down as true —
+ * never a false the next lock would act on by deleting them. Every other
+ * document is returned as it is.
+ */
+function withInferredMaterialization(document: ProjectConfigDocument | null, root: string): ProjectConfigDocument | null {
+  if (!isPlainObject(document) || document.partOf !== undefined) return document;
+  const rules = isPlainObject(document.rules) ? document.rules : undefined;
+  if (rules !== undefined && hasOwn(rules, 'materializeAgentFiles')) return document;
+  if (!holdsMaterializedAgentFiles(document, root)) return document;
+  return { ...document, rules: { ...(rules ?? {}), materializeAgentFiles: true } };
+}
+
+/**
+ * The configuration a save writes, for a document on disk that never states
+ * rules.materializeAgentFiles: a false there is only the schema default (no
+ * agent files were visible where it was read), so it is left unstated and the
+ * setting stays inferred from the agent files at the project's own root. A save
+ * that cannot see them (a migration rehearses in a copy holding .wai/ alone)
+ * would otherwise record a false the next lock acts on by deleting committed
+ * agent files. A true, and any value on a new or stating document, is written.
+ */
+function withoutDefaultedMaterialization(config: ProjectConfig, onDisk: ProjectConfigDocument | null): ProjectConfig {
+  if (!isPlainObject(onDisk) || config.rules?.materializeAgentFiles !== false) return config;
+  const stated = isPlainObject(onDisk.rules) && hasOwn(onDisk.rules, 'materializeAgentFiles');
+  if (stated) return config;
+  const { materializeAgentFiles: _defaulted, ...rules } = config.rules;
+  return { ...config, rules } as ProjectConfig;
+}
+
 function parseConfig(document: ProjectConfigDocument | null, root: string): ProjectConfig {
   try {
-    return ProjectConfigSchema.parse(asReadable(document));
+    return ProjectConfigSchema.parse(asReadable(withInferredMaterialization(document, root)));
   } catch (e: unknown) {
     throw new WaironError(
       `Invalid .wai/project.yaml: ${e instanceof Error ? e.message : String(e)}\n(project root: ${root})`,

@@ -229,8 +229,8 @@ methods:
       other id that differs from the one the lock approved has moved under everything that keyed on
       it (PROJECT_ID_CHANGED). It judges the bound project's own identity only. The family half — a
       member with a defaulted id (named with its alias as the id to declare), a member with no id,
-      and two members resolving to one id — is a family check since stage 4
-      (family_validator.checkMembers), which reads the family root's graph.
+      and two members resolving to one id — is a family check (family_validator.checkMembers), which
+      reads the family root's graph.
     signature: 'projectIdentity(ctx: RuleContext): void'
     returns: void
     params:
@@ -262,11 +262,11 @@ methods:
       subsystem-owned type at L1, a project-level type (no subsystem) for an L0 `{ typeDef }`
       without `from` — under a public name of [a-z0-9-_]+ (EXPORT_INVALID), every re-exported
       component can serve a boundary caller — a Portal, a gateway being a Portal variant, or an
-      Observer for events (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports; an error since stage
-      4), and an L0 entry that re-exports a member's or an external's export never declares a wider
-      audience than that export has (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never
-      widen it. The rule judges the facts the export resolver recorded in the scan — for the bound
-      root's table and every contained member's — and resolves nothing itself.
+      Observer for events (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports), and an L0 entry that
+      re-exports a member's or an external's export never declares a wider audience than that export
+      has (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. The rule judges
+      the facts the export resolver recorded in the scan — for the bound root's table and every
+      contained member's — and resolves nothing itself.
     signature: 'exportTables(ctx: RuleContext): void'
     returns: void
     params:
@@ -304,13 +304,13 @@ methods:
       text to write instead (the scan's rewrite: a bare local id, or `alias::publicName`): a leading
       `::`, which escapes to the root of whatever checkout loads it; `super::`, which climbs the
       containing projects — a place in one family, not a name; a member path (`desktop::shell`
-      written inside desktop, `waffler_core::transpiler::x` written inside transpiler), a first
-      segment the referring project does not declare, read from the bound root; and a self-prefix —
-      the referring project's own id as the first segment, with `::` or `.`
-      (`registry.advisory-channel` inside registry), which stage 3's migration did not rewrite and
-      stage 4's positional step does. Wairon's own writer emits none of them. A form with no rewrite
-      (its target is out of reach) is reported with the reason. It reads the project graph's
-      authored references, which the scan records before binding erases the form.
+      written inside desktop, `app_core::engine::x` written inside engine), a first segment the
+      referring project does not declare, read from the bound root; and a self-prefix — the
+      referring project's own id as the first segment, with `::` or `.` (`registry.advisory-channel`
+      inside registry), which `wairon doctor --fix` rewrites to the bare local id. Wairon's own
+      writer emits none of them. A form with no rewrite (its target is out of reach) is reported
+      with the reason. It reads the project graph's authored references, which the scan records
+      before binding erases the form.
     signature: 'referenceForms(ctx: RuleContext): void'
     returns: void
     params:
@@ -399,22 +399,22 @@ methods:
       (DEPRECATED_MOUNT_FORM, notice): the L1 form — a subsystem carrying projectPath — naming the
       mount, its path, the `members` entry that replaces it, and every field it carries that `doctor
       --fix` will move into the member (or stop on); a mount whose alias `members` also declares is
-      reported as ignored; and (stage 8) the long-form `path` key, naming the `source` (or
-      shorthand) `doctor --fix` rewrites it to. Since stage 8 it also judges what each member of the
-      bound project IS against what is declared or written about it, from the scan's problems at the
-      bound root (a member's own members are that member's gate's): what a member is follows from
-      its content — an id, an L0 or a lock make it a project, anything else a part — and every
-      contradiction is ONE finding, MEMBER_KIND_MISMATCH (error), naming the alias and the
-      contradiction: an asserted `as` the content contradicts; a part whose configuration declares
-      project fields (members, externals, rules, extensions, composition, targets) without the id
-      that would make it a project (add the id, or move them to the parent); a non-contained part
-      with no PartOf, or one naming another project (opened alone it could not say what it belongs
-      to); a contained member declaring PartOf; a `use` on a member whose content is a part (its
-      names are already this project's own). A part whose files could not be read — its directory
-      absent, or its git commit not cached and not fetchable (offline, refused, unknown) — is
-      PART_UNAVAILABLE (error): the project's own subsystems are missing, so its verdict cannot be a
-      pass. The member findings name no spec: members live in configuration. It reads the project
-      graph's nodes, their legacy mounts, the bound root's declared members and its problems.
+      reported as ignored; and the deprecated long-form `path` key, naming the `source` (or
+      shorthand) `doctor --fix` rewrites it to. It also judges what each member of the bound project
+      IS against what is declared or written about it, from the scan's problems at the bound root (a
+      member's own members are that member's gate's): what a member is follows from its content — an
+      id, an L0 or a lock make it a project, anything else a part — and every contradiction is ONE
+      finding, MEMBER_KIND_MISMATCH (error), naming the alias and the contradiction: an asserted
+      `as` the content contradicts; a part whose configuration declares project fields (members,
+      externals, rules, extensions, composition, targets) without the id that would make it a
+      project (add the id, or move them to the parent); a non-contained part with no PartOf, or one
+      naming another project (opened alone it could not say what it belongs to); a contained member
+      declaring PartOf; a `use` on a member whose content is a part (its names are already this
+      project's own). A part whose files could not be read — its directory absent, or its git commit
+      not cached and not fetchable (offline, refused, unknown) — is PART_UNAVAILABLE (error): the
+      project's own subsystems are missing, so its verdict cannot be a pass. The member findings
+      name no spec: members live in configuration. It reads the project graph's nodes, their legacy
+      mounts, the bound root's declared members and its problems.
     signature: 'memberDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -425,9 +425,8 @@ methods:
       - code: DEPRECATED_MOUNT_FORM
         severity: notice
         summary: >-
-          A member declared in a deprecated form — an L1 subsystem carrying projectPath, or (stage
-          8) the long-form `path` key — which doctor --fix rewrites to a `members` entry with one
-          `source`.
+          A member declared in a deprecated form — an L1 subsystem carrying projectPath, or the
+          long-form `path` key — which doctor --fix rewrites to a `members` entry with one `source`.
       - code: MEMBER_KIND_MISMATCH
         severity: error
         summary: >-
@@ -520,21 +519,21 @@ methods:
     description: >-
       Rule type-expressions. Reports what the scan's type canonicalisation recorded
       (ctx.typeSpellingFacts), one finding per position, located by spec and path: a stored text
-      that does not parse (TYPE_EXPRESSION_INVALID); one that breaks a position rule — void or async
-      out of place, a map key that is not string, int or an enum, a named scalar's holds that is not
-      one primitive other than void and any, `T??` (TYPE_POSITION_INVALID); one using a form the
-      grammar leaves out — an inline object shape, an inline function type, a string-literal union,
-      a union mixing in a primitive or a collection, an intersection, a utility type or a tuple
-      (TYPE_FORM_UNSUPPORTED); one naming `number` or a legacy builtin with no neutral meaning
-      (TYPE_NOT_NEUTRAL); and one that is an alias of its canonical spelling (TYPE_SPELLING_STALE,
-      which any save or doctor --fix repairs). Every message names the replacement: `number` asks
-      "int or float?" (and says when the doctor repair proposes int), a function type names a
-      signature type, a literal union an enum, an inline object or a mixed union a named
-      value-object. The writer refuses all but the stale spelling at write time; these findings are
-      how a tree that held them before the grammar existed is told, while it still loads and its
-      consumers read the position as opaque any — which is why only what no real tree holds (a text
-      that does not parse, a broken position rule) is an error. No finding when the run carries no
-      facts (a candidate run).
+      that does not parse (TYPE_EXPRESSION_INVALID); one that breaks a position rule — void, async
+      or result out of place, a map key that is not string, int or an enum, a named scalar's holds
+      that is not one primitive other than void and any, `T??` (TYPE_POSITION_INVALID); one using a
+      form the grammar leaves out — an inline object shape, an inline function type, a
+      string-literal union, a union mixing in a primitive or a collection, an intersection, a
+      utility type or a tuple (TYPE_FORM_UNSUPPORTED); one naming `number` or a legacy builtin with
+      no neutral meaning (TYPE_NOT_NEUTRAL); and one that is an alias of its canonical spelling
+      (TYPE_SPELLING_STALE, which any save or doctor --fix repairs). Every message names the
+      replacement: `number` asks "int or float?" (and says when the doctor repair proposes int), a
+      function type names a signature type, a literal union an enum (which the doctor repair
+      proposes), an inline object or a mixed union a named value-object. The writer refuses all but
+      the stale spelling at write time; on load every one of them is a warning — these findings are
+      how a tree that held them before the grammar existed is told, while it still loads, stays
+      lockable with its debt in view, and its consumers read the position as opaque any, which never
+      invents a shape. No finding when the run carries no facts (a candidate run).
     signature: 'typeExpressions(ctx: RuleContext): void'
     returns: void
     params:
@@ -543,13 +542,13 @@ methods:
         description: The validation run's shared read model and issue sink
     findings:
       - code: TYPE_EXPRESSION_INVALID
-        severity: error
+        severity: warning
         summary: A structured type position does not parse under the type grammar
       - code: TYPE_POSITION_INVALID
-        severity: error
+        severity: warning
         summary: >-
-          A type position breaks a position rule: void or async out of place, a non-scalar map key,
-          or T??
+          A type position breaks a position rule: void, async or result out of place, a non-scalar
+          map key, or T??
       - code: TYPE_FORM_UNSUPPORTED
         severity: warning
         summary: >-
@@ -632,4 +631,4 @@ methods:
           key
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-04T13:58:08.588Z'
+updatedAt: '2026-10-05T06:52:51.263Z'

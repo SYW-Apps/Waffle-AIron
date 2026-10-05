@@ -63,5 +63,5 @@ You must read, respect, and update `.wai/phased_design.md` (specifically Stage 5
 5. **Register & Promote**:
    - Present the drafted narrative content (the exact step-by-step YAML structure) and a concise summary of the key flow/design choices directly in the chat message to the user. Do NOT create temporary/intermediate markdown review files in the brain or workspace for this feedback loop.
    - Upon user approval, call `sdd_write_narrative` to save it in the spec tree.
-   - Once the interface, narrative, and spec for this component compile without errors, recommend changing the component's status field to `status: complete`.
+   - Once the interface, narrative, and spec for this component validate without errors, recommend setting the component's `status` to `complete` (authoring readiness — it tightens the validator's completeness checks). Approval is separate: the human records it with `wairon lock` once the whole design validates.
    - Update Stage 5 checkboxes in `.wai/phased_design.md`.

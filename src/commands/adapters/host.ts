@@ -35,6 +35,7 @@ export {
   setAssignment,
   removeAssignment,
   listAssignments,
+  explain,
   existingProjectRoot,
   registerLocalDevProject,
   mintToken,

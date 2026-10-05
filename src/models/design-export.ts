@@ -65,7 +65,7 @@ const ExtSchema = z.record(z.unknown());
  */
 export const TypeExpressionSchema: z.ZodType<TypeExpression> = z.lazy(() =>
   z.object({
-    form: z.enum(['primitive', 'named', 'list', 'set', 'map', 'optional', 'union', 'async', 'applied']),
+    form: z.enum(['primitive', 'named', 'list', 'set', 'map', 'optional', 'union', 'async', 'applied', 'result']),
     name: z.string().optional(),
     args: z.array(TypeExpressionSchema),
   }).passthrough(),

@@ -8,16 +8,18 @@ description: >-
   idiomatic spelling of a canonical one. The TypeScript dialect ships first, and its reader IS the
   alias table type_expression.parse normalises input with — one table, so normalising a spec and
   reading code can never drift apart — plus the loose readings only code needs: `number` agrees with
-  int and float alike (TypeScript cannot tell them apart), and `T | undefined` with `T?`. Its
-  writer: string, boolean, Uint8Array, number for int and float, string (ISO 8601) for date,
-  datetime and duration, T[], Set<T>, Record<K, V>, `T | null`, `A | B`, Promise<T>, an enum as a
-  string-literal union alias, unknown for any. A dialect is code shipped beside the analyzer that
-  reads that language, never configuration: a future analyzer brings its own (for Rust: Vec<T> to
-  list, HashMap to map, HashSet to set, Option<T> to `T?`, String to string, the sized integers to
-  int, f32/f64 to float, Vec<u8> to bytes, async fn to async). The omittable marker (`x?: T`) and
-  the async modifier are what the code's position says, not its type, so the analyzer reports them
-  as facts of their own (parameter_fact.optional, source_file_facts.asyncFunctions) rather than
-  through read.
+  int and float alike (TypeScript cannot tell them apart), `T | undefined` with `T?`, and a code
+  annotation T with a contract's `result<T, E>`. Its writer: string, boolean, Uint8Array, number for
+  int and float, string (ISO 8601) for date, datetime and duration, T[], Set<T>, Record<K, V>, `T |
+  null`, `A | B`, Promise<T>, T for `result<T, E>` (the function returns T and throws E on failure —
+  TypeScript has no checked failure type, so E is the error it throws and conformance never compares
+  it), an enum as a string-literal union alias, unknown for any. A dialect is code shipped beside
+  the analyzer that reads that language, never configuration: a future analyzer brings its own (for
+  Rust: Vec<T> to list, HashMap to map, HashSet to set, Option<T> to `T?`, Result<T, E> to result<T,
+  E>, String to string, the sized integers to int, f32/f64 to float, Vec<u8> to bytes, async fn to
+  async). The omittable marker (`x?: T`) and the async modifier are what the code's position says,
+  not its type, so the analyzer reports them as facts of their own (parameter_fact.optional,
+  source_file_facts.asyncFunctions) rather than through read.
 fields:
   - name: language
     type: string
@@ -62,8 +64,9 @@ methods:
     description: >-
       Whether a code annotation and a canonical spec expression describe the same type: the
       annotation read through this dialect equals the expression, a named type matching through its
-      code-level name, and this dialect's loose readings counting as agreement. An annotation it
-      cannot read never agrees.
+      code-level name, and this dialect's loose readings counting as agreement — in TypeScript a
+      `result<T, E>` agrees with an annotation of T (its failure is thrown, so E is never compared).
+      An annotation it cannot read never agrees.
   - name: write
     signature: 'write(expression: TypeExpression): string'
     params:
@@ -78,9 +81,9 @@ methods:
     returns: list<string>
     description: >-
       The write table as lines an implementer brief carries (`list<T> → T[]`, `T? → T | null`,
-      `async T → Promise<T>`, an enum → a string-literal union alias, a named scalar → a type alias
-      of its primitive, ...), so an implementer maps a contract's types by rule rather than by
-      guess.
+      `async T → Promise<T>`, `result<T, E> → T, throwing E`, an enum → a string-literal union
+      alias, a named scalar → a type alias of its primitive, ...), so an implementer maps a
+      contract's types by rule rather than by guess.
 sourcePath: src/models/type-dialects.ts
 createdAt: '2026-10-03T22:03:39.838Z'
-updatedAt: '2026-10-04T10:53:52.746Z'
+updatedAt: '2026-10-05T06:47:58.188Z'

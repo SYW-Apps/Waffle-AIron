@@ -429,6 +429,25 @@ methods:
     params:
       - name: apply
         type: bool
+  - name: explain
+    description: >-
+      Explain a user's effective permission for a capability at a scope — the value, its source and
+      the rung that decided it (project:admin over the scope).
+    signature: >-
+      explain(credential: string?, userId: string, capability: string, scopeKind: ScopeKind,
+      scopeId: string): EffectivePermission
+    returns: EffectivePermission
+    params:
+      - name: credential
+        type: string?
+      - name: userId
+        type: string
+      - name: capability
+        type: string
+      - name: scopeKind
+        type: ScopeKind
+      - name: scopeId
+        type: string
 status: complete
 createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-10-04T10:28:16.208Z'
+updatedAt: '2026-10-05T17:30:40.627Z'

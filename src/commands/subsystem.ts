@@ -256,6 +256,15 @@ function shownDir(dir: string): string {
   return nodePath.relative(process.cwd(), dir) || '.';
 }
 
+/**
+ * A project to re-lock as the plan names it: the directory the command ran in is
+ * "this project (.)" — a bare "." read as an empty list.
+ */
+function relockLabel(dir: string): string {
+  const shown = shownDir(dir);
+  return shown === '.' ? 'this project (.)' : shown;
+}
+
 /** Step 2 of runMigration: the verb, the family root, each owner's edits, the refusals, the notes, the files and the re-lock list. */
 function printPlan(planned: MigrationPlan): void {
   logger.header(`wairon family migration: ${planned.request.verb}`);
@@ -267,7 +276,7 @@ function printPlan(planned: MigrationPlan): void {
   for (const r of planned.refusals) logger.error(`[${r.code}]${r.project ? ` ${ownerLabel(r.project)}:` : ''} ${r.detail}`);
   for (const note of planned.notes) logger.warn(`NOTE: ${note}`);
   printFiles(planned);
-  if (planned.relock.length > 0) logger.info(`To re-lock once applied: ${planned.relock.map(shownDir).join(', ')}`);
+  if (planned.relock.length > 0) logger.info(`To re-lock once applied: ${planned.relock.map(relockLabel).join(', ')}`);
 }
 
 /** The file changes per owner, one line each, a count past a screenful. */
@@ -302,7 +311,7 @@ function printOutcome(report: FamilyMigrationReport): void {
   const verb = report.plan.request.verb;
   if (report.applied) {
     logger.success(`Applied the ${verb} migration: ${report.plan.changes.length} file(s) across ${new Set(report.plan.changes.map((c) => c.project)).size} project(s).`);
-    for (const dir of report.relock) logger.info(`Re-lock ${shownDir(dir)}: run \`wairon lock\` there.`);
+    for (const dir of report.relock) logger.info(`Re-lock ${relockLabel(dir)}: run \`wairon lock\` ${shownDir(dir) === '.' ? 'here' : 'there'}.`);
     return;
   }
   process.exitCode = 1;

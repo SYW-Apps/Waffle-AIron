@@ -3,14 +3,16 @@ name: Instance Bootstrap
 description: >-
   One-time boot initialization of a hosted instance, run before its listeners bind: seeds or loads
   the persisted instance identity (the boot-reserved built-in subject UUIDs) and, under devMode,
-  creates the synthetic local development unit when it is missing, so dev projects can always be
-  placed.
+  creates the synthetic local development unit when it is missing and places every project the
+  instance holds in no unit into it, so a dev project is always placed and the dev data dir never
+  reads as unmigrated.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
   - instance_identity_repository
   - organization_repository
+  - project_repository
 status: complete
 createdAt: '2026-09-15T10:51:21.902Z'
-updatedAt: '2026-09-18T20:21:06.954Z'
+updatedAt: '2026-10-05T17:30:21.995Z'

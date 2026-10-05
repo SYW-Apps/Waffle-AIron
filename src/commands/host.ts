@@ -533,7 +533,9 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
           id: qualifiedId,
           name: options.name ?? options.slug,
           slug: options.slug,
-          kind: options.kind ?? 'team',
+          // A top-level unit must be a business_entity (the org-unit hierarchy's
+          // root kind), so that is the default without --parent; under a parent, team.
+          kind: options.kind ?? (options.parent ? 'team' : 'business_entity'),
           ...(options.parent ? { parentId: options.parent } : {}),
           status: 'active',
           createdAt: '',
@@ -578,7 +580,7 @@ export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {
       logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
     }
   }
-  // Step 4: then the stage-7 member upgrade — a dry-run plan, applied all or nothing only with --fix.
+  // Step 4: then the member-record upgrade — a dry-run plan, applied all or nothing only with --fix.
   const upgrade = localAdmin.upgradeMemberRecords(cfg, fix);
   const plan = upgrade.plan;
   const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
@@ -655,6 +657,39 @@ function resolveScopeOptions(options: HostOptions): { kind: ScopeKind; id?: stri
   return { kind: 'instance' };
 }
 
+/**
+ * Warn when a user's effective project:read at a scope is not yes. Read and write
+ * are separate capabilities the resolver decides independently, so a write grant
+ * (or a token owned by someone) can cover a project its subject cannot open; this
+ * says so at the moment it is created, with the grant that fixes it. A user with
+ * no record, or a check that fails, warns nothing — the write already succeeded.
+ */
+function warnIfUnreadable(
+  cfg: HostConfig,
+  cred: string | null,
+  userId: string,
+  scope: { kind: ScopeKind; id?: string },
+  why: string,
+): void {
+  // A subsystem scope is read at its project: read has no subsystem rung.
+  const target = scope.kind === 'subsystem'
+    ? { kind: 'project' as ScopeKind, id: (scope.id ?? '').split('/')[0] }
+    : scope;
+  let read: string;
+  try {
+    read = localAdmin.explain(cfg, cred, userId, 'project:read', target.kind, target.id ?? '').value;
+  } catch {
+    return;
+  }
+  if (read === 'yes') return;
+  const where = target.kind === 'instance' ? 'the instance' : `${target.kind} ${target.id}`;
+  const flag = target.kind === 'instance' ? '--instance' : `--${target.kind} ${target.id}`;
+  logger.warn(
+    `project:read for "${userId}" at ${where} resolves to ${read} — ${why}. `
+      + `Grant it with \`wairon host permission set --user ${userId} --capability project:read ${flag}\`.`,
+  );
+}
+
 export async function runHostPermission(action: string, options: HostOptions = {}): Promise<void> {
   const cfg = resolveHostConfig(options);
   const cred = masterCredential();
@@ -683,6 +718,11 @@ export async function runHostPermission(action: string, options: HostOptions = {
         logger.success(
           `Assignment ${stored.id}: ${options.user} ${options.capability}=${value} @ ${scope.kind}${scope.id ? ` ${scope.id}` : ''}`,
         );
+        // Read and write are separate capabilities: a write grant over a scope the
+        // subject cannot read leaves them unable to open what they may change.
+        if (options.capability === 'project:write' && (value === 'yes' || value === 'approval')) {
+          warnIfUnreadable(cfg, cred, options.user, scope, `${options.user} can write here but cannot read it`);
+        }
         break;
       }
       case 'list': {
@@ -743,7 +783,13 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
           logger.blank();
           // A deprecated member-qualified entry is stored as the member's own record id: say so.
           for (const line of minted.mapped) {
-            logger.warn(`Narrowing ${line}: a member is a record of its own since stage 7, so the token names it by its id (qualified entries are deprecated).`);
+            logger.warn(`Narrowing ${line}: a member is a record of its own, so the token names it by its id (qualified entries are deprecated).`);
+          }
+          // The token acts as its owner's live permission: an owner who cannot read
+          // the project mints a token that cannot read it either.
+          if (options.project !== '*') {
+            warnIfUnreadable(cfg, cred, options.owner, { kind: 'project', id: options.project },
+              `the token acts as "${options.owner}"'s live permission, so it cannot read the project either`);
           }
           break;
         }

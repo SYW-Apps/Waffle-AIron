@@ -345,24 +345,15 @@ function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
     const scriptPath = process.argv[1] ? path.resolve(process.argv[1]).replace(/\\/g, '/') : null;
     const useDirectNode = !isPackaged && scriptPath && (scriptPath.endsWith('.js') || scriptPath.endsWith('.ts'));
 
-    // Project-local installs know the exact project, so pin it: the server then
-    // attaches deterministically regardless of the cwd the host spawns it with,
-    // and never silently climbs to an ancestor .wai (e.g. a parent repo's tree).
-    // Global installs are intentionally shared across projects, so they stay
-    // unpinned and rely on MCP roots / cwd to scope per session.
-    const env: Record<string, string> = useGlobal
-      ? {}
-      : { WAIRON_PROJECT_DIR: process.cwd().replace(/\\/g, '/') };
-
     // A HOSTED registration points the agent at an INSTANCE rather than at this
     // checkout: the same http endpoint, bearer and project selector the CLI's
     // remote surface uses, so `wairon remote` can read this entry back and the
     // agent and CLI provably work on the same project.
     const desiredEntry: Record<string, unknown> = options.hostedUrl
       ? hostedMcpEntry(options)
-      : useDirectNode
-        ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env }
-        : { command: 'wairon', args: ['mcp', 'serve'], env };
+      : useGlobal
+        ? machineEntry(useDirectNode ? scriptPath : null)
+        : projectEntry(root, useDirectNode ? scriptPath : null);
 
     const existingEntry = mcpServers['wairon'];
     return {
@@ -377,6 +368,34 @@ function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
       useGlobal,
     };
   });
+}
+
+/**
+ * The entry of a machine-wide (user-scope) registration: machine-specific by
+ * nature, so it names the running CLI by its absolute path when it runs as a
+ * script, and stays unpinned — it is shared across projects and scopes per
+ * session through MCP roots and the cwd.
+ */
+function machineEntry(scriptPath: string | null): Record<string, unknown> {
+  return scriptPath
+    ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env: {} }
+    : { command: 'wairon', args: ['mcp', 'serve'], env: {} };
+}
+
+/**
+ * The entry of a project-scoped registration (.mcp.json, .gemini/settings.json).
+ * That file is committed and shared, so it holds nothing machine-specific: the
+ * CLI by a path relative to the project when the running script lives inside it
+ * (a checkout of wairon itself), else `wairon` on the PATH. It carries no
+ * absolute project pin either: the host starts a project's server in that
+ * project, where the server attaches to the cwd's own .wai.
+ */
+function projectEntry(root: string, scriptPath: string | null): Record<string, unknown> {
+  if (scriptPath && !isOutsideRoot(root, scriptPath)) {
+    const relative = path.relative(root, scriptPath).replace(/\\/g, '/');
+    return { command: 'node', args: [`./${relative}`, 'mcp', 'serve'] };
+  }
+  return { command: 'wairon', args: ['mcp', 'serve'] };
 }
 
 /**
@@ -430,10 +449,10 @@ function reportInstalled(target: InstallTarget, agentLabel: string): void {
   const wasStale = target.before !== undefined;
   logger.success(`wairon MCP server ${wasStale ? 'updated (was stale)' : 'registered'} for ${agentLabel} in ${chalk.cyan(target.path)}.`);
   logger.blank();
-  logger.info('AI tools using this config will have access to these wairon tools:');
-  logger.info('  listAgents · getAgent · listDomains · validateTopology · getProjectConfig');
-  logger.info('  sdd_initialize_system · sdd_add_subsystem · sdd_add_component · sdd_define_interface');
-  logger.info('  sdd_write_narrative · sdd_validate_tree · sdd_get_status');
+  // A pointer, not a list: a hand-kept list of tool names went stale every
+  // time a tool was added (it named 12 of 37). The server lists its own tools.
+  logger.info('AI tools using this config get the wairon MCP server: the sdd_* spec-authoring, validation, member and');
+  logger.info('rename tools, plus live agent briefs (sdd_get_agent_brief). The full list is in docs/cli.md ("MCP tools").');
   logger.blank();
   const restartApp = target.backend === 'gemini' ? 'Antigravity CLI (agy)' : 'claude';
   logger.info(`Restart ${chalk.bold(restartApp)} (or reload MCP servers) to activate.`);

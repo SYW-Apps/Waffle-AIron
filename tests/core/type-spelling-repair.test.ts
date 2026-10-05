@@ -8,7 +8,7 @@ import { invalidateSpecCache, saveSpec, saveSystemSpec, signatureFacts } from '.
 import { repairTypeSpellings } from '../../src/core/type-spelling-repair.js';
 import { repairTypeSpellings as portalRepair } from '../../src/core/index.js';
 import { repairTypeSpellings as adapterRepair } from '../../src/commands/adapters/core.js';
-import { typeProblemIntProposal } from '../../src/models/index.js';
+import { typeProblemEnumProposal, typeProblemIntProposal } from '../../src/models/index.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -59,6 +59,16 @@ const LEGACY_TYPE = {
     { name: 'tags', type: 'Set<string>', optional: false },
     { name: 'pageSize', type: 'number | null', optional: false },
     { name: 'onChange', type: '(e: Line) => void', optional: false },
+    { name: 'scope', type: "'global' | 'local' | null", optional: false },
+  ],
+};
+
+/** A Rust-flavoured contract: Result<T, E> and () respell mechanically. */
+const RUST_INTERFACE = {
+  id: 'iledger', name: 'ILedger', description: 'Ledger contract', component: 'billing', status: 'draft', createdAt: STAMP, updatedAt: STAMP,
+  methods: [
+    { name: 'post', description: 'Post an entry', signature: 'post(): Result<(), LedgerError>', params: [], returns: 'Result<(), LedgerError>' },
+    { name: 'read', description: 'Read an entry', signature: 'read(): Promise<Result<Line, LedgerError>>', params: [], returns: 'Promise<Result<Line, LedgerError>>' },
   ],
 };
 
@@ -117,6 +127,24 @@ describe('repairTypeSpellings — the plan', () => {
     expect(type.authorNeeded.map((p) => [p.code, p.path, p.replacement])).toEqual([
       ['TYPE_FORM_UNSUPPORTED', 'fields.onChange', expect.stringMatching(/signature type/)],
     ]);
+    // The string-literal union is an enum PROPOSED, not left for an author.
+    expect(type.enumProposals.map((p) => [p.path, p.enumId, p.values, p.optional])).toEqual([['fields.scope', 'scope', ['global', 'local'], true]]);
+  });
+
+  it('respells Result<T, E> and () mechanically, as result<T, E> and void', () => {
+    const root = legacyTree();
+    writeYaml(specsDir(root, 'interfaces', 'iledger.yaml'), RUST_INTERFACE);
+    invalidateSpecCache();
+    const ledger = repairTypeSpellings(false).find((r) => r.specId === 'iledger')!;
+    expect(ledger.rewritten.map((r) => [r.path, r.stored])).toEqual([
+      ['methods.post.returns', 'result<void, LedgerError>'],
+      ['methods.read.returns', 'async result<Line, LedgerError>'],
+    ]);
+    expect(ledger.authorNeeded).toEqual([]);
+    repairTypeSpellings(true);
+    const stored = readYaml(fileOf(root, 'iledger.yaml'));
+    expect(stored.methods.map((m: { returns: string }) => m.returns)).toEqual(['result<void, LedgerError>', 'async result<Line, LedgerError>']);
+    expect(repairTypeSpellings(false).find((r) => r.specId === 'iledger')).toBeUndefined();
   });
 
   it('writes nothing without apply', () => {
@@ -148,7 +176,7 @@ describe('repairTypeSpellings — apply', () => {
     expect(count.params.map((p: any) => p.type)).toEqual(['number', 'number']);
     expect(count.returns).toBe('number');
     const type = readYaml(fileOf(root, 'line.yaml'));
-    expect(type.fields.map((f: any) => f.type)).toEqual(['set<string>', 'number | null', '(e: Line) => void']);
+    expect(type.fields.map((f: any) => f.type)).toEqual(['set<string>', 'number | null', '(e: Line) => void', "'global' | 'local' | null"]);
   });
 
   it('is idempotent: a second run rewrites nothing and plans the same proposals and author positions', () => {
@@ -157,7 +185,7 @@ describe('repairTypeSpellings — apply', () => {
     const written = fs.readFileSync(fileOf(root, 'ibilling.yaml'), 'utf8');
     const second = repairTypeSpellings(true);
     expect(second.every((r) => r.rewritten.length === 0)).toBe(true);
-    expect(second.map((r) => [r.specId, r.proposals, r.authorNeeded])).toEqual(first.map((r) => [r.specId, r.proposals, r.authorNeeded]));
+    expect(second.map((r) => [r.specId, r.proposals, r.enumProposals, r.authorNeeded])).toEqual(first.map((r) => [r.specId, r.proposals, r.enumProposals, r.authorNeeded]));
     expect(fs.readFileSync(fileOf(root, 'ibilling.yaml'), 'utf8')).toBe(written);
     expect(fs.readFileSync(fileOf(root, 'clean.yaml'), 'utf8')).toBe(yaml.dump(CLEAN_TYPE, { lineWidth: -1 }));
   });
@@ -181,6 +209,25 @@ describe('repairTypeSpellings — apply', () => {
     const repairs = repairTypeSpellings(true);
     expect(repairs.find((r) => r.specId === 'ibilling')?.rewritten ?? []).toEqual([]);
     expect(fs.readFileSync(fileOf(root, 'ibilling.yaml'), 'utf8')).toBe(before);
+  });
+});
+
+describe('type_expression_problem.enumProposal', () => {
+  const problem = (written: string, path = 'methods.save.params.scopeKind') => ({
+    code: 'TYPE_FORM_UNSUPPORTED' as const, written, detail: 'literal union', specId: 's', kind: 'interface' as const, path,
+  });
+
+  it('proposes an enum named for the position, its values in written order, each once', () => {
+    expect(typeProblemEnumProposal(problem("'global' | 'local' | 'global'"))).toMatchObject({ enumId: 'scope-kind', values: ['global', 'local'], optional: false });
+    expect(typeProblemEnumProposal(problem('"a" | "b" | undefined', 'methods.get.returns'))).toMatchObject({ enumId: 'get', values: ['a', 'b'], optional: true });
+  });
+
+  it('proposes nothing for a union mixing in anything but string literals, or another problem', () => {
+    expect(typeProblemEnumProposal(problem("'a' | 1"))).toBeNull();
+    expect(typeProblemEnumProposal(problem("'a' | Invoice"))).toBeNull();
+    expect(typeProblemEnumProposal(problem('(e: Line) => void'))).toBeNull();
+    expect(typeProblemEnumProposal({ ...problem("'a' | 'b'"), code: 'TYPE_NOT_NEUTRAL' })).toBeNull();
+    expect(typeProblemEnumProposal({ ...problem("'a' | 'b'"), path: undefined })).toBeNull();
   });
 });
 

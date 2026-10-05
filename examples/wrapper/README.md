@@ -14,25 +14,41 @@ packs/flowops.yaml        declarative pack: the flowops-automation profile
 packs/flowops-rules.cjs   programmatic pack: one custom SddRule —
                           FLOWOPS_PORTAL_TRANSPORT (Portals in flowops
                           subsystems must be MessageBus-triggered)
-install.js                the installer a wrapper actually ships: injects
-                          the packs via `wairon packs add`, then leaves —
-                          plain `wairon validate` enforces from then on
+install.js                the installer a wrapper can ship: vendors the
+                          packs into a project via `wairon pack add`, then
+                          leaves — plain `wairon validate` enforces from
+                          then on
 wrapper.js                ADVANCED: embedding wairon as a library to build
                           a branded gate binary (most wrappers skip this)
 demo-project/             a spec-only project governed by the doctrine —
-                          CI-clean; its .wai/project.yaml lists the packs
+                          CI-clean (`wairon validate --ci` passes); its
+                          .wai/project.yaml lists the packs
                           (the post-`install.js` end state, committed)
 ```
 
-## Distribution model (no npm)
+## Distribution model
 
-Wairon ships as standalone CLI binaries (GitHub releases). A wrapper
-product ships a **release ZIP**: its pack files + an install script. The
-user unzips and runs it — the script calls `wairon packs add` (per project,
-vendored into `.wai/packs/` and committed) or `wairon packs add --global`
-(machine-wide, `~/.wairon/packs`, auto-loaded for every project). Uninstall
-is `wairon packs remove <name> [--global]`. The installer automates exactly
-what a user can do by hand — nothing stays resident.
+Wairon is published on npm as `@wairon/cli` and as standalone CLI binaries
+(GitHub releases). A wrapper product ships only its packs, on top of the
+user's own wairon; it needs no fork and no build of wairon. Two ways to
+deliver them:
+
+- **A `.wpack` archive** (preferred). Build it with `wairon pack build` and
+  publish it, for example as a release asset. A user installs it into their
+  wairon's pack store (`wairon pack install <file-or-url>`). Installing makes
+  the pack available and applies it to nothing. Each project then selects it
+  with `wairon pack use <name>`, which records the selection in
+  `.wai/project.yaml`. For CI, record a fetchable source
+  (`wairon pack use <name> --source <url>`, then `wairon pack sync` on the
+  runner) or commit a copy (`wairon pack bundle`).
+- **Vendored files**, as `install.js` does: `wairon pack add <file>` copies
+  the pack into the project's `.wai/packs/` and registers it, and the project
+  commits it. Undo it with `wairon pack remove <name>`.
+
+A machine-wide pack no longer applies to a project that has not selected it.
+The installer automates exactly what a user can do by hand, and nothing stays
+resident. See [`docs/extending-wairon.md`](../../docs/extending-wairon.md)
+for selection, pinning and reproducibility.
 
 ## Try it
 
@@ -41,7 +57,7 @@ npm run build
 node examples/wrapper/wrapper.js              # embedded gate → clean
 cd examples/wrapper/demo-project
 node ../../../dist/cli/index.js validate      # config path → same doctrine
-node ../../../dist/cli/index.js packs list    # see the loaded packs
+node ../../../dist/cli/index.js pack list     # see the loaded packs
 ```
 
 Break something to see the doctrine bite: add an `Actor` component to the

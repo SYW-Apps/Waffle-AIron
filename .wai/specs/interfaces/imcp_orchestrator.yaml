@@ -162,10 +162,14 @@ methods:
         optional: true
   - name: setEndpoints
     description: >-
-      The sdd_set_endpoints workflow: verify the L3 contract exists, build one wire endpoint per
-      named method from that transport's own address fields and check it against the endpoint
-      schema, then persist the contract with the bindings attached. A method the contract does not
-      declare, or an endpoint the schema rejects, refuses the whole write before anything is saved.
+      The sdd_set_endpoints workflow: verify the L3 contract exists, read the Portal it belongs to,
+      build one wire endpoint per named method from that transport's own address fields and check it
+      against the endpoint schema, then persist the contract with the bindings attached. The
+      transport may be written in either vocabulary — the endpoint's (HTTP, gRPC, …) or the Portal's
+      portalType (HTTP_API is HTTP) — and is stored in the endpoint's. A transport the Portal's
+      portalType does not carry is refused, naming the transport that portalType implies; so is a
+      method the contract does not declare, or an endpoint the schema rejects — each before anything
+      is saved.
     signature: 'setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>): SpecChangeReport'
     returns: SpecChangeReport
     params:
@@ -202,20 +206,23 @@ methods:
     description: >-
       The sdd_get_spec workflow: read one stored spec by kind and id through the core client
       adapter, optionally narrowed to named methods, and answer with the stored spec plus the
-      derived markers a read may attach. A contract's methods are answered in their stored form
-      (method_signature.storedForm), so a sourced method shows its signatureFrom and not the params
-      the loader resolved into it; those come back beside the spec as the derived resolvedSignatures
-      marker, one entry per sourced method, never inside it. A methods filter that names something
-      the spec does not declare returns nothing and says what it does declare, so a misspelling
-      never reads as a method with no content; a narrowed answer carries the partial-result marker,
-      because the write tools REPLACE a method list and re-authoring from a partial read would
-      delete every method left out.
-    signature: 'getSpec(kind: WritableSpecKind, id: string, methods?: list<string>): SpecReadResult'
+      derived markers a read may attach. The kind may be omitted: it is then inferred from the id by
+      reading it at every level, and a read is refused — naming the candidate kinds — when the id
+      names specs at more than one level, or names none. A contract's methods are answered in their
+      stored form (method_signature.storedForm), so a sourced method shows its signatureFrom and not
+      the params the loader resolved into it; those come back beside the spec as the derived
+      resolvedSignatures marker, one entry per sourced method, never inside it. A methods filter
+      that names something the spec does not declare returns nothing and says what it does declare,
+      so a misspelling never reads as a method with no content; a narrowed answer carries the
+      partial-result marker, because the write tools REPLACE a method list and re-authoring from a
+      partial read would delete every method left out.
+    signature: 'getSpec(kind?: WritableSpecKind, id: string, methods?: list<string>): SpecReadResult'
     returns: SpecReadResult
     params:
       - name: kind
         type: WritableSpecKind
-        description: The kind of spec to read
+        description: The kind of spec to read; omitted, it is inferred from the id
+        optional: true
       - name: id
         type: string
         description: The id to read it by; the L0 system spec is a singleton
@@ -349,4 +356,4 @@ methods:
         description: Its new id
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-04T23:37:38.691Z'
+updatedAt: '2026-10-05T17:31:21.605Z'

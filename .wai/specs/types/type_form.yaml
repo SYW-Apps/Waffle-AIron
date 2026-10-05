@@ -24,5 +24,7 @@ values:
     description: 'async T: completes later with T (returns only)'
   - name: applied
     description: A named generic applied to arguments
+  - name: result
+    description: 'result<T, E>: completes with T or fails with E (returns only, or directly under async)'
 createdAt: '2026-10-04T23:13:33.213Z'
-updatedAt: '2026-10-04T23:13:33.589Z'
+updatedAt: '2026-10-05T06:47:14.027Z'

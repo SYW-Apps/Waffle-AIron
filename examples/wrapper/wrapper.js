@@ -9,8 +9,8 @@
  *   node examples/wrapper/wrapper.js [path-to-project]
  * (defaults to ./demo-project)
  *
- * Embedding requires a built checkout of this repo as a `file:` dependency
- * (wairon is distributed as standalone CLI binaries, not on npm).
+ * Outside this repo, depend on `@wairon/cli` from npm and
+ * `require('@wairon/cli')` instead of the built checkout below.
  */
 const path = require('path');
 const wairon = require('../../dist/index.js');

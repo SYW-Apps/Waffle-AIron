@@ -5,31 +5,36 @@ description: >-
   A type position's value, parsed under wairon's language-neutral type grammar: the one form every
   consumer reads instead of tokenizing a string. The grammar, in full: `type-position = ["async"]
   type; type = member {"|" member}; member = primary ["?"]; primary = name ["<" type {"," type} ">"]
-  | "(" type ")"; name = ident {("::" | ".") ident}`. A position is read whole — anything left over
-  is invalid, so no trailing prose, comment or aside. The ten primitives are string, int, float,
-  bool, bytes, date, datetime, duration, void and any; the collections are list<T>, set<T> and
-  map<K, V>; `T?` is T or no value (one "none": TypeScript's null and undefined both read as it); `A
-  | B` is exactly one of the named types (entity, value-object, enum or signature) — a non-named
-  member joins a union only through `?`, and a union mixing in a primitive or a collection is a form
-  the grammar leaves out (TYPE_FORM_UNSUPPORTED: model the choice as a named type, or as two
-  params); `async T` is a call completing later with T. The position rules (TYPE_POSITION_INVALID):
-  void only as a whole returns (or `async void`), never inside a collection or union and never
-  `void?`; async only at the top of a returns; a map key is string, int or an enum; a named scalar's
-  holds is one primitive other than void and any — never a named type, a collection, an optional or
-  a union; `T??` is refused and `any?` reads as any. Inline object shapes, inline function types,
-  string-literal unions, intersections, utility types and tuples are not in the grammar either: each
-  has a named replacement (a value-object, a signature type, an enum). Today's spellings are aliases
-  the parser accepts and normalises — TypeScript's (`T[]`, `Array<T>`, `ReadonlyArray<T>` → list;
-  `Set`, `ReadonlySet` → set; `Map`, `Record`, `ReadonlyMap` → map; `T | null`, `T | undefined`,
-  `Option<T>`, `Optional<T>` → `T?`; `Promise<T>` at the top of a returns → `async T`; boolean →
-  bool; integer, long and the sized integers → int; double, f32, f64 → float; Buffer, Uint8Array →
-  bytes; Date, timestamp → datetime; object, unknown, json, Json → any) and the legacy builtin
-  vocabulary existing trees can hold (str, vec, vector, List, dict, dictionary, HashMap). `number`
-  is NOT an alias: it means int and float alike in TypeScript, so it is read as float until fixed
-  and reported (TYPE_NOT_NEUTRAL, "int or float?"). Legacy builtins with no neutral meaning (uuid,
-  decimal, char, byte, time, tuple, result, error, never, box, arc, rc, ref, cell, refcell, mutex,
-  rwlock, std, mcpserver) are reported the same way, each with its replacement. A user generic
-  `Page<T>` stays a named type applied to arguments.
+  | "(" type ")" | "(" ")"; name = ident {("::" | ".") ident}`. A position is read whole — anything
+  left over is invalid, so no trailing prose, comment or aside. The ten primitives are string, int,
+  float, bool, bytes, date, datetime, duration, void and any; `()` is another spelling of void (the
+  unit type); the collections are list<T>, set<T> and map<K, V>; `T?` is T or no value (one "none":
+  TypeScript's null and undefined both read as it); `A | B` is exactly one of the named types
+  (entity, value-object, enum or signature) — a non-named member joins a union only through `?`, and
+  a union mixing in a primitive or a collection is a form the grammar leaves out
+  (TYPE_FORM_UNSUPPORTED: model the choice as a named type, or as two params); `async T` is a call
+  completing later with T; `result<T, E>` is a call that completes with T or fails with E — the
+  mainstream success-or-failure type (Rust's and Swift's Result, Kotlin's Result, F#'s Result), T
+  may be void, and Rust's `Result<T, E>` is its alias. The position rules (TYPE_POSITION_INVALID):
+  void only as a whole returns (or `async void`, or the success type of a result), never inside a
+  collection or union and never `void?`; async only at the top of a returns; result only at the top
+  of a returns or directly under its async, never optional; a map key is string, int or an enum; a
+  named scalar's holds is one primitive other than void and any — never a named type, a collection,
+  an optional or a union; `T??` is refused and `any?` reads as any. Inline object shapes, inline
+  function types, string-literal unions, intersections, utility types and tuples are not in the
+  grammar either: each has a named replacement (a value-object, a signature type, an enum). Today's
+  spellings are aliases the parser accepts and normalises — TypeScript's (`T[]`, `Array<T>`,
+  `ReadonlyArray<T>` → list; `Set`, `ReadonlySet` → set; `Map`, `Record`, `ReadonlyMap` → map; `T |
+  null`, `T | undefined`, `Option<T>`, `Optional<T>` → `T?`; `Promise<T>` at the top of a returns →
+  `async T`; boolean → bool; integer, long and the sized integers → int; double, f32, f64 → float;
+  Buffer, Uint8Array → bytes; Date, timestamp → datetime; object, unknown, json, Json → any), Rust's
+  `Result<T, E>` and `()` → `result<T, E>` and void, and the legacy builtin vocabulary existing
+  trees can hold (str, vec, vector, List, dict, dictionary, HashMap). `number` is NOT an alias: it
+  means int and float alike in TypeScript, so it is read as float until fixed and reported
+  (TYPE_NOT_NEUTRAL, "int or float?"). Legacy builtins with no neutral meaning (uuid, decimal, char,
+  byte, time, tuple, error, never, box, arc, rc, ref, cell, refcell, mutex, rwlock, std, mcpserver)
+  are reported the same way, each with its replacement. A user generic `Page<T>` stays a named type
+  applied to arguments.
 fields:
   - name: form
     type: TypeForm
@@ -73,10 +78,10 @@ methods:
     returns: string
     description: >-
       The one spelling of this expression: lower-case primitives, `list<T>` / `set<T>` / `map<K, V>`
-      with `, ` between arguments, `?` directly after its member and `(A | B)?` around a union with
-      none, ` | ` between union members in written order, and `async ` before a returns. Named
-      references are kept exactly as written, so binding and relativizing them stays the reference
-      table's job.
+      / `result<T, E>` with `, ` between arguments, `?` directly after its member and `(A | B)?`
+      around a union with none, ` | ` between union members in written order, and `async ` before a
+      returns. Named references are kept exactly as written, so binding and relativizing them stays
+      the reference table's job.
     symbol: canonicalTypeText
   - name: namedRefs
     signature: 'namedRefs(): list<string>'
@@ -93,9 +98,9 @@ methods:
     params: []
     returns: bool
     description: >-
-      Whether a value of this type holds many: a list, a set or a map at the top, under `?` or under
-      async. What the ERD draws as a `*` multiplicity.
+      Whether a value of this type holds many: a list, a set or a map at the top, under `?`, under
+      async or as a result's success type. What the ERD draws as a `*` multiplicity.
     symbol: typeIsMany
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:49.343Z'
-updatedAt: '2026-10-04T23:40:50.140Z'
+updatedAt: '2026-10-05T06:47:51.242Z'

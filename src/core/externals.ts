@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, withLineEndings } from '../utils/fs.js';
 import { readYamlFile, serializeYaml } from '../utils/yaml.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import {
@@ -40,7 +40,7 @@ function snapshotPath(root: string, alias: string): string {
 function writeAtomically(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, text);
+  fs.writeFileSync(tmp, withLineEndings(file, text));
   fs.renameSync(tmp, file);
 }
 

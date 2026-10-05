@@ -89,8 +89,16 @@ network — the operator owns that risk).
   (you'd be unable to administer).
 - **Project API keys** — minted via the control plane, stored **hashed**
   (salted SHA-256, constant-time compared) in `<dataDir>/auth/credentials.json`.
-  Each key is bound server-side to a role (`editor` | `admin`) and an authorized
-  project set. The plaintext is shown **once** at mint time.
+  Each key has an **owner** (a user id) and an authorized project set: it acts
+  as its owner's live permissions — the assignments set with
+  `wairon host permission set` — narrowed to those projects. The plaintext is
+  shown **once** at mint time. A key minted without an owner (the legacy
+  `--role editor|admin` form) resolves to zero permissions.
+- **Units and permissions** — every project is created inside an organization
+  unit, and access is a grid of assignments (subject × scope × capability:
+  `project:read`, `project:create`, `project:write`, `project:admin`,
+  `approval:decide`) anchored at the instance, a unit, a project or a
+  subsystem; the most specific setting wins.
 - **Auth-derived scope (never client-declared)** — a key authorized for one
   project needs no selector. A multi-project / wildcard key may pass an optional
   `X-Wairon-Project` header or `?project=` selector, honored **only within** its
@@ -225,7 +233,7 @@ Installs over the admin surface are **declarative-only** — profiles and langua
 tables are pure data. Programmatic **rule packs** are executable code; requiring
 arbitrary JS over the network would be a remote-code-execution surface, so they are
 **refused on the API** and install via the trusted filesystem instead — mount them
-into `WAIRON_PACKS_DIR`, or `docker compose exec wairon wairon packs add <file> --global`.
+into `WAIRON_PACKS_DIR`, or `docker compose exec wairon wairon pack add <file> --global`.
 The admin API still **lists** every installed pack (including code packs), so nothing
 is invisible.
 
@@ -235,7 +243,7 @@ docker compose exec wairon wairon host packs install --file ./acme-profiles.yaml
 docker compose exec wairon wairon host packs list
 
 # rule (code) packs — trusted filesystem only
-docker compose exec wairon wairon packs add /data/incoming/acme-rules.cjs --global
+docker compose exec wairon wairon pack add /data/incoming/acme-rules.cjs --global
 ```
 
 #### Extension packs on hosted instances — bake, don't shell in
@@ -293,15 +301,32 @@ docker compose pull
 docker compose up -d
 curl -fsS http://localhost:8080/healthz          # → {"ok":true}
 
-# 3. provision a project and mint an editor key — via docker exec (safest path)
-docker compose exec wairon wairon host project create --id acme
-docker compose exec wairon wairon host key mint --project acme --role editor
+# 3. an organization unit, a project in it, and who may use it — via docker exec (safest path)
+docker compose exec wairon wairon host unit create --slug acme --kind business_entity
+docker compose exec wairon wairon host project create --id shop --unit acme
+docker compose exec wairon wairon host permission set --user alice --capability project:read  --project shop
+docker compose exec wairon wairon host permission set --user alice --capability project:write --project shop
+
+# 4. a key acting as alice, narrowed to the project
+docker compose exec wairon wairon host key mint --project shop --owner alice
 #   → wk_…  (shown once — hand this to the MCP client)
 ```
 
 Remote MCP clients then connect to `https://<host>/mcp` with
 `Authorization: Bearer wk_…` (put TLS in front — see 5.4). A single-project key
 needs no project selector.
+
+- A root unit (one with no `--parent`) must be `--kind business_entity`;
+  departments and teams go below it with `--parent <unitId>`.
+- `project:write` does not include `project:read`; grant both for an author.
+  Grant them at `--unit acme` instead of `--project shop` to cover every project
+  in the unit.
+- The owner (`alice`) needs no user record first: an id without one acts as a
+  service principal. People who sign in through SSO get their user record on
+  first login; assign their permissions to that user id.
+- A new instance needs no `wairon host doctor --fix`: the server seeds its
+  identity at first start. Run `host doctor` (a dry run) after upgrading an
+  existing data dir, and `--fix` when it lists a migration.
 
 ### 5.2 Dockerfile / compose
 
@@ -365,9 +390,11 @@ move as releases land.
 Two equivalent paths to the same control-plane logic:
 
 - **CLI over `docker exec` / SSH** (recommended — no admin port exposed):
-  `wairon host project create|list|destroy`, `wairon host key mint|list|revoke`,
-  `wairon host lock`. Reads `WAIRON_ADMIN_TOKEN` and
-  `WAIRON_DATA_DIR` from the container env.
+  `wairon host unit create`, `wairon host project create|list|destroy`,
+  `wairon host permission set|list|remove`, `wairon host key mint|list|revoke`,
+  `wairon host lock`, `wairon host doctor [--fix]`, and `host packs`, `git`,
+  `producer`, `secret`, `demo` (see the [CLI reference](../cli.md#wairon-host--control-plane)).
+  Reads `WAIRON_ADMIN_TOKEN` and `WAIRON_DATA_DIR` from the container env.
 - **HTTP admin API** — the same operations under `/admin/*`, bound to
   `127.0.0.1:8081` by default. To let your own UI/automation call it, run with
   `--admin-host 0.0.0.0`, publish `8081`, and **front it with TLS + your own

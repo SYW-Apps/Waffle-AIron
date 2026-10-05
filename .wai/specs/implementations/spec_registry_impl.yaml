@@ -222,14 +222,15 @@ methods:
       and `owns` are sets: where two authored texts bound one target (e.g. a member path and a
       leading `::` form), the canonical write keeps that target once, in first-written position. The
       positions the loader leaves raw — a trusted link's subsystem, a declared `calls` entry, a
-      `component:` credential source, and each qualified name inside a type string (a field, a
-      parameter, a return, and the display signature beside them) — are rewritten to the rewrite the
-      scan recorded for them, token by token, so a deprecated form leaves those positions too; a raw
-      one with no canonical text is left as written. Refuses before writing, naming the position and
-      the text, when a bound reference carries a deprecated form (leading `::`, `super::`, member
-      path) and bound outside or unresolved, since no canonical text exists for it. Compares the
-      serialized document with the stored one and writes through the file store only when they
-      differ, answering whether it wrote; the lock is never touched.
+      `component:` credential source, the type reference of each invariant a narrative step asserts
+      (`<type-ref>.<invariant-id>`, its invariant id kept), and each qualified name inside a type
+      string (a field, a parameter, a return, and the display signature beside them) — are rewritten
+      to the rewrite the scan recorded for them, token by token, so a deprecated form leaves those
+      positions too; a raw one with no canonical text is left as written. Refuses before writing,
+      naming the position and the text, when a bound reference carries a deprecated form (leading
+      `::`, `super::`, member path) and bound outside or unresolved, since no canonical text exists
+      for it. Compares the serialized document with the stored one and writes through the file store
+      only when they differ, answering whether it wrote; the lock is never touched.
     calls:
       - spec_file_store.read
       - spec_file_store.write
@@ -263,4 +264,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-10-04T19:53:48.152Z'
+updatedAt: '2026-10-05T06:50:21.870Z'

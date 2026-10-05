@@ -278,6 +278,13 @@ methods:
         targetComponent: local_admin_portal
         targetMethod: upgradeMembers
     symbol: upgradeMemberRecords
+  - name: explain
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: explain
 status: complete
 createdAt: '2026-07-04T12:53:10.615Z'
-updatedAt: '2026-10-01T17:39:42.948Z'
+updatedAt: '2026-10-05T17:30:41.665Z'

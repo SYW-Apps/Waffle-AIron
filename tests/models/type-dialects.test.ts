@@ -11,6 +11,25 @@ import { canonicalTypeText, parseTypeExpression } from '../../src/models/type-gr
 const ts = typeDialectFor('typescript')!;
 const expr = (text: string) => parseTypeExpression(text, 'returns').expression!;
 
+describe('result<T, E> in TypeScript: T, throwing E', () => {
+  it('writes the success type, and agrees with an annotation of it (E is never compared)', () => {
+    expect(ts.write(expr('result<Invoice, BillingError>'))).toBe('Invoice');
+    expect(ts.write(expr('async result<void, BillingError>'))).toBe('Promise<void>');
+    expect(ts.agrees('Invoice', expr('result<Invoice, BillingError>'), new Map())).toBe(true);
+    expect(ts.agrees('Promise<Invoice[]>', expr('async result<list<Invoice>, BillingError>'), new Map())).toBe(true);
+    expect(ts.agrees('string', expr('result<Invoice, BillingError>'), new Map())).toBe(false);
+  });
+
+  it('a TypeScript Result<T, E> annotation reads as result<T, E> and agrees with it', () => {
+    expect(canonicalTypeText(ts.read('Result<Invoice, BillingError>')!)).toBe('result<Invoice, BillingError>');
+    expect(ts.agrees('Result<Invoice, BillingError>', expr('result<Invoice, BillingError>'), new Map())).toBe(true);
+  });
+
+  it('carries the mapping in the brief table', () => {
+    expect(ts.mappingLines().some((l) => l.startsWith('result<T, E> → T, throwing E'))).toBe(true);
+  });
+});
+
 describe('type_dialect.forLanguage', () => {
   it('answers the TypeScript dialect for TypeScript and JavaScript files, and none for a language without one', () => {
     expect(ts.language).toBe('typescript');

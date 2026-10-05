@@ -267,7 +267,7 @@ describe('names with no neutral meaning (TYPE_NOT_NEUTRAL)', () => {
     expect(problemOf('Record<number, string>')).toBe('TYPE_NOT_NEUTRAL');
   });
 
-  it.each(['uuid', 'decimal', 'char', 'byte', 'time', 'tuple', 'result', 'error', 'never', 'box', 'arc', 'rc', 'ref', 'cell', 'refcell', 'mutex', 'rwlock', 'std', 'mcpserver', 'McpServer', 'UUID'])('%s is reported, read as any, with a replacement', (name) => {
+  it.each(['uuid', 'decimal', 'char', 'byte', 'time', 'tuple', 'error', 'never', 'box', 'arc', 'rc', 'ref', 'cell', 'refcell', 'mutex', 'rwlock', 'std', 'mcpserver', 'McpServer', 'UUID'])('%s is reported, read as any, with a replacement', (name) => {
     const parse = parseTypeExpression(name, 'param');
     expect(parse.problem?.code).toBe('TYPE_NOT_NEUTRAL');
     expect(parse.problem?.replacement).toBeTruthy();
@@ -275,8 +275,55 @@ describe('names with no neutral meaning (TYPE_NOT_NEUTRAL)', () => {
   });
 
   it('a legacy generic is reported too', () => {
-    expect(problemOf('Result<Invoice, Error>', 'returns')).toBe('TYPE_NOT_NEUTRAL');
     expect(problemOf('Box<Invoice>')).toBe('TYPE_NOT_NEUTRAL');
+    // result<T, E> is in the grammar; a bare `Error` as its failure is still a name with no neutral meaning.
+    expect(problemOf('Result<Invoice, Error>', 'returns')).toBe('TYPE_NOT_NEUTRAL');
+  });
+});
+
+describe('result<T, E> and the unit type ()', () => {
+  it('reads result<T, E> as a returns, and the Rust spelling Result<T, E> as its alias', () => {
+    expect(canon('result<Invoice, BillingError>', 'returns')).toBe('result<Invoice, BillingError>');
+    expect(canon('Result<Invoice, BillingError>', 'returns')).toBe('result<Invoice, BillingError>');
+    expect(parseTypeExpression('Result<Invoice, BillingError>', 'returns').expression).toEqual({
+      form: 'result', args: [{ form: 'named', name: 'Invoice', args: [] }, { form: 'named', name: 'BillingError', args: [] }],
+    });
+  });
+
+  it('reads () as void, so Result<(), E> is result<void, E>', () => {
+    expect(canon('()', 'returns')).toBe('void');
+    expect(canon('Result<(), WriteError>', 'returns')).toBe('result<void, WriteError>');
+    expect(canon('Promise<Result<(), WriteError>>', 'returns')).toBe('async result<void, WriteError>');
+    expect(canon('async result<list<Invoice>, BillingError>', 'returns')).toBe('async result<list<Invoice>, BillingError>');
+    expect(canon('result<Invoice?, BillingError>', 'type-method-returns')).toBe('result<Invoice?, BillingError>');
+    expect(canon('result<void, BillingError>', 'signature-returns')).toBe('result<void, BillingError>');
+  });
+
+  it('a () that is not a whole returns breaks the void rule', () => {
+    expect(problemOf('()', 'param')).toBe('TYPE_POSITION_INVALID');
+    expect(problemOf('list<()>', 'returns')).toBe('TYPE_POSITION_INVALID');
+  });
+
+  it('stands only as a whole returns or under its async (TYPE_POSITION_INVALID elsewhere)', () => {
+    expect(problemOf('result<Invoice, BillingError>', 'param')).toBe('TYPE_POSITION_INVALID');
+    expect(problemOf('result<Invoice, BillingError>', 'field')).toBe('TYPE_POSITION_INVALID');
+    expect(problemOf('list<result<Invoice, BillingError>>', 'returns')).toBe('TYPE_POSITION_INVALID');
+    expect(problemOf('result<Invoice, BillingError>?', 'returns')).toBe('TYPE_POSITION_INVALID');
+    expect(problemOf('result<Promise<Invoice>, BillingError>', 'returns')).toBe('TYPE_POSITION_INVALID');
+    expect(problemOf('result<Invoice, void>', 'returns')).toBe('TYPE_POSITION_INVALID');
+  });
+
+  it('takes exactly two arguments', () => {
+    expect(problemOf('Result<Invoice>', 'returns')).toBe('TYPE_EXPRESSION_INVALID');
+    expect(problemOf('result', 'returns')).toBe('TYPE_EXPRESSION_INVALID');
+  });
+
+  it('names both its types, holds many as its success does, and is vocabulary', () => {
+    const expr = parseTypeExpression('result<list<Invoice>, BillingError>', 'returns').expression!;
+    expect(typeNamedRefs(expr)).toEqual(['Invoice', 'BillingError']);
+    expect(typeIsMany(expr)).toBe(true);
+    expect(isTypeVocabulary('Result')).toBe(true);
+    expect(canonicalTypeText(expr)).toBe('result<list<Invoice>, BillingError>');
   });
 });
 

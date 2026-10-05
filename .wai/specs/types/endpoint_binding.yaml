@@ -16,8 +16,9 @@ fields:
   - name: transport
     type: string
     description: >-
-      The wire protocol: HTTP, gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI or Custom. It must
-      match the Portal's portalType.
+      The wire protocol: HTTP, gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI or Custom — or the
+      Portal's portalType spelling of it (HTTP_API is HTTP), stored as the endpoint's. It must be
+      the transport the Portal's portalType implies; another is refused, naming that one.
     optional: false
   - name: httpMethod
     type: string
@@ -77,4 +78,4 @@ fields:
     optional: true
 methods: []
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-09-19T22:58:36.040Z'
+updatedAt: '2026-10-05T17:31:49.083Z'

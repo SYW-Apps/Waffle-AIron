@@ -8,14 +8,16 @@ import type { InterfaceSpec, MethodParam, StoredInterfaceSpec, StoredTypeSpec, T
 //   type-position = [ "async" ] type ;          (* async only at the top of a returns *)
 //   type          = member { "|" member } ;
 //   member        = primary [ "?" ] ;
-//   primary       = name [ "<" type { "," type } ">" ] | "(" type ")" ;
+//   primary       = name [ "<" type { "," type } ">" ] | "(" type ")" | "(" ")" ;
 //   name          = ident { ( "::" | "." ) ident } ;
 //
 // The ten primitives are string, int, float, bool, bytes, date, datetime,
-// duration, void and any; the collections list<T>, set<T> and map<K, V>; `T?`
-// is T or no value; `A | B` is exactly one of the NAMED types; `async T` a call
-// completing later with T. A user generic `Page<T>` is a named type applied to
-// arguments.
+// duration, void and any (`()` is another spelling of void, the unit type);
+// the collections list<T>, set<T> and map<K, V>; `T?` is T or no value;
+// `A | B` is exactly one of the NAMED types; `async T` a call completing later
+// with T; `result<T, E>` a call completing with T or failing with E (Rust's
+// `Result<T, E>` is its alias). A user generic `Page<T>` is a named type
+// applied to arguments.
 //
 // Today's spellings — TypeScript's, and the legacy builtin vocabulary existing
 // trees can hold — are ALIASES the parser accepts and normalises (the table
@@ -26,21 +28,22 @@ import type { InterfaceSpec, MethodParam, StoredInterfaceSpec, StoredTypeSpec, T
 // collection, intersection, utility type, tuple) is TYPE_FORM_UNSUPPORTED; a
 // name with no neutral meaning (`number`, `uuid`, ...) is TYPE_NOT_NEUTRAL and
 // still answers a reading (`number` as float, the rest as any); a misplaced
-// `void` or `async`, a non-scalar map key or `T??` is TYPE_POSITION_INVALID.
+// `void`, `async` or `result`, a non-scalar map key or `T??` is
+// TYPE_POSITION_INVALID.
 //
 // Pure: a text and the position it stands in are the whole input. Prose
 // signatures are not structured positions and are never read here.
 // ---------------------------------------------------------------------------
 
-/** primitive | named | list | set | map | optional | union | async | applied. */
-export type TypeForm = 'primitive' | 'named' | 'list' | 'set' | 'map' | 'optional' | 'union' | 'async' | 'applied';
+/** primitive | named | list | set | map | optional | union | async | applied | result. */
+export type TypeForm = 'primitive' | 'named' | 'list' | 'set' | 'map' | 'optional' | 'union' | 'async' | 'applied' | 'result';
 
 /** type_expression — a type position's value, parsed under the neutral grammar. */
 export interface TypeExpression {
   form: TypeForm;
   /** The primitive's canonical name, the named type's reference as written, or an applied generic's head. */
   name?: string;
-  /** Element (list, set), key then value (map), inner (optional, async), members (union) or arguments (applied). */
+  /** Element (list, set), key then value (map), inner (optional, async), members (union), arguments (applied) or success then failure (result). */
   args: TypeExpression[];
 }
 
@@ -113,7 +116,24 @@ export interface TypeSpellingRepair {
   kind: TypedSpecKind;
   rewritten: TypeRespelling[];
   proposals: TypeRespelling[];
+  /** Each string-literal union, with the enum proposed for it; never written by the repair. */
+  enumProposals: TypeEnumProposal[];
   authorNeeded: TypeExpressionProblem[];
+}
+
+/** type_enum_proposal — one string-literal union position the doctor proposes an enum for, never applied. */
+export interface TypeEnumProposal {
+  specId: string;
+  kind: TypedSpecKind;
+  path: string;
+  /** The position's text as written. */
+  written: string;
+  /** The id proposed for the enum: the position's name in kebab-case. */
+  enumId: string;
+  /** The literal values, in written order, each once. */
+  values: string[];
+  /** The union also held null or undefined: the position is written as the enum id followed by `?`. */
+  optional: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,8 +167,11 @@ const PRIMITIVE_ALIASES: ReadonlyMap<string, string> = new Map([
   ['str', 'string'],
 ]);
 
-/** Generic aliases of a collection, the optional marker and async: head → canonical form and arity. */
-const GENERIC_ALIASES: ReadonlyMap<string, { form: 'list' | 'set' | 'map' | 'optional' | 'async'; arity: number }> = new Map([
+/** The canonical form a generic head reads as. */
+type GenericForm = 'list' | 'set' | 'map' | 'optional' | 'async' | 'result';
+
+/** Generic aliases of a collection, the optional marker, async and result: head → canonical form and arity. */
+const GENERIC_ALIASES: ReadonlyMap<string, { form: GenericForm; arity: number }> = new Map([
   ['list', { form: 'list', arity: 1 }], ['Array', { form: 'list', arity: 1 }], ['ReadonlyArray', { form: 'list', arity: 1 }],
   ['List', { form: 'list', arity: 1 }], ['vec', { form: 'list', arity: 1 }], ['vector', { form: 'list', arity: 1 }],
   ['set', { form: 'set', arity: 1 }], ['Set', { form: 'set', arity: 1 }], ['ReadonlySet', { form: 'set', arity: 1 }],
@@ -157,6 +180,9 @@ const GENERIC_ALIASES: ReadonlyMap<string, { form: 'list' | 'set' | 'map' | 'opt
   ['HashMap', { form: 'map', arity: 2 }],
   ['Option', { form: 'optional', arity: 1 }], ['Optional', { form: 'optional', arity: 1 }],
   ['Promise', { form: 'async', arity: 1 }],
+  // The success-or-failure type the mainstream languages with typed failures
+  // share (Rust, Swift, Kotlin, F#); Rust's spelling is its alias.
+  ['result', { form: 'result', arity: 2 }], ['Result', { form: 'result', arity: 2 }],
 ]);
 
 /** Legacy builtins with no neutral meaning (TYPE_NOT_NEUTRAL), each with its replacement. Read as any. */
@@ -167,7 +193,6 @@ const NOT_NEUTRAL: ReadonlyMap<string, string> = new Map([
   ['byte', 'int, or bytes for binary data'],
   ['time', 'datetime for an instant, or duration for an elapsed time'],
   ['tuple', 'a named value-object'],
-  ['result', 'the success type as the returns (failures as findings or throws), or a named value-object'],
   ['error', 'a named value-object'],
   ['never', 'void'],
   ['box', 'the inner type (ownership is an implementation detail)'],
@@ -219,7 +244,7 @@ function primitiveOf(name: string): string | undefined {
 }
 
 /** The generic alias a head spells, exactly first and then ignoring case. */
-function genericOf(name: string): { form: 'list' | 'set' | 'map' | 'optional' | 'async'; arity: number } | undefined {
+function genericOf(name: string): { form: GenericForm; arity: number } | undefined {
   return GENERIC_ALIASES.get(name) ?? LOWER_GENERIC.get(name.toLowerCase());
 }
 
@@ -436,6 +461,11 @@ class RawParser {
     const close = this.closingParen();
     const after = close === -1 ? undefined : this.tokens[close + 1];
     if (!after || after.t !== 'p' || after.v !== '=>') {
+      // `()` is the unit type: another spelling of void.
+      if (this.isP(')', 1)) {
+        this.at += 2;
+        return { k: 'name', name: 'void' };
+      }
       this.expect('(');
       const inner = this.type();
       this.expect(')');
@@ -549,8 +579,10 @@ interface ReadContext {
   position: TypePosition;
   /** At the top of the position (through parentheses only). */
   top: boolean;
-  /** `void` may stand here: the whole of a returns, or directly under its async. */
+  /** `void` may stand here: the whole of a returns, directly under its async, or as a result's success type. */
   voidAllowed: boolean;
+  /** `result<T, E>` may stand here: the whole of a returns, or directly under its async. */
+  resultAllowed: boolean;
   /** The position's optional flag is set: `T | undefined` reads as T. */
   omittable: boolean;
   /** Reading code rather than a spec: `number` reads as the loose number marker. */
@@ -581,7 +613,7 @@ function optionalOf(inner: TypeExpression): TypeExpression {
 
 /** A context one level down: no longer at the top, so neither async nor a bare void stands there. */
 function inner(ctx: ReadContext): ReadContext {
-  return { ...ctx, top: false, voidAllowed: false, omittable: false };
+  return { ...ctx, top: false, voidAllowed: false, resultAllowed: false, omittable: false };
 }
 
 /** Read one raw node into its canonical expression under the context, or throw the problem. */
@@ -619,8 +651,22 @@ function asyncOf(innerNode: Raw, ctx: ReadContext, notes: ReadNotes, spelled: st
   if (!ctx.top || !RETURNS_POSITIONS.has(ctx.position)) {
     throw new TypeProblemError('TYPE_POSITION_INVALID', `${spelled} may stand only at the top of a returns, not in a ${ctx.position}`);
   }
-  const read = normalise(innerNode, { ...inner(ctx), voidAllowed: true }, notes);
+  const read = normalise(innerNode, { ...inner(ctx), voidAllowed: true, resultAllowed: true }, notes);
   return { form: 'async', args: [read] };
+}
+
+/** `result<T, E>`: only as a whole returns or directly under its async; T may be void, E never. */
+function resultOf(args: Raw[], ctx: ReadContext, notes: ReadNotes, spelled: string): TypeExpression {
+  if (!ctx.resultAllowed) {
+    throw new TypeProblemError(
+      'TYPE_POSITION_INVALID',
+      `${spelled} may stand only as a whole returns (or under its async), not in a ${ctx.top ? ctx.position : 'collection, union, optional or argument'}`,
+      'the success type here (a failure belongs to a method\'s returns)',
+    );
+  }
+  const ok = normalise(args[0], { ...inner(ctx), voidAllowed: true }, notes);
+  const err = normalise(args[1], inner(ctx), notes);
+  return { form: 'result', args: [ok, err] };
 }
 
 /** A bare name: a primitive, an alias, a legacy name, a none, or a named type. */
@@ -663,6 +709,7 @@ function appliedName(name: string, args: Raw[], ctx: ReadContext, notes: ReadNot
       throw new TypeProblemError('TYPE_EXPRESSION_INVALID', `"${name}" takes ${alias.arity} type argument${alias.arity === 1 ? '' : 's'}, ${args.length} given`);
     }
     if (alias.form === 'async') return asyncOf(args[0], ctx, notes, `${name}<...>`);
+    if (alias.form === 'result') return resultOf(args, ctx, notes, `${name}<...>`);
     if (alias.form === 'optional') return optionalOf(normalise(args[0], inner(ctx), notes));
     const read = args.map((a) => normalise(a, inner(ctx), notes));
     if (alias.form === 'map') assertMapKey(read[0], args[0]);
@@ -754,6 +801,8 @@ export function canonicalTypeText(expr: TypeExpression): string {
       return `${expr.form}<${canonicalTypeText(expr.args[0])}>`;
     case 'map':
       return `map<${canonicalTypeText(expr.args[0])}, ${canonicalTypeText(expr.args[1])}>`;
+    case 'result':
+      return `result<${canonicalTypeText(expr.args[0])}, ${canonicalTypeText(expr.args[1])}>`;
     case 'optional': {
       const innerText = canonicalTypeText(expr.args[0]);
       return expr.args[0].form === 'union' ? `(${innerText})?` : `${innerText}?`;
@@ -774,16 +823,17 @@ export function typeNamedRefs(expr: TypeExpression): string[] {
   return [...own, ...expr.args.flatMap(typeNamedRefs)];
 }
 
-/** type_expression.isMany — a list, set or map at the top, under `?` or under async. */
+/** type_expression.isMany — a list, set or map at the top, under `?`, under async or as a result's success type. */
 export function typeIsMany(expr: TypeExpression): boolean {
   if (expr.form === 'list' || expr.form === 'set' || expr.form === 'map') return true;
-  if (expr.form === 'optional' || expr.form === 'async') return typeIsMany(expr.args[0]);
+  if (expr.form === 'optional' || expr.form === 'async' || expr.form === 'result') return typeIsMany(expr.args[0]);
   return false;
 }
 
 /** The context one position is read in. */
 function contextFor(position: TypePosition, omittable: boolean, looseNumber = false): ReadContext {
-  return { position, top: true, voidAllowed: RETURNS_POSITIONS.has(position), omittable, looseNumber };
+  const returns = RETURNS_POSITIONS.has(position);
+  return { position, top: true, voidAllowed: returns, resultAllowed: returns, omittable, looseNumber };
 }
 
 /**
@@ -1011,6 +1061,60 @@ export function typeProblemIntProposal(problem: TypeExpressionProblem): TypeResp
   const parse = parseTypePosition(problem.written.replace(NUMBER_NAME, 'int'), 'returns');
   if (!parse.expression || parse.problem) return null;
   return { specId: problem.specId, kind: problem.kind, path: problem.path, written: problem.written, stored: parse.canonical };
+}
+
+/** A literal's value: a string literal without its quotes, or null for any other literal. */
+function stringLiteralValue(text: string): string | null {
+  const quote = text[0];
+  if ((quote !== '\'' && quote !== '"' && quote !== '`') || text[text.length - 1] !== quote) return null;
+  return text.slice(1, -1).replace(/\\(.)/g, '$1');
+}
+
+/** A position name in kebab-case: `scopeKind` and `scope_kind` give `scope-kind`. */
+function kebabOf(name: string): string {
+  return name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/[\s_.]+/g, '-').toLowerCase();
+}
+
+/**
+ * type_expression_problem.enumProposal — the enum a string-literal union may
+ * become, PROPOSED and never applied: for a TYPE_FORM_UNSUPPORTED problem
+ * collected over a spec whose written text is a union of string literals
+ * (nones aside, which make the proposal optional), the enum id taken from the
+ * position's name in kebab-case and the values in written order, each once.
+ * Null for any other problem or text. Pure.
+ */
+export function typeProblemEnumProposal(problem: TypeExpressionProblem): TypeEnumProposal | null {
+  if (problem.code !== 'TYPE_FORM_UNSUPPORTED') return null;
+  if (problem.specId === undefined || problem.kind === undefined || problem.path === undefined) return null;
+  let raw: Raw;
+  try {
+    raw = readRaw(problem.written);
+  } catch (e) {
+    if (e instanceof TypeSyntaxError) return null;
+    throw e;
+  }
+  const members = raw.k === 'union' ? raw.members : [raw];
+  const values: string[] = [];
+  let optional = false;
+  for (const member of members) {
+    if (member.k === 'name' && member.args === undefined && NONES.has(member.name)) {
+      optional = true;
+      continue;
+    }
+    const value = member.k === 'literal' ? stringLiteralValue(member.text) : null;
+    if (value === null) return null;
+    if (!values.includes(value)) values.push(value);
+  }
+  if (values.length === 0) return null;
+  return {
+    specId: problem.specId,
+    kind: problem.kind,
+    path: problem.path,
+    written: problem.written,
+    enumId: kebabOf(positionNameOf(problem.path)),
+    values,
+    optional,
+  };
 }
 
 /** No facts at all: what a scan starts from. */

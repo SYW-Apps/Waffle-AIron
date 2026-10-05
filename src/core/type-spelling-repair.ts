@@ -7,7 +7,7 @@ import {
   signatureFacts,
   typeSpellingFacts,
 } from './specs.js';
-import { typeProblemIntProposal, type TypeSpellingRepair } from '../models/index.js';
+import { typeProblemEnumProposal, typeProblemIntProposal, type TypeSpellingRepair } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Type-spelling repair (sdd_core, behind `wairon doctor`)
@@ -23,9 +23,10 @@ import { typeProblemIntProposal, type TypeSpellingRepair } from '../models/index
 // it stands).
 //
 // What it does NOT do is guess. A `number` position whose name plainly says a
-// whole number gets int PROPOSED (type_expression_problem.intProposal) and is
-// left as written for an author to confirm; every other position no rewrite
-// can settle is listed as needing an author. And an interface holding a
+// whole number gets int PROPOSED (type_expression_problem.intProposal), and a
+// union of string literals an enum (type_expression_problem.enumProposal); each
+// is left as written for an author to confirm, and every other position no
+// rewrite can settle is listed as needing an author. And an interface holding a
 // sourced method whose restatement differs from its source is never re-saved:
 // the writer stores a sourced method with only its source, so re-saving it
 // would decide that contract for its author (SIGNATURE_SOURCE_RESTATED keeps
@@ -55,7 +56,7 @@ export function repairTypeSpellings(apply: boolean): TypeSpellingRepair[] {
     const key = `${kind}:${specId}`;
     let repair = repairs.get(key);
     if (!repair) {
-      repair = { specId, kind, rewritten: [], proposals: [], authorNeeded: [] };
+      repair = { specId, kind, rewritten: [], proposals: [], enumProposals: [], authorNeeded: [] };
       repairs.set(key, repair);
     }
     return repair;
@@ -71,7 +72,9 @@ export function repairTypeSpellings(apply: boolean): TypeSpellingRepair[] {
     if (problem.specId === undefined || problem.kind === undefined || !own(problem.specId)) continue;
     const repair = repairOf(problem.specId, problem.kind);
     const proposal = typeProblemIntProposal(problem);
+    const enumProposal = proposal ? null : typeProblemEnumProposal(problem);
     if (proposal) repair.proposals.push(proposal);
+    else if (enumProposal) repair.enumProposals.push(enumProposal);
     else repair.authorNeeded.push(problem);
   }
   const planned = [...repairs.values()];
@@ -95,6 +98,6 @@ export function repairTypeSpellings(apply: boolean): TypeSpellingRepair[] {
     invalidateSpecCache();
   }
 
-  // Step 11: the planned repairs, written or not, with their proposals and the positions needing an author.
+  // Step 11: the planned repairs, written or not, with their int and enum proposals and the positions needing an author.
   return planned;
 }

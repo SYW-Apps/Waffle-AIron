@@ -381,6 +381,11 @@ describe('applyByDefault seeds NEW projects (A5)', () => {
 describe('enforceReproducibility finally enforces something (A6)', () => {
   /** Validate a project holding one selection, returning its issue codes. */
   function codesFor(selection: unknown, rules: Record<string, unknown> = {}): string[] {
+    return issuesFor(selection, rules).map((i) => i.code);
+  }
+
+  /** Validate a project holding one selection, returning its issues. */
+  function issuesFor(selection: unknown, rules: Record<string, unknown> = {}): { code: string; message: string }[] {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-repro-'));
     created.push(dir);
     fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
@@ -397,7 +402,7 @@ describe('enforceReproducibility finally enforces something (A6)', () => {
     invalidateSpecCache();
     // Pass rules exactly as the validate command and the MCP tool do — otherwise
     // the project's opt-out never reaches the rule.
-    return validateProject({ rules: loadProjectConfig()?.rules }).issues.map((i) => i.code);
+    return validateProject({ rules: loadProjectConfig()?.rules }).issues;
   }
 
   it('warns on a floating selection — it resolves off whatever this machine has', () => {
@@ -420,6 +425,16 @@ describe('enforceReproducibility finally enforces something (A6)', () => {
     const codes = codesFor({ name: 'demo', bundle: true });
     expect(codes).not.toContain('UNPINNED_PACK_SELECTION');
     expect(codes).not.toContain('PACK_SOURCE_UNFETCHABLE');
+  });
+
+  it('names the remedies when nothing can obtain the pack: bundle it (one, or --all), or record a URL for pack sync', () => {
+    store();
+    installPackFromDirectory(packSource('demo', '1.2.0'));
+    const found = issuesFor({ name: 'demo', version: '1.2.0' }).find((i) => i.code === 'PACK_SOURCE_UNFETCHABLE')!;
+    expect(found.message).toContain('wairon pack bundle demo');
+    expect(found.message).toContain('wairon pack bundle --all');
+    expect(found.message).toContain('wairon pack use demo --source <url>');
+    expect(found.message).toContain('wairon pack sync');
   });
 
   it('warns when nothing can obtain the pack elsewhere', () => {

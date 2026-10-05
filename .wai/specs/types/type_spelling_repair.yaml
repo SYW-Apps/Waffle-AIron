@@ -3,11 +3,13 @@ id: type_spelling_repair
 name: TypeSpellingRepair
 description: >-
   One spec the doctor's type-spelling repair plans for: the positions it rewrites to their canonical
-  spelling, the `number` positions for which it only PROPOSES int, and the positions only an author
-  can settle. A proposal is never applied by the repair: it is offered where the name plainly says
-  an integer (a count, size, length, limit, port, step, index, depth, level, days, minutes, seconds,
-  bytes, version, ...) and an author confirms it by writing int, or writes float; a number position
-  with no such name gets no proposal and stays reported as TYPE_NOT_NEUTRAL until an author chooses.
+  spelling, the `number` positions for which it only PROPOSES int, the string-literal unions for
+  which it only PROPOSES an enum, and the positions only an author can settle. A proposal is never
+  applied by the repair: int is offered where the name plainly says an integer (a count, size,
+  length, limit, port, step, index, depth, level, days, minutes, seconds, bytes, version, ...) and
+  an author confirms it by writing int, or writes float; an enum is offered for a union of string
+  literals and an author confirms it by defining the enum and writing its id. A number position with
+  no such name gets no proposal and stays reported as TYPE_NOT_NEUTRAL until an author chooses.
 subsystem: sdd_core
 fields:
   - name: specId
@@ -31,11 +33,15 @@ fields:
   - name: authorNeeded
     type: list<TypeExpressionProblem>
     description: >-
-      Each position no mechanical rewrite can settle: an inline function type (name a signature
-      type), a literal union (name an enum), a union mixing a primitive, a number without a
-      proposal, a builtin with no neutral meaning, an expression that does not parse
+      Each position no mechanical rewrite and no proposal can settle: an inline function type (name
+      a signature type), a union mixing a primitive, a number without a proposal, a builtin with no
+      neutral meaning, an expression that does not parse
+    optional: false
+  - name: enumProposals
+    type: list<TypeEnumProposal>
+    description: Each string-literal union position, with the enum proposed for it; never written by the repair
     optional: false
 methods: []
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:03:25.363Z'
-updatedAt: '2026-10-04T23:40:42.113Z'
+updatedAt: '2026-10-05T06:47:37.885Z'

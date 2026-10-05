@@ -29,6 +29,12 @@ describe('the design export JSON Schema', () => {
     expect(fs.readFileSync(file, 'utf8')).toBe(text);
   });
 
+  it('declares its draft and claims no $id it cannot resolve', () => {
+    const committed = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+    expect(committed.$schema).toBe('http://json-schema.org/draft-07/schema#');
+    expect(committed).not.toHaveProperty('$id');
+  });
+
   it('leaves objects open, so a newer minor still validates against it', () => {
     const closed: string[] = [];
     const walk = (node: unknown, at: string): void => {

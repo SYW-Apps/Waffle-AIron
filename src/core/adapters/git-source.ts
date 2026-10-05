@@ -155,6 +155,23 @@ function commitListed(listed: string, ref: string): string | undefined {
 }
 
 /**
+ * igit_source_adapter.trackedFiles — the files under the pathspecs (relative to
+ * the directory) that the index of the work tree holding the directory tracks,
+ * committed or staged, answered relative to the directory. Ignored and
+ * untracked files are never listed. Null when the directory is in no work tree
+ * or git is not installed: "git tracks none" is an empty list, "no git to ask"
+ * is null. No network.
+ */
+export function trackedFiles(directory: string, pathspecs: string[]): string[] | null {
+  if (pathspecs.length === 0) return [];
+  try {
+    return git(['ls-files', '-z', '--', ...pathspecs], directory).split('\0').filter((p) => p !== '');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * igit_source_adapter.head — the commit checked out in the work tree that
  * holds a directory, or null when the directory is in no git work tree (or git
  * is not installed). No network; provenance only.

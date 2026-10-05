@@ -58,6 +58,7 @@ its `typeMapping`; the others are the idiomatic spellings to follow.
 | `T?` | `T \| null` | `Option<T>` | `T \| None` | `*T` | nullable `T` / `T?` |
 | `A \| B` | `A \| B` | `enum` with payload | `A \| B` | an interface both implement | `sealed` hierarchy |
 | `async T` | `Promise<T>` | `async fn` → `T` | `async def` → `T` | a blocking call or a channel | `CompletableFuture<T>` / `suspend` / `Task<T>` |
+| `result<T, E>` (returns only; `result<void, E>` for `Result<(), E>`) | `T`, throwing `E` on failure (`void` for `result<void, E>`) | `Result<T, E>` (`()` for `void`) | `T`, raising `E` | `(T, error)` | `T` with `throws E` / `Result<T>` / `T`, throwing `E` |
 | enum `E` | `type E = 'a' \| 'b'` | `enum E` | `class E(StrEnum)` | typed `string` constants | `enum E` |
 | named scalar `E` holding `P` | `type E = P` | `struct E(P)` | `E = NewType('E', P)` | `type E P` | a value class / `@JvmInline value class E` / `record struct E(P)` |
 | `any` | `unknown` | `serde_json::Value` | `Any` | `any` | `Object` / `Any` / `object` |

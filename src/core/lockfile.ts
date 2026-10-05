@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { aiDir, aiDirAt } from '../utils/fs.js';
+import { aiDir, aiDirAt, withLineEndings } from '../utils/fs.js';
 import type { StateId } from './statehash.js';
 // The approver is shared vocabulary, not this store's private shape: a command
 // that only wants to RENDER one must not have to reach a Store to do it.
@@ -152,13 +152,14 @@ function normalizeRecord(raw: unknown): LockRecord {
 
 /**
  * Persist the lock record atomically to .wai/lock.json (overwrites any prior).
- * A legacy `children` map is never written: stage 5 records `members` instead.
+ * A legacy `children` map is never written: `members` is recorded instead.
  */
 export function writeLockRecord(record: LockRecord): void {
   const p = lockPath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(withSortedMaps(record), null, 2) + '\n');
+  // The record keeps the line endings it is checked out with (CRLF stays CRLF).
+  fs.writeFileSync(tmp, withLineEndings(p, JSON.stringify(withSortedMaps(record), null, 2) + '\n'));
   fs.renameSync(tmp, p);
 }
 

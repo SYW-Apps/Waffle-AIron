@@ -475,7 +475,7 @@ export const ExternalDeclarationSchema = z.object({
   /**
    * The producer's public names this project imports, so its specs may name
    * them bare: `['*']` imports every public name the producer exports to this
-   * project, `[waffler-error]` only those. Plain strings: a malformed entry is
+   * project, `[shared-error]` only those. Plain strings: a malformed entry is
    * REPORTED (the declaration's problem), never unreadable.
    */
   use: z.array(z.string()).optional(),

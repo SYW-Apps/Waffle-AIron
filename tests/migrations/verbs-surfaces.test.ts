@@ -70,7 +70,7 @@ describe('stage 6 — the verbs on the CLI (runMigration)', () => {
     expect(report.stdout).toContain('id: ledger → books-ledger');
     expect(report.stdout).toContain('ledger::ledger-portal → books-ledger::ledger-portal');
     expect(report.stdout).toContain('Report only (--report): nothing was written.');
-    expect(report.stdout).toMatch(/To re-lock once applied: ledger, \., billing/);
+    expect(report.stdout).toContain('To re-lock once applied: ledger, this project (.), billing');
     expect(dirHash(f.top)).toEqual(before);
 
     const unanswered = await cli(f.top, home, 'project', 'rename', 'books-ledger', '--project', 'ledger');
@@ -81,7 +81,8 @@ describe('stage 6 — the verbs on the CLI (runMigration)', () => {
     const applied = await cli(f.top, home, 'project', 'rename', 'books-ledger', '--project', 'ledger', '--yes');
     expect(applied.code, applied.stdout).toBe(0);
     expect(applied.stdout).toContain('Applied the rename migration');
-    for (const dir of ['ledger', '.', 'billing']) expect(applied.stdout).toContain(`Re-lock ${dir}: run \`wairon lock\` there.`);
+    for (const dir of ['ledger', 'billing']) expect(applied.stdout).toContain(`Re-lock ${dir}: run \`wairon lock\` there.`);
+    expect(applied.stdout).toContain('Re-lock this project (.): run `wairon lock` here.');
     expect(configOf(f.ledger)).toMatchObject({ id: 'books-ledger', previousIds: ['ledger'] });
   }, 600_000);
 

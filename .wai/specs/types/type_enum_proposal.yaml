@@ -1,0 +1,45 @@
+kind: value-object
+id: type_enum_proposal
+name: TypeEnumProposal
+description: >-
+  One string-literal union position the doctor's type-spelling repair turns into an enum PROPOSAL,
+  never applied: the enum to define (an id taken from the position's name) and its values in written
+  order. An author confirms it by defining the enum (sdd_add_type kind enum) and writing its id at
+  the position; until then the position stays as written and is reported as TYPE_FORM_UNSUPPORTED.
+fields:
+  - name: specId
+    type: string
+    description: The interface or type holding the position
+    optional: false
+  - name: kind
+    type: TypedSpecKind
+    description: The kind of the spec holding the position
+    optional: false
+  - name: path
+    type: string
+    description: Where in the spec, e.g. methods.save.params.scope
+    optional: false
+  - name: written
+    type: string
+    description: The position's text as written, e.g. 'global' | 'local'
+    optional: false
+  - name: enumId
+    type: string
+    description: >-
+      The id proposed for the enum: the position's name (the param or field, or the method whose
+      returns it is) in kebab-case
+    optional: false
+  - name: values
+    type: list<string>
+    description: The literal values, in written order, each once
+    optional: false
+  - name: optional
+    type: bool
+    description: >-
+      Whether the union also held null or undefined, so the position is written as the enum id
+      followed by ?
+    optional: false
+methods: []
+sourcePath: src/models/type-grammar.ts
+createdAt: '2026-10-05T06:47:32.704Z'
+updatedAt: '2026-10-05T06:47:33.276Z'

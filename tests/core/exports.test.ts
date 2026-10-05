@@ -185,6 +185,17 @@ describe('export index: the project table', () => {
     expect(t.problems).toEqual([expect.objectContaining({ kind: 'invalid', publicName: 'partner-api' })]);
   });
 
+  it('names a sourceless entry that repeats another entry\'s id as a duplicate, with both entry numbers', () => {
+    const t = project([
+      { id: 'payments-api', subsystem: 'payments', component: 'payment_portal' },
+      { id: 'payments-api', type: 'REST', details: 'a stray copy' },
+    ]);
+    expect(t.entries.map((e) => e.publicName)).toEqual(['payments-api']);
+    const problem = t.problems.find((p) => p.kind === 'invalid')!;
+    expect(problem.detail).toContain('duplicate entry "payments-api"');
+    expect(problem.detail).toContain('entry #2 names no source and no item, while entry #1 declares the same id');
+  });
+
   it('answers an empty table for a project with no L0', () => {
     const t = resolveProjectTable(null, SUBSYSTEMS, COMPONENTS, INTERFACES, TYPES, tables(SUBSYSTEMS), { ...NO_SOURCES, namespace: 'billing' });
     expect(t).toEqual({ owner: 'billing', level: 'project', entries: [], problems: [] });

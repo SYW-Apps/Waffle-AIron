@@ -1,5180 +1,623 @@
 # Changelog
 
-## Unreleased (from v5.1.0)
+## Unreleased — v6.0.0 (from v5.1.0)
 
-**Breaking.** Merge dev → main with `[major]` in the merge commit message →
-**v6.0.0**. Nine changes are visible on upgrade without any action by the user,
-and each needs one (see *Upgrading* below): machine-wide packs no longer apply to
-a project that has not declared them, existing lock records read as stale — the
-identity they record was machine-specific, and making it reproducible moves it
-once more — a project referencing a global pack's profile can newly fail
-`validate --ci`, and so can a chained subproject whose gate was waving cross-tree
-findings through or whose nested mount reaches outside its own project, a tree
-that still has a Specialist or a Gateway or breaks the new Supervisor and Actor
-dependency rules, a tree whose narratives or names the new readability checks
-judge, a tree whose code↔spec conformance the tightened call and body checks
-can now follow — a method's declared `calls` among them — or a tree holding a case the fixed validator rules used to miss
-— including a narrative step carrying a field its own step type cannot have, or a
-tree whose coarse `lint.allow` stops covering findings that name a site, or a
-tree whose intent-level methods were vouching for collaborators no narrative
-reaches now that the detail dial no longer does that for them. A
-scripted `sdd_update_spec` delta can also behave differently, where it was
-relying on a merge rule that was silently wrong (item 10), and a scripted call
-to a create tool that carries an unknown key inside a method, a param or a
-narrative step is now refused where it used to be stripped (item 13). Thirteen
-`sdd_*` tools now declare an `outputSchema`, which changes what a conforming MCP
-client expects back from them (item 14). The library surface narrows too:
-`@wairon/cli` stops re-exporting 120 runtime names that no contract ever named
-(item 4). Stage 2 adds three more: a hosted landscape entry with no audience now
-defaults to `instance` rather than `public`, a legacy L0 entry sourced from a chained
-member binds only what that member exports from its own L0, and `doctor --fix` asks
-before it applies the chaining migration (`--yes` in a script). Stage 3 renames and
-removes the mount writers' commands and tools with no aliases, re-keys every member's
-specs by its project id (one re-lock), and gives the deprecated reference and mount
-forms one release of grace. Stage 4 gives every cross-project edge one judge: a
-project's own gate reads only its own files and pins, `validate` at a parent becomes the
-family run (whose member checks can newly fail `--ci`), five codes escalate to errors, and
-`validateSddTree` is renamed `validateProject` with no alias. The governance stage makes
-every pack command that writes a project's packs show that pack's impact and ask first in a
-terminal (`--yes` for scripts), and adds three codes a parent's requirements can newly fail
-on. Stage 5 makes approval per project: every lock reads stale once, code findings stop
-blocking `wairon lock` (CI still enforces them), the lock record moves to format 2, and
-`generate` stops cascading into members. Stage 6 changes a family's shape only through
-plan-first, all-or-nothing migrations: `member internalize` no longer deletes the member's
-metadata (and takes `--into`/`--packs`), `subsystem externalize` asks before it applies
-(`--yes` in a script), and a rename always asks for a re-lock. Stage 7 makes every hosted
-member a project record of its own, inheriting access through its parent: hosted operators run
-`wairon host doctor --fix` once, a qualified token is mapped to the member's record id, and a
-hosted detach or adopt moves the member's directory. Stage 8 makes a new member a **part**
-by default (`--project` for a project) and `subsystem externalize` a storage move into a part
-(`--as project` for the old behaviour), renames `sdd_add_member`'s `path` to `source`, deprecates
-the long-form member `path` key, refuses `../` and git members on hosted, and compares path
-externals per use (re-pin once). The debt triage makes a hosted token mint require its
-project list (`*` for the full reach) and drops `environment` from hosted project init. The type
-grammar respells every stored type position once (`doctor --fix`, then a re-lock), refuses `number`
-and the forms it leaves out at write, retires `LANGUAGE_FOREIGN_BUILTIN` and moves every surface
-digest once (re-pin). The Supervisor doctrine judges a Supervisor's data calls by their
-declared effect and reports a `lint.allow` that names an error, so a tree can newly fail on
-either. Nothing here is purely additive, so `[minor]` would understate it.
+**Breaking: merge dev → main with `[major]` in the merge commit message → v6.0.0.**
 
-### A third severity: `notice`
+v6 makes a wairon project a set of **projects that name each other**. A project has
+an id, its levels export like a module, and another project is reached only as
+`alias::name` through a member or a declared external. A part of a system that only
+lives in another folder or repository is a **part**, not a project. Around that:
+approval is per project and the same on every machine, packs apply only where a
+project selects them, contract types use one language-neutral grammar, logic is an
+Orchestrator (Specialist and Gateway retire), and the validator checks readability
+and reads the code more closely.
 
-A finding can now be a **notice** — reported everywhere, never a failure. It sits
-between `off` and `warning`: the CLI, `wairon doctor`, the MCP tools, the hosted
-web views, the specs editor and the canvas all list notices distinctly, and
-neither `valid` nor `validate --ci` ever fails on one.
+Who is affected:
 
-- **Opt in per code.** `rules.sddRuleSeverity` accepts `notice`, so a team can
-  soften a warning to a notice, or raise a code later shipped as a notice to a
-  warning or an error. The project-identity and export-table checks below are
-  the first built-in codes that default to it.
-- **Allows and the debt register cover notices**, and a draft context never turns
-  anything into a notice (the downgrade is at most `warning`).
-- **The lock record counts notices** beside errors and warnings.
-- **MCP clients:** `sdd_validate_tree` (and `validateTopology`) return a separate
-  `notices` list in their structured content, a finding's `severity` may be
-  `notice`, and the candidate gate's verdict carries its notices. A client that
-  switches on severity should handle the third value.
-- **Fixed on the way:** the legacy hosted validate view read a field
-  `sdd_validate_tree` never sends, so it reported every tree as clean.
+- **Every project:** the first `validate --ci` after upgrading reports new findings,
+  and every lock reads stale once. Run the upgrade steps below.
+- **Families (a project with chained subprojects):** the chained mounts become
+  `members`. `wairon doctor --fix` migrates them.
+- **Hosted operators:** run `wairon host doctor --fix` once. Several admin API
+  answers and defaults change.
+- **CI:** `validate --ci` can newly fail. The optional `lock-check` workflow is new.
+- **MCP clients and scripts:** some tools are renamed or removed, 16 tools declare an
+  `outputSchema`, and nested unknown keys are refused.
+- **Library embedders:** `validateSddTree` is now `validateProject`, with no alias,
+  and 99 exports are gone.
 
-### A project has an id, and every level exports like a module
+### Upgrading from v5.1.0
 
-Stage 2a of the chained-subsystems work: the declarations the cross-project model
-rests on. It changes files and adds findings, not verdicts — every new code except
-three is a notice.
+Follow these in order. Every `doctor --fix` rewrite moves the gate identity, so lock
+last.
 
-**The project id.** `project.yaml` gains `id`, a slug of `[a-z0-9-_.]` that starts
-and ends with a letter or digit. It is the project's identity; `name` stays the
-display name.
+1. **Upgrade wairon everywhere at once:** developer machines, CI (and the
+   `setup-wairon` action's `version`) and the hosted server. Then restart or
+   reconnect each AI tool's wairon MCP server. A server whose build on disk changed the
+   spec schemas now refuses every spec write and says so.
+2. **Hosted operators: `wairon host doctor`, then `wairon host doctor --fix`.** The
+   dry run prints the plan. `--fix` migrates a data dir that predates the permission
+   model. It also registers every member that hosted families declare as a project
+   record of its own. It grants nothing: access is inherited, so everyone's reach
+   stays the same, and the plan shows that before anything is written. `wairon serve`
+   warns at startup while this is pending.
+   - To upgrade a hosted project's spec tree, pull it into a checkout
+     (`wairon remote pull`), run steps 3–8 there, then push it back
+     (`wairon remote push --force`, which backs up the tree it replaces).
+3. **Read the plan first: `wairon doctor`** at the top of the project. It writes
+   nothing. It lists every repair `--fix` will make, for this project and for each
+   member below it. In a family, also run:
+   - `wairon doctor --report chaining`, for the member migration and the new
+     cross-project dependencies it adds;
+   - `wairon doctor --report composed-validation`, for which of today's findings are
+     new and why.
+   - Read the new dependencies first. A cycle between two projects
+     (`PROJECT_DEPENDENCY_CYCLE`) usually means a reference that should move.
+4. **Decide on machine-wide packs.** Packs installed machine-wide no longer apply to a
+   project that has not selected them. Either:
+   - let the next step record the packs it applies today as explicit selections; or
+   - set `extensions.useGlobalPacks: true` in `.wai/project.yaml` first, to keep the
+     old behaviour on that machine.
 
-- **Who writes it.** `wairon init`, provisioning and hosted project creation (the
-  hosted project id) declare it, and a chained child — created, externalized,
-  backfilled or completed by `generate` — is identified by its mount's subsystem id.
-  No ordinary save writes one for you: a default can be wrong, so only deliberate
-  writers set it.
-- **A project without one** answers to its name slugified and gets
-  `PROJECT_ID_DEFAULTED` (**notice** — the first built-in code that defaults to one).
-  A name that yields no slug, or a declared id that breaks the grammar, is
-  `PROJECT_ID_AMBIGUOUS` (warning).
-- **The lock records it** as `projectId`, locally and hosted. An id that later
-  differs from the one the lock approved is `PROJECT_ID_CHANGED` (error): restore it,
-  or rename deliberately and re-lock. A lock taken before this release records no id
-  and judges nothing.
+   A subsystem whose `profile` comes from an unselected pack reports `UNKNOWN_PROFILE`.
+5. **Run `wairon doctor --fix` once, from the top of the family.** In scripts, use
+   `--fix --yes`. Writes outside the project root also need `--global`. It applies:
+   - recovery of an unfinished family migration;
+   - pack selections;
+   - Specialists retyped to Orchestrators with a `dependencyClass`;
+   - stray narrative-step fields (`FOREIGN_STEP_FIELD`) removed;
+   - stored signature texts regenerated;
+   - stored type spellings rewritten to the canonical grammar. This includes
+     `Result<T, E>` → `result<T, E>`, `()` → `void`, `T[]` → `list<T>`,
+     `T | null` → `T?` and `Promise<T>` → `async T`;
+   - the member migration. Each legacy L1 mount moves into `members`, ids are
+     declared, the exports, externals and `use` imports each reference needs are
+     written, deprecated reference forms are rewritten to `alias::name` or a bare
+     local id, and the result is pinned. The old family surface pins are deleted.
 
-**Export tables.** A subsystem's `publicInterfaces` and the L0 `publicInterfaces` are
-now export tables, the way a module's exports are: a level re-exports what a level
-below already declares instead of redeclaring it.
+   **Members are repaired by the same run.** Every member inside the project root gets
+   the per-project repairs, each line marked `[alias]`. A member in a sibling checkout
+   (`../x`) is named with the command to run in its own directory.
 
-- **Entry forms, the same at L1 and L0.** An own item as today; a named re-export
-  `{ from: payments, component: payment_portal, as: payments }` (optionally narrowed
-  with `interface`); a type exported by name `{ from: payments, typeDef: money }`; and
-  a wildcard `{ from: shipping }` that re-exports everything that subsystem exports.
-  `type` and `details` are optional on a re-export, which inherits its target's. The
-  public name is `as`, else the narrowed interface, else the component or type id.
-- **Existing L0 entries keep their names.** A legacy `{ subsystem, component, id }`
-  reads as `{ from: subsystem, component, as: id }`, one without a source takes it
-  from its component's owner, and one naming only an interface takes that interface's
-  component — so no published name, snapshot entry or OpenAPI tag moves.
-- **One resolver, `export_index`.** Each table is resolved once per scan: every
-  re-export followed to its canonical target, an explicit or own entry shadowing a
-  name a wildcard brings in, a wildcard cycle resolving to the union. The surface
-  projector, the validator, the canvas and the hosted landscape all read it.
-- **Findings** (new rule `export-tables`): `EXPORT_ID_DUPLICATE` (error — one public
-  name bound to two targets; the name is left out), `EXPORT_CYCLE` (error for a named
-  chain that never reaches its item, warning for a wildcard cycle), `EXPORT_INVALID`
-  (notice — a missing source or item, an item the source does not export, a type the
-  level does not own, a public name outside `[a-z0-9-_]+`) and `EXPORT_UNCONSUMABLE`
-  (notice — a re-exported component that is neither a Portal nor an Observer). No rule
-  checked L0 entries before. An invalid entry is still bound where it can be, so no
-  existing surface loses an entry until stage 4 makes these errors.
-- **A re-export is a name, not a licence.** A `dependsOn` across subsystems still has
-  to target the component its owning subsystem publishes, and the `PUBLIC_INTERFACE_*`
-  rules judge own entries only.
-- **Snapshots** record each entry's `componentType` and narrowed `interface`, carry
-  the producer's `projectId` beside `projectName` (as does `sdd_list_external_interfaces`),
-  list exported types apart in `exportedTypes`, and gather the type closure by
-  qualified id, so two subsystems' same-named types no longer collide.
-- **MCP.** `sdd_set_public_interfaces` and `sdd_add_subsystem` accept `from`,
-  `typeDef` and `as`, with `type`/`details` optional on a re-export.
-- **Doctrine: an Index may project another Index** of the same Repository, never in a
-  cycle — the exceptional case the export tables are (`ARCHITECTURE_VIOLATION_INDEX_DEP`
-  still fires across Repositories and on an Index cycle). The architecture standard
-  and the sdd-architect skill say so.
+   **Committed agent files are kept.** A `project.yaml` that never set
+   `rules.materializeAgentFiles` reads as `true` while wairon-managed agent files are
+   committed (or staged) in git, so the first lock keeps them. A save at the project's
+   root writes `true` down. Ignored or untracked leftovers (a gitignored `.claude/`)
+   do not count: such a project gets live briefs, and the lock writes no agent files.
+   Outside a git repository every managed agent file present counts.
+6. **Make the pack selections reproducible for CI.** CI has no pack store, so a
+   declared pack it cannot get is `PACK_NOT_INSTALLED`, and every command refuses.
+   Either:
+   - run `wairon pack bundle --all` and commit `.wai/packs/`; or
+   - record a fetchable source (`wairon pack use <name> --source <url>`) and run
+     `wairon pack sync` in CI (or the `setup-wairon` action with `packs: sync`).
 
-**Upgrading.**
+   A pack installed from a local path has no URL, so bundle it. Otherwise it reports
+   `PACK_SOURCE_UNFETCHABLE` and fails `--ci`.
+7. **Settle by hand what `doctor` lists but never writes:**
+   - **Gateways.** The Portal the Gateway owns becomes the front door, with
+     `variant: gateway`. Its other members become that Portal's dependencies, its
+     consumers depend on the Portal, and the Gateway spec is deleted.
+     `sdd_rename_component` can give the Portal the Gateway's id.
+   - **`number` positions.** Write `int` or `float`. `doctor` proposes `int` where
+     the name says a whole number.
+   - **String-literal unions.** `doctor` proposes an enum (its id and values) but does
+     not write it. Define the enum with `sdd_add_type` (`kind: enum`), then write its
+     id in the position.
+   - **Type forms the grammar leaves out.** Each is named with its replacement. An
+     inline object or a mixed union becomes a value-object, and a single value gets a
+     named scalar (`holds`). An inline function type becomes a `signature` type.
+   - **Migration findings.** These include `positional-ambiguous` (pick the
+     producer), `import-shadowed`, `import-collision` and `target-unpublished`
+     (export the target, or move the reference). A legacy mount that carries
+     `trustedLinks`, `lifecycle`, `profile`, `targetLanguage`, `designDepth` or `ext`
+     blocks the migration until that member holds the field itself.
+   - **Supervisors.** A Supervisor narrative that calls shared data must call methods
+     tagged `effect: read` or `effect: lifecycle`. Move each write into an
+     Orchestrator.
 
-- **Hosted landscape: an entry that declares no audience is now `instance`**, the
-  projector's default, where the landscape used to treat it as `public` (external).
-  Such an entry stops being visible at partner or external distance; declare
-  `audience: partner` or `external` where that reach was meant.
-- **The landscape lists what resolves.** Its snapshot is built from the resolved
-  export table, so an L0 entry that names no source, or a component that does not
-  exist, is no longer listed (validate reports it as `EXPORT_INVALID`). Its method,
-  endpoint and type names now come from the exported contract rather than from lists
-  authored inline on the L0 entry, which are no longer read.
-- **A pinned family surface reads stale once.** A snapshot projected now carries
-  `componentType`, `interface` and `projectId`, so a pin taken before this release no
-  longer equals the parent's projection. Re-pin (`wairon surface pin`).
-- **A cross-tree reference to a renamed export** matches its public name only: once a
-  snapshot records a stereotype, an entry whose id is neither its component nor its
-  interface no longer answers to its backing component's name.
+   Write these through the MCP tools, which regenerate a method's signature text. A
+   type you change by editing the spec file leaves `SIGNATURE_TEXT_STALE` until you
+   run `wairon doctor --fix` again.
+8. **Run `wairon validate --ci` and work through the findings** (`--all` prints every
+   one). Most are covered by the codes table below. The usual remedies:
+   - Split a coarse `lint.allow` into one allow per site (`at:`). The
+     `UNUSED_LINT_ALLOW` finding lists the sites.
+   - Delete allows that name retired codes, and allows whose finding no longer
+     fires (`UNUSED_LINT_ALLOW` says "no such finding fired").
+   - Write a method's `calls` where its narrative shows no steps.
+   - Declare `mounts` on the listener Portal that serves each HTTP Portal.
+   - Make a member's parent-relative `sourcePath`s relative to the member.
+   - To soften a warning while you pay it down, set it to `notice` in
+     `rules.sddRuleSeverity` (notices never fail `--ci`).
+   - Re-pin with `wairon externals pin` after editing what a consumer uses.
+9. **Lock bottom-up: each member project first, then the top.** Run `wairon lock` at
+   each project's own root and commit `.wai/lock.json`. A part has no lock of its
+   own: the parent's lock covers it.
+   - `lock` refuses only on design errors. It records code-conformance results beside
+     the approval and does not block on them, so a passing lock alongside a failing
+     `validate --ci` is expected until the code findings are paid.
+   - `lock` no longer writes `status: complete` into spec files.
+10. **Update scripts and integrations** for the renamed CLI commands, MCP tools,
+    library exports and hosted API answers in the tables below.
+11. **Optional: gate merges on approval.** `wairon lock-check` is new and fails only
+    when a design moved past its approval:
 
-### Projects declare what they consume, and pin it
+    ```yaml
+    jobs:
+      approved-design:
+        uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v6.0.0
+        with:
+          wairon-version: '6.0.0'
+    ```
 
-Stage 2b of the chained-subsystems work: every project is a crate of its own,
-reached from another project only through its L0 exports and only as a dependency
-it declared. Like 2a it changes files and adds findings, not verdicts â€” every new
-code but one is a notice.
+    Pin both the ref and `wairon-version`: the gate identity's algorithm can change
+    between versions. Turn on `strict: true` only once re-locking is part of review.
 
-**The project graph.** The spec scan now records every project root it walks â€”
-namespace, parent, mount alias, directory, its own L0 and its `project.yaml`, read
-through that root's binding â€” and a new `project_family_index` projects them into
-one node per project, an owner for every spec id, and every reference that leaves
-the project making it. The scan's freshness signature covers each root's
-`project.yaml`, so an edit to a root's externals is seen without a restart. The
-architecture standard says a scan may read the configuration of the root it is
-walking, through that root's binding.
+`.wai/transactions/` (staged family migrations) ignores itself. Never commit it.
 
-**Externals.** `project.yaml` gains `externals`, keyed by alias:
+### Breaking changes
 
-```yaml
-externals:
-  billing: {}                                            # alias = producer id
-  crm: { project: crm }
-  ledger: { project: acme.ledger, source: { path: ../ledger } }
-```
+#### CLI
 
-A producer is found in the family (parent, members, siblings) by its id, or through
-`source.path`. A member needs no declaration â€” the mount is its alias. A project
-without a declared id answers to its name slug in every reader, the graph included.
-
-- **`wairon externals pin [aliasâ€¦]`** projects each producer's resolved L0 export
-  table at the consumer's audience ceiling (`project` for the family, `instance`
-  through `source.path`) into `.wai/externals/<alias>.yaml`, and records in
-  `.wai/externals.lock.yaml` the producer id, the snapshot's content digest and a
-  `used` map â€” every public name the consumer's references land on, each used method
-  with its signature digest. An unchanged snapshot is not rewritten; with no aliases
-  named, pins for aliases no longer declared are removed. An alias the project does
-  not declare is refused before anything is written.
-- **`wairon externals status`** compares each used member with the live producer at
-  signature level â€” unchanged, changed, removed, or unlocked (used now, not in the
-  lock) â€” and reports `EXTERNAL_CHECK_UNAVAILABLE` for anything it cannot compare,
-  never a pass. A pin is **stale only when something used changed**; `drifted`
-  reports that the producer moved at all. It only reports: it fails nothing.
-- **`wairon externals list`** shows each declared external, how it resolves and what
-  is pinned. All three take `--json`.
-- **MCP:** `sdd_pin_externals` (a tree-scoped write) and `sdd_get_externals_status` (a
-  tree-scoped read), both answering with structured content. Hosted, `sdd_pin_` is a
-  write prefix.
-- **Gate inputs:** the lock identity covers `.wai/externals/` and the lock, so
-  re-pinning a changed contract or `used` map moves it.
-- **Stage-2 limits:** no stage-2 reference form reaches a project outside the family,
-  so a `source.path` external has an empty `used` map and its status is
-  `EXTERNAL_CHECK_UNAVAILABLE`. A type is pinned only through a used method's
-  signature closure or as a `typeDef` export until stage 3.
-
-**Findings.**
-
-- `EXTERNAL_UNDECLARED` (notice, new rule `project-boundaries`): a reference reaches
-  another project that the referring project neither mounts nor declares.
-- `EXTERNAL_NOT_EXPORTED` (notice): a reference reaches another project at anything
-  but a public name of its L0 whose audience covers the referrer.
-- `TRUSTED_LINK_CROSSES_PROJECT` (notice): a `trustedLinks` entry names a subsystem of
-  another project.
-- `EXTERNAL_UNRESOLVED` (notice, new rule `external-declarations`): a declared external
-  whose alias or producer id is malformed, or whose producer the family and its
-  `source.path` do not provide.
-- `DEPRECATED_REFERENCE_FORM` (notice, new rule `reference-forms`): a reference written
-  with a leading `::`; the finding names the absolute id to write instead. `super::`
-  is not reported until stage 3 brings `alias::name`.
-- `EXPORT_WIDENS_AUDIENCE` (**error**): an L0 entry re-exports a member's or an
-  external's export at a wider audience than that export has. It is bound at the
-  narrower audience. Only a re-export from another project can trip it.
-- **Project identity across the family:** two projects of one family that resolve to
-  one id, or a member with no id, are `PROJECT_ID_AMBIGUOUS` (warning); a member that
-  declares no id is `PROJECT_ID_DEFAULTED`, naming its mount's subsystem id as the id
-  to declare.
-- **Export tables see the family.** An L0 entry may re-export from a member (by its
-  mount alias) or a family external (by its alias), through that project's own L0
-  table; every member's table is resolved and judged by `export-tables`.
-
-**Deprecated.** `wairon surface pin`, `wairon surface externals` and the MCP tool
-`sdd_list_external_interfaces` keep working for one release and say so: declare the
-parent or sibling under `externals` and use `wairon externals` / `sdd_pin_externals` /
-`sdd_get_externals_status`.
-
-**Upgrading.**
-
-- **Expect notices on a chained family.** A member referencing a sibling or its parent
-  gets `EXTERNAL_UNDECLARED` until it declares it, and `EXTERNAL_NOT_EXPORTED` until the
-  producer exports what is used from its L0 at audience `project`; none fails CI.
-- **An L0 entry sourced from a mount now follows the member's L0.** An entry whose
-  `from`/`subsystem` (or inferred owner) is a chained mount re-exports from that member
-  project's own export table, so it binds only a public name the member exports; one
-  the member does not export is `EXPORT_INVALID` and leaves the table. Export it from
-  the member's L0 first.
-- **A test or script filtering findings by `/REFERENCE/`** now also sees
-  `DEPRECATED_REFERENCE_FORM` wherever a spec writes a leading `::`.
-- **Every lock reads stale once**: the gate identity's consumed-contract keys now name
-  their kind (`surface:`, `external:`, `lock:`), and the rule sequence gained three
-  rules. Re-lock.
-
-### The chaining migration, and a project.yaml save that keeps its comments
-
-Stage 2c of the chained-subsystems work: the migration that takes an existing
-chained family onto the stage-2 model, plan first.
-
-**`wairon doctor --report chaining`** prints, per project of the family, what the
-migration would write, and writes nothing. It climbs from the bound project to the
-highest root in reach and plans from what the project graph and the export usage
-already report:
-
-- **ids:** each project that declares no `id` gets one — a member its mount's
-  subsystem id, the top root its name slug, and any project whose lock recorded an
-  id keeps that one (a member whose approved id differs from its mount id is
-  reported `id-locked`; moving it is the stage-6 rename, so re-locking never
-  deadlocks on `PROJECT_ID_CHANGED`);
-- **L0 entries:** for every reference that reaches another project at anything but
-  a public name, the producer gains `{ from: <subsystem>, component | typeDef,
-  audience: project }` (no `as`: the public name is the item's own id) — only for an
-  item its subsystem already publishes at L1;
-- **externals:** the consumer declares the producer under its id (`alias: {}`);
-- **pins:** each new or affected alias is pinned once everything else is written;
-- **stage-1 pins:** a member's family pin converts to an external for the parent;
-  every family pin is listed as superseded, and stage 3's migration deletes them once
-  the externals that replace them are pinned (see *The migration* under stage 3).
-
-What it will not decide it reports instead (`id-ambiguous`, `target-unpublished`,
-`name-taken`, `narrowed`, `subsystem-reference`, `alias-invalid`, `alias-taken`,
-`declaration-orphaned`, …), with totals at the end.
-
-**`wairon doctor --fix`** runs the migration after its existing repairs (after the
-chained-config backfill and the spec repairs, before the MCP registration): it prints
-the plan and applies it only once confirmed. `--yes` answers for a non-interactive
-run; with neither a terminal nor `--yes`, nothing of it is written. The L0 entries go
-through the gated authoring seam, dry-run first, so a refused entry stops the run
-before anything is written. A family only partly in reach, or a project the plan must
-write that has no `project.yaml`, refuses the whole apply before its first write. The
-migration is idempotent and **locks nothing**: it names every project whose lock the
-writes staled. `--report` never combines with `--fix`.
-
-A plain `wairon doctor` adds a `Chaining: N pending` line when something is planned or
-reported.
-
-**project.yaml keeps its comments (F82).** Every configuration save — packs,
-profiles, the execution tier, and now the migration's `setId` / `declareExternal` —
-used to re-serialize the file and drop every comment in it (this repository keeps its
-debt register in those comments). A save is now an edit of the file: keys that did not
-change keep their text byte for byte, a changed value is replaced in place in its own
-quoting, a removed key is deleted, and a new key lands at its place in the schema's
-field order (a new `id` after `schemaVersion`, before `name`). The edited text is read
-back and must equal what was meant, or the write is refused and nothing is written.
-Line endings are kept.
-
-**Fixed on the way.** From the family root, a member project's L0 re-export without
-`as` was named by its qualified id (`billing::invoice-portal`, reported
-`EXPORT_INVALID`); it is now named by the item's local id. A type reference written
-through its subsystem (`operations::route-id`) now lands on that type's `typeDef`
-export, so `EXTERNAL_NOT_EXPORTED` stops firing once the type is exported.
-
-**Upgrading.**
-
-- **New runtime dependency: `yaml` (v2).** Only the project-configuration file
-  adapter uses it, for the comment-preserving save; everything else still reads and
-  writes YAML with `js-yaml`. `npm install` picks it up.
-- **To migrate a chained family,** run `wairon doctor --report chaining` to see the
-  plan, then `wairon doctor --fix` (or `--fix --yes` in CI and scripts) to apply it,
-  then `wairon lock` in each project the output names. Run it from any project of the
-  family; it plans the whole family from its top.
-- **A project that declares no `id` gets one** from `doctor --fix`, even outside a
-  family (its name slug, or the id its lock recorded).
-- **A configuration save no longer appends new keys at the end** of `project.yaml`;
-  it places them in schema order. A script that compares the file's text after a save
-  will see that difference.
-
-### Members, and a loader without position
-
-Stage 3 of the chained-subsystems work. A family becomes a set of projects that name
-each other: a project declares the projects it contains as **members** in
-`project.yaml`, and every cross-project reference is `alias::name`.
-
-```yaml
-# .wai/project.yaml of the containing project
-members:
-  billing: services/billing                                   # shorthand: alias = key
-  ledger: { path: services/ledger, description: The books }   # long form
-```
-
-**A member is not a subsystem.** It has no L1 spec in its parent's tree, carries no
-content there, and is named only by its alias. Its own `.wai/` tree is designed from
-its own root.
-
-- **Resolution without position.** An id without `::` is local to the project that
-  writes it. `alias::name` goes through the referring project's alias table (its
-  members and declared `externals`) to a public name of that project's resolved L0
-  export table. A reference means the same thing from every root and at every depth,
-  and the loader no longer merges a member's tree into its parent's namespace.
-- **Keys.** A member's specs are keyed by its project id (`<id>::<local id>`) at any
-  depth; the bound root's own specs are bare. A subsystem whose key repeats its
-  member's id (`billing::billing`) keeps that honest id, and only its display
-  collapses: the canvas and the status tree label it `billing` under the member.
-- **The status tree** prints each member as `[Project] alias (id)` holding its own
-  subsystems, never as a `[Subsystem]` of its parent; a legacy mount is marked
-  `[mount form]`. `sdd_get_status` names every member the root declares, legacy
-  mounts included, and the `recursive` option of `sdd_get_status` and
-  `sdd_validate_tree` now reads "descend into members".
-- **New findings.** `DEPRECATED_MOUNT_FORM` (notice), `LOCAL_ID_SHADOWS_PROJECT`
-  (warning), `DUPLICATE_SPEC_ID` (error, types included, naming both files),
-  `PROJECT_ID_COLLISION` (error) and `PROJECT_DEPENDENCY_CYCLE` (warning; an error in
-  stage 5). `NAMESPACE_SHADOWING` retires with the root anchor it guarded.
-- **`strippedKeys` on the change report.** `sdd_update_spec` (and every gated delta)
-  names each key the stored file carries that its level's schema does not know — read
-  from the raw file, as `path: value` — which the write drops, on a dry run too.
-
-**The writers write members, never the L1 mount form.**
-
-| Before | Now |
+| v5.1.0 | v6.0.0 |
 |---|---|
-| `wairon subsystem add <id> --project-path <dir>` | `wairon member add <alias> <path> [--description]` |
+| `wairon subsystem add <id> --project-path <dir>` | `wairon member add <alias> <source>`: creates a **part** (`--project` creates a project) |
 | `wairon subsystem move <id> --project-path <dir>` | `wairon member move <alias> <path>` |
-| `wairon subsystem internalize <id>` | `wairon member internalize <alias>` |
-| `wairon subsystem externalize <id> --project-path <dir>` | `wairon subsystem externalize <id> --path <dir>` |
-| `sdd_add_subsystem` with `projectPath` | `sdd_add_member` (a `projectPath` is now refused, naming it) |
+| `wairon subsystem internalize <id>` | `wairon member internalize <alias> [--into <subsystem>] [--packs adopt\|drop]` |
+| `wairon subsystem externalize <id> --project-path <dir>` | `wairon subsystem externalize <id> --path <dir>`: moves it into a **part** (`--as project` creates a project) |
+| `wairon surface externals` | `wairon externals status` / `wairon externals list` |
+| `wairon surface generate-children` | removed: a parent pushes nothing into its members; a consumer pins with `wairon externals pin` |
+| `wairon host promote` | removed: `wairon lock` is the approval |
+| `wairon validate` at a project with members | runs the **family run**; `--no-recursive` runs the project's own gate alone |
+| `wairon generate` at a parent | writes this project's outputs only; `--family` walks the members (`--no-recurse` is accepted and ignored) |
+| `wairon lock` | approves this project only, refuses on design errors only, rewrites no spec file (`--no-recursive` is accepted and ignored) |
+| `wairon generate` with `materializeAgentFiles` off | writes no agent files and removes wairon-managed ones; agents are live briefs |
+| `pack use\|unuse\|add\|remove\|install`, `host packs install\|remove --project` | show the pack's impact and ask in a terminal; pass `--yes` in scripts |
+| `doctor --fix`, `subsystem externalize`, `member internalize` | print a plan and ask; `--yes` in scripts, `--report` to see the plan only |
+| `doctor --fix` / `generate` writing outside the project root | needs `--global` (each replaced file is backed up) |
+| `wairon generate --target <unknown>` | refused, naming the configured targets |
+
+#### MCP tools
+
+| v5.1.0 | v6.0.0 |
+|---|---|
+| `sdd_add_subsystem` with `projectPath` | refused; use `sdd_add_member` (`source`, `as`) |
 | `sdd_move_subsystem_project` | `sdd_move_member` |
-| `sdd_internalize_subsystem` | `sdd_internalize_member` |
-| `sdd_externalize_subsystem { projectPath }` | `sdd_externalize_subsystem { path }` |
-| `sdd_set_subsystem_project_path` | removed — members are configuration; `sdd_move_member` relocates one |
-
-- **`createMember`** (`wairon member add`, `sdd_add_member`, and `wairon init` run in
-  a subdirectory of a project) scaffolds the member project — its `project.yaml`
-  declaring the alias as its id, and an L0 whose vision is the description — each
-  only when absent, and declares it in `members`. It writes no L1 spec.
-- **`moveMember`** relocates a member's directory and points its entry there. A member
-  still declared by a legacy L1 mount is moved into `members` first — and refused,
-  naming the fields, when that mount carries anything beyond its path and description
-  (a published entry, trusted links, lint allows, a lifecycle, profile, target language,
-  design depth or extension data): a move never drops a field, and `wairon doctor
-  --fix` carries them plan-first.
-- **`externalizeSubsystem`** turns an internal subsystem into a member declared under
-  its id. Every reference keeps its target: the parent's references into it become
-  `<id>::name`, its references back into the parent `<parent id>::name` (the parent is
-  declared as the member's external), and a `super::` it wrote becomes the id of the
-  project it lands in — never `super::`. One whose target lies above the bound root is
-  refused before anything moves. The exports either side now needs are left to
-  `wairon doctor --fix`.
-- **`internalizeMember`** takes a single-subsystem member back and re-saves every
-  reference across the old boundary as a local id. It refuses a member that holds
-  more than one subsystem, or declares members or externals of its own, and a member
-  another project of the family still references — listing each reference, since
-  rewriting other projects is the family migration's job.
-- **`EXTERNAL_UNRESOLVED` from a member's own root.** A member that declares its parent
-  or a sibling as an external no longer reads as unresolved when it is validated from
-  its own root: the validator climbs to the family's top (only where the request may
-  read above its root) and the notice fires only when neither the scan nor the climb
-  finds the producer.
-- **Agent topology.** A member's delegating owner is named `<alias> (member project)`
-  and describes the member it delegates into, not a "chained subproject".
-- **The authoring seam refuses** a subsystem that names `projectPath`, before anything
-  reaches disk, and points at `sdd_add_member`.
-- `saveSubsystemSpec` is gone from the library; a subsystem is saved through the
-  generic `saveSpec('subsystem', …)` like every other level.
-
-**Hosted.** A token qualifier keeps its text (`projectId::alias`, one member alias per
-hop), and each hop is now read as a member alias, looked up in `members` or the legacy
-mount. Every existing token binds exactly the root it bound before, an internal
-subsystem is still no root, and nothing widens. The hosted lock pins each member the
-bound tree declares (it was handing over the subsystem specs, which no longer name
-members, and pinned nothing).
-
-**Retired.** The sibling surface — `.wai/surfaces` sibling pins,
-`projectSubsystemSurface`, `pinFamilySurfaces`, the family pin,
-`sdd_list_external_interfaces`, and `wairon surface pin` / `wairon surface externals`
-— is replaced by externals and their pins.
-
-**Upgrading.**
-
-- **Renamed and removed, with no aliases** (this release is major): the CLI commands
-  `wairon subsystem add` → `wairon member add`, `wairon subsystem move` →
-  `wairon member move`, `wairon subsystem internalize` → `wairon member internalize`,
-  `wairon subsystem externalize --project-path` → `--path`; the MCP tools
-  `sdd_move_subsystem_project` → `sdd_move_member`, `sdd_internalize_subsystem` →
-  `sdd_internalize_member`, the `projectPath` argument of `sdd_externalize_subsystem`
-  → `path`, and `sdd_set_subsystem_project_path` and `sdd_list_external_interfaces`
-  removed; `sdd_add_subsystem` refuses `projectPath` (use `sdd_add_member`); and
-  `wairon surface pin` / `wairon surface externals` removed. Library callers of
-  `saveSubsystemSpec`, `createChainedSubsystem`, `moveSubsystemProject` and
-  `internalizeSubsystem` move to `saveSpec('subsystem', …)`, `createMember`,
-  `moveMember` and `internalizeMember`. Scripts and agent prompts that name any of
-  these need the new names.
-- **Members are re-keyed by project id.** A member's specs used to be keyed by the
-  mount path that reached them (`waffler_core::transpiler::*`); they are now keyed by
-  the member's project id (`transpiler::*`). A lock taken before this release reads as
-  stale for the specs whose keys moved: re-lock once.
-- **Deprecated forms, one release of grace.** A leading `::`, `super::`, a member path
-  (`billing::invoice::invoice_portal`) and an L1 subsystem carrying `projectPath` still
-  resolve — a path-form first segment naming a family project's id walks on from that
-  project, so each reads the same from every root — and each is reported
-  (`DEPRECATED_REFERENCE_FORM`, `DEPRECATED_MOUNT_FORM`, notices). The next major
-  release stops reading them.
-- **`wairon doctor --fix` rewrites them** — see *The migration* below.
-
-**The migration.** `wairon doctor --report chaining` prints what the family needs and
-writes nothing; `wairon doctor --fix` prints the same plan, asks, and applies it
-(`--fix --yes` in CI and scripts; with no terminal and no `--yes` it writes none of it).
-Run it from any project of the family: it climbs to the top and plans the whole family.
-On top of stage 2c's ids, exports, externals and pins, it now:
-
-- **moves every legacy L1 mount into its parent's `members`** — its `projectPath` as
-  the path, its description into the member's long form — and deletes the mount
-  document. A mount's published entry becomes an L0 export of the member at audience
-  `project` (published first at L1 in the member subsystem that owns the component,
-  with the entry's transport kind and details, where that subsystem does not publish it
-  yet). Empty arrays, lint allows about the mount and an entry's `consumers` retire with
-  the mount, each listed. A non-empty `trustedLinks`, a `lifecycle`, `profile`,
-  `targetLanguage`, `designDepth` or `ext` on a mount **blocks** the migration — the
-  member has to hold it itself — and nothing is written until a person moves or drops it;
-- **exports a project-level type as the project's own** (`{ typeDef, audience: project }`
-  with no `from`) where another project uses it, and **writes a minimal L0** — the
-  project's name and a one-line vision — for a project that exports and has none;
-- **rewrites every reference out of a deprecated form**, from the family's top root, to
-  the text the writer emits: a bare local id where it lands in its own project, else
-  `alias::name` — raw positions included (type strings, declared `calls`, `component:`
-  credential sources, trusted links, and the display signature beside a rewritten
-  parameter). Every rewrite is listed, grouped per project and spec with counts. A spec
-  that also holds a deprecated reference with no canonical text keeps all its rewrites
-  back, named in a `rewrite-unavailable` finding;
-- **deletes the stage-1 family pins** under `.wai/surfaces` (the parent's and every
-  sibling's), last, once the externals that replace them are pinned — one line per
-  project in the plan;
-- **lists every key its first L0 write will drop** — a key the stored L0 carries that
-  the schema does not know, e.g. `status: draft` — under a "will be removed" line, so
-  the one confirmation covers it.
-
-A second run plans nothing. The migration **locks nothing**: it names every project
-whose approval the writes staled; re-lock each once with `wairon lock`. Proven on a copy
-of a sixteen-project family: 15 mounts moved, 334 references rewritten, 169 family pins
-deleted, and `DEPRECATED_REFERENCE_FORM` / `DEPRECATED_MOUNT_FORM` / `EXTERNAL_UNDECLARED`
-at zero afterwards.
-
-### One judge per edge: the owner's gate and the family run
-
-Stage 4 of the chained-subsystems work. A project's verdict no longer depends on where
-it is validated from: every cross-project edge has exactly one judge.
-
-- **The owner's gate — `validateProject`.** It judges a project from its own files
-  alone: its specs, its configuration, its code, its lock, its pinned externals
-  (`.wai/externals.lock.yaml` and the snapshots) and the export tables of the members
-  it contains. It never walks up to a parent, never reads a sibling and discovers
-  nothing, so a project gets the same verdict from every root, with or without its
-  family on disk. A reference into another project is judged against the pin, and
-  every such finding carries how it resolved — `resolved`, `missing`, `ambiguous`,
-  `unavailable` or `forbidden` — with the owner, the call site, the canonical target
-  and the digest it was judged against. A contained member's own specs are its own
-  gate's; a parent never re-judges them. A project with externals prints one line
-  saying `validate --family` composes them.
-- **The family run — `validateFamily`.** `wairon validate` at a project that declares
-  members, `wairon validate --family` anywhere, and `sdd_validate_tree` with
-  `family: true` (or at a parent). Every selected project's own gate is carried
-  verbatim under its key, with its totals; then each project's externals are composed
-  against their live producers — `EXTERNAL_INCOMPATIBLE` (error: a used method or type
-  changed or vanished, judged on canonical digests, bare names imported through `use`
-  included), `EXTERNAL_DRIFTED` (notice: the producer changed, nothing used did),
-  `EXTERNAL_CHECK_UNAVAILABLE` (warning: nothing to compare, never a pass) — and the
-  family checks run over the graph: `MEMBER_NOT_FOUND` and `PROJECT_ID_COLLISION`
-  (errors), `MEMBER_UNAPPROVED`, `MEMBER_DRIFTED` (the member's own lock is stale) and
-  `PROJECT_DEPENDENCY_CYCLE` (warnings), and a member's defaulted or missing id
-  (`PROJECT_ID_DEFAULTED` naming its alias, `PROJECT_ID_AMBIGUOUS`). A family code is
-  tuned by the owning project's `rules.sddRuleSeverity` — the consumer for a
-  composition finding, the root for a member check; `lint.allow` does not reach them,
-  because they name no spec. An unrelated member's failure changes nothing about
-  another member's verdict.
-- **Reach.** A plain run reads nothing above the project it was started at: an
-  external whose producer lies above is counted in a one-line hint instead of failing.
-  `--family` makes the walk up explicit. Hosted, the run keeps the credential's reach
-  and never widens it; `validate --family` in an attached checkout asks the instance for
-  it.
-- **Declared imports.** An external or a member may import names:
-  `externals: { shared: { use: [waffler-error] } }` (or `use: ['*']`). A bare name
-  resolves to a local spec first, then to an exported public name of an alias that
-  imports it; two imports supplying one name is `IMPORT_AMBIGUOUS`, an explicit import
-  colliding with a local name `IMPORT_SHADOWED_BY_LOCAL`, a name no import supplies
-  `IMPORT_UNRESOLVED`. The case- and punctuation-insensitive suffix match across every
-  type in the scan is gone.
-- **Escalated to errors**, now that a project's own gate can judge them exactly:
-  `EXTERNAL_NOT_EXPORTED`, `EXPORT_INVALID`, `EXPORT_UNCONSUMABLE`,
-  `TRUSTED_LINK_CROSSES_PROJECT` and `EXTERNAL_UNDECLARED` (an unknown `x::y` among
-  them).
-- **Deleted, with no `--legacy`:** resolve-through-parent and everything that existed
-  for it — `CROSS_TREE_REF_UNRESOLVED`, the `resolvedThrough` and `crossTree` fields,
-  the mount-pool lookups and the `project-cycles` rule (its check is the family run's
-  now). The project-identity rule judges the bound project's own id only; a member's
-  id is a family check.
-- **Library.** `validateSddTree` is renamed `validateProject`, with no alias, and
-  `validateFamily` is exported beside it.
-- **`externalize` leaves a tree that passes.** Moving a subsystem into a member now
-  exports what crosses the new boundary on each side (a type through its subsystem and
-  the L0, a component its subsystem already publishes through the L0) and imports by
-  name (`use`) each bare type the moving side no longer owns — a union member
-  included — so the text stays as written. A component its subsystem does not publish
-  is not made public by a move; `EXTERNAL_NOT_EXPORTED` keeps naming it.
-
-**The upgrade report.** `wairon doctor --report composed-validation` says what stage 4
-changed in each project's verdict, and writes nothing. A lock records totals only, so it
-puts each project's lock totals and validator version beside today's as-complete totals
-— attributed to the upgrade only when the lock predates stage 4 — and classes today's
-findings by a reason it can compute: **escalated** (one of the codes above),
-**pinned** (a reference now judged against the project's own pin), and **positional**
-(a reference the family's top still matches by position, with what it matched and the
-`use` line, export or external it needs — the same match the positional migration
-writes from). What it cannot attribute is counted, never explained away; a positional
-candidate no rule decides is listed with every candidate for a person to pick.
-
-**The positional migration.** `wairon doctor --report chaining` plans it and writes
-nothing; `wairon doctor --fix` prints the same plan, asks (`--yes` in a script) and
-applies it. For every reference that resolved before stage 4 only by position it writes
-the explicit form stage 4 needs, from the same match the upgrade report explains:
-
-- a **named `use` import** — `externals: { shared: { use: [waffler-error] } }`, or on the
-  member alias — with the reason the producer was chosen (`only-match`,
-  `declared-producer`, `already-exported`; a producer this plan itself declares is marked
-  so), the export the producer lacks (reason `positional`) and the external the consumer
-  lacks, pinned;
-- a **self-prefixed reference** (`registry.x`, `registry::x` in the project called
-  registry — for a member that declares no id, also the alias its parent gives it)
-  rewritten to its bare local id, raw type positions included;
-- nothing it would have to guess: a name no tie-break rule decides is
-  `positional-ambiguous` (every candidate listed — a person picks), a named import a local
-  spec would shadow is `import-shadowed` and never written, and two imports supplying one
-  bare name are `import-collision`.
-
-The match decides in rounds, as a re-run after apply would: a producer the consumer
-declares — or will, because it already reaches it by `alias::name` or an earlier round's
-import declares it — is a declared producer. So the migration is idempotent: the second
-plan is empty. The plan **opens with every new cross-project dependency** it adds
-("waffler_core now depends on waffler_ui (61 references)") — listed, never blocking, no
-layering guessed; whether the edge should exist is the reader's call. Apply writes ids,
-exports and externals, then the member moves, imports, rewrites and stage-1 pin
-deletions, and **pins last** — every family external declared before the migration and
-never pinned included — so every snapshot projects the final spelling. Nothing is
-locked: each project whose approval the writes staled is named, to be re-locked with
-`wairon lock` at its own root.
-
-**Upgrading.**
-
-- Run `wairon doctor --report composed-validation` first: it names what is new and why.
-- **`validate` at a parent is now the family run**: `--ci` fails on its warnings as on
-  any other — an unlocked or drifted member (`MEMBER_UNAPPROVED`, `MEMBER_DRIFTED`)
-  among them — until each member is locked at its own root, or the code is re-tuned in
-  the parent's `rules.sddRuleSeverity`. `--no-recursive` runs the parent's own gate
-  alone.
-- **A bare name another project supplies needs a `use` import**, and a reference into
-  another project needs the producer to export it and the consumer to declare and pin
-  it. Run `wairon doctor --report chaining` at the family's top, read the new
-  dependencies it lists first, then `wairon doctor --fix` to write them all; settle what
-  it reports for a person (`positional-ambiguous`, `import-shadowed`, `import-collision`)
-  by hand, and re-lock each project it names.
-- Scripts that called `validateSddTree` call `validateProject`.
-- An MCP client reading `sdd_validate_tree` sees an optional `projects` list and a
-  `project` key on each finding in a family run.
-
-### Governance: a pack's impact before it applies, and packs a parent requires
-
-Packs exist to adjust wairon's checks and behaviour, and a pack may loosen or remove
-them by design — a pack for an automation platform has to. So wairon never judges
-what a pack changes. It makes installing one **intentional**: the impact is shown
-before the write, and a pack applies per project.
-
-- **`wairon pack impact <name>[@version]`** shows, writing nothing, the pack's doctrine
-  against wairon's defaults (rules loosened, raised, turned off or added; profiles,
-  stereotype fencing, edge licences, patterns, guarantee tokens and language tables),
-  the profiles of it that would govern this project, and the findings that change here
-  — a dry validate of the current and the candidate configuration, with both totals.
-  What it says the findings will be is what validation reports after the write.
-- **Every pack write asks first.** `pack use`, `pack unuse`, `pack add`, `pack remove`,
-  and `pack install` when it moves this project's floating selection print the report
-  and ask; anything but yes writes nothing. `--yes`, or a run with no terminal, writes
-  without it and says so. `wairon host packs install | remove --project` do the same
-  for a hosted project.
-- **MCP.** `sdd_pack_impact` (local, read-only) answers the report as structured
-  content; `sdd_add_member` answers what it applied. The hosted data plane adds
-  `sdd_host_pack_impact` (project:read, writes nothing).
-- **Hosted.** `POST /admin/projects/{id}/packs/{name}/impact` and `…/removal-impact`
-  (project:read, write nothing) and their web routes; the web UI shows the report
-  before it installs, adopts or removes a pack and writes only on confirm, says
-  plainly that an archive upload has no preview, shows what a reconcile would apply
-  and did apply, and shows what the instance policy applied to a new project. The
-  unattended policy writes carry their impacts: a policy evaluation and reconcile
-  (`impacts`), `setProjectType` (`impact`), an init request's evaluation (`doctrine`,
-  the doctrine half alone), and a policy-governed creation, which now answers a
-  `GovernedProjectCreation` — the unchanged record beside every pack's impact and the
-  governing profile's — through the MCP init, the policy portal and the web create,
-  audits the impacts, and records their headlines on an approval as its
-  `executionSummary`.
-- **`composition.requirePolicies`.** A parent requires packs of its members by semver
-  range, optionally one profile inside the pack. A member adopts by selecting the pack
-  itself. The family run judges it: `POLICY_NOT_ADOPTED` (error — missing, unpinned,
-  out of range, or the wrong profile) and `POLICY_DEVIATION` (notice — the member
-  changes one of the pack's settings; `--ci` never fails on it). A range that does not
-  parse is `POLICY_REQUIREMENT_INVALID` (error) at the requiring project's own gate. A
-  member's own gate never reads its parent's requirements, and a pack's loosening is
-  never a finding.
-- **Scaffolding.** `wairon member add`, `wairon init` in a subdirectory and
-  `sdd_add_member` write the parent's required packs into a new member once, pinned to
-  the highest installed version each range admits, and say what they applied.
-
-**Upgrading.**
-
-- **Pack commands now ask first in a terminal.** A script that runs `wairon pack use |
-  unuse | add | remove | install` or `wairon host packs install | remove --project`
-  with a terminal attached waits for an answer: pass `--yes`. Without a terminal (CI,
-  a pipe) they write as before and say they applied without showing the impact.
-- **Three new codes.** A parent that declares `composition.requirePolicies` can newly
-  fail its family run on `POLICY_NOT_ADOPTED`, and its own gate on
-  `POLICY_REQUIREMENT_INVALID`; `POLICY_DEVIATION` is a notice. Nothing reports them
-  until a project declares a requirement. Re-tune them in the requiring project's
-  `rules.sddRuleSeverity`.
-- **Hosted API clients.** `POST /web/projects`, the policy portal's init and
-  `executeApprovedInit` answer a `GovernedProjectCreation` (`record`, `packImpacts`,
-  `profileImpact`) instead of the bare record: read the record from `record`.
-
-### Approval across a family: each project locks itself, transitively by hashing
-
-Stage 5 of the chained-subsystems work. A lock used to copy each child's `StateId`
-into `children` without re-checking it, hash its members' spec files into its own
-identity, leave `composition` outside it, and `generate` at a parent wrote into
-every member. Now each project approves itself, and a parent's approval covers
-its members through their own approvals.
-
-- **What a lock certifies is the design.** The gate identity is the project's own
-  specs, the design doctrine, its own consumed inputs, `composition`, and each
-  direct member's **composition subject** — the `stateId` in that member's own lock
-  record, read and never recomputed. A change two levels down reaches the top once
-  the member between them re-locks; until then the top shows that member as
-  drifted.
-- **Code findings no longer block `wairon lock`.** The lock refuses on design errors
-  only. Code-conformance results are recorded beside the claim (`code`), with the
-  analyzer that produced them (validator version, doctrine digest, grade), and the
-  lock prints `code: N error(s), … recorded beside the claim`. An analyzer upgrade,
-  `rules.conformance` and `sddRuleSeverity` overrides of code codes form the
-  analyzer digest outside the gate identity, so none of them stales an approval.
-  `validate --ci` still fails on code errors: CI enforces conformance, the lock
-  does not. A design can now be approved before it is implemented.
-- **Inputs are captured before validation and confirmed before writing.** A lock
-  that sees its gate identity move while it runs — a spec, the doctrine, an input,
-  the composition block or a member's approval — refuses ("inputs changed while it
-  ran") and writes nothing.
-- **Lock record format 2.** `format: 2`, `members` (alias → `{project, subject,
-  state}`, state `approved | drifted | never`) and `code`; `validationResult` is the
-  design half. `children` is read for one release and never written.
-- **`composition.requireApprovedMembers`** (opt-in, off by default) makes a parent's
-  lock refuse while a direct member is drifted or never approved, naming each. Off,
-  the lock proceeds and records each member's state, and the family run keeps
-  `MEMBER_UNAPPROVED` / `MEMBER_DRIFTED` as warnings.
-- **A parent lock writes nothing below itself.** Each member locks at its own root.
-- **`generate --family` replaces the cascade.** `generate` at a project writes only
-  that project's outputs; `--family` walks the members explicitly. `--no-recurse` is
-  accepted for one release and does nothing new.
-- **Member briefs and `delegatesTo`.** A parent's agent topology lists a member's
-  agents by reference (`delegatesTo: <alias>::<agentId>`, ids only), never copying
-  them, and a brief for `<alias>::<agent>` composes at the member's own root,
-  through the mount.
-- **`wairon status` and `sdd_get_status` print the pin tree** — each member's state
-  from its own root and how the parent pinned it (`matches | moved | unpinned`) —
-  so status asked at the parent and at the member agree.
-- **Hosted.** The hosted lock (`wairon host lock`, `POST /admin/projects/{id}/lock`,
-  the web lock, and an approved `project:lock` request) runs the same flow and
-  writes the same format-2 record; its outcome states the code findings beside the
-  claim. A **lock request pins the gate identity** of the tree it is about
-  (`ApprovalRequest.gateStateId`). When the tree moved after the request, the
-  approved execution refuses and writes nothing, and the request ends `cancelled`
-  with the reason on it (`executionSummary`: *the design changed since it was
-  requested (requested …, now …); request the lock again*) — the requester asks
-  again. A request made before stage 5 carries no identity and executes against the
-  tree as it stands. The HTTP admin and web planes answer a refused lock with 409.
-
-**Upgrading.**
-
-- **Every lock reads stale once.** The gate identity gained inputs (members'
-  composition subjects, `composition`) and lost the code rules. `wairon lock-check`
-  says so rather than just "stale": *the approval on record … was taken under an
-  earlier gate identity — the gate identity gained inputs in stage 5: members'
-  composition subjects, `composition`; code conformance moved beside the claim*,
-  with whether any own spec file changed since. Re-lock once (`wairon lock`) and
-  commit `.wai/lock.json`; in a family, bottom-up — members first.
-- **Code findings no longer block `wairon lock`.** If you relied on the lock to stop
-  unimplemented or drifted code, run `wairon validate --ci` in CI: it still fails on
-  code errors.
-- **Lock format 2.** Tools that read `.wai/lock.json` should read `members` and
-  `code`; `children` is read by wairon for one release and never written again.
-- **`requireApprovedMembers`** is off by default; set
-  `composition.requireApprovedMembers: true` in a parent's `project.yaml` to make
-  its lock wait for its members' approvals. Changing it stales that project's lock.
-- **`generate` no longer cascades.** A script that relied on `generate` at a parent
-  writing every member's files runs `wairon generate --family`.
-- **Hosted lock requests refuse if the tree moved after the request.** An approver
-  who approves a stale request sees the refusal, and the request is cancelled with
-  the reason (never left approved and un-executable until it expires); the
-  requester files a new one. Hosted API clients that call the
-  lock may now receive 409 for a refusal that is not a validation failure.
-
-### Family migrations: plan first, all or nothing, never a lock
-
-Stage 6 of the chained-subsystems work. Changing a family's shape — bringing a project
-in, renaming one, taking one out, folding one back into its parent — used to be a set of
-writers that each touched one project at a time, could stop half-way, and in
-`internalize`'s case deleted the member's whole `.wai`. Every such change is now a
-**family migration** (the new `sdd_migrations` subsystem): planned first, confirmed, then
-applied to every project it touches or to none of them.
-
-- **The verbs.**
-  - `wairon member attach <alias> <path>` — an existing project becomes a member, keeping
-    its L0, subsystems, packs and lock (`member add` scaffolds a new one). Its id is
-    declared when it only defaulted one: the id its lock approved, else its effective id.
-  - `wairon project rename <new-id> [--project <alias path>]` — a project's id, and every
-    reference to it family-wide: an alias that was the id follows it with each reference
-    written through it (respelled at its parsed position, never by a text search) and the
-    L0 re-exports naming it; an external naming the old id is repointed; a pin is carried
-    to its new key with its digest unchanged. The old id is kept in the new
-    `previousIds`.
-  - `wairon member rename-alias <old> <new>` — one alias of the current project (a member
-    or an external), and the current project's references through it; nothing in any
-    member or sibling changes. An external whose alias was its producer id keeps naming
-    that producer, now explicitly.
-  - `wairon member detach <alias> [--widen]` — the member leaves the family: the parent and
-    every family consumer reach it as an external by `source.path`, the parent's pinned. A
-    consumer using a name the member exports only to the family (audience `project` or
-    `department`) refuses the detach (`audience-too-narrow`, one refusal per export naming
-    its users): outside the family a pin sees `instance` and above. With `--widen` the plan
-    instead widens exactly those used exports to `instance` in the member's L0, through the
-    gated authoring seam, each shown (`widen <export> project→instance (used by …)`) and
-    confirmed with the rest — never an unused export, never silently.
-  - `wairon member adopt <alias>` — detach's inverse: an external found by a path inside
-    the current project becomes a member again. Detach then adopt gives back the member's
-    specs byte for byte and every configuration semantically.
-  - `wairon member internalize <alias> [--into <subsystem>] [--packs adopt|drop]
-    [--export <name>…]` — a member, every subsystem of it, folded into the current
-    project. Its own metadata goes to a home instead of being deleted: its L0 vision onto
-    the `--into` subsystem's description, its boundaries, requirements and databases into
-    the parent's L0 (merged by identity), its target language, profile and design depth
-    onto the moved subsystems (a project type that is no subsystem profile, such as
-    `fullstack`, is listed as not carried rather than stamped), its members and externals
-    into the parent's configuration,
-    its packs adopted or dropped as `--packs` says, and the names other family projects
-    use from it re-exported by the parent. Every other family project that consumed it is
-    re-pointed at the parent. What has no home — its lock, pins and derived outputs — is
-    deleted and listed. A member carrying conformance debt, a severity override the parent
-    does not share, or a `.wai` file the write does not recognise is refused.
-  - `wairon subsystem externalize <id> --path <dir>` — now family-wide: every other family
-    project using a name the moved subsystem realizes is checked to keep resolving, and a
-    reference back into a component its subsystem does not publish refuses the plan.
-  - `member move` is unchanged: it changes no reference.
-- **Plan, confirm, apply.** Every verb prints its plan — each project's edits, every
-  refusal, the notes (consumers outside the family it cannot see, pins that will read
-  drifted), the file changes and the projects to re-lock. `--report` prints it and writes
-  nothing; otherwise it asks (`--yes` answers; a shell with no terminal and no `--yes`
-  writes nothing). A refused plan exits non-zero and writes nothing.
-- **All or nothing.** A plan is computed by running the verb's own writes on a private
-  copy of the family's `.wai` trees; applying it stages every file change and a backup of
-  every file it replaces under each project's `.wai/transactions/<id>/`, then swaps them
-  in. Any failure restores every backup: the family is fully migrated or exactly as it
-  was. A crash mid-swap leaves a journal.
-- **Never a lock.** Every verb names the projects to re-lock; a rename names every project
-  it wrote, the renamed one first.
-- **MCP.** `sdd_attach_member`, `sdd_detach_member` (with `widen`), `sdd_adopt_member`,
-  `sdd_rename_project` and `sdd_rename_member_alias` are new; `sdd_internalize_member`
-  gains `into`, `packs` and `exports`, and it and `sdd_externalize_subsystem` now run the
-  family migration. Each takes `dryRun`, which answers the plan and writes nothing; a
-  refused plan is a tool error carrying it. Hosted, all seven are tree-scoped writes —
-  a `dryRun` call included.
-- **`PROJECT_ID_RENAMED` (notice).** An id the rename moved from the one the lock
-  approved (the approved id is in `previousIds`) owes a re-lock and nothing more — it is
-  no longer `PROJECT_ID_CHANGED`, so the re-lock the rename asks for succeeds. This also
-  unblocks stage 3's *id-locked* member: rename it to its alias and re-lock.
-- **Hosted: an unfinished migration is rolled back when the project is next bound.** A
-  hosted project has no one to run `doctor --fix`, so the data plane recovers a crashed
-  transaction itself and audits each (`migration.recovered`).
-
-**Upgrading.**
-
-- **`member internalize` keeps the member's metadata.** It no longer deletes the member's
-  `.wai`: its pieces are placed as above and the rest is listed. A member with more than
-  one subsystem and an L0 vision needs `--into <subsystem>`; one selecting a pack the
-  parent does not needs `--packs adopt` or `--packs drop`. A member that carries
-  conformance debt is refused — pay or move the debt first.
-- **`subsystem externalize` and `member internalize` ask first** (`--yes` in a script,
-  `--report` to see the plan), and apply all or nothing.
-- **A rename always needs a re-lock.** The id is part of what was approved: re-lock every
-  project the rename lists (`PROJECT_ID_RENAMED` reminds you until you do).
-- **`.wai/transactions/`** holds a migration's staged files, backups and journal while it
-  applies, and is removed when it finishes. It carries its own `.gitignore` (`*`) — never
-  commit it.
-- **A pending-transaction banner.** A migration a crash left unfinished shows in `wairon
-  status`, `wairon validate`, `sdd_get_status` and `sdd_validate_tree` as a
-  `TRANSACTION_PENDING` notice until `wairon doctor --fix` rolls it back (the recovery is
-  the first fix doctor applies); a new plan is refused until then.
-- **Library callers:** `internalizeMember(alias, destination)` takes an
-  `InternalizeDestination` and answers an `InternalizeResult`; the CLI and MCP core
-  adapters no longer re-export `externalizeSubsystem` or `internalizeMember` — the verbs
-  go through the migration portal (`plan`, `apply`, `discard`).
-
-### Hosted members are projects of their own
-
-Stage 7 of the chained-subsystems work. Locally a member has been a project since stage 3 —
-its own id, gate, lock and migrations. On a hosted instance it was still a path inside its
-parent's record, reached by a narrowed token (`platform::billing`) and permissioned only
-through the parent. Every member of a hosted family is now a **hosted project record** of
-its own.
-
-- **Member records.** A member record carries `parentProjectId` and `memberPath`; its root
-  is derived from its parent's, never stored, so moving a family moves its members with it.
-  A member is a project for every hosted operation: it is bound by its own id, its own
-  record-level tools (status, approval, lock requests, packs, policy, producers, commit,
-  landscape) act on it, and audit names it (`projectId` the member, `composition` the
-  project the request ran at).
-- **Access is inherited through the project chain.** Projects nest like organization units:
-  a member's chain is its own scope, then its parent's, up to its family root's units and
-  the instance — the most specific setting wins. A grant on a project reaches every member
-  below it; an explicit **no** on a member's own record beats any inherited yes. No grant is
-  ever copied.
-- **Membership changes reach, and says so.** Because a member inherits its parent's access,
-  attaching or adopting a project widens who can reach it and detaching narrows it. Hosted,
-  `sdd_attach_member`'s dry run carries the principals who gain access beside the plan;
-  `sdd_detach_member` and `sdd_adopt_member` list everyone who loses or gains access; every
-  applied change is audited with the reach it changed (`member.registered`,
-  `member.returned`, `member.relocated`, `member.renamed`, `member.departed`,
-  `member.detached`, `member.adopted`; `family.changed` for a project a family-shape tool
-  wrote without changing its membership).
-- **Hosted detach and adopt relocate.** Every hosted record has an isolated root, so a
-  detached member cannot stay inside its family's tree. A hosted detach **moves** the member
-  — its files leave as deletes and arrive in a new isolated root as creates, its own members
-  with it — in the same all-or-nothing transaction as the family edits and the host store
-  writes; its record becomes top-level and keeps its former family root's units. A hosted
-  adopt (`sdd_adopt_member` with `path`) moves it back and converts the record into a member
-  again; detach-then-adopt is the identity on hosted as it is locally.
-- **`source.hosted`.** An external may name its producer by hosted record id —
-  `source: { hosted: billing }` — which a detach writes for every consumer, since a path
-  cannot cross isolated roots. Exactly one of `source.path` and `source.hosted` is set. It
-  is read live (status, re-pin) only through the hosting server's record lookup, within what
-  the request may read; the consumer's own gate still judges its pin. Outside a hosted
-  server it is reported as "hosted-only producer `<id>`: available only through the hosted
-  server" — unavailable, never a pass.
-- **Reconcile.** After an applied `sdd_add_member`, `sdd_move_member` or family migration on
-  hosted, the family's records follow the family on disk: new members are registered,
-  moved ones relocated, departed ones disabled (never deleted) — and re-enabled when the family
-  declares them again (`member.returned`, listing exactly who regains reach) — and a renamed member is
-  re-keyed — its own-scope settings and the key entries naming it move to the new id, with
-  no widening.
-- **One family commit.** A git-backed family commits through its family root's repository:
-  a member under its own `<path>/.wai/`, and a family migration or reconciliation as ONE
-  commit covering every member it touched.
-- **Refusals.** Placing a member in a unit refuses (a member takes its units from its family
-  root). Renaming a hosted family root's id refuses: "renaming a hosted family root's id is
-  not supported; a member can be renamed, or the root recreated".
-- **Two fixed bugs.** Hosted member specs were never committed by the periodic sync, and the
-  backup mirror missed members; both now cover every member through its family root.
-- **Web app.** `GET /web/projects` lists member records with `parentProjectId`; the app shows
-  a crumb to a member's parent (named only when you can see the parent) and lists members
-  under their parent. The family canvas links each member to its own page when you may read
-  it. `GET /web/projects/externals` answers a project's relation health — its externals
-  status, per external — shown on the project's new *Relations* tab. Its reach is your listed
-  projects (read, write or administer). Colouring the canvas's relation edges and clicking a
-  member node open are a future engine hook; the canvas shows a strip of member links instead.
-
-**Upgrading.**
-
-- **Run `wairon host doctor`, then `wairon host doctor --fix`.** It registers every member
-  the hosted families declare (members of members included) as a record — plan first, all
-  or nothing, audited. It writes **no grant**: access is inherited, so everyone's reach is
-  exactly what it was (the plan proves it, row by row, before it writes). Until it runs, the
-  server logs at boot how many members await it. A member it cannot read refuses the whole
-  upgrade, named with why (a missing directory, no `.wai/project.yaml`, a file that fails
-  its schema, no valid id).
-- **A crash is recovered.** A transaction a crash left unfinished under the data directory
-  (a member upgrade, or a hosted detach or adopt) is rolled back before the server serves,
-  and by `host doctor --fix`; a dry run reports it.
-- **Explicit denies on members.** A "no" assigned on a member's own record now beats
-  whatever its parent grants — use it to keep a member private inside a readable family.
-- **Qualified tokens keep working for one release.** A token narrowed to `platform::billing`
-  is rewritten by the upgrade to the member's record id (`billing`); one that is not keeps
-  resolving to the member's record. `host key mint` given a qualified entry stores the record
-  id and says what it mapped (`platform::billing -> billing`); the admin API answers it as
-  `mapped`. Mint new tokens by record id.
-- **Hosted detach and adopt move directories** and name the projects they write to re-lock.
-  `sdd_adopt_member` takes `path` on hosted (where to adopt a `source.hosted` external). An
-  empty directory at the target — what a cut-short cleanup after a committed move can leave
-  — counts as free; a non-empty one refuses (`relocation-target-exists`).
-- **A detached project has no git binding.** The family's repository stays with the family
-  and none is created for the detached project: the detach result and its audit event say
-  "no git binding: enable one for this project", and its Git status reads not git-backed.
-  Enable a binding for it (`wairon host git enable --project <id> --remote <url>`,
-  `POST /admin/projects/{id}/git`, or the project's Git tab) if its
-  history should keep being published.
-- **`source.path` is optional** in `externals` now that `source.hosted` exists; a source
-  naming both or neither is reported as the declaration's problem.
-- **Library callers:** `mintToken` answers `{ token, mapped }` instead of the bare token.
-
-### Parts and projects: boundaries are earned
-
-Stage 8 of the chained-subsystems work. Stages 1–7 made every member an independent
-project — the right model for a boundary, and the wrong one for a piece of a system that
-merely lives in another folder or repository. Stage 8 separates what a system is made of
-from where its files live.
-
-- **Parts.** A member is a **part** or a **project**, and its content decides which: a tree
-  that declares an id, holds an L0 or carries a lock is a project; anything else is a part
-  — a piece of its parent stored elsewhere, whose subsystems are the parent's own (local
-  ids, the ordinary subsystem rules, the parent's lock, the parent's agents). `as:` only
-  asserts it; a contradiction is `MEMBER_KIND_MISMATCH`.
-- **One location key.** A member is declared by one key, shorthand first:
-  `scheduler: services/scheduler` (contained), `admin: ../admin` (a sibling checkout),
-  `payments: git@host:acme/payments.git#<full commit>` (a git repository at a commit),
-  `hosted:<id>` (a hosted record, projects only); the long form is
-  `{ source, as, ref, dir, description, use }`. Leaving the root is only ever a leading
-  `../`.
-- **Storage is orthogonal.** A part reads the same — and approves the same — contained, in a
-  sibling checkout or in a git repository. A git member is fetched at its pinned commit into
-  a content-addressed, immutable cache (`WAIRON_CACHE_DIR`, else the OS user cache
-  directory) that works offline once filled; a git part is read-only here.
-- **The growth verbs.** `member add` creates a **part** by default (`--project` for a
-  project). `member promote <alias>` makes a part an independent project in place — its id,
-  an L0 exporting exactly what the parent uses of it, references respelled `alias::name`,
-  pins on both sides — and `member demote` is its exact inverse
-  (promote-then-demote is the identity: the part's files byte for byte). Both run on stage
-  6's all-or-nothing transaction, plan first, and refuse a member fetched from git. A member
-  in a `../` sibling checkout on the family root's volume joins the same transaction — its
-  files change all-or-nothing with the family's and either root recovers a crash — while
-  each repository still gets its own commit, as the plan says ("files: all-or-nothing;
-  commits: one per repository"); one on another volume is refused (`cross-volume`).
-  `member move` moves a sibling member to another sibling path. A demote names every L0
-  export entry it removes, hand-written ones included.
-  `subsystem externalize` now moves a subsystem into a part (a storage move: no reference,
-  export or pin changes, the same verdict); `--as project` composes it with a promote.
-  `member internalize` of a part is a storage move too. `member update <alias>` moves a git
-  member's pinned commit and shows the spec files it adds, changes and removes first
-  (`--report` writes nothing). MCP: `sdd_promote_member`, `sdd_demote_member`;
-  `sdd_add_member` takes `source` and `as`; `sdd_externalize_subsystem` takes `as`.
-- **Referenced projects, compared per use.** A project member stored outside its parent (a
-  `../`, git or hosted source) is judged by its parent's gate against its pin, exactly as an
-  external; the family run opens it where it is stored — the fetch cache at its pinned
-  commit — runs its own gate, and composes it. Every producer is now compared **per use**:
-  a sibling checkout, a git repository or a path external that breaks a used method is
-  `EXTERNAL_INCOMPATIBLE` in the family run, not only drifted. A git external's live
-  producer is its ref's head; a git member's is its pinned commit. One that cannot be
-  fetched is `EXTERNAL_CHECK_UNAVAILABLE` — never a pass. Pins record their role
-  (`external`, `member`) and the producer's commit only when it lives in another git
-  repository (a git source, or a sibling that is its own repository): a contained or
-  same-repository producer records none, so a monorepo re-pin never churns the lock.
-- **A part on its own.** A part stored outside its parent pins the excerpt of the parent it
-  uses (`wairon externals pin` at the part), so its own repository's CI can validate it
-  alone (`PART_JUDGED_ALONE`); unpinned, it says "validate from the parent".
-- **Overview follows composition.** The canvas draws a part's subsystems as the parent's own
-  with a storage badge (`part <alias> · contained | ../x | git <commit>`) and a referenced
-  project as a project node with its consumption edges; the web app lists parts and badges
-  members; `wairon status` prints a part's subsystems under their parent, and at a part's
-  root one line naming its parent and its pin.
-- **Hosted.** A part is part of its parent's record. Demoting a member retires its record
-  (disabled with `disabledReason: part of <parent>` — shown in the web app and `host
-  project list` — reconcile's `retired`, audited `member.retired`, its own-scope settings kept,
-  the reach change listed — a member-own "no" stops applying); promoting it back re-enables
-  it (`member.returned`). A `hosted:` project member is its own top-level record. Hosted
-  roots are isolated: a member with a `../` or git source is refused there.
-- **Guidance.** The `sdd-architect` skill, the agent guide and the MCP server instructions
-  teach the growth path — subsystems, then parts, then projects — the member grammar, and
-  promote/demote.
-
-**Upgrading.**
-
-- **Existing members are unchanged.** Every member wairon created before stage 8 holds an
-  id and an L0, so it reads as the project it always was; nothing is migrated.
-- **New members are parts.** `wairon member add <alias> <path>` (and `sdd_add_member`) now
-  creates a part; pass `--project` (`as: project`) for what it used to create.
-  `sdd_add_member`'s `path` argument is now `source`.
-- **`externalize` makes a part.** `wairon subsystem externalize` and
-  `sdd_externalize_subsystem` move the subsystem into a part; `--as project`
-  (`as: project`) is the old behaviour.
-- **The long-form `path` key is deprecated** (`DEPRECATED_MOUNT_FORM`): `wairon doctor
-  --fix` rewrites `{ path: x }` to the one location key. It is read for one release.
-- **Git members** need git on the machine that validates them; the fetch cache lives in
-  `WAIRON_CACHE_DIR` (set it in CI to cache it between runs). Move a git member forward
-  with `wairon member update`; a verdict never moves because a remote did.
-- **Part-alone CI:** in the part's repository run `wairon externals pin` once with the parent
-  checked out at `partOf.path`, commit the pin, and `wairon validate --ci` there judges the
-  part against it.
-- **Path externals are compared per use now.** A family run that reported a path or hosted
-  external as "unavailable — outside the family" now compares each use; re-pin
-  (`wairon externals pin`) to record the used members, and expect `EXTERNAL_INCOMPATIBLE`
-  where a producer broke one.
-- **Hosted:** a member with a `../` or git source is refused; promote/demote change records
-  through reconcile, as every family-shape tool does.
-
-### The canvas shows relation health, and its project nodes open
-
-- **Each consumption edge carries its relation's health.** `wairon diagram`
-  compares the family's relations with their live producers by default — each
-  project's externals status read at its own root (`family_validator.relations`,
-  the very comparison a family run judges, so an edge and a verdict cannot
-  disagree) — and draws each edge between two projects by it: a glyph at its
-  middle (✓ ok, Δ drifted, ✕ incompatible, ? unavailable), its colour, and a
-  dotted line for unavailable, so the state never rests on colour alone. Where
-  edges fold at a collapsed level, the worst health wins. Hovering an edge, or
-  selecting it, shows which uses changed or were removed, why one could not be
-  compared, the pin's commit or short digest and when it was compared. One legend
-  row names the four states and the compared-at time. `ExternalStatus` gains
-  `health()` (incompatible > unavailable > drifted > ok — nothing that could not
-  be checked reads ok) and carries the lock's `pinnedDigest`/`pinnedCommit` as
-  provenance; `sdd_get_externals_status` declares them (and `outOfReach`) in its
-  output schema.
-- **`wairon diagram --no-health`** skips the comparison: consumption edges are
-  drawn neutral and the legend says health was not checked. Without health the
-  canvas never draws an edge as good. Only the canvas carries health; Mermaid,
-  draw.io and Excalidraw ignore it. A local run reads within the explicit reach
-  `validate --family` uses, so a `../` producer is compared, not left out.
-- **A contained project member has a relation too.** It is no external, so no
-  externals status ever named it: a parent consuming its own contained member
-  now answers that relation from its own gate's findings on those references —
-  incompatible when `EXTERNAL_NOT_EXPORTED` or another resolution failure lands
-  on one, ok otherwise; it is read live, so it never drifts.
-- **Declared externals that are no project of the family are drawn** as
-  external project nodes (dashed, with their storage badge) that their
-  consumption edges land on, so peers that only consume each other still show
-  their relations.
-- **Frozen where it is exported.** A written canvas page and a share snapshot
-  carry the relations as they were, each with its `comparedAt`; the legend says
-  "as of". A share snapshot reads them within its creator's reach and carries no
-  member record ids.
-- **Hosted:** the web canvas reads relations within the caller's listed projects,
-  exactly as the Relations tab does — a member or producer out of that reach is
-  unavailable, never ok. A project node carrying a `recordId` (a member, or an
-  external whose `source.hosted` record the caller may read) offers "Open project
-  ↗" in its panel and opens on double-click through the new host hook
-  `onOpenProject`; a node without one is drawn unlinked. Locally a contained
-  member drills in and a referenced or external one opens its details panel.
-- **The SPA's member-links strip above the canvas is retired**: the nodes open
-  themselves.
-
-### Hosted access rules per subsystem, and why someone can or cannot act
-
-- **A subsystem is one more rung below its project.** A hosted permission chain is
-  now subsystem → project → parent projects → units → instance. A subsystem scope
-  (`<projectId>/<subsystemId>`, a part's subsystems included — they are the
-  project's own) carries one capability, `project:write`, as yes or no (or
-  inherit): a team can be denied one subsystem of a project it may edit, or allowed
-  to edit one subsystem without project-wide write. Reading stays whole-project, and
-  every other capability resolves at a subsystem exactly as at its project. The rung
-  is visited only for a subsystem target and only for `project:write`, so with no
-  subsystem settings every resolution is what it was before; a property test over a
-  generated permission matrix (subjects, roles anchored at the instance, units,
-  projects and subsystems, everyone-defaults, every capability, member chains)
-  holds the old resolver and the new one to the same answer on every unit and
-  project target.
-- **Spec writes are judged spec by spec.** On the hosted data plane the listed
-  spec-writing tools are admitted when the caller may write some subsystem of the
-  bound project; the core's spec writers then refuse a spec of a subsystem the
-  request may not change (`SubsystemWriteDenied`, naming the subsystem and the rung
-  that decided it) before anything is written. A subsystem owns itself, a component
-  or type names its subsystem, an interface or implementation follows its
-  component, and the L0 and system-level types fall under the project rung. A
-  component rename, a method rename and a method move judge every spec they would
-  write first and name every subsystem they may not change. Every other write tool
-  still needs project-wide write, and a refusal at the door now says which rung
-  decided it.
-- **Whole-tree writes stay whole.** A lock is decided at the project rung (a
-  subsystem's yes never authorizes one) and is refused when a subsystem rule denies
-  the caller any subsystem of the project, naming each. A family migration that
-  would reshape a project holding a subsystem the request may not change refuses
-  `subsystem-denied`, one per subsystem.
-- **Behaviour change — teams must know.** Inside a hosted request, a spec write
-  into a family member the caller may not write at the project rung is now
-  refused. Before, nothing stopped it: the door checked only the bound project, so
-  a caller with write on a parent could change a member that explicitly denied
-  them. It is a fix, but a workflow that relied on it now fails with
-  `SubsystemWriteDenied`.
-- **A type group belongs to no subsystem**, so creating one needs project-wide
-  write; a caller who may write only some subsystems cannot.
-- **A promote or an externalize never widens access.** When a member project is
-  registered from a parent's subsystem, each of the parent's rules on that
-  subsystem is carried onto the new project's own scope, audited, and the
-  subsystem rule itself is kept. The plan lists every carried rule before anything
-  is written — a hosted externalize as a project is now screened like a promote,
-  so its dry run carries the listing too: from `<project>/<subsystem>` to the new
-  project, per subject and value; several subsystems naming one subject collapse
-  onto one rule with the resulting value ("most restrictive wins"); a role binding
-  at a moved subsystem is listed as "not carried (can only narrow)".
-- **A member rename keeps its subsystem rules.** The hosted re-key moves every
-  subsystem rule and role binding at `<old>/<subsystem>` to `<new>/<subsystem>`
-  with the member's own settings, audited, so nothing a rule denied comes back
-  after the rename. Detach and adopt keep the record's id and need no re-key.
-- **Administering a subsystem's rules is administering its project.** The grid,
-  `setAssignment` and `bindRole` take a subsystem scope and refuse any capability
-  other than `project:write`, and an approval value, there. A rule naming a subsystem
-  its project no longer declares is kept — it applies again if the subsystem comes
-  back — and the grid, the permission list and the explanation label it
-  "subsystem not found". The CLI sets and lists one with
-  `wairon host permission set|list --project <p> --subsystem <s>`.
-- **The explanation.** `GET /web/admin/permissions/explain` (project:admin over the
-  scope) answers one user's effective permission for a capability at a unit, project
-  or subsystem scope, with the source and the rung that decided it; `/admin/permissions`
-  shows it as a Check beside the grant form, and offers a project's subsystems in its
-  scope picker.
-
-### Relation health on the HTML canvas and the admin diagrams
-
-- The web UI's HTML canvas (`GET /web/canvas`) now carries relation health on its
-  consumption edges, read within the caller's reach exactly as the canvas model and
-  the Relations tab read it — anything beyond is unavailable, never ok.
-- The admin plane's canvas diagram and its download carry it too, read with the
-  master credential's whole-instance reach. Other formats are unchanged, and the
-  signed view link still renders with health "not checked".
-
-### The design export, and renames that leave a trace
-
-A project's whole design can now be handed to another tool as one versioned, deterministic
-document, and a rename no longer reads as a delete plus an add.
-
-- **`wairon export [--out <file>]` and `exportDesign()`.** One JSON document (format
-  `wairon-design`, `formatVersion` 1.0) holding the resolved design: subsystems, components,
-  contracts with their signatures inlined, implementations with flat narratives, and types with
-  every position as canonical text plus a parsed expression. Every element is keyed and every
-  reference is a key; a reference into another project is written `alias::publicName`, the
-  stable name a consumer resolves. Dependencies (contained members and externals) are listed with
-  the public names used and the digest their pin records, never inlined. The source carries the
-  tree's StateId and the approval verdict `lock-check` gives. The same tree gives byte-identical
-  output. The format page is `docs/design-export.md`, and a JSON Schema generated from the
-  format's schema ships as `schemas/design-export-1.json`.
-- **No "executable or library" kind.** The export carries the facts a consumer decides that
-  from — lifecycle roots, endpoints and transports, listener mounts, the export table — and each
-  consumer decides for its own target.
-- **Rename traces.** Renaming a component, an interface or implementation named after it, a
-  type, or a contract method records the old key (`previousIds`, `previousNames`), shown as
-  `formerly` in the export, so a consumer can follow the rename. A retired id or method name
-  cannot be taken again (`id-retired`, `name-retired`), and a hand-edited trace that collides
-  with a live key or with another trace is `RENAME_TRACE_CONFLICT` (warning). A re-authoring
-  carries the traces; unsetting one releases its names.
-- **`sdd_rename_type`.** Renames a type and respells every type position, signature source and
-  export entry naming it.
-- **A published name survives a rename.** Renaming a component or type that backs an export
-  entry without `as` now writes `as: <old name>`, so consumers' pins keep resolving;
-  `renameComponent` and `renameType` report each kept name, and `renameMethod` reports the
-  export entries publishing the method it renamed.
-- **wairon's own export states how it is entered and what it ships.** The `wairon` binary is
-  now a CLI Portal (`cli_portal`, src/cli/index.ts) with one `CLI` endpoint per command, dispatching
-  to the `cli_runner` workflows (moved out of the entry into src/cli/runner.ts), and the binary's
-  startup cleanup is an `init` lifecycle root. The L0 export table names the binary, the
-  `@wairon/sdk` package (now including `defineRule` and its rule-authoring types) and the
-  `@wairon/cli` library entry's surfaces (core, validation, surfaces), so `wairon export` on
-  this repository lists them. The library entry now re-exports the validator portal's and the
-  surface portal's whole contracts (`validateAsComplete`, `measurePackImpact`,
-  `computeGateStateId`, `exportSurface`, `pinExternals`, `getExternalsStatus` and the rest)
-  beside `validateProject`, `validateFamily` and `exportDesign`. The family migrations' pin
-  maintenance (`renamePin`, `unpin`, `listFamilyPins`) moved off the surface portal onto an
-  internal `pin_maintenance_portal` published to sdd_migrations only, so the library never
-  offers a pin carried without re-pinning.
-
-### Types speak one language
-
-Every structured type position (a param's type, a method's returns, a field's type, a type
-method's and a signature type's params and returns) is read under one small,
-language-neutral grammar instead of being tokenized as free text. A contract now means the
-same thing to every implementation language, and every consumer reads one spelling.
-
-- **The grammar.** Ten primitives: `string`, `int`, `float`, `bool`, `bytes`, `date` (a
-  calendar day), `datetime` (an instant), `duration`, `void` and `any`. Three collections:
-  `list<T>`, `set<T>` and `map<K, V>`, whose key is `string`, `int` or an enum. `T?` means
-  T or no value, and `async T` is a returns that completes later. A named type is an
-  entity, a value-object, an enum or a signature type, applied to arguments when it is
-  generic (`Page<T>`). A position is read whole: a trailing aside does not parse.
-- **One "none".** `T?` belongs to the type, and the `optional` flag keeps meaning "may be
-  left out". TypeScript's `null` and `undefined` both read as `?`, and `T | undefined` on
-  an optional position reads as the flag alone. Both together mean "may be left out, and
-  may be explicitly none".
-- **Canonical spelling, and respelling reports.** TypeScript's spellings and the old
-  builtin vocabulary are accepted as input: `string[]` and `Array<T>` read as `list`,
-  `Record` and `Map` as `map`, `T | null` as `T?`, `Promise<T>` as `async T`, `boolean` as
-  `bool`, `object`, `unknown` and `json` as `any`. The loader reads every position canonical
-  in memory, and the writer stores canonical text. `sdd_add_type`, `sdd_define_interface`
-  and `sdd_update_spec` answer with a `respellings` list (`path`, `written`, `stored`) for
-  every alias they rewrote. A stored alias is `TYPE_SPELLING_STALE` (warning) until any
-  save or `doctor --fix` rewrites it, and stage 1's derived signature texts follow the
-  canonical types.
-- **`int` and `float`.** `number` is not an alias, because it does not say which one it
-  is. A write holding it is refused with "int or float?", and a stored one is
-  `TYPE_NOT_NEUTRAL` (warning) and is read as `float` until an author decides. The same
-  code names the legacy builtins with no neutral meaning (`uuid`, `decimal`, `tuple`,
-  `box`, ...) and their replacement.
-- **Unions of named types.** `A | B` is exactly one of named types. `?` is the only way a
-  non-named member joins. A union mixing in a primitive or a collection, an inline object
-  shape, an inline function type, a string-literal union, an intersection, a utility type
-  and a tuple are left out of the grammar: refused at write, `TYPE_FORM_UNSUPPORTED`
-  (warning) on load, and each message names the replacement (a value-object, a signature
-  type, an enum). Only a text that does not parse (`TYPE_EXPRESSION_INVALID`) and a broken
-  position rule (`TYPE_POSITION_INVALID`: `void` or `async` out of place, a non-scalar map
-  key, `T??`) are errors.
-- **The `enum` kind.** A new type kind: a closed, ordered list of `values` (`name`, an
-  optional `description`), unique by name, with optional pure methods and nothing else
-  (`ENUM_MEMBERS`, error, otherwise). `sdd_add_type` takes `kind: enum` with `values`, and
-  the web specs editor shows the kind and edits each value's description. Code
-  conformance compares the values with a string-literal union alias, a `z.enum([...])`
-  or a string `enum` (`UNREALIZED_ENUM_VALUE` and `UNDECLARED_ENUM_VALUE`, carryable
-  warnings at exact grade).
-- **Named scalars.** A value-object may declare `holds: <primitive>` (`string`, `int`,
-  `float`, `bool`, `bytes`, `date`, `datetime` or `duration`) in place of fields: one value
-  under a name, a newtype or type alias in every language (`type OrderId = string`). It is
-  not a union, not a named type and not `any`; anything else in `holds` is
-  `TYPE_POSITION_INVALID`, and an alias such as `boolean` is respelled. A named scalar is
-  not `HOLLOW_TYPE`. Fields beside `holds`, a table or component link on it, or `holds` on
-  an entity, an enum or a signature type is `NAMED_SCALAR_MEMBERS` (error). Type-shape
-  conformance compares it with the type alias the code declares under its name, read
-  through the dialect: `TYPE_HOLDS_MISMATCH` (carryable warning, exact grade) when the
-  alias's right side is another type, or the name is declared as a record. OpenAPI renders
-  it as its primitive's schema under the type's name and reads such a component back; the
-  ERD draws it compactly with no relation edges; the surface closure and digest carry what
-  it holds; the briefs' type mapping says how it is spelled. `sdd_add_type` takes `holds`,
-  and the web specs editor sets it on a fieldless value-object. This is how a mixed union
-  such as `PackSelection | string` becomes a union of named types: the string gets a name.
-- **`async` and `ASYNC_MISMATCH`.** `async` on a returns is checked against the realizing
-  function: `ASYNC_MISMATCH` (carryable warning, exact grade) reports a contract and a
-  function that disagree on whether the call completes later.
-- **Code through a dialect.** Param conformance compares the contract's canonical type
-  with the code's annotation read through the language's dialect, so `T[]` agrees with
-  `list<T>`, and TypeScript `number` agrees with both `int` and `float`. Implementer briefs
-  carry a `typeMapping` for their language, the same table, also folded into the
-  instructions as a "Types in <language>" section.
-- **OpenAPI.** The codec maps the whole grammar both ways. `T?` admits null (`type: [X,
-  "null"]`, or `anyOf` with `{type: "null"}` around a `$ref`) where it used to be an
-  "Unresolved type". `map` is `additionalProperties`, `set` is an array with
-  `uniqueItems`, `bytes` is a base64 string, `date` is `format: date` (it was
-  `date-time`), `duration` is `format: duration`, a union of named types is `oneOf`, and
-  an enum is a string component with its values as `enum`. `fromOpenApi` reads every
-  schema back into its canonical type, and a named string component carrying `enum`
-  becomes an enum type.
-- **ERD.** Multiplicity comes from the parsed expression: `*` for a list, set or map,
-  `0..1` for an optional field or a `T?` type. A field typed by an enum or a named scalar
-  gets no relation edge, because each is a value domain, and an enum node lists its values
-  in place of fields.
-- **Surface snapshots.** The type closure follows the named types each parsed expression
-  references and carries an enum with its values in order. Digests hash the canonical
-  expression, so an alias and its canonical spelling digest alike, and adding, removing or
-  reordering an enum value moves the digest.
-- **`LANGUAGE_FOREIGN_BUILTIN` is retired.** It pushed contracts towards one language's
-  spellings, which is the opposite of what the grammar does. The pack field
-  `languages.<id>.foreignBuiltins` is accepted and ignored for one release: a pack that
-  still declares it gets `PACK_FIELD_DEPRECATED` (notice), and the field goes in the
-  release after.
-- **wairon's own tree uses enums.** The fields and params of wairon's own specs whose closed
-  set of values was listed only in prose are now typed by enums, each bound to the code's
-  literal union or `z.enum`, so the enum-values check guards them. Its design export,
-  surface snapshots and briefs show those positions as enums instead of `string`.
-- **Behaviour change (hosted): three settings offer only what they do.** The exposure
-  policy's `adminApiMode` is `disabled` or `enabled` (where the admin API listens stays
-  `--admin-host`); the audit policy's `metadataMode` is `none` or `redacted`; the quota
-  policy's `mode` is `observe` or `warn`. The retired values had no behaviour of their own and
-  still load for one release, mapped with a warning that names the old and new value:
-  `local_only`, `private_network` and `public` read as `enabled` (a startup line for a stored
-  policy, the audit event's metadata for an admin write), `full-redacted` as `redacted` and
-  `block` as `observe` (a startup warning for `WAIRON_AUDIT_POLICY` / `WAIRON_QUOTA_POLICY`).
-  The admin UI offers only the new values.
-
-**Upgrading.** Run `wairon doctor --fix` once: it rewrites every stored type position that
-is an alias into its canonical spelling (plain `wairon doctor` prints the plan first). Then
-settle by hand what it lists and never writes: each `number` position (it proposes `int`
-where the name says a whole number; confirm by writing `int`, or write `float`), and each
-position using a form the grammar leaves out, with its replacement named. The rewritten
-specs make the lock stale, so re-lock afterwards. Surface digests now hash canonical
-types, so a consumer that pinned a snapshot whose members changed spelling sees
-`EXTERNAL_DRIFTED` once and re-pins (`wairon surface pin`). A pack declaring
-`foreignBuiltins` can drop the field.
-
-### Supervisors keep their own state, and Actors are found where callers really look
-
-A Supervisor had nowhere to keep its bookkeeping: held state belongs in a data
-component, but a Supervisor could not depend on one at all. And the remedy for an Actor
-reached without supervision pointed at a ceremonial edge to the Supervisor instead of the
-lookup a caller really performs. Both are replaced.
-
-- **Supervision state.** A Supervisor may `owns` a Store or Registry of its own — restart
-  counts, live sets, run brackets — one hop, private, read and written in full. It owns
-  nothing else (`SUPERVISOR_CONTAINMENT`, error), a block has one owner whether patterns
-  or Supervisors claim it (`SHARED_OWNED_MEMBER`), and nobody else depends on that state:
-  a component that does is reported, as the intruder, naming the Supervisor and the state
-  (`SUPERVISION_STATE_INTRUSION`, error).
-- **Shared data, per call.** A Supervisor may depend on a data component it does not own,
-  and calls it only through `read`- and `lifecycle`-effect methods; a call to a write, or to
-  a method that declares no effect, is `SUPERVISOR_WRITE_SHORTCUT` (error) — the write goes
-  through the Orchestrator that does it. `ARCHITECTURE_VIOLATION_SUPERVISOR_DEP` now covers
-  only a Supervisor depending on a presentation block.
-- **A third method effect: `lifecycle`.** `effect: lifecycle` marks a method that creates,
-  destroys, or (un)registers an entity's existence or membership without modifying its
-  domain fields. It is closed under composition: a lifecycle method that calls a
-  write-effect method is `LIFECYCLE_CALLS_WRITE` (error). The existing effect readers treat
-  it as a mutation: `PORTAL_WRITE_SHORTCUT` refuses a Portal's direct lifecycle call as it
-  refuses a write, and a durable Store's lifecycle methods need the hydration read-back as
-  its writes do. `sdd_define_interface`, `sdd_update_spec`, the OpenAPI codec and the web
-  specs editor accept it.
-- **An Actor is found through its supervision.** A component depending on a live Actor is
-  supervised reach when it also depends on a Supervisor that supervises the Actor — as
-  before — or on a Registry such a Supervisor maintains, by owning it or by calling it with
-  lifecycle-effect methods: the lookup hop the code really takes.
-  `ACTOR_REACHED_WITHOUT_SUPERVISOR`'s remedy now names that Registry, or says to model one.
-- **An allow cannot cover an error, and now says so.** A `lint.allow` naming a code that is
-  an error on its spec silenced nothing (correct) but was then reported as an allow whose
-  finding never fired — or, when the error did fire, not reported at all. Either way
-  `UNUSED_LINT_ALLOW` now says plainly that an error cannot be allowed.
-
-**Upgrading.** A tree whose Supervisor depended on a Store, Registry, Repository, Index or
-Query used to fail on the edge; it now passes the edge and is judged on what its narratives
-call there. A Supervisor narrative calling a write — or an untagged method — on data it does
-not own newly fails, as does a component depending on state a Supervisor now owns. Tag the
-shared methods a Supervisor calls `read` or `lifecycle`, move each write into an
-Orchestrator, and remove any `lint.allow` naming an error code. No spec is rewritten.
-
-### Signatures: one source, named when shared
-
-A method's signature is stated once. The text is derived from structured params, a
-function type can be named and reused, and a method that only forwards can take its
-params and returns from what it forwards to instead of restating them.
-
-- **Derived text.** A contract method with `params` shows `name(a: T, b?: U): R`: its
-  params in declared order, `?` after an optional one, the types exactly as written, then
-  the returns. The writer stores that text and the loader re-derives it on every load, so
-  a stale stored text is never shown; a hand edit that drifted is `SIGNATURE_TEXT_STALE`
-  (warning) and any save repairs it. A method without params keeps its prose. Type methods
-  gain optional `params` too, and derive the same way.
-- **Signature types.** A new type kind, `signature`: params, returns and a description,
-  nothing else. It is a named function type, so a callback param can be typed by it, and
-  its text is `(a: T, b?: U): R`. A signature type carrying fields or methods, or lacking
-  its returns, and a data type carrying params or returns, is `SIGNATURE_TYPE_MEMBERS`
-  (error).
-- **`signatureFrom`.** A contract method may name one source instead of stating its
-  params and returns: a signature type, or a `component.method` its component reaches
-  through `dependsOn` or `owns`. The loader resolves it, so every consumer sees the
-  source's params. No chains. The findings:
-  - `SIGNATURE_SOURCE_UNRESOLVED`, `SIGNATURE_SOURCE_AMBIGUOUS` (the value names both a
-    method and a signature type; qualify it), `SIGNATURE_SOURCE_CHAINED`,
-    `SIGNATURE_SOURCE_OFF_EDGE` and `SIGNATURE_SOURCE_RESTATED` (a source beside params
-    or returns that differ from it) are errors.
-  - `SIGNATURE_SOURCE_AVAILABLE` (**notice**) points at a Repository facade's methods
-    that restate exactly the owned member method they forward to. Switch it off with
-    `rules.sddRuleSeverity`.
-- **Authoring.** `sdd_define_interface` takes `signatureFrom` (and `signature` becomes
-  optional when params derive it); `sdd_add_type` takes `kind: signature` with `params`
-  and `returns`, and type-method `params`. A write that states a source beside params or
-  returns is refused. To adopt a source on an existing method, the `sdd_update_spec`
-  delta sets `signatureFrom` and unsets the method's `params`, `returns` and
-  `signature`. `sdd_get_spec` answers a contract in its stored form, with each sourced
-  method's resolved params beside it as a read-only `resolvedSignatures` marker.
-  Renames and method moves carry `signatureFrom` with them.
-- **Everywhere it is shown.** The canvas draws a sourced method's source beside its
-  signature and a signature type with its text in place of a field list; the producers'
-  doc pages do the same; the web specs editor shows a derived signature read-only and
-  edits `signatureFrom`.
-- **Snapshots and OpenAPI.** A surface snapshot carries every method's params inline and
-  never a `signatureFrom`. A signature type travels in the type closure complete (its
-  params and returns), the closure follows them, and the digests include its shape, so
-  changing a named signature moves the digest of every member that names it. The OpenAPI
-  codec renders a signature type as a component with no `type` constraint, a description
-  saying it is a function type with no JSON form, and an `x-wairon-signature` extension
-  holding its params and returns; `fromOpenApi` decodes it back.
-- **`WAIRON_QUOTA_POLICY`** sets the hosted quota policy the way `WAIRON_AUDIT_POLICY`
-  sets the audit policy: a JSON object of any of its fields (`enabled`, `mode`, and the
-  non-negative integer limits) laid over the disabled default, refused at startup when
-  invalid.
-- wairon's own tree adopts `signatureFrom` on its Repository facades: 164 methods across
-  25 facades now name the member method they forward to.
-
-**Upgrading.** Run `wairon doctor --fix` once: it rewrites every stored signature text
-that differs from the text its params derive (plain `wairon doctor` lists them first),
-and drops a sourced method's restatement when it equals its source. A restatement that
-differs is never repaired, since only its author knows which contract was meant. The
-rewritten specs make the lock stale, so re-lock afterwards.
-
-### The undecided debt is decided
-
-The conformance debt register carried 229 findings marked *undecided*: places where the
-spec and the code disagreed and nobody had read which side was right. Every one has been
-read; the kind is now empty, and the register went from 303 findings over 406 units to 75
-over 103.
-
-- **Contracts and code agree on their arguments.** Most param findings were binding
-  errors, not disagreements: implementations that never declared their injected leading
-  config argument, and symbols bound to a wrapper instead of the body. The rest moved the
-  side that was wrong: contracts gained the inputs callers really pass (a git credential
-  reference, who placed a project), lost the ones nothing takes, and code was renamed to
-  say what its contract says.
-- **The ERD draws the records that exist.** Type specs describe the value a type finally
-  holds (a defaulted field is required), model the fields they were missing, and drop the
-  ones never built. The hosted project record keeps only what it stores.
-- **Every export is a promise or private.** A name another component imports is a contract
-  method, a realization handle, or a pure method of its modelled type; the rest stopped
-  being exported. A barrel's re-export of a modelled type's pure method counts as promised
-  surface.
-- **Portals take what their contracts say.** The share portal, the MCP resource reader and
-  the host request handler leave transport parsing to the dispatcher.
-- `FACADE_FORWARDING` names the facade method as its site, so a `lint.allow` for it must
-  name the method (`at:`).
-
-Behaviour changes:
-
-- **A hosted token mint requires its project list.** A mint with no list, or an empty one,
-  is refused; pass the project ids, or `*` for the owner's full reach (the CLI already did).
-- **Hosted project init writes the display name and description** into the new project's
-  `.wai/project.yaml`; `environment` is no longer part of the request (deployment is not
-  design).
-- **The server records who created a cross-project relation and when**, and keeps them on
-  update; the unused `sourceAdapter` leaves the relation record.
-- **Every sign-in start path enforces the provider's redirect allowlist.**
-- **`WAIRON_AUDIT_POLICY` sets the hosted audit policy**: JSON, any subset of its fields,
-  laid over the secure default and refused at startup when invalid. Member migrations
-  honour it too.
-- `aiGuide` leaves the project.yaml schema; nothing read or wrote it.
-
-### Fixed: a delta's absent fields, and two tests that failed under load
-
-- **A field a delta element leaves out keeps its stored value, at every depth.**
-  An element `sdd_update_spec` names merges field by field: a field it leaves
-  out, or passes as `null`/`undefined`, is "no change" below the top level as
-  it always was at it. The element merge was a shallow spread, so a key present
-  with no value replaced the stored one — `undefined` erased an interface
-  method's `params` or a try step's `catches` and `endStep`, and `null` was
-  refused by the schema instead. Only `[]` or an `unset` clears. The tool
-  description now says so, and that `narrative: []` on a method you are not
-  editing clears its steps. (F88)
-- **`tests/server/git-backed.test.ts` no longer fails under full-suite load.**
-  Each test rebuilt the same seeded remote with six synchronous git processes
-  before running its own dozen or more, all inside a fixed per-test budget that
-  a saturated machine stretches several-fold. The seeded remote is now built
-  once per file and copied per test, with the copy's clone repointed at its own
-  remote: the file runs in half the time alone and under load.
-- **`tests/mcp/skill-prompts-variants.test.ts` binds a fixture project.** Its
-  prompt suite created MCP servers with no project, so they read this
-  repository's own ~1,300-spec tree through the working directory and composed
-  its agent topology on every resources/list — a cold read that took seconds
-  under load, and a verdict that depended on the live tree. Every suite in the
-  file now binds a small project of its own.
-
-### Fixed: technology tokens, context sync, global writes and two delta merges
-
-- **A technology can declare the tokens it is matched by.** An entry of
-  `technologies` is a bare name or `{ name, matches }`; with `matches`, the
-  technology-boundaries rule polices those tokens instead of the name. A package
-  named after its file format (`yaml`) no longer floods TECH_LEAKAGE with every
-  mention of the format (100 warnings on this tree), and wairon's own
-  project-config adapter now binds it as `{ name: yaml, matches: [yaml package,
-  parseDocument] }` instead of naming it in prose. (F83)
-- **`wairon generate` keeps the derived context documents current whenever the
-  project keeps a `.wai/context/` directory**, not only when a person wrote
-  `project.md` — the same documents `doctor --fix` keeps current. (F84)
-- **Nothing outside the project root is written without its own consent.**
-  `doctor --fix` plans the MCP registration first: a write that stays in the
-  project runs as before, while a machine-wide one (Antigravity's global
-  `mcp_config.json` for an `agy` target) and the legacy global plugin's cleanup
-  are listed in their own plan — file, old and new value, credentials redacted —
-  and need their own confirmation: `--yes` covers them only with the new
-  `--global`, a terminal asks, and a run with neither skips them and says so. A
-  replaced global file is kept beside itself as `<file>.wairon-backup-<timestamp>`
-  (also by `wairon mcp install --global`), and the plugin is moved aside, never
-  deleted. `generate` names and skips a target whose output directory resolves
-  outside the project unless `--global` is given, and then backs up each file it
-  replaces or prunes there. The chaining migration's plan marks a project above
-  this one's root. (F85)
-- **`sdd_update_spec` no longer crashes on a new element without its list.** A
-  method the delta adds with no `narrative` is an intent-level method with none
-  (the schema's own default); a `narrative` that is not a list is refused naming
-  the field; and an `unset` of a defaulted list (`methods`, `publicInterfaces`)
-  resets it instead of throwing a raw TypeError on save. (F86)
-- **A jump a delta writes stays where the delta put it.** Jumps written by a
-  delta (on an inserted, appended or edited step) are read in the numbering the
-  whole delta leaves behind; only stored jumps relocate around the delta's
-  inserts and deletes. A branch inserted together with a later step no longer
-  comes out pointing one step too far, and a delete is no longer refused because
-  a jump the delta wrote names that number in the final numbering. (F87)
-
-### The analysis stops blaming the wrong code, and renames keep the debt they move
-
-- **Tests to revisit are matched by the module a test imports from.** A test
-  counts for a method only when it imports it from the method's own file or a
-  re-export of it; a test importing a same-named function from another module no
-  longer floods the report (removing one thin adapter's forwards listed 265 test
-  files; it now lists the 17 that mention them).
-- **An aliased re-export is followed.** `export { a as b } from 'm'` forwards
-  exactly as an unaliased re-export does, for call-step conformance and body
-  reachability, so an adapter no longer has to take its provider's names to be
-  credited.
-- **Renames and method moves rekey the debt register and lint allows.** The
-  carried entries and allows keyed by the old component, contract or method ids
-  follow the move, so unchanged debt no longer reads as both paid and new. The
-  register's comments and formatting are kept, the rewrite is verified by
-  re-parsing before anything is written, and each report lists what it rekeyed.
-- **An owning subsystem that does not exist is refused** — by `sdd_add_type`, as
-  every other create tool refuses an unknown parent, and by `sdd_update_spec`
-  when a delta moves a component or type under one. An owner the delta leaves
-  alone is not judged, so a spec already pointing at a missing subsystem can
-  still be repaired.
-
-### Authoring tells the truth about stale servers, narratives and moves
-
-- **A stale MCP server refuses the writes that would lose data.** The server
-  fingerprints the spec schemas and the write tools' inputs; when the build on
-  disk changed them, every spec write (dry runs included) is refused with the
-  reason, `writesRefused: true`, and the instruction to reconnect
-  (`/mcp reconnect wairon`) — a server running old schemas strips fields the new
-  build knows. A rebuild that changed no schema keeps writing, with the warning.
-  `sdd_get_status` leads with the staleness.
-- **Narrative changes are reported by step, not by position.** Inserting one step
-  into a 97-step narrative reported about 124 "set" changes, one per shifted
-  field; it now reads as the step added, the steps renumbered and the jumps
-  relocated. A change report's `change` can now also be `renumbered` or
-  `relocated` — a client that switches on it should handle both.
-- **`sdd_move_methods` into a component without a contract creates it** (and the
-  implementation the moved narratives need) instead of refusing, and says what it
-  created. A moved method keeps the file it is realized in when the receiving
-  implementation names a different one, with a notice, instead of silently
-  claiming the other file.
-- **Errors carry one `Error:` prefix**, on every tool.
-
-### `wairon host` administers through an in-process portal
-
-The local operator's CLI administers an instance in-process — it calls the admin
-workflows directly with the master credential, and they authorize it themselves —
-but sdd_host published those workflows only through the HTTP admin plane, so
-`wairon host` imported past it into five internal modules.
-
-- **sdd_host publishes a second, in-process portal**, `local_admin_portal`, to
-  sdd_cli alone (`consumers`). It forwards by identity to the workflows the HTTP
-  plane already uses, adds no authorization of its own, and leaves the HTTP
-  surface unchanged. `wairon host` now imports nothing from sdd_host but it.
-- **Two writes got stricter on the way.** Registering the local dev project is
-  refused unless the host configuration is in dev mode, and seeding the default
-  identity provider at boot writes only the fixed provider secret from the
-  server's own environment — a caller can choose neither the key nor the value.
-- **The permission-model migration has an owner**, and the identity-provider
-  seeding moved out of the CLI into a workflow of its own, so the policy write it
-  makes goes through a workflow rather than straight to the registry.
-
-### An import that crosses a subsystem boundary lands on the portal
-
-The dependency check let an in-process import land on ANY module of another
-subsystem, on the reasoning that the portal barrel is cosmetic at runtime. It is
-not cosmetic for the contract: an import past the portal can use anything the
-module exports, and 26 names no contract promised were being used across
-subsystems that way. Measured before the change: 78 crossing imports, 38 of them
-landing past the portal.
-
-- **New rule `portal-imports` (`IMPORT_BYPASSES_PORTAL`, warning).** A runtime
-  import between component-mapped files that crosses into another subsystem must
-  land on a file realizing one of that subsystem's published components.
-  `dependency-conformance` still asks whether the hop is declared; this asks
-  where it lands.
-- **Every thin client adapter has a module of its own**, re-exporting the
-  provider's portal, and its consumer imports that module. Only this makes the
-  adapter's call steps resolve to the adapter - an import-path change alone does
-  not - so the carried "thin core adapter" debt is paid: the register drops from
-  458 to 396 findings.
-- **Every name a consumer takes across a boundary is on a portal contract** -
-  published where it is a capability (pack discovery and diagnosis, variants,
-  loader diagnostics, the canvas model, the doctor's repairs), turned into
-  behaviour on a type where it is one (a candidate verdict formats its own
-  refusal), or removed where the consumer should not need it.
-- **Integration secrets are injected by the caller.** The Git backing and the
-  Notion and Miro producers take the resolved token as an argument and no
-  longer reach into the host's secret store; the host resolves it for the one
-  call it authorizes, and `wairon produce` passes the token it obtained straight
-  in instead of writing it into the process environment.
-- **Switching project roots reads the tree as it is now.** The first read under
-  a new root binding re-verifies the tree against disk, so a parent project
-  changed outside the process is never projected from a stale cache.
-
-### Core publishes capabilities, not one front door
-
-`core_portal` published 97 methods to every caller, and measuring who called what
-showed they cluster by capability, not by caller. It is now seven portals, each
-with its own contract — **reads** (`spec_tree_portal`), **raw writes**
-(`spec_store_portal`), **mechanical writes** (`spec_maintenance_portal`: renames,
-subproject relocation, doctor repairs, tree import, provisioning), **approval**,
-**project configuration**, **extension packs** and **agent context** — and every
-client adapter depends on exactly the ones it calls. `src/core/index.ts` still
-realizes all seven.
-
-- **A published surface can name its consumers.** A `publicInterfaces` entry's
-  new `consumers` lists the subsystems it is published to; when every entry
-  publishing a component names them, any other subsystem depending on it is
-  `CROSS_SUBSYSTEM_UNLISTED_CONSUMER` (error), and a consumer id that names no
-  subsystem is `PUBLIC_INTERFACE_UNKNOWN_CONSUMER` (error). wairon's own raw spec
-  writes are published to the authoring seam alone, so no door can reach them
-  around the gate. `sdd_add_subsystem` and `sdd_set_public_interfaces` express
-  the field; `sdd_set_public_interfaces` also no longer keeps a field a restated
-  entry dropped.
-- **`wairon subsystem add`, and `wairon init` inside a parent project, author
-  through the seam.** A re-run on an existing id re-authors it in place and
-  reports what it carried, instead of overwriting its description, published
-  surface and trusted links with a placeholder.
-- **A restatement is parsed before it is written.** A door that states only the
-  fields it owns gets the schema's defaults for the rest, and a spec that would
-  not parse is refused with the reason, instead of failing inside the store.
-- **Eleven typed save/delete methods leave the portal** — nothing called them
-  through it once every authored write went through the seam. See *Upgrading*
-  item 4 if you embed wairon as a library.
-
-### Every authored write goes through the authoring seam
-
-`sdd_authoring` called itself the one place that decides what may be written and
-then writes it, and every door was meant to reuse it. Only three MCP tools did:
-`sdd_add_component`, `sdd_update_spec` and `sdd_move_methods`. The other create
-tools, the three setters and `sdd_delete_spec` saved through the store directly,
-and the rules for re-authoring a spec — the stored status is never lowered, what
-the input cannot express is carried, what an omission cleared and a restatement
-removed is named, the parent must exist, narrative labels must resolve — lived in
-the MCP transport handlers, six times over. The visible symptom: redefining a
-contract with `sdd_define_interface` so that a method disappeared named no tests
-to revisit, while the same change through `sdd_update_spec` did.
-
-- **The seam has one whole-spec write.** `writeSpec` takes a restatement — the
-  spec as the tool states it, plus the fields that tool's input can express — and
-  does everything above in one place, for every level from the L0 down. The
-  receipt now carries `testsToRevisit`, so a create that drops or rewrites a
-  method names the tests encoding it, exactly as a delta does.
-- **A delete goes through the seam too**, and reports the tests a removed
-  contract or implementation took with it.
-- **The setters are gated deltas.** `sdd_set_endpoints`,
-  `sdd_set_public_interfaces` and `sdd_set_subsystem_project_path` answer with a
-  change report, write nothing when nothing changes, and no longer restamp
-  `updatedAt` on a no-op. `sdd_set_public_interfaces` still replaces the list.
-- **An unbound public interface has an identity.** An entry not yet bound to a
-  component is addressed by its type and details, so two unbound surfaces (a REST
-  and a MessageBus one, say) no longer collapse into one in `sdd_update_spec`'s
-  merge — that collapse predates this change and was silent. A list naming one
-  identity twice is refused as a genuine duplicate.
-- **The core store answers by kind.** `loadSpec`, `saveSpec` and `deleteSpec`
-  take the kind as data, replacing the kind switches callers repeated.
-- Mechanical writes stay ungated, as before: lock status promotion, migrations,
-  doctor repairs, provisioning, and — because they change identity, not what a
-  component owns — renames and subproject relocation.
-
-### The status dashboard and the status report are one renderer
-
-`runStatus` in `src/commands/status.ts` and `getStatusReport` in
-`src/core/status.ts` were the same renderer written twice: both scanned the
-tree, loaded system, subsystem, component, interface and implementation specs,
-filtered by `--subsystem`, and drew the same completeness map. Diffed against
-each other on this repository's own tree, **901 of 902 output lines were
-identical** — the differences were a heading, the approval verdict line, and 21
-`chalk` calls. That duplication had already shipped a regression: the approval
-verdict existed in one copy and not the other, so `wairon status` and
-`sdd_get_status` could disagree about whether a tree had drifted from its lock.
-
-The second copy is gone. `getStatusReport` takes an optional **`StatusDecor`**,
-a vocabulary of ROLES rather than colours — `structure`, `emphasis`,
-`layer(kind, text)`, `score(pct, text)`, `draft`, `present`, `missing` — each
-defaulting to identity, so a caller that wants plain text passes nothing and
-the report it gets back is byte-for-byte the report it always got. `wairon
-status` now supplies chalk through those roles and does nothing else: it
-refuses outside a project, asks `cli_core_adapter` for the report, prints a
-heading and the report, asks for the verdict and prints it. **The coloured
-output is unchanged** — captured under `FORCE_COLOR=1` before and after, 90,872
-bytes over 915 lines, byte-identical. What the collapse *did* change, and what
-this entry did not say when it was written, is the command's two refusals: it
-stopped exiting non-zero over a tree it could not read. That is the next entry.
-
-Naming roles instead of colours is what makes one renderer safe for both
-readers: `src/core/status.ts` imports no `chalk` and never learns what a
-terminal is, which a test now holds it to. The command also stopped reaching
-past its adapter — it was importing `../core/specs.js` for the tree and
-`../core/index.js` for the verdict, the tenth instance of the sdd_cli→sdd_core
-crossing; `cli_core_adapter` forwards `getStatusReport` and `approvalVerdict`
-like every other core call. Six `validate --ci` warnings close with it.
-
-### `wairon status` exits non-zero again over a tree it cannot read
-
-Collapsing the dashboard onto the shared renderer (above) cost the command its
-two `process.exit(1)` paths. `getStatusReport` answered ONE string carrying
-three different outcomes — a completeness map, a list of spec files that would
-not parse, and "there is no L0 system here" — so the only way to tell a refusal
-from a report was to match the prose, and nothing did. Both refusals became
-report body on **stdout**, under an *Architecture Status Dashboard* heading,
-with **exit 0**: a script running `wairon status` over a broken tree read it as
-healthy. No test in the suite covered either path.
-
-The fix is in the contract, not the caller. `report` now answers a
-**`StatusReport`** — `{ text, failed }` — the same two-part shape the approval
-verdict already uses, so a presenter decides what to DO from a fact rather than
-by recognising a sentence. `wairon status` prints the explanation as an error on
-**stderr** and exits 1, appending ``Run `wairon init` first.`` when the failure
-is the missing system spec; that hint stays in the CLI, because `sdd_get_status`
-hands the same explanation to an agent with no terminal to run it in.
-`sdd_get_status` takes `.text` and shows it whether or not the tree loaded — a
-client asking after status most needs to hear that it will not load.
-
-The report's own bytes did not move: all three `text` values are what the
-function returned before, and the healthy dashboard under `FORCE_COLOR=1` is
-byte-identical. Three e2e tests now spawn the built CLI over an unparseable
-tree, over a tree with no `system.yaml`, and over a healthy one, and read the
-exit code — the one thing no test that imports source can see, because it would
-take `process.exit` with it.
-
-### The core Portal publishes its contract, not sixteen whole modules
-
-`src/core/index.ts` realizes `core_portal`, and it carried seventeen
-`export * from` lines. Sixteen of them republished modules realizing **39
-components**, so the barrel offered **240 runtime names** where `icore_portal`
-declares 97 — and `@wairon/cli`, which re-exports it, offered 438. Every
-consumer could therefore reach any member and bypass the facade, which is why
-the same sdd_cli→sdd_core crossing kept being found one symbol at a time:
-`movedChildren`, `diffSize` and `settledSpecPaths` out of `./approval.js`, the
-four modules `wairon diagram` built its artifacts out of, the generator `wairon
-generate` wrote through, the two domain modules `wairon domains` read, the two
-derivations `wairon execution` resolved, the guide and the stamp, the context
-documents, the status report. Each was closed by naming one forward. The hole
-they kept coming through was the star block, and this is that.
-
-The sixteen are gone. Every method `icore_portal` declares is now a stated
-**identity re-export** — `export { foo } from './bar.js';`, never a wrapper —
-grouped by source module: the spec tree and the lock state from `./specs.js`,
-provisioning and the chained-subproject wiring from `./provision.js`, the tree
-identity from `./statehash.js`, the lock record from `./lockfile.js`, the
-rendered diagram from `./diagram.js`, domain detection from `./detection.js`,
-the extension packs from `./extensions.js`, the machine pack store from
-`./packstore.js`, the agent topology from `./agent_resolver.js`. Identity
-matters here: the Portal method and the component's function are the same
-function, which is what lets the conformance analysis resolve each call by
-identity instead of reading a second implementation.
-
-The barrel now publishes **113 runtime names** — the 97 contract methods, three
-methods that travel with a type it publishes (`diffSize`, `declaredPackNames`,
-`declaredProfileIds`), the six-name shared rule vocabulary, and the seven
-diagram functions reported below — plus fourteen shared value shapes as
-`export type`. The package entry drops from **438 names to 318**: `@wairon/cli`
-stops exporting 120 names, none of them on any contract. Nothing was added.
-
-**One star export stays**: `./rules/index.js` realizes no component. It is
-sdd_validator's shared rule vocabulary — rule types, the context builder, the
-registry — imported through here by 93 modules, with no contract to overshoot.
-
-**Seven diagram functions are reported rather than quietly forwarded.**
-`generateComponentDiagram`, `generateSequenceDiagram`, `generateDiagramSet`,
-`diagramSetIndex`, `toMarkdown`, `loadSpecGraph` and `buildCanvasDataModel` back
-`wairon diagram --all|--sequence|--subsystem` and `wairon host demo`, and no
-spec names them: `icore_portal` names `renderDiagram`, `iarchitecture_diagrams`
-names `render` and `buildGraphModel`. `cli_core_adapter` dependsOn `core_portal`
-alone, so this barrel is the only route that does not make sdd_cli import an
-sdd_core module. They are published under their own heading, separate from the
-contract, and the barrel-surface test carries them as a **shrink-only ratchet** —
-the list fails the moment one of them becomes a contract method, and a new name
-cannot join it. The same goes for `activeTargetTypes`, which the public library
-disambiguates against the models' pure `activeTargetTypes(config)`: `src/index.ts`
-now names `./core/skills.js` rather than taking it off a surface that never
-claimed it.
-
-**`approver_identity` moved to `src/models/lock.ts`.** `ApproverIdentity` and
-its `label` projection (`describeApprover`) lived inside `src/core/lockfile.ts`,
-the lock STORE. That placement was load-bearing in the wrong direction: a Portal
-may not depend on a Store, so while the function sat beside the lock file's I/O
-there was no legal route for a CLI command to render an approver at all — which
-is why `wairon doctor` was reaching into `../core/lockfile.js` for it. It is
-shared vocabulary and a pure projection over the value's own fields, so it lives
-with the models; `src/core/lockfile.ts` imports the type back, and
-`src/commands/lock.ts` and `src/commands/doctor.ts` take the function from the
-models. The rendering is byte-identical — the same four outcomes, including the
-`[authenticated]` marker that separates an identity an instance vouched for from
-one read off a machine.
-
-**`extension_orchestrator` publishes its two pack-store writes.**
-`installPackFromDirectory` and `uninstallPack` are now bound in
-`src/core/extensions.ts` the same way its three read siblings already were, so
-the orchestrator declares what its contract promises. The core portal forwards
-all five from the module that holds them.
-
-**The embedding API is named on the library entry instead of inherited.**
-`validateSddTree`, `loadExtensions`, `loadExtensionPacks`, `emptyExtensions`,
-`globalPacksDir` and `discoverPacks` are what `docs/extending-wairon.md` and
-`examples/wrapper/wrapper.js` document as the way a wrapper product compiles
-its own doctrine into a gate binary — and `iextension_orchestrator.load`
-records that contract in the spec tree (`invokedBy: external`, "no internal
-call chain exists by design"). None of them is on `icore_portal`, so all six
-reached the package only because the barrel starred the module that held them,
-and narrowing the Portal would have taken a documented API down with it.
-`src/index.ts` names them itself now, from the modules that hold them. Removing
-one from there is a deliberate break; losing one because a Portal stopped
-starring a module is not, and this is the difference the split makes visible.
-
-Twenty-one tests, in two tiers, because a barrel is exactly the thing a type
-checker proves EXISTS and cannot prove is still a facade. `tests/core/core-barrel-surface.test.ts`
-reads `icore_portal` and compares — it freezes no list of names, so it keeps
-holding as the contract changes — and refuses any name on the surface that no
-spec accounts for, asserts every contract method is carried, asserts exactly one
-star export survives, ratchets the seven reported functions, checks the fourteen
-declared types, resolves what each of the five consumer files outside
-`src/core` takes off the barrel, and holds the embedding API — every name the
-doc lists, and every call the shipped wrapper example makes. Reverting
-`src/core/index.ts` alone fails seven of its sixteen; reverting `src/index.ts`
-alone fails the two embedding ones; reverting `src/core/lockfile.ts` alone fails
-the one that says the approver projection has left the store.
-`tests/e2e/core-surface.test.ts`
-drives `sdd_get_status`, `wairon status` and `wairon lock-check` against the
-REAL built server and CLI, before an approval and after one — removing either the
-`getStatusReport` or the `approvalVerdict` forward from the barrel fails it.
-
-### The approval verdict is a published read, and `sdd_get_status` carries it again
-
-The previous entry dropped one line from the status report: the approval
-verdict — how many specs have moved since a human last locked the tree, who
-approved it and when. It was dropped for a real reason (`project_status`
-depends on the spec loader alone, and keeping the verdict inside the report
-raised two `UNDECLARED_DEPENDENCY` warnings) and it named the fix. This is the
-fix.
-
-The loss was not cosmetic. `sdd_get_status` is what an AI agent reads to decide
-whether it may write code against these specs, and a tree that has drifted from
-its approval is the single most important thing that answer can carry — while
-silence reads exactly like being current.
-
-The verdict is now **`approval_comparison.verdict`**, published rather than kept
-private, because every presenter needs the same answer and two renderings of
-"has this drifted" that can disagree is precisely what a lock exists to prevent.
-It lives in `src/core/approval.ts` as `approvalVerdict()`, beside the digests and
-the child pins it already reads, and answers an `ApprovalVerdict` — the sentence
-to show and whether it IS drift, kept apart so a caller picks its severity from
-the fact rather than by matching prose. `core_portal` republishes it by identity
-(the Portal method and the Orchestrator function are the same function),
-`mcp_core_adapter` forwards it, and `sdd_get_status` composes it beside the
-completeness report. `wairon status` calls the same function instead of the
-private copy it used to keep — that copy is what let the terminal name the specs
-that had moved while the MCP tool said nothing at all.
-
-**`src/core/status.ts` is untouched**, which is the whole point. The verdict is
-composed *beside* the report by each presenter, never folded into it: putting it
-back inside would hand the approval dependency to every reader of the report,
-which is the coupling the last entry correctly refused. The function was MOVED,
-not rewritten, so all three of its outcomes survive byte for byte — silence when
-nothing was ever approved, the "predates per-spec approval" wording when the
-record is a coarse lock, and otherwise the verdict naming the specs that moved.
-`wairon status` output on this repository is byte-identical before and after.
-
-Both core symbols are imported into `src/mcp/server.ts` **unrenamed**: each is a
-method the file's `mcp_core_adapter` contract names, so a renamed binding would
-leave the narrative's call site pointing at a symbol the contract does not carry.
-
-Ten tests, because the gap that let this be dropped silently was a test gap: the
-status tests all ran on temp projects with **no lock record**, where the verdict
-was empty whatever the code did. Five in `tests/core/approval.test.ts` drive the
-function itself — never approved, approved and unchanged, approved and then
-edited (it must NAME the spec, not assert staleness), a record written before
-per-spec approval, and an unreadable one — plus the Portal identity assertion.
-Five more in `tests/mcp/status-verdict.test.ts` drive the real MCP server over an
-in-memory transport: the tool reports the drift, confirms an unmoved tree, stays
-quiet about a project nobody approved, composes the verdict beside a report that
-does not contain it, and — the guard against the coupling creeping back —
-`src/core/status.ts` names no approval module. Reverting `src/mcp/server.ts`
-alone fails three of the five; reverting the core change as well fails eight.
-
-### The completeness report belongs to core, not to a CLI command
-
-`src/mcp/server.ts` imported `getStatusReport` out of `../commands/status.js` —
-sdd_mcp reaching into an sdd_cli command file, which put one subsystem behind
-another for its own status tool. The same crossing the context documents and the
-AI guide closed, in the other direction.
-
-The report was never CLI-specific: the terminal, the MCP server and two test
-files all want it. It lives in **`src/core/status.ts`** now, realizing
-`project_status` — a `read` Orchestrator over the spec loader, because asking
-after a project's state must never change it. `core_portal` publishes
-`getStatusReport` by identity rather than wrapped, and `StatusOptions` beside it;
-`mcp_core_adapter` forwards 1:1 and the MCP server binds it at the top of the
-file, where it has to be — the report was once lazily required from the command
-module, which resolved against the CLI bundle and answered "Cannot find module"
-on the hosted data plane instead of the dashboard.
-
-`runStatus` — the coloured terminal dashboard — stays in sdd_cli, and takes the
-option shape from core rather than declaring a second copy of it. Two
-declarations of the same options is how the terminal and the MCP server come to
-disagree about what recursion depth means.
-
-**One behaviour was dropped here, and is restored in the entry above.**
-`getStatusReport` used to append the approval verdict — which specs have moved
-since a human last locked the tree. That line reads the lock record and the
-approval digests, and `project_status` depends on the spec loader alone: keeping
-it raises two `UNDECLARED_DEPENDENCY` warnings, `project_status` →
-`approval_comparison` and `project_status` → `lock_store`, measured rather than
-assumed. Dropping it from the report was right; leaving `sdd_get_status` silent
-about a drifted tree was not, and the wave said so. The second of the two fixes
-named here is the one taken — the verdict modelled as its own published read on
-`approval_comparison`, composed beside the report rather than inside it — so
-`getStatusReport` still knows nothing about the approval, and both `wairon
-status` and `sdd_get_status` show the verdict.
-
-Four tests in `tests/core/status.test.ts`, covering the boundary rather than the
-report's content, which was already covered. Two of them are the same assertion
-at different strengths on purpose: the portal answers the same string as the
-module, AND it is the same function — a wrapper passes the first and fails the
-second, and the identity is what `CALL_STEP_UNREALIZED`'s N:1 forwarding exempts.
-The other two are source scans, the one assertion a type-check cannot make:
-`src/mcp/server.ts` names no `commands/status.js` in any spelling — static
-import, lazy require or dynamic — and `src/commands/status.ts` declares no
-`StatusOptions` of its own. All four fail when their half of the change is
-reverted; the same-string test holds against a wrapper, which is exactly the gap
-the identity test fills. The temp-project helper moved to module scope so the new
-block reuses it instead of growing a second copy.
-
-### The context documents, and who is allowed to write them
-
-`.wai/context/` holds two kinds of document and the code treated them as one.
-`project.md` and `architecture.md` are written by a **person**; `domains.md` and
-`wairon-guide.md` are **derived**. `src/core/context.ts` exported a write for all
-four.
-
-**`writeProjectContext` and `writeArchitectureContext` are deleted, and nothing
-replaces them.** Neither has ever had a caller. They were exported, callable, and
-aimed at the one unrecoverable thing this directory could do — overwriting what
-somebody wrote about their own system — and a write function that exists is a
-write function something eventually calls. The derived pair is written; the human
-pair is only ever read. `hasArchitectureContext` goes with them for the reason
-`hasWaironGuide` did: a published read with no reader is a claim somebody later
-trusts.
-
-The store now names its writes — `writeDomainsDoc` and `writeGuideDoc`, each
-answering whether the content actually differed — and `syncContextFiles` calls
-them instead of reaching `writeFileIfChanged` inline. Where each derived document
-lives, and the write-only-if-changed rule that keeps a regenerate free of diffs,
-are stated once now rather than in two places that could drift.
-
-`wairon init`, `wairon generate` and `wairon doctor` imported
-`../core/context.js` directly — sdd_cli reaching into an sdd_core module. Ninth
-instance of that crossing; the first eight are listed in `src/core/index.ts`, and
-it closes where every one of them did. `core_portal` publishes three operations —
-`syncContextFiles`, `hasContext` and the new `derivedDocPaths` — by identity
-rather than wrapped, and `cli_core_adapter` forwards each 1:1.
-
-**`export * from './context.js'` is gone from `src/core/index.ts`**, the same way
-the `./domains.js` star export went two changes ago. It republished a whole
-module — both renderers, the path table, the directory helper, both human-file
-readers — from a Portal whose contract names three context operations, which says
-nothing about which of them the Portal means and lets every consumer keep
-depending on the member rather than the facade. Three commands were doing exactly
-that.
-
-`wairon doctor`'s reach was the subtler one: it built its staleness list out of
-`CONTEXT_PATHS.waironGuideMd()` and `CONTEXT_PATHS.domainsMd()`, which is the
-module's internal layout of `.wai/context/` spelled out inside a command, and
-would have reported on the wrong pair the day that layout moved. It asks
-`derivedDocPaths()` now. `CONTEXT_PATHS` stays an internal constant of
-`context.ts` and is on no contract.
-
-Twenty-nine tests in `tests/commands/context-boundary.test.ts`. The behavioural
-half proves the derived pair moves only when it has something to say — a second
-refresh answers false for both, writing notes moves the guide alone, changing a
-domain's owned paths moves the domain document alone — that `derivedDocPaths`
-names exactly the files a refresh writes and neither document a person wrote, and
-that a refresh run twice leaves both human-authored files byte-for-byte. Rendering
-is proven pure by moving the clock a year and a half between two calls rather than
-by calling twice in the same millisecond. Twenty-five of the twenty-nine fail when
-the change is reverted; the four that hold either way pin behaviour that was
-already correct — the no-timestamp property, and the guide still rendering when
-the project configuration fails its own schema.
-
-**This narrows the public library surface.** `src/index.ts` re-exports the core
-barrel wholesale, so dropping the star export also removes `contextDir`,
-`CONTEXT_PATHS`, `renderDomainsDoc`, `renderWaironGuide`, `readProjectContext`
-and `readArchitectureContext` from the `wairon` package. Nothing in this
-repository consumed any of them, and no stated forward was added to keep them:
-a package surface that exists because a star export swept it up is not a surface
-anybody chose to publish. The three operations the Portal names are still there,
-and the renderers remain reachable where they are actually used — from inside the
-module, and from the idempotence test that guards them.
-
-### The guide wairon writes into another tool's config file, reached through the portal
-
-`wairon init` wrote the AI guides, `wairon generate` refreshed them and `wairon
-doctor` read the version stamp on them — all three by importing
-`../utils/ai-guide.js` and `../core/stamp.js` straight out of sdd_core. Eighth
-instance of that crossing; the first seven are listed in `src/core/index.ts`, and
-it closes where every one of them did. `core_portal` now publishes the six
-operations — `globalGuideFilePath`, `localGuideFilePath`, `injectGuide`,
-`writeRootGuideDelegator`, `reinjectLocalGuides` and `readStampVersion` — by
-identity rather than wrapped, `cli_core_adapter` forwards each 1:1, and none of
-the three commands names a core module any more.
-
-`wairon generate` reached for its refresh through a lazy
-`require('../utils/ai-guide.js')`, which was worse than an import in two ways: it
-hid the crossing from a reader, and **it does not resolve once the CLI is
-bundled** — `src/core/context.ts` carries that exact note about that exact form,
-one module away, where the same lazy shape was already replaced. It is a normal
-static import now, so the crossing is visible and the call survives bundling.
-
-**`hasWaironGuide` is deleted.** It answered "does this file already carry a
-guide?", which no caller has ever asked, because injection strips before it
-appends and so nobody has to look first. A published read with no reader is not
-harmless: it is a claim somebody later trusts. `stripGuideSection` stays
-deliberately unpublished for the mirror-image reason — it is the guide's own
-internal seam, and a Portal republishing it would be offering a half-write.
-
-Thirty-two tests in `tests/commands/ai-guide-boundary.test.ts`, and the file
-opens with a warning rather than an import. `injectGuide(path, 'global')` writes
-a real AI tool's machine-wide configuration — on a maintainer's machine, the
-`CLAUDE.md` Claude Code loads into every session — so every test here redirects
-`HOME`, `USERPROFILE`, `CLAUDE_CONFIG_DIR` and `GEMINI_CONFIG_DIR` at a throwaway
-directory and then **asks the code under test where it would write**, refusing to
-run if the answer is outside it. `afterAll` re-reads the real files and fails if
-a byte moved. The same fence `tests/config/userconfig.test.ts` established.
-
-Every behaviour proven by revert, and two of them are worth naming because they
-had no test at all before: injection twice leaves **one** section rather than
-two, and what a person wrote above and below the markers survives a re-inject
-verbatim. Both fail the moment `inject` stops stripping first. One claim did
-**not** move under revert and is reported rather than counted: refreshing a
-guide ignores a target name it does not recognize through two mechanisms at
-once, so deleting the explicit skip changes no observable behaviour — the path
-lookup answers nothing for an unknown tool anyway.
-### Fan-out is coupling only when the component holds flow
-
-`GOD_COMPONENT` and `EXCESSIVE_DEPENDENCIES` both counted `dependsOn.length` and
-stopped there. That proxy conflates two structurally different shapes. A Portal
-that fans out to twelve areas while narrating nothing but hand-offs is a routing
-table: its responsibility lives in what it forwards to, and its dependency count
-tracks how many areas the subsystem publishes rather than how much it knows. An
-Orchestrator coordinating ten stateful collaborators is the god component the
-rule exists to catch. The raw count cannot tell them apart, so it reported the
-first and would keep reporting it however the subsystem was arranged — the only
-escape being an allow, which teaches users to suppress a rule that asked the
-wrong question.
-
-Both `findings[].summary` lines now say the exemption exists, in the contract and
-in the registry alike. `rule-catalog.test.ts` proves those are ONE list, so a rule
-summary is spec data: it changes through the authoring tools and the code string
-follows. Worth knowing before touching a rule's codes, because the suite is the
-only place that tells you.
-
-**Both rules now exempt a pure forwarder**, and it is the same judgement
-`INCOHESIVE_METHODS` has made since the method-cohesion rule learned it — the
-same one naming-discipline makes when it spares an Adapter's and a Portal's
-method names from the stutter check, *because a forwarder's method mirrors the
-command or route it exposes*. The fan-out rules were the only ones that never
-got it. `isForwardingMethod` was already in `method-cohesion.ts`; it is now
-exported beside `isPureForwarder` and `pureForwarderComponents`, and all three
-rules read the one definition rather than three spellings that would drift.
-
-**A component with no narrated method is NOT exempt**, because absence of
-narrative is not evidence of forwarding. Nor is one whose methods hold flow: a
-single method that branches is enough to be judged, which is what keeps the
-exemption narrow enough to be worth having. Deliberately not done: raising the
-limit, or scaling it with project size. Both would loosen the rule for
-Orchestrators too, which is precisely where it should stay tight.
-
-And then the narrow version earned its keep immediately, by refusing to exempt
-`core_portal` over exactly one method. `localApprover` re-exported a function
-that shells out to `git config` and reads `os.hostname()` — **a Portal
-publishing unmediated I/O**, which its own narrative half-admitted by saying
-"re-exported through this Portal rather than living in it" while typing the step
-`local`. No rule catches that directly. This one caught it by its shadow.
-
-**`local_approver` is that reading, as a component.** A `read` Orchestrator, so
-answering the question provably cannot change anything, with the preference
-order narrated where it can be argued with: git's configured author first,
-because it is the one identity the repository already attributes work to and a
-reviewer can match it against the commit carrying the lock; then the email alone
-if that is all git has, since inventing the other half would mean labelling a
-machine-derived string as `git`; then `user@hostname`, where the hostname is the
-useful half because a bare username in CI is `runner` and identifies nobody.
-
-The identity stays CALLER-supplied. Moving the resolution inside the lock write
-was considered and rejected on measurement: `writeLockRecord` has two callers,
-and the hosted one passes an authenticated principal. Filling it in from the
-local machine would have stamped every hosted lock `runner@hostname` and quietly
-replaced the strongest identity in the system with the weakest.
-
-### Printing an allowance belongs to the allowance
-
-`describeBudget` sat on the budget policy in `sdd_core`, and the two callers who
-wanted it — `wairon agent brief` and the MCP server's brief resource — reached
-across a subsystem boundary into a core module to print six lines. Rendering a
-budget is pure projection over its own fields, so it is now `summarize(budget,
-profile)` on `src/models/execution.ts`, beside the type it renders and with the
-value first, the way `diffSize(d: ApprovalDiff)` already reads. The output is
-unchanged line for line. It is not named `describe`, which is a test-runner
-global. Both callers now hold a budget and name no core module at all.
-
-**`wairon execution show` goes through the adapter like everything else.** It
-was importing `resolveAgentTopology`, `deriveExecutionProfile` and `resolveBudget`
-straight out of three `sdd_core` modules. The core Portal now publishes the two
-derivations — `deriveExecutionProfile` says what an agent's work is LIKE and
-names no model, tool or host; `resolveBudget` maps that shape onto an allowance —
-and `cli_core_adapter` forwards both. That is the seventh time this crossing has
-been found, and it closed the way it always does: the boundary is crossed in one
-place, by the one component whose whole job is to cross it.
-
-### Combining two sources is workflow, not registry work
-
-`src/core/domains.ts` realizes `domain_registry`, and it also derived domains
-from the spec tree — so it imported `src/core/specs.ts`. The validator refused
-that, and it was right to: a Store, Registry or Index may reach its own Store, a
-backend Adapter or pure logic, and the spec tree is none of the three. The fix
-is not a wider rule. Answering "what domains exist" reads the spec tree AND the
-topology configuration, and combining two sources is workflow, so it does not
-belong inside the Repository at all.
-
-**Two Orchestrators now sit above the facade.** `src/core/domain_projector.ts`
-(`dependencyClass: read`, so the component that answers what exists provably
-cannot change it) holds `resolveDomains` and `deriveSubsystemDomains`, moved out
-of the registry unchanged. It reaches each half through the surface that
-publishes it — the spec tree through `./specs.js`, the configuration through
-`./topology.js` and never `../config/loader.js`, which would recreate the same
-violation one component further out. `src/core/domain_curator.ts` holds the two
-writes: it asks the projector what ids are taken, refuses a clash by name, and
-only then hands the domain to the facade to persist.
-
-**Each half of the id check is now caught where it can be seen.** The registry's
-duplicate check guards only the set it owns — two registered domains answering
-to one id — because that is the half a Store-bound component can answer. The
-collision with a subsystem-derived domain is the half that lives in no file, and
-the curator catches it before the call ever reaches the registry. The two
-refusals say different things on purpose: one sends the caller to the spec tree,
-the other to `.wai/topology.yaml`, and a caller that cannot tell them apart does
-not know which file to open.
-
-**The facade sheds five methods.** `resolve`, `find`, `listFreeStanding` and
-`deriveFromSubsystems` went with the reads they were forwarding; `saveConfig`
-went because no caller outside the registry ever wanted it. `topology_repository`
-publishes `addFreeStanding`, `removeFreeStanding` and `loadConfig`, and a facade
-method published for no consumer is a surface somebody has to keep true.
-
-**The Portal's writes go to the curator, not the facade.** `resolveDomains` on
-`src/core/index.ts` forwards to the projector; `addDomain` and `removeDomain`
-forward to `domain_curator`. A Portal that reaches a write-effect facade method
-is the shortcut the standard names by code — and here it is not ceremony, because
-the id check a registration needs cannot be made where the write happens.
-
-`itopology_repository` now tags those two methods `effect: write`, which is what
-makes that rule enforce anything: `PORTAL_WRITE_SHORTCUT` judges tagged methods
-only, and the facade carried no tag, so the old shape validated clean. Measured
-by pointing `addDomain` back at the facade with the tags in place — it fails as
-an error now, where before it passed in silence.
-
-**This narrows the public library surface further.** `findDomain`,
-`listFreeStandingDomains` and `deriveSubsystemDomains` are gone from
-`src/core/domains.ts` entirely, and `addFreeStandingDomain` and
-`removeFreeStandingDomain` are all that remain of it. The reads live on the
-projector under the same names; the operations `core_portal` names are all still
-published from the package entry, unchanged.
-
-**What the tests hold.** `tests/core/domain-workflow.test.ts` covers the
-projector across both sources (including a project with no configuration file at
-all, where the derived half must still answer) and both of the curator's
-refusals, proving the messages differ and that a refusal never reaches the write.
-`tests/core/topology-repository.test.ts` keeps the facade and the registry, and
-asserts the registry accepts a subsystem-derived id when called alone — not a
-hole, but the shape of the split stated out loud, so nobody later "fixes" it by
-teaching the Registry to read the spec tree again.
-
-### The topology has one face, and the domains commands use it
-
-`topology_store` was deliberately standalone while the only operations were
-read-the-file and write-the-file, with an allow saying the shape would be
-revisited when a member earned it. `domain_registry` earned it: registering a
-domain and unregistering one are registry work, and the doctrine names Store and
-Registry as a Repository's members precisely so neither ends up doing the
-other's job.
-
-`src/core/topology.ts` is that Repository's facade — every method one forward
-and nothing else: the writes to `src/core/domains.ts`, the file to
-`src/config/loader.ts`. It holds no logic by construction; anything that needed
-a decision would belong in a member instead, and the decision that turned up is
-why the reads left again (see the section above). **Consumers now depend on the
-facade rather than on the two modules**, which is the whole of what makes it a
-Repository rather than two modules with a label: `agent_resolver` reads the
-configuration through it, `context` resolves domains through the projector that
-reads it, and the MCP server's `listDomains` goes through the core Portal like
-every other sdd_core call that server makes.
-
-**The two kinds of domain stay apart, deliberately.** A subsystem-bound domain
-is DERIVED from the spec tree on every call and lives in no file; a free-standing
-one is a decision about the repository's shape and lives in the configuration.
-Registering refuses an id either kind already holds — the collision the file
-cannot see is the one a check reading only `.wai/topology.yaml` would let through
-— and `removeFreeStanding` cannot reach a derived domain at all, because the way
-to remove one is to remove its subsystem.
-
-### `wairon domains` asks for the topology instead of reaching into it
-
-The sixth instance of the same crossing. `src/commands/domains.ts` imported
-`resolveDomains`, `addFreeStandingDomain`, `removeFreeStandingDomain` and
-`findDomain` out of `../core/domains.js`, and `detectDomainCandidates` out of
-`../core/detection.js` — sdd_cli reaching into two sdd_core modules — while
-`core_portal` names all four operations on its contract. `movedChildren`,
-`diffSize` and `settledSpecPaths` out of `./approval.js`, the four core modules
-`wairon diagram` built its artifacts out of, and the generator `wairon generate`
-wrote through were the first five, and it closes the way it always does: the
-boundary is crossed once, on `cli_core_adapter`.
-
-**The Portal stops star-exporting a member.** `src/core/index.ts` had
-`export * from './domains.js'`, republishing the whole raw surface of a
-component the Portal names four operations of — and letting every consumer keep
-depending on the member. It now publishes `resolveDomains`, `addDomain` and
-`removeDomain` as stated forwards — to the projector and the curator, per the
-section above — and `detectDomainCandidates`
-stays a star export of `./detection.js` because the detector is its own
-component, published by identity rather than wrapped. **This narrows the public
-library surface**: `findDomain`, `listFreeStandingDomains`,
-`deriveSubsystemDomains`, `addFreeStandingDomain` and `removeFreeStandingDomain`
-no longer come out of the package entry. Nothing in `src` or the tests imported
-them from there, and the operations the Portal names are all still published.
-
-**A lookup is not a second read.** The command's `findDomain` call is now one
-`resolveDomains().find(…)` at the call site rather than a method on the adapter:
-a published read that answers a subset of another published read is how two
-spellings of "which domains are there" start to disagree.
-
-**Namespace bindings, because a rename hides the call.**
-`import * as topology from './topology.js'` in `agent_resolver.ts`, and
-`import * as projector` / `import * as curator` in `core/index.ts`, so each call
-SITE says `topology.loadConfig()` or `curator.registerDomain(…)`. An `as` rename
-compiles to the same thing, but the name
-a reader — and the conformance analysis, which reads the invoked name — sees at
-the call is the local one, so the renamed form says nothing about which contract
-method was reached.
-
-**What the tests hold.** `tests/core/topology-repository.test.ts` proves each
-method reaches the member that owns the work (spied, so a method wired to the
-wrong member cannot accidentally look right), that the facade answers what the
-store answers unmocked, and the refusals it still owns — a duplicate registered
-id, a derived id it cannot remove — with the derived domain unchanged and the
-configuration file never rewritten. `tests/commands/domains-boundary.test.ts`
-walks the whole route Portal → curator → facade → registry with call-through
-spies, because a Portal write that reached the facade directly would still pass
-every assertion about the file; and it adds the assertion no type-check can
-make: the import SITE, read as literal lines rather than a pattern, because an
-escaped regex has quietly matched nothing here four times.
-
-### A path convention that belongs to nobody
-
-`src/config/loader.ts` held two things with nothing to do with each other:
-where the `.wai/` directory keeps its files, and the topology this project
-stores in it. The first is `WaiPaths`, `aiPathsAt`, `AI_PATHS`,
-`isProjectInitialized` and `assertProjectInitialized` — resolved by nineteen
-modules across every subsystem. The second is `loadRegistry`,
-`loadTopologyConfig` and `saveTopologyConfig`, which is one job: the durable
-file state `topology_store` now claims.
-
-They are split. The path helpers move to `src/config/paths.ts` unchanged and
-every import site follows them; `loader.ts` keeps the three store functions
-and resolves its own file locations through the new module like everybody
-else. No exported name changed, and `src/config/index.ts` republishes both
-halves, so the library surface is the surface it was.
-
-**Why a split and not nineteen declared edges.** A spec that claims
-`loader.ts` makes every importer of that file owe a declared `dependsOn` to
-`topology_store`, and the validator said so: 19 `UNDECLARED_DEPENDENCY`
-findings naming `src/config/loader.ts` as the target, raised on components
-whose entire business with it was resolving a path. Nineteen arrows that all
-say "this one resolves paths" tell a reader nothing. `src/utils/fs.ts` is the
-precedent — forty-eight importers, deliberately unclaimed, zero findings — and
-`paths.ts` joins it there. The tree goes from 24 warnings to 7. Two of the 19
-survive, and they are the two that were never about paths: `agent_resolver`
-and `cli_runner` call the store itself, which is an edge somebody has to
-decide about rather than one the split can dissolve.
-
-**The halves are held apart by a test.**
-`tests/config/paths-split.test.ts` reads both files and fails if a path helper
-drifts back into `loader.ts`, or if any module under `src/` or `tests/` starts
-taking one out of `loader.ts` again. It is a source scan on literal strings,
-because the split it guards is a fact about file contents and nothing else
-would notice it going wrong.
-
-### `wairon generate` asks for the agent files instead of writing them itself
-
-The fifth instance of the same crossing in two days, and the smallest.
-`src/commands/generate.ts` imported `generateAll` and
-`resolveExpectedOutputPaths` out of `../exporters/generate.js` — sdd_cli
-reaching into an sdd_core module — while `core_portal` publishes both calls and
-`cli_core_adapter` exists to make that hop once. `movedChildren`, `diffSize`
-and `settledSpecPaths` out of `./approval.js`, and the four core modules
-`wairon diagram` built its artifacts out of, were the first four.
-
-`cli_core_adapter` now realizes `generateAll` and `resolveExpectedOutputPaths`,
-the core Portal republishes the generator by identity, and the command keeps
-what a command is for: which agents are in scope, when to prune, and what to
-say about it afterwards. The files it writes are the same files.
-
-**The path enumeration travels with the write.** `resolveExpectedOutputPaths`
-renders nothing and touches no file, and `generate` needs it *before* it
-decides to render anything: it is how a reconcile knows which files under a
-target directory are wairon's own, and pruning one that is not is destroying
-somebody else's work. A caller that can be handed a summary from the Portal has
-to be able to ask it for the paths too, or it is back to importing the module.
-
-**The barrel now points at a module that points back.**
-`src/exporters/generate.ts` takes `loadTemplate` and `composeAgentBrief` from
-`../core/index.js`, so republishing it from that barrel closes a loop — inside
-sdd_core, between a Portal and a component it already declares as a dependency.
-Both halves are function declarations used at call time and neither runs
-anything at module scope, so the cycle is inert. It is written down because a
-loop that works is the kind that gets discovered by something unrelated
-breaking.
-
-**Two things found, and deliberately left.** `registerExporter` — the plugin
-seam on `src/exporters/registry.ts` — is called by nothing in `src` or in the
-tests; it stays exported and stays unwired, because whether that seam is a plan
-or a leftover is not this change's call to make. And `generateAgent` is on no
-contract: nothing outside its own module calls it, so it is the generator's
-internal step rather than a published method, and it stays exported in code and
-absent from the surface.
-
-**The assertion a type-check cannot make.** `../exporters/generate.js` and
-`./subsystem.js` both compile, so the only thing that says which side of the
-boundary the command is on is the import SITE.
-`tests/commands/generate-boundary.test.ts` reads it as a literal line — not a
-pattern; an escaped regex has quietly matched nothing here three times — beside
-the behaviour tests that prove the adapter answers what the generator answers,
-and that a real `generate` run writes exactly the set the adapter says it owns.
-
-### `wairon diagram` asks for an artifact instead of assembling one
-
-The fourth instance of the same crossing in two days, and the largest.
-`src/commands/diagram.ts` imported `../core/canvas.js`,
-`../core/diagram-export.js`, `../core/diagram.js` and `../core/validation.js`
-— four sdd_core modules reached straight from a command — and built every
-artifact itself: load the tree into a canvas model, run the validator for the
-issue overlay, hand the model to an encoder, write the string. `core_portal`
-has published `renderDiagram(format)` the whole time, and the hosting server
-has been reaching it through `host_core_adapter` for months.
-
-`cli_core_adapter` now realizes `renderDiagram`, and the command asks for
-`canvas`, `mermaid`, `drawio` or `excalidraw` and writes what comes back.
-`wairon host demo` was making the same reach — `buildCanvasModel` out of the
-canvas module, to count the tree it had just seeded — and now counts through
-`buildCanvasDataModel` on that same adapter. What the command keeps is what a
-command is for: which format was asked for, where the file lands, and what to
-say about it afterwards.
-
-**One keyword was a cycle.** `src/core/diagram-export.ts` imported
-`CanvasModel` — an interface, erased at compile time — with a plain `import`.
-`canvas.ts` imports the two encoders as real values, because it serializes
-their *source* into the rendered page so the download buttons run them in the
-browser against a layout the reader has rearranged. Read together, those two
-edges drew a cycle between `spec_canvas` and `diagram_codec` where the code has
-an arrow. `import type` deletes the half that was never there.
-
-**What it cost to learn.** `renderDiagram(format)` is the four-format path and
-nothing else, and `wairon diagram` is not: `--all` writes the whole set,
-`--sequence` draws one narrative, `--subsystem` draws one slice. `DiagramOptions`
-models all three as fields and no contract method takes any of them, so the
-adapter republishes `generateDiagramSet`, `generateSequenceDiagram`,
-`generateComponentDiagram`, `toMarkdown`, `diagramSetIndex` and `loadSpecGraph`
-beside the one method `icli_core_adapter` names. The crossing is now in the
-right place and the contract is six methods short of the command it serves —
-written down here rather than declared away, because an adapter export that no
-contract names is a gap somebody can still read, and a contract method with no
-narrative behind it is not.
-
-Two smaller prices, both paid on purpose. `--all` asks for three formats by
-name instead of sharing one model between two encoders, so it builds the canvas
-model three times rather than twice — one extra tree load for a command that
-already writes a directory. And the command's own fallback is gone: it used to
-run the validator with defaults when the project had no configuration, where
-the core answers no findings at all. `assertProjectInitialized()` refuses a
-project without a configuration on the line above, so that branch had never
-run.
-
-Warnings 10 → 2, and the two left are the serialization seam the specs already
-describe: nothing *calls* `buildDrawioXml` or `buildExcalidrawScene`, because
-the page carries their text to a runtime that starts after this process exits.
-
-### The approval is reached through the portal that already claimed to publish it
-
-`src/core/index.ts` has said for a while that the approval is "published on the
-portal because both the local lock and the hosted admin plane approve through
-it". It published four of the six functions that sentence covers. `wairon lock`
-and `wairon status` imported the other two — `movedChildren` and `diffSize` —
-straight out of `src/core/approval.js`, which is sdd_cli reaching past
-`core_portal` into another subsystem's module. Nothing was broken by it, and
-that is why it lasted: an import that resolves is invisible until something asks
-where the boundary is.
-
-`core_portal` now re-exports `movedChildren`, and both commands take the whole
-approval surface from the portal. The re-export is by identity rather than a
-wrapper, so there is no second place for the behaviour to drift — and a test
-asserts exactly that, beside one that reads both command files and fails if
-either names the module again. A type-check cannot make that assertion: both
-imports compile, so only the import site says which side of the boundary a
-command is on.
-
-**`diffSize` stays a free function, and stays off the contract.** It is
-`ApprovalDiff`'s own arithmetic — added plus changed plus removed — so it
-belongs to the value, not to the component that builds one. `ApprovalDiff` is
-plain data: built as an object literal, compared field by field in tests, never
-reconstructed from anything. Turning the count into a real method would mean a
-class, and the class would buy nothing but the dot. It ships beside the type on
-the portal for the reason a method travels with its type — a caller that can
-receive a diff from there has to be able to count one from there, or it is back
-to importing the module. `ChildPinDrift` is now a named exported interface
-rather than an inline `{ id; pinned; now }`, so the contract has something to
-bind to, and `now: null` — the child that no longer carries an approval at all,
-which is a different problem from a child that moved — finally has a test.
-
-**What it cost to learn.** Eleven warnings went in and nine came out, and the
-nine are one finding wearing three codes. Six `CALL_STEP_UNREALIZED` say the
-narratives name calls this code does not make: `captureApprovedSpecs` is
-narrated as reading `spec_loader.loadComponentSpecs` and actually digests raw
-file text through `snapshotSpecFiles`, which no spec models at all; four methods
-are narrated as `lock_store.read` and actually call `readLockRecordAt`, a
-root-scoped read the `ilock_store` contract does not have; and
-`currentChildPins` is narrated as calling `spec_loader.listChainedRoots` while
-its signature takes the mounts from its caller precisely so it does not have to.
-None of the six is closable in code without making the code worse.
-
-`INCOHESIVE_METHODS` is the same gap read a second way, and it is not a real
-split. The rule groups methods by the components their narratives reach:
-`captureApprovedSpecs` and `currentChildPins` reach `spec_loader`, the other
-four reach `lock_store`, no overlap, two groups. In the code both groups touch
-both — `captureApprovedSpecs` calls `readLockRecord` to carry a scoped
-approval forward, and `diffAgainstApproval` digests the tree through
-`currentSpecDigests` — so narratives naming what the bodies do would union the
-two groups into one and the finding would not exist. No `lint.allow` was added:
-the finding is pointing at a narrative, and silencing it there would move a
-known defect into a claim.
-
-### A delete goes through the store that calls itself the only one touching disk
-
-C6, the code half. `spec_file_store` describes itself as "the single file-I/O
-face of the spec repository" and says outright that it "is the only spec-tree
-component that touches the disk". The five `delete*Spec` methods unlinked files
-themselves, so both sentences were false: the one place the spec tree's storage
-format is chosen never learned that a document had stopped existing. The store
-gains `remove` — unlink, then prune each parent directory the deletion emptied,
-stopping at the specs root — and the chain runs facade → registry → store, the
-same shape a save already had.
-
-`remove` answers **false when there was nothing there**, so a caller can tell
-"deleted" from "was never there" without a second existence check, and the
-delete methods invalidate the index cache only when something actually went.
-
-**The specs root is a parameter, and that is the finding.** The narrative asks
-`remove` to stop at the specs root; the contract declares `remove(specPath)`.
-The store cannot derive that boundary: `paths.specsDir` is configurable and the
-component's own description forbids it to read `project.yaml` to find out. So
-the code ships `remove(specPath, specsRoot)` and the contract is one param
-short. No rule checks arity — Level 1 realization reads a symbol and a body, not
-a signature — which is exactly why it is written down here instead of being
-carried silently in the code.
-
-**`advertiseHostedTools`** is now one named function rather than sixteen `reg`
-calls inline in `createMcpServer`, so the method the specs model has something
-to bind to. Identical behaviour, and it turned out to be untested behaviour: the
-switch deciding whether a LOCAL stdio server offers an agent sixteen tools that
-can only ever answer "unavailable outside a hosted request" had no test at all.
-It has one now, both ways.
-
-**What it cost to learn.** Extracting that function opened the finding it
-closed. `src/mcp/server.ts` realizes methods of eleven components, and
-`createMcpServer` is `mcp_server.create`; naming the hosted block gives it a
-23rd colocated crossing on a debt entry written for 22. In a file that holds
-that many components, extracting a function is not a refactor — it is a new
-component boundary, and the register has to be told. The ten delete-path
-crossings the pass leaves behind are the save path's shape exactly, twelve
-entries of which that register already carries: `invalidateSpecCache` is
-`spec_registry`'s method, and the facade and the orchestrator forward to it
-through functions of the same name in the same file. Nothing in the code can
-separate them while one module realizes all three.
-
-Verified unchanged by the same pass: `sdd_move_subsystem_project` takes
-`subsystem` (the contract was the broken half), the declared `ValidationOptions`
-matches the interface in `src/core/validation.ts` field for field, and
-`getProjectConfig` already runs portal → orchestrator → adapter.
-
-### A write names the tests it just invalidated
-
-F25: eight hosted tests encoded behaviour the committed specs had changed.
-Nothing in the spec pass listed them, so a brief that said "keep existing tests
-green" collided with the spec it was built on, and the collision surfaced in the
-implementation wave rather than in the write that caused it. A gated
-`sdd_update_spec` that changes or deletes a METHOD now answers with
-`testsToRevisit`: the tests that encode it, one entry per method, in the change
-report and on the tool's output schema. The change that creates the collision is
-the one that reports it.
-
-**Two lists, and the measurement is why.** The proposal said "search by symbol",
-which is a claim about an INSTRUMENT, so it was measured on this tree first —
-264 test files, 695 distinct method symbols:
-
-```
-imported symbol   0 hits: 382   1-3: 265   11+: 18   worst 111 (invalidateSpecCache)
-bare name         0 hits: 262   1-3: 317   11+: 59   worst 187 (project)
-```
-
-An import is a BINDING, not a coincidence, and its worst cases are functions
-genuinely used everywhere. But it misses 382 of 695 methods outright, because a
-test driving a method through a portal never imports it. The bare name finds
-exactly those and then drowns: `project` matched 187 of 264 files, `status` 122,
-`read` 112. Neither is honest alone, and merged they would hide which evidence
-was found — so `TestsToRevisit` carries `imported` and `mentioned` apart, and
-withholds the mention list above **a tenth of the walked suite**, with
-`indiscriminate` saying why. Saying a name is too common is an answer; printing
-187 paths is not. The threshold is a PROPORTION, so on a suite of ten files or
-fewer every mention is withheld — the mention half is a large-suite instrument,
-by construction.
-
-**`rules.conformance.testRoots` is its own opt-in setting**, deliberately not
-part of `sourceRoots`: tests are not code the specs are expected to claim, and
-putting them there would make every test file an `UNCLAIMED_SOURCE_FILE`.
-Declaring none walks nothing and answers empty. The search also answers empty
-rather than throwing when a root escapes the project root, when a test file
-cannot be read, or when a project has no configuration at all — naming the tests
-must never be the thing that fails a write.
-
-**What it cost to learn.** The walk was already written. `buildCodeModel` had
-root resolution with containment checks and the node_modules/dot-directory skip,
-and the JS pattern table already had the named-import clause; the honest change
-was to give both readers the same `walkDeclaredRoots` and the same import-clause
-pattern rather than a second walker that would eventually disagree about what a
-root may reach. What the search does NOT reuse is the exact-AST grade, and that
-is the measurement talking: the numbers above were taken with a read-and-scan,
-so an AST pass would have been a differently calibrated instrument wearing the
-same threshold — and it would have cost an AST parse of every test file on every
-write. As shipped, wairon's own 265-file suite costs about 0.15s per gated write,
-and only when `testRoots` is declared.
-
-Sharing that pattern also found a latent defect in the pattern-grade analyzer.
-`matchAll` CLONES a regex together with its `lastIndex`, and the export-marker
-scan drives those same shared patterns with `exec`, which leaves an offset
-behind on a match — so the next file scanned with that pattern started part way
-in. On two Rust files where the first held an exported declaration, the second
-file's declarations came back EMPTY. Only projects at pattern grade were ever
-affected (a language with no exact analyzer, or a TypeScript project where the
-compiler module cannot be resolved at all), which is why nothing had reported
-it. The scan now hands each pattern back the way it found it.
-
-
-### `sdd_move_methods` — a move that says where the methods CAN live
-
-Splitting a component meant re-sending two contracts and two narratives by hand,
-then deep-comparing against HEAD to prove nothing else had moved. D2b paid that
-three times.
-
-`renameMethod` and `renameComponent` are mechanical and live ungated on
-`sdd_core`. A move is not: it changes which component OWNS behaviour, which is
-exactly what the stereotype and dependency rules judge. So core gained the
-mechanical lift-and-retarget beside `renameMethod`, and the gate injects its
-judgement as a write hook the way `updateSpecGated` does. Each method leaves the
-source contract and arrives on the target's carrying signature, params, returns,
-guarantees and endpoint binding; its implementation entry travels with it
-carrying narrative, sourcePath, symbol, detail, intent, calls and findings. The
-target gains the dependencies the moved narratives call.
-
-**The refusal is the feature.** When a rule refuses the move, nothing is written
-and the report ranks the candidate homes cheapest-legal-first — the requested
-target among them, so its shortfall reads beside the others. That is the hand
-labour it replaces: when #88 moved five methods out of `web_admin_orchestrator`,
-both natural homes were refused by `maxComponentDependencies` (11 and 12 against
-a ceiling of 10), and working that out was done by eye over a graph the tool
-already held. The SOURCE is exempt from that ceiling: a component that already
-exceeds it must still be able to give methods away, or the feature locks exactly
-the component it exists to relieve.
-
-`SpecWriteHooks` gains `assess`. `gate` throws to refuse, which cannot answer
-"would this be legal" without driving a search on caught exceptions — a search
-whose control flow is a throw per candidate, where a bug in the gate is
-indistinguishable from a refusal. The store holds the tree and enumerates the
-candidates; the gate holds the judgement; neither can answer alone.
-
-What it deliberately does not touch: prose, and a published wire address. Moving
-a method between components must not silently re-address an RPC, so both are
-reported as `mentions` instead.
-
-**What it cost to learn.** The reference-field table — which fields of which
-spec kind name another spec — now lives once, in `core/specs.ts`, and both the
-rename (walking files) and the move (walking the typed store) drive it. It was
-already one list in two halves, and the half that goes stale is the one nobody
-reads: `calls` entries were missing from it entirely, so `sdd_rename_method` had
-been leaving a dangling `<component>.<oldName>` behind since `calls` shipped.
-Writing the move found it; the move needed the same six kinds the rename
-retargets, and only five were there. It does not fail quietly — `validate`
-reports INVALID_TARGET_METHOD_REFERENCE as an error — but the only way back was
-to find and edit every entry by hand.
-
-The other cost was the plan itself. `Array.prototype.filter` hands back the SAME
-element objects, so a plan built as `{...clone(spec), methods: spec.methods.filter(…)}`
-shares its methods with the snapshot a failed write has to restore — and the
-reference sweep, which rewrites in place, then quietly edits both. The atomicity
-test caught it: a failed write restored specs that had already been mutated
-through the snapshot. Copy first, filter the copy.
-
-### The implement and delegate skills carry the conventions the work taught
-
-A delegated change kept going wrong in the same ways, and each brief patched the
-last incident by hand. Whatever the brief-writer forgot, the subagent never knew.
-The conventions now ship with the tool instead of being remembered per task.
-
-`sdd-implement` gains a **Working conventions** section: never hand-edit what a
-tool owns, read every write back before believing it, prove a behaviour by revert
-and restore from a snapshot rather than `git checkout` (which discards work the
-task never named), measure before repairing, leave untracked paths alone, and
-treat the approval as the human's to give. Each one closes with the incident that
-produced it, because a convention without its cost reads as a preference and gets
-dropped under pressure.
-
-`sdd-delegate` gains **What goes in the brief — and what must not**: a brief that
-re-types the conventions is a brief that will one day omit one. Point the subagent
-at the skill and spend the brief on what only the delegator knows — the exact base
-commit, the write fence, what has already been measured. It also gains **Receiving
-the report**: a report that lists only successes has not been read until you have
-looked for what it did not do.
-
-No new skill was added. A skill loads when its description matches the task, and
-"conventions" describes no task — a sixth skill would have been a file nobody
-opens at the moment it was needed.
-
-### A method declares the calls it makes
-
-A method whose narrative shows no steps used to reach **every contract method of its component's `dependsOn` and
-`owns`** — a detail-dial fallback, so that a lower declared fidelity could not false-flag a collaborator as unused.
-It is gone, and `calls` replaces it: what the method says it calls, and nothing else.
-
-Measured on wairon's own tree before the change: **215 implementation methods have an empty narrative and 138 of them
-sit on a component with dependencies**, but disabling the fallback produced only **31 findings** — 19
-`UNUSED_COMPONENT` (17 Stores and 2 Adapters) and 12 `UNUSED_METHOD`. So the fallback was not holding up the detail
-dial broadly; it was holding up the Index and Registry members of Repository patterns, whose intent prose says they
-read and write their sibling Store while nothing in the graph said so.
-
-- **`calls` on the L4 method** (beside `narrative`, `intent` and `detail`), each entry one `<component>.<method>`
-  reference. It is `invokedBy`'s mirror — that declares the caller OUTSIDE the modeled graph, this declares the
-  callees inside it — and it lives at L4 rather than beside `invokedBy` at L3 because what a method CALLS is a
-  property of the realization: the dial that hides the steps is here, and two implementations of one contract may
-  reach different collaborators.
-- **The spelling is the debt register's and the lint allow's**: `<component>.<method>`, exactly what `at`/`covers`
-  name a unit with (a `covers` entry is the same string with the step number a declaration has no equivalent of). A
-  third vocabulary for "which method" would be the worse outcome.
-- **The walk takes the declared edges and no others.** An undeclared collaborator is NOT reached, so `UNUSED_*` is
-  now as strong below `full` detail as it always was at `full`.
-- **A declared call is checked like a call step**, in the same rule and the same loop: the reference must read
-  `<component>.<method>` (`MALFORMED_DECLARED_CALL`, a new error), the component must be one this component declares
-  (`UNDECLARED_DEPENDENCY_CALL`), and the method must be on its contract (`INVALID_TARGET_METHOD_REFERENCE`). A
-  declaration cannot buy reachability for free.
-- **Refused beside a non-empty narrative.** A method with steps already says what it calls, in steps the flow rules
-  check; a second spelling beside them could only ever disagree with the first.
-- `UNUSED_METHOD` and `INVOKED_BY_REDUNDANT` now name their SITE (the method), so an allow for one covers exactly
-  that method and never its neighbours on the same interface.
-
-**Upgrading.** Run `wairon validate`. A method with an empty narrative below `full` detail no longer vouches for its
-component's collaborators, so `UNUSED_COMPONENT`/`UNUSED_METHOD` can newly fire and `validate --ci` newly fail. The
-remedy is to write the calls that method actually makes into its `calls` — which is also the declaration that makes
-its intent prose checkable. Where the call cannot be written truthfully (nobody knows what it calls, or the answer is
-a modelling question), that is debt: a sited `lint.allow` with the reason that is true there, or a fix to the model.
-Do not declare a call the code does not make.
-
-**A declared call is now checked against the CODE**, in the same rule, the same loop and the same verdict as a
-narrative `call` step. It was validated against the spec only (the target resolves, the collaborator is declared, the
-method is on the contract), so it was an unverified claim: a channel through which a method with no narrative could
-buy reachability in the graph while the code did nothing. That channel is closed.
-
-- **A step and a declaration make the same claim.** Both say *this method calls that component's method*. A step also
-  says WHERE in the flow — and this check has never read order, arguments or conditions, so the step number is no part
-  of what it judges. It is only how a finding POINTS at the claim: `step 3 → billing_store.save` or
-  `declared call → billing_store.save`. One question, one verdict, one rule.
-- **The same codes, deliberately.** `CALL_STEP_UNREALIZED` and `CALL_ORIGIN_UNRESOLVED` now read "call step or declared
-  call". A separate code per spelling would fragment the debt register's vocabulary over a distinction the finding does
-  not turn on, and the register would then carry the same fact under two names.
-- **The unit a register entry or a lint allow names** is `<component>.<method>` for a declaration — the `calls` entry
-  verbatim — where a step's is `3:<component>.<method>`. That is the spelling `calls` was given for, now used.
-- **The converse direction asks a declaring method the same question.** A colocated call — a modelled method of another
-  component in the same file, which nothing imports and no file-level check can see — must be written down, and `calls`
-  is where a narrative-less method writes one down. `UNDECLARED_COLOCATED_CALL` now reads "neither a narrative step nor
-  a declared call names it", and its remedy names `calls` beside the narrative.
-- **N:1 identity forwarding and the conformance dial apply unchanged.** Both are facts about the code and the
-  component, which do not know which way the claim was written.
-- **A method that claims NOTHING is still judged in neither direction.** It has nothing to prove forward and has not
-  failed to declare anything; what it leaves unsaid is `UNUSED_COMPONENT`/`UNUSED_METHOD`'s subject, which is the
-  pressure that makes a declaration worth writing. Measured on wairon's own tree, extending the converse direction to
-  those methods too would report 7 further colocated crossings — five of them an Adapter or Index reaching a Store it
-  sits beside — so that is a modelling question, not a wiring one, and it is left open rather than decided here.
-
-Measured on wairon's own tree before the change: **134 declared edges over 84 methods in 31 implementations**. 99
-verify outright, 2 are accepted by N:1 identity forwarding, and **33 are `CALL_ORIGIN_UNRESOLVED`** — every one of them
-a call on a local binding or parameter whose declared type the reader does not follow, all inside the project
-configuration Repository's single module. **Nothing was accused: zero `CALL_STEP_UNREALIZED`, zero new
-`UNDECLARED_COLOCATED_CALL`.** The 33 are carried as `unreadable`, which is what they are.
-
-**Breaking.** A project whose declarations do not match its code newly reports, and `validate --ci` can newly fail. A
-declared call that names a target realized in a file the code never reaches is `CALL_STEP_UNREALIZED`; one whose call
-site the reader cannot resolve to a file is `CALL_ORIGIN_UNRESOLVED`, which accuses nothing and asks for nothing. The
-remedy for the first is to make the call, fix the declaration, or map the code name with a per-method `symbol` — never
-to drop the declaration, which would only move the finding to `UNUSED_*`. Do not declare a call the code does not make.
-
-### A `lint.allow` covers exactly the finding it names
-
-A rule that reports a SITE fires once per site; an allow was keyed by code and spec alone, so one of them silenced
-every occurrence there was. Measured on wairon's own tree: **32 allows suppressed 46 findings** — 14 occurrences, 30%,
-invisible even to the allow that named them, and at unit granularity 4 more. The prose rotted in the same gap: one
-allow claimed "27 of the runner's 32 narrated methods", one named a second edge that had stopped firing, one named a
-single call target for six methods while one of them called something else entirely.
-
-**Breaking.** An existing project's coarse allow stops covering what it used to, for every code whose findings name a
-site. The finding surfaces and `validate --ci` can newly fail; the allow is reported `UNUSED_LINT_ALLOW`, and that
-finding lists the sites that fired so the remedy is a copy-paste. Today the sited codes are `CALL_STEP_UNREALIZED`,
-`CALL_ORIGIN_UNRESOLVED`, `UNDECLARED_COLOCATED_CALL`, `METHOD_BODY_NOT_FOUND`, `UNDECLARED_DEPENDENCY` and
-`UNREALIZED_DEPENDENCY`; an allow for any other code is unaffected and needs no edit.
-
-- **`at` — the site the allow covers**, named exactly as the finding names it: a contract method, an import edge
-  `from -> to`, a declared edge `component -> target`. A sited finding is covered only by an allow naming that site;
-  a finding that names none is covered only by an allow that names none either, so the codes that fire once per spec
-  (`GOD_COMPONENT`, `UNOWNED_STORE`, `EXCESSIVE_NARRATIVE_STEPS`, …) stay exactly as they were — a site field there
-  would be ceremony.
-- **`covers` — the units of an aggregating finding**, each named the way the finding's message names it
-  (`3:billing_store.save`). The allow silences the finding only when it lists every unit reported; a unit nobody
-  listed is named back as new instead of inheriting a decision taken about its neighbours. `covers` without `at` is
-  refused by the schema.
-- **This is the conformance debt register's vocabulary, deliberately.** `at`/`covers` are `FindingParts`, the same
-  words the register matches on, because it is the same question — which occurrence — and a second vocabulary for it
-  would be the worse outcome.
-- **`UNUSED_LINT_ALLOW` now says what the run saw.** An allow whose site no longer exists, and a coarse allow left on
-  a sited code, are both stale, and the finding names the sites that did fire — "no such finding fired" would read as
-  a lie on a spec where three of them did.
-- `sdd_update_spec` merges `lint.allow` by **code AND `at`**, since several allows may now share a code on one spec.
-
-**Upgrading.** Run `wairon validate`. Every `UNUSED_LINT_ALLOW` it reports names the sites the run found: split the
-allow into one per site, each with the reason that is true THERE. Where the reason turns out to say the finding is
-right but unpaid ("reconcile later", "overclaimed"), it belongs in `rules.conformance.carried`, not in an allow.
-
-### A carried classification can say it is not settled yet
-
-`STALE_CARRIED_FINDING` catches an entry that stopped applying. Nothing catches one that still applies for a reason
-that has become false — and a confident-sounding `why` that is wrong is worse than a missing one, because it reads as
-settled and nobody looks again.
-
-- **`revisit` on a reason group** (`rules.conformance.carried[].revisit`): a sentence saying what would settle the
-  classification. Every run counts the findings in the marked groups beside the kind totals — *"172 finding(s) over
-  294 unit(s) carried … 48 finding(s) in 2 group(s) are marked for re-evaluation"* — and prints each group's sentence,
-  so the uncertainty is as loud as the debt. It is a sentence and not a flag because a reader deciding whether to pick
-  it up needs to know what to measure.
-- **There is no counterpart on `lint.allow`, and that is a decision.** An entry in the register silences nothing — the
-  finding is counted out loud on every run — so marking one uncertain adds a second dial to something already visible.
-  An allow DOES silence, and a "provisional allow" would buy the silence and defer the decision: the finding gone, the
-  doubt in a field nobody opens. The mechanism for a decision nobody has taken is to not take it — leave the warning
-  firing — or, where the code is carryable, an entry of kind `undecided`, which is exactly that sentence.
-
-### Conformance that never goes quiet: a call is realized where it LANDS
-
-Level 3 matched narrative `call` steps by **callee name**, closed over same-file helpers, as set membership — so a step
-naming `billing_store.save` was satisfied by any function called `save` the realizing function could reach, in any
-module at all. Level 1 accepted a method as realized because its **name** was in the file, whether or not anything with
-a body stood behind it. And neither could see a call that crosses a component boundary **inside one file**, because
-nothing is imported there for a file-level check to read.
-
-**Breaking.** Three newly reported findings, and one existing finding that now fires where it used to pass: a project
-upgrading will see calls reported that previously passed, and `validate --ci` can newly fail (see *Upgrading*).
-
-- **`CALL_STEP_UNREALIZED` now asks where the call LANDS.** A step is realized only by a call whose callee resolves to
-  one of the **target method's own source files**. The call site's SHAPE is what makes that answerable without a type
-  checker: a bare call resolves through this file's import bindings or its own declarations; `ns.save()` through a
-  NAMESPACE import binding, whose properties are that module's exports; `value.save()` through a value binding only
-  when that module declares `save` too, since the property could otherwise have been attached anywhere. Every landing
-  is widened by what the module republishes, so a call through a barrel still lands where the function lives. A target
-  that names no file of its own has nothing to resolve against and keeps the old name-membership answer.
-- **`CALL_ORIGIN_UNRESOLVED` (warning): the name IS called, from a site written in a shape the reader cannot follow.**
-  A receiver holding a value the module assembled, a receiver with no name to record, an import from a PACKAGE
-  specifier: none of these carries an origin a pure model can read. That is a different answer from *the call is
-  missing*, and keeping the two apart is the point: **only what resolved may accuse.** The finding NAMES the shape it
-  could not follow (``written as `hostCore.loadProjectConfig(…)` ``) and asks for nothing. It reports what was **not
-  checked**, not what is wrong, and no working call is asked to be rewritten to suit the analysis: it is a coverage
-  hole, reported for the same reason `CONFORMANCE_DEGRADED` is, that a silently degraded gate is worse than a degraded
-  one. Its severity stays **warning**, which is what this tree's other two coverage-hole codes
-  (`CONFORMANCE_ANALYSIS_SKIPPED`, `CONFORMANCE_DEGRADED`) carry.
-- **`METHOD_BODY_NOT_FOUND` (warning): the symbol is a declaration, not an implementation.** At exact grade a method
-  realized by a DECLARATION owes a function body as well, so a signature, an overload, an ambient or interface
-  declaration or a plain value binding stops reading as an implementation. *Body* is what the model measures, not what
-  a compiler would infer: a function, method or accessor declaration, or a function/arrow initializer bound to a named
-  slot. Two things are deliberately not reported — a weak string-literal anchor at the `anchored` tier claims no
-  function at all (a route registration is meant to be a string), and a body **reachable** through the imports and
-  republications the file forwards the name by IS the implementation, the N:1 identity forwarding Level 1 blesses.
-- **`UNDECLARED_COLOCATED_CALL` (warning): a boundary crossing that looks local.** When the realizing function calls a
-  modelled method of ANOTHER component living in the **same file**, the narrative must declare it. Sharing a file does
-  not make the hop internal, and no file-level check can see it: nothing is imported, and Level 2 judges edges
-  *between* files. A call to a same-file **private helper** is no modelled method and is never reported — reporting it
-  would turn every module's internal factoring into a finding. The walk stops AT a colocated modelled method, because
-  what that method goes on to call belongs to its own narrative.
-- **Two analysis gaps closed on the way, both of which had been keeping the tree quieter than it should be.**
-  - **A named re-export republishes exactly as `export *` does.** The barrel chase carried a republished function's
-    measured body only through star exports, so a Portal barrel written `export { enable, sync } from './orchestrator.js'`
-    — the shape `src/git/index.ts` uses — published names with nothing behind them. The two spellings are now chased
-    alike, which is what keeps `METHOD_BODY_NOT_FOUND` off a legitimate barrel.
-  - **A carried call site keeps the file it was read in.** A barrel's republished sites would otherwise arrive with no
-    origin of their own, and their bare names would resolve in the barrel's scope instead of the real module's.
-- **The facts the model carries, restated.** `SourceFileFacts.functionCalls` (callee NAMES) is replaced by
-  `functionCallSites` (`CallSiteFact[]`: the name, whether it was a member access, the receiver identifier, and the
-  file a carried site was read in), and `importBindings` (`ImportBindingFact`: the specifier, whether it was a
-  namespace import, the name it was renamed from) is new. A function-like **with a body** always gets a sites entry,
-  empty when it calls nothing; a name with **no** entry has no body to read — that difference is the whole of
-  `hasFunctionBody`, and why an empty entry is never dropped. `CodeIndex.originOf(site, from)` resolves a call site's
-  landing against the run's closed path set, answering the empty set where a pure model cannot say. Embedding wairon
-  as a library and reading `functionCalls`? Read `functionCallSites` and map its `name`.
-- **A `this.<field>.<method>()` call is followed through what the class DECLARES the field to be.** A
-  constructor-injected collaborator is the one member receiver a pure model can follow past the value it holds: the
-  class writes down its type, and the type names a module. The analyzer now records the type names each instance field
-  is declared with (class property declarations and constructor parameter properties) and the module each TYPE-ONLY
-  import binding came from — kept apart from `importBindings`, because a type binding can never be a call origin and
-  is exactly what a declared type resolves through. A field the code annotates with nothing records nothing: what an
-  initializer INFERS is not what the code declares.
-  **This tier may only ACCEPT a call, never accuse one.** A declared type says what a collaborator IS, never which
-  class ships the body, so it is a possibility and not a fact — `CodeIndex.possibleOriginsOf(site, from)` answers it
-  and `originOf` stays the proven tier a finding names a landing from. A followed type that lands somewhere OTHER than
-  the target's file therefore leaves the step reported as `CALL_ORIGIN_UNRESOLVED`, exactly as before, and never as
-  `CALL_STEP_UNREALIZED`. Measured on wairon's own tree: `CALL_ORIGIN_UNRESOLVED` 49 → 44 findings (50 → 45 steps), and the
-  `CALL_STEP_UNREALIZED` set is unchanged finding for finding, and the whole tree gained no finding at all.
-- **A `new Class(…).<method>()` call is followed through the module its CLASS NAME came from.** The second receiver a
-  pure model can follow, and for the same reason: the code NAMES the class right there, and that name is bound to a
-  module. `new ApprovalRegistry(dataDir, store).create(request)` is good code — a collaborator built for one call — and
-  it was the commonest shape the reader could not read. It resolves through the class's RUNTIME import binding (a
-  constructed class is a value, never a type-only binding), else this file when it declares that class.
-  **Acceptance only, like the declared field type:** `possibleOriginsOf` answers it, `originOf` stays the proven tier a
-  finding names a landing from, and a constructed class that lands somewhere OTHER than the target's file leaves the
-  step reported as `CALL_ORIGIN_UNRESOLVED`, never as `CALL_STEP_UNREALIZED`.
-  **The limit, recorded rather than discovered later:** a constructed class says where the CLASS was written, never
-  where a method it INHERITS from a base was — and a base lives in whatever module it likes. So the reading reaches the
-  derived class's file and stops there, which is a false NEGATIVE and never an accusation; fixtures pin both halves of
-  that claim. Measured on wairon's own tree: `CALL_ORIGIN_UNRESOLVED` 44 → **6** findings (45 → 7 steps), with
-  `CALL_STEP_UNREALIZED`, `UNDECLARED_COLOCATED_CALL` and `METHOD_BODY_NOT_FOUND` unchanged finding for finding and the
-  whole tree gaining no finding at all. What survives is three named reader gaps and no author defect: a package
-  specifier (`@wairon/sdk`) the resolver does not map to a path, a receiver bound to a same-file `const` object, and a
-  plain `this.<method>()` self-call the model records no receiver name for.
-- **One author defect these checks exposed, repaired.** `spec_file_store_impl` declared `sourcePath: src/core/specs.ts`
-  while its methods carry `symbol: readYamlFile` / `writeYamlFile` / `listFilesRecursive` — declared in
-  `src/utils/yaml.ts` and `src/utils/fs.ts`, which `src/core/specs.ts` only imports and calls. The declaration tier
-  accepted it (an import binding anchors a declaration), and 21 narrative call steps across the tree were accused of
-  landing in the wrong module as a result. Each method now names the file that DECLARES its symbol, and those two files
-  leave `rules.conformance.unclaimed` — the ratchet working, and that list only shrinks.
-- **The source analysis follows three more shapes, and only where the code settles them.** A forwarding binding with
-  no specifier — `export { a as b }`, or a property `{ b: a }` / `{ b }` of an exported adapter object reached through
-  `exportedVia` — now resolves the published name to the ONE body its local name settles on (a module-scope body, or
-  an import binding whose module holds one), so the method is judged on that body instead of reading as bodiless
-  (`METHOD_BODY_NOT_FOUND`); a local name that does not settle stays bodiless. A package specifier that names a
-  package of THIS repository — the root package and its declared workspaces, never `node_modules` — resolves like a
-  relative import, its built entry mapped back to source through the package's tsconfig `outDir`/`rootDir`, in every
-  check that resolves imports (call origins, dependency edges, export reach); a third-party package stays unresolved.
-  And a `fn().method()` receiver is followed through the type fn's return annotation names (or the class its one
-  return constructs), and a `this.method()` receiver inside a class's own method through that class — both only where
-  a body of the method is there, and both on the acceptance-only tier. New facts: `exportAliases`, `returnTypes`,
-  `CallSiteFact.returnedBy` / `enclosingClass`, `CodeModel.packages`. A facade that forwards by identity to another
-  file's modelled method is that method in the converse direction too, so its carried calls are never reported as its
-  own `UNDECLARED_COLOCATED_CALL`. A tree whose code took these shapes can see findings resolve, `lint.allow` entries
-  written for the old blind spot turn stale (`UNUSED_LINT_ALLOW`), and a register entry carried as `unreadable` turn
-  `STALE_CARRIED_FINDING`; wairon's own register drops all seven of its `unreadable` findings.
-  **What it cost, measured:** `CALL_STEP_UNREALIZED` 42 → 26 findings (81 → 60 steps), and **26 new
-  `UNDECLARED_DEPENDENCY`** findings, because a method's `sourcePath` claims the whole FILE and those two are
-  general-purpose utility modules that nineteen other implementations import. That debt was always there; it was invisible
-  while the files sat on the unclaimed register. Declaring those edges would be a lie — the importers use `pathExists`
-  and `parseYaml`, not the spec file store — so the honest resolutions are to split the store's three symbols into
-  their own module, or to accept the coarse claim.
-
-### `wairon lock-check`: refuse a merge whose specs were never approved (new, optional)
-
-A human approves a design by running `wairon lock`, which records a gate identity
-for the parsed spec tree in the committed `.wai/lock.json`. Nothing checked that
-record at merge time. Six times in this programme the approval was taken *after*
-the pull request had already merged, leaving the default branch holding specs
-nobody had said yes to — silently, because there was no gate to notice.
-
-- **`wairon lock-check`** answers one question and exits on it: *is the design in
-  this working tree the design that was approved?* Three states, three verdicts:
-  `locked` passes; `stale` — the design moved past its approval — **fails**,
-  naming the remedy (`wairon lock`, then commit the record); `unlocked` — nothing
-  was ever approved — passes with a notice. A repository with no `.wai/specs` at
-  all says exactly that and passes, rather than being reported as unapproved.
-  `--strict` turns those last two into failures.
-- **Optional by construction.** Only `stale` refuses at the default strictness,
-  and `stale` cannot occur in a project that never locked. An existing project
-  upgrading into this release therefore cannot start failing on it, and neither
-  can one that imports the workflow below without asking for `--strict`.
-- **Not a flag on `validate`, deliberately.** `validate` asks whether the design
-  is LEGAL; this asks whether it is APPROVED, and the two are independent — a
-  tree can be approved and illegal, or legal and unapproved. Folding them into
-  one exit code would make a single red check mean two unrelated things. It is
-  also about three times faster on wairon's own tree (0.5s against 1.6s): it
-  loads the tree, hashes it and reads one JSON file, where `validate` runs the
-  whole rule set.
-- **It gates on the gate identity, not on the per-spec content digests** the same
-  record carries. Those answer "has this file changed since you approved it", so
-  a whitespace-only edit would move them; the gate identity hashes the parsed
-  tree plus the governing doctrine and answers "has the DESIGN changed". A merge
-  gate that demands a re-lock for reformatting is a gate people learn to bypass.
-- **A reusable GitHub workflow any repository can import**, since this one is
-  public. One line in your own workflow:
-
-  ```yaml
-  jobs:
-    approved-design:
-      uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v5.1.0
-  ```
-
-  Inputs: `working-directory`, `wairon-version`, `strict`, `node-version` and
-  `runs-on`, all with defaults. Pin `@<ref>` to a **tag**, never to `main` or
-  `dev` — a moving branch means the check gating your merges can change under
-  you between two runs of the same commit. wairon's own CI runs the same check
-  on itself, against the CLI that commit builds.
-- **What it does not prove: WHO approved.** `lockedBy` is a claim, not an
-  attestation — anyone who can run the CLI can write a lock record. Pull-request
-  review is what establishes who reviewed; this establishes that the thing
-  merging is the thing that was reviewed. It also cannot block a merge by
-  itself: a workflow can only fail a job, and making a failing job stop a merge
-  is a branch-protection setting on the repository.
-
-### The gate identity is the same on every machine (breaking: re-lock once)
-
-The identity a lock records was machine-specific. `computeStateId` digested the
-spec tree in the order the filesystem handed the spec files back — NTFS returns
-a directory sorted one way, ext4 returns it in hash order — and `canonicalize`
-sorts object keys but never arrays. So the same commit hashed differently
-depending on where it was hashed, and a lock only ever verified on the machine
-that took it.
-
-This was not theoretical: the `lock-check` gate above failed in CI on the very
-commit that added it, with a valid record and an unchanged tree. Reading the
-identical files, this repository's spec tree digested to `5d7bef12…` on Windows
-and `0697076b…` on Linux. The first divergence was two real component ids,
-`share_snapshots` and `share_snapshot_index`: `_` sorts before `s` by codepoint,
-and after it under the directory order Windows returns.
-
-- **The specs are put in a deterministic order before they are digested**: by
-  id, and for the duplicate-id case (itself a validation error) by canonical
-  content, compared by codepoint. It lives in `computeStateId`, the function
-  that claims the determinism, and it reorders only whole specs. The arrays
-  INSIDE a spec — a narrative's steps, a method's params — are ordered by
-  meaning; sorting those in `canonicalize` would have made a reordered flow
-  digest identically to the original and a lock survive a real design change.
-- **No sort that decides an identity uses `localeCompare` any more.** The
-  doctrine projection sorted its rules, codes, packs, patterns and assertions
-  with it, and collation is a property of the machine's ICU build, not of the
-  data: it already ordered a shipped pair of codes the other way round
-  (`EXCESSIVE_METHOD_PARAMS` before `EXCESSIVE_METHODS`, where the codepoints say
-  the reverse). Pack DISCOVERY order — which decides who wins a doctrine
-  collision, and so reaches both the verdict and the identity — was sorted the
-  same way and is now ordinal too. Human-readable listings keep `localeCompare`,
-  which is what it is for.
-- **Proven by construction, not by a second laptop.** A property test permutes
-  the loaders' output and requires the digest not to move; a second test renames
-  every spec file so the directory order flips; a third pins a fixture tree's
-  digest as a constant, generated on both platforms and confirmed equal, so any
-  future reordering shows up in a diff instead of in someone's CI. After the fix
-  this repository's tree digests to `0697076b…` on Windows and on Linux alike,
-  and its gate identity to `a523af3f…` on both.
-
-**Breaking, once.** Both halves move the identity, so every lock record written
-before this release reads as *stale* and every project re-locks — see
-*Upgrading*. That is the correct reading: those records attest to a digest that
-was never reproducible off the machine that wrote it.
-
-### A chained subproject is judged through its parent — never waved through
-
-Validated from its own root, a chained child could not fail its gate for anything
-that crossed into its parent. Every reference into the parent became an
-`UNVERIFIED_EXTERNAL_REF` warning that `--ci` waives — including references the
-parent judges as hard boundary violations. On the regression fixture the parent,
-scoped to the mount, reported `CROSS_SUBSYSTEM_NON_ADAPTER`,
-`CROSS_SUBSYSTEM_PRIVATE_ACCESS`, `INVALID_DEPENDENCY_REFERENCE` and
-`INVALID_TARGET_METHOD_REFERENCE` as errors; the child reported `valid: true`.
-Every code↔spec conformance error was downgraded and waived the same way, so a
-child naming code that did not exist passed too. Nothing hosted ever delivered
-surfaces, so a hosted subproject lock approved real violations.
-
-- **Judged through the parent.** When a chained child holds references it cannot
-  resolve and its parent is on disk, validation walks to the top root, validates
-  there scoped to the mount chain — with the parent's own rules and doctrine and
-  the same strictness — and merges the result into the child's own findings,
-  under the child's ids. It is a union with no severity changed, so a child is
-  never judged more leniently than its parent. The result names where it came
-  from: `resolvedThrough`, printed by `wairon validate` and returned by
-  `sdd_validate_tree`.
-- **Hosted reach is the credential's.** Resolving reads the parent tree, so a
-  token for the top project (or `*`) resolves through it, a token narrowed to
-  `project::child` never does, and the walk never climbs above the tenant root.
-- **No usable parent, no softening.** Every reference keeps its raw verdict: a
-  cross-tree form stays a `CROSS_TREE_REF_UNRESOLVED` warning that `--ci` does not
-  waive, and a typo stays an error. `UNVERIFIED_EXTERNAL_REF` and
-  `CHAINED_SUBPROJECT_CONTEXT` are retired.
-- **A child pins its own surfaces: `wairon surface pin`.** Run in a chained child
-  while its parent is on disk, it stores the family surface and every sibling's
-  published surface into the child's `.wai/surfaces/`, rewriting only what
-  changed — so a child cloned without its parent (a submodule checked out alone
-  in CI) still has contracts to validate against. A surface held inside a mount
-  now also decides that mount's references when validating from the parent root.
-- **A parent lock no longer pushes surfaces into its children.** Pushed delivery
-  is gone: the lock hook, `wairon surface generate-children`, and `SURFACE_STALE`.
-  So is the git flood a scoped lock used to cause — (children × subsystems)
-  snapshots rewritten into other people's working trees on the parent's schedule.
-  An unscoped lock still regenerates the derived files (skills, context and
-  guides) of every chained descendant — each child's layer, then its own
-  subprojects' — and initializes a child that is missing its project files.
-- **A child's source paths are its own.** They are read against the child root,
-  as the loader always did. An implementation written through the parent (a
-  `child::` id) now stores its `sourcePath` and `simPath` relative to the child
-  when the path lands inside it, and `subsystem externalize` / `internalize`
-  rebase the moved paths exactly. The conformance downgrade, its
-  `crossTreeContext` marker and the `--ci` waiver are gone.
-- **A loader refusal is anchored to its spec id**, qualified into the mount, so
-  `wairon validate --subsystem <mount>` no longer drops a malformed child spec
-  that the child's own validate reports.
-
-### Chained subprojects, continued: never softer with the parent on disk, flat at every depth, confined when narrowed
-
-Checking the change above against the code found that it could do the opposite of
-what it promised. Three more gaps sat close by, one of them in hosted confinement.
-
-- **A leniently configured parent could soften a child's own findings.** The walk
-  to the parent was triggered by — and replaced — a family of codes that included
-  verdicts on edges entirely inside the child (`CROSS_SUBSYSTEM_NON_ADAPTER`,
-  `UNDECLARED_DEPENDENCY_CALL`). With a parent that set such a code to `warning` or
-  `off`, a child that failed alone passed with its parent checked out. Now only a
-  reference-resolution failure triggers the walk; the parent-side run judges each
-  rule at the stricter of the parent's and the child's severity; and a child
-  finding gives way only to an equally or more severe parent finding on the same
-  spec, or to a resolution failure the parent's run did not repeat.
-- **A flat chained child now works at every depth.** A grandchild whose subsystem
-  is named after its mount loaded from the top as two subsystems, and with the
-  shadowing fix below its components would have pointed at an id nothing
-  declares. A reference to the mount's own name is now the mount at any depth.
-- **A credential narrowed to a chained child reads nothing above the child.**
-  Validation already honored this; discovering the parent did not. Surface
-  freshness in `sdd_list_external_interfaces` and the bind-time announcement now
-  answer for a child-scoped credential as a top root would, and the four landscape
-  discovery tools are refused under a subproject-qualified binding, like the other
-  record-level tools, instead of answering for the whole project.
-- **Hosted reads are gated as reads.** `sdd_list_external_interfaces` and the
-  topology tools (`listAgents`, `getAgent`, `listDomains`, `validateTopology`,
-  `getProjectConfig`) fell into the fail-closed default and required
-  `project:write`. They require `project:read` now, and a test fails when a tool the
-  hosted server advertises relies on that default.
-- **Two August fixes are finally on `dev`.** Their pull request was merged into a
-  branch that had already been merged, so neither landed: namespace shadowing
-  detectable from disk with the `--ci` draft-subsystem waiver, and the closed
-  Specialist dependency matrix. Their entries follow below; the Specialist has
-  since retired (see *Logic is an Orchestrator*).
-
-### Chained subprojects: correct on the current model before it changes
-
-A repository-backed review of the chaining code, taken after the fixes above,
-found places where one tree got different answers depending on where it was read
-from, and checks that did less than they said. These are fixed without changing
-the chaining model itself, which is being redesigned separately.
-
-- **A mount is contained by the project that declares it.** A nested child's
-  `projectPath` was checked against whichever root loaded the tree, so a child
-  declaring `../sibling` loaded from the top project and was refused from its own
-  root. Loading, namespace resolution, parent detection, whole-tree walks and the
-  writers now all decide containment against the declaring project, both as the
-  path is written and as the filesystem resolves it. **Breaking:** that `../`
-  mount is now refused from the top root too.
-- **Findings about a nested mount carry its qualified id**, so
-  `validate --subsystem <mount>` keeps a missing, cyclic or escaping grandchild
-  instead of dropping it.
-- **Finding a parent is gated like reading one.** A credential narrowed to a
-  chained child no longer reads the parent's spec files to learn whether a parent
-  exists, and no request looks above its own top project root.
-- **A pinned surface is matched by the provider a reference names.**
-  `super::billing::invoice_portal` was resolved against whichever pinned surface
-  exposed an `invoice_portal` first, even another sibling's. It now consults
-  billing's surface alone, and a reference that names no provider while several
-  pinned surfaces expose that name with different contracts is the new error
-  `SURFACE_REF_AMBIGUOUS` instead of a silent pick.
-- **Pin freshness is judged on content.** `sdd_list_external_interfaces` and
-  `wairon surface externals` compared a pin's recorded state with the parent's
-  whole-tree state, so any unrelated parent edit made every pin stale — and
-  re-pinning could not repair it, because an unchanged contract is not rewritten.
-  A pin is now fresh exactly when its contracts equal what the parent publishes
-  now, so `wairon surface pin` always repairs a stale entry.
-- **The lock covers the contracts a verdict consulted.** The gate identity now
-  also digests the stored surface snapshots of the project and of every chained
-  mount, provenance excluded: swapping a pinned contract invalidates a lock, while
-  re-pinning an unchanged one does not. The algorithm marker becomes
-  `sha256+doctrine+inputs`, so every existing lock reads stale once.
-- **Externalizing a subsystem keeps its own references pointing where they did.**
-  `subsystem externalize` rewrote the parent's references to the moved subsystem
-  but left the moved specs' own references as written, so once they loaded from
-  the new child root, a reference to a sibling subsystem or to another chained
-  project no longer resolved. Those are now rewritten into `super::` form (one
-  already in `super::` form gains a hop), and `internalize` restores them exactly.
-  Type names resolve by name wherever they live and are left as written.
-- **A tree archive is complete, or says it is not.** A `.waitree` export silently
-  left out any chained mount it could not follow — escaping its project, missing,
-  cyclic, nested too deep, or holding no spec tree. It now refuses, naming each
-  one and why, unless `--allow-partial` (`wairon remote push|pull`) or
-  `allowPartial` (`sdd_host_export_tree` and the admin and web export routes) is
-  given; then the archive is built and the result lists what was skipped.
-- **Hosted git commits the approval.** Git backing kept `.wai/lock.json` out of
-  commits, so a hosted approval never reached the bound remote. Only
-  `.wai/git.json` stays local now, and an exclusion left by an earlier version is
-  removed with a warning.
-- **`sdd_get_status` opens with the family context** — the mount a child is known
-  by and its parent's name (within the credential's reach), and the subprojects a
-  root mounts — because a connected agent never sees the startup log line that
-  used to be the only place this was said.
-- **A narrowed credential is served only tools that act on its tree.** Hosted
-  confinement refused a fixed list of record-level tools and served everything
-  else. Every tool now declares whether it acts on the bound tree or on the
-  project record, and under a `proj::child` credential a tool that declares
-  neither is refused, so a newly added tool fails closed.
-
-### Project configuration goes through one Repository
-
-`.wai/project.yaml` was read and written directly from about 35 files — the CLI,
-the core, the validator, the skills exporter, the MCP server and the hosted
-server — each with its own parse, merge or raw write. Wairon's own rule, that held
-state lives in a Store and never in the components using it, did not hold for
-wairon. Every reader and writer now goes through one `project_config_repository`
-in sdd_core (a Store, a Registry, an Index and a filesystem Adapter), reached
-through each subsystem's core adapter. Behaviour is kept, except as listed here.
-
-- **A key wairon does not know survives every write.** A typed save used to drop
-  any key the schema did not model, anywhere in the file, while the hosted raw
-  merges kept them. Every write now carries unknown keys over verbatim and keeps
-  the file's key order.
-- **Pack writes do what they did, in one place.** `pack add` registers a path once,
-  `pack use` moves a re-selected pack to the highest precedence, `pack unuse` and
-  `pack remove` each touch only their own kind of entry, `pack bundle` and
-  `doctor --fix` write once, and every pack write records `useGlobalPacks`. The
-  hosted pack registry now stores pack files only; the pack and policy workflows
-  register what it vendored.
-- **`wairon init` keeps an existing configuration.** A folder holding
-  `.wai/project.yaml` but no spec tree had its configuration overwritten with
-  defaults; init now keeps it and bootstraps only the missing tree.
-- **Creating a configuration never overwrites one.** Provisioning a root that
-  already has a `project.yaml` is refused before anything is written, and so is
-  externalizing a subsystem into a folder that already holds one — which used to
-  overwrite that configuration and its L0.
-- **Hosted policy reads and writes go through the schema.** `setProjectType`, the
-  recorded profile selection and policy evaluation read the configuration through
-  the Repository, so a `project.yaml` that fails the schema is reported instead of
-  read partially, and a write puts the schema's defaults in the file, as any CLI
-  save already does — one diff in a git-backed project, then stable.
-- **The specs folder is resolved once, when a project root is bound**, still from
-  `paths.specsDir`, and still found when the configuration fails the schema.
-- **Fixed: a project selecting a pack by name lost its health references.** The
-  hosted health report took each pack entry's file stem; a by-name selection threw
-  inside a swallowed error, so the project reported no pack or profile references
-  at all. It now reports the selection's name, and a `wairon dev` project's
-  references carry its project id instead of its folder name.
-
-### A method can name its own source file, and a contract method declares its findings
-
-An implementation had one `sourcePath`, so a method whose body lived elsewhere — a CLI command in its own file, a
-provisioning workflow outside the orchestrator's main module — was checked against the wrong file. The call check found
-no function there and skipped the method without a word, and no agent's write fence covered the file that actually held
-the code.
-
-- **A method names its own file.** `sourcePath` on an L4 method overrides the implementation's for that method.
-  `sdd_write_narrative` accepts it, and a chained subproject's save and `subsystem externalize` / `internalize` keep it
-  relative to the right root, exactly like the implementation's own path.
-- **Every check reads the method's own file.** Structural conformance checks each contract method in its own file and
-  reports a missing, escaping or unreadable file once per file, naming the methods that use it; a problem in one method's
-  file no longer blocks the others. Call-step realization, the narrative-detail lint, dependency, hidden-state and
-  integration conformance and the technology-leakage scan follow the same file, and the code model analyzes every file an
-  implementation or its methods name.
-- **`MISSING_SOURCE_PATH` names the methods left without a file.** An implementation with no path of its own is complete
-  when every method names one; an implementation that names no file at all is still reported, whatever its contract's
-  size.
-- **Agent write fences hold every file** an implementation and its methods name.
-- **`wairon status` lists each method's own file** under its implementation, flagged when missing, and counts the
-  source-file share of completeness only when every named file exists.
-- **A contract method declares the findings it reports: `findings: [{ code, severity, summary }]`.**
-  `sdd_define_interface` accepts it and `sdd_update_spec` upserts and deletes entries by `code`. A declared code must
-  be anchored in the method's source file, as a string literal or a property-access name such as `Codes.X`, or
-  `UNREALIZED_FINDING` (warning) says so — the catalog of what
-  a check reports sits on its contract, the way ESLint keeps a rule's messages in its `meta`. Below exact analysis grade
-  the check is lenient: it can miss an unreported code, but never flags a reported one.
-- **Wairon's own tree** points 26 methods at their real files: 19 of `cli_runner`'s command methods at
-  `src/commands/*.ts` and 7 of `core_orchestrator`'s provisioning methods at `src/core/provision.ts`. The checks this
-  turned on found `init`, `generate`, `list` and `show` reaching core and skills internals directly. They now go through
-  `cli_core_adapter`, which gained `resolveAgentTopology`, `ensureProjectInitialized`, `listDirectChainedSubprojects`
-  and `defaultPackSelections`, and `init` bootstraps the L0 system spec through core's own non-destructive bootstrap.
-- **`wairon init` no longer writes an `agent-architect` file.** Agent files are opt-in (`materializeAgentFiles`, off by
-  default), yet `init` wrote one regardless, and the next `wairon generate` removed it again. A project that opts in gets
-  its agent files, the architect included, from `wairon generate`, rendered from the resolved topology.
-
-### Code nobody designed is visible: source roots, and a type that claims its file
-
-Every conformance rule starts from a spec and asks what the code does about it. A file no spec ever names is invisible
-to all of them — it cannot be unrealized, undeclared or unwired, because nothing points at it. That is the one gap a
-spec-driven gate cannot close from the spec side, and it is where a codebase drifts away from its design: 72 of the 259
-source files under wairon's own `src/` — 28% — were named by nothing, and nothing said so. Two changes close it, one
-from each side.
-
-- **A type claims code: `sourcePath` and `symbol`, on the type and on each of its methods.** A type named the data the
-  design is about and named no code, so the whole model layer was the one part of a tree that was asked nothing.
-  `sourcePath` makes it a claim, judged exactly as an implementation's is: the file must resolve to a readable file
-  inside the project root (`MISSING_SOURCE_FILE`, `SOURCE_PATH_ESCAPES_ROOT`, `CONFORMANCE_ANALYSIS_SKIPPED`, now
-  reported for a type's files too), and the file must publish the declaration or `UNREALIZED_TYPE` (warning) says so.
-  `symbol` binds the code-level name when it legitimately differs from the modelled one. Each pure method carries the
-  same two overrides, because a type's methods routinely live apart from its declaration and under other names — in
-  wairon's own tree `method_implementation` is declared in `src/models/specs.ts` while `stepConfigVerdict` lives in
-  `step-config.ts`, and `narrative_step.foreignFields` is realized by the free function `narrativeStepForeignFields`.
-  `UNREALIZED_TYPE_METHOD` (warning) reports a method that is in neither. `sdd_add_type` expresses all four fields.
-- **The type's declaration is checked at the EXPORT tier, its methods at the declaration tier.** A modelled type is part
-  of the design's published vocabulary, and the declaration tier would accept a file that merely *imports* the name —
-  which every consumer does, so any of them would satisfy the claim. A method is not: it is an interface member, a class
-  method or a free function at any nesting depth, which is exactly what the declaration tier holds. Only exact analysis
-  separates an export from a mention, so below exact grade the declaration tier is the floor for both and the grade
-  rides on the finding.
-- **`UNCLAIMED_SOURCE_FILE` (warning): a source file that no spec names.** A file under a declared source root that no
-  implementation `sourcePath`, method `sourcePath`, `simPath` or type `sourcePath` names, and that the frozen unclaimed
-  list does not carry.
-- **Opt-in, through `rules.conformance` in `.wai/project.yaml`.** `sourceRoots` names the paths holding this project's
-  own source (a directory is walked recursively, a file stands for itself; `node_modules` and dot-directories are never
-  descended into, and an absolute or parent-escaping root is refused by containment exactly as a `sourcePath` is).
-  `exclude` drops what inside them is not this project's code to claim — vendored libraries, generated output, a chained
-  subproject's own directory. A project that declares no root walks nothing and the check stays silent.
-- **`unclaimed` is a one-way debt register, not a suppression.** A `lint.allow` hides one finding behind one spec,
-  forever, where only a reader of that spec ever sees it. `rules.conformance.unclaimed` is the whole debt in one
-  reviewable place, and it is exactly the set of files that would otherwise fire: an entry that is now claimed, that is
-  a proven barrel, or that the walk no longer finds is `STALE_UNCLAIMED_ENTRY` (warning) and must be deleted. So the
-  list can only shrink, and a file that is neither claimed nor listed is reported the day it appears.
-- **A pure re-export barrel is exempt — as a rule, with a test.** A file whose every top-level statement re-exports
-  another module declares nothing of its own, so there is nothing in it for a spec to claim, and a type pointed at one
-  is `UNREALIZED_TYPE` for the same reason. The fact is measured at exact grade only, from the statement list, *before*
-  the barrel chase folds the republished names into `declaredNames` — after it, a barrel is indistinguishable from the
-  files it publishes. A weaker grade cannot tell a barrel from a file it failed to parse, so it never takes the
-  exemption.
-- **Nothing newly reports without opting in.** The new codes need a declared source root, and no project can have a
-  type `sourcePath` before this release, so an existing tree that upgrades and changes nothing validates exactly as it
-  did. The one behaviour a project sees after adopting the field: `sourcePath` and `symbol` are *expressed* by
-  `sdd_add_type`, so a restatement that omits them clears them and says so, like every other expressed field.
-- **Wairon's own tree claims its data model.** 175 types now name the file their declaration lives in, 18 pure methods
-  name their own file or code-level symbol, and `src` is a declared source root. That retires 14 of the 72 unclaimed
-  files — the model layer (`src/models/*.ts`), the type-holder modules (`src/core/rules/types.ts`, `src/git/types.ts`,
-  `src/producers/types.ts`, `src/server/types.ts`) and `src/server/openapiindex.ts`. Five are exempt as pure re-export
-  barrels, the vendored Cytoscape bundle under `src/templates/canvas` is excluded, and the remaining 53 are written
-  down in `rules.conformance.unclaimed` where the next wave can see all of them at once.
-
-### The validator's rules are designed in the spec tree
-
-The validator's 43 rules existed only as code. The spec tree modelled the rule machinery but described the rules in one
-prose step, so a rule change had no spec to change first, and nothing checked that the codes the specs promised were the
-codes the rules reported.
-
-- **Eight rule families and a projector.** `sdd_validator` gains `integrity_rules`, `narrative_rules`, `intrinsic_rules`,
-  `doctrine_rules`, `extension_rules`, `wiring_rules`, `conformance_rules` and `heuristic_rules`, plus
-  `narrative_graph_projector`, the reachability walk two wiring rules share. Each rule is one method named after it,
-  declares the codes it reports as `findings`, and has a full narrative; `rule_registry` registers every rule in run
+| `sdd_internalize_subsystem` | `sdd_internalize_member` (`into`, `packs`, `exports`, `dryRun`) |
+| `sdd_externalize_subsystem { projectPath }` | `sdd_externalize_subsystem { path, as, dryRun }` |
+| `sdd_set_subsystem_project_path` | removed: members are configuration |
+| `sdd_list_external_interfaces` | `sdd_pin_externals` / `sdd_get_externals_status` |
+| `sdd_host_promote_project` | removed |
+| Unknown key nested in a tool's input (a method, param, step, endpoint, …) | refused by name; it used to be dropped silently. `sdd_update_spec`'s `delta` stays open and lists ignored keys under `ineffective` |
+| Tool results | 16 tools declare an `outputSchema` and return `structuredContent` beside the unchanged text: the six create tools, `sdd_update_spec`, `sdd_get_spec` (the spec sits under `spec`), `sdd_validate_tree`, `sdd_set_endpoints`, `sdd_set_public_interfaces`, `sdd_delete_spec`, `sdd_add_member`, `sdd_pack_impact`, `sdd_pin_externals`, `sdd_get_externals_status`. A proxy that rewrites results must carry `structuredContent` |
+| Finding severity | can be `notice`; `sdd_validate_tree` returns a separate `notices` list. The `crossTreeContext` marker is gone; a family run adds `projects` and a `project` key per finding |
+| Change report `change` | can also be `renumbered` or `relocated` |
+| `sdd_update_spec` deltas | the merge semantics changed (array merges, step deletes and step retypes). See *Fixes*; a script that relied on the old behaviour was writing specs nobody intended |
+| Spec writes through a server older than the build on disk | refused with `writesRefused: true`; reconnect the server |
+| Spec schema (`Specialist`, `Gateway`, `number`, L1 `projectPath`) | refused at write |
+
+#### Library (`@wairon/cli`)
+
+`validateSddTree` is renamed with **no alias**. The package entry exports 509 names
+(v5.1.0: 313). 99 are gone, all of them internals a star export had swept in.
+
+| Removed | Use instead |
+|---|---|
+| `validateSddTree` | `validateProject` (one project's gate), `validateFamily` (the family run) |
+| `saveSystemSpec`, `saveSubsystemSpec`, `saveComponentSpec`, `saveInterfaceSpec`, `saveImplementationSpec`, `saveTypeSpec`, `delete*Spec` | `saveSpec(kind, spec)`, `deleteSpec(kind, id)`, `loadSpec(kind, id)` |
+| `createChainedSubsystem`, `moveSubsystemProject`, `internalizeSubsystem` | `createMember`, `moveMember`, `internalizeMember(alias, destination)` |
+| `saveProjectConfig` | `createProjectConfig`, `setProjectType`, `recordProfileSelection`, `setExecutionTier`, `registerPackRef` / `deregisterPackRef`, `upsertPackSelection` / `removePackSelection`, `markSelectionsBundled`; `projectConfigExists()` |
+| `listExternalInterfaces`, `projectSubsystemSurface`, `projectChildSurface`, `generateChildSnapshots`, `checkChildSurfaceFreshness`, `loadSurfaceSnapshots`, `saveSnapshot` | `pinExternals`, `getExternalsStatus`, `exportSurface`, `importSurface`, `listExternals` |
+| `findDomain`, `listFreeStandingDomains`, `deriveSubsystemDomains`, `addFreeStandingDomain`, `removeFreeStandingDomain` | `resolveDomains`, `addDomain`, `removeDomain` |
+| `extractGenericTypeVariables`, `extractTypeGenerics`, `extractTypesFromSignature`, `LANGUAGE_MARKERS`, `normalizeLanguage` | no replacement on the entry |
+| Context documents (`contextDir`, `CONTEXT_PATHS`, `renderDomainsDoc`, `renderWaironGuide`, `read*Context`, `write*Context`, `hasArchitectureContext`), the OpenAPI codec (`toOpenApi`, `toOpenApiSet`, `fromOpenApi`, `isOpenApiDocument`), skill and template registry internals, pack manifest schemas, spec path helpers (`get*Path`), group-spec functions, the status ratchet (`promoteAllComplete`, `applySpecStatus`, `collectPromotableSpecs`) | no longer exported |
+
+Also: `LoadedExtensions` has the required fields `instructions` and
+`selectionFailures` (build one with `emptyExtensions()`). In the code model,
+`SourceFileFacts.functionCalls` is replaced by `functionCallSites` (read each site's
+`name`). The embedding API in `docs/extending-wairon.md` is exported by name, and
+`examples/wrapper/wrapper.js` calls `validateProject`.
+
+#### Finding codes that can newly fail `validate --ci`
+
+`--ci` fails on errors and warnings, never on notices. Code-conformance findings
+(marked †) need an implementation `sourcePath` and fire at exact analysis grade.
+
+| Code | Severity | Fires when | Remedy |
+|---|---|---|---|
+| `STEREOTYPE_RETIRED` | error | a component is still `Specialist` or `Gateway` | `doctor --fix`; Gateways by hand (step 7) |
+| `DEPENDENCY_CLASS_VIOLATION`, `DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR` | error | logic reaches past its `dependencyClass` (`pure`, `read`), or the class sits on a non-Orchestrator | change the class or the edge |
+| `SUPERVISOR_WRITE_SHORTCUT` | error | a Supervisor calls a shared data method whose effect is not `read` or `lifecycle` | tag the method, or route the write through an Orchestrator |
+| `SUPERVISOR_CONTAINMENT`, `SUPERVISION_STATE_INTRUSION`, `LIFECYCLE_CALLS_WRITE`, `ARCHITECTURE_VIOLATION_SUPERVISOR_DEP` | error | a Supervisor owns more than its own Store or Registry, another component reaches that state, a `lifecycle` method calls a write, or a Supervisor depends on a presentation block | follow the message |
+| `ACTOR_REACHED_WITHOUT_SUPERVISOR` | error | a live Actor is reached neither through a Supervisor that supervises it nor through a Registry such a Supervisor maintains | model the lookup hop |
+| `UNDECLARED_DEPENDENCY_CALL`, `PORTAL_WRITE_SHORTCUT`, `ROUTER_COMPONENT_CONTAINMENT`, `CIRCULAR_DEPENDENCY` | error | existing rules now also judge calls through a pinned contract, a Portal's dispatch table, a RouterComponent owning two Portals, and a cycle through a `--subsystem` scope | fix the edge |
+| `DUPLICATE_STEP_LABEL` | error | two steps of one narrative share a label | rename one |
+| `DUPLICATE_SPEC_ID` | error | two spec files of one project declare one id | remove or rename one |
+| `EXPORT_INVALID`, `EXPORT_ID_DUPLICATE`, `EXPORT_CYCLE`, `EXPORT_UNCONSUMABLE`, `EXPORT_WIDENS_AUDIENCE` | error | an L0 or L1 `publicInterfaces` entry has no source, names something not exported, repeats an id, cycles, re-exports a non-Portal/Observer, or widens a member's audience | fix the entry |
+| `EXTERNAL_UNDECLARED`, `EXTERNAL_NOT_EXPORTED`, `IMPORT_AMBIGUOUS`, `IMPORT_UNRESOLVED`, `IMPORT_SHADOWED_BY_LOCAL`, `TRUSTED_LINK_CROSSES_PROJECT` | error | a reference reaches another project undeclared or at a name it does not export, or a `use` import is ambiguous, unresolved or shadowed | `doctor --fix`, then the hand items |
+| `EXTERNAL_INCOMPATIBLE`, `MEMBER_NOT_FOUND`, `PROJECT_ID_COLLISION`, `PART_UNAVAILABLE`, `MEMBER_KIND_MISMATCH` | error | family run: a used contract changed or vanished, a member is missing or unreadable, or two projects share an id | re-pin, restore, or rename |
+| `MEMBER_UNAPPROVED`, `MEMBER_DRIFTED`, `PROJECT_DEPENDENCY_CYCLE`, `EXTERNAL_CHECK_UNAVAILABLE`, `PROJECT_ID_AMBIGUOUS`, `LOCAL_ID_SHADOWS_PROJECT` | warning | family run: a member is unlocked or its lock is stale, two projects depend on each other, a used contract cannot be compared, or an id is missing or shadowed | lock members bottom-up; tune in the parent's `rules.sddRuleSeverity` |
+| `PROJECTPATH_ESCAPE` | error | a legacy mount leaves the project that declares it (a `../sibling`) | declare the sibling from the project that contains both, or migrate with `doctor --fix` |
+| `SURFACE_REF_AMBIGUOUS` | error | a reference matches pinned contracts of several producers that disagree | name the producer (`alias::name`) |
+| `PACK_NOT_INSTALLED`, `PACK_VERSION_UNSATISFIED`, `PACK_INTEGRITY_MISMATCH` | error | a declared pack cannot be resolved; every command refuses | step 6 |
+| `UNPINNED_PACK_SELECTION`, `PACK_SOURCE_UNFETCHABLE`, `PACK_STORE_DRIFT` | warning | a selection floats, or cannot be fetched, or the bundle and the store disagree | pin, bundle, or `rules.enforceReproducibility: false` |
+| `TYPE_SPELLING_STALE`, `SIGNATURE_TEXT_STALE` | warning | a stored alias spelling, or a signature text its params no longer derive | `doctor --fix` |
+| `TYPE_NOT_NEUTRAL`, `TYPE_FORM_UNSUPPORTED`, `TYPE_EXPRESSION_INVALID`, `TYPE_POSITION_INVALID` | warning | `number` or a legacy builtin, a form the grammar leaves out, a position that does not parse, or a misplaced `void`, `async` or `result` (all refused at write) | step 7 |
+| `FOREIGN_STEP_FIELD` | warning | a narrative step carries a field its type cannot have | `doctor --fix` |
+| `NARRATIVE_COMPLEXITY`, `EXCESSIVE_NARRATIVE_STEPS` | warning | a narrative above the `moderate` cognitive band, or above 25 steps (the limit now has a default) | split it, or set `complexity.cognitiveWarnAbove` / `maxNarrativeSteps` |
+| `MISLEADING_BLOCK_WORD`, `GENERIC_COMPONENT_NAME`, `METHOD_REPEATS_COMPONENT`, `COMPONENT_IS_ITS_ONLY_METHOD`, `INCOHESIVE_METHODS` | warning | a name says a block it is not, says nothing, repeats its component, or an Orchestrator holds two jobs (a pure forwarder is exempt) | rename or split, or a reasoned `lint.allow` |
+| `UNUSED_COMPONENT`, `UNUSED_METHOD` | warning | a method with no narrative steps no longer vouches for every collaborator | write its `calls` |
+| `UNUSED_LINT_ALLOW`, `UNKNOWN_LINT_ALLOW_CODE` | warning | a coarse allow on a code that names sites, an allow naming an error, or an allow naming a retired code | one allow per site (`at:`); delete the rest |
+| `UNMOUNTED_PORTAL`, `ENDPOINT_OUTSIDE_MOUNT` | warning | an HTTP Portal no listener mounts, or an endpoint outside its mount's prefixes | declare `mounts` on the listener (an empty list on a Portal that serves itself) |
+| `MOUNT_TARGET_NOT_PORTAL` | error | a listener mounts something that is not a Portal | fix the mount |
+| `UNTYPED_SEAM`, `UNREALIZED_CLAIM`, `UNCONDITIONAL_CALL_CYCLE` | warning | existing rules now see bare types nested in a published method, "persistence" claims, and cycles through parallel, `doWhile` and `try` steps | follow the message |
+| † `CALL_STEP_UNREALIZED` | warning | a call step (or declared call) does not land in the target method's own source file; a same-named function elsewhere no longer counts | fix the call or the target's `sourcePath`, or map it with `symbol` |
+| † `CALL_ORIGIN_UNRESOLVED`, `METHOD_BODY_NOT_FOUND`, `UNDECLARED_COLOCATED_CALL` | warning | a call site the analysis cannot follow, a declaration without a body, or an undeclared call between components sharing a file | point at the body, narrate or declare the call |
+| † `UNREALIZED_PARAM`, `UNDECLARED_PARAM`, `PARAM_NAME_MISMATCH`, `PARAM_OPTIONALITY` | warning | contract `params` and the realizing function disagree on a parameter, its name or its optionality | fix either side; declare wiring arguments in `injectedParams` |
+| † `ASYNC_MISMATCH` | warning | an `async` returns and the function disagree | fix either side |
+| † `UNDECLARED_EXPORT`, `UNREALIZED_EXPORT_HANDLE` | warning | a file exports a name no contract declares and another component imports it, or a declared `exportedVia` names a missing export | put the name on a contract, or stop exporting it |
+| † `IMPORT_BYPASSES_PORTAL` | warning | an import into another subsystem lands on a file that realizes none of its published components | import through the portal |
+
+Code-conformance findings can be recorded as classified debt in
+`rules.conformance.carried` instead of being allowed.
+
+**Retired codes** (an allow naming one is `UNKNOWN_LINT_ALLOW_CODE`; a severity entry naming
+one does nothing):
+`ARCHITECTURE_VIOLATION_SPECIALIST_DEP`, `GATEWAY_CONTAINMENT`,
+`LANGUAGE_FOREIGN_BUILTIN`, `NAMESPACE_SHADOWING`, `CROSS_TREE_REF_UNRESOLVED`,
+`SURFACE_STALE`, `UNVERIFIED_EXTERNAL_REF`, `CHAINED_SUBPROJECT_CONTEXT`. The built-in
+rules are split into smaller named rules (40 → 115); a split rule kept its codes.
+
+#### Spec, configuration and lock
+
+- **`project.yaml`** gains `id` (written by `init` and `doctor --fix`), `members`,
+  `externals`, `composition` (`requirePolicies`, `requireApprovedMembers`),
+  `execution`, `previousIds` and `partOf`. `rules` gains `materializeAgentFiles`,
+  `complexity.*` thresholds and `conformance` (`sourceRoots`, `exclude`, `unclaimed`,
+  `carried`, `testRoots`). `aiGuide` is gone; it was never read. A save keeps
+  comments, unknown keys, key order and line endings, and places a new key in schema
   order.
-- **One file per rule.** Each rule lives in `src/core/rules/<family>/<rule>.ts`, and its spec method names that file with
-  `symbol: check`. No rule file imports another: shared analysis goes through queries on the rule context, model
-  functions in `src/models` (type references, the code model, the step graph, surface references) and the projector.
-- **The validator gathers, then the rules judge.** `validate` runs the writer's round-trip dry run and gathers the known
-  issue codes before any rule runs, so no rule calls core. The write gate, `validateComponentCandidate`, is served
-  through the validator portal and gathers the same codes.
-- **`spec_validator` is modelled as an Orchestrator**, because validation is a workflow, and `rule_store` gains `clear`.
-- **No finding changes.** Every message, severity and order is the same. The existing tests, the e2e journeys and the
-  rule-matrix tier pass with their assertions unchanged, and the matrix's code universe is the same 160 codes. A new test
-  keeps the code's rule registry and the spec catalog identical in both directions: rules and methods, codes, severities,
-  summaries, spec scope, registration order, and one file per rule.
-- **The type specs model what the rules read**, among them a component's Portal, event and link fields, an
-  implementation's `simPath` and `technologies`, a type's `invariants`, the code model's analysis fields and the
-  project's pack selections.
-- **What narrating the rules surfaced.** The gate hash in `sdd_core` reads the validator's built-in rule list, an edge
-  the old import path hid from dependency conformance; `state_hash_specialist_impl` acknowledges it until a design change
-  decides how core obtains the list. 27 of the 44 narratives exceed the coming complexity defaults; they stay faithful
-  here and are split in a later change. Rule behaviour that looks wrong is fixed separately, each fix with a failing test
-  first.
-- **Library exports.** `LANGUAGE_MARKERS`, `normalizeLanguage`, `extractGenericTypeVariables`, `extractTypeGenerics` and
-  `extractTypesFromSignature` are no longer exported. The model functions that replace their uses are:
-  `methodTypeRefs`, `methodGenericParameters`, `typeGenericParameters`, `fieldTypeRefs` and
-  `interfaceGenericParameters`.
-
-### The validator's rules do what their narratives say
-
-Narrating the 43 rules faithfully turned up behaviour that disagreed with a rule's own description, with its neighbours,
-or with the step graph. Each fix was reproduced by a failing test first; the rule's narrative changed, then its code, and
-each test was proven by reverting the fix. Findings a tree did not see before come first, because `validate --ci` can
-newly fail on them (see *Upgrading*).
-
-- **Newly reported.**
-  - `UNDECLARED_DEPENDENCY_CALL` (error) covers calls and dispatches that resolve against a surface snapshot: a step that
-    reaches another tree's component the caller does not list in `dependsOn` no longer passes.
-  - `PORTAL_WRITE_SHORTCUT` (error) judges a Portal's dispatch table too: a binding that routes a capability to a
-    write-effect Repository or Index method is reported once, on the Portal.
-  - `ROUTER_COMPONENT_CONTAINMENT` (error) fires on a RouterComponent that owns more than one Portal, as its message
-    always said.
-  - `CIRCULAR_DEPENDENCY` (error) in a `--subsystem` run reports a cycle through the scope even when the search meets an
-    out-of-scope cycle first; the scoped run used to report nothing. The finding is anchored on the first component of
-    the path it shows.
-  - `UNTYPED_SEAM` judges a published method through its type references, so a prose signature without structured
-    `params` gets the verdict the same params would, and a bare type nested in another (`Json[]`, `Map<string, Json>`,
-    `Record<string, unknown>`) counts. Its summary now names `object`, which it always flagged. Wairon's own
-    `icli_runner.runHostProject` and `runHostKey` took `options: object`; their signatures now name the options each
-    command passes.
-  - `UNREALIZED_CLAIM` recognises "persisting" and "persistence".
-  - `UNCONDITIONAL_CALL_CYCLE` treats a call inside a parallel arm as unavoidable, because every arm runs.
-  - `UNCONDITIONAL_CALL_CYCLE` treats a call inside a `doWhile` body, and one in the FIRST step of a `try` body, as
-    unavoidable too. A `doWhile` runs its body before it tests, so what the body cannot avoid the loop cannot avoid; a
-    `try` is always entered at its body's first step, which executes before any handler can catch anything. Both headers
-    used to "complete" around their own body — the loop through its exit edge, the try through a catch — so a call that
-    genuinely always happens read as guarded and a real unbounded recursion went unreported. Anything DEEPER in a try
-    body is still avoidable: a throw before it diverts to the handler.
-- **No longer reported wrongly or twice.**
-  - `MEANINGLESS_BRANCH` reads fall-through from the step graph: a branch or switch ending a parallel arm falls through
-    to the join, not into the next arm, and a switch whose unmatched values end the method decides something.
-  - `INESCAPABLE_CYCLE` accepts a cycle that exits by falling off the end of the narrative.
-  - `UNREALIZED_CLAIM` ignores text in quotes or backticks, which names a value or quotes a message, and counts a
-    `register` step to a data-layer component as the structural edge it is.
-  - `UNWIRED_INTEGRATION_SIM` leaves a missing file to `MISSING_SOURCE_FILE`, and a chained subproject's child-relative
-    paths to the child's own run.
-  - `UNREALIZED_DEPENDENCY` reports a target that is both owned and depended on once, naming both relations.
-  - `UNCONSUMED_TOPIC` and `UNSOURCED_SUBSCRIPTION` report a topic once per component, listing every declaration that
-    binds it there.
-  - `NARRATIVE_SEMANTIC_UNBACKED` is not judged against a dispatch binding whose method does not exist; that is
-    `UNSERVED_CAPABILITY`.
-  - A building block's `owns` is `BLOCK_OWNS_MEMBERS` and nothing more. It no longer makes the block an owner, so a
-    Store or Registry it claims is still judged by `UNOWNED_STORE` and `REGISTRY_WITHOUT_STORE`, its dependants get no
-    `VISIBILITY_VIOLATION`, and a pattern's member it claims gets no `SHARED_OWNED_MEMBER`.
-  - `HIDDEN_STATE` honours the method-level conformance dial: a method dialled `off` does not make its file mapping
-    evidence, and a method dialled on under an implementation dialled off does.
-- **Draft context is read the same way everywhere.** A finding on an implementation reads the implementation, its
-  contract, its component and its subsystem; one on an interface also reads the interface's own status; one on a
-  subsystem or an entity reads the subsystem's. Naming, complexity, technology leakage (`TECH_LEAKAGE`,
-  `VENDOR_NAME_IN_CONTRACT`, `TECH_ON_LOGIC_COMPONENT`), unused detection, the invariant findings and the non-Portal
-  endpoint ban now follow it, so `--ci` waives their warnings in a draft subsystem as it does for the others.
-- **Findings land where the fix is made and say what was checked.**
-  - `UNUSED_METHOD` is reported on the interface that declares the method, like `INVOKED_BY_*`, so an allow covers one
-    contract.
-  - `ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT` is reported on the interface that declares the endpoint.
-  - `SHARED_OWNED_MEMBER` names the first owner against every later claimant.
-  - `CROSS_SUBSYSTEM_TARGET_NON_PORTAL` names the crossing component's stereotype instead of calling every crosser a
-    client Adapter.
-  - `UNREALIZED_FINDING` names both anchors it accepts, a string literal or a property-access name, in its summary and
-    its message.
-  - `UNCONDITIONAL_CALL_CYCLE` orders its members by code unit instead of locale collation, so its anchor, and an allow
-    on it, are the same on every machine.
-- **One configuration, one answer.** `GOD_COMPONENT` reads the effective `maxComponentDependencies` for the component's
-  subsystem, the value `EXCESSIVE_DEPENDENCIES` reads, and uses its own default of 8 only where none is set. An empty
-  `profile: ''` means no profile for severity overrides too, as it already did for rule configs and design depth.
-- **Kept, with the reason written into the narrative.** `UNASSERTED_INVARIANT` still reports a write method an
-  implementation does not implement: the obligation belongs to the contract's write method, and the finding names the
-  invariants the missing narrative must assert.
-- **The skills say what the rules check.** The narrative skill documents a switch's `on` as optional, the two ways to
-  continue a loop, and a closing step per nested loop; the guides and the architect and implement skills say
-  `PORTAL_WRITE_SHORTCUT` covers dispatch-table bindings.
-
-### Two rules could not see what they claimed to judge
-
-Both were narrow in a way nothing pointed at: a type named only by a type-method signature read as unused, and a step
-carrying a field its own type cannot have was never reported at all. Each is a newly reported finding, not a refactor —
-run `validate --ci` (see *Upgrading*).
-
-- **A type method is a reference.** `UNUSED_TYPE` counted fields and interface signatures, never the methods declared on
-  types — so `rule_context.codeIndex(): CodeIndex` left `CodeIndex` flagged. It now reads each type method's signature
-  and returns too. A type named nowhere but its **own** methods stays unused, the way a function that only calls itself
-  is. The finding's message and summary name type methods.
-  - **Ten `lint.allow` entries retired** from wairon's own tree, each of which said exactly this and asked to be
-    deleted once the rule could see it: `code_index`, `dependency_edges`, `import_graph`, `ownership_index`,
-    `realization_index`, `resolved_detail`, `resolved_method`, `spec_id`, `step_config_verdict`, `step_graph`. The
-    eleventh, on `openapi_spec_index`, is a different reason — a wire shape carried inside a string artifact body — and
-    still reports. If you carry an allow with the same wording, `UNUSED_LINT_ALLOW` will now tell you to drop it.
-- **`FOREIGN_STEP_FIELD` (warning): a step carries only what its own `type` defines.** `MALFORMED_FLOW_STEP` checked
-  flow config on `local`/`call`/`register`/`dispatch` steps only, so `outcome` on a branch, `error` on a call and
-  `targetComponent` on a `throw` all passed. Each is a leftover of an edit that changed a step's type back when the
-  writer merged the new type's fields over the old step instead of rebuilding it. **This closes the loop with that
-  fix**: rebuilding a retyped step stopped new ones appearing, and this reports the ones already written. The finding
-  never guesses — only the author knows whether a `local` carrying a target was meant to be a call — and it does not
-  make a narrative unsound: dead configuration leaves the flow perfectly readable.
-  - **`wairon doctor` names each one, and `--fix` drops them.** A mechanical repair like the filename migration: the
-    field goes, the step's type, description, label and real config stay.
-  - **Seven steps repaired** in wairon's own tree, three of them fossils of exactly that retype:
-    `admin_orchestrator_impl.executeApprovedLock` step 11 and `.lockProject` step 15 (`outcome` on a call),
-    `cli_runner_impl.runRemote` step 7 (`error` on a call) and step 13 (`targetComponent`, `targetMethod` on a throw),
-    `cli_runner_impl.runLogin` step 3 and `cli_packs_adapter_impl.installPack` step 3 (`targetComponent`,
-    `targetMethod` on a local), and `surface_exchange_orchestrator_impl.exportProjectSurface` step 7 (`outcome` on a
-    branch).
-- **One table, in the model layer.** The per-type field table lived in `src/core/specs.ts` — the writer — where a rule
-  reaching for it would have inverted the layering. It now lives beside the verdict that judges a step
-  (`src/models/step-config.ts`) as `narrative_step.foreignFields()`, and the writer reads it from there. The retype
-  rebuild and the finding cannot disagree, because there is nothing left to disagree with.
-
-### Logic is an Orchestrator; Specialist and the Gateway pattern retire
-
-Wairon's building blocks said what a component holds, but not what its logic may reach. A Specialist was "one focused
-capability" with its own list of forbidden edges, and nothing checked whether logic only computed, only read, or ran a
-workflow. A Gateway was a pattern that owned its interceptors, so logic that several front doors need could not be
-shared. Findings a tree did not see before come first, because `validate --ci` can newly fail on them (see
-*Upgrading*).
-
-- **Newly reported, as errors.**
-  - `STEREOTYPE_RETIRED` reports a component still typed `Specialist` or `Gateway`. The write tools no longer offer
-    either and refuse to save a component that keeps one, so a Specialist is retyped before its component is edited.
-  - `DEPENDENCY_CLASS_VIOLATION` reports logic depending on a component its `dependencyClass` does not allow, and
-    `DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR` a class declared on anything but an Orchestrator.
-  - `ARCHITECTURE_VIOLATION_SUPERVISOR_DEP` reports a Supervisor depending on anything but Actors, Orchestrators,
-    Adapters or other Supervisors: a Supervisor reaches data only through workflows.
-  - `ACTOR_REACHED_WITHOUT_SUPERVISOR` reports a component that depends on a live Actor it does not supervise without
-    also depending on a Supervisor that supervises it.
-  - `ARCHITECTURE_VIOLATION_QUERY_DEP` and `UNOWNED_QUERY` judge the new Query block.
-- **Logic is an Orchestrator with a dependency class.**
-  - `dependencyClass: pure | read` is a first-class component field, enforced as a Store's `durability` is.
-    `sdd_add_component` and `sdd_update_spec` express it. Unset means a workflow.
-  - `pure` logic depends only on pure logic, and every block may use it: a Store may call a codec.
-  - `read` logic may also depend on read logic, Repositories, Indexes and Adapters. That it calls only their read
-    methods is not judged yet; that check waits for facade methods to carry effect tags.
-- **Specialist and the Gateway pattern are retired.**
-  - `wairon doctor` lists each Specialist with the dependency class its dependencies give it, or none (a workflow) when
-    a dependency fits neither, and says why. `doctor --fix` retypes each to an Orchestrator and rebases project
-    variants built on Specialist.
-  - A Gateway migrates by hand, following the steps in its finding.
-  - `ARCHITECTURE_VIOLATION_SPECIALIST_DEP` and `GATEWAY_CONTAINMENT` are gone, facade forwarding checks Repositories
-    only, and the cross-subsystem rule no longer accepts a Gateway as a front door.
-- **A gateway is a Portal variant.** It authenticates, authorizes, validates or rate-limits before it dispatches, by
-  calling that logic and returning early on a rejection. Inbound auth stays in the Portal's `auth`.
-- **Variants are built in.**
-  - wairon ships `arbiter`, `projector`, `composer` and `codec` on Orchestrator, and `gateway` on Portal.
-  - They load before the global (`~/.wairon/variants`) and project (`.wai/variants`) directories, and a later layer
-    overrides a variant with the same id.
-  - Until now the shapes the standard describes existed only in wairon's own repository.
-- **Query joins the Repository members**, for computed reads over its Repository's Store. It depends only on that Store,
-  a backend Adapter or pure logic, and lives only inside a Repository.
-- **Hidden-state no longer flags Supervisor and Actor files**, which own runtime state by design.
-- **One finding per mistake.**
-  - A dependency on a Portal or an Observer reports once.
-  - A retired component reports once: the dependency, containment and class rules skip it, and its migration decides
-    what its edges become.
-  - A Repository still judges its other members while one is retired. A Feature or Router component is judged again
-    once its retired member is migrated, because that member changes the count the rule checks.
-  - A pattern owning a pattern no longer adds `VISIBILITY_VIOLATION` on the inner pattern's dependants.
-- **The validator computes the lock's gate identity.** Core no longer reads the validator's rule list: `sdd_validator`
-  computes the identity, and core compares a lock with the identity its caller passes. The marker is now
-  `sha256+content+doctrine+inputs`, so every existing lock reads stale once.
-- **`sdd_rename_component`** renames a component together with the interfaces and implementations named after it, and
-  rewrites every reference in the tree: ownership, published interfaces, an interface's component, an implementation's
-  contract, component classes and `auth` sources.
-- **`sdd_rename_method`** renames a contract method the same way: it moves on every interface of the component that
-  declares it — its name, and the name inside its signature — and on the implementations of those contracts, and
-  narrative `call`, `register` and `dispatch` steps, dispatch-table bindings and lifecycle entrypoints follow. An
-  implementation that declared no `symbol` is pinned to the old name (`pinSymbol: false` declines), so the function it
-  already binds to keeps binding. Prose is never rewritten and a gRPC binding keeps its wire method — renaming a
-  contract method must not silently rename an RPC — and both are reported as mentions.
-- **Wairon's own tree:**
-  - its 27 Specialists are Orchestrators (18 pure, 9 read), and 14 are renamed for what they are responsible for;
-  - `mcp_server` is an Orchestrator;
-  - `host_server` supervises a `backup_schedule` Actor and delegates boot seeding to `instance_bootstrap`.
-- **The standard:** §3, §7, §8, §10 and §12 teach the model above, the language bindings add the module-of-functions
-  form, and a live auction is the worked example.
-
-### One rule, one question: rule methods that were several rules are split
-
-The complexity dial the section below adds turned on wairon's own validator family and found rule methods that were not
-one rule at all: one method, several finding codes, several independent loops, and a narrative nobody could hold in
-their head. Splitting them makes each rule a thing a user can name in `wairon rules list`, in a `lint.allow` reason or
-in a bug report, and drops each narrative under the `complex` band. Every finding code is preserved exactly — no code
-is added, removed or re-graded — so no `sddRuleSeverity` override, no `lint.allow` keyed on those codes and no rule-matrix
-fixture changes. A code may now be owned by two rules, which is the honest shape where the same sentence is true on both
-sides of a seam.
-
-| was | is | why |
-| --- | --- | --- |
-| `dispatch-tables` | `dispatch-table-bindings` + `dispatch-step-routing` | the table a Portal declares, and the narrative step that routes through it — `UNSERVED_CAPABILITY` means "this capability has no server" on both sides |
-| `type-references` | `type-declarations` + `field-type-references` + `signature-type-references` | what a type declares about itself, and the two places a reference to a missing type actually bites |
-| `architectural-profiles` | `profile-registration` + `profile-stereotype-fencing` + `pack-profile-stereotypes` | three questions with three owners: is the name real (the project's config), does the built-in family doctrine allow this stereotype (wairon), does the pack's own declared doctrine allow it (the pack) |
-| `structural-conformance` | `source-file-linkage` + `method-realization` + `finding-realization` | three questions about the same code model: does the spec name files that exist, does the file contain the method, does it report the codes the method declares |
-| `narrative-flow` | `narrative-step-config` + `narrative-reachability` + `narrative-jump-edges` | does each step carry the config its type requires, can every step be reached (and do the regions nest), and where do the jump edges land |
-| `contract-symmetry-and-narratives` | `contract-symmetry` + `narrative-target-references` + `cross-tree-references` + `surface-reference-backing` | four questions a user recognizes: does the implementation mirror its contract, does a target inside this tree resolve, does a target that leaves it pin to exactly one declared surface, and does that surface back what the step asks of it |
-| `stereotype-dependencies` | `subsystem-boundary-dependencies` + `logic-dependency-class` + `data-block-dependencies` + `entrypoint-dependencies` + `portal-write-shortcut` | where an edge is allowed to LAND, and then the intra-subsystem matrix by the layer that answers for it — an Orchestrator's declared class, the data blocks, the entry points and the process layer — with the Portal read-face guard last, the one that reads narratives and dispatch tables rather than `dependsOn` |
-| `pattern-ownership` | `pattern-membership` + `pattern-containment` + `unowned-blocks` + `member-visibility` | who may own and what a claim must name, what each pattern must contain, which data blocks are left standing alone, and who may see a private member |
-| `declarative-assertions` | `assertion-forbidden-edges` + `assertion-required-fields` + `assertion-endpoint-shapes` | the assertion KIND is what a pack author writes, and each kind asks its own question of its own collection: an edge in the dependency graph, a field on a spec at one level, or the transport and address an endpoint binds |
-| `target-language` | `signature-language-builtins` + `narrative-language-constructs` | what a CONTRACT may name in the declared language, and what a NARRATIVE may describe in it — two codes over two collections that only ever shared the `targetLanguage` opt-in |
-| `technology-boundaries` | `technology-binding` + `technology-boundaries` | which stereotype may bind a technology at all, separated from where that technology's NAME may then appear |
-| `public-surface` | `public-surface-binding` + `public-surface-declared-type` + `public-surface-bound-contract` | what BACKS the entry, whether that component's stereotype can realize the type it declares, and whether the contract it binds is that component's own |
-| `namespace-hygiene` | `reserved-id-segments` + `namespace-shadowing` | two questions of the same ids: the one segment the `::` grammar reserves, and the local name that would anchor a bare reference to the root instead |
-| `integration-conformance` | `integration-sim-declaration` + `integration-sim-file` + `integration-sim-wiring` + `integration-sim-coverage` | one rule per finding about one harness: is a harness expected here, does the declared one exist, does it wire the real modules, does it name every narrated path |
-| `narrative-antipatterns` | `meaningless-branches` + `inescapable-cycles` + `unconditional-call-cycles` | three separate proofs that happened to share a file: a decision whose arms all land on one step, a step cycle nothing can leave, and a call cycle in which no edge is guarded |
-| `narrative-detail` | `narrative-detail` + `detail-sufficiency` | does a method carry the detail its level PROMISES (a narrative at full, prose below it), and is that level low enough to be hiding something the reader is owed |
-| `portal-endpoints` | `portal-endpoints` + `non-portal-endpoints` | the two arms of one `if`, and two different subjects: what a Portal must bind, and what everything else may not carry at all |
-| `portal-call-auth` | `portal-call-auth` + `auth-source-wiring` | the CALL SITE (who may present a credential, and must it say where the credential comes from) separated from the SOURCE (does the `component:` reference resolve to a provider the presenter is wired to) |
-| `invariant-backing` | `unique-invariant-ids` + `invariant-backing` + `invariant-references` | three questions of one registry, two of which share nothing with the middle one: are the entity's ids unique, does each invariant reach every write path of its owner, and does every asserted reference name something declared |
-
-`profile-registration` also checks the project's own `projectType` before each subsystem's profile rather than after —
-the project-wide question first. On wairon's own tree the split retires `wiring_rules_impl`'s
-`EXCESSIVE_NARRATIVE_STEPS` allow outright — no narrative in that family lists more than 25 steps any more.
-
-`narrative-flow` needed a derivation moved first. Its later phases ran only over a narrative it had already found
-structurally sound, and splitting that flag away would have had the reachability walk call sound steps dead whenever a
-jump target did not exist — wrong findings, not merely noisier ones. So `MethodImplementation.stepConfigVerdict()` is
-now a pure derivation beside `stepGraph()`, returning the step-config problems (`StepConfigProblem`: the step, the code
-it maps to, the detail) and the `sound` verdict; `narrative-step-config` reports what it returns, and the other two gate
-on it. `CONFORMANCE_DEGRADED` stays with `source-file-linkage` for the same kind of reason: it is run-wide and carries no
-spec id, so it belongs to the one rule that builds the file index, or it would be reported once per rule that rebuilt it.
-
-On wairon's own tree the conformance split retires `conformance_rules_impl`'s `EXCESSIVE_NARRATIVE_STEPS` allow — the
-31-step narrative it named is gone and nothing left in that family lists more than 25 — and both families' remaining
-`NARRATIVE_COMPLEXITY` allows were rewritten to name only the narratives that still reported at that point — the
-waves below retire them, and every other one, outright.
-
-`contract-symmetry-and-narratives` was the worst of them: 66 steps at cognitive score 99, because roughly half of it was
-the cross-tree surface-resolution sequence written twice — once for dispatch steps and once for call/register steps,
-which the code's own comment described as "IDENTICAL target validation". That duplication is unified first: one
-resolution path every entry kind feeds, where the kinds differ only in the verb the finding reads with
-(`dispatches through` / `registers callback` / `calls`) and in what the surface must expose (a served capability or an
-exposed method). The unification is behaviour-preserving to the letter — every message, anchor, severity, draft context
-and `surfaceResolved` flag is byte-identical, verified by diffing the full finding set of all 561 rule-matrix fixtures
-before and after. `SURFACE_REF_AMBIGUOUS` still names the reaching clause per kind, and the `surfaceResolved` flag still
-marks exactly the findings whose reference resolved against a snapshot, which is what keeps them at full strength in a
-chained subproject. The split is four rules rather than the three the shape suggests: the cross-tree half measured 21
-even unified, so resolving a reference (`cross-tree-references`: ambiguous, unresolved-outside-the-root, or the plain
-typo) is separated from judging the contract it resolved to (`surface-reference-backing`: the declared collaborator, the
-exposed method or served capability, the asserted guarantees). The four narratives measure 13, 19, 11 and 18. The family's
-`EXCESSIVE_NARRATIVE_STEPS` allow is retired — nothing in it lists more than 20 steps any more.
-
-`stereotype-dependencies` and `pattern-ownership` were the two biggest left — 63 steps at cognitive score 95 and 45 at
-52 — and both were re-paying the same prologue before they could check anything: walk the components, walk their
-`dependsOn`, resolve the id, decide what an unresolved one means, skip an edge with a retired end, tell an
-intra-subsystem edge from a boundary crossing, and let the governing pack profile license the pair. So the prologue is
-extracted first, as a fifth entry in the shared read model the section below describes: `ctx.dependencyEdges()`, the
-run's resolved dependency edges, each carrying what it declares, what it reached, where that lands (`internal`,
-`cross-subsystem`, `surface`, `ambiguous`, `unpinned` or `missing` — six answers, exhaustive), whether either end is
-retired, the draft context a finding on it takes, and whether the profile's `allowedEdges` licenses the stereotype pair.
-`all` is every edge; `matrix` is the subset the intra-subsystem matrix judges, with all three filters already applied.
-The pack escape is the reason the extraction has to come first: it relaxes the WHOLE matrix, and a matrix split five
-ways would otherwise repeat it five times — where a licensed edge would escape some parts of it and not others.
-
-Two behaviours had to survive the cut exactly. `ARCHITECTURE_VIOLATION_PORTAL_DEP` is an edge's ONE finding — nothing
-may depend on a Portal or an Observer, and no consumer-side check reports the same edge again — which was a `continue`
-inside the single loop; `entrypoint-dependencies` keeps it for its own later checks, and the two consumer-side rules
-(`logic-dependency-class`, `data-block-dependencies`) open on the same guard, named as the doctrine it is. And
-`CROSS_SUBSYSTEM_NON_ADAPTER` still carries `surfaceResolved` on the surface-resolved path and not in-tree, which is
-what keeps a chained subproject's verdict at full strength: the two paths stayed two arms of the boundary rule rather
-than being merged on the strength of their shared code.
-
-The nine narratives measure 17, 7, 13, 12, 10 (dependencies) and 16, 10, 7, 3 (patterns). `pattern-containment` needed
-no further per-kind split: a Repository is judged member by member and the two counting patterns share one pass, which
-is 10. `member-visibility` deliberately does NOT read the edge index — it judges the dependency id as authored, and an
-id no pattern owns is nobody's private member whether it names a facade, a standalone block or nothing at all, so
-resolution, reach and licensing decide nothing there. Behaviour is preserved to the letter: the full finding set of all
-561 rule-matrix fixtures (2069 findings) is byte-identical before and after. `doctrine_rules_impl`'s
-`EXCESSIVE_NARRATIVE_STEPS` allow is retired and its `NARRATIVE_COMPLEXITY` allow now names only `portalEndpoints` and
-`portalCallAuth`, the two the family still owes.
-
-`declarative-assertions` was the last of the 48-step narratives, at cognitive score 61, and its shape was a ladder over
-the three assertion kinds: one loop, one `switch`, and three arms that shared nothing but a selector and a message
-suffix. The kinds are not implementation detail — a pack author writes `kind: forbid-edge` by hand — so each is now a
-rule a user can find in `wairon rules list` under the word they typed, and the shared reading of one assertion (which
-components a selector picks, how a violation is reported at the pack's severity with its stated reason) is
-`declared-assertion.ts`, imported by all three. The alternative, keeping one rule and hiding the kind dispatch in a
-derivation, would have moved the bulk of the logic into three unnarrated functions and left the registry claiming one
-rule where a user sees three doctrines. The three narratives measure 14, 14 and 10.
-
-`technology-boundaries` was reshaped rather than split in half: `TECH_ON_LOGIC_COMPONENT` reads an implementation's own
-`technologies` and its component's stereotype and nothing else, so it lifts out whole as `technology-binding` (score 3),
-but `TECH_LEAKAGE` and `VENDOR_NAME_IN_CONTRACT` share the technology-HOME index — the ownership closure, its contracts,
-its implementations and its subsystem chain, per declared token — and separating them would build that index twice. They
-stay one rule, at 15 rather than 23, because the collection phase now walks every declared token of every declaring
-implementation once instead of nesting a token loop inside an implementation loop, with each declaring component's scope
-computed once and reused. That map is deliberately still the PLAIN owner map (every `owns` claim, last claimant winning)
-and not `ctx.ownershipIndex()`: it feeds a scope-widening step, so narrowing it would turn one finding into two on a tree
-that already carries an ownership error. `target-language` needed neither trick — its two codes never shared a loop, only
-the `targetLanguage` opt-in — and its halves measure 6 and 6 once each collects the specs it judges before judging them.
-
-Behaviour is preserved to the letter: the full finding set of all 561 rule-matrix fixtures (2069 findings) is
-byte-identical before and after. Both families' `NARRATIVE_COMPLEXITY` and `EXCESSIVE_NARRATIVE_STEPS` allows are
-retired outright — nothing in `extension_rules_impl` or `heuristic_rules_impl` reaches the severe band or lists more
-than 25 steps any more, and the worst narrative left in either family measures 15.
-
-`public-surface` (33) and `integration-conformance` (29) split along seams their codes already drew, and both splits
-cost a precondition the single loop used to inherit by falling through. `public-surface`'s two `continue`s ARE its
-precedence: an entry that names no component, or one that names a component that does not exist, says nothing reliable
-about a type or a contract, so both siblings restate that guard rather than accuse on top of a binding finding.
-`public-surface-bound-contract` needs it most — `intf.component !== pi.component` is trivially true for EVERY interface
-when `pi.component` names nothing, so without the guard one mistyped component id would accuse a perfectly good
-contract of belonging elsewhere. Its three narratives measure 14, 15 and 16. `integration-conformance`'s precedence was
-two `continue`s and an exact-grade gate; `integration-sim-wiring` and `integration-sim-coverage` each restate
-`integration-sim-file`'s verdict, so a harness that does not exist is still reported once rather than three times, and
-the four measure 7, 7, 14 and 16. Neither split invents a shared "is this judgeable" helper: a precondition one rule
-inherits from another is doctrine it owes its own reader, and it is written out where the accusation is.
-
-`namespace-hygiene` (25) is two codes, and was not 25 because of either of them. Its private `checkId` closure has no
-spec representation, so the same two checks were unrolled across five id kinds, and splitting alone would have left two
-halves of 15 with the five-fold copy intact. The walk moves into the shared read model instead, as `ctx.specIds()` —
-every spec id in the tree with the kind label its findings already name it by (`Subsystem`, `Component`, `Interface`,
-`Implementation`, `Type`) — and `reserved-id-segments` and `namespace-shadowing` become one loop and one branch each, at
-3. It returns every id, in scope or not, and each rule keeps its own `ctx.isSpecInScope` test: which specs a rule may
-accuse is doctrine the rule states for itself, not plumbing to be folded away.
-
-`call-conformance` is NOT split and keeps its single code. It asks one question — is every narrative call step realized
-as a real call — and two rules for one question is what this section exists to prevent. Its 25 was the DESCENT:
-implementation, contract, component, chained-subproject skip, method, source file, facts, exact grade — six of its nine
-branches before a single call step was examined. So the descent becomes the read model's second new member,
-`ctx.implementationMethods()`: each implementation method with the component it realizes, the file that realizes it (the
-method's `sourcePath`, else the implementation's, absent when neither names one) and its draft context, with
-implementations whose contract or component does not resolve and those inside a chained subproject already left out.
-Plumbing only — the conformance dial and the exact-grade test stay written in `call-conformance`, because "only exact
-grade may accuse" is the honesty stance a rule owes its reader and belongs where the accusation is read. The narrative
-drops from 25 to 15. `narrative-detail` walks the same descent and will be its second consumer when it splits.
-
-Behaviour is preserved to the letter here too: the full finding set of all 561 rule-matrix fixtures (2069 findings) is
-byte-identical before and after. `integrity_rules_impl`'s two allows (`NARRATIVE_COMPLEXITY` and
-`EXCESSIVE_NARRATIVE_STEPS`) and `conformance_rules_impl`'s `NARRATIVE_COMPLEXITY` allow are retired outright — nothing
-in either family reaches the severe band or lists more than 25 steps any more. That last allow had named
-`dependencyConformance` among the narratives it covered, which stopped being true one wave earlier, when the shared read
-model below dropped that narrative from 28 to 14.
-
-The last six severe rule methods come under the bar together. `narrative-antipatterns` (26) was three separate proofs
-in one file, and its `MEANINGLESS_BRANCH`, `INESCAPABLE_CYCLE` and `UNCONDITIONAL_CALL_CYCLE` become
-`meaningless-branches` (11), `inescapable-cycles` (8) and `unconditional-call-cycles` (11). Two of them run a Tarjan
-SCC, but over graphs with nothing in common — one method's step graph, and the call graph across every component — so
-the traversal moves into a shared module (`narrative/completed-step-graph.ts`) beside the completion-closed step graph
-and the "is this step unavoidable" reading, and each rule states its own graph. Sharing the traversal is not sharing
-the graph. `narrative-detail` (27) splits along the seam its own comments drew: `narrative-detail` (18) keeps
-`MISSING_NARRATIVE` and `INTENT_FLOOR` — the two arms of one branch, a narrative at `full` and prose below it — while
-`detail-sufficiency` (16) takes `UNNARRATED_COMPLEXITY` and `DETAIL_BELOW_STEREOTYPE`, which stay together because the
-measured finding SUPPRESSES the stereotype one: evidence outranks expectation, and separating them would mean
-measuring the same function twice to reproduce that. `portal-endpoints` (20) and `portal-call-auth` (26) were the
-cleanest cuts. The first was two arms of one `if` about two different subjects, and becomes `portal-endpoints` (12)
-and `non-portal-endpoints` (8). The second is two questions with one subject: `portal-call-auth` (12) judges the CALL
-SITE (an authenticated outbound call is made by an Adapter, and says where its credential comes from) and
-`auth-source-wiring` (16) judges the SOURCE (a `component:` reference resolves, to an Adapter or Store, that the
-presenter is wired to). Five rules for five codes was rejected: the last three codes are one question's three failure
-modes — missing, wrong kind, unwired — and each extra rule would re-walk every narrative step in the tree to ask a
-third of it. `invariant-backing` (20) splits three ways, since the file already marked its seam: `unique-invariant-ids`
-(6) needs only the entity's own invariant list, `invariant-references` (3) walks the steps rather than the entities,
-and `invariant-backing` (12) keeps the two codes that share the owner resolution and its write-method scan. The
-invariant REFERENCE grammar (`<type-ref>.<invariant-id>`, split at the last dot) moves to `wiring/invariant-ref.ts`,
-because one rule resolves such a reference and another asks whether it denotes a particular entity's invariant, and the
-two must never disagree about what the string means.
-
-`unused-detection` (20) is deliberately split only three ways, and its three remaining codes stay together. The
-reachability walk is the expensive thing and it already runs TWICE: once from internal seeds alone, which is what makes
-`INVOKED_BY_REDUNDANT` answerable, and once with the `invokedBy` entrypoints added, which is what makes
-`UNUSED_COMPONENT` and `UNUSED_METHOD` answerable. One rule per code would walk the same graph four times. So
-`unused-types` (3) lifts out with its own reference scan, `invoked-by-description` (8) lifts out as a prose floor on
-the declaration's `caller`, and the reachability trio keeps the rule at 15.
-
-One proposal was refused. `detail-sufficiency` was to take its walk from `ctx.implementationMethods()`, as
-`call-conformance` did. It cannot: that member drops implementations whose contract names a component that does not
-resolve — which `UNNARRATED_COMPLEXITY` still judges today, tolerating an absent component throughout — and it drops
-chained subprojects, which is right for the code-side reading but wrong for `DETAIL_BELOW_STEREOTYPE`, a purely
-spec-side verdict that is judged at the parent root like every other spec-side rule. Since the suppression keeps the
-two codes in one rule, the rule flattens its own walk instead: it gathers the methods the dial holds below `full` with
-nothing written, then judges that flat list — 16 rather than the 26 a nested walk would have cost. No fixture covers
-either combination, so the identical finding set would not have caught it.
-
-Behaviour is preserved to the letter once more: the full finding set of all 561 rule-matrix fixtures (2069 findings) is
-byte-identical before and after. `narrative_rules_impl`'s, `doctrine_rules_impl`'s and `wiring_rules_impl`'s
-`NARRATIVE_COMPLEXITY` allows are retired outright — no rule family carries one any more, and the worst narrative left
-in the three measures 19. The built-in registry grows from 77 rules to 86.
-
-### The rules share one derived read model
-
-Four indexes were rebuilt inside individual rules — the same walk, in file after file, with subtly different shapes.
-That is duplicated work and duplicated semantics, and it is why several rules could not be split honestly: a seam that
-forces an index to be rebuilt twice is a bad seam. They are now memoized `RuleContext` methods over named value objects,
-so a pack-authored rule reads them too:
-
-| method | what it holds | who rebuilt it before |
-| --- | --- | --- |
-| `codeIndex()` | every analyzed path's facts, and its three anchor tiers: what the file declares, what is anchored in it, and its finding anchors | the seven code↔spec conformance rules and the narrative detail dial — eight files |
-| `realizationIndex()` | which files realize which components, both ways, plus the implementations behind each — one walk of the implementations whose contract and component resolve and that are not inside a chained subproject | `dependency-conformance` and `integration-conformance`, half-built in `source-file-linkage` |
-| `importGraph(paths?)` | resolved import edges, the re-export pass, the file-set connectivity test and the reachability closure — over a CLOSED path set, which is part of the graph's identity because resolution is string matching against it | `dependency-conformance` (mapped exact-grade files) and `integration-conformance` (every analyzed path) walked their own |
-| `ownershipIndex()` | which pattern privately owns each member block | `pattern-ownership`, which built it inside the loop that reports on it |
-
-`interfaceMethodsOf` is memoized too: eight rules ask it per dispatch binding or per narrative step, and it rebuilt its
-array on every call.
-
-The ownership map is the one whose shape decides findings rather than only speed, so it keeps `pattern-ownership`'s
-semantics exactly: a retired or building-block claimant records nothing, so do an unresolved member and an inner
-pattern, and where two patterns claim one block the first claimant stays the owner. `dependency-conformance` and
-`technology-boundaries` keep their own PLAIN owner maps — every `owns` claim, last claimant winning — because the two
-readings differ on trees that already carry an ownership error, where narrowing the map would turn one finding into two.
-Switching them is a doctrine decision, not a refactor, and each map now says so where it is built.
-
-Behaviour is preserved to the letter: the full finding set of all 561 rule-matrix fixtures (2069 findings, each dumped
-as severity, code, spec id, draft context, surface-resolved flag and message) is byte-identical before and after. On
-wairon's own tree `dependencyConformance` drops from cognitive score 28 to 14 — its file map, its edge pass and two
-near-identical trace branches are gone — and `hiddenState` from 8 to 6, now that the index's own exact-grade set is the
-loop. `patternOwnership` loses the step that recorded the map it reports on.
-
-### Complexity, naming and cohesion are checked
-
-Wairon judged a tree's structure but not its readability. A narrative could grow to sixty steps of nested guards, a
-component could be called a registry while being a Store, a method could repeat the name of the component it sits on,
-and an Orchestrator could quietly hold two unrelated jobs. Each check below ships with a default drawn from measuring
-wairon's own tree, and the rules that add them pass their own thresholds.
-
-- **Narrative complexity, on two independent axes.**
-  - `NARRATIVE_COMPLEXITY` (warning) reports a narrative whose cognitive band is above the configured one, `moderate`
-    by default. The band comes from shape, not length: a branch, switch, loop or parallel step counts one plus its
-    nesting depth, each catch clause of a try counts the same, and each jump counts one, flat — so a flat list of calls
-    scores zero however long it is.
-  - `EXCESSIVE_NARRATIVE_STEPS` (warning) now **defaults to 25 steps**. Until now it ran only where a project had
-    configured a limit.
-  - `NARRATIVE_COMPLEXITY_OVER_MAX` and `NARRATIVE_STEPS_OVER_MAX` (errors) report only where `maxCognitiveLevel` or
-    `narrativeStepsHardMax` is set; neither has a default.
-  - The step check moved from `complexity-and-metadata` to the new `narrative-complexity` rule, so both axes of the
-    same judgement live in one place.
-- **Naming discipline.**
-  - `MISLEADING_BLOCK_WORD` (warning): a component's head noun names a building block it is not, such as a Store still
-    called `..._registry`. Only the head noun counts, so `pack_store_adapter` is fine — its qualifiers name what it
-    adapts.
-  - `GENERIC_COMPONENT_NAME` (warning): manager, helper, utils, handler, service and the rest say nothing.
-  - `METHOD_REPEATS_COMPONENT` (warning): a method repeating its component's concept directly after the verb
-    (`architecture_diagrams.renderDiagram`). A qualified compound such as `policy_repository.getPackPolicy` is not
-    repetition. Adapters and Portals are exempt, because a forwarder's method mirrors the command or route it exposes.
-  - `COMPONENT_IS_ITS_ONLY_METHOD` (warning): a component with one method, named after that method — fold it into its
-    caller, or name it for its responsibility.
-- **Cohesion.** `INCOHESIVE_METHODS` (warning) reports an Orchestrator whose methods fall into two or more groups of two
-  or more that share no called component: the shape of a component holding two jobs. A **pure forwarder is exempt** — a
-  component whose every narrated method holds exactly one `call` or `dispatch` step and nothing beside it but a `return`
-  hands off and answers for no responsibility of its own, so its methods reach different components precisely because it
-  is a switchboard. That is the same reasoning that exempts Adapters and Portals from the stutter check above, and the
-  same shape §7 already calls pure 1:1 forwarding on a Repository facade. One `local` step — in-component work — or one
-  flow step in any narrated method is enough to be judged again, and a method carrying no narrative is the detail dial's
-  business, not this rule's. A deliberate facade that is not a pure forwarder still acknowledges the finding with a
-  reasoned `lint.allow`.
-- **A project's own configuration wins.** The `complexity`, `documentation` and `naming` configs now resolve as the
-  profile pack's settings overlaid with the project's own, which is how `rules.sddRuleSeverity` already resolved.
-  Before this, an installed pack's profile overrode a project's explicit value.
-- **What `wairon rules list` prints is checked against the specs.** Nothing compared a rule's description with the spec
-  method it implements, and four had drifted apart. `hidden-state` was still described by its pre-doctrine wording,
-  `declarative-assertions` omitted why its codes are the packs' own, and `portal-fields` read two ways at once.
-- **New configuration:** `complexity.cognitiveWarnAbove`, `complexity.maxCognitiveLevel` and
-  `complexity.narrativeStepsHardMax`, beside the existing `complexity.maxNarrativeSteps`.
-- **Wairon's own tree.** The seven components retyped from Registry to Store or Repository in an earlier review are
-  renamed for what they are: `credential_repository`, `project_repository` and `secret_repository`, and
-  `git_config_store`, `lock_store`, `pack_store` and `producer_config_store`.
-- **The naming findings are fixed rather than suppressed.** 37 contract methods stop repeating the component they sit
-  on — `architecture_diagrams.renderDiagram` reads `render`, `web_project_orchestrator.listProjects` reads `list` —
-  and `mcp_server` drops "Manager" from its name. Where the clean name would be a bare verb exported from a module, or
-  a reserved word like `export`, the implementation pins the existing function with `symbol:`, the seam every
-  validator rule already uses for `check`. What the complexity and cohesion checks report still carries a reasoned
-  `lint.allow` naming the cleanup that removes it.
-
-### Two web orchestrators stop holding two jobs
-
-The cohesion check above named three components on wairon's own tree, and each carried a `lint.allow` promising a split.
-The pure-forwarder exemption answers one of them outright (`project_ops_orchestrator`: 38 methods, every one a single
-hand-off). The other two are answered by moving the logic — spec-only moves: every method stays the function it already
-was, in the file it already lived in.
-
-- **`web_orchestrator` is now `web_session_orchestrator`** and holds only the browser-session lifecycle: SSO sign-in
-  start/complete, the built-in admin password sign-in, sign-out on one device and on all of them, the local-developer
-  session, the pre-auth login options, and the session-principal context. Its other half was two methods that forwarded
-  `getGraph` and `getProjectCanvas` to `web_graph_orchestrator` and did nothing else — the hop left behind when that
-  component was split out, for this same dependency reason, and never removed. The hop is gone rather than renamed: a
-  third component holding two forwards would be the synthetic facade the doctrine refuses. `web_portal` reaches the
-  graph orchestrator directly (6 → 7 dependencies, both already realized in `src/server/web.ts`), and the session
-  orchestrator falls from 10 dependencies to 9 and from 10 methods to 8. Its `INCOHESIVE_METHODS` allow is deleted.
-- **`web_admin_orchestrator` is now only a switchboard.** Of its 23 methods, 18 already forwarded the browser session
-  straight to the identity or permission-admin orchestrator; five did not. Those five — listing organization units,
-  upserting one, placing a project into one, disposing of one, and listing the configured secret key names — are the
-  instance-structure surfaces the loopback control plane never exposes to a browser, and `src/server/webadmin.ts`
-  already gathers exactly them behind one gate (`requireInstanceAdminSession`, whose own comment calls them that). They
-  move to a new **`web_instance_admin_orchestrator`** (5 methods, 7 dependencies), which the portal reaches directly.
-  What remains forwards and nothing else, so the exemption covers it: its `INCOHESIVE_METHODS` allow is deleted too,
-  and the bridge falls from 9 dependencies to 2.
-- **Nothing was absorbed over the cap.** The natural homes were already full: `landscape_orchestrator` owns the
-  credential-anchored `upsertUnit` and `placeProject`, and `identity_orchestrator` owns the provider configuration the
-  secret refs exist to serve. Both sit exactly at the configured `maxComponentDependencies: 10`, and the moved
-  workflows need `permission_repository` and `user_repository` (landscape) or `secret_repository` (identity) that
-  neither declares. A new component is what the cap leaves.
-- **`removeUnit` keeps a step-count allow, reworded, in its new home.** Its 37 steps are the workflow: a gate, an
-  existence check, four dispositions to validate and resolve, then either the whole re-homing path (reparent the
-  children, re-point the placements, remap the permission and user scopes, delete the emptied unit) or the cascade that
-  deletes the subtree, and the best-effort audit. It is one function in `src/server/webadmin.ts`, so narrating it
-  shorter would mean naming a component the code does not have.
-- **The two allows that stay were rewritten to say what is true.** `cli_runner` and `core_orchestrator` both claimed to
-  be deliberate facades. They are not — 27 of the runner's 32 narrated methods and 13 of core's 45 hold flow of their
-  own, which is precisely why the new exemption does not reach them. Each allow now rests on the ground that actually
-  holds: being the one entry point of the terminal and of the library, which splitting along the call groups would
-  multiply.
-
-### The long narratives find the homes their code already had
-
-The step check above named seven methods on wairon's own tree over its 25-step default, each carrying an
-`EXCESSIVE_NARRATIVE_STEPS` allow. None of them is complex — every one scores 9 or less on the cognitive axis — so
-this was length, not nesting. Five are answered by naming a phase the code already had: four of the six new contract
-methods are functions that were sitting in the source unmodelled, so their narrative steps move verbatim into the
-method they always belonged to. Two keep an allow, reworded, because their step count is the length of a list, not
-the size of a job.
-
-- **`completeSsoLogin` (26 → 20 steps) was inlining two methods its own contract already declares.** The code calls
-  `resolveEnabledProvider` and `tryAppendAudit`, which `identity_orchestrator` models as `resolveEnabledProvider` and
-  `appendAuditBestEffort` and which `mintSelfToken`, `revokeSelfToken` and `startSsoLogin` were written against; only
-  this narrative spelled both out longhand. The four provider-resolution steps and the four-step audit try/catch are
-  now one call each. Spec-only — not a line of code changed — and its allow is deleted.
-- **One initialization body, narrated once (`createGovernedProject`, 22 steps).** `initializeProjectWithProfile` (29 →
-  6) and `executeApprovedInit` (25 → 2) both call `performInit` in `src/server/policy.ts`, whose own comment calls it
-  "the single profile-aware initialization body shared by the gated portal path and approval execution". The spec had
-  it twice, and the copies had already drifted: three of the twenty step descriptions differed, one of them about who
-  `selectedBy` is stamped from. The body is now one method bound to that function by `symbol:`, and each entry narrates
-  only what is its own — the credential gate, or the note that there is none.
-- **`reconcileProjectPolicy` (34 → 24) hands its profile half to `repairGoverningProfile` (9 steps).** The method ran
-  two jobs under one authorization: apply the instance policy's missing required/default packs, then repair a governing
-  profile that is broken or non-compliant. The second is now a function of its own in `src/server/policy.ts` and a
-  method of its own on the contract, returning what it left in force (`ProfileRepair`); the eight steps moved into it
-  byte for byte. A `project_policy_orchestrator.appendAuditBestEffort` binds the same `tryAppendAudit` that file already
-  had, mirroring the identity plane, so the audit block is one step on both callers. Dependencies unchanged at 9 — a
-  method calling its own component adds no edge.
-- **`renameComponent` (30 → 17) hands the move itself to `moveRenamedSpecs` (15 steps).** What carries the length is
-  not the guards: reload each renamed spec as the reference rewrite left it, write it under the new id where the loader
-  places it, clear a colliding file first, then remove the file it left and prune the folders that empties. That is one
-  phase with one name, extracted in `src/core/provision.ts` and narrated there. The shared refusal block the phased
-  design proposed — the four guard steps `renameComponent` and `renameMethod` hold in common — is real, but it is worth
-  four steps and would have left this at 26: it stays for the DRY pass rather than riding along here.
-- **`validateSddTree` (26 → 25) names `resolveThroughParent` (4 steps).** The function has existed since chained
-  children were judged through their parents; only the narrative inlined it. This is the one place where a step was
-  partitioned rather than moved whole: the old step blended the walk and the parent's verdict (which are the callee's)
-  with the gate and the merge (which are the caller's), so each clause now sits on the side that performs it. Nothing
-  was dropped.
-- **`registerBuiltinRules` keeps its allow, reworded: 89 steps of catalog.** The function is three statements — empty
-  the set, walk `SDD_RULES`, append each — and the narrative says exactly that in steps 1, 88 and 89. The other 86 are
-  one `register` seed per built-in rule: the catalog that makes each rule family's method reachable, and the list
-  `tests/core/rule-catalog.test.ts` pins in order to `SDD_RULES` so registry and rule set cannot drift. Splitting the
-  seeds per family would split no code and would break that invariant — the eight families occur in thirteen
-  non-contiguous blocks of `SDD_RULES` (integrity alone in three, at positions 1–7, 59–61 and 86), so per-family
-  registration would reorder the run sequence. A new rule adds one step here, which is the point.
-- **`runPack` keeps its allow, reworded: 26 steps of command family.** A flat twelve-arm `if`-chain, one adapter call
-  per `wairon pack` subcommand, two steps each plus the switch and the unknown-action refusal. The same shape sits at
-  every size in the runner — `runPacks` (8), `runAgent` (9), `runSurface` (12), `runRemote` (14) — and there is no seam
-  to split on: all twelve arms call one module, and every subcommand's action calls `runPack` directly, so scope-based
-  sub-dispatchers would be invented rather than named.
-- **Allows deleted:** the `EXCESSIVE_NARRATIVE_STEPS` allows on `identity_orchestrator_impl`, `core_orchestrator_impl`,
-  `spec_validator_impl` and `project_policy_orchestrator_impl` (which covered two methods). `cli_runner_impl` keeps its
-  unrelated `UNDECLARED_DEPENDENCY` allow untouched. Two value objects are new for the extracted returns:
-  `ParentResolution` and `ProfileRepair`. Tree: 0 findings before and after.
-
-### The last two severe narratives: one names the functions it already called, one names the derivation inside it
-
-The two narratives still in the severe cognitive band — the only ones left in the tree — carried the last
-`NARRATIVE_COMPLEXITY` allows. Neither turned out to be complicated logic. One was three phases of a request narrated as
-one method although the code had split them years ago; the other was a pure derivation inlined into a graph walk.
-
-- **`host_request_orchestrator.handle` (59 steps / score 25 → 21 / 5) was inlining two functions the code already had.**
-  `src/server/request.ts` exports `dispatchProjectLifecycleTool` and `auditToolCall`, and `handleMcpRequest` calls both —
-  but `ihost_request_orchestrator` declared only `handle` and `viewDiagram`, so the spec spelled both out longhand. Both
-  are contract methods now, each bound by `symbol:` to the function that was already sitting there. Steps 13–46 (the
-  sixteen-arm hosted tool table and the envelope it shapes) move into `dispatchProjectLifecycleTool`; steps 54–58 (build
-  the redacted event, append it, diagnose a failure) move into `auditToolCall` (6 steps, score 1), which is what the
-  confinement refusal, the permission refusal and both dispatch paths have always shared. Spec-only — not a line of code
-  changed — and one new value object, `McpToolResponse`, for the envelope the dispatch returns. No dependency was added:
-  a method calling its own component adds no edge, so the component stays at 9 against its cap of 10.
-- **The tool table keeps a step allow, reworded, because its length is a list and not a job.**
-  `dispatchProjectLifecycleTool` lists 38 steps and scores 18: one guard, one switch, and sixteen arms of two steps each
-  — a call to the orchestrator that owns the tool, then the jump back to the single envelope-shaping step. Splitting it
-  by owning orchestrator would invent three sub-dispatchers where `request.ts` has one switch, and each would need a
-  `default` arm invented for it: today the single default IS `sdd_host_get_approval_status`, so two of the three new
-  defaults would be unreachable code deciding what an impossible tool name does. Same shape and same reasoning as
-  `cli_runner.runPack` (26) and `rule_registry.registerBuiltinRules` (89).
-- **`narrative_graph_projector.walk` (25 steps / score 21 → 20 / 15) hands its per-step edge derivation to `stepEdges`
-  (8 steps, score 1).** Unlike `handle`, this one is a genuine extraction: the file held exactly one exported function
-  and a `methodKey` helper, so nothing was waiting to be modelled. The switch inside the narrative loop — which edges a
-  `call`, `register` or `dispatch` step contributes — is a pure derivation over one step, so it is now a pure function
-  returning `NarrativeEdge[]`, and the walk applies each edge by reaching its component and enqueueing its method. The
-  three per-arm jumps disappear with it.
-- **The derivation stayed on the component and did NOT become a `narrative_step` type method.**
-  `method_implementation.cognitiveScore()` and `stepGraph()` are the precedent for pure arithmetic belonging on the type,
-  and it was measured against them. Refused for three reasons, now written into the component's own description: the
-  derivation needs the whole tree's components to route a `dispatch` step through a Portal's dispatch table, so it is not
-  intrinsic to one step; it takes `followRegisterEdges`, which is the walk's policy rather than a property of the step;
-  and what the switch encodes IS the doctrine the component exists to carry in an L5 narrative (a `register` step is a
-  handoff, a dispatch table is a served surface) — and a type method carries no narrative.
-- **Allows: two `NARRATIVE_COMPLEXITY` deleted** (`host_request_orchestrator_impl`, `narrative_graph_projector_impl`)
-  **and one `EXCESSIVE_NARRATIVE_STEPS` reworded** (`host_request_orchestrator_impl`, which named `handle` and now names
-  the tool table it moved to). No narrative anywhere in the tree is severe any more, and every step allow that remains
-  says why it is permanent.
-- **Proof.** 56 of `handle`'s 59 steps and 18 of `walk`'s 25 are byte-identical in their new homes, diffed field by field
-  with jump targets relocated for the shift; the three that are not are the seam itself — the branch that blended the
-  callee's classification with the caller's dispatch, and the two jumps the method boundary replaced — partitioned clause
-  by clause with no clause dropped. The projector's extraction was checked against the pre-extraction inner loop over all
-  384 shapes of narrative step (every type × target × method × capability × option) and agrees on every one. 3316 unit
-  tests, 21 e2e; the tree validates at 0 findings before and after.
-
-### The twelve draft components are complete — nothing in the tree is draft any more
-
-D2b's last item. Ten `sdd_validator` components (`conformance_rules`, `doctrine_rules`, `extension_rules`,
-`heuristic_rules`, `integrity_rules`, `intrinsic_rules`, `narrative_rules`, `wiring_rules`, `gate_identity`,
-`narrative_graph_projector`) and two on `sdd_host` (`backup_schedule`, `instance_bootstrap`) were still `draft`, each
-with its interface and its implementation — 36 specs. They are `complete`. Every spec in the tree now says `complete`,
-so the draft machinery has nothing left to apply to.
-
-- **What it turns on.** A finding carrying draft context had two escapes. `getRuleSeverity` downgraded the 23
-  completeness codes from error to warning — `MISSING_IMPLEMENTATION_METHOD`, `MISSING_NARRATIVE`, `INTENT_FLOOR`,
-  `MISSING_ENDPOINT`, the structural-conformance family (`MISSING_SOURCE_PATH`, `MISSING_SOURCE_FILE`,
-  `UNREALIZED_METHOD`, `UNDECLARED_DEPENDENCY`, …), `UNNARRATED_COMPLEXITY`, `UNASSERTED_INVARIANT`,
-  `CALL_STEP_UNREALIZED` and the integration-sim gate — and `--ci` waived `DRAFT_COMPONENT_WARNING` outright plus any
-  `UNUSED_COMPONENT` raised against a draft component. `MISSING_INTEGRATION_SIM` skipped a draft implementation before
-  it was ever asked. None of that applies to the rule families any more: if one of them drifts from the code that
-  realizes it, or loses a narrative, the gate fails with an error instead of printing a warning that `--ci` forgives.
-- **It cost nothing, because the tree was already complete-clean.** `validate` and `validate --ci` were at 0 findings
-  before the promotion and at 0 findings after it. No `lint.allow` was added, and none was made stale: no allow in the
-  tree rests on draft or design status, and the 36 specs carried no allows at all. `status` — with `updatedAt` — is the
-  only field that moved on any of them: 36 files, 72 insertions, 72 deletions, two lines each. 3316 unit tests, 21 e2e.
-- **One exemption is now the subsystem's, not the component's.** `backup_schedule` and `instance_bootstrap` each declare
-  two dependencies and no `simPath`, so `MISSING_INTEGRATION_SIM` is live for them and silent only because `sdd_host`
-  has adopted no integration sims (the rule asks per subsystem; `sdd_validator` has 16). The first sim `sdd_host`
-  declares will put the question to both of them — as an error now, where a draft would have been asked nothing.
-
-### Execution budgets: the topology gains a resource axis
-
-The derived topology said who owns what, and nothing about what their work costs
-to do. In a delegating workflow that gap is expensive: a subagent's `model` field
-defaults to `inherit`, so an agent file that omits it silently adopts the parent
-session's model — measured across three archived sessions of this project's own
-development, 1,860 of 2,176 subagent turns ran on the most expensive tier that
-way, and the fixed per-spawn overhead everyone worries about was under 2% of the
-bill by comparison.
-
-- **`ExecutionProfile` — what the work is like.** Derived from the topology alone
-  (no spec authoring): `breadth` from owned-path spread, `writes` from the role,
-  `reasoningDepth` from the component stereotype, `delegates` from the template.
-  The vocabulary already encoded the last one — a Store is plumbing its contract
-  and narrative fully describe, an Orchestrator carries the decisions — so
-  derivation reads the stereotype rather than inventing a second classification.
-- **`ExecutionBudget` — what that earns.** Capability *tiers* (`small`,
-  `standard`, `large`, `frontier`), never vendor model names, plus effort, a turn
-  ceiling, a tool class, nested-delegation rights and MCP access. Mapping a tier
-  onto a real model is the consumer's job, because only the consumer knows what
-  its host tool understands.
-- **A tier dial, `execution.tier`, defaulting to `off`.** `free` applies
-  structural constraints only and is defined as having no quality tradeoff at
-  all; `default` adds tier selection and turn ceilings; `trade` and `aggressive`
-  each name what they cost. Raising the dial can only tighten a budget, so it is
-  safe to turn without auditing every agent. At `off` every output is
-  byte-identical to before this existed.
-- **Both delivery paths carry it.** Generated agent files can *enforce* a budget
-  through front-matter (`model`, `effort`, `maxTurns`, `tools`, `mcpServers`);
-  a live brief can only *advise*, since the caller spawning from it is what
-  applies it. That asymmetry is deliberate — a brief is consumed by tools wairon
-  does not control. Since `materializeAgentFiles` is off by default, the brief is
-  the path most projects actually use.
-- **`frontier` is never derived.** It is reachable only by an explicit
-  per-agent override, and it is not an owner tier: treat it as a sparring partner
-  for a question the specs do not settle. An owner that genuinely needs it is
-  usually a component doing too much.
-- **`orchestrate` is not derived either.** Every agent in a wairon topology owns
-  and authors something — even a chained-subproject owner writes its mount spec —
-  so the thin no-bulk-content grant would break them rather than make them
-  cheaper. It stays selectable by override for a hand-defined manager.
-
-`sdd-delegate` applies the budget when spawning, because constituting a subagent
-correctly is part of spawning it rather than a separate concern.
-
-Budget front-matter is emitted for the `claude` target only. The
-`cursor`/`copilot`/`codex` targets reuse the Claude markdown shape, but the
-budget fields are Claude Code's subagent contract — writing them elsewhere
-would add keys those tools ignore rather than constraints they honour, and an
-unhonoured budget reads as enforced when nothing enforces it. A target opts in
-once its own fields are verified.
-
-`wairon execution show` lists every agent's allowance with the rationale that
-produced it, so a tier choice is auditable rather than magic;
-`wairon execution set-tier <tier>` moves the dial and says what the new tier
-costs before you keep it.
-
-### `wairon lock` stopped rewriting your spec tree
-
-Approving used to ratchet every spec's `status` from `draft` to `complete` on
-disk — **786 files** on this project's own tree, for a decision that changed no
-design. A lock scoped to one subsystem still rewrote everything it could reach,
-and the specs a human had actually edited were buried under files whose content
-had not changed. `.wai/phased_design.md` records that blanket freeze being
-reverted by hand four times, once annotated "product gap: lock needs phase
-awareness".
-
-The fix is one addition that retires several concepts: **record what was
-approved per spec, not one hash of the whole tree.**
-
-- **The approval lives on the committed lock record** (`src/core/approval.ts` →
-  `.wai/lock.json`): one sha256 per spec file, ~90 KB for this project's 786
-  specs. Being committed is the point — a teammate, a fresh clone and CI all see
-  the same approval the approver saw. Keys are sorted, so re-approving a
-  one-spec change is a two-line diff; digests normalize line endings, so an
-  approval taken on Windows survives a Linux checkout. A test asserts the spec
-  tree is byte-identical after `lock`.
-- **`wairon status` names what moved** instead of asserting that something did.
-  `Lock: STALE` — which fired on a tree validating 0 errors / 0 warnings, named
-  nothing, and asked for work producing no new information — is gone:
-
-  ```
-  3 specs changed since approval (2 changed, 1 added) — approved … by Robbe <…>:
-    .wai/specs/sdd_core/spec_loader/.index.yaml
-    ...
-  ```
-
-  Silent before there has ever been an approval: a design still being written
-  is not news.
-- **Settledness is derived, not stored.** The ratchet was load-bearing — the
-  MCP authoring tools always write `status: 'draft'`, draft specs get
-  completeness findings downgraded to warnings, and lock was the only promoter,
-  so deleting it naively would have left the gate permanently soft. A spec that
-  is approved and unchanged is now presented to the rules as complete in
-  memory. It is also bidirectional, which the one-way on-disk ratchet could
-  never be: a spec that drifts after approval returns to draft context by
-  itself.
-- **`lockedBy` records the identity AND its source.** `hosted` was
-  authenticated by the instance; `git` and `os` are self-declared. Locally the
-  git author identity is preferred, because it is what a reviewer can match
-  against the commit carrying the lock, falling back to `user@hostname`. The
-  hosted lock previously wrote a constant `admin:master` while its caller held a
-  resolved principal; it now records the subject, and on the approval path the
-  decider rather than the requester.
-- **Per `.wai`, with children pinned.** Every project root owns its own lock
-  record, so a parent's approval never freezes a child's in-flight work and a
-  child cloned alone carries its approval with it. A parent pins each child's
-  approved `StateId` the way a submodule pins a commit: a child edit does not
-  dirty the parent, but the parent still sees the child move.
-- **`lock --subsystem` approves only its own scope.** Everything outside keeps
-  the approval it already had.
-
-Rationale record: [docs/design/approval-baseline.md](docs/design/approval-baseline.md).
-
-### Removed: `promote`, a second gate on an already-locked door
-
-`wairon host promote` re-read the lock, recomputed the `StateId`, and — if
-nothing had drifted — flipped `.wai/lock.json`'s `status` from `ready` to
-`promoted`. That was its entire effect. `'promoted'` appeared in four places in
-the whole codebase: the field's comment, its type union, the single write, and
-one UI function that treated `ready` and `promoted` **identically**. Nothing
-merged, published, deployed, or branched on it; its own success message read
-"change-set marked ready for promotion".
-
-It was designed as a separation-of-duties checkpoint, wired through the approval
-machinery so a second person could sign off. But `lock` is already the human
-gate — agents do not run it — so promote gated a door that was already locked.
-
-Removed end to end: the CLI command, the `sdd_host_promote_project` MCP tool,
-the admin and web HTTP routes, `executeApprovedPromote`, the lifecycle
-orchestrator action, the `project:promote` approval kind, `PromoteResult`, and
-the Promote button. `LockRecord.status` is now the single value `'ready'`.
-
-**Kept:** the `promote:mark-ready` → `project:write` alias in `migration.ts`, so
-stored permission grants on existing hosted instances still upgrade.
-
-Separation of duties is worth rebuilding — but on a baseline, where "approved by
-X at baseline B" is a reviewable fact, rather than as a status string nothing
-reads.
-### Spec trees move between local and hosted — `.waitree` archives + `wairon remote`
-
-A spec tree was stuck where it was born: a project outgrowing local had no path
-to a hosted instance, a hosted project could not be forked locally, and a
-developer whose agent worked against a hosted project could not run `wairon
-validate` from their checkout at all. Three additions close that, sharing one
-archive format.
-
-- **`.waitree`, the spec-tree archive.** A project's whole tree — its own `.wai/`
-  plus the `.wai/` of every chained subproject, at their original relative paths
-  — packs into one file with a `wairon-tree.yaml` envelope carrying the project
-  name, the packed roots, the tree's content state id and per-entry sha256s.
-  Authored design travels (specs, lock, rules, variants, surfaces, packs);
-  regenerable artifacts (`generated/`, `docs/`) stay behind unless asked for,
-  since the destination rebuilds them. Rides the same ZIP boundary and the same
-  pre-decompress safety model as `.wpack` (zip-slip, bomb, depth, symlink), with
-  caps sized for thousands of small YAML files.
-- **Hosted export/import.** `sdd_host_export_tree` / `sdd_host_import_tree` on
-  the data plane (project:read / project:admin), a **Transfer** tab in the web
-  project view, and `GET|POST /admin/projects/{id}/tree` for operators. Both are
-  TREE-scoped like lock and promote: a credential narrowed to `proj::child`
-  transfers exactly that child. Import **never writes into a live tree** — it
-  extracts to staging inside the project root and only then swaps into place,
-  moving the previous tree aside to a timestamped backup, so a rejected or
-  corrupt archive leaves the destination byte-identical. Executable content
-  (a bundled code pack) is always refused over the wire, the same rule the pack
-  surface already applies; a local extraction on your own machine is the trusted
-  filesystem tier and is not restricted.
-- **`wairon remote push|pull|attach|detach|status`, `wairon login|logout`.**
-  Migration in both directions from a checkout, over the *same* authenticated MCP
-  endpoint an agent uses — no second auth surface. `attach` records a standing
-  binding (instance + project in `.wai/remote.json`, credential in
-  `~/.wairon/credentials.json`, never mixed), after which `validate`, `status`
-  and `lock` run against the hosted tree; everything needing local files keeps
-  failing with guidance to pull first. With nothing attached, the binding falls
-  back to **the agent's own MCP configuration** — so a developer whose agent
-  already works against a hosted project types no credential twice, and the two
-  cannot drift onto different projects. `wairon mcp install --hosted <url>`
-  writes that entry.
-
-Two constraints worth knowing: creating the destination project during
-`push --unit` rides the hosted *web* route (the data plane resolves its project
-binding before dispatch, so it cannot address a project that does not exist yet),
-and `wairon logout` forgets a credential locally without revoking it — revocation
-lives in the hosted UI under Tokens, which the command says out loud.
-
-### Fixed: `wairon update` installed dev builds onto stable installs
-
-`-dev.N` was never in the self-updater's list of pre-release labels — it knew
-only `-beta.N` and `-preview.N` — so a dev build fell through the channel filter
-as a *stable* release. On the default `stable` channel, `wairon update` would
-download the build cut from the last merge to `dev`. Both halves of the release
-pipeline were already correct (every `-dev.N` GitHub release is marked
-pre-release, and npm has `latest` on the stable version with dev builds under the
-`dev` dist-tag), so this was purely the client misreading correct tags — no
-release or tag needed republishing.
-
-`dev` is now a first-class update channel alongside `stable`, `beta` and
-`preview`. Channels are ranked, and each sees its own tier and every narrower
-one: `stable` installs only `vX.Y.Z`, `dev` sees everything. Switch with
-`wairon update --channel dev` (persisted in `~/.wairon/config.json`); an
-unrecognized `--channel` value is now rejected rather than saved.
-
-Classification is closed by default, which is what failed before: any tag with a
-pre-release suffix is a pre-release, and a suffix this build does not recognize
-(`-rc.1`, `-nightly.N`) ranks at the *widest* tier instead of falling through to
-stable — so the next label added to the release pipeline cannot repeat this. The
-updater also cross-checks GitHub's own `prerelease` flag, so a release marked
-pre-release is never a stable-channel candidate however its tag reads. Two
-related fixes ride along: an up-to-date narrow channel now says when a newer
-pre-release exists on a wider one (silence read as "nothing is newer" rather
-than "nothing is newer *for you*"), and the release page size went from 20 to
-100 — `dev` cuts a build per merge, so a page of 20 could hold nothing but
-`-dev.N` and leave a stable install seeing no eligible release at all.
-
-### `sdd_get_status`, `sdd_validate_tree` and `listDomains` can be exercised end to end again
-
-Four `sdd_*` tools reached their implementations through lazy
-`require('../commands/status.js')`-style calls. Shipped builds were fine — the
-bundler inlines those — but the test runner resolves neither the `.js` specifier
-nor the path, so any test driving them through a real MCP client got `Cannot
-find module` instead of a result. They could be shipped but not proven, which is
-how the hosted data plane ended up with tools no end-to-end test covered. Now
-static imports, extending the fix already applied once to the spec surface (and
-documented there) to the rest. `context.ts`'s lazy `require('./domains.js')` —
-documented as breaking a circular dependency that does not exist — went the same
-way.
-
-### `wairon dev` is its own local mode again — no sign-in screen, no hosted chrome
-
-The local dev server could land on the hosted sign-in screen and stay there,
-reporting *"No sign-in method is configured on this instance"* — a dead end,
-since `wairon dev` deliberately configures none. Two causes, both fixed, plus the
-mode itself is now a distinct surface rather than the hosted app with pieces
-hidden.
-
-- **A stale session cookie no longer wedges the dev server.** Auto-login only ran
-  on a *cookieless* GET, but session cookies are not port-scoped: a
-  `wairon_session` left by another project's dev server, a hosted instance on the
-  same host, or an ephemeral dev data dir that was cleaned would be presented,
-  resolve to nothing, and 401. Any bearerless GET in devMode now re-establishes
-  the local session and overrides the presented cookie (re-sending `Set-Cookie`
-  only when the value actually changes). Hosted mode is untouched — it still
-  mints nothing and 404s `/web/dev-login`.
-- **An expired dev session is no longer handed back.** `startDevSession` reused
-  the first stored session for the local-developer subject without checking its
-  expiry, so after the 30-day TTL it returned a dead credential forever. It now
-  prunes expired sessions before reuse and mints a fresh one.
-- **Local mode is a separate shell.** `wairon dev` serves one project on
-  loopback with no accounts, so it no longer renders the environment/org-unit
-  navigator or hosted chrome: a slim bar with two surfaces — **Canvas** (the live
-  architecture graph, bound to the local project) and **Specs** (the spec value
-  editor, previously unreachable in dev) — sharing the same components as the
-  hosted app, so the canvas ↔ specs deep-links work in both. The sign-in screen
-  is unreachable in local mode: an unauthenticated boot probes the dev-only
-  re-establish route once, recovering silently on a dev server and falling
-  through to the real login only on a hosted one.
-
-### Validator fixes: --ci draft parity + namespace shadowing detectable from disk
-
-Two intent/implementation gaps the rule-matrix and e2e tiers surfaced, both
-fixed to match the documented intent.
-
-- **`validate --ci` waives `DRAFT_SUBSYSTEM_WARNING` like the component
-  variant** — `isCiDraftWaivable` waived `DRAFT_COMPONENT_WARNING` but not
-  `DRAFT_SUBSYSTEM_WARNING`, so any fresh draft tree failed `--ci` on a pure
-  status notice while the CLI simultaneously printed "N draft-related
-  warning(s) (non-fatal in --ci)". Both codes (the whole `DRAFT_*_WARNING`
-  family — hierarchy.ts emits each with the same unconditional draft context)
-  are now waived identically; every other warning, including draft-downgraded
-  completeness findings like an unbound Portal method, stays fatal. The e2e
-  authoring journey's `lint.allow` workaround for this is gone.
-- **Declaration-site ids always mount-qualify, so `NAMESPACE_SHADOWING` is
-  reachable** — the loader ran a chained child's DECLARED spec ids through the
-  same `qualifyId` used for references, whose root-subsystem anchor returned
-  any bare id colliding with a root subsystem name UNQUALIFIED. A child
-  subsystem named like a root subsystem therefore silently merged into the
-  root's id space (duplicate subsystem + `ORPHANED_SUBSYSTEM` noise, no
-  shadowing warning) — the exact hazard `NAMESPACE_SHADOWING` documents, with
-  its tripwire structurally unreachable from disk. Declarations now qualify
-  through a dedicated `qualifyDeclaredId` (mount realizations — a child
-  subsystem under the mount's own name — still collapse onto the mount);
-  reference resolution is untouched, so `::`-absolute and bare root-anchored
-  references from a child to root subsystems resolve exactly as before.
-  **Behavior change:** a colliding chained-child subsystem (or component/
-  interface/implementation/type) id now loads qualified (e.g.
-  `partner-billing::ledger`) and trips `NAMESPACE_SHADOWING` instead of
-  silently merging into the root subsystem's id space.
-
-### Specialist dependency matrix closed: Registry and Actor edges now flag
-
-**Superseded before release.** The Specialist has retired, and this code with it: see *Logic is an Orchestrator;
-Specialist and the Gateway pattern retire*. This entry records the dev builds that carried it.
-
-The Specialist is the wildcard block and was historically misused as a god
-component (up to holding entity state in memory); the deliberate
-counter-doctrine is that ALL storage — even in-memory — goes through the
-Store/Registry/Index/Repository mechanism and Specialists stay pure
-capabilities. The enforced forbidden list said so for Store but left the
-persistence WRITE path and one runtime block open — an oversight the
-rule-matrix sweep surfaced, now closed.
-
-- **Behavior change:** `Specialist → Registry` and `Specialist → Actor`
-  `dependsOn` edges now flag `ARCHITECTURE_VIOLATION_SPECIALIST_DEP` (error),
-  joining Portal/Observer/Orchestrator/Store/Supervisor. This closes the
-  wildcard god-component channel; Repository facades (plus Indexes, Adapters,
-  and other Specialists) remain the legal way for a Specialist to reach held
-  state. The rule message, doc comment, and the architecture standard's
-  dependency-rules bullet now state the closed list.
-- **Migration:** an existing tree with a deliberate `Specialist → Registry`/
-  `Actor` edge acknowledges it with a `lint.allow` reason on the spec — or,
-  better, retypes/rewires per the message's Repository-facade resolution.
-  (Note errors are not locally suppressible by default; re-tune the code via
-  `rules.sddRuleSeverity` first if a transition period is needed.)
-
-### Rule-matrix test tier: every finding code pinned by fire+control fixtures
-
-The validator can emit ~160 distinct finding codes; the rule tests covered some
-of them, and nothing noticed when a rule shipped without any. The new
-`tests/rules-matrix/` tier makes that coverage self-enforcing.
-
-- **Fixture contract** — `defineRuleFixture({ code, severity?, anchoredTo?,
-  scenario, tree, expectFire })`: each code gets a TRIGGERING fixture and a
-  near-identical CONTROL that must stay quiet for that code (a control only
-  guarantees its own code's silence — other codes may fire). Trees are
-  declarative miniature systems with realistic domain names, materialized as
-  real temp `.wai` projects and validated through `validateSddTree()` — the
-  same loader → schema → composed-rule-sequence path the CLI, MCP server, and
-  hosted gate run, so a rule starved by the loader fails here too. Family
-  files under `tests/rules-matrix/families/` are auto-collected; there is no
-  central manifest to conflict on.
-- **The ratchet** — `meta.test.ts` diffs the real `knownIssueCodes` universe
-  (test pack included, so namespaced `<PACK>_<CODE>` assertion codes are
-  enforced on the same terms) against the collected fixtures; `ratchet.json`
-  lists the not-yet-covered debt explicitly and only shrinks. A new code with
-  no fixture and no entry, a stale entry for a now-covered code, or an
-  unsorted/unknown entry each turn CI red — so every new rule needs fixtures
-  immediately, and deleting coverage means growing a file a reviewer reads.
-- **Pack composition proven** — a small declarative test pack
-  (`ledger-platform`) contributes a forbid-edge assertion and a guarantee
-  token; fixtures pin that its namespaced code fires and can be satisfied, and
-  that a pack-declared guarantee token is accepted while an undeclared one
-  still flags `UNKNOWN_GUARANTEE`.
-- **Coverage floors** — `vitest.config.ts` now carries `coverage.thresholds`:
-  a global floor just under the measured baseline plus a higher floor for
-  `src/core/rules/**` (measured separately — vitest excludes glob-matched
-  files from the global pool). The floors move deliberately, by humans; no
-  `autoUpdate`. Thresholds apply to `npm run test:coverage` only — plain
-  `npm test` stays coverage-free.
-
-### Black-box e2e tier: agent journeys against the built artifact
-
-Two incidents this week shared a blind spot: a long-lived MCP server running an
-older `dist/` silently stripped newly-added schema fields on write, and an older
-CLI binary rejected spec trees using new vocabulary. Both were invisible to the
-unit suite, which imports `src/` directly and never runs what actually ships.
-The new `tests/e2e/` tier closes that gap by testing the BUILT artifact as a
-subprocess.
-
-- **Agent journeys over real MCP stdio** — each suite spawns
-  `node dist/cli/index.js mcp serve` against a scratch project and drives it
-  with the official SDK client: the full authoring flow (system → subsystem →
-  components → interfaces → narratives → validate → status → live agent brief),
-  the declared-entrypoint regression (`invokedBy` kind + caller and `register`
-  steps asserted VERBATIM in the YAML on disk — the stale-server class), and
-  agent-mistake journeys proving refusals are clean and leave the tree
-  byte-identical.
-- **CLI smoke on the journey-built tree** — `validate --ci`, `lock` (asserting
-  the `.wai/lock.json` stateId digest), and `agent brief` run through the built
-  binary, exactly as a human would.
-- **Wiring** — `npm run test:e2e` (own `vitest.e2e.config.ts`, generous
-  timeouts, no coverage); the default `npm test` stays unit-scope and excludes
-  `tests/e2e/**`. CI runs the e2e tier after Build. The release workflow gained
-  a post-publish verify job: in a clean node container it installs the
-  just-published `@wairon/cli@<version>` from the registry, asserts
-  `wairon --version` prints that version, and completes a JSON-RPC initialize
-  handshake against `wairon mcp serve`.
-
-### Pack scoping: installing a pack no longer governs every project on the machine
-
-A pack installed machine-wide used to apply to every project on that machine,
-including projects that never mentioned it. The gate, `skills list`, and the MCP
-instructions therefore differed per developer, and CI — which has no pack store —
-enforced a different rule set than the author's laptop. Installing a pack now makes
-it *available*; a project *selects* what it applies.
-
-- **The pack store** — `wairon pack install <source>` puts a pack in this wairon
-  install's store (`WAIRON_PACKS_DIR`, else `~/.wairon/packs`), laid out
-  `<name>/<version>/` so several versions coexist. `pack uninstall`, and
-  `pack which <name>` to see exactly which version, path, content digest, and
-  recorded origin a name resolves to. Installing applies to nothing.
-- **Per-project selection** — `wairon pack use <name>[@version]` records the pack
-  by name in `.wai/project.yaml`. `--pin` freezes the resolved version and its
-  digest, `--source <url>` records an explicit fetch URL, `--bundle` marks it for
-  committing. `pack unuse` drops the selection and leaves the pack installed.
-  Unpinned means "latest installed".
-- **A selection carries its own source** — copied from the store's install record
-  at selection time, so the project self-describes how a fresh machine or CI runner
-  obtains the same doctrine. `wairon pack sync` installs every declared-but-missing
-  pack from it; `pack install` accepts a URL. A local-path origin is not fetchable
-  and `pack use` says so rather than leaving CI to discover it.
-- **Bundling for self-sufficiency** — `wairon pack bundle [name] [--all]` commits a
-  copy under `.wai/packs/<name>/<version>/`, which resolves **before** the store, so
-  a clone and CI need no store and no network. The answer for private packs and
-  air-gapped CI.
-- **A declared pack that cannot be resolved is an error**, never a silent skip:
-  `validate`, `status`, `lock`, `generate`, and every `sdd_*` MCP call refuse. The
-  code names the remedy — `PACK_NOT_INSTALLED` (absent), `PACK_VERSION_UNSATISFIED`
-  (installed, but not at the pin — the message lists what *is* installed),
-  `PACK_INTEGRITY_MISMATCH` (content off the pinned digest). All error severity, all
-  in `wairon rules list` and tunable via `rules.sddRuleSeverity`.
-- **A pinned `integrity` is verified on whichever path wins, recomputed from the
-  files.** A committed bundle is not exempt — it overrides the store, which makes it
-  the most important place to honour a pin, not a place to skip it. The store's
-  recorded digest is not trusted as the answer either, since a pack edited in place
-  would otherwise satisfy a pin it no longer matches.
-- **`PACK_STORE_DRIFT`** (warning) when a bundle and the store hold different
-  content for the same `name@version`. The bundle still applies, so this exists to
-  explain why an edit to the installed copy had no effect.
-- **`applyByDefault: true`** in a pack manifest seeds that pack into new projects at
-  `wairon init` — what a machine-wide install *should* mean: a default for projects
-  you create from now on, recorded where it is visible, not retroactive authority
-  over everything on disk.
-- **`rules.enforceReproducibility` now does something.** It has existed since `init`
-  started writing it and was read nowhere. It backs `UNPINNED_PACK_SELECTION` and
-  `PACK_SOURCE_UNFETCHABLE` — warnings while you work, errors under `--ci` and at
-  `lock`. You may develop against a floating pack set; CI will not accept one. A
-  bundled selection is exempt: its committed bytes are the pin.
-- **`wairon doctor`** reports unresolvable selections, installed-but-unapplied packs,
-  and packs applying via an explicit `useGlobalPacks: true`. `doctor --fix` records
-  the unapplied set as explicit selections. It never invents selections for a
-  project that deliberately applies nothing, distinguishing "never decided" (the
-  field absent from the file) from "chose deliberately".
-- **`.github/actions/setup-wairon`** — a composite action with `packs: sync | none |
-  <explicit list>`, so a cloned repo's CI needs no pack configuration.
-
-### The lock now covers the doctrine that validated the tree
-
-`wairon lock` recorded a hash of the spec tree alone. The pack set — which *is* the
-gate — was invisible to it, so you could lock a tree validated under one rule set,
-change the packs, and still promote on the strength of the earlier lock because the
-spec digest never moved. That is the stale-approval hole the commit-scoped lock
-exists to close, entering through the doctrine door.
-
-Implemented as a **second** identity rather than a change to the existing one,
-because the same StateId also stamps surface snapshots and drives their freshness
-comparison, where doctrine is irrelevant:
-
-- `computeStateId()` — spec tree only. Surface/landscape snapshots, freshness.
-- `computeGateStateId()` — tree **+** doctrine projection. `lock`, hosted lock, and
-  the promote-time re-check.
-
-The projection covers only what can change a verdict: pack identities, merged
-profile and language tables, patterns, guarantee tokens, assertions, and rule
-names/codes. Pack `skills` and `instructions` are excluded — prose cannot alter a
-verdict, and including it would invalidate every lock on a documentation tweak.
-
-It also covers the **builtin rule registry** (names, codes, default severities) and
-the project's own governing configuration (`projectType` and `rules`). So "valid
-stays valid unless the rules truly change": a release touching no rule keeps every
-lock, one that adds, removes, or re-grades a code invalidates exactly the locks it
-should, and a severity override or profile switch counts as the gate change it is.
-Keyed on the registry rather than the wairon version deliberately — the version
-would churn every lock on every patch. Residual gap, accepted knowingly: a rule
-whose *implementation* grows stricter without its name, codes, or default severity
-changing is not caught.
-
-### Teaching the connecting agent over MCP
-
-An agent connecting to a wairon MCP server received nothing: `initialize` carried no
-`instructions`, there was no prompts capability, and skills were pull-only
-resources. Spec-authoring quality depended on whether a human remembered to brief
-the agent.
-
-- **`instructions` on `initialize`** — the protocol's own "how to use this server"
-  field, which clients inject into the system prompt. Carries the L0→L5 shape, the
-  authoring order by tool name, the fact that the `sdd_*` schemas are
-  self-describing, the bound project's governing profile, the loaded packs, and the
-  directive to read `wairon-skill://sdd-architect` *before* authoring. Short and
-  pointer-heavy by design; composed per server construction, so a hosted
-  per-request server reports its own project.
-- **Packs contribute, wairon owns the default** — `instructions:` in a pack manifest
-  is appended under `## From pack "<name>"` in pack load order, optionally scoped to
-  the governing profile. A pack states its platform delta; it never restates
-  wairon's model, which would drift on every release.
-- **Skills as MCP prompts** as well as resources, so clients that surface prompts can
-  offer them directly.
-- **Pack skills can EXTEND a builtin** — `extends: sdd-implement` appends the pack's
-  section to the builtin under `## Platform: <pack>` instead of standing beside it as
-  a parallel skill the agent has to notice and reconcile. The builtin stays wairon's,
-  so an upgrade still updates it.
-- **Variant guidance reaches hosted agents** — `sdd_get_spec` on a variant-tagged
-  component returns the resolved guidance and its same-variant siblings as a derived,
-  read-only field. Previously it only reached generated agent files.
-
-### The gated write seam is its own subsystem
-
-`src/core/authoring.ts` is the boundary every spec write passes: it judges a
-component against the intrinsic rules and only then persists it, and it injects
-that same judgement into the store's delta update as a hook. No spec named it, so
-the one place that decides what may be written was the one place the tree could
-not see — and the interface it calls said so out loud (`validateComponentCandidate`
-carried "no sdd_core narrative models that call yet, because no spec names
-authoring.ts").
-
-The file's own header states the layering: *access paths → authoring → specs +
-rules*. It is a layer **above** both `sdd_core` and `sdd_validator`, and a layer
-above two peers cannot live inside one of them without inverting an edge.
-Modelling it inside `sdd_core` first made that concrete, and cost three things —
-the same mistake in three shapes: a second component that existed only to make the
-hop into `sdd_validator` legal, a new `sdd_core → sdd_validator` trusted link
-declaring a mutual coupling that did not exist, and a gate nothing depended on,
-whose real caller could only be written down as prose. So the seam is
-**`sdd_authoring`**, a subsystem of its own.
-
-- **`authoring_portal`** (Portal) is the published surface: `addComponent` and
-  `updateSpecGated`, the two exports `src/mcp/server.ts` imports. It exists so the
-  inbound hop is a drawn edge — a cross-subsystem dependency may only enter through
-  a published Portal.
-- **`authoring_orchestrator`** (Orchestrator) is the gated workflow: `addComponent`
-  judges a candidate and refuses it before anything touches disk; `updateSpecGated`
-  builds the judgement as a write hook and hands the delta outward. A Portal never
-  performs the write itself, so both writes route through here — the layer the
-  doctrine has always required a Portal's writes to reach.
-- **`authoring_core_adapter`** and **`authoring_validator_adapter`** (Adapters) name
-  the two outward hops: to `sdd_core` for the writes and for the project's own rule
-  severities, and to `sdd_validator` for the candidate judgement. Only a local client
-  Adapter may cross a subsystem boundary, and both hops run outward.
-- **`mcp_authoring_adapter`** (Adapter, `sdd_mcp`) makes the seam's inbound edge real.
-  `sdd_add_component` now reaches `authoring_portal.addComponent` instead of claiming
-  a `core_portal.saveComponentSpec` call the code never made — the spec had recorded
-  the truth only as a `symbol: addComponent` footnote.
-- **`core_orchestrator.updateSpec`** is on the contract at last — the delta applier
-  the authoring tools have written through for months, with the guards, the merge,
-  the no-op comparison and the injected gate in its narrative — and
-  **`core_portal.updateSpec`** publishes it, because the caller now stands outside
-  `sdd_core`.
-- **The `sdd_core → sdd_validator` trusted link is gone.** It was needed only while
-  the gate lived inside `sdd_core`. With the gate outside, both of its hops run
-  outward and `sdd_validator` reads the spec tree through `sdd_core` exactly as it
-  always did: no dependency is mutual, nothing needs acknowledging, and the tree now
-  declares no `trustedLinks` anywhere.
-- **No method carries an `invokedBy` any more.** Every edge the seam needs is drawn,
-  including the one from the MCP server that used only to be described.
-
-### Spec authoring: array deltas upsert, and an optional field can be removed
-
-`sdd_update_spec` documented that arrays are "matched by name (or id) and
-merged/upserted", with `action: 'delete'` to remove an element. That held for
-`methods`, `fields`, `publicInterfaces`, `dispatch`, `lifecycle`, `emits`, and
-`subscribesTo` — and was **silently false for every other array**, which fell
-through to wholesale replacement. A delta naming ONE element deleted every element
-it did not mention:
-
-```
-trustedLinks  [x, y] + delta [x]     ->  [x]     (y silently gone)
-invariants    [i1,i2] + delta [i1]   ->  [i1]    (i2 silently gone)
-lint.allow    [A, B]  + delta [A]    ->  [A]     (B silently gone)
-```
-
-The same data loss already fixed once for dispatch tables, still live for six other
-fields — destroying authored specs through the sanctioned authoring path.
-
-- **One identity table replaces the per-field special cases**, so the contract is
-  true by construction and a future array field inherits upsert semantics instead
-  of regressing to destructive replace. Keys: `dispatch` by capability, `lifecycle`
-  by phase+component+method, `emits`/`subscribesTo` by topic+event, `trustedLinks`
-  by subsystem, `invariants` and `patterns` by id, `lint.allow` by code,
-  `boundaries` by name, `globalRequirements` by description, else name or id.
-- **`action: 'delete'` now works on all of them** — including a stale `lint.allow`,
-  which wairon reports and fails `--ci` on but which the tools previously could not
-  remove, dead-ending an agent restricted to the `sdd_*` surface.
-- **An explicitly empty array still clears a list.** Under pure upsert semantics it
-  would mean "change nothing", leaving no way to empty a keyed list.
-- **`unset` removes an optional field**: `{ unset: ['basePath', 'variant'] }`. It
-  could previously be set but never cleared — `null`/`undefined` mean "no change",
-  and writing `""` leaves the field present and empty, which is a different and
-  usually wrong spec. Explicit rather than overloading `null`: a destructive
-  meaning must be asked for, not inferred from an absent value.
-
-### Re-authoring a spec no longer erases what the tool cannot express
-
-Every `sdd_add_*` / `sdd_define_*` / `sdd_write_*` tool is an upsert: called with an
-id that already exists, it rewrites that spec. Each tool's input schema is a
-hand-maintained **subset** of the canonical schema, and the handler rebuilt the spec
-from its arguments — so every field the input could not express was erased by a
-restatement that never mentioned it, under a `Successfully added` banner:
-
-```
-sdd_add_component      lint.allow, ext, auth, variant, patterns, externalLinks
-sdd_add_subsystem      lint.allow, ext
-sdd_add_type           lint.allow, ext
-sdd_initialize_system  databases (hard-reset to []), publicInterfaces, diagram
-```
-
-A suppressed warning silently coming back days later was the only tell. The same
-loss was fixed once for `sdd_define_interface` and `sdd_write_narrative`; the other
-four surfaces were never covered.
-
-- **All six write surfaces now carry forward what they cannot express**, driven by
-  each tool's *own* input-schema keys — so a field added to a tool starts being
-  replaced, and a field added only to the canonical schema starts being carried,
-  with no parallel list to drift. It lives at the tool boundary because only there
-  is "the caller cleared this" distinguishable from "the caller never mentioned it";
-  the store receives a whole spec and cannot tell those apart.
-- **`ext` is carried even though the tools accept it.** It is opaque pack data the
-  authoring agent does not own and cannot know to restate, and the schema promises
-  it is preserved verbatim. Everything else expressed keeps replace semantics.
-- **Removals are stated rather than left to be discovered.** Replace is still the
-  contract for what the input *can* say — but a restatement that drops a method or
-  empties an array now says so, naming what went:
-
-```
-NOTICE:
-- Component "graphics" already existed — re-authored in place; this input REPLACES what it expresses.
-- Carried forward (not expressible through this tool): createdAt, externalLinks, lint, ext.
-- REMOVED by this restatement: method "beta" (endpoint bindings included) — absent from the input…
-- CLEARED by omission: dependsOn (had 1) — the argument was not repeated…
-```
-
-- **Two automated checks hold the line** (`tests/mcp/schema-field-coverage.test.ts`).
-  Against the schemas the server actually publishes over `listTools` — not a copy of
-  them — every canonical field must be expressed by its tool, store-managed, derived,
-  or explicitly declared `sdd_update_spec`-only *with a reason*; stale declarations
-  are flagged too. Then each declared field is populated, the create tool re-run with
-  minimal arguments, and required to survive. The narrative **step** schema — the
-  largest hand-copied surface, where a missing field is stripped by the MCP SDK
-  before the handler runs — is covered the same way.
-
-### A misplaced field is refused at the write, not discovered at validate time
-
-`sdd_add_component` accepted any field on any `componentType` — the write path only
-checked the schema, where `portalType`, `basePath`, and `durability` are all
-optional. The stereotype rules that reject them live in `sdd_validate_tree`, and two
-of their codes (`UNEXPECTED_PORTAL_FIELD`, `DURABILITY_ON_NON_STORE`) are errors that
-never relax while draft — correctly, since a misplaced field is wrong *now* rather
-than merely incomplete.
-
-The result was a trap rather than a warning. Setting `basePath` on an Orchestrator
-succeeded, then failed validation permanently, and before `unset` existed there was
-no way to remove the field again: the component was wedged, and recreating it was the
-only escape. Agents reported this as *"non-Portal components require Portal-only
-arguments"* — the schema never required them; the spec just could not be repaired.
-
-- **Rules now declare their scope.** `scope: 'spec'` marks a rule whose verdict reads
-  one spec's own fields and no cross-spec relationship; `'tree'` (the default, so an
-  undeclared rule can never leak into the write path) marks one that needs the loaded
-  tree. The intrinsic subset runs against a **candidate** spec before it is written.
-- **Two rules split along that line**, since each mixed intrinsic and tree checks:
-  `portal-fields` (field shape) out of `portal-endpoints` (endpoint bindings), and
-  `durability-declaration` (does the declaration belong here) out of
-  `durability-round-trip` (hydration reachability). Same codes, same messages, same
-  severities — relocated, not rewritten.
-- **`sdd_add_component` and `sdd_update_spec` gate on the merged spec**, so an update
-  cannot introduce a misplacement either. A refusal names the code and the remedy,
-  and nothing reaches disk — the fix is to retry the call, not repair a saved spec.
-- **Deliberately not the whole rule set.** A component is legitimately authored
-  before its interface, dependencies, and narratives exist, so tree rules would
-  reject every correct first step of the authoring order. A draft Portal without its
-  `portalType` yet still writes (a warning, as in a tree run); a Portal-only field on
-  a Store does not.
-- **Mechanical re-saves stay ungated** — status promotion, layout normalization, and
-  migrations pass no gate, so a spec that predates a rule remains loadable and
-  repairable via `unset`. `rules.sddRuleSeverity` disarms the gate exactly as it
-  disarms the same code in `validate`.
-
-### Hosted web UI: custom theme builder (new, `feat/webapp-custom-theme-builder`)
-
-The theme picker's three built-in palettes are now a starting point, not the
-menu. A **theme builder** (`/themes`, reached from the header menu's new
-"Custom themes" section) lets a user author, duplicate, and delete their own
-themes, stored per browser alongside the existing UI settings.
-
-- **Sparse overrides over the derived engine.** wairon derives its whole
-  `--wairon-*` palette from one primary color, so a custom theme stores only
-  the edits: resolution is derive(primary, mode) → base overrides → per-mode
-  overrides. Every field in the builder shows the resolved value, marks whether
-  it is `derived` or `custom`, and resets per field — untouched tokens keep
-  adapting to light/dark/high-contrast. (The reference SYW builder this ports
-  layers derivation *over* a full snapshot, which silently discards base edits;
-  the inversion is deliberate.)
-- **The editor.** Grouped token editors (brand, surfaces, text, borders &
-  effects, status) with color pickers + alpha, shadow presets, and free-form
-  CSS for gradients; a seed control that re-derives the full palette from one
-  color; per-mode override pinning; live surface/typography previews with
-  WCAG contrast ratios; and a "generate accessible text set" pass that pins
-  AA-compliant (4.5:1) text tokens for the previewed mode. Edits stage in a
-  local draft with a floating save bar — nothing applies or persists until
-  saved.
-- **Custom themes are first-class everywhere**: they appear in the header-menu
-  and login-cog pickers, re-theme the canvas chrome through the bridge, and
-  `-rgb` companions + the accessible primary-contrast recompute from the final
-  colors automatically. A vanished custom id degrades to the default theme.
-- **The picker is the shared SYW `ThemeMenu` component** (matching waffler_ui):
-  one compact "Appearance" section — a dropdown trigger showing the active
-  theme's swatch pill + name, a flyout listing every theme with "Create custom
-  theme" at its foot, and the mode toggle directly beneath. Extracted as a
-  props-only, app-agnostic component (`components/ThemeMenu.tsx`, styled purely
-  through `.tmenu-*` classes) so the same menu can be lifted into any SYW app.
-
-### Declared entrypoints: `register` steps + `invokedBy` (new)
-
-Unused-detection could only see callers the narrative graph modeled, so a callback
-handed to the runtime (timer, event listener, shutdown hook) or a method invoked by
-an external system read as `UNUSED_COMPONENT`/`UNUSED_METHOD` — and the lint.allow
-that silenced the finding also stopped reachability from propagating through the
-method's narrative. Two mechanisms close that honestly:
-
-- **`register` narrative step** — a runtime-callback HANDOFF with the same target
-  shape as a `call` step (`targetComponent` + `targetMethod`). Reachability treats
-  it as an edge (the callback is reached wherever its registering narrative is),
-  but it is NOT an invocation: exempt from call-graph conformance
-  (`CALL_STEP_UNREALIZED`), never a call-cycle edge (`UNCONDITIONAL_CALL_CYCLE`),
-  and not followed by the durability boot walk — registering a hydrating read at
-  init is not executing it at boot, matching the non-flooded boot-graph doctrine.
-  Targets get the identical existence/dependency/contract validation call steps get.
-- **`invokedBy` on L3 methods** — `{ kind: runtime | external | sibling-subsystem,
-  caller }` declares a real caller OUTSIDE the modeled graph. Unused-detection seeds
-  the method as an entrypoint, so reachability PROPAGATES through its narrative —
-  unlike a lint.allow, which only hides the finding. The declaration is audited:
-  missing or placeholder-thin `caller` prose warns `INVOKED_BY_UNDESCRIBED`, and a
-  declaration on a method the internal walk already reaches warns
-  `INVOKED_BY_REDUNDANT` (stale — remove it).
-
-### The authoring tools say what they accepted
-
-A create could not say what level it was authoring at, a read could not ask for
-one method, and only the TOP level of a tool's input refused a key it did not
-know. Each gap ended the same way: a call that reported success over something
-it had not done.
-
-- **A create states its `status`.** `sdd_add_subsystem`, `sdd_add_component`,
-  `sdd_define_interface` and `sdd_write_narrative` take a `status` now, so a spec
-  authored at a level its author already considers settled is written at that
-  level instead of being born `draft` and needing a follow-up `sdd_update_spec`
-  that is easy to forget — and easy to forget once per spec across a whole tree.
-  Omitting it keeps exactly the old behaviour: `draft` for a new spec, and the
-  status already stored for a re-authoring. `sdd_initialize_system` and
-  `sdd_add_type` do NOT take one: the L0 and a type have no status field, and an
-  argument that could not be honoured is the kind of lie this release is about.
-- **No create lowers a stored status.** A stated status may raise a spec's level
-  or restate it; one that would take it backwards is refused by name, and nothing
-  is written. The store cannot make that call — it cannot tell a stated `draft`
-  from the default one — so the rule lives at the tool boundary, which knows what
-  the caller actually said. Reopening a frozen spec for revision is still
-  `sdd_update_spec`'s job, which sets the demotion deliberately and says so.
-- **`sdd_get_spec` can return one method.** Pass `methods: ["runJourney"]` and
-  only those come back; every other field of the spec is unchanged. A 45-method
-  implementation fetched whole to look at one of them is the read side of the
-  same waste a blind restatement is on the write side. A name the spec does not
-  declare is refused, with the names it does declare, so a typo never reads as a
-  method with no content — and a filtered answer carries a `partialResult`
-  marker naming how many methods it left out, because `sdd_define_interface` and
-  `sdd_write_narrative` REPLACE the method list and re-authoring from a partial
-  read would delete the rest.
-- **An unknown key nested inside a tool's input is refused by name.** The
-  top-level strictness that caught `dependson` stopped at the top level:
-  `methods: [{ "descriptoin": "…" }]` merged, was stripped by the writer schema,
-  and the tool answered "Successfully saved". Every SHAPED nested object in every
-  tool input is strict now — a method, a param, a narrative step, a finding, a
-  dispatch binding, an endpoint, a lifecycle entrypoint, a trusted link, a type
-  field, an invariant. **This is a breaking change** for a caller that was
-  sending an unknown nested key; see *Upgrading*.
-- **`sdd_update_spec`'s `delta` stays open — and names what had no effect.** It
-  is the one input that is deliberately permissive, because the shapes below it
-  nest further than any hand-copied schema at the boundary should restate. A
-  schema cannot help there, so the answer does: the change report carries an
-  `ineffective` list, printed under `NO EFFECT`, naming by path every key the
-  level's schema dropped (`methods.run.descriptoin`), every value the stored spec
-  already held, and every `unset` that removed nothing. A nested typo comes back
-  named instead of stripped in silence.
-- **`sdd_update_spec` takes `dryRun`.** It runs the whole write — the merge, the
-  renumbering, the label resolution, the comparison and the candidate gate — and
-  answers with the change report it would have produced, marked `DRY RUN`, with
-  `written: false`, nothing stamped and not one byte of the stored file moved.
-  The gate runs deliberately: an account of a write that would itself be refused
-  is not an account worth having. Worth doing before a delta that renumbers a
-  long narrative, where the relocation rules are easier to read in a report than
-  in a diff.
-
-### The tools answer with data, not only with English
-
-Every `sdd_*` tool answered through one text block, so an agent that wanted to
-know what a write DID had to parse a sentence. That is why the last several
-releases went into making those sentences trustworthy: prose was the only
-channel there was. The tools whose answer is already a structure now **declare
-an `outputSchema` and return `structuredContent`** beside the text, so a caller
-reads fields instead of English — and can see the shape on `tools/list` before
-it ever calls.
-
-- **The text block is unchanged.** Every sentence, every `NOTICE` block, every
-  JSON payload is byte for byte what it was; a client that understands no
-  structured content sees no difference at all. The notice block is now composed
-  from the same list the structure carries, so the two can never disagree about
-  what a write reported.
-- **The six create tools answer with a write receipt.**
-  `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_add_component`,
-  `sdd_define_interface`, `sdd_write_narrative` and `sdd_add_type` return
-  `{kind, id, name, replacedExisting, status?, notices[], scaffoldedProjectPath?}`.
-  A create is an upsert, so "added" and "re-authored in place" are two outcomes
-  of one call, and `replacedExisting` is the first time that is a field rather
-  than a verb in a sentence. `status` is the status the spec **actually holds**
-  after the write — which is also a fix: the boundary used to hand the store a
-  bare `draft` and let the store's no-demotion guard turn it back, so it did not
-  itself know what a restatement of a `complete` spec had written. It resolves
-  the stored status now and writes it as itself.
-- **`sdd_update_spec` returns the change report as data.** `SpecChangeReport`
-  was already a structure — `written`, `dryRun`, `changes[]`, `ineffective[]`,
-  `notices[]`, `summary` — and only the rendering was prose. Both channels now
-  carry the one report, so a script can branch on `written` or read `ineffective`
-  by path without matching on `NO EFFECT`.
-- **`sdd_validate_tree` returns findings as objects**, split into `errors` and
-  `warnings`, each with `code`, `severity`, `message`, `specId` and the
-  `draftContext` flag `--ci` waives on. The text block was already this JSON; what
-  is new is that the shape is DECLARED, so a client validates it on arrival
-  instead of trusting it.
-- **`sdd_get_spec` keeps the derived markers out of the spec.** Structured
-  content is `{kind, id, spec, partialResult?, variantGuidance?}` — the stored
-  spec under its own key, and the two derived, read-only markers beside it,
-  where nothing can mistake them for something stored and re-author them back.
-  The text block still folds them in, exactly as before.
-- **The stale-server warning reaches both channels.** When the build on disk
-  changes under a running server, the banner is appended to the text block as it
-  always was AND `staleServer: true` is set on the structured content. A guard
-  that has twice stopped a stale process from silently stripping fields is not
-  one to leave behind for readers who moved to the structured half.
-- **A refusal is still a refusal.** Per the MCP specification a tool declaring an
-  `outputSchema` owes `structuredContent` on every non-error result; an `isError`
-  result is exempt, in the SDK's server-side check and in its client-side one. So
-  a refusal answers exactly as it did — the message, `isError`, and no invented
-  report for a write that never happened.
-
-The remaining tools were left alone deliberately. `sdd_get_status` answers a
-prose dashboard that no structure exists behind yet, and `sdd_rename_component`,
-`sdd_rename_method`, `sdd_list_external_interfaces` and `sdd_get_agent_brief`
-already answer in JSON — declaring their shapes means hand-copying four rich
-types at the boundary, which is the drift the input side has a coverage test to
-prevent and the output side does not yet.
-
-### Type references: what a union may say, written down
-
-The tree holds well over a hundred type references containing a union, nearly
-all of them `T | null` returns, and it validates clean — so union handling
-worked. What was missing was any statement of WHICH shapes work, which is the
-same as not knowing whether the next one an author writes will.
-
-- **The grammar is documented where an author reads it**: on the `type` of a
-  parameter and of an entity field, and on a method's `returns`, in both the MCP
-  tool schemas and the canonical spec schema, with the full rule on
-  `src/models/type-references.ts`. A type string is TOKENIZED, not parsed as a
-  type expression — every identifier it names is a reference that must resolve,
-  and `|`, `<>`, `[]`, `,` and `()` are separators. That one rule is why a union
-  needs no special syntax: `Invoice | null`, `Invoice | Receipt` (both must
-  resolve), `Promise<Invoice | null>`, `Map<string, Invoice | null>`,
-  `Invoice[] | null`, `(Invoice | null)[]`, qualified members, and spacing that
-  does not matter. A union of string literals (`'read' | 'write'`) names no type
-  at all, and resolves to nothing rather than to a missing type. A parameter's
-  `optional` says the caller may OMIT it, which is a different contract from a
-  parameter that must be passed and may be passed as nothing — that one is
-  required, with a union for a type — and its description now says so, because
-  using `optional` for nullability is the mistake that started this.
-- **A migration leaves a union exactly as written.** The reference rewrites
-  behind `sdd_rename_component`, `sdd_rename_method`,
-  `sdd_externalize_subsystem` and `sdd_internalize_subsystem` remap a `type`
-  field as a WHOLE STRING, so a bare `invoice` is qualified to
-  `billing::invoice` while `invoice[] | null` is left verbatim. That is not a
-  dangling reference: a type reference matches by name as a suffix of the
-  qualified id, whichever namespace the naming spec sits in, so the unqualified
-  member still resolves. Both halves are now pinned by tests, against a
-  word-by-word rewrite that would edit inside the union.
+- **A project's own `complexity`, `documentation` and `naming` settings override its
+  profile pack's**, as its severities already did.
+- **Specs:** `Specialist` and `Gateway` retire. Type positions follow the grammar.
+  `lint.allow` gains `at` and `covers`, and `sdd_update_spec` merges allows by code
+  and `at`. A method effect can be `lifecycle`. An L1 subsystem carrying
+  `projectPath` is a deprecated form.
+- **Lock record format 2.** It adds `members` (alias → project, approved state),
+  `code` (the conformance results beside the claim), `projectId` and one digest per
+  spec. `children` is read for one release and never written.
+  - The **gate identity** is computed differently. It no longer depends on the
+    machine, and it now also covers the governing doctrine, the pinned contracts,
+    `composition` and the members' approvals. Code findings are recorded beside the
+    approval instead of inside it.
+  - So every v5.1.0 lock reads stale once, and `lock-check` says why.
+  - `lock` never rewrites spec `status`. A spec that is approved and unchanged is
+    judged as complete in memory.
+
+#### Hosted
+
+- `wairon host doctor --fix` is required (step 2). Every member of a hosted family
+  becomes a project record that inherits access through its parent. An explicit
+  "no" on a member's own record beats any inherited grant.
+- **Writes are judged per member and per subsystem.** A spec write into a member, or
+  a subsystem, that the caller may not write is refused with `SubsystemWriteDenied`,
+  even when the caller may write the parent. A lock needs write on the whole project.
+- **Promote is removed:** `wairon host promote`, `sdd_host_promote_project`, the
+  admin and web promote routes, the `project:promote` approval kind and the Promote
+  button. Stored `promote:mark-ready` grants still migrate.
+- **Token mint requires its project list** (`*` for the owner's full reach). A token
+  qualified `project::member` is mapped to the member's record id. The mint answer
+  is `{ token, mapped }`.
+- **Admin API answers:**
+  - Policy-governed project creation (`POST /web/projects`, the policy portal's init,
+    an approved init) answers a `GovernedProjectCreation` (`record`, `packImpacts`,
+    `profileImpact`); read the record from `record`.
+  - A refused lock answers 409.
+  - A lock request whose design moved after it was requested ends `cancelled`, with
+    the reason.
+  - `environment` is no longer part of a project-init request.
+- **Defaults and values:**
+  - A landscape entry with no audience is `instance` (it was `public`).
+  - The exposure, audit and quota settings offer only the values that behave
+    differently: `adminApiMode` is `disabled` or `enabled`, `metadataMode` is `none`
+    or `redacted`, and quota `mode` is `observe` or `warn`. Stored retired values are
+    mapped with a warning for one release.
+- **Git backing commits `.wai/lock.json`**, so an approval reaches the bound remote.
+- A member with a `../` or git source is refused on hosted (hosted roots are
+  isolated). A hosted detach or adopt moves the member's directory.
+
+### Deprecated
+
+**Removed right after v6.0.0.** Each is still read in v6.0.0, reported as a notice,
+and rewritten by `wairon doctor --fix`:
+
+- a leading `::` (`::shared::error-type`);
+- `super::`;
+- member paths (`billing::invoice::invoice_portal`);
+- the L1 mount form (a subsystem carrying `projectPath`);
+- the hosted token qualifier `projectId::alias` (mint by record id).
+
+**Read for one release:**
+
+- the long-form member `path` key (`doctor --fix` rewrites it to the one location
+  key);
+- `children` in a lock record;
+- `generate --no-recurse` and `lock --no-recursive` (accepted and ignored);
+- a pack's `languages.<id>.foreignBuiltins` (`PACK_FIELD_DEPRECATED`);
+- the retired hosted settings values.
+
+`wairon packs` remains a deprecated alias of `wairon pack`.
+
+### New
+
+**Members, parts and projects.**
+
+- A member is declared by one location key: `scheduler: services/scheduler`,
+  `admin: ../admin`, `payments: git@host:acme/payments.git#<commit>` or
+  `hosted:<id>`. Its content decides whether it is a project (it has an id, an L0 or
+  a lock) or a part (anything else).
+- A part's subsystems are the parent's own: same ids, same lock, same agents.
+- Git members are fetched at their pinned commit into an offline-capable cache
+  (`WAIRON_CACHE_DIR`). `wairon member update` moves the pin.
+- A part stored outside its parent can pin the excerpt of the parent it uses, so its
+  own CI can validate it alone.
+
+**Cross-project references.**
+
+- `project.yaml` `externals` declares the projects a project consumes. Each level's
+  `publicInterfaces` is an export table, with named re-exports, type exports and
+  wildcards.
+- `wairon externals pin | status | list` records and compares exactly what is used,
+  at signature level. `use` imports bring in bare names.
+- `validate --family` (and `sdd_validate_tree` with `family`) runs every member's own
+  gate and composes each external against its live producer.
+
+**Family migrations.** `member attach | detach [--widen] | adopt | rename-alias |
+internalize | promote | demote`, `project rename` and `subsystem externalize` print a
+plan, ask, then apply to every project they touch, or to none. Each has an MCP tool
+with `dryRun`. A rename keeps the old id in `previousIds` and asks for a re-lock
+(`PROJECT_ID_RENAMED`).
+
+**Approval.**
+
+- `wairon lock-check` checks that the design in the tree is the approved design, and
+  comes with a reusable workflow.
+- `wairon status` names the specs that changed since approval.
+- `lockedBy` records where the identity came from (`git`, `os` or `hosted`).
+- A parent can require approved members (`composition.requireApprovedMembers`).
+
+**Packs.**
+
+- A machine-wide pack store with versions (`pack install | uninstall | which`).
+- Per-project selection (`pack use | unuse`, `--pin`, `--source`, `--bundle`),
+  `pack sync` and `pack bundle`.
+- `pack impact`, also `sdd_pack_impact` and hosted previews: what a pack changes,
+  before it is written.
+- Parent requirements: `composition.requirePolicies`, judged by `POLICY_NOT_ADOPTED`
+  and `POLICY_DEVIATION`.
+- `applyByDefault` seeds a pack into new projects. A pack's `instructions` and skills
+  that extend a built-in skill reach the connecting agent.
+
+**Types and contracts.**
+
+- One neutral grammar: ten primitives, `list` / `set` / `map`, `T?`, `async T` and
+  `result<T, E>`. It reaches OpenAPI, the ERD and the snapshots, and implementer
+  briefs carry each language's mapping.
+- New type kinds: `enum`, named scalars (`holds`) and `signature` types.
+- A method's signature text is derived from its `params`, and `signatureFrom` names
+  the method or signature type it forwards.
+- Contract methods declare their `findings`, and a method can name its own
+  `sourcePath`.
+
+**Code ↔ spec.**
+
+- Calls are checked where they land, and parameters, exports, type shapes, listener
+  mounts and routes are compared against the code.
+- `rules.conformance.sourceRoots` reports `UNCLAIMED_SOURCE_FILE` for code no spec
+  names.
+- A type can claim its file (`sourcePath`, `symbol`).
+- A method's `calls` declares what it calls when its narrative shows no steps.
+- `register` steps and `invokedBy` declare callers outside the modelled graph.
+- `rules.conformance.carried` holds classified debt.
+
+**Design blocks.**
+
+- Logic is an Orchestrator with `dependencyClass: pure | read`.
+- Query is a Repository member, and a Supervisor may own its own state.
+- Built-in variants: `arbiter`, `projector`, `composer` and `codec` on Orchestrator,
+  and `gateway` on Portal.
+- A `publicInterfaces` entry can name its `consumers`.
+
+**Readability checks.** Narrative complexity, naming discipline and method cohesion,
+each with configurable thresholds.
+
+**Authoring.**
+
+- Rename and move tools: `sdd_rename_component`, `sdd_rename_method`,
+  `sdd_rename_type` and `sdd_move_methods`. A move that a rule refuses ranks the
+  legal homes. A rename leaves a trace (`previousIds`, `previousNames`) and keeps
+  published names.
+- Creates take a `status`, `sdd_get_spec` can return chosen `methods`, and
+  `sdd_update_spec` takes `dryRun` and `unset` and reports `ineffective` keys and
+  `testsToRevisit` (`rules.conformance.testRoots`).
+- A write is refused when it would place a field its component type cannot have.
+
+**Agents.**
+
+- Agents are **live briefs**, through `sdd_get_agent_brief`, the `wairon-agent://`
+  resource and `wairon agent brief`. Agent files are opt-in
+  (`rules.materializeAgentFiles`), and `wairon agent customize` adds your own
+  guidance in `.wai/agents/<id>.md`.
+- The new `sdd-delegate` skill spawns a subagent from a brief.
+- Execution budgets (`execution.tier`, `wairon execution show | set-tier`) give
+  each agent a capability tier, a turn ceiling and a tool class.
+- The MCP server sends `instructions` on connect and offers the skills as prompts.
+
+**Severity `notice`:** reported everywhere, never a failure. Any code can be set to
+`notice` in `rules.sddRuleSeverity`.
+
+**Design export.** `wairon export` and `exportDesign()` produce the whole resolved
+design as one deterministic JSON document (`wairon-design` 1.0,
+`schemas/design-export-1.json`, `docs/design-export.md`).
+
+**Moving between local and hosted.**
+
+- `.waitree` archives.
+- `wairon remote push | pull | attach | detach | status`.
+- `wairon login | logout`.
+- `wairon mcp install --hosted`.
+- Hosted tree export and import, also from the web Transfer tab.
+
+**Hosted.**
+
+- Access rules per subsystem.
+- A permission explanation (`/web/admin/permissions/explain`).
+- Relation health on the canvas and on the project's Relations tab.
+- Member crumbs and openable member nodes.
+- A custom theme builder.
+- `WAIRON_AUDIT_POLICY` and `WAIRON_QUOTA_POLICY` set the audit and quota policies.
+
+**CLI.**
+
+- `wairon diagram` draws relation health (`--no-health` skips it).
+- `validate --all` prints every finding, with per-code totals.
+- `wairon update --channel dev`.
+- `wairon dev` is a local Canvas and Specs shell with no sign-in.
 
 ### Fixes
 
-- **Re-authoring a subsystem quietly reopened it.** `saveSubsystemSpec` was the
-  one saver without the no-demotion guard its four siblings have had all along,
-  and every create tool states `draft`, so `sdd_add_subsystem` on an existing id
-  wrote `draft` straight over a `complete` subsystem — taking its whole subtree
-  back into draft context, where draft-related findings are downgraded and
-  `--ci` waives them, with nothing in the answer saying so. A subsystem arriving
-  at `draft`, or without a status, now keeps the status already stored, exactly
-  as a component, an interface and an implementation do. A demotion the caller
-  states is still honoured: `sdd_update_spec` with an explicit `status` sets it,
-  and that path now passes the flag it always meant to.
-- **A write that changed nothing reported "Successfully updated".** `sdd_update_spec`
-  answered with the same sentence whether a delta rewrote a narrative or landed
-  nowhere at all, and re-stamped `updatedAt` on the way, so an edit that never
-  happened was indistinguishable from one that did — and left a diff behind to prove
-  it had. An update now compares the merged spec with what is stored, read through
-  the same level schema the writer uses, and **writes nothing when they match**: the
-  answer says so, and the file is untouched. When something did change, the answer
-  names every change by path — `methods.runJourney.narrative.step 7.type`,
-  `dependsOn`, `description` — with what it was and what it is. `updateSpec` and
-  `updateSpecGated` return that report instead of a bare notice list.
-- **A method-level `unset` silently did nothing.** `unset` was a verb at the top
-  level only. One level down — on a method, a param, a field, a narrative step, a
-  dispatch binding — it was neither a field nor a verb: it merged onto the element
-  as data, the writer schema stripped it, and the tool answered "Successfully
-  updated implementation spec" over a spec it had left exactly as it found it. A
-  method's `symbol`, a step's `label`, could be set and never cleared. `unset` is
-  now honoured at every level, and `[]` clears a method's `narrative` the way it
-  clears every other list it names (fed to the step merge, `[]` used to mean "upsert
-  no steps" and left the narrative in place).
-- **Changing a step's `type` left the old type's fields standing.** A retype merged
-  the new type's fields over the step and kept everything else, so a `branch` that
-  became a `call` still carried its `condition` and `onFalseStep`: a step the schema
-  accepts, a write that reports success, and a `MALFORMED_FLOW_STEP` at the next
-  validate, blamed on the narrative rather than on the edit that made it. A step
-  whose `type` changes is now **rebuilt for its new type** — every field the new type
-  cannot carry is dropped and named in a NOTICE, while the human's own content (the
-  `description`, and the `label` other steps address it by) is kept. A delta that
-  retypes AND sets a field the new type cannot carry is refused rather than quietly
-  stripped: dropping a stored leftover is cleaning up after the old type, dropping
-  what the caller just wrote is ignoring them. Dissolving a region is now an
-  explicit, reported act — retype a `loop`/`try`/`parallel` header and its `endStep`,
-  `catches` and `finallyStep` go with it.
-- **A label could not retarget a jump that already had a number.** Symbolic labels
-  resolved only where no number was stored: a delta repointing an existing jump with
-  `onFalseLabel` merged the label onto the OLD number, and resolution then saw both
-  and refused the write as a contradiction ("sets both `onFalseStep=2` and
-  `onFalseLabel="cleanup"` — they disagree"), leaving hand-counted numbers as the only
-  way to move a jump. In a DELTA the number is what is stored and the label is the new
-  intent, so **the stored twin gives way** — for every `*Label` field, and for a
-  `cases`/`catches` entry's `label`. A delta that sets the number and its label
-  together is still a genuine contradiction and still refused.
-- **Three step deletes that broke a narrative silently.** `action: "delete"` refused
-  exactly one thing: a step another step jumps to. It now also refuses **a delete that
-  addresses no step** (a marker the writer stripped while reporting success), **a
-  delete whose restated `label` or `description` does not match the step it landed
-  on**, and **a delete of a loop/try/parallel header whose body is still there** —
-  which used to leave that body standing with nothing looping, guarding or forking it:
-  a narrative that still validates and no longer means what it says. The second guard
-  exists because step deltas apply in ascending order against the numbering the
-  earlier entries of the SAME delta left behind — delete step 3 and step 7 becomes
-  step 6, so a second delete written as 7 addresses what used to be step 8. Restating
-  what is being deleted is the only way that is ever noticed. That order is now
-  written down: in the tool description, on the `SpecDelta` type, and above
-  `updateSpec` itself alongside the rest of the application pipeline.
-- **A malformed marker on a narrative step was a silent no-op.** The keyed arrays
-  have refused `remove: "true"` and `action: "remove"` since the delta intent guards
-  went in; narrative steps, which carry two more verbs than any of them, were
-  skipped — the marker matched no branch, the writer stripped it, and the caller was
-  told a step had been removed over a narrative left exactly as it was. A step delta
-  now refuses a non-boolean `remove`, an `action` that is neither `insert` nor
-  `delete`, a `captureJumps` on anything but an insert (where alone it means
-  something), and a step delta with no `stepNumber` to address.
-- **The identity promise stopped one level below the spec's own fields.** "Arrays
-  upsert, they do not replace" was true of a spec's top-level arrays and of nothing
-  inside them: a delta naming ONE of a method's `params` replaced the whole list and
-  silently deleted the rest, and a delta retargeting ONE of a `try` step's `catches`
-  dropped every other clause — the same data loss the top level was fixed for, one
-  level down, with the tool still promising otherwise. Nested arrays now merge by
-  identity at **every** depth, with the same delete markers and the same
-  phantom-delete refusal. Switch cases are addressed by `value` and try catches by
-  `error`, never by their `step`, which is a relocatable number and not an identity.
-  Parallel arms follow the general rule: named, they merge by name; unnamed, they
-  carry no identity at all and the list still replaces wholesale.
-- **The authoring seam's configuration read reached past the portal it declares.**
-  `candidateOptions` called `projectConfigRepository.load()` directly, so the spec had
-  to carry intent prose where a call step belonged. It calls the core portal's
-  `loadProjectConfig` now — the identical one-line read — and the spec says so with a
-  call step, like its two siblings.
-- **A stale lock reported itself as locked.** The hosted project config view judged
-  "locked" from the mere EXISTENCE of a lock record while the promote gate compared
-  state identities — so a project whose specs changed after locking still claimed a
-  freeze that did not hold, the same time-of-check gap the lock exists to close,
-  reintroduced in the reporting surface. `readLockState()` is now the single
-  authority (`unlocked | locked | stale`), shared by the promote gate, the config
-  view, `wairon status`, and `wairon doctor`, so they cannot disagree. `locked` now
-  means the lock is IN FORCE; `lockStale` distinguishes voided from never-locked so
-  a UI can prompt for the re-lock.
-- **Lock staleness was invisible until promote.** It was compared in exactly one
-  place, so a voided lock surfaced only when someone tried to promote — fail-closed,
-  but late. `status` and `doctor` now report it with the reason and the remedy.
-  Deliberately NOT auto-relocking on upgrade: the record carries `lockedBy` and
-  asserts that a human approved promoting this state, so regenerating it would make
-  that assertion untrue.
-- **Organizations page crashed on a hosted instance upgraded to v5** with
-  `Cannot read properties of undefined (reading 'localeCompare')`. Units persisted
-  before slugs existed have no `slug`, `host doctor --fix` is operator-invoked, and
-  the units view sorted on `slug` straight off the wire — a data-shape problem
-  surfacing as an unreadable minified UI crash. The read path now derives a missing
-  slug from the id (a unit's id is its dot-qualified path and the slug is its last
-  segment, so a root unit's id *is* its slug — the same rule the migration applies).
-  Identity is never rewritten and a present slug never overwritten.
-- **An unmigrated data dir now announces itself at startup.** `wairon serve` reports
-  pending legacy shapes and names the remedy, reusing the migration's own dry run as
-  the detector so the two cannot disagree. It writes nothing and never blocks
-  startup. Previously the first symptom was zero permissions or a crashed page.
-- **CI typechecks the web app.** `web/` is a separate package, not an npm workspace,
-  so the root `typecheck` never covered it and `build:web` does not run in CI — a
-  type error in `web/src` could reach main unnoticed.
-- **A test no longer rebuilds the project mid-suite.** The hosted-server example test
-  ran `npm run build`, whose `prebuild` cleans `sdk/dist`, while ~126 other test
-  files loaded in parallel workers — so any file importing `@wairon/sdk` in that
-  window died with `Cannot find module '/sdk/dist/index.js'`. Intermittent, invisible
-  when run alone, and more likely the more tests the suite gained.
+- **Delta merges.**
+  - Every array merges by identity at every depth (it used to replace whole lists
+    such as `trustedLinks`, `invariants`, `lint.allow`, `params` and `catches`).
+  - A field a delta leaves out keeps its value, `unset` works at every level, and
+    `[]` clears a narrative.
+  - A step whose `type` changes is rebuilt for the new type.
+  - A label can retarget a jump that already has a number.
+  - Deleting a step is refused when it addresses nothing, its restatement does not
+    match, or it would leave a region body without its header.
+  - Malformed step markers are refused.
+- **Re-authoring** with a create tool carries what the tool cannot express
+  (`lint.allow`, `ext`, `auth`, …) and names what it removed. It no longer reopens a
+  complete subsystem as draft.
+- **No-op writes.** A write that changes nothing writes nothing and says so. A real
+  change is reported field by field, and narrative changes step by step.
+- **Write targets.** `sdd_move_methods` into a component without a contract creates
+  it. An unknown owning subsystem is refused.
+- **Stale locks.** A stale lock no longer reports as locked; `status` and `doctor`
+  name the staleness and its remedy.
+- **Hosted.**
+  - The legacy validate view no longer reports every tree as clean.
+  - The organizations page no longer crashes on units saved before slugs existed.
+  - An unmigrated data dir is announced at startup.
+  - Read-only topology tools need read access, not write.
+  - A unit removal refuses a missing or unknown disposition.
+  - `pack remove` takes the name the listing shows.
+  - A producer-run failure answers its own HTTP status instead of 500.
+- **Hosted CLI.**
+  - `wairon host unit`, `host key` and `host permission` behave as the hosted
+    quick start documents them.
+  - `host unit create` without `--parent` creates a `business_entity`, the only
+    kind a top-level unit can be (it defaulted to `team`). Under a parent the
+    default stays `team`.
+  - `host key mint` refuses a project that no hosted record holds, and mints
+    nothing.
+  - Granting `project:write` to a user who cannot read that scope, or minting a
+    token for an owner who cannot read its project, warns and names the
+    `project:read` grant that fixes it.
+- **`wairon dev`.**
+  - A stale or expired session no longer strands it on a sign-in screen.
+  - It places its project at startup, so it no longer warns that a
+    permission-model migration is pending.
+- **`wairon update`.** The stable channel no longer installs dev builds.
+- **`wairon init`.**
+  - It keeps an existing configuration.
+  - It writes no agent file.
+  - For an Antigravity (`agy`) target it no longer writes a project
+    `.gemini/settings.json`, which Antigravity ignores. It prints the command that
+    registers the server machine-wide instead.
+  - It refuses clearly without a terminal (use `-y`).
+  - Provisioning and externalizing never overwrite an existing `project.yaml`.
+- **MCP registration.** A project-scoped registration (`.mcp.json`,
+  `.gemini/settings.json`), written by `init`, `mcp install` or `doctor --fix`, holds
+  nothing machine-specific. It runs `wairon mcp serve` from the PATH (or the CLI by a
+  project-relative path when the CLI is installed inside the project) and pins no
+  project directory. `doctor --fix` rewrites an older entry that named absolute
+  paths. A `--global` registration is machine-wide and still names the CLI by its
+  absolute path.
+- **`wairon doctor`.** On a machine without Antigravity it reports nothing to
+  register, instead of a missing registration.
+- **`wairon generate`.**
+  - It keeps the derived context documents current.
+  - It prints what it reconciled.
+  - It refuses an unknown `--target`.
+- **Line endings.** Every `.wai` writer keeps a file's line endings.
+- **`validate --ci`.** It waives `DRAFT_SUBSYSTEM_WARNING` like
+  `DRAFT_COMPONENT_WARNING`.
+- **Rule false positives fixed.**
+  - `MEANINGLESS_BRANCH` reads fall-through from the step graph.
+  - `INESCAPABLE_CYCLE` accepts an exit off the end.
+  - `UNREALIZED_CLAIM` ignores quoted text.
+  - `UNUSED_TYPE` counts type-method signatures.
+  - `GOD_COMPONENT` and `EXCESSIVE_DEPENDENCIES` exempt a pure forwarder and read
+    the effective `maxComponentDependencies`.
+  - Several rules report once instead of twice.
+  - `UNUSED_METHOD` and `ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT` land on the
+    interface that declares the method.
+- **Analysis.**
+  - The pattern-grade analyzer no longer drops a second file's declarations.
+  - Aliased and named re-exports, local workspace packages and own-class calls are
+    followed.
+  - A technology can declare the tokens it is matched by
+    (`{ name, matches }`).
+- **Migrations.**
+  - Self-qualified invariant references are migrated.
+  - `EXPORT_INVALID` names a duplicate export id.
+  - `lock` says when it replaces an older approval.
+  - A family migration no longer writes `materializeAgentFiles: false` into a
+    `project.yaml` that never set it. The migration rehearses in a copy that has no
+    agent files, so the default was recorded and the next lock deleted the
+    committed agent files.
+- **Packs.** `pack bundle` of a pack installed as a single file by an older
+  `packs add --global` writes a pack directory that resolves without the store. It
+  used to write the file where the directory belongs, so a clone and CI still
+  reported `PACK_NOT_INSTALLED`. Such a bundle no longer reports `PACK_STORE_DRIFT`
+  against the file it came from.
+- **Messages and tools.**
+  - `sdd_get_spec` infers the kind from a unique id, and refuses an id that names
+    specs of several kinds.
+  - `sdd_set_endpoints` accepts the Portal's transport naming (`HTTP_API`, stored as
+    `HTTP`) and refuses a transport the Portal's `portalType` does not imply.
+  - A family migration's re-lock list names the project it ran in as
+    `this project (.)`, where it printed a bare `.` that read as an empty list.
+  - `lock-check` on a stale lock says what moved: how many of the project's own spec
+    files changed, and which direct member's approval moved, was added or was
+    removed.
+  - The design export's `source.stateId` and the lock record's `stateId` are
+    different digests by design. `docs/design-export.md` now says so: `stateId` is
+    the content id to cache on, and `source.approval` relates an export to its
+    approval.
+  - `wairon export` at a project with member projects names them. Members are
+    listed under `dependencies` and never inlined, so the top of a family that holds
+    no design of its own exports no components. That export no longer reads as
+    empty without a reason.
+  - The design-export schema declares its `$schema` and no longer carries an `$id`
+    that did not resolve.
+- **Packages.** The library entry ships TypeScript declarations, and the npm package
+  and release binaries ship the web app (the build fails without it).
 
-### Upgrading
+### Security
 
-1. **Hosted instances: run `wairon host doctor` (dry run), then `--fix`.** Required
-   if you upgraded from a pre-permission-model version — legacy users and API tokens
-   otherwise resolve to zero permissions, and units without slugs break the
-   organizations page. `wairon serve` now warns when this is pending.
-2. **Re-lock any locked project.** Two changes make every earlier record read as
-   *stale*, and one `wairon lock` settles both. The lock now covers doctrine and
-   the surface contracts a verdict consulted, so records written without that
-   coverage cannot be retro-verified. And the gate identity itself moved: it was
-   computed over the spec tree in filesystem order and sorted with a
-   locale-aware comparison, so it differed between machines — a lock taken on a
-   laptop read as stale in CI. Both fail closed by design. If you gate merges
-   with `wairon lock-check`, expect one red run per repository until the fresh
-   record is committed; after that the same commit reads the same on every
-   machine, which it did not before.
-3. **Declare the packs your projects apply.** Machine-wide packs no longer apply
-   unless a project selects them. Run `wairon doctor` to see what is installed but
-   unapplied and `wairon doctor --fix` to record it as explicit selections — or set
-   `extensions.useGlobalPacks: true` in `.wai/project.yaml` to keep the old
-   behaviour. **A project whose subsystem references a global pack's `profile` will
-   otherwise report `UNKNOWN_PROFILE`, which fails `validate --ci`.**
-4. **Embedding wairon as a library:** `LoadedExtensions` gained required
-   `instructions` and `selectionFailures` fields. Use the exported
-   `emptyExtensions()` rather than hand-constructing one. **And the surface
-   narrowed**: `src/core/index.ts` stopped republishing sixteen whole modules, so
-   `@wairon/cli` exports 318 runtime names where it exported 438. The 120 that
-   went were never on `icore_portal` — internals of the spec loader and the spec
-   validator, the skills exporter, the surfaces and OpenAPI codecs, the template
-   and variant registries, the pack manifest schemas, the tree-archive staging —
-   reachable only because a star export republished the module that held them. **Everything
-   `docs/extending-wairon.md` documents still works**: `validateSddTree`,
-   `loadExtensions`, `loadExtensionPacks`, `emptyExtensions`, `globalPacksDir`,
-   `discoverPacks`, `loadProjectExtensions`, `setProjectRoot`, `SDD_RULES`,
-   `composeRuleSequence` and the spec loaders/savers are named on the library
-   entry rather than inherited, and `examples/wrapper/wrapper.js` runs unchanged.
-   If you depended on one of the 120, open an issue naming the call — it can be
-   modelled onto a contract, which is the only way a surface stays a surface.
-   **Eleven more went with the capability portals**: the typed spec writes
-   `saveSystemSpec`, `saveSubsystemSpec`, `saveComponentSpec`,
-   `saveInterfaceSpec`, `saveImplementationSpec`, `saveTypeSpec` and the five
-   `delete*Spec`. Write through the kind-generic `saveSpec(kind, spec)` and
-   `deleteSpec(kind, id)` instead — the same store writes, with the kind as data.
-5. **Chained subprojects: re-run `validate --ci` in each child.** It can newly
-   fail, by design — it was waving these through:
-   - a reference into the parent now carries the parent's verdict; fix the edge
-     the parent rejects;
-   - a child validated without its parent on disk keeps raw
-     `CROSS_TREE_REF_UNRESOLVED` warnings — run `wairon surface pin` in the child
-     while the parent is available, and commit the pinned surfaces;
-   - a `MISSING_SOURCE_FILE` on a path written relative to the parent root: make
-     it child-relative, or re-save the implementation through the parent, which
-     now re-expresses it;
-   - replace `wairon surface generate-children` in scripts with `wairon surface
-     pin` run from the child, and drop `lint.allow` entries naming
-     `UNVERIFIED_EXTERNAL_REF` or `CHAINED_SUBPROJECT_CONTEXT` (now reported as
-     unknown codes);
-   - a nested child whose `projectPath` leaves its own project (a `../sibling`)
-     is now `PROJECTPATH_ESCAPE` from every root, the top one included: mount the
-     sibling from the project that contains both;
-   - a reference that names no provider, where two pinned surfaces expose that
-     name with different contracts, is now `SURFACE_REF_AMBIGUOUS`: name its
-     provider (`super::<provider>::<name>`);
-   - a `.waitree` export (`wairon remote push|pull`, `sdd_host_export_tree`, the
-     admin and web export routes) that would leave out a chained mount now
-     refuses: fix the mount, or pass `--allow-partial` / `allowPartial` to export
-     without it.
-6. **Retype Specialists and migrate Gateways: run `wairon doctor`, then
-   `wairon doctor --fix`.** A tree with either now fails `validate --ci` with
-   `STEREOTYPE_RETIRED`, and the write tools refuse to save a component that keeps
-   one.
-   - `--fix` retypes each Specialist to an Orchestrator with the `dependencyClass`
-     its dependencies give it, or none (a workflow) when a dependency fits neither,
-     and rebases project variants built on Specialist.
-   - Migrate each Gateway by hand: (1) the Portal it owns becomes the front door,
-     with `variant: gateway`; (2) its other members become dependencies of that
-     Portal; (3) its consumers depend on that Portal; (4) delete the Gateway spec.
-     `sdd_rename_component` can then give the Portal the Gateway's id.
-   - Remove `lint.allow` entries naming `ARCHITECTURE_VIOLATION_SPECIALIST_DEP` or
-     `GATEWAY_CONTAINMENT`, now reported as `UNKNOWN_LINT_ALLOW_CODE`, and any
-     `rules.sddRuleSeverity` entry naming them, which no longer does anything.
-   - Also newly reported, as errors: a Supervisor depending on anything but Actors,
-     Orchestrators, Adapters or other Supervisors, and a component that depends on
-     a live Actor without also depending on a Supervisor that supervises it.
-7. **Embedding wairon as a library: `saveProjectConfig` is removed** from the
-   package's main entry. It replaced the whole `.wai/project.yaml` without
-   validation and dropped keys the schema does not know. Write through the
-   intent-level functions the core surface now exports instead:
-   `createProjectConfig`, `setProjectType`, `recordProfileSelection`,
-   `setExecutionTier`, `registerPackRef` / `deregisterPackRef`,
-   `upsertPackSelection` / `removePackSelection` and `markSelectionsBundled`.
-   `loadProjectConfig` from the main entry still throws when a project has no
-   configuration; `projectConfigExists()` answers that question directly.
-8. **Re-run `validate --ci`: the fixed rules report what they used to miss.**
-   - New errors: a call or dispatch to a cross-tree component the caller does not
-     list in `dependsOn` (`UNDECLARED_DEPENDENCY_CALL`); a Portal dispatch binding
-     routed to a write-effect Repository or Index method (`PORTAL_WRITE_SHORTCUT`);
-     a RouterComponent owning two Portals (`ROUTER_COMPONENT_CONTAINMENT`); in a
-     `--subsystem` run, a dependency cycle through the scope (`CIRCULAR_DEPENDENCY`).
-   - New warnings: a published method whose prose signature, or a type nested in a
-     parameter or return, is a bare `Json`, `any`, `unknown` or `object`
-     (`UNTYPED_SEAM`); a "persisting" or "persistence" claim with no data edge
-     (`UNREALIZED_CLAIM`); a call cycle through a parallel arm
-     (`UNCONDITIONAL_CALL_CYCLE`).
-   - Move a `lint.allow` for `UNUSED_METHOD` from the component to the interface
-     that declares the method. An `UNCONDITIONAL_CALL_CYCLE` allow goes stale where
-     its members' ids sort differently by locale than by code unit (`_` against
-     `-`): move it to the implementation the finding now names.
-9. **Re-run `validate --ci`: readability is checked now.** New warnings appear on
-   trees that configured nothing, so read them before you silence them.
-   - `EXCESSIVE_NARRATIVE_STEPS` above 25 steps, and `NARRATIVE_COMPLEXITY` above the
-     `moderate` band. Split the narrative into steps that call smaller methods, set
-     `complexity.maxNarrativeSteps` or `complexity.cognitiveWarnAbove` in
-     `.wai/project.yaml`, or allow the finding with a reason.
-   - `MISLEADING_BLOCK_WORD`, `GENERIC_COMPONENT_NAME`, `METHOD_REPEATS_COMPONENT`,
-     `COMPONENT_IS_ITS_ONLY_METHOD` and `INCOHESIVE_METHODS`. Rename or split, or
-     acknowledge the shape with a reasoned `lint.allow` — a deliberate facade is a
-     legitimate answer to the cohesion finding. A switchboard that already forwards
-     and nothing else needs no allow: the cohesion rule exempts a pure forwarder, so
-     the way out is often to move the one method that does more.
-   - **A project's own `complexity`, `documentation` and `naming` config now overrides
-     its profile pack's**, as its severities already did. Where a pack profile was
-     deliberately overriding a project value, move that setting into the pack or drop
-     it from the project.
-10. **Scripted `sdd_update_spec` deltas: six previously-accepted deltas now behave
-    differently.** All six were silently wrong before, so a script that relies on
-    them was already producing a spec nobody intended — but they change without
-    warning, so check any generator you have.
-    - **A delta naming ONE element of an array INSIDE an element now MERGES instead
-      of replacing.** `methods: [{ name, params: [one param] }]` used to leave that
-      method with one param; it now leaves the others in place. To drop the others,
-      mark each with `action: "delete"`, or clear the list with `[]` and write the
-      new one in a second call. The same applies to a step's `catches` and `cases`.
-    - **A nested delete that addresses nothing is refused**, where the marker used to
-      be stripped while the write reported success.
-    - **A delete of a narrative step the narrative does not have is refused**, where
-      it used to be a silent no-op. A delta that deleted several steps by their
-      ORIGINAL numbers was relying on this: step deltas apply in ascending order
-      against the numbering earlier entries left behind, so the later numbers were
-      already addressing the wrong steps. Renumber them, or restate each step's
-      `label` or `description` on the delete and have them checked.
-    - **A delete of a loop/try/parallel header whose body remains is refused.**
-      Retype the header first — which drops its region fields and reports them —
-      then delete it.
-    - **A delta that retypes a step and also sets a field the new type cannot carry
-      is refused**, where the field used to merge through and surface later as
-      `MALFORMED_FLOW_STEP`. Drop the field from the delta.
-    - **A step delta carrying `remove: "true"`, an unknown `action`, or
-      `captureJumps` outside an insert is refused**, where the marker used to be
-      ignored and the write reported as done. Fix the marker — these deltas were
-      never applying.
-11. **Re-run `validate --ci`: code↔spec conformance follows the call now.** Three
-    new findings, and one existing one that reaches further, so read them before
-    you silence anything. All four read a method's declared `calls` as well as
-    its narrative `call` steps: a declaration asserts the same call a step does,
-    so it answers to the same check, and a finding says `declared call` where it
-    would otherwise say `step 3`.
-    - `CALL_STEP_UNREALIZED` is no longer satisfied by a same-named function in
-      another module. Where it newly fires, either the call really does land
-      somewhere else, or the target's `sourcePath` names a file the function was
-      never written in — the finding prints the files it did land in, which is
-      usually the answer. Map an intent-language name onto the code name with a
-      per-method `symbol` rather than renaming either.
-    - `CALL_ORIGIN_UNRESOLVED` is not an accusation: the target's name IS called,
-      from a member call through a value the analysis cannot follow
-      (`this.store.save()`). Call the target through its module binding to make
-      the step provable, or read the finding as the grade's limit.
-    - `METHOD_BODY_NOT_FOUND` fires where a `sourcePath` names a file holding the
-      method's declaration but not its body — commonly a header module, an
-      interface, or a forwarding table whose entry no chase can follow. Point the
-      path at the file that implements it, or dial that method to `off`.
-    - `UNDECLARED_COLOCATED_CALL` fires where several components share one source
-      file and one calls another without saying so. Narrate the call, or list it
-      in the method's `calls` where the method shows no steps — it is a real edge
-      either way — or split the file so the boundary is one the import graph can
-      see.
-12. **Re-run `validate --ci`: two rules now see what they always claimed to judge.**
-    - **New warning `FOREIGN_STEP_FIELD`** on a narrative step carrying a field its
-      own `type` cannot have — `outcome` on a branch, `error` on a call,
-      `targetComponent` on a `throw`. These are the leftovers of retypes made before
-      the writer rebuilt a retyped step. Run `wairon doctor` to see each one and
-      `wairon doctor --fix` to drop them; where the step really was a call that lost
-      its type, retype it instead.
-    - **`UNUSED_TYPE` counts a type-method signature as a reference.** A type named
-      only by another type's method no longer reports. Delete any `lint.allow` that
-      was standing in for this — it now goes stale as `UNUSED_LINT_ALLOW`. A type
-      named nowhere but its OWN methods still reports, deliberately.
-13. **Scripted authoring calls: an unknown key NESTED in a tool's input is now
-    refused.** Only the top level of an `sdd_*` tool's input was strict, so a key
-    the schema did not know inside a method, a param, a narrative step, a
-    finding, a dispatch binding, an endpoint, a lifecycle entrypoint, a trusted
-    link, a type field or an invariant was silently dropped and the call reported
-    success. Every shaped nested object is strict now, so the same call fails
-    with `Unrecognized key(s) in object` naming the key. Nothing you were writing
-    with such a key was ever reaching the spec — the refusal is the first time
-    you are told — but it arrives as a failure where there used to be none, so
-    re-run any generator that authors specs through MCP and fix what it names.
-    - `sdd_update_spec`'s `delta` is deliberately NOT strict and is unchanged: it
-      is the one place the shapes nest further than a boundary schema should
-      restate. It now reports what it dropped instead, under `NO EFFECT` in the
-      answer — read that list where you would have read a refusal.
-14. **MCP clients: thirteen tools now declare an `outputSchema`.**
-    `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_add_component`,
-    `sdd_define_interface`, `sdd_write_narrative`, `sdd_add_type`,
-    `sdd_update_spec`, `sdd_get_spec`, `sdd_validate_tree`, `sdd_set_endpoints`,
-    `sdd_set_public_interfaces`, `sdd_set_subsystem_project_path` and
-    `sdd_delete_spec` return `structuredContent` alongside the text block they
-    always returned. **The text block is unchanged** for the first nine, so a
-    client that ignores structured content needs no action for them; the three
-    setters keep their first sentence and now follow it with the change report,
-    and a delete or a create that invalidated tests adds a `TESTS TO REVISIT`
-    block. What changes is what a CONFORMING client expects: per the MCP
-    specification a tool declaring an `outputSchema` must return structured
-    content on every non-error result, and an SDK client validates it on arrival.
-    - A client whose SDK predates structured output ignores the field entirely;
-      one that knows it will validate it. Either way, a proxy or gateway that
-      rewrites tool results must carry `structuredContent` through rather than
-      rebuilding the envelope from `content` alone.
-    - Reading the text block and parsing it still works everywhere, and is what
-      the wairon CLI and the hosted web interface do. Prefer the structured half
-      in new code: `sdd_update_spec` gives you `written`, `changes[]` and
-      `ineffective[]`; a create gives you `replacedExisting` and the `status`
-      actually written; `sdd_validate_tree` gives you findings as objects.
-    - `sdd_get_spec`'s structured answer is `{kind, id, spec, partialResult?,
-      variantGuidance?}` — the spec sits under `spec`, NOT at the top level as it
-      does in the text block, because the two derived markers belong beside it
-      and not inside it.
-15. **`wairon lock-check` is OPTIONAL — nothing starts failing because you
-    upgraded.** It is a new command and a new reusable workflow; no existing
-    command changed, no CI step is added to your repository by installing this
-    release, and nothing runs it unless you ask. If you do adopt it, adopt it in
-    this order, because item 2 above means **every** project reads as *stale*
-    until it is re-locked:
-    1. Run `wairon lock` and commit `.wai/lock.json` on your default branch.
-    2. Add the workflow to your pull-request CI (see the feature entry above for
-       the one-liner) and leave `strict` at its default `false`.
-    3. Only once your team is re-locking as part of normal review, turn on
-       `strict: true` and/or add the job to branch protection as a required
-       status check. Neither is something the workflow can decide for itself.
+Hosted deployments of v5.1.0 should upgrade. This release hardens:
+
+- the confinement of credentials narrowed to a member;
+- write authorization for members and subsystems inside a hosted request;
+- CSRF protection on web writes (approval decisions, project configuration);
+- the sign-in redirect allowlist on every sign-in entry point;
+- session handling on the local dev server;
+- how integration secrets reach the Git and producer integrations;
+- the local operator's administrative writes.
 
 ## v5.1.0 (from v5.0.1)
 

@@ -388,7 +388,9 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     const check = checkApproval(false);
     expect(check.state).toBe('stale');
     expect(check.approved).toBe(false);
-    expect(check.message).toContain("the gate identity gained inputs in stage 5: members' composition subjects, `composition`; code conformance moved beside the claim");
+    expect(check.message).toContain('was taken under an earlier gate identity (written by wairon ');
+    expect(check.message).toContain("Since wairon 6.0.0 the gate identity also covers members' composition subjects and `composition`, and code conformance is recorded beside the claim.");
+    expect(check.message).not.toMatch(/stage \d/);
     expect(check.message).toContain('No own spec file has changed since the approval.');
     expect(check.message).toContain('re-lock once');
 
@@ -405,6 +407,22 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     const lock = readLockState(computeGateStateId());
     expect(lock.state).toBe('stale');
     expect(lockUpgraded(lock)).toBe(false);
+  });
+
+  it('lock-check at a parent names the direct member whose approval moved, and an own edit by its count', async () => {
+    fam = buildApprovalFamily();
+    await lockAll(fam);
+    fam.touch(fam.mid, 'edited');
+    await lockAt(fam.mid);
+    bind(fam.top);
+    const check = checkApproval(false);
+    expect(check.state).toBe('stale');
+    expect(check.message).toContain('What moved: direct member(s): mid (its approval moved since this one was taken).');
+    expect(check.message).not.toContain('sib');
+
+    fam.touch(fam.sib, 'edited');
+    bind(fam.sib);
+    expect(checkApproval(false).message).toContain('What moved: 1 own spec file(s) changed since the approval.');
   });
 
   it('the pin tree marks a format-1 member upgraded and reads its parent\'s legacy `children` as the pin', async () => {

@@ -11,12 +11,25 @@ methods:
     narrative: []
     intent: >-
       Reads the document through the fs adapter and parses it against the ProjectConfig schema,
-      applying its defaults; returns null when the file is absent. A document that fails the schema
-      raises the validation error with the project root and the offending fields, never a partially
-      defaulted configuration.
+      applying its defaults; returns null when the file is absent. One default is read from the
+      project rather than the schema: a document that never states rules.materializeAgentFiles was
+      written before agent files became opt-in, when they were always materialized, so it reads true
+      while COMMITTED wairon-managed agent files (the managed marker, or an
+      -owner/-implementer/-architect.md name) sit in the configured targets' output directories
+      inside the project root, and false otherwise — an upgrade then keeps the committed agent
+      files, and the first save writes the setting down explicitly instead of a false that would
+      have the next lock delete them. Which files count is asked of the git source adapter's
+      trackedFiles: only a file the project's git index tracks (committed or staged) is evidence, so
+      an ignored or untracked leftover in a gitignored agents folder never switches materialization
+      on for a project that runs on live briefs. When there is no git to ask (the project is in no
+      work tree, or git is not installed) every managed file present counts, as before — silently
+      treating a non-git project's agent files as disposable would have the next lock delete files a
+      person keeps. A document that fails the schema raises the validation error with the project
+      root and the offending fields, never a partially defaulted configuration.
     calls:
       - project_config_fs_adapter.documentExists
       - project_config_fs_adapter.readDocument
+      - git_source_adapter.trackedFiles
   - name: write
     narrative: []
     intent: >-
@@ -76,4 +89,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:15.916Z'
-updatedAt: '2026-09-26T21:28:28.866Z'
+updatedAt: '2026-10-05T20:59:34.294Z'

@@ -59,8 +59,19 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   // Case (b): this very directory is already an initialized wairon project.
   if (ancestorRoot && path.resolve(ancestorRoot) === path.resolve(cwd)) {
     logger.info('Project already initialized.');
-    logger.info('Design your spec tree with the SDD architect skill, then run `wairon generate`.');
+    logger.info('Design your spec tree with the SDD architect skill, validate it, then run `wairon lock` to approve it.');
     return;
+  }
+
+  // Every path below asks questions unless --yes. Without a terminal to ask
+  // them on, inquirer died with an ERR_USE_AFTER_CLOSE stack trace; say what
+  // to do instead, before anything is written.
+  if (!options.yes && !process.stdin.isTTY) {
+    throw new WaironError(
+      'Non-interactive shell: `wairon init` asks questions and there is no terminal to ask them on. '
+        + 'Re-run with --yes (-y) to use the defaults (project name from the directory, profile backend, '
+        + 'targets claude and agy). Nothing was written.',
+    );
   }
 
   // Case (c): cwd sits inside a parent wairon project → offer to make this
@@ -453,15 +464,23 @@ async function executeInit(
     }
   }
 
-  // Register MCP server for Antigravity (agy) target — project-local only.
-  // Global registration ($HOME) is opt-in via `wairon mcp install --global`.
-  if (targetTypes.includes('gemini') || targetTypes.includes('agy')) {
+  // Register only what a selected tool reads. The project .gemini/settings.json
+  // is the Gemini CLI's; Antigravity (agy) reads MCP servers ONLY from its
+  // machine-wide mcp_config.json, which init never writes (global registration
+  // is opt-in) — so for an agy target, say how to register instead of writing a
+  // project file it ignores and then warning that it is ignored.
+  if (targetTypes.includes('gemini')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
       runMcpInstall({ backend: 'gemini', global: false });
     } catch (err) {
-      logger.warn(`Failed to automatically register MCP server for Antigravity: ${err}`);
+      logger.warn(`Failed to automatically register MCP server for the Gemini CLI: ${err}`);
     }
+  } else if (targetTypes.includes('agy')) {
+    logger.info(
+      'Antigravity (agy) reads MCP servers only from its machine-wide ~/.gemini/antigravity-cli/mcp_config.json, '
+        + `which init does not write. To give it the wairon tools: ${chalk.bold('wairon mcp install --backend gemini --global')}`,
+    );
   }
 
   // Seed the context directory with auto-generated files (domains.md + wairon-guide.md)
@@ -493,9 +512,10 @@ async function executeInit(
   logger.blank();
   logger.info('Next steps:');
   logger.info('  Edit .wai/context/project.md — describe the project concept and stack details for the AI');
-  logger.info('  wairon status               — view the architecture completeness dashboard');
-  logger.info('  wairon validate             — check the spec tree & component boundaries');
   logger.info('  Design your spec tree with the SDD architect skill or the wairon MCP sdd_* tools');
+  logger.info('  wairon status               — view the spec tree, its authoring readiness and approval state');
+  logger.info('  wairon validate             — check the spec tree & component boundaries');
+  logger.info('  wairon lock                 — approve the validated design (commit .wai/lock.json); `wairon lock-check` gates CI on it');
   logger.blank();
 }
 
@@ -595,11 +615,13 @@ Define the non-negotiable architectural guardrails here. The AI agent must follo
 
 *   [ ] **Primary Language & Runtime:** Node.js (TypeScript) / Python / etc.
 *   [ ] **Architectural Style:** Clean Architecture / Hexagonal / Domain-Driven Design (DDD).
-*   [ ] **Data Persistence Rules:** E.g. No raw SQL in controllers; all DB operations must use a \`Store\` / \`Repository\`.
-*   [ ] **Stereotype Dependencies:**
-    *   \`Store\` components can only call other \`Stores\` or \`Registries\`.
-    *   \`Adapter\` components cannot depend on \`Orchestrators\` or \`Stores\` directly.
-    *   Only \`Portal\` components can accept external traffic.
+*   [ ] **Data Persistence Rules:** E.g. No raw SQL in controllers; held state lives in a data component — the recommended \`Repository\` (owning its \`Store\`, \`Registry\`, \`Index\`es and \`Query\`s), or a deliberately standalone \`Store\` for genuinely simple state.
+*   [ ] **Stereotype Dependencies** (enforced by \`sdd_validate_tree\`):
+    *   Only \`Portal\` components accept external traffic; a gateway is a \`Portal\` with the \`gateway\` variant.
+    *   A \`Portal\` never depends on a \`Store\`, \`Registry\` or \`Adapter\`. Its reads may go through a \`Repository\` / \`Index\` facade; every write routes through an \`Orchestrator\`.
+    *   State never lives as fields inside an \`Orchestrator\`; logic is an \`Orchestrator\` (\`dependencyClass: pure | read\` bounds what it may depend on).
+    *   A \`Registry\` and an \`Index\` depend on the \`Store\` they read; a \`Store\` may use an \`Adapter\` as its backend.
+    *   Outbound calls to third parties go through an \`Adapter\`.
 
 ---
 
@@ -612,15 +634,16 @@ Define the non-negotiable architectural guardrails here. The AI agent must follo
 
 ---
 
-## Stage 3: Ingress/Egress Portals (Level 2 & Level 3)
+## Stage 3: Ingress Portals & Outbound Adapters (Level 2 & Level 3)
 
-Portals are the boundaries of your subsystems. Define how requests enter and leave.
+Portals are where requests enter a subsystem; Adapters are where calls leave it.
 
 *   [ ] **Define Ingress Portals (REST / gRPC / MessageBus):**
     *   *AI Action:* Create L2 Portal components with \`status: draft\` and map their L3 interfaces.
-    *   *Design check:* Ensure HTTP endpoints (method, path) or gRPC names are correctly declared in the method bindings.
-*   [ ] **Define Egress Portals (Clients / Publishers):**
-    *   *AI Action:* Declare any external event publishing or client communication Portals.
+    *   *Design check:* Bind each method's wire endpoint with \`sdd_set_endpoints\`, and give every HTTP Portal its \`mounts\` (or a listener) — otherwise \`UNMOUNTED_PORTAL\`.
+    *   *Design check:* A subsystem another subsystem calls lists those callers in its \`publicInterfaces[].consumers\`.
+*   [ ] **Define Outbound Adapters (third-party clients / publishers):**
+    *   *AI Action:* Declare an \`Adapter\` for each external API, database driver or event publisher the subsystem calls.
 
 ---
 
@@ -645,13 +668,13 @@ Map the behavior step-by-step.
 
 ---
 
-## Stage 6: Sandbox Implementation
+## Stage 6: Approval & Implementation
 
-Once the specs are clean and compiled, mark the components as \`status: complete\` to lock them, then generate the agents and write code!
+Once the specs validate cleanly, the human approves the design with \`wairon lock\`; implementation starts from the approved design.
 
 *   [ ] **Validation Check (AI):** Call the \`sdd_validate_tree\` MCP tool (must return 0 errors).
-*   [ ] **Agent Generation (human):** The developer runs \`wairon generate\` from their terminal to instantiate agent sandboxes — the AI does not run this.
-*   [ ] **Code Implementation:** Let the agent implement the component code matching the narrative.
+*   [ ] **Approval (human):** The developer runs \`wairon lock\` from their terminal and commits \`.wai/lock.json\` — the AI does not run this. The lock records the approval; it does not rewrite spec files or their \`status\`. \`wairon lock-check\` gates merges on it in CI.
+*   [ ] **Code Implementation (AI):** Confirm \`sdd_get_status\` reports the design approved, then delegate each component via the \`sdd-delegate\` skill (live briefs from \`sdd_get_agent_brief\`); code must match the L3 interfaces and L5 narratives.
 `;
   // Written verbatim: AI steps reference MCP tools; the one CLI step is explicitly
   // human-run, so `wairon` stays literal (no dev-path substitution).
