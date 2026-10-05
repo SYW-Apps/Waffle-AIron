@@ -430,10 +430,10 @@ function reportInstalled(target: InstallTarget, agentLabel: string): void {
   const wasStale = target.before !== undefined;
   logger.success(`wairon MCP server ${wasStale ? 'updated (was stale)' : 'registered'} for ${agentLabel} in ${chalk.cyan(target.path)}.`);
   logger.blank();
-  logger.info('AI tools using this config will have access to these wairon tools:');
-  logger.info('  listAgents · getAgent · listDomains · validateTopology · getProjectConfig');
-  logger.info('  sdd_initialize_system · sdd_add_subsystem · sdd_add_component · sdd_define_interface');
-  logger.info('  sdd_write_narrative · sdd_validate_tree · sdd_get_status');
+  // A pointer, not a list: a hand-kept list of tool names went stale every
+  // time a tool was added (it named 12 of 37). The server lists its own tools.
+  logger.info('AI tools using this config get the wairon MCP server: the sdd_* spec-authoring, validation, member and');
+  logger.info('rename tools, plus live agent briefs (sdd_get_agent_brief). The full list is in docs/cli.md ("MCP tools").');
   logger.blank();
   const restartApp = target.backend === 'gemini' ? 'Antigravity CLI (agy)' : 'claude';
   logger.info(`Restart ${chalk.bold(restartApp)} (or reload MCP servers) to activate.`);

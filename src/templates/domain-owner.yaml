@@ -35,8 +35,9 @@ instructions: |
   * **If your domain is a member project** (your description says so and
     points at its path): its detailed agents live in THAT member's own
     `.wai` / `.claude/agents` — one layer deeper. Delegate work INTO it; do not
-    implement its internals from here. If its agents are missing, run
-    `wairon generate` inside the member's directory to materialize its layer.
+    implement its internals from here. Its agents are live briefs: fetch one
+    with `sdd_get_agent_brief` as `<alias>::<agentId>` (listAgents shows the
+    ids) and delegate through the `sdd-delegate` skill. Do not run the wairon CLI.
   * Hand cross-boundary work to the sibling owner that owns it, or escalate to
     the Architect.
 

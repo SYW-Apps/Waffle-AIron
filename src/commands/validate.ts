@@ -26,7 +26,7 @@ import {
 // validate the tree as if every spec were already complete (the status flip
 // happens in-memory inside the validator and is restored — nothing on disk
 // changes). Republished here as the adapter's forward to the validator portal;
-// `wairon lock` gates its dry-run on this and refuses to freeze on errors.
+// `wairon lock` gates its dry-run on this and refuses to approve on errors.
 //
 // cli_validator_adapter.computeGateStateId — the gate identity a lock records
 // and every staleness check compares, republished as the adapter's forward to
@@ -75,6 +75,7 @@ export interface ValidateOptions {
   subsystem?: string; // validate only a specific subsystem
   recursive?: boolean; // at a parent: the family run (true, the default) or the owner's gate alone (false, a member depth of 0)
   family?: boolean; // ask for the family run explicitly (`validate --family` at a member)
+  all?: boolean; // print every finding instead of the first 100 per severity
 }
 
 // ---------------------------------------------------------------------------
@@ -164,12 +165,13 @@ interface SpecTally {
  * each as their own kind) — in a family run each under its project key, the
  * per-project verdicts after them — and the one-line hint, when there is one.
  */
-function renderSpecFindings(result: ValidationResult): SpecTally {
+export function renderSpecFindings(result: ValidationResult, all = false): SpecTally {
   const tally: SpecTally = { errors: false, fatalWarnings: false, waived: 0, notices: 0 };
   if (result.issues.length === 0) {
     logger.success('Spec tree is valid and component type boundaries are enforced.');
   }
-  const MAX_PRINT = 100;
+  // The first 100 findings per severity, unless --all asks for every one.
+  const MAX_PRINT = all ? Number.POSITIVE_INFINITY : 100;
   const printed = { error: 0, warning: 0, notice: 0 };
   const skipped = { error: 0, warning: 0, notice: 0 };
   for (const issue of result.issues) {
@@ -189,10 +191,14 @@ function renderSpecFindings(result: ValidationResult): SpecTally {
     else if (issue.severity === 'notice') logger.notice(line);
     else logger.warn(line);
   }
-  const more = (n: number, what: string): string => `... and ${n} more ${what}(s) omitted. Use '--subsystem <id>' to validate a specific subsystem.`;
+  const more = (n: number, what: string): string =>
+    `... and ${n} more ${what}(s) not shown (${printed[what as keyof typeof printed]} of ${printed[what as keyof typeof printed] + n} printed). Run with --all to print every finding.`;
   if (skipped.error > 0) logger.error(more(skipped.error, 'error'));
   if (skipped.warning > 0) logger.warn(more(skipped.warning, 'warning'));
   if (skipped.notice > 0) logger.notice(more(skipped.notice, 'notice'));
+  // When the list was long enough to be cut (or --all printed a long one),
+  // the per-code totals are the picture a reader actually needs.
+  if (skipped.error + skipped.warning + skipped.notice > 0 || (all && result.issues.length > 100)) renderCodeTotals(result);
   if (result.projects) {
     logger.blank();
     logger.info('Per project (each its own gate):');
@@ -203,6 +209,22 @@ function renderSpecFindings(result: ValidationResult): SpecTally {
   }
   if (result.hint) logger.info(result.hint);
   return tally;
+}
+
+/** Findings counted per severity and code, most frequent first. */
+function renderCodeTotals(result: ValidationResult): void {
+  const counts = new Map<string, { severity: string; code: string; n: number }>();
+  for (const issue of result.issues) {
+    const key = `${issue.severity} ${issue.code}`;
+    const entry = counts.get(key) ?? { severity: issue.severity, code: issue.code, n: 0 };
+    entry.n++;
+    counts.set(key, entry);
+  }
+  const rank: Record<string, number> = { error: 0, warning: 1, notice: 2 };
+  const rows = [...counts.values()].sort((a, b) => (rank[a.severity] ?? 3) - (rank[b.severity] ?? 3) || b.n - a.n || a.code.localeCompare(b.code));
+  logger.blank();
+  logger.info('Findings by code:');
+  for (const r of rows) logger.info(`  ${String(r.n).padStart(6)}  ${r.severity.padEnd(7)}  ${r.code}`);
 }
 
 export async function runValidate(options: ValidateOptions = {}): Promise<void> {
@@ -235,7 +257,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
 
   // --- Project config ---
   logger.header('Project Config');
-  // A part's configuration says only what it is a part of (stage 8): its
+  // A part's configuration says only what it is a part of: its
   // parent's configuration governs it, so it has no targets of its own to check.
   const part = isPart(projectConfig);
   const configResult = part ? { valid: true, issues: [] } : validateProjectConfig(projectConfig);
@@ -280,7 +302,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   }
 
   // --- SDD Spec Tree ---
-  // A part opened alone has no L0 of its own: its gate judges it against its pinned parent (stage 8).
+  // A part opened alone has no L0 of its own: its gate judges it against its pinned parent.
   if (pathExists(AI_PATHS.specsSystem()) || part) {
     logger.header('SDD Architectural Specs');
     const sddOptions = {
@@ -298,7 +320,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     // selected project; otherwise the owner's gate over the bound project alone.
     const sddResult = family ? validateFamily(sddOptions) : validateProject(sddOptions);
     // Step 10: render.
-    const tally = renderSpecFindings(sddResult);
+    const tally = renderSpecFindings(sddResult, options.all === true);
     hasErrors ||= tally.errors;
     hasFatalWarnings ||= tally.fatalWarnings;
     waivedWarnings += tally.waived;

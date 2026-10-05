@@ -65,10 +65,10 @@ export const typeExpressionsRule: SddRule = {
   name: 'type-expressions',
   judges: 'design',
   description:
-    'Reports what the scan\'s type canonicalisation recorded (ctx.typeSpellingFacts), one finding per position, located by spec and path: a stored text that does not parse (TYPE_EXPRESSION_INVALID); one that breaks a position rule — void or async out of place, a map key that is not string, int or an enum, a named scalar\'s holds that is not one primitive other than void and any, `T??` (TYPE_POSITION_INVALID); one using a form the grammar leaves out — an inline object shape, an inline function type, a string-literal union, a union mixing in a primitive or a collection, an intersection, a utility type or a tuple (TYPE_FORM_UNSUPPORTED); one naming `number` or a legacy builtin with no neutral meaning (TYPE_NOT_NEUTRAL); and one that is an alias of its canonical spelling (TYPE_SPELLING_STALE, which any save or doctor --fix repairs). Every message names the replacement: `number` asks "int or float?" (and says when the doctor repair proposes int), a function type names a signature type, a literal union an enum, an inline object or a mixed union a named value-object. The writer refuses all but the stale spelling at write time; these findings are how a tree that held them before the grammar existed is told, while it still loads and its consumers read the position as opaque any — which is why only what no real tree holds (a text that does not parse, a broken position rule) is an error. No finding when the run carries no facts (a candidate run).',
+    "Reports what the scan's type canonicalisation recorded (ctx.typeSpellingFacts), one finding per position, located by spec and path: a stored text that does not parse (TYPE_EXPRESSION_INVALID); one that breaks a position rule — void, async or result out of place, a map key that is not string, int or an enum, a named scalar's holds that is not one primitive other than void and any, `T??` (TYPE_POSITION_INVALID); one using a form the grammar leaves out — an inline object shape, an inline function type, a string-literal union, a union mixing in a primitive or a collection, an intersection, a utility type or a tuple (TYPE_FORM_UNSUPPORTED); one naming `number` or a legacy builtin with no neutral meaning (TYPE_NOT_NEUTRAL); and one that is an alias of its canonical spelling (TYPE_SPELLING_STALE, which any save or doctor --fix repairs). Every message names the replacement: `number` asks \"int or float?\" (and says when the doctor repair proposes int), a function type names a signature type, a literal union an enum (which the doctor repair proposes), an inline object or a mixed union a named value-object. The writer refuses all but the stale spelling at write time; on load every one of them is a warning — these findings are how a tree that held them before the grammar existed is told, while it still loads, stays lockable with its debt in view, and its consumers read the position as opaque any, which never invents a shape. No finding when the run carries no facts (a candidate run).",
   codes: [
-    { code: 'TYPE_EXPRESSION_INVALID', defaultSeverity: 'error', summary: 'A structured type position does not parse under the type grammar' },
-    { code: 'TYPE_POSITION_INVALID', defaultSeverity: 'error', summary: 'A type position breaks a position rule: void or async out of place, a non-scalar map key, or T??' },
+    { code: 'TYPE_EXPRESSION_INVALID', defaultSeverity: 'warning', summary: 'A structured type position does not parse under the type grammar' },
+    { code: 'TYPE_POSITION_INVALID', defaultSeverity: 'warning', summary: 'A type position breaks a position rule: void, async or result out of place, a non-scalar map key, or T??' },
     { code: 'TYPE_FORM_UNSUPPORTED', defaultSeverity: 'warning', summary: 'A type position uses a form the grammar leaves out — inline object, inline function type, string-literal union, union mixing in a primitive or collection, intersection, utility type or tuple — and the message names its named replacement' },
     { code: 'TYPE_NOT_NEUTRAL', defaultSeverity: 'warning', summary: 'A type position names number (int or float?) or a legacy builtin with no neutral meaning, and the message names the replacement' },
     { code: 'TYPE_SPELLING_STALE', defaultSeverity: 'warning', summary: 'A stored type position is an alias of its canonical spelling; any save or doctor --fix rewrites it' },
@@ -80,9 +80,9 @@ export const typeExpressionsRule: SddRule = {
     // Steps 2-3: every recorded problem, in scope, under its own code.
     for (const problem of facts.problems) {
       if (problem.specId === undefined || !ctx.isSpecInScope(problem.specId)) continue;
-      const severity = problem.code === 'TYPE_EXPRESSION_INVALID' || problem.code === 'TYPE_POSITION_INVALID' ? 'error' : 'warning';
+      // A warning on load, whatever the code: the writer already refuses each at write time.
       ctx.addIssue(
-        severity,
+        'warning',
         problem.code,
         problemMessage(problem, problem.specId),
         problem.specId,

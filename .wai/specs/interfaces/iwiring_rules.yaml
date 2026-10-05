@@ -261,6 +261,10 @@ methods:
       must resolve to a declared entity invariant: the reference splits at its last dot into a type
       reference and an invariant id, and some entity matching that type reference must declare that
       id. A reference nothing declares is an error — the step claims a property that exists nowhere.
+      The message says which: when the type reference carries a qualifier (`alias::type`) and the
+      bare reference does resolve, the cause is the qualifier — typically the project's own alias
+      written from inside it — and the message names it and the bare reference to write instead,
+      never claiming that no entity declares the invariant.
     signature: 'invariantReferences(ctx: RuleContext): void'
     returns: void
     params:
@@ -329,4 +333,4 @@ methods:
           its own — a whole surface nothing serves
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-04T11:53:18.096Z'
+updatedAt: '2026-10-05T06:49:57.067Z'

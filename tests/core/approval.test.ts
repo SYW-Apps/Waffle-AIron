@@ -433,7 +433,7 @@ describe('the approval', () => {
     approve();
     const verdict = approvalVerdict([own({ state: 'drifted', upgraded: true })]);
     expect(verdict.drifted).toBe(true);
-    expect(verdict.text).toContain('the gate identity gained inputs in stage 5');
+    expect(verdict.text).toContain('the gate identity gained inputs in this release');
     expect(verdict.text).toContain('Re-lock once');
   });
 

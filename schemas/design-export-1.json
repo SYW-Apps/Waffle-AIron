@@ -598,7 +598,8 @@
                                       "optional",
                                       "union",
                                       "async",
-                                      "applied"
+                                      "applied",
+                                      "result"
                                     ]
                                   },
                                   "name": {

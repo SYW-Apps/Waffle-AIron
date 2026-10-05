@@ -743,7 +743,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
           logger.blank();
           // A deprecated member-qualified entry is stored as the member's own record id: say so.
           for (const line of minted.mapped) {
-            logger.warn(`Narrowing ${line}: a member is a record of its own since stage 7, so the token names it by its id (qualified entries are deprecated).`);
+            logger.warn(`Narrowing ${line}: a member is a record of its own, so the token names it by its id (qualified entries are deprecated).`);
           }
           break;
         }

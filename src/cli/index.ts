@@ -142,7 +142,7 @@ program
 
 program
   .command('lock-check')
-  .description('Merge gate: is the design in this working tree the design that was approved? Compares the tree\'s gate identity against the committed .wai/lock.json. Exits 1 when the design moved past its approval; passes with a notice when the project never locked, unless --strict.')
+  .description('Merge gate: is the design in this working tree the design that was approved? Compares the tree\'s gate identity against .wai/lock.json as it is in the working tree (in CI, the file committed in the checked-out revision; locally, an uncommitted record counts too). Exits 1 when the design moved past its approval; passes with a notice when the project never locked, unless --strict.')
   .option('--strict', 'also fail when nothing was ever approved, or when there is no spec tree at all')
   .action(async (opts) => {
     await lockCheckCommand(opts);
@@ -150,10 +150,10 @@ program
 
 program
   .command('lock')
-  .description('Final check before implementation: validate the spec tree as complete, freeze all specs to complete, and (re)generate the agent topology — only if it validates. In an attached checkout, locks the hosted project instead.')
+  .description('Record human approval of the design: validate the spec tree as complete, write the approval to .wai/lock.json (one digest per spec; spec files are not rewritten), and refresh this project\'s generated outputs — only if the design validates. Commit .wai/lock.json; `wairon lock-check` gates on it. In an attached checkout, locks the hosted project instead.')
   .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
   .option('--subsystem <id>', 'only lock specs in the specified subsystem')
-  .option('--no-recursive', 'do not recursively validate subprojects')
+  .option('--no-recursive', 'accepted for one release and ignored: a lock approves this project only; each member locks at its own root')
   .action(async (opts) => {
     await lockCommand(opts);
   });
@@ -169,6 +169,7 @@ program
   .option('--subsystem <id>', 'only validate the specified subsystem (granular)')
   .option('--no-recursive', "at a project that declares members: run the owner's gate alone instead of the family run")
   .option('--family', "run the family run from here: every member's own gate, and this project's externals composed against their live producers")
+  .option('--all', 'print every finding (by default the first 100 per severity are printed, followed by per-code totals)')
   .action(async (opts) => {
     await validateCommand(opts);
   });
@@ -179,9 +180,9 @@ program
 
 program
   .command('status')
-  .description('Show a hierarchical completeness graph of the SDD Spec Tree')
+  .description('Show the spec tree with its authoring readiness (how far each spec is written out, from its draft/design/complete status) and, separately, its approval state from .wai/lock.json')
   .option('--subsystem <id>', 'only show status for the specified subsystem')
-  .option('--no-recursive', 'do not recursively show status for subprojects')
+  .option('--no-recursive', 'show this project only, without its members')
   .action(async (opts) => {
     await statusCommand(opts);
   });

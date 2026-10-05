@@ -44,7 +44,7 @@ import { summarize } from '../models/execution.js';
 
 // cli_runner.runLock — the local `wairon lock` workflow: CAPTURE the gate
 // identity before anything is judged, gate on the DESIGN half of the
-// as-complete dry-run validation (an invalid design is never frozen), lock
+// as-complete dry-run validation (an invalid design is never approved), lock
 // through the lock adapter (which refuses when requireApprovedMembers finds a
 // direct member unapproved, and when the identity moved while the lock ran),
 // and refresh THIS project's generated outputs. Code-conformance findings never
@@ -97,7 +97,8 @@ async function runLock(options: LockOptions): Promise<void> {
       }
     }
     if (skippedErrors > 0) {
-      logger.error(`... and ${skippedErrors} more error(s) omitted.`);
+      logger.error(`... and ${skippedErrors} more error(s) not shown (${errorCount} of ${errors.length} printed). `
+        + 'Run `wairon validate --all` to see every finding (it judges draft specs leniently; the lock judges them as complete).');
     }
     logger.blank();
     logger.info('Fix the errors above, then run `wairon lock` again. Nothing was changed.');
@@ -147,7 +148,7 @@ async function runLock(options: LockOptions): Promise<void> {
 // guidance to `wairon remote pull` rather than silently doing nothing.
 // ---------------------------------------------------------------------------
 
-/** cli_runner.runLock — hosted when attached, else the local freeze. */
+/** cli_runner.runLock — hosted when attached, else the local approval. */
 export async function lockCommand(opts: { yes?: boolean; subsystem?: string; recursive?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
@@ -159,7 +160,7 @@ export async function lockCommand(opts: { yes?: boolean; subsystem?: string; rec
 }
 
 /** cli_runner.runValidate — hosted when attached, else the local validation. */
-export async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursive?: boolean; family?: boolean }): Promise<void> {
+export async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursive?: boolean; family?: boolean; all?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
     const report = (await validateAttached(target, opts.subsystem, opts.family)) as {
@@ -186,7 +187,7 @@ export async function validateCommand(opts: { ci?: boolean; subsystem?: string; 
   for (const t of recoverMigrations(getProjectRoot(), false)) {
     logger.notice(`[TRANSACTION_PENDING] an unfinished family migration (${t.verb}, transaction ${t.id}, coordinator phase ${t.phase}) — run \`wairon doctor --fix\` to roll it back`);
   }
-  await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive, family: opts.family });
+  await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive, family: opts.family, all: opts.all });
 }
 
 /** cli_runner.runStatus — hosted when attached, else the local dashboard. */

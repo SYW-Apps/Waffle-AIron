@@ -713,10 +713,14 @@ describe('git-backed projects (sdd_git)', () => {
     const clone = fs.mkdtempSync(path.join(base, 'content-clone-'));
     git(['-c', 'core.autocrlf=false', 'clone', '-q', '--branch', 'wairon/work', remote, '.'], clone);
 
-    // 1. Every wairon-AUTHORED spec file is byte-identical, working tree → clone.
+    // 1. Every wairon-AUTHORED spec file is byte-identical, working tree → clone,
+    //    line endings aside: the writer keeps the working tree's convention (a
+    //    checkout under core.autocrlf=true is CRLF), and git stores LF, which is
+    //    what this clone, with translation pinned off, checks out.
+    const lf = (bytes: Buffer): Buffer => Buffer.from(bytes.toString('utf8').replace(/\r\n/g, '\n'), 'utf8');
     for (const rel of Object.values(authored)) {
-      const original = fs.readFileSync(path.join(root, rel));
-      const carried = fs.readFileSync(path.join(clone, rel));
+      const original = lf(fs.readFileSync(path.join(root, rel)));
+      const carried = lf(fs.readFileSync(path.join(clone, rel)));
       expect(carried.equals(original), `byte drift between project and clone in ${rel}`).toBe(true);
     }
 

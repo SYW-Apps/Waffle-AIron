@@ -1,9 +1,10 @@
 # wairon — Roadmap
 
-> Last updated: 2026-06-14
+> Last updated: 2026-10-05 (for v6.0.0)
 
 wairon is an AIDD support tool built around Spec-Driven Development. This roadmap
-reflects what is actually shipped in `src/` and what is planned.
+reflects what is actually shipped in `src/` and what is planned. The
+[CHANGELOG](../CHANGELOG.md) has the per-release detail.
 
 ---
 
@@ -11,14 +12,42 @@ reflects what is actually shipped in `src/` and what is planned.
 
 - **SDD spec tree** — L0 System → L1 Subsystem → L2 Component → L3 Interface →
   L4 Implementation → L5 Narrative, stored under `.wai/specs/`.
-- **Architecture-conformance validation** (`wairon validate`) — reference
-  integrity, contract↔implementation method symmetry, narrative-call
-  resolution, component-stereotype dependency rules, dependency-cycle detection,
-  and draft-aware severity.
-- **Spec-derived agent topology** (`wairon list` / `generate`) — agents are
-  derived from the spec tree (`system-architect`, `<subsystem>-owner`,
-  `<component>-implementer`) and written as native subagent files. There is no
-  hand-maintained agent registry.
+- **Architecture-conformance validation** (`wairon validate`) — a documented
+  rule registry (`wairon rules list`): reference integrity,
+  contract↔implementation method symmetry, narrative-call resolution and
+  control-flow soundness, component-stereotype dependency rules (including the
+  Supervisor/Actor doctrine and the Repository pattern), technology-leakage
+  fencing, dependency-cycle detection, draft-aware severity, per-project
+  severity overrides and per-spec `lint.allow`. `--ci` for pipelines.
+- **Code↔spec conformance** — a spec's `sourcePath` is checked against the code:
+  declared exports, methods, params and the import graph, recorded beside the
+  approval and enforced by `validate --ci`.
+- **One type grammar** — language-neutral type spellings (`list<T>`, `T?`,
+  `async T`, `int`/`float`, enums, named value-objects, signature types), with
+  `wairon doctor --fix` rewriting older spellings.
+- **Approval and the merge gate** — `wairon lock` records a human's approval of
+  the design as one digest per spec in the committed `.wai/lock.json` (it never
+  rewrites the spec tree); `wairon lock-check` answers in CI whether the design
+  being merged is the approved one, also as a reusable GitHub workflow.
+- **Members, parts and projects** — a project grows from subsystems, to
+  **parts** (some of its subsystems stored in another folder or repository), to
+  member **projects** with their own id, exports and lock, reached as
+  `alias::name`. Declared `externals` are pinned (`wairon externals pin`) and
+  compared with their live producers. `validate` at a parent is the family run.
+- **Family migrations and renames** — attach, detach, adopt, promote, demote,
+  internalize, externalize, project and alias renames, each planned first
+  (`--report` / `dryRun`) and applied all or nothing; in-tree renames of
+  components, methods and types, and method moves, rewrite every reference.
+- **Design export** (`wairon export`) — the whole resolved design as one JSON
+  document with a published schema, stamped with the approval verdict, for
+  generators and translators.
+- **Spec-derived agent topology** — agents are derived from the spec tree
+  (`system-architect`, `<subsystem>-owner`, optionally a
+  `<component>-implementer` per component) and served as **live briefs**
+  (`sdd_get_agent_brief`, `wairon agent brief`), composed from the current tree
+  on every call. Agent files on disk are an opt-in materialized view
+  (`rules.materializeAgentFiles`). Execution budgets derive a model tier and
+  allowance per agent. There is no hand-maintained agent registry.
 - **Domains** (`wairon domains`) — subsystem-derived domains plus free-standing
   domains declared in `.wai/topology.yaml`, each with a derived owner agent.
 - **SDD skills** (`wairon skills`) — installed into each active target tool to
@@ -31,37 +60,41 @@ reflects what is actually shipped in `src/` and what is planned.
   via `instructions` in `pack.yaml`.
 - **Shared context** (`.wai/context/`) — project description + auto-generated
   domain map and AI guide.
-- **Tooling** — `init`, `status`, self-update with release channels, command
-  aliases, multi-target exporters (Claude, Gemini, custom).
+- **Diagrams** (`wairon diagram`) — Mermaid component and L5-derived sequence
+  diagrams, an interactive canvas (Cytoscape.js, embedded, works offline) with
+  scoped navigation, narrative flowcharts and relation health, and editable
+  draw.io / Excalidraw exports.
+- **Extension packs** (`wairon pack`) — profiles, language tables, rules,
+  patterns, variants and skills injected from outside; a machine pack store
+  with per-project selection, pinning, bundling and `pack sync` for CI, and
+  `pack impact` before every pack write.
+- **Tooling** — `init`, `status`, `doctor` (health checks and upgrade
+  repairs), `wairon dev` (the web UI over a local project), self-update with
+  release channels, command aliases, multi-target exporters (Claude, Gemini /
+  Antigravity, custom), npm packages and standalone binaries.
 - **Hosted server** (`wairon serve` / `wairon host`) — the `sdd_host` subsystem
   serves the `sdd_*` tools over streamable HTTP for many fully-isolated projects,
-  each scoped per-request to its authenticated project. Split data plane
-  (project-API-key auth) / admin control plane (project & key lifecycle plus a
-  commit-scoped `lock`/`promote` with a promote-time state re-check). Self-host
-  via Docker. See the [hosted server guide](design/hosted-mcp-server.md).
+  each scoped per request to its authenticated project. Split data plane / admin
+  control plane; organization units and a permission grid; owner-bound API keys
+  and SSO; a state-scoped `lock` with approval requests; hosted members as
+  records of their own; git-backed projects; Notion / Miro producers; a web UI
+  (canvas, specs, admin). Self-host via Docker. See the
+  [hosted server guide](design/hosted-mcp-server.md).
 
 ---
 
 ## Planned
 
-- **Conformance engine depth** — glob-aware ownership overlap, richer stereotype
-  rules, and clearer remediation messages. This is wairon's core differentiator.
-- **Spec-driven diagram generation** — stage 1 shipped: `wairon diagram` emits
-  Mermaid component diagrams (subsystem subgraphs, boundary-hop edges, `owns`
-  containment, public-surface marking) and **L5 narrative → sequence diagrams**.
-  Stage 2 shipped: `wairon diagram --canvas` emits an interactive single-page
-  HTML canvas — subsystem/pattern boundaries as collapsible containers,
-  collapsed boundaries aggregate external edges into labeled tubes,
-  click-through detail panel (description, interfaces, methods, endpoints,
-  narratives, dependencies, trusted links), search, and a validation-issue
-  overlay. Fully self-contained (no libraries, offline). Living,
-  always-accurate documentation from the same source of truth as the code.
+- **Conformance engine depth** — call-graph↔narrative conformance beyond the
+  current checks, event-topology completeness, and clearer remediation
+  messages. This is wairon's core differentiator.
+- **Upgrade automation** — more of the mechanical rewrites `wairon doctor
+  --fix` leaves to an author today (for example language-flavoured result
+  types), and per-member repairs run from a family's top.
 - **Derive specs from existing code** — bootstrap a draft spec tree from a repo
   so teams can adopt conformance without greenfield modeling.
-- **`wairon generate` cohesion** — optional MCP auto-registration during
-  generate (currently explicit via `wairon mcp install`).
-- **CI integration** — `wairon validate --ci` in PR checks; conformance diff
-  reporting.
+- **CI reporting** — conformance diffs between two revisions in PR checks (the
+  pass/fail gates, `validate --ci` and `lock-check`, ship today).
 - **Org scale** — shared template libraries and cross-project standards.
 - **Multi-Domain Architectural Profiles** — Support non-backend domains cleanly to prevent context waste. The engine integration is shipped (profiles resolve per subsystem, family fencing applies, extension packs register custom profiles with their own doctrine/severities/designDepth), but the depth of **builtin** doctrine varies by profile — labeled honestly below. Platform-specific doctrine is expected to arrive as extension packs (profile + rules + language table), not as core code.
   - **Frontend Profiles** (`frontend-reactive` and `frontend-controller`) — *doctrine enforced today*:

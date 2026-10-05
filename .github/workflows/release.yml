@@ -50,8 +50,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The React web app (web/) builds first so the embed step ships it as
+      # dist/webapp.html (a pkg asset). WAIRON_REQUIRE_WEBAPP fails the build if
+      # the bundle is missing, instead of silently falling back to the legacy UI.
+      - name: Build web app
+        run: npm run build:web
+
       - name: Build TypeScript + copy assets
         run: npm run build
+        env:
+          WAIRON_REQUIRE_WEBAPP: '1'
 
       - name: Build binary (${{ matrix.target }})
         shell: bash
@@ -254,6 +262,15 @@ jobs:
           echo "wairon --version -> ${GOT}"
           if [ "${GOT}" != "${VERSION}" ]; then
             echo "::error::wairon --version printed '${GOT}', expected '${VERSION}'"
+            exit 1
+          fi
+
+      - name: Package ships the React web app
+        shell: bash
+        run: |
+          ROOT="$(npm root -g)/@wairon/cli"
+          if [ ! -s "${ROOT}/dist/webapp.html" ]; then
+            echo "::error::the published package has no dist/webapp.html (the hosted UI would fall back to the legacy page)"
             exit 1
           fi
 

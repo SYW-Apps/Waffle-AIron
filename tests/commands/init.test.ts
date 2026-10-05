@@ -156,3 +156,35 @@ describe('cli_runner.runInit: no agent file, and the L0 core bootstraps (real CL
     expect.soft(notes).toContain('materializeAgentFiles');
   }, 180_000);
 });
+
+// ---------------------------------------------------------------------------
+// `wairon init` without --yes on a stdin that is not a terminal (CI, a pipe):
+// it used to die inside inquirer with an ERR_USE_AFTER_CLOSE stack trace. It
+// must refuse plainly, name --yes, and write nothing.
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runInit: a non-interactive shell without --yes (real CLI)', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  it('refuses with a clear message naming --yes, no stack trace, and writes nothing', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-notty-'));
+
+    const outcome = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init'], {
+      cwd: rootDir, timeout: 180_000,
+    }).then(
+      (r) => ({ code: 0, out: r.stdout + r.stderr }),
+      (e: { code?: number; stdout?: string; stderr?: string }) => ({ code: e.code ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` }),
+    );
+
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.out).toContain('Non-interactive shell');
+    expect(outcome.out).toContain('--yes');
+    expect(outcome.out).not.toContain('ERR_USE_AFTER_CLOSE');
+    expect(outcome.out).not.toMatch(/\n\s+at /);
+    expect(fs.existsSync(path.join(rootDir, '.wai'))).toBe(false);
+  }, 180_000);
+});

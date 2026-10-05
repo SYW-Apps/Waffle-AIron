@@ -9,33 +9,65 @@ flags: `--verbose`, `--silent`, `-v`/`--version`.
 
 ### `wairon init [-y, --yes] [--pack <source>]`
 Bootstrap `.wai/` in the current project: project config, the SDD spec tree
-(an L0 `.index.yaml` is seeded), the shared `.wai/context/`, the architect agent
-file, and the SDD skills installed into each selected target tool. `--yes` uses
-defaults without prompts; `--pack <source>` (repeatable) vendors + registers an
-extension pack right after init (see `wairon packs`). Re-running on an
+(an L0 `.index.yaml` is seeded), the shared `.wai/context/` and the AI guide
+(`CLAUDE.md` / `GEMINI.md`), the project-local MCP registration, and the SDD
+skills installed into each selected target tool. No agent files are written:
+agents are served as live briefs (`sdd_get_agent_brief`, `wairon agent brief
+<id>`) unless the project opts into `rules.materializeAgentFiles: true`. `--yes`
+uses defaults without prompts (a shell with no terminal needs it);
+`--pack <source>` (repeatable) vendors + registers an extension pack right after
+init (see `wairon pack`). Re-running on an
 initialized project is a no-op that points you back to the SDD flow. Run inside
 a subdirectory of an existing project, it offers to make that directory a
 **member** of the parent (see `wairon member add`).
 
-### `wairon status`
-Print a hierarchical completeness dashboard of the SDD spec tree (which
-subsystems/components/interfaces/implementations are drafted vs complete).
+### `wairon status [--subsystem <id>] [--no-recursive]`
+Print the SDD spec tree as a hierarchy. Its percentages measure **authoring
+readiness** — each spec's own `draft` / `design` / `complete` status — and are
+separate from **approval**, which is the lock record in `.wai/lock.json` and is
+printed on its own line. `wairon lock` never rewrites a spec's status, so an
+approved tree can still show draft specs. `--subsystem <id>` shows one
+subsystem; `--no-recursive` shows this project without its members.
 Each member project prints as `[Project] alias (id)` holding its own subsystems,
 with its **approval state** computed at the member's own root (`approved`,
 `drifted`, `never`) and how this project's lock pinned it (`matches`, `moved`,
 `unpinned`). The report closes with this project's own state. Asked at the parent
 or at the member, the answer is the same.
 
-### `wairon validate [--ci]`
+### `wairon validate [--ci] [--all] [--subsystem <id>] [--family] [--no-recursive]`
 Run the architecture-conformance gate over the spec tree: reference integrity,
 contract↔implementation method symmetry, narrative-call resolution, component
 stereotype dependency rules, and dependency-cycle detection. `--ci` treats
-warnings as errors.
+warnings as errors (notices are printed and counted, never fatal).
 
-### `wairon generate [--target <type>] [--domain <id>] [--domains <ids>] [--root] [--family] [--dry-run]`
-Regenerate agent output files from the spec-derived topology and (re)install the
-SDD skills. Filters limit generation to a target type or to specific domains.
-`--dry-run` previews without writing.
+- The first 100 findings per severity are printed; the rest are counted ("N
+  more not shown") and a per-code total follows. `--all` prints every finding.
+- `--subsystem <id>` validates one subsystem.
+- At a project that declares members, `validate` is the **family run**: every
+  member's own gate, and this project's externals composed against their live
+  producers. `--no-recursive` runs this project's gate alone; `--family` runs
+  the family run from a member.
+
+### `wairon generate [--target <name>] [--domain <id>] [--domains <ids>] [--root] [--family] [--no-prune] [--global] [--dry-run]`
+Reconcile the generated guides, skills and context, and — only when the project
+opts in — write the agent files from the spec-derived topology.
+
+**Agent files are opt-in.** With `rules.materializeAgentFiles` off (the default
+for a new project) no agent file is written, and a run removes the ones an
+earlier version wrote; agents are served as live briefs instead
+(`sdd_get_agent_brief`, `wairon agent brief <id>`). Set
+`rules.materializeAgentFiles: true` in `.wai/project.yaml` to keep agent files
+on disk (`rules.generateComponentImplementers: true` adds one implementer per
+component).
+
+- `--target <name>` limits generation to one of the project's configured
+  targets (`claude`, `agy`, …); an unknown name exits non-zero and lists the
+  targets the project configures.
+- `--domain <id>` / `--domains <ids>` / `--root` limit it to some domains.
+- `--no-prune` keeps wairon-managed agent files that left the topology.
+- `--global` also writes a target whose output directory is outside the project
+  root, backing up each file it replaces.
+- `--dry-run` previews without writing.
 
 `generate` writes **only this project's** outputs. A parent's topology lists a
 member's agents by reference (`delegatesTo: <alias>::<agentId>`) instead of
@@ -46,8 +78,13 @@ root. `--family` also generates each member's own layer, in its own root.
 ### `wairon lock [-y, --yes] [--subsystem <id>]`
 Review and approve the design. Validates the spec tree **as if complete** (full
 strictness, no draft-status relaxation) and — only if the **design** passes —
-records the current tree as approved and regenerates this project's agent
-topology.
+records the current tree as approved and refreshes this project's generated
+outputs (agent files only when `rules.materializeAgentFiles` is on).
+
+**It approves; it does not change statuses.** No spec's `status` is rewritten:
+approval lives in `.wai/lock.json`. Implementation gates on that approval —
+`wairon lock-check` in CI, `sdd_get_status` for an AI tool — not on
+`status: complete`. Commit `.wai/lock.json` with the change it approves.
 
 **What it certifies is the design.** Only design findings can refuse a lock.
 Code-conformance findings (the code↔spec checks) are recorded **beside** the
@@ -94,12 +131,14 @@ a human is actually answering:
 ```
 
 `--yes` skips the confirmation (for CI); `--subsystem`
-limits the scope.
+limits the scope. A shell with no terminal and no `--yes` writes nothing.
 
 ### `wairon lock-check [--strict]`
 The **merge gate**. One question, one exit code: *is the design in this working
 tree the design that was approved?* It compares the tree's gate identity against
-the one recorded in the committed `.wai/lock.json`.
+the one recorded in `.wai/lock.json` **as it is in the working tree**. In CI that
+is the file committed in the checked-out revision; locally an uncommitted lock
+record counts too, so commit it before you rely on a local pass.
 
 | What it finds | Default | `--strict` |
 | --- | --- | --- |
@@ -108,10 +147,10 @@ the one recorded in the committed `.wai/lock.json`.
 | **`unlocked`** — nothing was ever approved | pass, with a notice (0) | **fail (1)** |
 | no `.wai/specs` in this directory at all | pass, saying so (0) | **fail (1)** |
 
-A lock taken before stage 5 reads `stale` once, because the gate identity
-gained inputs. The message says so — the approval *was taken under an earlier
-gate identity* — and whether any own spec file changed since; re-lock once and
-commit `.wai/lock.json`. It stays about this project's own approval: a member's
+A lock taken by a wairon release before 6.0.0 reads `stale` once, because the
+gate identity gained inputs. The message says so — the approval *was taken under
+an earlier gate identity* — and whether any own spec file changed since; re-lock
+once and commit `.wai/lock.json`. It stays about this project's own approval: a member's
 state is `wairon status`'s to report.
 
 **It is optional by construction.** Only `stale` refuses by default, and `stale`
@@ -139,8 +178,9 @@ merging is the thing that was reviewed.
 
 #### Using it in GitHub Actions
 
-This repository publishes it as a **reusable workflow**. Add one job to your own
-workflow:
+This repository publishes it as a **reusable workflow** (from v6.0.0 — the
+workflow and the `lock-check` command do not exist in earlier releases). Add one
+job to your own workflow:
 
 ```yaml
 # .github/workflows/ci.yml in YOUR repository
@@ -148,17 +188,19 @@ on: [pull_request]
 
 jobs:
   approved-design:
-    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v5.1.0
+    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v6.0.0
+    with:
+      wairon-version: '6.0.0'
 ```
 
 With inputs (all optional):
 
 ```yaml
   approved-design:
-    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v5.1.0
+    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v6.0.0
     with:
       working-directory: packages/api   # where the .wai/ tree lives (default: .)
-      wairon-version: '5.1.0'           # version or npm dist-tag (default: latest)
+      wairon-version: '6.0.0'           # version or npm dist-tag, 6.0.0 or later (default: latest)
       strict: false                     # fail when nothing was approved (default: false)
       node-version: '20'                # (default: '20')
       runs-on: ubuntu-latest            # (default: ubuntu-latest)
@@ -166,7 +208,9 @@ With inputs (all optional):
 
 Pin `@<ref>` to a **tag**, never to `main` or `dev`. A moving branch means the
 check that gates your merges can change under you between two runs of the same
-commit — and this one decides whether code merges.
+commit — and this one decides whether code merges. Pin `wairon-version` too, to
+the version you lock with: the gate identity's algorithm can change between
+releases, and the default `latest` moves.
 
 On a `pull_request` event the default checkout is the merge commit, so what the
 gate judges is literally the design that would land.
@@ -176,10 +220,17 @@ making a failing job stop a merge is a branch-protection / ruleset setting on
 your repository ("Require status checks to pass" → add this job). No workflow
 can declare that for itself.
 
-### `wairon doctor [--fix]`
+### `wairon doctor [--fix] [-y, --yes] [--global] [--report <section>]`
 Health check: flags stale generated guides/skills, an unregistered MCP server,
-and spec-tree issues. `--fix` regenerates stale in-project guides/context/skills
-and registers the MCP server.
+spec-tree issues and the member/reference migration still pending. `--fix`
+regenerates stale in-project guides/context/skills, registers the MCP server and
+applies the spec repairs, then the member migration once confirmed (`--yes`
+answers that confirmation in a script). A write outside the project root (a
+machine-wide MCP config) also needs `--global`; each file it replaces is backed
+up beside itself. `--report <section>` prints one section's report and writes
+nothing: `chaining` (the member/reference migration plan) or
+`composed-validation` (what the family run changes about each member's
+findings); it never combines with `--fix`.
 
 Among its spec repairs, `--fix` rewrites every stored type position that is an
 alias of its canonical spelling (`string[]` becomes `list<string>`, `boolean`
@@ -193,8 +244,15 @@ plan without writing it.
 
 ### `wairon list` (alias `ls`) / `wairon show <id>`
 List, or show full details of, the agents resolved from the spec tree
-(`system-architect`, `<subsystem>-owner`, `<component>-implementer`, and owners
-for free-standing domains).
+(`system-architect`, `<subsystem>-owner`, owners for free-standing domains, and
+a `<component>-implementer` per component when
+`rules.generateComponentImplementers` is on).
+
+### `wairon agent brief <id>` / `wairon agent customize <id>`
+`brief` prints the live delegation brief for one agent — the same composition
+`sdd_get_agent_brief` returns, rendered from the current spec tree on every
+call. `customize` scaffolds the user-owned guidance file `.wai/agents/<id>.md`,
+which later briefs for that agent include.
 
 ### `wairon rules list`
 List the SDD conformance rule registry — every rule group, the issue codes it
@@ -228,10 +286,28 @@ Raising the dial can only tighten a budget, so it is safe to turn without
 auditing every agent. Per-agent overrides live in `.wai/project.yaml` under
 `execution.overrides`.
 
-### `wairon packs list | add <source> [--global] | remove <name> [--global]`
+### `wairon pack …`
 Extension packs — plain config files (YAML, or a JS module for programmatic
 rules) injecting custom profiles, language/platform tables, and conformance
-rules (see [Extending wairon](extending-wairon.md)).
+rules (see [Extending wairon](extending-wairon.md)). `wairon packs` is a
+deprecated alias of `wairon pack`.
+
+| Command | Description |
+|---------|-------------|
+| `wairon pack init <name> [--kind declarative\|code] [--dir <path>] [--skill]` | Scaffold a new pack project |
+| `wairon pack build [source] [--out <file>]` | Build an installable `.wpack` archive from a pack directory |
+| `wairon pack install <source> [-y]` | Install a pack (`.wpack`/`.zip` or a directory) into this machine's pack store. It applies to nothing until a project selects it |
+| `wairon pack uninstall <name>[@version]` | Remove a pack from the store |
+| `wairon pack use <name>[@version] [--source <url>] [--pin] [--bundle] [-y]` | Select an installed pack for this project, recorded in `.wai/project.yaml` |
+| `wairon pack unuse <name> [-y]` | Deselect a pack for this project (it stays installed) |
+| `wairon pack impact <name>[@version]` | What a pack changes here, writing nothing (below) |
+| `wairon pack sync` | Install every declared-but-missing pack from the source its selection records — what a fresh machine or CI runner needs |
+| `wairon pack bundle [name] [--all]` | Commit a copy of a selected pack under `.wai/packs/`, so a clone and CI need no pack store |
+| `wairon pack which <name>` | Which installed pack a name resolves to: version, path, digest, origin |
+| `wairon pack list` | Global and project packs and what each provides, with load errors inline |
+| `wairon pack add <source> [--global]` / `wairon pack remove <name> [--global]` | Vendor a pack file or directory into `.wai/packs/` (or install it machine-wide), or remove it |
+
+The vendoring commands in detail:
 
 - `add <source>`: verify the pack loads, then vendor it into `.wai/packs/`
   and register it in `project.yaml → extensions.packs` (commit `.wai/` so CI
@@ -246,9 +322,13 @@ rules (see [Extending wairon](extending-wairon.md)).
   `.wai/packs/` (files elsewhere are left in place); `--global` removes a
   machine-wide pack.
 
-`wairon packs` is the deprecated alias of `wairon pack`, whose selection
-commands (`install | uninstall | which | use | unuse | impact | bundle | sync`)
-are described in [Extending wairon](extending-wairon.md#installing-and-selecting-packs).
+The store and selection commands (`install | uninstall | which | use | unuse |
+impact | bundle | sync`) are described in
+[Extending wairon](extending-wairon.md#installing-and-selecting-packs).
+
+`wairon patterns list` lists the reusable, versioned architecture patterns the
+loaded packs declare; `wairon variants list` lists the component variants (each
+anchored on a base block, with its implementation guidance).
 
 ### `wairon pack impact <name>[@version]` — and confirm before every pack write
 Packs exist to adjust wairon's checks and behaviour, and a pack may loosen or
@@ -281,10 +361,11 @@ writes**; anything but yes writes nothing. In a script, pass `-y, --yes`: the
 write happens without the report, and the command says it applied without
 showing it. A run with no terminal to ask on (CI, a pipe) behaves the same way.
 
-### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>]`
+### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>] [--no-health]`
 Generate architecture diagrams derived from the spec tree — living
 documentation from the same source of truth as the conformance gate. Every
-format writes a file (paths are printed); nothing opens automatically.
+format writes a file (by default under `.wai/docs/diagrams/`; `--out` names
+another file or directory); nothing opens automatically.
 
 - **default (no flags): the interactive canvas** (`canvas.html`).
 - `--format mermaid` (or `--subsystem <id>`): system-wide or scoped Mermaid
@@ -319,6 +400,8 @@ format writes a file (paths are printed); nothing opens automatically.
   entrypoint method with a narrative, plus `canvas.html`,
   `architecture.drawio`, and `architecture.excalidraw`) into
   `.wai/docs/diagrams/` (or `--out`).
+- `--no-health`: skip comparing each consumption relation with its live
+  producer; the canvas draws those edges as not checked.
 
 The canvas is a small single-page app with **C4-style scoped navigation**:
 each view renders one scope's direct children (System → subsystems →
@@ -461,7 +544,7 @@ root to see one.
 `::` (`::shared::money`), `super::` (`super::sibling`), a member path
 (`billing::invoice::invoice_portal`) and an L1 subsystem carrying
 `projectPath` (`DEPRECATED_MOUNT_FORM`), and a member's long-form `path` key
-(`{ path: services/x }`, stage 8: one location key, `source`). `wairon doctor
+(`{ path: services/x }`; the one location key is `source`). `wairon doctor
 --fix` rewrites them to `members`, the one location key and `alias::name`.
 
 ---
@@ -482,8 +565,9 @@ spec tree (read-only); free-standing domains live in `.wai/topology.yaml`.
 
 ## Skills
 
-The SDD skills (`sdd-architect`, `sdd-narrative`, `sdd-auditor`, `sdd-implement`)
-drive the spec-driven workflow inside your AI tool.
+The five SDD skills (`sdd-architect`, `sdd-narrative`, `sdd-auditor`,
+`sdd-implement`, `sdd-delegate`) drive the spec-driven workflow inside your AI
+tool.
 
 | Command | Description |
 |---------|-------------|
@@ -501,17 +585,24 @@ and author specs directly.
 |---------|-------------|
 | `wairon mcp serve` | Start the MCP server (stdio transport) |
 | `wairon mcp install [--global] [--config-dir <path>] [--backend claude\|gemini]` | Register the server. Default: project-local. `--global` uses the home config (respects `CLAUDE_CONFIG_DIR`/`GEMINI_CONFIG_DIR`); `--config-dir` installs into an explicit, validated config dir (requires `--backend`) |
+| `wairon mcp install --hosted <url> [--project <id>] [--token <token>]` | Register a **hosted** entry against an instance instead of the local stdio server; the token defaults to the credential stored by `wairon login` |
 | `wairon mcp status` | Show whether the server is registered |
 
-**Tools:** `listAgents`, `getAgent`, `listDomains`, `validateTopology`,
-`getProjectConfig`, `sdd_initialize_system`, `sdd_add_subsystem`,
-`sdd_set_public_interfaces`, `sdd_add_member`, `sdd_move_member`,
-`sdd_externalize_subsystem`, `sdd_internalize_member`, `sdd_attach_member`,
-`sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`,
-`sdd_rename_member_alias` (each family migration takes `dryRun`),
-`sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`,
-`sdd_write_narrative`, `sdd_add_type`, `sdd_get_spec`, `sdd_update_spec`,
-`sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.
+The local server offers 37 tools:
+
+| Group | Tools |
+|-------|-------|
+| Topology (read) | `listAgents`, `getAgent`, `listDomains`, `validateTopology`, `getProjectConfig` |
+| Authoring | `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`, `sdd_write_narrative`, `sdd_add_type`, `sdd_update_spec`, `sdd_delete_spec` |
+| Reading and checking | `sdd_get_spec`, `sdd_get_status`, `sdd_validate_tree` |
+| Renames and moves (in this tree) | `sdd_rename_component`, `sdd_rename_method`, `sdd_rename_type`, `sdd_move_methods` |
+| Members and family migrations (each takes `dryRun`) | `sdd_add_member`, `sdd_move_member`, `sdd_externalize_subsystem`, `sdd_promote_member`, `sdd_demote_member`, `sdd_internalize_member`, `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`, `sdd_rename_member_alias` |
+| Externals | `sdd_pin_externals`, `sdd_get_externals_status` |
+| Packs | `sdd_pack_impact` |
+| Delegation | `sdd_get_agent_brief` (the live brief for one agent; also served as the `wairon-agent://` resource) |
+
+A hosted server adds its own `sdd_host_*` and `sdd_landscape_*` tools; see the
+[hosted server guide](design/hosted-mcp-server.md).
 
 ---
 
@@ -552,16 +643,40 @@ limits `maxProjectsPerUser`, `maxMcpRequestsPerMinute`, `maxProjectBytes` and
 Runs **in-process** (no running server needed), so it works over SSH /
 `docker exec`. Reads the master credential from `WAIRON_ADMIN_TOKEN`.
 
+Every project lives in an **organization unit**, and access is a grid of
+**permission assignments** (subject × scope × capability). An API key acts as its
+**owner's** live permissions, narrowed to the projects it names. The first
+project on a new instance:
+
+```sh
+wairon host unit create --slug acme --kind business_entity        # a root unit
+wairon host project create --id shop --unit acme
+wairon host permission set --user alice --capability project:read  --project shop
+wairon host permission set --user alice --capability project:write --project shop
+wairon host key mint --project shop --owner alice                 # → wk_… (shown once)
+```
+
+`project:write` does not include `project:read`: a key whose owner can only
+write is refused every read tool. An owner needs no user record — an id with no
+record acts as a service principal.
+
 | Command | Description |
 |---------|-------------|
-| `wairon host project create --id <id>` | Provision a new isolated project (its own `.wai/` tree) |
+| `wairon host unit create --slug <slug> [--kind <kind>] [--name <name>] [--parent <unitId>]` | Create an organization unit. A root unit (no `--parent`) must be `--kind business_entity`; below it, `department`, `team`, … |
+| `wairon host project create --id <id> --unit <unitId>` | Provision a new isolated project (its own `.wai/` tree) in a unit |
 | `wairon host project list` | List hosted projects |
 | `wairon host project destroy --id <id>` | Remove a project and its tree |
-| `wairon host key mint --project <id\|*> [--owner <userId>] [--role editor\|admin]` | Mint an API key (plaintext shown once). A token naming a project covers its members; a deprecated member-qualified `--project platform::billing` is stored as the member's record id, and the command says what it mapped |
+| `wairon host demo [--id <id>] [--unit <unitId>] [--force]` | Provision a project seeded with an example spec tree (default id and unit `demo`; the unit is created if absent), so the canvas has content |
+| `wairon host permission set --user <userId> --capability <cap> [--value yes\|approval\|no\|inherit] [--project <id> [--subsystem <id>] \| --unit <unitId> \| --instance]` | Set one assignment. Capabilities: `project:read`, `project:create`, `project:write`, `project:admin`, `approval:decide`. The scope defaults to the instance |
+| `wairon host permission list [--user <userId>] [scope flags]` / `remove --id <assignmentId>` | List or remove assignments |
+| `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). A token naming a project covers its members. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
 | `wairon host doctor [--fix]` | Inspect the data dir and, with `--fix`, migrate it: roll back a transaction a crash left unfinished there, apply the permission-model migration, then register every hosted family's members as records of their own (no grant written — access is inherited through the parent chain — and every member-qualified key entry rewritten to a record id), all or nothing, audited |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
 | `wairon host lock --project <id>` | The same lock flow as `wairon lock` (design gate, `members`, `code` beside the claim, format 2) against the hosted project |
+| `wairon host git enable \| disable \| sync \| commit \| status \| sync-config` | Bind a hosted project to its real repository (wairon commits only `.wai/`) |
+| `wairon host producer configure \| produce \| remove \| list` | Project a hosted project to Notion or Miro |
+| `wairon host secret set \| list` | Set integration secrets at runtime (`git-token`, `notion-token`, `miro-token`, `signing-secret`) — no restart |
 | `wairon host packs list [--project <id>]` | List the server-global packs, or one hosted project's |
 | `wairon host packs install --file <pack.yaml> [--name <n>] [--project <id>] [-y]` | Install a declarative pack server-wide, or into a hosted project. Into a project it first shows the pack's impact on that project (measured by the host, writing nothing) and asks; `--yes`, or no terminal, installs without the report and says so |
 | `wairon host packs remove --name <n> [--project <id>] [-y]` | Remove a pack; from a project it first shows what the pack accounts for there and asks, as install does |
@@ -577,10 +692,28 @@ return the impact of every pack they applied in their results.
 
 ---
 
+## Connecting to a hosted instance
+
+| Command | Description |
+|---------|-------------|
+| `wairon login <url> [--token <token>] [--project <id>]` | Store a bearer credential for a hosted instance on this machine (`--project` verifies it against that project first; the token defaults to `WAIRON_REMOTE_TOKEN`) |
+| `wairon logout [url]` | Forget a stored credential (local only — it does not revoke it), or list what is stored |
+| `wairon remote push \| pull [--url] [--project] [--token] [--unit <id>] [--force] …` | Migrate a spec tree to or from a hosted project (`--unit` creates the destination project first) |
+| `wairon remote attach \| detach \| status` | Bind this checkout to a hosted project; while attached, `wairon lock` locks the hosted project |
+
+## Surfaces, externals and producers
+
+| Command | Description |
+|---------|-------------|
+| `wairon externals pin [alias…] \| status \| list [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml`; `status` compares each pin with its live producer per used member; `list` shows what is declared |
+| `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI document per portal), import one, or list them |
+| `wairon produce <notion\|miro> [--page <id>] [--token <token>]` | Project the local spec tree to Notion or Miro (the token comes from `--token`, the environment, else a prompt; nothing is stored) |
+
 ## Tooling
 
 | Command | Description |
 |---------|-------------|
+| `wairon dev [--port <port>] [--open]` | A local single-project dev server: the wairon web UI over the current project, no login or tenancy (loopback only) |
 | `wairon update [--check] [--channel <name>]` | Check/install the latest release; switch channel |
 | `wairon aliases list` | Show command aliases (`wai`) and their status |
 | `wairon aliases enable <name>` / `disable <name>` | Create / remove an alias |

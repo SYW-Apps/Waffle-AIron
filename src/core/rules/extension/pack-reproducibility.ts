@@ -47,7 +47,7 @@ export const reproducibilityRule: SddRule = {
         ctx.addIssue(
           'warning',
           'PACK_SOURCE_UNFETCHABLE',
-          `Pack selection "${selection.name}" records no source and is not bundled, so a fresh machine or CI runner cannot obtain it — \`wairon pack sync\` has nothing to fetch. Record a URL (\`wairon pack use ${selection.name} --source <url>\`) or commit a copy (\`wairon pack bundle ${selection.name}\`).`,
+          `Pack selection "${selection.name}" records no source and is not bundled, so a fresh machine or CI runner cannot obtain it — \`wairon pack sync\` has nothing to fetch. Commit a copy the repository carries (\`wairon pack bundle ${selection.name}\`, or \`wairon pack bundle --all\` for every selection), or record a URL \`wairon pack sync\` fetches it from (\`wairon pack use ${selection.name} --source <url>\`). A selection \`wairon doctor --fix\` recorded from a pack installed from a local path has no URL to record: bundle it.`,
         );
       }
     }

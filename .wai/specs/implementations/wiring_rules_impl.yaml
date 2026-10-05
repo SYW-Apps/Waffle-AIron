@@ -877,7 +877,10 @@ methods:
         label: refsEnd
         description: >-
           Report UNKNOWN_INVARIANT_REF (error; draft context isDraftCtx) on impl.id, naming the step
-          number, the method and the ref
+          number, the method and the ref — and, when the ref's type reference carries a qualifier
+          and the same ref without it resolves, naming the qualifier as the cause and the bare ref
+          to write instead (a project's own alias written from inside it), rather than saying no
+          entity declares the invariant
         type: local
     symbol: check
     exportedVia: invariantReferencesRule
@@ -926,4 +929,4 @@ methods:
     exportedVia: portalMountsRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-04T11:53:20.684Z'
+updatedAt: '2026-10-05T06:50:08.239Z'

@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as YAML from 'yaml';
 import { z } from 'zod';
 import { getProjectRoot } from '../utils/fs.js';
+import { DEFAULT_TARGET_DIRS } from './defaults.js';
 import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { readFileOrNull, writeFile } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
@@ -722,9 +723,61 @@ function asReadable(document: ProjectConfigDocument | null): ProjectConfigDocume
   return { name: '', createdAt: PART_EPOCH, updatedAt: PART_EPOCH, ...document };
 }
 
+/** What marks an agent file wairon generated: the managed banner's marker (exporters/base.ts), or a role-suffixed agent name. */
+const MANAGED_AGENT_MARKER = 'wairon:managed';
+const MANAGED_AGENT_NAME = /-(owner|implementer|architect)\.(md|ya?ml)$/;
+
+/**
+ * Whether wairon-managed agent files sit in the project: in any built-in
+ * target's default output directory or a configured target's own, inside the
+ * project root only. Read only for a document that never states
+ * rules.materializeAgentFiles.
+ */
+function holdsMaterializedAgentFiles(document: Record<string, unknown>, root: string): boolean {
+  const dirs = new Set(Object.values(DEFAULT_TARGET_DIRS));
+  for (const target of Array.isArray(document.targets) ? document.targets : []) {
+    const outputDir = isPlainObject(target) ? target.outputDir : undefined;
+    if (typeof outputDir === 'string') dirs.add(outputDir);
+  }
+  const base = path.resolve(root);
+  for (const dir of dirs) {
+    const full = path.resolve(base, dir);
+    const rel = path.relative(base, full);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) continue;
+    let names: string[];
+    try {
+      names = fs.readdirSync(full);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      if (MANAGED_AGENT_NAME.test(name)) return true;
+      const head = readFileOrNull(path.join(full, name));
+      if (head !== null && head.slice(0, 4096).includes(MANAGED_AGENT_MARKER)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * A document that never states rules.materializeAgentFiles was written before
+ * agent files became opt-in, when they were always materialized: it reads true
+ * while wairon-managed agent files are present, so an upgrade keeps the
+ * committed agent files and the first save writes the setting down as true —
+ * never a false the next lock would act on by deleting them. Every other
+ * document is returned as it is.
+ */
+function withInferredMaterialization(document: ProjectConfigDocument | null, root: string): ProjectConfigDocument | null {
+  if (!isPlainObject(document) || document.partOf !== undefined) return document;
+  const rules = isPlainObject(document.rules) ? document.rules : undefined;
+  if (rules !== undefined && hasOwn(rules, 'materializeAgentFiles')) return document;
+  if (!holdsMaterializedAgentFiles(document, root)) return document;
+  return { ...document, rules: { ...(rules ?? {}), materializeAgentFiles: true } };
+}
+
 function parseConfig(document: ProjectConfigDocument | null, root: string): ProjectConfig {
   try {
-    return ProjectConfigSchema.parse(asReadable(document));
+    return ProjectConfigSchema.parse(asReadable(withInferredMaterialization(document, root)));
   } catch (e: unknown) {
     throw new WaironError(
       `Invalid .wai/project.yaml: ${e instanceof Error ? e.message : String(e)}\n(project root: ${root})`,

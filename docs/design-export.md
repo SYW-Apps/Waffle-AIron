@@ -21,7 +21,7 @@ read back into a tree.
 | Where | How |
 |---|---|
 | CLI | `wairon export` prints the JSON to stdout, and nothing else. `wairon export --out design.json` writes the file and reports the path and the approval state. See [cli.md](cli.md#wairon-export---out-file). |
-| Library | `import { exportDesign } from '@wairon/cli'`, then `exportDesign(outPath?, approval?)`, which returns the document and writes it when `outPath` is given. |
+| Library | `const { exportDesign } = require('@wairon/cli')` (or `import` from an ES module), then `exportDesign(outPath?, approval?)`, which returns the document and writes it when `outPath` is given. The package ships no TypeScript declarations; a TypeScript consumer declares the module itself or types the document from the JSON Schema. |
 | JSON Schema | `schemas/design-export-1.json`, shipped in the package. It is generated from the zod schema in `src/models/design-export.ts` at build time, and a test fails if the two drift. |
 
 The CLI decides the approval verdict first, the same way `wairon lock-check` does (not strict),
@@ -53,6 +53,11 @@ spec files sit in on disk.
   fields, enum values, narrative steps, lifecycle roots and `formerly`.
 - **The document has no timestamp.** Equal `source.stateId`s with equal approvals mean equal
   documents, so a consumer can cache on `stateId`.
+- **`source.stateId` is a content id of the exported design, not the lock's gate identity.**
+  It is a different digest from the `stateId` in `.wai/lock.json`, which also covers the
+  doctrine, the declared inputs and the members' approvals. To relate an export to an
+  approval, read `source.approval`: it is `locked` exactly when that lock record covers this
+  tree.
 
 ## Keys
 
@@ -65,6 +70,13 @@ spec files sit in on disk.
 | Field, param, enum value | its name, within its owner |
 | Narrative step | its `stepNumber`, within its method |
 | Anything in another project | `alias::publicName`: the alias this project declares the project under, and the public name that project's L0 exports it as |
+
+A type's key `subsystem::id` uses `::` as a **key separator** inside this document: its first
+segment is one of this document's own `subsystems` keys. A cross-project key's first segment is
+an alias from `dependencies` instead, so the two never collide. Signature text (a method's
+`signature` string) keeps the spec's own spelling, which writes a subsystem-owned type as
+`subsystem.id`; read the structured `params` and `returns`, not the signature text, when you
+need keys.
 
 A reference into another project is always written the way a consumer can resolve it: through
 the producer's **public** export table. It is never written with the loader's internal key, so

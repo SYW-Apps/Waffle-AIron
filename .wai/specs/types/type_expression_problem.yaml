@@ -56,6 +56,19 @@ methods:
       type-spelling repair lists and the type-expressions rule mentions; an author confirms it by
       writing int, or writes float. Pure.
     symbol: typeProblemIntProposal
+  - name: enumProposal
+    signature: 'enumProposal(): TypeEnumProposal?'
+    params: []
+    returns: TypeEnumProposal?
+    description: >-
+      The enum this problem's position may become, PROPOSED and never applied: for a string-literal
+      union (TYPE_FORM_UNSUPPORTED) collected over a spec whose members are all string literals —
+      none and undefined members aside, which make the proposal optional — the enum id taken from
+      the position's name in kebab-case and the values in written order, each once. None for any
+      other problem, for a union mixing in anything but string literals, or when no value is left.
+      What the doctor's type-spelling repair lists; an author confirms it by defining the enum and
+      writing its id. Pure.
+    symbol: typeProblemEnumProposal
 sourcePath: src/models/type-grammar.ts
 createdAt: '2026-10-03T22:02:56.994Z'
-updatedAt: '2026-10-04T23:40:40.101Z'
+updatedAt: '2026-10-05T06:47:34.626Z'

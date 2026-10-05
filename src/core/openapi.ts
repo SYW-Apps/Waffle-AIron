@@ -81,6 +81,9 @@ function schemaOfExpression(expr: TypeExpression, closureIds: Set<string>): Reco
       return { oneOf: expr.args.map(member => schemaOfExpression(member, closureIds)) };
     case 'async':
       return schemaOfExpression(expr.args[0], closureIds);
+    case 'result':
+      // The success body; a failure is the operation's error response, not part of it.
+      return schemaOfExpression(expr.args[0], closureIds);
   }
 }
 
@@ -96,10 +99,11 @@ function schemaFor(typeRef: string, closureIds: Set<string>): Record<string, unk
   return schemaOfExpression(expr, closureIds);
 }
 
-/** Whether a returns completes with no value: `void` or `async void`. */
+/** Whether a returns completes with no value: `void`, `async void`, or a result whose success type is void. */
 function returnsNothing(returns: string): boolean {
   const expr = expressionOf(returns);
-  const inner = expr?.form === 'async' ? expr.args[0] : expr;
+  const awaited = expr?.form === 'async' ? expr.args[0] : expr;
+  const inner = awaited?.form === 'result' ? awaited.args[0] : awaited;
   return inner?.form === 'primitive' && inner.name === 'void';
 }
 

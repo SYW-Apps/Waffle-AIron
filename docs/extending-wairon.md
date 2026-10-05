@@ -6,8 +6,8 @@ extra conformance rules — is injected from outside through **extension
 packs**: plain configuration files (YAML, or a JS module for programmatic
 rules) that wairon reads and imports. A product built this way (a
 *wrapper*) is just packs + an installer on top of the user's existing
-wairon installation: no fork, no npm, and wairon core never learns the
-platform exists.
+wairon installation: no fork, no build step, and wairon core never learns
+the platform exists.
 
 A working wrapper lives at [`examples/wrapper/`](../examples/wrapper/) and
 is guarded by `tests/examples/wrapper-example.test.ts`, so it cannot
@@ -211,7 +211,7 @@ the member's own.
 **Per project (recommended for repo doctrine):**
 
 ```sh
-wairon packs add path/to/pack.yaml       # or a .cjs file, or a pack directory
+wairon pack add path/to/pack.yaml       # or a .cjs file, or a pack directory
 ```
 
 This **vendors** the pack into `.wai/packs/` and registers it in
@@ -223,7 +223,7 @@ authoring specs is held to the same rules as the pipeline.
 **Machine-wide:**
 
 ```sh
-wairon packs add path/to/pack.yaml --global
+wairon pack add path/to/pack.yaml --global
 ```
 
 Installs into the global packs folder (`WAIRON_PACKS_DIR` or
@@ -248,9 +248,9 @@ extensions:
 Inspect and uninstall:
 
 ```sh
-wairon packs list                 # global + project packs, what each provides
-wairon packs remove <name>        # deregister + delete vendored files
-wairon packs remove <name> --global
+wairon pack list                 # global + project packs, what each provides
+wairon pack remove <name>        # deregister + delete vendored files
+wairon pack remove <name> --global
 wairon init --pack <source>       # doctrine applied at project birth
 ```
 
@@ -261,12 +261,12 @@ wrapper product does **not** need npm either. Ship a release ZIP containing
 your pack files plus a small install script; the user unzips and runs it:
 
 ```sh
-wairon packs add ./my-product-pack            # per project, or:
-wairon packs add ./my-product-pack --global   # machine-wide
+wairon pack add ./my-product-pack            # per project, or:
+wairon pack add ./my-product-pack --global   # machine-wide
 ```
 
 The installer injects once and leaves — from then on plain `wairon
-validate` enforces the doctrine, and `wairon packs remove` undoes it. See
+validate` enforces the doctrine, and `wairon pack remove` undoes it. See
 [`examples/wrapper/install.js`](../examples/wrapper/install.js) for the
 template. A spec-only product (implementation lives on a cloud platform)
 needs nothing more: the wrapped repository holds specs + docs, wairon holds
@@ -572,11 +572,12 @@ for core, where it lands gated-off in profiles that lack it.
 ## Embedding wairon as a library (advanced)
 
 Only needed to build a branded gate binary with doctrine compiled in —
-packs + installer cover everything else. It requires a built checkout of
-this repo as a `file:` dependency (wairon is not published to npm):
+packs + installer cover everything else. Install the npm package
+(`npm install @wairon/cli`) and require it; the library entry is CommonJS and
+ships no TypeScript declarations:
 
 ```js
-const wairon = require('waffle-airon'); // this repo, built
+const wairon = require('@wairon/cli');
 
 wairon.setProjectRoot(projectDir);
 const extensions = wairon.loadExtensions([...packPathsOrModuleIds], projectDir);
@@ -589,6 +590,7 @@ auto-loading. The relevant exported API: `validateProject(options)` (the
 owner's gate: one project from its own files), `validateFamily(options)` (the
 family run: every member's own gate verbatim, the composition of each
 project's externals against their live producers, and the family checks),
+`exportDesign` (the `wairon export` document — see [the format](design-export.md)),
 `loadExtensions`, `loadExtensionPacks`, `loadProjectExtensions`,
 `globalPacksDir`, `discoverPacks`, `setProjectRoot`, the `SddRule` /
 `RuleContext` / `LoadedExtensions` / `DeclarativePack` types, `SDD_RULES`,

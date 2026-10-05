@@ -22,7 +22,8 @@ import { getProjectRoot } from '../utils/fs.js';
 // ---------------------------------------------------------------------------
 // status command
 //
-// Shows a hierarchical completeness map of the SDD Spec Tree.
+// Shows the spec tree with its authoring readiness (from each spec's status)
+// and, separately, the approval verdict from the lock record.
 // ---------------------------------------------------------------------------
 
 /** What each layer's label looks like in a terminal. */
@@ -143,6 +144,13 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
     logger.blank();
     if (lock.drifted) logger.warn(lock.text.trim());
     else logger.info(lock.text.trim());
+    // The percentages above and the verdict here answer different questions,
+    // and an approved tree showing "50% Complete" read like a contradiction:
+    // the lock no longer rewrites spec statuses, so the two never converge.
+    logger.info(chalk.gray(
+      'The percentages measure authoring readiness (each spec\'s draft/design/complete status), not approval: '
+        + 'approval is the lock record above (.wai/lock.json), and `wairon lock` does not change any spec\'s status.',
+    ));
   }
 
   logger.blank();

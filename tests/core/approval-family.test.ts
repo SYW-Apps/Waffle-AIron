@@ -388,7 +388,9 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     const check = checkApproval(false);
     expect(check.state).toBe('stale');
     expect(check.approved).toBe(false);
-    expect(check.message).toContain("the gate identity gained inputs in stage 5: members' composition subjects, `composition`; code conformance moved beside the claim");
+    expect(check.message).toContain('was taken under an earlier gate identity (written by wairon ');
+    expect(check.message).toContain("Since wairon 6.0.0 the gate identity also covers members' composition subjects and `composition`, and code conformance is recorded beside the claim.");
+    expect(check.message).not.toMatch(/stage \d/);
     expect(check.message).toContain('No own spec file has changed since the approval.');
     expect(check.message).toContain('re-lock once');
 

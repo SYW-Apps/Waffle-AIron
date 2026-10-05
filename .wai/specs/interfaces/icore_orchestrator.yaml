@@ -1170,19 +1170,22 @@ methods:
     description: >-
       Plan, and with apply write, the one-time rewrite of stored type positions into their canonical
       spelling: every interface and type of the bound project holding a position that is an alias
-      (TYPE_SPELLING_STALE) is re-saved, and the writer stores every position canonical — so what it
-      writes is exactly what any later save would, and the derived signature texts follow. It never
-      guesses: a `number` position whose name plainly says an integer (count, size, length, limit,
-      port, step, index, depth, level, days, minutes, seconds, bytes, version, ...) gets int
-      PROPOSED (type_expression_problem.intProposal) and is left as written for an author to
-      confirm, and every position no rewrite can settle (an inline function type, a literal union, a
-      union mixing a primitive, a number with no proposal, a builtin with no neutral meaning, an
-      expression that does not parse) is listed as needing an author. Re-saving a spec holding such
-      a position leaves that position as written. An interface holding a sourced method whose
-      restatement differs from its source is never re-saved — the writer would store that method
-      with only its source and decide the contract for its author — so its aliases wait until
-      SIGNATURE_SOURCE_RESTATED is settled. Only the bound project's own specs are repaired.
-      Idempotent: after an applied run nothing is left to rewrite. Without apply nothing is written.
+      (TYPE_SPELLING_STALE — `Result<T, E>` and `()` included, which become `result<T, E>` and void)
+      is re-saved, and the writer stores every position canonical — so what it writes is exactly
+      what any later save would, and the derived signature texts follow. It never guesses: a
+      `number` position whose name plainly says an integer (count, size, length, limit, port, step,
+      index, depth, level, days, minutes, seconds, bytes, version, ...) gets int PROPOSED
+      (type_expression_problem.intProposal), a union of string literals gets an enum PROPOSED
+      (type_expression_problem.enumProposal: the id from the position's name, the values in written
+      order), each left as written for an author to confirm, and every position no rewrite or
+      proposal can settle (an inline function type, a union mixing a primitive, a number with no
+      proposal, a builtin with no neutral meaning, an expression that does not parse) is listed as
+      needing an author. Re-saving a spec holding such a position leaves that position as written.
+      An interface holding a sourced method whose restatement differs from its source is never
+      re-saved — the writer would store that method with only its source and decide the contract for
+      its author — so its aliases wait until SIGNATURE_SOURCE_RESTATED is settled. Only the bound
+      project's own specs are repaired. Idempotent: after an applied run nothing is left to rewrite.
+      Without apply nothing is written.
     signature: 'repairTypeSpellings(apply: bool): list<TypeSpellingRepair>'
     returns: list<TypeSpellingRepair>
     params:
@@ -1217,4 +1220,4 @@ methods:
         description: Its new id, under the same owner
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T23:37:35.357Z'
+updatedAt: '2026-10-05T06:48:27.066Z'

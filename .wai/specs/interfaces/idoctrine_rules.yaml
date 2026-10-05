@@ -383,11 +383,11 @@ methods:
   - name: projectBoundaries
     description: >-
       Rule project-boundaries. The one judge of every cross-project reference the bound project
-      writes (decision 9 — every project is a crate of its own, reached only through its L0 exports
-      and only as a dependency it declared). It reads each of the project's own references from the
-      project graph — `::` forms and bare names bound through `use` imports alike — takes its
-      resolution from resolveCrossProject, decided before any severity from the project's own files
-      alone, and reports every outcome but resolved once, carrying the resolution: forbidden is
+      writes (every project is a crate of its own, reached only through its L0 exports and only as a
+      dependency it declared). It reads each of the project's own references from the project graph
+      — `::` forms and bare names bound through `use` imports alike — takes its resolution from
+      resolveCrossProject, decided before any severity from the project's own files alone, and
+      reports every outcome but resolved once, carrying the resolution: forbidden is
       EXTERNAL_UNDECLARED (the reference reaches a project the referrer declares neither as a member
       nor as an external, or names a first segment that is none of its subsystems, aliases or
       foreign providers); missing is EXTERNAL_NOT_EXPORTED (the producer's table — a contained
@@ -399,9 +399,9 @@ methods:
       deprecated form naming no alias — never a pass). A bare name no import supplies is not this
       rule's: it is the unresolved-reference finding it always was, with rule_context.importHint
       appended. A trustedLinks entry naming a subsystem of another project (`alias::sub`) is
-      TRUSTED_LINK_CROSSES_PROJECT: a sanctioned fast lane stays inside one project. Stage 4 makes
-      the three stage-2 notices errors now that the owner's gate judges them exactly; a reference is
-      never left to a parent's verdict.
+      TRUSTED_LINK_CROSSES_PROJECT: a sanctioned fast lane stays inside one project. An undeclared,
+      unexported or ambiguous reference is an error, since the owner's gate judges it exactly; a
+      reference is never left to a parent's verdict.
     signature: 'projectBoundaries(ctx: RuleContext): void'
     returns: void
     params:
@@ -477,4 +477,4 @@ methods:
           is closed under composition
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-10-04T11:51:19.234Z'
+updatedAt: '2026-10-05T06:52:38.467Z'

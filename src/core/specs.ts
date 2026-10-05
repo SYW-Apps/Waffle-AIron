@@ -1031,6 +1031,20 @@ function qualifiedTypeNames(typeStr: string | undefined): string[] {
   return out;
 }
 
+/** The type reference of an asserted invariant (`<type-ref>.<invariant-id>`, split at its last dot); undefined when it has none. */
+function invariantTypeRef(ref: string): string | undefined {
+  const at = ref.lastIndexOf('.');
+  return at > 0 && at < ref.length - 1 ? ref.slice(0, at) : undefined;
+}
+
+/** An asserted invariant with its type reference passed through `map`, its invariant id kept. */
+function mapInvariantRef(ref: string, map: ReferenceMapper): string {
+  const typeRef = invariantTypeRef(ref);
+  if (typeRef === undefined || !typeRef.includes('::')) return ref;
+  const next = map('type', typeRef);
+  return next === typeRef ? ref : `${next}${ref.slice(typeRef.length)}`;
+}
+
 /** The references a spec names in positions the loader leaves raw — recorded only when they carry `::`. */
 function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; value: string }[] {
   const out: { position: string; value: string }[] = [];
@@ -1055,6 +1069,8 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
         for (const step of m.narrative) {
           const source = (step as { auth?: { from?: string } }).auth?.from;
           if (typeof source === 'string' && source.startsWith(COMPONENT_AUTH_SOURCE)) add('auth', source.slice(COMPONENT_AUTH_SOURCE.length));
+          // An asserted invariant's type reference is a type position the loader leaves raw.
+          for (const ref of step.assertsInvariants ?? []) add('type', invariantTypeRef(ref));
         }
       }
       break;
@@ -1208,6 +1224,9 @@ function respellStoredReferences(kind: string, doc: Record<string, unknown>, map
       for (const m of list(doc.methods)) {
         for (const step of list(m.narrative)) {
           at(step, 'targetComponent', 'narrative');
+          if (Array.isArray(step.assertsInvariants)) {
+            step.assertsInvariants = step.assertsInvariants.map((ref: unknown) => (typeof ref === 'string' ? mapInvariantRef(ref, map) : ref));
+          }
           const auth = step.auth as Record<string, unknown> | undefined;
           if (auth && typeof auth.from === 'string' && auth.from.startsWith(COMPONENT_AUTH_SOURCE)) {
             auth.from = `${COMPONENT_AUTH_SOURCE}${map('auth', auth.from.slice(COMPONENT_AUTH_SOURCE.length))}`;
@@ -1275,7 +1294,10 @@ function mapRawReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper)
               return call && next !== call.compId ? `${next}.${call.methodName}` : entry;
             }),
           } : {}),
-          narrative: m.narrative.map((step) => {
+          narrative: m.narrative.map((authored) => {
+            const step = authored.assertsInvariants
+              ? { ...authored, assertsInvariants: authored.assertsInvariants.map((ref) => mapInvariantRef(ref, map)) }
+              : authored;
             const source = (step as { auth?: { from?: string } }).auth?.from;
             if (typeof source !== 'string' || !source.startsWith(COMPONENT_AUTH_SOURCE)) return step;
             const auth = (step as { auth: Record<string, unknown> }).auth;

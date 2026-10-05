@@ -321,9 +321,9 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
   }
 }
 
-/** The stage-5 upgrade note: the identity gained inputs, which says nothing about the design. */
+/** The gate-identity upgrade note: the identity gained inputs, which says nothing about the design. */
 export const GATE_UPGRADE_NOTE =
-  'the gate identity gained inputs in stage 5 (members\' composition subjects, `composition`; '
+  'the gate identity gained inputs in this release (members\' composition subjects, `composition`; '
   + 'code conformance moved beside the claim)';
 
 /**

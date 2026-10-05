@@ -394,7 +394,7 @@ function refuseUnapprovedMembers(required: boolean, members: ProjectApproval[]):
   const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
   if (!required || unapproved.length === 0) return;
   const named = unapproved.map((m) => `${m.alias ?? m.key} (${m.state}${
-    m.upgraded ? ' — approved under the pre-stage-5 identity, re-lock it once' : ''})`);
+    m.upgraded ? ' — approved under an earlier gate identity, re-lock it once' : ''})`);
   throw new LockRefusedError(
     `composition.requireApprovedMembers: direct member(s) not approved — ${named.join(', ')}. `
       + 'Lock each at its own root first; a parent never approves below itself. Nothing was written.',

@@ -3,10 +3,10 @@
  * enum-types.ts.
  *
  * Documented intents pinned here (rule descriptions):
- *  - TYPE_EXPRESSION_INVALID (error): a structured type position does not
+ *  - TYPE_EXPRESSION_INVALID (warning on load; the writer refuses it): a structured type position does not
  *    parse under the grammar — anything left over after the grammar finishes
  *    is invalid, so a position carries no trailing prose.
- *  - TYPE_POSITION_INVALID (error): a position rule is broken — void or async
+ *  - TYPE_POSITION_INVALID (warning on load; the writer refuses it): a position rule is broken — void, async or result
  *    out of place, a map key that is not string, int or an enum, or T??.
  *  - TYPE_FORM_UNSUPPORTED (warning): a form the grammar leaves out — here a
  *    string-literal union, whose replacement is an enum.
@@ -76,7 +76,7 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'TYPE_EXPRESSION_INVALID',
-    severity: 'error',
+    severity: 'warning',
     anchoredTo: 'iparcel_rates',
     expectFire: true,
     scenario:
@@ -96,7 +96,7 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'TYPE_POSITION_INVALID',
-    severity: 'error',
+    severity: 'warning',
     anchoredTo: 'iparcel_rates',
     expectFire: true,
     scenario: 'The parcel rating contract takes its service level as `async string`, though async may stand only at the top of a returns.',

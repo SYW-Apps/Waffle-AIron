@@ -38,9 +38,12 @@ function lastSegment(name: string): string {
 /**
  * Whether a code reading and a spec expression are one type: equal form by
  * form; a named type agreeing through its code-level name; TypeScript's
- * `number` (the loose marker) agreeing with int and float alike.
+ * `number` (the loose marker) agreeing with int and float alike; and a spec's
+ * `result<T, E>` agreeing with a code T — TypeScript has no typed failure, so
+ * the function returns T and throws E, and E is never compared.
  */
 function sameType(code: TypeExpression, spec: TypeExpression, codeNames: Map<string, string>): boolean {
+  if (spec.form === 'result' && code.form !== 'result') return sameType(code, spec.args[0], codeNames);
   if (code.form === 'primitive' && code.name === 'number') return spec.form === 'primitive' && (spec.name === 'int' || spec.name === 'float');
   if (code.form === 'named' && (spec.form === 'named' || spec.form === 'applied')) {
     if (spec.form === 'applied') return false;
@@ -81,6 +84,9 @@ function writeTypeScript(expr: TypeExpression): string {
       return expr.args.map(writeTypeScript).join(' | ');
     case 'async':
       return `Promise<${writeTypeScript(expr.args[0])}>`;
+    case 'result':
+      // The success type: the function throws its failure.
+      return writeTypeScript(expr.args[0]);
     case 'applied':
       return `${expr.name}<${expr.args.map(writeTypeScript).join(', ')}>`;
   }
@@ -127,6 +133,7 @@ const typescriptDialect: TypeDialect = {
       'T? → T | null',
       'A | B → A | B',
       'async T → Promise<T>',
+      'result<T, E> → T, throwing E on failure (result<void, E> → void)',
       "an enum E → type E = 'a' | 'b' (a string-literal union alias)",
       'a named scalar E holding P → type E = P (an alias of the primitive)',
     ];

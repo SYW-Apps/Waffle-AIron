@@ -52,7 +52,9 @@ fields:
     type: bool
     description: >-
       Whether generation writes agent files to disk; when false the live briefs are the only view of
-      the topology (default: false)
+      the topology (default: false — except for a configuration written before the setting existed,
+      which reads true while wairon-managed agent files are present, so an upgrade never deletes
+      committed agent files)
     optional: false
   - name: designDepth
     type: DesignDepth
@@ -61,4 +63,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T23:40:30.505Z'
+updatedAt: '2026-10-05T06:49:42.080Z'

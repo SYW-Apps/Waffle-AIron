@@ -22,7 +22,7 @@ export const projectIdentityRule: SddRule = {
   name: 'project-identity',
   judges: 'design',
   description:
-    "The bound project is keyed on its id, so the id must be declared, well-formed, stable and its own: a project that declares none answers to its display name slugified until it writes one (PROJECT_ID_DEFAULTED), a project whose name yields no id or whose declared id breaks the grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), an id the rename migration moved from the one the lock approved is owed a re-lock and nothing more (PROJECT_ID_RENAMED: the approved id is one of the configuration's previousIds), and any other id that differs from the one the lock approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). It judges the bound project's own identity only. The family half — a member with a defaulted id (named with its alias as the id to declare), a member with no id, and two members resolving to one id — is a family check since stage 4 (family_validator.checkMembers), which reads the family root's graph.",
+    "The bound project is keyed on its id, so the id must be declared, well-formed, stable and its own: a project that declares none answers to its display name slugified until it writes one (PROJECT_ID_DEFAULTED), a project whose name yields no id or whose declared id breaks the grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), an id the rename migration moved from the one the lock approved is owed a re-lock and nothing more (PROJECT_ID_RENAMED: the approved id is one of the configuration's previousIds), and any other id that differs from the one the lock approved has moved under everything that keyed on it (PROJECT_ID_CHANGED). It judges the bound project's own identity only. The family half — a member with a defaulted id (named with its alias as the id to declare), a member with no id, and two members resolving to one id — is a family check (family_validator.checkMembers), which reads the family root's graph.",
   codes: [
     { code: 'PROJECT_ID_AMBIGUOUS', defaultSeverity: 'warning', summary: "Project has no usable id: its name yields no slug, or its declared id breaks the grammar" },
     { code: 'PROJECT_ID_CHANGED', defaultSeverity: 'error', summary: "Project id differs from the id the lock approved" },
@@ -49,7 +49,7 @@ function judgeOwnIdentity(ctx: RuleContext, identity: ProjectIdentity): void {
     ctx.addIssue(
       'notice',
       'PROJECT_ID_DEFAULTED',
-      `Project "${identity.name}" declares no id in .wai/project.yaml, so it answers to "${identity.id}", derived from its display name — renaming the project would move it. No save writes it for you; declare it with \`id: ${identity.id}\` (stage 3 requires an explicit id).`,
+      `Project "${identity.name}" declares no id in .wai/project.yaml, so it answers to "${identity.id}", derived from its display name — renaming the project would move it. No save writes it for you; declare it with \`id: ${identity.id}\` (a project is keyed on an explicit id).`,
     );
   }
   // Steps 6-7: no usable id.

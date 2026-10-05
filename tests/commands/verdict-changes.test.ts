@@ -143,9 +143,9 @@ describe('the upgrade report — verdict_changes.explain', () => {
     const printed = log.mock.calls.map((c) => String(c[0])).join('\n');
     expect(printed).toContain('this is not a per-code diff');
     expect(printed).toMatch(/locked by v5\.1\.1-dev\.40: 0 error\(s\), 3 warning\(s\), 1 notice\(s\)/);
-    expect(printed).toContain('the lock predates stage 4');
+    expect(printed).toContain('the lock predates composed validation');
     expect(printed).toContain('members.shared.use: [index-value]');
-    expect(printed).toMatch(/\d+ finding\(s\) could not be attributed to stage 4/);
+    expect(printed).toMatch(/\d+ finding\(s\) could not be attributed to composed validation/);
     expect(printed).toContain('Positional matches no rule decides (1)');
     expect(printed).toMatch(/report: "WafflerError" matches shared::waffler-error and ui::waffler_error/);
     expect(printed).toContain('Nothing was written.');

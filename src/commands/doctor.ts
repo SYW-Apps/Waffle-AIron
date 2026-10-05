@@ -35,12 +35,14 @@ import {
   backfillChainedSubprojectConfigs,
   diagnoseProjectPacks,
   pinInstalledPacksAsSelections,
+  // The family a --fix cascades into, and the plain report summarises per member.
+  projectFamily,
 } from './adapters/core.js';
-import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot, isOutsideRoot } from '../utils/fs.js';
+import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot, isOutsideRoot, runWithProjectRoot } from '../utils/fs.js';
 import { checkSkillFreshness, exportSddSkills } from './adapters/skills.js';
 // A configuration's enabled targets are the project_config type's own behaviour.
 import { activeTargetTypes } from '../models/project.js';
-import { computeGateStateId, validateProject } from './validate.js';
+import { computeGateStateId, validateFamily } from './validate.js';
 // The approver's own projection, taken from the models rather than from
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
 // a command has no business reaching a Store to get it.
@@ -220,16 +222,30 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     try {
       const cfg = loadProjectConfig();
       if (!cfg) throw new ProjectNotInitializedError();
-      const result = validateProject({ rules: cfg.rules, projectType: cfg.projectType });
-      const errs = result.issues.filter((i) => i.severity === 'error').length;
-      const warns = result.issues.filter((i) => i.severity === 'warning').length;
+      // The family gate: the bound project's own and every member's, so a clean
+      // top never reads as a clean family.
+      const result = validateFamily({ rules: cfg.rules, projectType: cfg.projectType });
+      const counts = severityCounts(result.issues);
+      const { errs, warns, notes } = counts;
       // Notices are counted and named, but alone they leave the check passing.
-      const notes = result.issues.filter((i) => i.severity === 'notice').length;
       const noted = notes > 0 ? `, ${notes} notice(s)` : '';
       if (errs > 0) line(tally, 'error', `Conformance: ${errs} error(s), ${warns} warning(s)${noted} — see \`wairon validate\` (you: \`sdd_validate_tree\`)`);
       else if (warns > 0) line(tally, 'warn', `Conformance: ${warns} warning(s)${noted} — see \`wairon validate\` (you: \`sdd_validate_tree\`)`);
       else if (notes > 0) line(tally, 'ok', `Conformance: 0 errors, 0 warnings, ${notes} notice(s) — see \`wairon validate\` (you: \`sdd_validate_tree\`)`);
       else line(tally, 'ok', 'Conformance: 0 errors, 0 warnings');
+      // One line per project of the family with findings, the bound project's own counts included.
+      const byProject = new Map<string, typeof result.issues>();
+      for (const issue of result.issues) {
+        const key = issue.project ?? '';
+        byProject.set(key, [...(byProject.get(key) ?? []), issue]);
+      }
+      if (byProject.size > 1 || (byProject.size === 1 && !byProject.has(''))) {
+        for (const [key, issues] of [...byProject].sort(([a], [b]) => a.localeCompare(b))) {
+          const own = severityCounts(issues);
+          if (own.errs === 0 && own.warns === 0 && own.notes === 0) continue;
+          console.log(`      ${key === '' ? 'this project' : `member ${key}`}: ${own.errs} error(s), ${own.warns} warning(s), ${own.notes} notice(s)`);
+        }
+      }
     } catch (e) {
       line(tally, 'warn', `Could not run conformance check: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -321,6 +337,11 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
           line(tally, 'warn', `${proposal.kind} ${proposal.specId} ${proposal.path}: "${proposal.written}" → ${proposal.stored} (proposed)`);
         }
       }
+      const enumProposals = spellings.flatMap((repair) => repair.enumProposals);
+      if (enumProposals.length > 0) {
+        console.log(`  ${chalk.gray('enum proposed — never written: define the enum, then write its id here')}`);
+        for (const proposal of enumProposals) line(tally, 'warn', describeEnumProposal(proposal));
+      }
       if (authorNeeded.length > 0) {
         console.log(`  ${chalk.gray('needs an author — no rewrite can settle these')}`);
         for (const problem of authorNeeded) {
@@ -330,6 +351,16 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       if (spellings.length > 0) logger.blank();
     } catch (e) {
       line(tally, 'warn', `Could not plan the type-spelling repair: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // ── Members ────────────────────────────────────────────────────────────
+    // The repairs above plan this project's own specs only. Each member's,
+    // planned the same way bound to its root, in one line per member with
+    // something pending. Silent when no member has anything.
+    try {
+      reportMemberRepairs(tally);
+    } catch (e) {
+      line(tally, 'warn', `Could not plan the members' repairs: ${e instanceof Error ? e.message : String(e)}`);
     }
 
     // ── Chaining ───────────────────────────────────────────────────────────
@@ -414,7 +445,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
         console.log(chalk.bold('Lock'));
         line(tally, 'warn',
           `stale — the lock of ${lock.record!.lockedAt} was taken under an earlier gate identity: the gate identity gained `
-          + 'inputs in stage 5 (members\' composition subjects, `composition`; code conformance moved beside the claim). '
+          + 'inputs in this release (members\' composition subjects, `composition`; code conformance moved beside the claim). '
           + 'Re-lock once (`wairon lock`).');
       } else if (lock.state === 'stale') {
         console.log(chalk.bold('Lock'));
@@ -558,14 +589,7 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   // record the installed packs it is no longer applying as explicit selections.
   // Doctrine that governs a project must be declared BY that project, or a clone
   // and CI enforce a different rule set and the difference is invisible.
-  try {
-    const pinned = pinInstalledPacksAsSelections();
-    if (pinned.length > 0) {
-      console.log(`  ${icon('ok')} Recorded ${pinned.length} installed pack(s) as explicit selections: ${pinned.join(', ')}.`);
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} Could not record pack selections: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  pinPackSelections('');
 
   // Migrate legacy spec filenames
   try {
@@ -592,81 +616,10 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
     console.log(`  ${icon('error')} Chained-subproject backfill failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // Retire the Specialist stereotype: each becomes an Orchestrator with the
-  // dependencyClass its dependencies decide, and each Specialist-based project
-  // variant rebases onto Orchestrator. Runs after the filename migration
-  // above, so the retyped specs are saved under their current names.
-  try {
-    const retirement = retireSpecialists(true);
-    if (retirement.retyped.length > 0) {
-      console.log(`  ${icon('ok')} Retired ${retirement.retyped.length} Specialist(s) to Orchestrator.`);
-    }
-    if (retirement.rebasedVariants.length > 0) {
-      console.log(`  ${icon('ok')} Rebased ${retirement.rebasedVariants.length} variant(s) from Specialist to Orchestrator: ${retirement.rebasedVariants.join(', ')}.`);
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} Specialist retirement failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  // Drop every narrative-step field its own step type cannot have — the
-  // leftovers of retypes made before the writer rebuilt a retyped step. A
-  // mechanical repair like the filename migration: the field configures
-  // nothing, and no step's `type` is ever guessed at from it.
-  try {
-    const repairs = repairForeignStepFields(true);
-    if (repairs.length > 0) {
-      console.log(`  ${icon('ok')} Dropped foreign fields from ${repairs.length} narrative step(s):`);
-      for (const repair of repairs) {
-        console.log(`      ${repair.implementation}.${repair.method} step ${repair.stepNumber} (${repair.stepType}): ${repair.fields.join(', ')}`);
-      }
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} Narrative-step repair failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  // Regenerate every stored signature text its params contradict, and drop
-  // every restatement equal to its method's signature source. A mechanical
-  // repair like the one above: one project, idempotent, outside the family
-  // transaction, and exactly what any later save of the spec would write.
-  try {
-    const signatures = repairSignatures(true);
-    if (signatures.length > 0) {
-      console.log(`  ${icon('ok')} Rewrote ${signatures.length} spec(s) into their stored signature form:`);
-      for (const repair of signatures) {
-        console.log(`      ${repair.kind} ${repair.specId}: ${describeSignatureRepair(repair)}`);
-      }
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} Signature repair failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  // Rewrite every stored type position that is an alias into its canonical
-  // spelling. A mechanical repair like the one above: one project, idempotent,
-  // outside the family transaction, and exactly what any later save of the
-  // spec would write. The int proposals and the positions needing an author
-  // are printed, never written.
-  try {
-    const spellings = repairTypeSpellings(true);
-    const rewritten = spellings.filter((repair) => repair.rewritten.length > 0);
-    if (rewritten.length > 0) {
-      const positions = rewritten.reduce((n, repair) => n + repair.rewritten.length, 0);
-      console.log(`  ${icon('ok')} Rewrote ${positions} type position(s) in ${rewritten.length} spec(s) into their canonical spelling.`);
-    }
-    const proposals = spellings.flatMap((repair) => repair.proposals);
-    if (proposals.length > 0) {
-      console.log(`  ${icon('warn')} ${proposals.length} number position(s) with int proposed — not written; confirm by writing int, or write float:`);
-      for (const proposal of proposals) console.log(`      ${proposal.kind} ${proposal.specId} ${proposal.path}: "${proposal.written}" → ${proposal.stored} (proposed)`);
-    }
-    const authorNeeded = spellings.flatMap((repair) => repair.authorNeeded);
-    if (authorNeeded.length > 0) {
-      console.log(`  ${icon('warn')} ${authorNeeded.length} type position(s) need an author — no rewrite can settle them:`);
-      for (const problem of authorNeeded) {
-        console.log(`      ${problem.kind} ${problem.specId} ${problem.path ?? ''}: "${problem.written}" — ${problem.replacement ? `write ${problem.replacement}` : problem.detail}`);
-      }
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} Type-spelling repair failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  // The per-project spec repairs — Specialists, foreign step fields,
+  // signatures, type spellings — after the filename migration above, so the
+  // specs they re-save are saved under their current names.
+  repairProjectSpecs('');
 
   // The chaining migration — the last spec-touching fix: after the
   // configuration backfill, so every chained child has a project.yaml to
@@ -674,11 +627,230 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   // so its gated L0 writes save specs under current names into a repaired tree.
   await migrateChaining(options, tally);
 
+  // The members: the repairs above wrote this project only. Cascade into each
+  // member below it — after the chaining migration, so a legacy mount it moved
+  // into `members` is a member here — the way the family run validates them.
+  repairMembers();
+
   await repairMcpRegistration(options, targets);
 
   logger.blank();
 }
 
+
+// ── the per-project repairs, and their cascade into the members ─────────────
+
+/** How a project reads in a --fix line: nothing for the bound project, `[alias] ` for a member. */
+function whoPrefix(who: string): string {
+  return who === '' ? '' : `[${who}] `;
+}
+
+/** Errors, warnings and notices of a set of findings. */
+function severityCounts(issues: { severity: string }[]): { errs: number; warns: number; notes: number } {
+  return {
+    errs: issues.filter((i) => i.severity === 'error').length,
+    warns: issues.filter((i) => i.severity === 'warning').length,
+    notes: issues.filter((i) => i.severity === 'notice').length,
+  };
+}
+
+/** One enum proposal in a line: where, what is written, and the enum to define. */
+function describeEnumProposal(p: { kind: string; specId: string; path: string; written: string; enumId: string; values: string[]; optional: boolean }): string {
+  return `${p.kind} ${p.specId} ${p.path}: "${p.written}" → enum ${p.enumId} (${p.values.join(', ')}), written as ${p.enumId}${p.optional ? '?' : ''} (proposed)`;
+}
+
+/**
+ * Record the installed packs a project no longer applies as explicit
+ * selections (one that never declared a position on machine-wide packs), and
+ * name the remedy for each recorded selection CI could not obtain: no
+ * fetchable source was recorded (a pack installed from a local path has
+ * none), and it is not bundled.
+ */
+function pinPackSelections(who: string): void {
+  try {
+    const pinned = pinInstalledPacksAsSelections();
+    if (pinned.length === 0) return;
+    console.log(`  ${icon('ok')} ${whoPrefix(who)}Recorded ${pinned.length} installed pack(s) as explicit selections: ${pinned.join(', ')}.`);
+    const pinnedNames = new Set(pinned.map((label) => label.replace(/@[^@]*$/, '')));
+    const unobtainable = (loadProjectConfig()?.extensions?.packs ?? [])
+      .filter((e): e is Exclude<typeof e, string> => typeof e !== 'string')
+      .filter((e) => pinnedNames.has(e.name) && !e.source && !e.bundle)
+      .map((e) => e.name);
+    if (unobtainable.length > 0) {
+      console.log(`  ${icon('warn')} ${whoPrefix(who)}${unobtainable.length} of them record no fetchable source (installed from a local path), so CI and a fresh clone cannot obtain them: ${unobtainable.join(', ')}. `
+        + 'Run `wairon pack bundle --all` to commit a copy the repository carries, or `wairon pack use <name> --source <url>` to record where `wairon pack sync` fetches each.');
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} ${whoPrefix(who)}Could not record pack selections: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/**
+ * The per-project spec repairs, each idempotent and each writing the bound
+ * project's own specs only: retire the Specialists, drop the foreign
+ * narrative-step fields, regenerate the stored signatures, rewrite the stored
+ * type spellings (printing the int and enum proposals and the positions
+ * needing an author, none of which is written). Each failure is printed and
+ * the next repair still runs.
+ */
+function repairProjectSpecs(who: string): void {
+  const at = whoPrefix(who);
+  // Retire the Specialist stereotype: each becomes an Orchestrator with the
+  // dependencyClass its dependencies decide, and each Specialist-based project
+  // variant rebases onto Orchestrator.
+  try {
+    const retirement = retireSpecialists(true);
+    if (retirement.retyped.length > 0) {
+      console.log(`  ${icon('ok')} ${at}Retired ${retirement.retyped.length} Specialist(s) to Orchestrator.`);
+    }
+    if (retirement.rebasedVariants.length > 0) {
+      console.log(`  ${icon('ok')} ${at}Rebased ${retirement.rebasedVariants.length} variant(s) from Specialist to Orchestrator: ${retirement.rebasedVariants.join(', ')}.`);
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} ${at}Specialist retirement failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Drop every narrative-step field its own step type cannot have — the
+  // leftovers of retypes made before the writer rebuilt a retyped step. The
+  // field configures nothing, and no step's `type` is ever guessed at from it.
+  try {
+    const repairs = repairForeignStepFields(true);
+    if (repairs.length > 0) {
+      console.log(`  ${icon('ok')} ${at}Dropped foreign fields from ${repairs.length} narrative step(s):`);
+      for (const repair of repairs) {
+        console.log(`      ${repair.implementation}.${repair.method} step ${repair.stepNumber} (${repair.stepType}): ${repair.fields.join(', ')}`);
+      }
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} ${at}Narrative-step repair failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Regenerate every stored signature text its params contradict, and drop
+  // every restatement equal to its method's signature source: exactly what any
+  // later save of the spec would write.
+  try {
+    const signatures = repairSignatures(true);
+    if (signatures.length > 0) {
+      console.log(`  ${icon('ok')} ${at}Rewrote ${signatures.length} spec(s) into their stored signature form:`);
+      for (const repair of signatures) {
+        console.log(`      ${repair.kind} ${repair.specId}: ${describeSignatureRepair(repair)}`);
+      }
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} ${at}Signature repair failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Rewrite every stored type position that is an alias into its canonical
+  // spelling (`Result<(), E>` → `result<void, E>` among them). The int and enum
+  // proposals and the positions needing an author are printed, never written.
+  try {
+    const spellings = repairTypeSpellings(true);
+    const rewritten = spellings.filter((repair) => repair.rewritten.length > 0);
+    if (rewritten.length > 0) {
+      const positions = rewritten.reduce((n, repair) => n + repair.rewritten.length, 0);
+      console.log(`  ${icon('ok')} ${at}Rewrote ${positions} type position(s) in ${rewritten.length} spec(s) into their canonical spelling.`);
+    }
+    const proposals = spellings.flatMap((repair) => repair.proposals);
+    if (proposals.length > 0) {
+      console.log(`  ${icon('warn')} ${at}${proposals.length} number position(s) with int proposed — not written; confirm by writing int, or write float:`);
+      for (const proposal of proposals) console.log(`      ${proposal.kind} ${proposal.specId} ${proposal.path}: "${proposal.written}" → ${proposal.stored} (proposed)`);
+    }
+    const enumProposals = spellings.flatMap((repair) => repair.enumProposals);
+    if (enumProposals.length > 0) {
+      console.log(`  ${icon('warn')} ${at}${enumProposals.length} string-literal union(s) with an enum proposed — not written; define the enum (sdd_add_type kind enum), then write its id:`);
+      for (const proposal of enumProposals) console.log(`      ${describeEnumProposal(proposal)}`);
+    }
+    const authorNeeded = spellings.flatMap((repair) => repair.authorNeeded);
+    if (authorNeeded.length > 0) {
+      console.log(`  ${icon('warn')} ${at}${authorNeeded.length} type position(s) need an author — no rewrite can settle them:`);
+      for (const problem of authorNeeded) {
+        console.log(`      ${problem.kind} ${problem.specId} ${problem.path ?? ''}: "${problem.written}" — ${problem.replacement ? `write ${problem.replacement}` : problem.detail}`);
+      }
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} ${at}Type-spelling repair failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/** A member project below the bound root: the alias it is declared under, its directory, and whether it lies inside the root. */
+interface MemberProject {
+  alias: string;
+  directory: string;
+  inside: boolean;
+}
+
+/** Every member project below the bound root, as the family the tree forms now lists them (nearest first). */
+function memberProjects(): MemberProject[] {
+  const root = getProjectRoot();
+  return projectFamily().nodes
+    .filter((node) => node.namespace !== '' && node.directory && pathExists(node.directory))
+    .map((node) => ({ alias: node.mountAlias ?? node.namespace, directory: node.directory, inside: !isOutsideRoot(root, node.directory) }));
+}
+
+/**
+ * --fix's cascade: each member inside the bound root gets the per-project
+ * repairs, bound to its own root — the packs it no longer applies pinned, then
+ * its spec repairs — each line marked with the member. A member outside the
+ * root (a sibling checkout) is not written from here: it is named with the
+ * command to run in its own directory.
+ */
+function repairMembers(): void {
+  let members: MemberProject[];
+  try {
+    members = memberProjects();
+  } catch (e) {
+    console.log(`  ${icon('error')} Could not read the family's members: ${e instanceof Error ? e.message : String(e)}`);
+    return;
+  }
+  for (const member of members) {
+    if (!member.inside) {
+      console.log(`  ${icon('warn')} [${member.alias}] lies outside this project (${member.directory}): run \`wairon doctor --fix\` there to upgrade it.`);
+      continue;
+    }
+    runWithProjectRoot(member.directory, () => {
+      if (!projectConfigExists()) return;
+      pinPackSelections(member.alias);
+      repairProjectSpecs(member.alias);
+    });
+  }
+}
+
+/** Plain doctor: one line per member with repairs pending, planned bound to its root; silent when none has any. */
+function reportMemberRepairs(tally: Tally): void {
+  const pending: string[] = [];
+  for (const member of memberProjects()) {
+    const counts = runWithProjectRoot(member.directory, () => {
+      if (!projectConfigExists()) return null;
+      const spellings = repairTypeSpellings(false);
+      return {
+        specialists: retireSpecialists(false).retyped.length,
+        stepFields: repairForeignStepFields(false).length,
+        signatures: repairSignatures(false).length,
+        respell: spellings.reduce((n, r) => n + r.rewritten.length, 0),
+        proposals: spellings.reduce((n, r) => n + r.proposals.length + r.enumProposals.length, 0),
+        authorNeeded: spellings.reduce((n, r) => n + r.authorNeeded.length, 0),
+      };
+    });
+    if (!counts) continue;
+    const parts = [
+      counts.specialists ? `${counts.specialists} Specialist(s)` : '',
+      counts.stepFields ? `${counts.stepFields} step(s) with foreign fields` : '',
+      counts.signatures ? `${counts.signatures} spec(s) with stale signatures` : '',
+      counts.respell ? `${counts.respell} type position(s) to respell` : '',
+      counts.proposals ? `${counts.proposals} proposal(s)` : '',
+      counts.authorNeeded ? `${counts.authorNeeded} position(s) needing an author` : '',
+    ].filter(Boolean);
+    if (parts.length === 0) continue;
+    const where = member.inside
+      ? '`wairon doctor --fix` here cascades into it'
+      : `run \`wairon doctor --fix\` in ${member.directory}`;
+    pending.push(`member ${member.alias}: ${parts.join(', ')} — ${where}`);
+  }
+  if (pending.length === 0) return;
+  console.log(chalk.bold('Members'));
+  for (const text of pending) line(tally, 'warn', text);
+  logger.blank();
+}
 
 // ── writes outside the project root ─────────────────────────────────────────
 
@@ -822,18 +994,18 @@ function reportLabel(key: string): string {
 
 /**
  * Step 6: the upgrade report per project — the lock's totals beside today's
- * (attributed to the upgrade only when the lock predates stage 4) — then the
+ * (attributed to the upgrade only when the lock predates composed validation) — then the
  * entries grouped by code with their reasons and rewrites, then how many
  * findings it could not attribute. The lock records totals only, and the
  * report says so: this is not a per-code diff.
  */
 function printUpgradeReport(report: UpgradeReport): void {
-  console.log(chalk.bold('Composed validation: what stage 4 changed'));
+  console.log(chalk.bold('Composed validation: what it changed since each lock'));
   console.log(chalk.gray('  A lock records totals only (errors, warnings, notices) and the validator version that took it — nothing per code — so this is not a per-code diff. Today\'s findings are classed by a reason computed now.'));
   for (const p of report.projects) {
     const locked = p.lockedTotals ? `locked by v${p.lockedBy}: ${p.lockedTotals}` : 'never locked';
     const attribution = p.lockedTotals
-      ? (p.predatesStage4 ? ' — the lock predates stage 4, so a difference is the upgrade\'s' : ' — the lock was taken by a stage-4 validator, so a difference is not the upgrade\'s')
+      ? (p.predatesStage4 ? ' — the lock predates composed validation, so a difference is the upgrade\'s' : ' — the lock was taken under composed validation, so a difference is not the upgrade\'s')
       : '';
     console.log(`  ${reportLabel(p.key)}: ${locked}; today (as-complete): ${p.currentTotals}${attribution}`);
   }
@@ -844,15 +1016,15 @@ function printUpgradeReport(report: UpgradeReport): void {
     for (const e of entries) {
       const where = `${reportLabel(e.project)}${e.specId ? ` ${e.specId}` : ''}`;
       const reason = e.reason === 'escalated'
-        ? 'escalated: a stage-2 notice that is an error since stage 4'
+        ? 'escalated: once a notice, an error under composed validation'
         : e.reason === 'pinned'
           ? 'pinned: judged against the project\'s own pin, no longer through the parent\'s live tree'
           : `positional: the family's top matches it${e.resolvedAs ? ` to ${e.resolvedAs}` : ''} by position, which is how it passed before${e.rewrite ? ` — the migration writes ${e.rewrite}` : ''}`;
       console.log(`    ${e.severity} ${where}: ${reason}`);
     }
   }
-  if (report.entries.length === 0) console.log('  No finding is new for a reason stage 4 introduced.');
-  console.log(`  ${report.unclassified} finding(s) could not be attributed to stage 4.`);
+  if (report.entries.length === 0) console.log('  No finding is new for a reason composed validation introduced.');
+  console.log(`  ${report.unclassified} finding(s) could not be attributed to composed validation.`);
   if (report.unmatched.length > 0) {
     console.log(`  ${chalk.bold('Positional matches no rule decides')} (${report.unmatched.length}) — counted above; a person picks:`);
     for (const m of report.unmatched) {
@@ -1050,7 +1222,7 @@ function printProjectMigration(p: ProjectMigration): void {
     console.log(`    will be removed from its stored L0 by the first write (the schema does not know them): ${p.droppedKeys.join('; ')}`);
   }
   for (const x of p.externals) {
-    const why = x.reason === 'legacy-pin' ? 'replaces the stage-1 family pin of' : 'its references cross into';
+    const why = x.reason === 'legacy-pin' ? 'replaces the legacy family pin of' : 'its references cross into';
     console.log(`    external: ${x.alias}: {} — ${why} ${projectLabel(x.producer)}`);
   }
   for (const i of p.imports) {
@@ -1066,10 +1238,10 @@ function printProjectMigration(p: ProjectMigration): void {
     if (m.retired.length > 0) console.log(`      retires with the mount: ${m.retired.join('; ')}`);
   }
   if (p.supersededPins.length > 0) {
-    console.log(`    superseded family pins: ${p.supersededPins.length} — deleted once the externals that replace them are pinned; nothing reads them since stage 3`);
+    console.log(`    superseded family pins: ${p.supersededPins.length} — deleted once the externals that replace them are pinned; nothing reads them any more`);
   }
   for (const alias of p.locations) {
-    console.log(`    member: ${alias}: the deprecated long-form \`path\` rewritten to \`source\` (stage 8) — its meaning unchanged`);
+    console.log(`    member: ${alias}: the deprecated long-form \`path\` rewritten to \`source\` — its meaning unchanged`);
   }
 }
 

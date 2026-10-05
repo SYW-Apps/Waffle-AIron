@@ -2393,13 +2393,14 @@ methods:
       - stepNumber: 3
         description: >-
           Group into one repair per interface or type of the bound project itself (a contained
-          member's specs are keyed under its namespace and are its own doctor's): its respellings as
-          rewritten — except on an interface holding a differing restatement, whose aliases stay as
-          they are (reported by TYPE_SPELLING_STALE beside SIGNATURE_SOURCE_RESTATED) until its
-          author settles the restatement; each of its problems for which
-          type_expression_problem.intProposal answers a proposal (a `number` position whose name
-          plainly says an integer) as that proposal, never applied; and every other problem as
-          needing an author
+          member's specs are keyed under its namespace and are its own doctor's — the doctor
+          cascades into it): its respellings as rewritten — except on an interface holding a
+          differing restatement, whose aliases stay as they are (reported by TYPE_SPELLING_STALE
+          beside SIGNATURE_SOURCE_RESTATED) until its author settles the restatement; each of its
+          problems for which type_expression_problem.intProposal answers a proposal (a `number`
+          position whose name plainly says an integer) as that proposal, never applied; each for
+          which type_expression_problem.enumProposal answers one (a union of string literals) as an
+          enum proposal, never applied; and every other problem as needing an author
         type: local
       - stepNumber: 4
         description: Was the write asked for?
@@ -2441,8 +2442,8 @@ methods:
       - stepNumber: 11
         label: report
         description: >-
-          Answer the planned repairs, written or not, with their proposals and the positions needing
-          an author
+          Answer the planned repairs, written or not, with their int and enum proposals and the
+          positions needing an author
         type: return
         outcome: TypeSpellingRepair[]
     detail: full
@@ -2561,4 +2562,4 @@ methods:
         outcome: renamed
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T19:54:01.406Z'
+updatedAt: '2026-10-05T06:48:22.943Z'

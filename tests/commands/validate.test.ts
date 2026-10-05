@@ -1,8 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { carriedDebtSummary, isCiDraftWaivable, validateAsComplete } from '../../src/commands/validate.js';
+import { stripVTControlCharacters } from 'util';
+import { carriedDebtSummary, isCiDraftWaivable, renderSpecFindings, validateAsComplete } from '../../src/commands/validate.js';
 import type { CarriedDebt } from '../../src/models/project.js';
 import { validateProject } from '../../src/core/validation.js';
 import type { ValidationIssue } from '../../src/core/validation.js';
@@ -249,5 +250,54 @@ describe('validateAsComplete (the lock gate forwarder)', () => {
     } finally {
       fs.rmSync(proj.tempDir, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// How many findings are printed. The default prints the first 100 per
+// severity, says how many were left out of how many, points at --all, and
+// ends with per-code totals; --all prints every one.
+// ---------------------------------------------------------------------------
+
+describe('renderSpecFindings (truncation and --all)', () => {
+  const many = (n: number, code: string): ValidationIssue[] =>
+    Array.from({ length: n }, (_, i) => ({ severity: 'warning' as const, code, message: `${code} ${i}` }));
+
+  const capture = (fn: () => void): string => {
+    const lines: string[] = [];
+    const push = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
+    const spies = [
+      vi.spyOn(console, 'log').mockImplementation(push),
+      vi.spyOn(console, 'warn').mockImplementation(push),
+      vi.spyOn(console, 'error').mockImplementation(push),
+    ];
+    try { fn(); } finally { for (const s of spies) s.mockRestore(); }
+    // Strip ANSI colour so assertions read the words.
+    return stripVTControlCharacters(lines.join('\n'));
+  };
+
+  it('by default prints 100 warnings, says how many more of how many, names --all, and totals per code', () => {
+    const issues = [...many(130, 'ALPHA_CODE'), ...many(20, 'BETA_CODE')];
+    const out = capture(() => renderSpecFindings({ valid: true, issues }));
+
+    expect(out.match(/\[(ALPHA|BETA)_CODE\] /g)?.length).toBe(100);
+    expect(out).toContain('... and 50 more warning(s) not shown (100 of 150 printed). Run with --all to print every finding.');
+    expect(out).toContain('Findings by code:');
+    expect(out).toMatch(/130\s+warning\s+ALPHA_CODE/);
+    expect(out).toMatch(/20\s+warning\s+BETA_CODE/);
+  });
+
+  it('with --all prints every finding and no truncation line', () => {
+    const issues = many(150, 'ALPHA_CODE');
+    const out = capture(() => renderSpecFindings({ valid: true, issues }, true));
+
+    expect(out.match(/\[ALPHA_CODE\] /g)?.length).toBe(150);
+    expect(out).not.toContain('not shown');
+  });
+
+  it('prints no totals table when nothing was cut', () => {
+    const out = capture(() => renderSpecFindings({ valid: true, issues: many(3, 'ALPHA_CODE') }));
+    expect(out).not.toContain('Findings by code:');
+    expect(out).not.toContain('not shown');
   });
 });

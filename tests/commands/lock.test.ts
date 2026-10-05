@@ -221,6 +221,39 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(false);
     expect(readLockRecordAt(rootDir)).toBeNull();
   });
+
+  it('says "First approval" only when no record exists — an older record without per-spec digests is named as replaced', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
+    buildLockableProject(rootDir);
+
+    const said = (): string => {
+      const text = vi.mocked(console.log).mock.calls.map((c) => c.map(String).join(' ')).join('\n');
+      vi.mocked(console.log).mockClear();
+      return text;
+    };
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      // No record yet: a true first approval.
+      await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+      expect(said()).toContain('First approval of this tree');
+
+      // A record written before per-spec digests existed (an upgrade from an older wairon).
+      const lockFile = path.join(rootDir, '.wai', 'lock.json');
+      const older = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+      delete older.specs;
+      older.validatorVersion = '5.1.0';
+      fs.writeFileSync(lockFile, JSON.stringify(older, null, 2));
+
+      await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+      const second = said();
+      expect(second).not.toContain('First approval');
+      expect(second).toContain('Replacing the approval on record');
+      expect(second).toContain('wairon 5.1.0');
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
 });
 
 describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery into children', () => {

@@ -60,7 +60,7 @@ const KINDS_AT: Record<string, WritableSpecKind[]> = {
   dependsOn: ['component'], owns: ['component'], dispatch: ['component'], mounts: ['component'],
   lifecycle: ['subsystem'], publicInterfaces: ['subsystem'], trustedLinks: ['subsystem'],
   contract: ['implementation', 'interface'], narrative: ['implementation'], calls: ['implementation'], auth: ['implementation'],
-  subsystem: ['component', 'type'], group: ['type'], type: ['interface', 'type'],
+  subsystem: ['component', 'type'], group: ['type'], type: ['interface', 'type', 'implementation'],
 };
 
 /** The kind of the spec holding a reference, read off where it sits (under the top root's binding). */

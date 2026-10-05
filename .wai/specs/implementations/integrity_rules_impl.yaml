@@ -1331,9 +1331,11 @@ methods:
         endStep: 3
       - stepNumber: 3
         description: >-
-          Report the problem under its own code (TYPE_EXPRESSION_INVALID, TYPE_POSITION_INVALID,
-          TYPE_FORM_UNSUPPORTED or TYPE_NOT_NEUTRAL) on the spec holding it, at the method or field
-          its path names, with the position's text, what is wrong and the replacement it names
+          Report the problem as a warning under its own code (TYPE_EXPRESSION_INVALID,
+          TYPE_POSITION_INVALID, TYPE_FORM_UNSUPPORTED or TYPE_NOT_NEUTRAL) on the spec holding it,
+          at the method or field its path names, with the position's text, what is wrong and the
+          replacement it names — a warning on load whatever the code, since the writer already
+          refuses each of them at write time
         type: local
       - stepNumber: 4
         description: For each recorded respelling
@@ -1454,4 +1456,4 @@ methods:
     exportedVia: renameTracesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-04T17:40:03.823Z'
+updatedAt: '2026-10-05T06:48:14.768Z'

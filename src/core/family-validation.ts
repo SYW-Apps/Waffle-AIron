@@ -460,7 +460,7 @@ function approvalFinding(entry: ProjectApproval, config: ProjectConfig | null): 
   }
   if (entry.state === 'drifted' && entry.upgraded) {
     return finding(config, 'MEMBER_DRIFTED',
-      `The member ${named(entry.key)} was approved under an earlier gate identity — the gate identity gained inputs in stage 5 (members' composition subjects, \`composition\`; code conformance moved beside the claim), which says nothing about its design. Re-lock it once at its own root (\`wairon lock\`).`,
+      `The member ${named(entry.key)} was approved under an earlier gate identity — the gate identity gained inputs in this release (members' composition subjects, \`composition\`; code conformance moved beside the claim), which says nothing about its design. Re-lock it once at its own root (\`wairon lock\`).`,
       entry.key);
   }
   if (entry.state === 'drifted') {

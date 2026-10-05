@@ -131,7 +131,9 @@ methods:
           Record an invalid problem: no source at all, an alias that is neither a subsystem, a
           member nor a declared external, or an external the scan did not read (found only through
           source.path, or a parent or sibling outside the scan), whose table cannot be followed from
-          here
+          here. An entry with no source whose public name another entry of the table also declares
+          is named as what it most likely is — a duplicate of that entry, with both entry numbers —
+          so the remedy (delete the copy) is in the finding
         type: local
       - stepNumber: 11
         label: bound
@@ -154,4 +156,4 @@ methods:
     symbol: resolveProjectTable
 status: complete
 createdAt: '2026-09-27T10:34:37.874Z'
-updatedAt: '2026-09-27T12:17:45.764Z'
+updatedAt: '2026-10-05T06:50:31.440Z'

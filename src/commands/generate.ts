@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
-import { ProjectNotInitializedError } from '../utils/errors.js';
+import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 // Every sdd_core call goes through the core adapter, never a core module
 // directly — generation included: generateAll and resolveExpectedOutputPaths
 // came straight out of ../exporters/generate.js until this import moved.
@@ -88,13 +88,13 @@ export function pruneStaleAgents(expectedPaths: Set<string>, scanDirs?: Iterable
 // owner/architect files rendered through the same brief composition. Guides,
 // skills, and context sync run in both modes. Topology is LAYERED: this
 // reconciles only the current project's own layer — there is no cascade into
-// members (stage 5). `--family` walks the members explicitly, generating each
+// members. `--family` walks the members explicitly, generating each
 // member's own layer in its own .wai/.claude, so the whole stack can still be
 // reconciled by one command while each layer stays proportional to itself.
 // ---------------------------------------------------------------------------
 
 interface GenerateOptions {
-  /** Limit to a specific target type: claude, gemini, custom */
+  /** Limit to one configured target type (e.g. claude, agy); an unknown one is refused. */
   target?: string;
   /** Limit to a single domain id (or 'root' for root-level agents) */
   domain?: string;
@@ -155,6 +155,26 @@ function announceOutsideTargets(projectConfig: ProjectConfig, reach: WriteReach)
   return outside.map((t) => t.type);
 }
 
+/** The target types this project configures, in configuration order. */
+function configuredTargetTypes(projectConfig: ProjectConfig): string[] {
+  const targets = projectConfig.targets as ReadonlyArray<{ type: string } | string>;
+  return [...new Set(targets.map((t) => (typeof t === 'string' ? t : t.type)))];
+}
+
+/**
+ * Refuse a --target this project does not configure. It used to be silently
+ * accepted and match nothing, so a typo looked exactly like a clean run.
+ */
+export class UnknownTargetError extends WaironError {
+  constructor(target: string, known: string[]) {
+    super(
+      `Unknown target "${target}". This project configures: ${known.length ? known.join(', ') : '(none)'}. `
+        + 'Pass one of those, or add a target to .wai/project.yaml (`targets`).',
+    );
+    this.name = 'UnknownTargetError';
+  }
+}
+
 export async function runGenerate(options: GenerateOptions = {}): Promise<void> {
   await generateLayer(options);
 
@@ -191,6 +211,10 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
 
   const projectConfig = loadProjectConfig();
   if (!projectConfig) throw new ProjectNotInitializedError();
+  if (options.target !== undefined) {
+    const known = configuredTargetTypes(projectConfig);
+    if (!known.includes(options.target)) throw new UnknownTargetError(options.target, known);
+  }
   // The live topology through the core adapter — empty while the project has no system spec.
   const agents = resolveAgentTopology();
 
@@ -217,6 +241,10 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
     const removed = pruneStaleAgents(new Set(), candidateDirs, reach);
     if (removed > 0) {
       logger.info(`Removed ${removed} previously materialized agent file(s) — agents are served as live briefs (sdd_get_agent_brief); opt back in with rules.materializeAgentFiles: true.`);
+    } else {
+      // Said at default verbosity: a run that writes no agent file would
+      // otherwise print nothing at all and read like it did nothing.
+      logger.info('Agent files: off (rules.materializeAgentFiles) — agents are served as live briefs (sdd_get_agent_brief); no agent files written.');
     }
   }
 
@@ -251,6 +279,7 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
     // re-injects ITS guides into ITS own dir, not the original invocation dir.
     reinjectLocalGuides(getProjectRoot(), activeTargetTypes(projectConfig));
     logger.verbose('Local AI guides re-injected.');
+    logger.info(`Guides, skills and context reconciled for: ${activeTargetTypes(projectConfig).join(', ') || '(no active targets)'}.`);
   } catch (err) {
     logger.warn(`Failed to re-inject AI guides: ${String(err)}`);
   }
