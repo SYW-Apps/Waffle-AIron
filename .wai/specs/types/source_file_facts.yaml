@@ -204,15 +204,41 @@ fields:
       are. A barrel carries the module-scope body of each name it republishes — never a member,
       which no export names. Which body a name means is bodySitesOf's question
     optional: true
+  - name: exportAliases
+    type: list<ExportAliasFact>
+    description: >-
+      The forwarding bindings the file publishes with no module specifier of its own (see
+      ExportAliasFact): each `export { local as exported }` specifier of a runtime export clause,
+      renamed or not, and each identifier-valued property `{ exported: local }` / `{ exported }` of
+      an exported top-level object literal, under that object's binding name. EXACT grade only. What
+      lets a reader follow `export { bootstrapInstance as init }` or an adapter object of forwards
+      to the name whose body realizes it; the analyzer itself carries that body onto the published
+      name when the local name settles on exactly one — a module-scope body of this file with no
+      nested same-named one, or an import binding whose module holds one — and leaves the name
+      bodiless otherwise
+    optional: true
+  - name: returnTypes
+    type: map<string, string>
+    description: >-
+      The type name each named function-like RETURNS, by function name, recorded only where the code
+      settles it: a return annotation naming a type outright (unwrapping Promise), else,
+      unannotated, a body whose ONE return statement constructs a plainly named class (`return new
+      C()`). Same-named functions that disagree, a generic, union or literal annotation, and several
+      returns record nothing. EXACT grade only. What a `fn().method()` receiver is followed through
+    optional: true
 methods:
   - name: resolveImport
-    signature: 'resolveImport(specifier: string, knownPaths: Set<string>): string | undefined'
+    signature: >-
+      resolveImport(specifier: string, knownPaths: Set<string>, packages?: map<string, string>):
+      string | undefined
     returns: string?
     description: >-
-      Resolve one of this file's relative import specifiers against a set of known source paths:
-      join it with this file's directory, then try the joined path, .js swapped for .ts or .tsx, the
-      .ts, .tsx and .js extensions, and an index file; undefined for a bare package specifier or
-      when nothing matches
+      Resolve one of this file's import specifiers against a set of known source paths. A relative
+      one: join it with this file's directory, then try the joined path, .js swapped for .ts or
+      .tsx, the .ts, .tsx and .js extensions, and an index file. A package specifier: the source
+      file `packages` maps it to (code_model.packages — the local packages of this repository), when
+      that file is known. Undefined for a package specifier the map does not name — a third-party
+      package — and when nothing matches
   - name: callSitesOf
     signature: 'callSitesOf(fn: string): CallSiteFact[] | undefined'
     returns: list<CallSiteFact>?
@@ -292,6 +318,16 @@ methods:
       nested one (a bare name in the module's scope binds the top-level declaration, a member is
       reachable only through its container, and a nested body could shadow the name where it sits);
       else every body under the name, unioned, as callSitesOf answers
+  - name: returnTypeOf
+    signature: 'returnTypeOf(fn: string): string?'
+    params:
+      - name: fn
+        type: string
+    returns: string?
+    description: >-
+      The type name a named function-like returns, where the code settles it (returnTypes), or none
+      — the silence a fn(...).method() receiver keeps when the code does not say what fn returns. An
+      own-property lookup, so a function named like an object built-in reads nothing
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-04T23:40:43.276Z'
+updatedAt: '2026-10-05T00:40:20.191Z'

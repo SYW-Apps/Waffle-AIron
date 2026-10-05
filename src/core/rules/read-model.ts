@@ -8,6 +8,7 @@ import {
   methodSourceFile,
   pathKey,
   resolveImport,
+  returnTypeOf,
   typeBindingOf,
   type CallSiteFact,
   type CodeModel,
@@ -61,6 +62,9 @@ function appendUnique<T>(map: Map<string, T[]>, key: string, value: T, same?: (a
  * conformance rule (and the narrative detail dial) instead of once per rule.
  */
 export function buildCodeIndex(model: CodeModel): CodeIndex {
+  // The repository's own packages: a specifier naming one resolves like a
+  // relative import, everywhere this index or a rule resolves one.
+  const packages: Readonly<Record<string, string>> = model.packages ?? {};
   const facts = new Map<string, SourceFileFacts>();
   const paths = new Set<string>();
   const exactPaths = new Set<string>();
@@ -107,7 +111,7 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
       const f = facts.get(from);
       if (f?.status !== 'analyzed') continue;
       for (const specifier of f.reexports) {
-        const to = resolveImport(from, specifier, paths);
+        const to = resolveImport(from, specifier, paths, packages);
         if (to && !out.has(to)) { out.add(to); queue.push(to); }
       }
     }
@@ -119,7 +123,7 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
 
   /** Where a module specifier LANDS from a file: the module, widened by what it republishes. */
   const landingFrom = (scope: string, specifier: string): ReadonlySet<string> => {
-    const to = resolveImport(scope, specifier, paths);
+    const to = resolveImport(scope, specifier, paths, packages);
     return to ? republishedFrom(to) : NO_ORIGIN;
   };
 
@@ -213,7 +217,7 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
    */
   const possibleOriginsOf = (site: CallSiteFact, from: string): ReadonlySet<string> => {
     const proven = originOf(site, from);
-    if (!site.field && !site.constructed && !site.via) return proven;
+    if (!site.field && !site.constructed && !site.via && !site.returnedBy && !site.enclosingClass) return proven;
     const resolved = scopeOf(site, from);
     if (!resolved) return proven;
     const { path: scope, facts: f } = resolved;
@@ -234,28 +238,84 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
     // the same name, never instead of it: both readings are things the file
     // writes down, and this tier's question is what a call CAN have reached.
     if (site.via) for (const typeName of localTypesOf(f, site.via)) widenThroughType(typeName);
+    // `this.name()` inside a class's own method: this file, where the class
+    // holds a body under the name. A subclass may override it, which is why
+    // this is a possibility and never a landing.
+    if (site.enclosingClass !== undefined && holdsMemberBody(f, site.name, site.enclosingClass)) {
+      for (const candidate of republishedFrom(scope)) out.add(candidate);
+    }
+    // `fn().name()`: the type fn RETURNS, read where fn itself is written,
+    // and followed to the module that declares it — but only to a module
+    // holding a body of the name under that type, so an interface's
+    // signature never counts and a return the code does not settle reaches
+    // nothing.
+    if (site.returnedBy !== undefined) {
+      for (const fnFile of originOf({ name: site.returnedBy, member: false }, scope)) {
+        const at = facts.get(fnFile);
+        if (at?.status !== 'analyzed' || at.analysisGrade !== 'exact') continue;
+        const typeName = returnTypeOf(at, site.returnedBy);
+        if (typeName === undefined) continue;
+        const specifier = typeBindingOf(at, typeName);
+        const landings = specifier !== undefined
+          ? landingFrom(fnFile, specifier)
+          : declarationsAt(fnFile).has(typeName) ? republishedFrom(fnFile) : NO_ORIGIN;
+        for (const candidate of landings) {
+          const there = facts.get(candidate);
+          if (there && holdsMemberBody(there, site.name, typeName)) out.add(candidate);
+        }
+      }
+    }
     return out;
   };
+
+  /** Whether a file holds a body of `name` bound as a member of `container` — a class's own method, or an object's property. */
+  const holdsMemberBody = (f: SourceFileFacts, name: string, container: string): boolean =>
+    f.status === 'analyzed' && f.analysisGrade === 'exact'
+    && !!f.functionBodies && Object.prototype.hasOwnProperty.call(f.functionBodies, name)
+    && f.functionBodies[name].some(b => b.container === container);
 
   const declarationsAt = (path: string): ReadonlySet<string> =>
     namesAt(declarations, pathKey(path), f => new Set([...f.declaredNames, ...f.exportedNames]));
 
-  const forwardsOf = (start: string, name: string): ForwardedName[] => {
+  const forwardsOf = (start: string, name: string, container?: string): ForwardedName[] => {
     const out: ForwardedName[] = [];
+    const listed = new Set<string>();
     const seen = new Set<string>();
-    const queue: ForwardedName[] = [{ file: pathKey(start), name }];
+    // A hop is a name the file PUBLISHES (optionally as a property of an
+    // exported object), or — after an export alias — a name of the file's own
+    // SCOPE, which is either its own declaration or an import binding that
+    // leads on to the module it came from.
+    type Hop = { file: string; name: string; container?: string; scope?: boolean };
+    const queue: Hop[] = [{ file: pathKey(start), name, container }];
     while (queue.length) {
       const at = queue.shift()!;
-      const key = `${at.file}#${at.name}`;
+      const key = `${at.scope ? 's' : 'p'}|${at.container ?? ''}|${at.file}#${at.name}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push(at);
-      for (const binding of facts.get(at.file)?.reexportBindings ?? []) {
+      if (!listed.has(`${at.file}#${at.name}`)) {
+        listed.add(`${at.file}#${at.name}`);
+        out.push({ file: at.file, name: at.name });
+      }
+      const f = facts.get(at.file);
+      if (at.scope) {
+        const binding = f ? importBindingOf(f, at.name) : undefined;
+        if (!binding || binding.namespace) continue;
+        const to = resolveImport(at.file, binding.from, paths, packages);
+        if (to) queue.push({ file: to, name: binding.imported ?? at.name });
+        continue;
+      }
+      for (const alias of f?.exportAliases ?? []) {
+        if (alias.exported !== at.name || alias.container !== at.container) continue;
+        queue.push({ file: at.file, name: alias.local, scope: true });
+      }
+      // An export-from republishes a module binding, never a member.
+      if (at.container !== undefined) continue;
+      for (const binding of f?.reexportBindings ?? []) {
         const star = binding.exported === '*';
         if (!star && binding.exported !== at.name) continue;
         // A star re-export never republishes a module's default export.
         if (star && at.name === 'default') continue;
-        const to = resolveImport(at.file, binding.from, paths);
+        const to = resolveImport(at.file, binding.from, paths, packages);
         if (!to) continue;
         // A star forwards only the names its module actually publishes.
         if (star && !facts.get(to)?.exportedNames.includes(at.name)) continue;
@@ -268,6 +328,7 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
   return {
     paths,
     exactPaths,
+    packages,
     factsAt: (path) => facts.get(pathKey(path)),
     declarationsAt,
     anchorsAt: (path) =>
@@ -346,7 +407,7 @@ export function buildImportGraph(index: CodeIndex, universe: Set<string>): Impor
 
   const resolveAll = (from: string, specifiers: string[], into: Set<string>): void => {
     for (const specifier of specifiers) {
-      const to = resolveImport(from, specifier, universe);
+      const to = resolveImport(from, specifier, universe, index.packages);
       if (to && to !== from) into.add(to);
     }
   };

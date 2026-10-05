@@ -26,6 +26,17 @@ fields:
       which is what keeps that rule opt-in. Facts for these files live in files, like any other
       analyzed path.
     optional: false
+  - name: packages
+    type: map<string, string>
+    description: >-
+      The package specifiers that name a package of THIS repository, each mapped to the canonical
+      project-relative source file it resolves to: the root package and every workspace package the
+      root package.json declares (never node_modules), by the package's `name` for its main entry
+      and `name/sub` for each plain subpath export, each entry mapped back from the package's build
+      output to its source through the package's tsconfig outDir/rootDir when it names a build file.
+      What lets a package import resolve like a relative one; a third-party specifier is in no entry
+      and resolves to nothing, as before
+    optional: true
 methods:
   - name: pathKey
     signature: 'pathKey(path: string): string'
@@ -41,4 +52,4 @@ methods:
       analyzed no such path
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-10-04T10:19:58.817Z'
+updatedAt: '2026-10-05T00:38:18.238Z'

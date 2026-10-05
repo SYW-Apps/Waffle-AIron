@@ -1,0 +1,32 @@
+kind: value-object
+id: export_alias_fact
+name: ExportAliasFact
+description: >-
+  One name a file publishes BOUND to another name of its own scope, with no module specifier of its
+  own: an export specifier `export { local as exported }` (renamed or not), or an identifier-valued
+  property of an exported top-level object literal — `{ exported: local }` or the shorthand `{
+  exported }` — which then carries the object's binding name as its container. What lets a reader
+  follow a forwarding binding one hop to the name whose body realizes it: the local name is this
+  file's own declaration, or an import binding that leads on to the module it came from.
+subsystem: sdd_validator
+fields:
+  - name: exported
+    type: string
+    description: >-
+      The name this file publishes: the export specifier's exported name, or the object property's
+      key
+    optional: false
+  - name: local
+    type: string
+    description: 'The name of this file''s own scope it is bound to: a local declaration, or an import binding'
+    optional: false
+  - name: container
+    type: string
+    description: >-
+      The exported object literal's binding name, set only for a property alias — what an anchor's
+      exportedVia handle names; absent for an export specifier
+    optional: true
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-10-05T00:37:54.250Z'
+updatedAt: '2026-10-05T00:37:55.062Z'

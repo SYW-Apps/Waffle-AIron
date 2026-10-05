@@ -40,6 +40,25 @@ export interface ReexportBindingFact {
   from: string;
 }
 
+/**
+ * One name a file publishes BOUND to another name of its own scope, with no
+ * module specifier of its own (source_file_facts exportAliases): an export
+ * specifier `export { local as exported }`, renamed or not, or an
+ * identifier-valued property of an exported top-level object literal —
+ * `{ exported: local }` or the shorthand `{ exported }` — which then carries
+ * the object's binding name as its `container`. The local name is this file's
+ * own declaration, or an import binding that leads on to the module it came
+ * from: either way the forwarding is written down, one hop away.
+ */
+export interface ExportAliasFact {
+  /** The name this file publishes: the export specifier's exported name, or the object property's key. */
+  exported: string;
+  /** The name of this file's own scope it is bound to: a local declaration, or an import binding. */
+  local: string;
+  /** The exported object literal's binding name, set only for a property alias — what an `exportedVia` handle names. */
+  container?: string;
+}
+
 export interface ImportBindingFact {
   /** The module specifier the binding came from, exactly as written. */
   from: string;
@@ -92,6 +111,25 @@ export interface CallSiteFact {
    * not in the constructed class's.
    */
   constructed?: string;
+  /**
+   * The function whose RESULT the receiver is — set only when the call was
+   * written `fn(…).name(…)` with `fn` a plain identifier
+   * (`current().updateSpec()` → "current"), and never together with `via`,
+   * `field` or `constructed`. Followed through what the code writes down
+   * about fn's result (SourceFileFacts.returnTypes): a POSSIBLE origin and
+   * never a proven one, and only where the module that type leads to holds a
+   * body under the invoked name.
+   */
+  returnedBy?: string;
+  /**
+   * The top-level named class whose own method the call sits in — set only
+   * when the call was written `this.name(…)` directly inside a method,
+   * accessor or constructor of that class (an arrow function keeps `this`; a
+   * nested function expression rebinds it and records nothing). A POSSIBLE
+   * origin and never a proven one, since a subclass may override the method,
+   * and only where the class holds a body under the invoked name.
+   */
+  enclosingClass?: string;
   /**
    * The file this site was READ in, set only when it is not the file these
    * facts describe — a pure re-export barrel carries the sites of the function
@@ -264,6 +302,27 @@ export interface SourceFileFacts {
    * weaker grade leaves it unset rather than guess.
    */
   reexportBindings?: ReexportBindingFact[];
+  /**
+   * The forwarding bindings the file publishes with no module specifier of
+   * its own (see ExportAliasFact): each runtime `export { local as exported }`
+   * specifier, renamed or not, and each identifier-valued property of an
+   * exported top-level object literal, under that object's binding name.
+   * EXACT grade only. The analyzer carries the local name's body onto the
+   * published one when the local name settles on exactly one — a module-scope
+   * body of this file with no nested same-named one, or an import binding
+   * whose module holds one — and leaves the published name bodiless otherwise.
+   */
+  exportAliases?: ExportAliasFact[];
+  /**
+   * The type name each named function-like RETURNS, by function name,
+   * recorded only where the code settles it: a return annotation naming a
+   * type outright (`Promise<T>` unwrapped), else, unannotated, a body whose
+   * ONE return statement constructs a plainly named class. Same-named
+   * functions that disagree, a generic, union or literal annotation, and
+   * several returns record nothing. EXACT grade only. What a `fn().method()`
+   * receiver is followed through.
+   */
+  returnTypes?: Record<string, string>;
   /**
    * Cyclomatic complexity per named function-like (function/method/accessor
    * declarations, and function/arrow initializers of named slots). EXACT grade
@@ -448,6 +507,17 @@ export interface CodeModel {
    * opt-in. Facts for these files live in `files`, like any other path.
    */
   rootFiles: string[];
+  /**
+   * The package specifiers that name a package of THIS repository, each
+   * mapped to the canonical source file it resolves to: the root package and
+   * every workspace package the root package.json declares (never
+   * node_modules), `name` for the main entry and `name/sub` for each plain
+   * subpath export, build entries mapped back to their source through the
+   * package's tsconfig outDir/rootDir. What lets a package import resolve like
+   * a relative one; a third-party specifier is in no entry and resolves to
+   * nothing. Absent or empty when the repository declares no packages.
+   */
+  packages?: Record<string, string>;
 }
 
 /**
@@ -634,14 +704,34 @@ export function dialectOf(facts: SourceFileFacts): TypeDialect | null {
 }
 
 /**
- * source_file_facts.resolveImport — resolve one of a file's relative import
- * specifiers against a set of known source paths, purely (no I/O): join it with
- * the importing file's directory, then try the joined path, `.js` swapped for
- * `.ts` or `.tsx`, the `.ts`, `.tsx` and `.js` extensions, and an index file.
- * Undefined for a bare package specifier or when nothing matches.
+ * The type name a named function-like returns, where the code settles it
+ * (SourceFileFacts.returnTypes); undefined otherwise — the silence a
+ * `fn().method()` receiver keeps when the code does not say what fn returns.
  */
-export function resolveImport(fromFile: string, specifier: string, knownPaths: Set<string>): string | undefined {
-  if (!specifier.startsWith('.')) return undefined;
+export function returnTypeOf(facts: SourceFileFacts, fn: string): string | undefined {
+  return ownEntry(facts.returnTypes, fn);
+}
+
+/**
+ * source_file_facts.resolveImport — resolve one of a file's import specifiers
+ * against a set of known source paths, purely (no I/O). A relative one: join
+ * it with the importing file's directory, then try the joined path, `.js`
+ * swapped for `.ts` or `.tsx`, the `.ts`, `.tsx` and `.js` extensions, and an
+ * index file. A package specifier: the source file `packages` (the code
+ * model's local-package map) names for it, when that file is known.
+ * Undefined for a package the map does not name — a third-party one — or
+ * when nothing matches.
+ */
+export function resolveImport(
+  fromFile: string,
+  specifier: string,
+  knownPaths: Set<string>,
+  packages?: Readonly<Record<string, string>>,
+): string | undefined {
+  if (!specifier.startsWith('.')) {
+    const mapped = ownEntry(packages, specifier);
+    return mapped !== undefined && knownPaths.has(mapped) ? mapped : undefined;
+  }
   const joined = pathKey(path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier)));
   const candidates = [
     joined,

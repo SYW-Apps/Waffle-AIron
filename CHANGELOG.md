@@ -2878,6 +2878,22 @@ upgrading will see calls reported that previously passed, and `validate --ci` ca
   accepted it (an import binding anchors a declaration), and 21 narrative call steps across the tree were accused of
   landing in the wrong module as a result. Each method now names the file that DECLARES its symbol, and those two files
   leave `rules.conformance.unclaimed` — the ratchet working, and that list only shrinks.
+- **The source analysis follows three more shapes, and only where the code settles them.** A forwarding binding with
+  no specifier — `export { a as b }`, or a property `{ b: a }` / `{ b }` of an exported adapter object reached through
+  `exportedVia` — now resolves the published name to the ONE body its local name settles on (a module-scope body, or
+  an import binding whose module holds one), so the method is judged on that body instead of reading as bodiless
+  (`METHOD_BODY_NOT_FOUND`); a local name that does not settle stays bodiless. A package specifier that names a
+  package of THIS repository — the root package and its declared workspaces, never `node_modules` — resolves like a
+  relative import, its built entry mapped back to source through the package's tsconfig `outDir`/`rootDir`, in every
+  check that resolves imports (call origins, dependency edges, export reach); a third-party package stays unresolved.
+  And a `fn().method()` receiver is followed through the type fn's return annotation names (or the class its one
+  return constructs), and a `this.method()` receiver inside a class's own method through that class — both only where
+  a body of the method is there, and both on the acceptance-only tier. New facts: `exportAliases`, `returnTypes`,
+  `CallSiteFact.returnedBy` / `enclosingClass`, `CodeModel.packages`. A facade that forwards by identity to another
+  file's modelled method is that method in the converse direction too, so its carried calls are never reported as its
+  own `UNDECLARED_COLOCATED_CALL`. A tree whose code took these shapes can see findings resolve, `lint.allow` entries
+  written for the old blind spot turn stale (`UNUSED_LINT_ALLOW`), and a register entry carried as `unreadable` turn
+  `STALE_CARRIED_FINDING`; wairon's own register drops all seven of its `unreadable` findings.
   **What it cost, measured:** `CALL_STEP_UNREALIZED` 42 → 26 findings (81 → 60 steps), and **26 new
   `UNDECLARED_DEPENDENCY`** findings, because a method's `sourcePath` claims the whole FILE and those two are
   general-purpose utility modules that nineteen other implementations import. That debt was always there; it was invisible

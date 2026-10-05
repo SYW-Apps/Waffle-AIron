@@ -1040,14 +1040,15 @@ methods:
         description: >-
           N:1 identity forwarding — the caller's own realized symbol IS the target name, so facade
           and target collapse onto one function and the claim is realized by identity, exactly as
-          Level 1's N:1 sharing blesses. The same identity written as a republication under another
-          name counts the same: when code.forwardsOf(file, fnSymbol) — the symbol followed through
-          this file's re-exports, `export { a as b } from 'm'` exactly as the unaliased `export { a
-          } from 'm'` — reaches one of the target's own files under a name the target is realized
-          by, the adapter republishing its provider under the adapter's contract name IS the
-          provider's function. A declaration earns this on the same terms a step does: the reason is
-          the shape of the CODE, which does not know which way the claim was written. Continue with
-          the next claim
+          Level 1's N:1 sharing blesses. The same identity written as a forwarding under another
+          name counts the same: when code.forwardsOf(file, fnSymbol, exportedVia) — the symbol
+          followed through this file's re-exports (`export { a as b } from 'm'` exactly as the
+          unaliased `export { a } from 'm'`), its export aliases (`export { a as b }`, or a property
+          `{ b: a }` of the exportedVia object) and the import binding such an alias names — reaches
+          one of the target's own files under a name the target is realized by, the adapter
+          forwarding its provider under the adapter's contract name IS the provider's function. A
+          declaration earns this on the same terms a step does: the reason is the shape of the CODE,
+          which does not know which way the claim was written. Continue with the next claim
         type: branch
         condition: accepted lacks fnSymbol
         onFalseStep: 7
@@ -1056,12 +1057,13 @@ methods:
           matching = the sites whose name is in accepted. reached = the union of
           code.possibleOriginsOf(site, file) over matching — every file each matching call CAN have
           been written in, a this.<field>.<method>() receiver followed through the field's declared
-          type, a new Class(...).<method>() receiver through the module its class name came from,
-          and a plain <name>.<method>() receiver through the type the file annotates that name with.
-          landed = the union of code.originOf(site, file) over the same sites — the files a call
-          PROVABLY lands in, empty where a pure model cannot say, and the only tier a finding may
-          name a landing from: widening what a call reached can accept a claim, it must never accuse
-          one
+          type, a new Class(...).<method>() receiver through the module its class name came from, a
+          plain <name>.<method>() receiver through the type the file annotates that name with, a
+          fn(...).<method>() receiver through the type fn returns, and a this.<method>() receiver
+          through the class whose own method it sits in. landed = the union of code.originOf(site,
+          file) over the same sites — the files a call PROVABLY lands in, empty where a pure model
+          cannot say, and the only tier a finding may name a landing from: widening what a call
+          reached can accept a claim, it must never accuse one
         type: local
       - stepNumber: 12
         description: >-
@@ -1121,7 +1123,10 @@ methods:
           in this file, else, where the code does not settle the body, the one anchored under the
           bare name — belongs to another component, is not in declared, and whose code.originOf
           resolves to this very file. The converse direction stops at a modelled method because what
-          it goes on to call belongs to its own narrative
+          it goes on to call belongs to its own narrative — and for the same reason crossings is
+          EMPTY when the function itself forwards by identity (code.forwardsOf(file, fnSymbol,
+          exportedVia)) to a modelled method written in ANOTHER file: the body read here is that
+          method's, carried across the forwarding, and its calls are its own narrative's subject
         type: local
       - stepNumber: 17
         description: >-
@@ -1754,4 +1759,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-04T22:32:46.489Z'
+updatedAt: '2026-10-05T00:45:36.977Z'

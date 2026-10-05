@@ -20,17 +20,6 @@ methods:
         type: call
         targetComponent: sdk_portal
         targetMethod: extractPack
-lint:
-  allow:
-    - code: UNREALIZED_DEPENDENCY
-      at: host_sdk_adapter -> sdk_portal
-      reason: >-
-        host_sdk_adapter imports the published @wairon/sdk surface (import * as sdkPortal from
-        '@wairon/sdk'), but sdd_sdk is a SEPARATE npm workspace package (its sourcePaths are
-        sdk/src/*). The Level-2 dependency analyzer resolves only RELATIVE specifiers against the
-        mapped source files, so a legitimate cross-package import of the published portal reads as
-        unrealized. The edge is real and correct — an analyzer limitation at the workspace-package
-        boundary, in src/server/adapters.ts.
 status: complete
 createdAt: '2026-07-21T18:42:54.336Z'
-updatedAt: '2026-09-25T20:49:35.442Z'
+updatedAt: '2026-10-05T00:46:06.033Z'

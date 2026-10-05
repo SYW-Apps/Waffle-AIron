@@ -54,7 +54,27 @@ fields:
       re-export barrel carries the sites of the function it publishes, and their bare names and
       receivers resolve in that file's scope, never in the barrel's
     optional: true
+  - name: returnedBy
+    type: string
+    description: >-
+      The function whose RESULT the receiver is — set only when the call was written
+      fn(...).name(...) with fn a plain identifier (current().updateSpec() gives "current"), and
+      never together with via, field or constructed. A receiver a pure model can follow through what
+      the code writes down about fn's result: the type its return annotation names, or the class its
+      one return statement constructs (source_file_facts.returnTypes). A possible origin and never a
+      proven one, and only where the module that type leads to holds a BODY under the invoked name
+    optional: true
+  - name: enclosingClass
+    type: string
+    description: >-
+      The top-level named class whose own method the call sits in — set only when the call was
+      written this.name(...) directly inside a method, accessor or constructor of that class (an
+      arrow function keeps `this`, a nested function expression rebinds it and records nothing). A
+      receiver a pure model can follow: the class this file declares. A possible origin and never a
+      proven one, since a subclass may override the method, and only where the class holds a body
+      under the invoked name
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-19T15:29:49.702Z'
-updatedAt: '2026-10-04T10:19:54.170Z'
+updatedAt: '2026-10-05T00:38:15.510Z'

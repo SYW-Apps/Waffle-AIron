@@ -154,6 +154,13 @@ export interface CodeIndex {
   paths: Set<string>;
   /** The paths analyzed at exact AST grade: the only files an import graph may accuse from, or a measured function be read in. */
   exactPaths: Set<string>;
+  /**
+   * The model's local-package map (CodeModel.packages, empty when it has
+   * none): handed to every import resolution the index and the rules make, so
+   * a specifier naming a package of this repository resolves like a relative
+   * one.
+   */
+  packages: Readonly<Record<string, string>>;
   /** The analysis facts for a path, by its canonical key. */
   factsAt(path: string): SourceFileFacts | undefined;
   /** Declaration-tier anchors: the file's declared and exported names. */
@@ -182,13 +189,18 @@ export interface CodeIndex {
   originOf(site: CallSiteFact, from: string): ReadonlySet<string>;
   /**
    * Every file the function a call site invokes CAN have been written in: the
-   * proven origins, widened for the two receivers the code writes a NAME for.
+   * proven origins, widened for the receivers the code writes a NAME for.
    * A `this.<field>.<method>()` site widens by the modules that declare the
    * field's DECLARED TYPE — its type-only or runtime import binding, else this
    * file when it declares that name itself; a `new Class(…).<method>()` site
    * widens by the module its CLASS NAME came from — its RUNTIME import binding
    * (a constructed class is a value, never a type-only binding), else this
-   * file when it declares that class.
+   * file when it declares that class; a plain `<name>.<method>()` site widens
+   * through the type the file annotates that name with; a `fn(…).<method>()`
+   * site widens by the module that declares the type fn RETURNS — read where
+   * fn is written — where that module holds a body of the method under that
+   * type; and a `this.<method>()` site inside a class's own method widens by
+   * this file where the class holds a body under the name.
    *
    * Possibilities, not facts: a declared type says what a constructor-injected
    * collaborator is, never which class ships the body, and a constructed class
@@ -200,17 +212,21 @@ export interface CodeIndex {
    */
   possibleOriginsOf(site: CallSiteFact, from: string): ReadonlySet<string>;
   /**
-   * What a name a file publishes IS, followed through every re-export: the
-   * pair itself, then for each export-from that republishes the name — named
-   * or star, aliased or not (`export { a as b } from 'm'` makes the file's `b`
-   * m's `a`) — the module it comes from under the name that module publishes
-   * it by, transitively. An aliased re-export forwards exactly as an
+   * What a name a file publishes IS, followed through every forwarding the
+   * code writes down: the pair itself, then for each export-from that
+   * republishes the name — named or star, aliased or not (`export { a as b }
+   * from 'm'` makes the file's `b` m's `a`) — the module it comes from under
+   * the name that module publishes it by; for each export alias publishing it
+   * with no specifier (`export { a as b }`, or with `container` a property
+   * `{ b: a }` of that exported object) the file's own `a`, and where `a` is
+   * a runtime import binding, the module it came from under the name it was
+   * imported by — transitively. An aliased re-export forwards exactly as an
    * unaliased one does; the spelling differs, the identity does not.
    * Specifiers outside the closed path set, files below exact grade (which
    * record no re-export names) and cycles end the walk. PROVEN: every pair is
    * written down in the code.
    */
-  forwardsOf(path: string, name: string): ForwardedName[];
+  forwardsOf(path: string, name: string, container?: string): ForwardedName[];
 }
 
 /** One (file, name) a republished name resolves to (forwarded_name). */
