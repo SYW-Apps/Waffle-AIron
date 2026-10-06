@@ -19,7 +19,7 @@ import {
 import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, type WriteReach } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
-import { readLockRecord, type LockRecord } from './lockfile.js';
+import { readLockRecord, writeLockRecord as persistLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { listSpecFiles, readSpecFile, removeSpecFile, writeSpecFile } from './spec-files.js';
 // git_source_adapter: a git part is read from the content-addressed fetch cache at its pinned commit (stage 8).
@@ -71,6 +71,7 @@ import {
   methodTypeRefs,
   methodGenericParameters,
   interfaceGenericParameters,
+  typeGenericParameters,
   fieldTypeRefs,
   signatureTypeRefs,
   storedMethodSignature,
@@ -85,10 +86,11 @@ import {
   type TypeSpellingFacts,
   type StoredInterfaceSpec,
   type StoredTypeSpec,
+  type ProjectRelations,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
-import { buildGraphModel } from './diagram.js';
+import { buildGraphModel, renderDiagram as renderArchitectureDiagram, type DiagramFormat } from './diagram.js';
 // The export index is an owned face of this Repository: the facade forwards
 // its two reads 1:1 (spec_loader resolveSubsystemExports / resolveProjectExports).
 import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf, pinnedUsageOf } from './exports.js';
@@ -947,6 +949,58 @@ function mapSignatureSource(value: string, map: ReferenceMapper): string {
 }
 
 /**
+ * A path to a type-expression slot of a stored spec: dotted field names, each
+ * list field walked element by element (`methods.params.type` is the type of
+ * every parameter of every method).
+ */
+export type TypeExpressionPath =
+  | 'methods.params.type' | 'methods.returns' | 'methods.signature' | 'methods.signatureFrom'
+  | 'fields.type' | 'params.type' | 'returns';
+
+/**
+ * The type-expression positions — ONE list of where a spec writes a type
+ * string. Every reader and writer of a type position walks it (the scan's raw
+ * and bare references, the respelling writer, the canonical re-save, a boundary
+ * move's crossings), so a position added here is read and respelled
+ * everywhere at once, and one left out is missed everywhere at once — which the
+ * reference-position test enumerates against the schemas. An interface
+ * method's `signatureFrom` is a type position only when it names no
+ * `component.method` source; its readers decide that per value.
+ */
+export const TYPE_EXPRESSION_PATHS: Readonly<Record<'interface' | 'type', readonly TypeExpressionPath[]>> = {
+  interface: ['methods.params.type', 'methods.returns', 'methods.signature', 'methods.signatureFrom'],
+  type: ['fields.type', 'params.type', 'returns', 'methods.params.type', 'methods.returns', 'methods.signature'],
+};
+
+/** One type-expression slot of a document: the object holding it, its key, its path, and the method it belongs to. */
+export interface TypeExpressionSlot {
+  holder: Record<string, any>;
+  key: string;
+  path: TypeExpressionPath;
+  method?: Record<string, any>;
+}
+
+/** Every string slot of `doc` at a type-expression path of its kind (TYPE_EXPRESSION_PATHS), in table order. */
+export function typeExpressionSlots(kind: string, doc: unknown): TypeExpressionSlot[] {
+  const out: TypeExpressionSlot[] = [];
+  const paths = kind === 'interface' || kind === 'type' ? TYPE_EXPRESSION_PATHS[kind] : [];
+  const walk = (node: unknown, segments: string[], at: TypeExpressionPath, method: Record<string, any> | undefined): void => {
+    if (!node || typeof node !== 'object') return;
+    const holder = node as Record<string, any>;
+    const [head, ...rest] = segments;
+    if (rest.length === 0) {
+      if (typeof holder[head] === 'string') out.push({ holder, key: head, path: at, ...(method ? { method } : {}) });
+      return;
+    }
+    const next = holder[head];
+    const items = Array.isArray(next) ? next : next && typeof next === 'object' ? [next] : [];
+    for (const item of items) walk(item, rest, at, head === 'methods' ? item : method);
+  };
+  for (const at of paths) walk(doc, at.split('.'), at, undefined);
+  return out;
+}
+
+/**
  * A spec with every bound reference passed through `map` (the spec's own id untouched).
  *
  * The write path calls this BEFORE the schema fills its defaults, so a list the
@@ -1056,12 +1110,8 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
       for (const link of (spec as SubsystemSpec).trustedLinks ?? []) add('trustedLinks', link.subsystem);
       break;
     case 'interface':
-      for (const m of (spec as InterfaceSpec).methods) {
-        qualifiedTypeNames(m.returns).forEach((t) => add('type', t));
-        m.params?.forEach((p) => qualifiedTypeNames(p.type).forEach((t) => add('type', t)));
-        // A signatureFrom with no method head (`alias::change_listener`) is a type reference.
-        if (m.signatureFrom !== undefined && !signatureSourceParts(m.signatureFrom)) add('type', m.signatureFrom);
-      }
+    case 'type':
+      typeSlotReferences(kind, spec).forEach((t) => add('type', t));
       break;
     case 'implementation':
       for (const m of (spec as ImplementationSpec).methods) {
@@ -1074,17 +1124,41 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
         }
       }
       break;
-    case 'type': {
-      const t = spec as TypeSpec;
-      for (const f of t.fields) qualifiedTypeNames(f.type).forEach((n) => add('type', n));
-      // A signature's params and returns, and a type method's params, are type positions too.
-      t.params?.forEach((p) => qualifiedTypeNames(p.type).forEach((n) => add('type', n)));
-      qualifiedTypeNames(t.returns).forEach((n) => add('type', n));
-      for (const m of t.methods ?? []) m.params?.forEach((p) => qualifiedTypeNames(p.type).forEach((n) => add('type', n)));
-      break;
-    }
     default:
       break;
+  }
+  return out;
+}
+
+/**
+ * The qualified names (`::` forms) every type-expression slot of an interface
+ * or a type writes, in table order. A display signature is read for the names
+ * its structured params and returns do not already carry — a type method's
+ * prose signature is its only statement of its parameter types — and a
+ * signatureFrom only when it names no `component.method` source.
+ */
+function typeSlotReferences(kind: string, spec: unknown): string[] {
+  const out: string[] = [];
+  const structured = new Set<string>();
+  const slots = typeExpressionSlots(kind, spec);
+  for (const slot of slots) {
+    const value = slot.holder[slot.key] as string;
+    if (slot.path === 'methods.signature') continue;
+    if (slot.path === 'methods.signatureFrom') {
+      if (!signatureSourceParts(value)) out.push(value);
+      continue;
+    }
+    for (const name of qualifiedTypeNames(value)) {
+      out.push(name);
+      structured.add(name);
+    }
+  }
+  for (const slot of slots.filter((s) => s.path === 'methods.signature')) {
+    for (const name of qualifiedTypeNames(slot.holder[slot.key] as string)) {
+      if (structured.has(name)) continue;
+      structured.add(name);
+      out.push(name);
+    }
   }
   return out;
 }
@@ -1123,7 +1197,12 @@ function bareRawReferences(kind: ReferenceKind, spec: unknown): { position: stri
       const t = spec as TypeSpec;
       for (const f of t.fields) for (const ref of fieldTypeRefs(t, f.type)) add('type', ref);
       for (const ref of signatureTypeRefs(t)) add('type', ref);
-      for (const m of t.methods ?? []) for (const p of m.params ?? []) for (const ref of fieldTypeRefs(t, p.type)) add('type', ref);
+      // A type method's params and returns — or, without params, its prose signature — as the type rules read them.
+      const own = lower(typeGenericParameters(t));
+      for (const m of t.methods ?? []) {
+        const generics = new Set([...own, ...lower(methodGenericParameters(m))]);
+        for (const ref of methodTypeRefs(m)) add('type', ref, generics);
+      }
       break;
     }
     case 'implementation':
@@ -1143,6 +1222,11 @@ function bareRawReferences(kind: ReferenceKind, spec: unknown): { position: stri
  * self-prefixed reference is written in (stage 4 records it; stage 3's
  * re-save missed it). A name the mapper does not know comes back as it was.
  */
+export function respellTypeNames(typeStr: string, map: (name: string) => string): string {
+  return mapTypeNames(typeStr, (_position, name) => map(name))!;
+}
+
+/** mapTypeNames, by position: each qualified name inside a type string passed through `map`. */
 function mapTypeNames(typeStr: string | undefined, map: ReferenceMapper): string | undefined {
   if (typeStr === undefined) return undefined;
   return typeStr.replace(
@@ -1181,12 +1265,10 @@ function respellStoredReferences(kind: string, doc: Record<string, unknown>, map
     const values = holder[key];
     if (Array.isArray(values)) holder[key] = values.map((v) => (typeof v === 'string' ? map(position, v) : v));
   };
-  const typed = (holder: Record<string, unknown>, key: string): void => {
-    if (typeof holder[key] === 'string') holder[key] = mapTypeNames(holder[key] as string, map);
-  };
+  // An L0 entry's legacy `subsystem` is its `from`, as the loader reads it.
   const published = (entries: unknown): void => {
     for (const e of list(entries)) {
-      for (const key of ['from', 'component', 'interface', 'typeDef']) at(e, key, 'publicInterfaces');
+      for (const key of ['from', 'subsystem', 'component', 'interface', 'typeDef']) at(e, key, 'publicInterfaces');
       each(e, 'consumers', 'publicInterfaces');
     }
   };
@@ -1208,16 +1290,7 @@ function respellStoredReferences(kind: string, doc: Record<string, unknown>, map
       break;
     case 'interface':
       at(doc, 'component', 'contract');
-      for (const m of list(doc.methods)) {
-        typed(m, 'signature');
-        typed(m, 'returns');
-        for (const p of list(m.params)) typed(p, 'type');
-        if (typeof m.signatureFrom === 'string') {
-          m.signatureFrom = signatureSourceParts(m.signatureFrom)
-            ? mapSignatureSource(m.signatureFrom, map)
-            : mapTypeNames(m.signatureFrom, map);
-        }
-      }
+      typedSlots('interface', doc, map);
       break;
     case 'implementation':
       at(doc, 'contract', 'contract');
@@ -1244,13 +1317,24 @@ function respellStoredReferences(kind: string, doc: Record<string, unknown>, map
     case 'type':
       at(doc, 'subsystem', 'subsystem');
       at(doc, 'group', 'group');
-      for (const f of list(doc.fields)) typed(f, 'type');
-      for (const p of list(doc.params)) typed(p, 'type');
-      typed(doc, 'returns');
-      for (const m of list(doc.methods)) for (const p of list(m.params)) typed(p, 'type');
+      typedSlots('type', doc, map);
       break;
     default:
       break;
+  }
+}
+
+/**
+ * Every type-expression slot of a document (TYPE_EXPRESSION_PATHS) passed
+ * through `map` token by token, in place. A signatureFrom that names a
+ * `component.method` source has its component head mapped instead.
+ */
+function typedSlots(kind: 'interface' | 'type', doc: Record<string, unknown>, map: ReferenceMapper): void {
+  for (const slot of typeExpressionSlots(kind, doc)) {
+    const value = slot.holder[slot.key] as string;
+    slot.holder[slot.key] = slot.path === 'methods.signatureFrom' && signatureSourceParts(value)
+      ? mapSignatureSource(value, map)
+      : mapTypeNames(value, map);
   }
 }
 
@@ -1266,20 +1350,17 @@ function mapRawReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper)
       const s = spec as unknown as SubsystemSpec;
       return { ...s, trustedLinks: (s.trustedLinks ?? []).map((l) => ({ ...l, subsystem: map('trustedLinks', l.subsystem) })) } as unknown as T;
     }
-    case 'interface': {
-      const i = spec as unknown as InterfaceSpec;
-      return {
-        ...i,
-        methods: i.methods.map((m) => ({
-          ...m,
-          ...(m.signature !== undefined ? { signature: mapTypeNames(m.signature, map)! } : {}),
-          ...(m.returns !== undefined ? { returns: mapTypeNames(m.returns, map)! } : {}),
-          ...(m.params ? { params: m.params.map((p) => ({ ...p, type: mapTypeNames(p.type, map)! })) } : {}),
-          // A type source is a raw type position; a method source's head is bound, never raw.
-          ...(m.signatureFrom !== undefined && !signatureSourceParts(m.signatureFrom)
-            ? { signatureFrom: mapTypeNames(m.signatureFrom, map)! } : {}),
-        })),
-      } as unknown as T;
+    case 'interface':
+    case 'type': {
+      // Every type-expression slot (TYPE_EXPRESSION_PATHS), on a copy. A type
+      // source is a raw type position; a method source's head is bound, never raw.
+      const copy = JSON.parse(JSON.stringify(spec)) as Record<string, unknown>;
+      for (const slot of typeExpressionSlots(kind, copy)) {
+        const value = slot.holder[slot.key] as string;
+        if (slot.path === 'methods.signatureFrom' && signatureSourceParts(value)) continue;
+        slot.holder[slot.key] = mapTypeNames(value, map);
+      }
+      return copy as unknown as T;
     }
     case 'implementation': {
       const impl = spec as unknown as ImplementationSpec;
@@ -1304,18 +1385,6 @@ function mapRawReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper)
             return { ...step, auth: { ...auth, from: `${COMPONENT_AUTH_SOURCE}${map('auth', source.slice(COMPONENT_AUTH_SOURCE.length))}` } };
           }),
         })),
-      } as unknown as T;
-    }
-    case 'type': {
-      const t = spec as unknown as TypeSpec;
-      const typedParams = <P extends { type: string }>(params: P[] | undefined): { params?: P[] } =>
-        (params ? { params: params.map((p) => ({ ...p, type: mapTypeNames(p.type, map)! })) } : {});
-      return {
-        ...t,
-        fields: t.fields.map((f) => ({ ...f, type: mapTypeNames(f.type, map)! })),
-        ...typedParams(t.params),
-        ...(t.returns !== undefined ? { returns: mapTypeNames(t.returns, map)! } : {}),
-        methods: (t.methods ?? []).map((m) => ({ ...m, ...typedParams(m.params) })),
       } as unknown as T;
     }
     default:
@@ -7423,6 +7492,24 @@ export function readLockState(current: StateId): LockStatus {
   const record = readLockRecord();
   if (!record) return { state: 'unlocked', record: null, current };
   return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
+}
+
+/**
+ * core_orchestrator.writeLockRecord — the lock record written through the lock
+ * store. The approval portal publishes THIS function, so a Portal never reaches
+ * the store's write itself: writes route through the Orchestrator.
+ */
+export function writeLockRecord(record: LockRecord): void {
+  persistLockRecord(record);
+}
+
+/**
+ * core_orchestrator.renderDiagram — the spec tree rendered in the requested
+ * format by the architecture diagrams, with the relation health passed through
+ * (only the canvas draws it). The spec tree portal publishes this function.
+ */
+export function renderDiagram(format: DiagramFormat, relations?: ProjectRelations[]): string {
+  return renderArchitectureDiagram(format, relations);
 }
 
 /**

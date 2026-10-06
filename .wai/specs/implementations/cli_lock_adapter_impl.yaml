@@ -174,33 +174,84 @@ methods:
         targetComponent: approval_portal
         targetMethod: readLockState
       - stepNumber: 6
+        label: members
+        description: >-
+          Read every member PROJECT's approval at its own root, at every depth, with how its
+          declaring project pinned it (parts are left out: a part has no approval of its own, its
+          declaring project's is its approval). The gate identity reads each member's RECORDED
+          approval, never its tree, so without this read a member's unapproved edits are invisible
+          here.
+        type: call
+        targetComponent: validator_portal
+        targetMethod: familyApprovals
+      - stepNumber: 7
+        label: member-drift
+        description: Does a member project carry spec changes nobody approved at its own root?
+        type: branch
+        condition: a member project is drifted
+        onTrueStep: 8
+        onFalseStep: 10
+      - stepNumber: 8
+        label: member-folders
+        description: >-
+          Read the project graph for where each member project lives, so the verdict can name the
+          folder to lock in
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: projectFamily
+      - stepNumber: 9
+        label: verdict-member-drifted
+        description: >-
+          Refuse at every strictness: the merge gate is never green while a member's design changes
+          are unapproved. Name each drifted member with its folder and the remedy — `wairon lock` at
+          that member's own root, then commit its .wai/lock.json — and say whether this project's
+          own approval needs one too.
+        type: return
+        outcome: member drifted
+      - stepNumber: 10
         label: dispatch-state
-        description: Turn the state into the decision.
+        description: Turn this project's own lock state into the decision.
         type: switch
         'on': the resolved lock state
         cases:
           - value: locked
-            step: 7
+            step: 11
           - value: stale
-            step: 8
-        defaultStep: 14
-      - stepNumber: 7
+            step: 14
+        defaultStep: 21
+      - stepNumber: 11
+        label: member-never
+        description: Was --strict asked for while a member project was never approved at its own root?
+        type: branch
+        condition: strict was asked for and a member project has no approval of its own
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        label: verdict-member-never
+        description: >-
+          Refuse: --strict asks for an approved family, and these members were never approved by
+          anyone. Name each with its folder and the remedy (`wairon lock` at its own root).
+        type: return
+        outcome: member never approved
+      - stepNumber: 13
         label: verdict-locked
         description: >-
           The approval still covers this design: pass, naming who approved it and when so the log
-          carries the evidence.
+          carries the evidence, and how many member projects are approved at their own roots. A
+          member that was never approved is named as NOT gated (only --strict fails it), so the
+          verdict never calls the family approved while one of its projects was never approved.
         type: return
         outcome: locked
-      - stepNumber: 8
+      - stepNumber: 14
         label: upgrade-only
         description: >-
           Is the staleness only the gate-identity upgrade of wairon 6.0.0 (LockStatus.upgraded: the
           record's algorithm is an earlier gate marker)?
         type: branch
         condition: the lock status is upgraded
-        onTrueStep: 9
-        onFalseStep: 11
-      - stepNumber: 9
+        onTrueStep: 15
+        onFalseStep: 17
+      - stepNumber: 15
         label: own-diff
         description: >-
           Compare the own spec files with the approval's per-spec digests, so the message can say
@@ -208,7 +259,7 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: diffAgainstApproval
-      - stepNumber: 10
+      - stepNumber: 16
         label: verdict-upgraded
         description: >-
           Refuse (the old identity cannot be recomputed, so nothing proves the design unchanged),
@@ -218,7 +269,7 @@ methods:
           spec file changed since, and the remedy: re-lock once and commit .wai/lock.json.
         type: return
         outcome: stale (identity upgraded)
-      - stepNumber: 11
+      - stepNumber: 17
         label: stale-own-diff
         description: >-
           Compare the own spec files with the approval's per-spec digests, so the verdict can say
@@ -226,15 +277,29 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: diffAgainstApproval
-      - stepNumber: 12
-        label: stale-members
+      - stepNumber: 18
+        label: repin-only
         description: >-
-          Read each DIRECT member's approval state and pin (depth 1), so the verdict names WHICH
-          member's approval moved since this one was taken, or is no longer approved at its own root
-        type: call
-        targetComponent: validator_portal
-        targetMethod: familyApprovals
-      - stepNumber: 13
+          Did only member approvals move — no own spec file changed, no direct member added or
+          removed, and every direct member whose pin moved is approved at its own root?
+        type: branch
+        condition: the only movement is direct members re-approved at their own roots
+        onTrueStep: 19
+        onFalseStep: 20
+      - stepNumber: 19
+        label: verdict-repin
+        description: >-
+          Refuse, saying exactly what is needed and why it is not alarming. A member's own approval
+          moving is expected — its own approver signed its new design off at its own root, so the
+          member is not in question. What this project's lock pins is the member approval it was
+          taken against, and the root is judged by whether that pin is still the member's approved
+          one: it is not, so this project's approval names an earlier member design than the one
+          about to merge. Name each such member, say that nothing of this project's own specs moved,
+          and give the one remedy — `wairon lock` here, which records the members' new approvals
+          (and anything the doctrine, a declared input or `composition` moved alongside).
+        type: return
+        outcome: stale (member re-approved)
+      - stepNumber: 20
         label: verdict-stale
         description: >-
           The design, or something it was approved under, moved past the approval: refuse at every
@@ -244,13 +309,15 @@ methods:
           updated record.
         type: return
         outcome: stale
-      - stepNumber: 14
+      - stepNumber: 21
         label: verdict-unlocked
         description: >-
-          Never approved: the opt-in seam. Pass with a notice by default so an upgrading project
-          cannot suddenly fail, and refuse only when strict was asked for.
+          Never approved: the opt-in seam. Without strict, pass with a notice that says plainly what
+          plain lock-check guarantees — it fails only a committed approval that no longer matches,
+          so a project with no .wai/lock.json (never locked, or the record deleted) is not gated,
+          which is why CI runs `wairon lock-check --strict`. With strict, refuse.
         type: return
         outcome: unlocked
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-05T17:31:11.742Z'
+updatedAt: '2026-10-05T23:43:31.692Z'

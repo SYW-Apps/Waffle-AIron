@@ -1,4 +1,4 @@
-import { implementationSourceFiles, pathKey, type ComponentSpec, type ImplementationSpec } from '../../../models/index.js';
+import { implementationSourceFiles, pathKey, resolveImport, type ComponentSpec, type ImplementationSpec } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -32,7 +32,10 @@ import { RuleContext, SddRule } from '../types.js';
 // pure string matching against it (.js→.ts swaps, index files), so widening it
 // would resolve specifiers differently. Only exact-grade (AST) analyzed files
 // participate; pattern/generic imports are too coarse to accuse anyone with.
-// Type-only imports never reach the model (excluded at collection).
+// Type-only imports never ACCUSE (they are no runtime edge, and type coupling
+// is allowed), but they do REALIZE a declared edge: a collaborator injected
+// through its constructor is reached through its type, and `import type` is
+// the whole of what dependency injection writes down in the consumer's file.
 // Chained-subproject implementations validate standalone in their own run and
 // are absent from the realization index, as in Level 1.
 // ---------------------------------------------------------------------------
@@ -41,7 +44,7 @@ export const dependencyConformanceRule: SddRule = {
   name: 'dependency-conformance',
   judges: 'code',
   description:
-    'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning). Only exact-grade analyzed files participate; type-only imports are exempt; chained subprojects validate standalone.',
+    'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning). A type-only import never accuses, but it does realize a declared edge: a constructor-injected collaborator is reached through its type, and `import type` is what dependency injection writes down. Only exact-grade analyzed files participate; chained subprojects validate standalone.',
   codes: [
     { code: 'UNDECLARED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A runtime import between component-mapped files has no declared dependsOn/owns (or published-surface) justification' },
     { code: 'UNREALIZED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A declared dependsOn/owns edge between components in different files is realized by no import between any of their files' },
@@ -155,6 +158,25 @@ export const dependencyConformanceRule: SddRule = {
     // A trace is a runtime import, a re-export (barrel forwarding), or — for a
     // mounting declarer (Portal/Observer) — the REVERSE import (the server
     // file imports the portal's file; mutual wiring, one file direction).
+    // The files a file's TYPE-ONLY imports land in, among the mapped ones —
+    // resolved against the same closed set the graph is, so a type import
+    // can realize an edge exactly where a runtime import could.
+    const typeTraces = new Map<string, Set<string>>();
+    const typeTracesOf = (path: string): Set<string> => {
+      let out = typeTraces.get(path);
+      if (out) return out;
+      out = new Set<string>();
+      const facts = code.factsAt(path);
+      for (const specifier of new Set(Object.values(facts?.typeOnlyBindings ?? {}))) {
+        const to = resolveImport(path, specifier, mappedPaths, code.packages);
+        if (to && to !== path) out.add(to);
+      }
+      typeTraces.set(path, out);
+      return out;
+    };
+    const typeConnects = (from: string[], to: string[]): boolean =>
+      from.some(f => { const traces = typeTracesOf(f); return to.some(t => traces.has(t)); });
+
     for (const component of ctx.components) {
       const fromFiles = filesOf(component.id);
       if (fromFiles.length === 0) continue;
@@ -184,6 +206,8 @@ export const dependencyConformanceRule: SddRule = {
         if (toFiles.length === 0) continue;
         if (fromFiles.some(f => toFiles.includes(f))) continue;
         if (graph.connects(fromFiles, toFiles, isMountingDeclarer)) continue;
+        // A type-only import realizes the edge too: DI writes nothing else.
+        if (typeConnects(fromFiles, toFiles)) continue;
 
         const impls = mappedImplsOf(component.id);
         const declaredDependsOn = component.dependsOn.includes(targetId);
@@ -194,7 +218,7 @@ export const dependencyConformanceRule: SddRule = {
         ctx.addIssue(
           'warning',
           'UNREALIZED_DEPENDENCY',
-          `Component "${component.id}" declares ${relation} "${targetId}", but no runtime import connects their source files (${fromFiles.join(', ')} ↛ ${crossSubsystem ? `subsystem ${target.subsystem}` : filesOf(targetId).join(', ')}) — either the collaboration is wired indirectly (DI) or the declared edge is stale.`,
+          `Component "${component.id}" declares ${relation} "${targetId}", but no import — runtime or type-only — connects their source files (${fromFiles.join(', ')} ↛ ${crossSubsystem ? `subsystem ${target.subsystem}` : filesOf(targetId).join(', ')}) — either the collaboration is wired indirectly (DI) or the declared edge is stale.`,
           impls[0]?.id ?? component.id,
           draft,
           undefined,

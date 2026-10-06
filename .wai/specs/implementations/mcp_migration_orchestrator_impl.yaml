@@ -35,8 +35,11 @@ methods:
         targetMethod: apply
       - stepNumber: 6
         description: >-
-          Answer the report as structured content: applied with the projects to re-lock, or the
-          failure (a tool error) and whether the family was restored
+          Answer the report as structured content: applied with the projects to re-lock — and, when
+          it made a new project (a promote, or an externalize --as project), the folder it lives in
+          and exactly what the human runs there so a team's own session can open it (`wairon
+          generate` and `wairon mcp install --backend claude`; the CLI's verbs do it themselves) —
+          or the failure (a tool error) and whether the family was restored
         type: return
         outcome: FamilyMigrationReport
   - name: pending
@@ -56,4 +59,4 @@ methods:
         outcome: notice lines
 status: complete
 createdAt: '2026-09-30T20:39:33.686Z'
-updatedAt: '2026-09-30T21:34:10.020Z'
+updatedAt: '2026-10-06T00:13:50.203Z'

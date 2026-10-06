@@ -84,12 +84,14 @@ describe('lock records an approval; status reports what moved since (real CLI)',
       env: process.env,
     });
 
-  it('says nothing about approval before there is one', async () => {
+  it('says plainly that there is no approval yet, and nothing more', async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approve-'));
     buildProject(root);
 
     const { stdout } = await run(root, 'status');
-    expect(stdout).not.toMatch(/approval/i);
+    // The help promises the approval state; a project never locked says so in one line.
+    expect(stdout).toMatch(/Approval: this project is never approved/);
+    expect(stdout).not.toMatch(/Approved:|changed since approval/);
     expect(stdout).not.toContain('STALE');
   }, 180_000);
 

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import * as yaml from 'js-yaml';
 
 // ---------------------------------------------------------------------------
 // File system helpers
@@ -433,26 +434,129 @@ export function getProjectRootOverride(): string | null {
   return projectRootOverride;
 }
 
-/**
- * Walk up from startDir to the nearest ancestor containing a wairon project
- * with system.yaml in its specs folder. Returns null if none is found.
- */
-export function findSystemRoot(startDir: string): string | null {
+// ---------------------------------------------------------------------------
+// Project binding — WHICH project a command acts on (the binding rule written
+// down on the WaiPaths type). Every surface resolves it here: the CLI through
+// getProjectRoot, the MCP server and `wairon dev` through resolveProjectBinding.
+//
+// From the starting folder, walk up to the nearest folder whose specs hold an
+// L0. The walk never climbs past the repository root (the nearest folder
+// holding `.git`) on its own: an ancestor project above it binds only when it
+// DECLARES the crossing — a `members` entry whose path resolves to a folder
+// that contains the starting folder and lies inside that repository. A stray
+// `.wai` in a parent folder therefore binds nothing in a child repository.
+// ---------------------------------------------------------------------------
+
+/** How a project came to be bound. */
+export type ProjectBindingVia = 'here' | 'ancestor' | 'declared-member';
+
+/** project_binding — the project a folder binds to, and how. */
+export interface ProjectBinding {
+  /** The bound project root (absolute). */
+  root: string;
+  /** here: the folder itself; ancestor: a folder above it, inside its repository; declared-member: a project above the repository root that declares it. */
+  via: ProjectBindingVia;
+  /** The repository root the walk was bounded by, when the folder is inside one. */
+  repositoryRoot?: string;
+}
+
+/** Whether a folder holds a wairon project's L0 (`.wai/specs/.index.yaml`, or the legacy `system.yaml`; `.wairon` for old installs). */
+function holdsSystemSpec(dir: string): boolean {
+  for (const base of ['.wai', '.wairon']) {
+    const specs = path.join(dir, base, 'specs');
+    if (fs.existsSync(path.join(specs, '.index.yaml')) || fs.existsSync(path.join(specs, 'system.yaml'))) return true;
+    if (base === '.wai' && fs.existsSync(path.join(dir, '.wai'))) break; // .wai present: never fall back to .wairon
+  }
+  return false;
+}
+
+/** The nearest folder at or above startDir holding `.git` (a directory, or the file a worktree or submodule carries); null outside any repository. */
+function findRepositoryRoot(startDir: string): string | null {
   let dir = path.resolve(startDir);
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const isWai = fs.existsSync(path.join(dir, '.wai'));
-    const isWairon = !isWai && fs.existsSync(path.join(dir, '.wairon'));
-    const base = isWai ? '.wai' : (isWairon ? '.wairon' : null);
-    if (base) {
-      if (fs.existsSync(path.join(dir, base, 'specs', '.index.yaml')) || fs.existsSync(path.join(dir, base, 'specs', 'system.yaml'))) {
-        return dir;
-      }
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/** Whether `inner` is `outer` or lies below it. */
+function isAtOrBelow(outer: string, inner: string): boolean {
+  const rel = path.relative(outer, inner);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
+ * The member folders a project declares in its `.wai/project.yaml`, resolved
+ * against its root: path sources only (a git or hosted member lives nowhere
+ * under the declaring folder). Read leniently — an unreadable configuration
+ * declares nothing — because binding must never fail on someone else's file.
+ */
+function declaredMemberDirs(projectRoot: string): string[] {
+  let parsed: unknown;
+  try {
+    const text = fs.readFileSync(path.join(projectRoot, '.wai', 'project.yaml'), 'utf-8');
+    parsed = yaml.load(text);
+  } catch {
+    return [];
+  }
+  const members = (parsed as { members?: unknown } | null)?.members;
+  if (!members || typeof members !== 'object') return [];
+  const dirs: string[] = [];
+  for (const value of Object.values(members as Record<string, unknown>)) {
+    const declaration = value as { source?: unknown; path?: unknown } | string | null;
+    const source = typeof declaration === 'string'
+      ? declaration
+      : typeof declaration?.source === 'string' ? declaration.source : typeof declaration?.path === 'string' ? declaration.path : undefined;
+    if (!source) continue;
+    const text = source.trim();
+    // A git URL (scheme or scp form) or a hosted record has no folder here.
+    if (text.startsWith('hosted:') || /^[a-z][a-z0-9+.-]*:\/\//i.test(text) || /^[\w.-]+@[\w.-]+:/.test(text) || path.isAbsolute(text)) continue;
+    dirs.push(path.resolve(projectRoot, text));
+  }
+  return dirs;
+}
+
+/**
+ * Resolve the project a folder binds to by the binding rule; null when none
+ * does. Never fails: an unreadable ancestor configuration declares nothing.
+ */
+export function resolveProjectBinding(startDir: string): ProjectBinding | null {
+  const start = path.resolve(startDir);
+  const repositoryRoot = findRepositoryRoot(start) ?? undefined;
+  const withRepo = (b: ProjectBinding): ProjectBinding => (repositoryRoot ? { ...b, repositoryRoot } : b);
+  let dir = start;
+  // Inside the repository (or anywhere, outside one): the nearest L0.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (holdsSystemSpec(dir)) return withRepo({ root: dir, via: dir === start ? 'here' : 'ancestor' });
+    if (repositoryRoot && dir === repositoryRoot) break;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  // Above the repository root: only a project that declares the crossing.
+  dir = path.dirname(repositoryRoot!);
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (holdsSystemSpec(dir)) {
+      const declares = declaredMemberDirs(dir).some((member) => isAtOrBelow(repositoryRoot!, member) && isAtOrBelow(member, start));
+      if (declares) return withRepo({ root: dir, via: 'declared-member' });
     }
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
   }
+}
+
+/**
+ * The root the binding rule binds from startDir (resolveProjectBinding), or
+ * null when no project binds it.
+ */
+export function findSystemRoot(startDir: string): string | null {
+  return resolveProjectBinding(startDir)?.root ?? null;
 }
 
 /** The resolved project root: the request-scoped root if bound (hosting server),

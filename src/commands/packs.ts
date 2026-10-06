@@ -529,6 +529,15 @@ export function uninstallStorePack(spec: string): void {
 export function whichPack(spec: string): void {
   const { name, version } = parseNameAtVersion(spec);
   const resolved = resolveInstalledPack(name, version);
+  // A project resolves a selection to its committed bundle FIRST — answer what
+  // this project actually loads, as validate and `pack list` do.
+  const bundled = bundledSelectionRef(name, version);
+  if (bundled) {
+    console.log(`${chalk.bold(name)} ${chalk.cyan(`v${bundled.version ?? '?'}`)}  ${chalk.dim('(bundled in this project — .wai/packs/)')}`);
+    console.log(`  path     ${chalk.dim(bundled.ref)}`);
+    console.log(`  store    ${resolved ? chalk.dim(`also installed: v${resolved.version} at ${resolved.path} (the bundle applies here)`) : chalk.dim('not installed in the store — the bundle is all this project needs')}`);
+    return;
+  }
   if (!resolved) {
     logger.error(`No pack "${spec}" is installed in the store (${packStoreDir()}).`);
     const names = [...new Set(listInstalledPacks().map((p) => p.name))];
@@ -537,6 +546,25 @@ export function whichPack(spec: string): void {
     return;
   }
   printInstalled(resolved, version === undefined);
+}
+
+/** This project's selection of a pack, when it resolves to a bundled copy under .wai/packs/; null outside a project or when not bundled. */
+function bundledSelectionRef(name: string, version: string | undefined): { ref: string; version?: string } | null {
+  try {
+    if (!projectConfigExists()) return null;
+    const root = getProjectRoot();
+    for (const entry of loadProjectConfig()?.extensions?.packs ?? []) {
+      if (typeof entry === 'string' || entry.name !== name) continue;
+      if (version !== undefined && entry.version !== undefined && entry.version !== version) continue;
+      const ref = packEntryRef(entry, root);
+      if (!ref) continue;
+      const rel = path.relative(path.join(root, '.wai', 'packs'), path.resolve(root, ref));
+      if (rel.startsWith('..') || path.isAbsolute(rel)) continue;
+      const segments = rel.split(path.sep);
+      return { ref, version: entry.version ?? (segments.length > 1 ? segments[1] : undefined) };
+    }
+  } catch { /* a configuration that cannot be read selects nothing */ }
+  return null;
 }
 
 function printInstalled(pack: InstalledPack, latestByDefault: boolean): void {

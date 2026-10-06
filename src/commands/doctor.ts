@@ -438,7 +438,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       const lock = readLockState(computeGateStateId());
       if (lock.state === 'locked') {
         console.log(chalk.bold('Lock'));
-        line(tally, 'ok', `frozen at ${lock.record!.lockedAt} by ${describeApprover(lock.record!.lockedBy)}`);
+        line(tally, 'ok', `approved at ${lock.record!.lockedAt} by ${describeApprover(lock.record!.lockedBy)}`);
         if (!lock.record!.specs) {
           line(tally, 'warn', 'this lock predates per-spec approval — re-lock so `wairon status` can name what drifts');
         }
@@ -452,8 +452,8 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       } else if (lock.state === 'stale') {
         console.log(chalk.bold('Lock'));
         line(tally, 'warn',
-          `stale — the design or something it was approved under changed since ${lock.record!.lockedAt}, so this lock no longer holds. `
-          + 'Re-run `wairon lock` to freeze the current state.');
+          `stale — the design or something it was approved under changed since ${lock.record!.lockedAt}, so the approval no longer covers it. `
+          + 'Run `wairon lock` to approve the current design (`wairon status` names the specs that moved).');
         logger.blank();
       }
     } catch { /* a health check must never break the health report */ }

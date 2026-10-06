@@ -5,8 +5,10 @@ description: >-
   registration is one endpoint: its `.command('…')` literal is the method's anchor (the anchored
   conformance tier, a route registration), and its action hands the parsed arguments and flags to
   one cli_runner workflow, either in ./runner.ts or in the command module that realizes it. A
-  preAction hook sets the log level from --verbose/--silent, and main() parses argv and turns a
-  WaironError into its message and exit 1. The file reaches no adapter and holds no workflow.
+  preAction hook sets the log level from --verbose/--silent and hands the command's path to
+  cli_runner.announceBinding, so every command that acts on a project names the one it bound before
+  it runs; main() parses argv and turns a WaironError into its message and exit 1. The file reaches
+  no adapter and holds no workflow.
 contract: icli_portal
 sourcePath: src/cli/index.ts
 methods:
@@ -610,4 +612,4 @@ methods:
     symbol: install
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-10-04T18:16:37.034Z'
+updatedAt: '2026-10-05T23:37:36.628Z'

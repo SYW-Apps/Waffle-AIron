@@ -11,7 +11,9 @@ import { WaironError } from '../utils/errors.js';
 // which re-exports the host's local admin portal — never past it into the
 // modules that realize the workflows.
 import * as localAdmin from './adapters/host.js';
-import { runWithProjectRoot } from '../utils/fs.js';
+import { runWithProjectRoot, resolveProjectBinding } from '../utils/fs.js';
+import { loadProjectConfig } from './adapters/core.js';
+import { effectiveProjectId } from '../models/project.js';
 // The demo census crosses into sdd_core through cli_core_adapter, like every
 // other sdd_core call the CLI makes — `../core/canvas.js` was this file
 // reaching past the Portal into another subsystem's module.
@@ -335,13 +337,21 @@ function openBrowser(url: string): void {
 }
 
 export async function runDev(options: HostOptions = {}): Promise<void> {
-  const cwd = process.cwd();
-  // The dev server serves the CURRENT project: a .wai/ must be present.
-  if (!fs.existsSync(path.join(cwd, '.wai'))) {
+  // The dev server serves the project the binding rule binds from here — the
+  // same root `wairon status` reports and the MCP server attaches to: the
+  // nearest folder with an L0, never past the repository root unless declared.
+  const binding = resolveProjectBinding(process.cwd());
+  if (!binding) {
     throw new WaironError(
-      'No .wai/ found in the current directory. Run `wairon dev` from a wairon project root (or run `wairon init` first).',
+      'No wairon project binds this folder. Run `wairon dev` inside a wairon project (or run `wairon init` first).',
     );
   }
+  const cwd = binding.root;
+  let projectId: string | null = null;
+  try {
+    const config = runWithProjectRoot(cwd, () => loadProjectConfig());
+    if (config) projectId = effectiveProjectId(config);
+  } catch { /* an unreadable configuration names no id */ }
 
   // Ephemeral, per-cwd dev data dir under the OS temp dir — NOT the project's own
   // .wai. A deterministic hash of the cwd keeps it stable across restarts (so the
@@ -392,7 +402,7 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   const url = `http://127.0.0.1:${port}`;
   logger.success('wairon dev server started (local, single-project, no login).');
   logger.info(`  open:      ${chalk.cyan(url)}`);
-  logger.info(`  project:   ${chalk.gray(cwd)}  ${chalk.gray('(served as "local")')}`);
+  logger.info(`  project:   ${projectId ?? path.basename(cwd)} at ${chalk.gray(cwd)}  ${chalk.gray('(served as "local")')}`);
   logger.info(`  data dir:  ${chalk.gray(dataDir)}  ${chalk.gray('(ephemeral)')}`);
   logger.blank();
   logger.info('An agent edits specs; refresh the page to see the live graph. Press Ctrl+C to stop.');

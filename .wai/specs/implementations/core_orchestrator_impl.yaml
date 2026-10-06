@@ -4,9 +4,11 @@ description: >-
   Concrete implementation of the Core Orchestrator: spec tree read/write workflows in
   src/core/specs.ts. Methods whose bodies live in sibling core modules name them in their own
   sourcePath: the provisioning, chained-subsystem and rename workflows in provision.ts, and the
-  Specialist retirement in stereotype-migration.ts. The lock, state-hash and diagram forwards
-  realized in lockfile.ts, statehash.ts and diagram.ts, republished by the core portal barrel, keep
-  their method-realization checks dialed off.
+  Specialist retirement in stereotype-migration.ts. The lock-record write and the diagram render are
+  real forwards in specs.ts, which the core portal barrel publishes, so a Portal reaches the lock
+  store's write only through this Orchestrator. The state-hash and lock-record read forwards,
+  realized in statehash.ts and lockfile.ts and republished by the barrel, keep their
+  method-realization checks dialed off.
 contract: icore_orchestrator
 sourcePath: src/core/specs.ts
 methods:
@@ -118,7 +120,6 @@ methods:
         type: call
         targetComponent: lock_store
         targetMethod: write
-    conformance: 'off'
   - name: renderDiagram
     narrative:
       - stepNumber: 1
@@ -126,7 +127,6 @@ methods:
         type: call
         targetComponent: architecture_diagrams
         targetMethod: render
-    conformance: 'off'
   - name: createMember
     sourcePath: src/core/provision.ts
     narrative:
@@ -391,11 +391,16 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
-          Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
-          implementations, and types) into the part's specs dir, re-expressing each moved
-          implementation's file paths — sourcePath, each method's sourcePath, simPath — relative to
-          the part's root, the same files. Keys and references are untouched: the moved specs are
-          still the bound project's own, so nothing is respelled
+          Move every spec file the subsystem owns into the part's specs dir, whatever the layout
+          keeps it in: its nested folder whole (its .index.yaml, components, interfaces,
+          implementations and types), and each file outside it at the same relative place under the
+          part — a type or group in the shared types/ folder naming it, and in the flat layout its
+          subsystems/ file, each component naming it, their contracts and those contracts'
+          implementations; a destination already taken refuses before anything moves, and a folder
+          the move empties goes. Each moved implementation's file paths — sourcePath, each method's
+          sourcePath, simPath — are re-expressed relative to the part's root, the same files. Keys
+          and references are untouched: the moved specs are still the bound project's own, so
+          nothing is respelled
         type: local
       - stepNumber: 6
         description: >-
@@ -412,15 +417,18 @@ methods:
       - stepNumber: 8
         description: >-
           Promote the new part in place under the subsystem id — exactly promoteMember's writes
-          (configuration made a project's, minimal L0, exports on both sides for what crosses,
-          references re-saved across the new boundary, the parent declared as its external, `as:
+          (configuration made a project's, minimal L0, exports on both sides for what crosses and
+          for every name the parent re-exports from it, references respelled across the new
+          boundary, crossing consumers entries dropped, the parent declared as its external, `as:
           project`) and its refusals, which here leave nothing moved: the externalize as project is
-          one write or none
+          one write or none. Keep its result
         type: local
       - stepNumber: 9
-        description: Subsystem moved into a part, or into a member project
+        description: >-
+          Subsystem moved into a part (answer nothing), or into a member project (answer the
+          promote's result)
         type: return
-        outcome: externalized
+        outcome: externalized, with the promote result for a project
     conformance: 'off'
   - name: internalizeMember
     sourcePath: src/core/provision.ts
@@ -1024,11 +1032,16 @@ methods:
         onFalseStep: 6
       - stepNumber: 5
         label: chained-component
-        description: Refuse a component inside a chained subproject
+        description: >-
+          Refuse a component inside another project: a member project is written from its own root,
+          never through its parent's tree. The refusal names the exact way — the member's folder,
+          and the same rename run there (its own MCP server: open a session in that folder, which
+          `wairon init` or the promote that made it gave a guide and .mcp.json; or `wairon generate`
+          and `wairon mcp install --backend claude` there first)
         type: throw
         error: >-
-          chained-component: the component lives in a chained subproject; rename it from that
-          project's own root
+          chained-component: the component lives in another project; rename it from that project's
+          own root, naming its folder and the session to open there
       - stepNumber: 6
         description: 'Guard: the new id must be a plain lowercase identifier'
         type: branch
@@ -1172,11 +1185,13 @@ methods:
         onFalseStep: 6
       - stepNumber: 5
         label: chained-component
-        description: Refuse a component inside a chained subproject
+        description: >-
+          Refuse a component inside another project: a member project is written from its own root.
+          The refusal names the member's folder and the same rename run from a session there
         type: throw
         error: >-
-          chained-component: the component lives in a chained subproject; rename its method from
-          that project's own root
+          chained-component: the component lives in another project; rename its method from that
+          project's own root, naming its folder and the session to open there
       - stepNumber: 6
         description: 'Guard: the new name must be a camel-case identifier'
         type: branch
@@ -2097,47 +2112,62 @@ methods:
         targetMethod: updateMember
       - stepNumber: 9
         description: >-
-          Re-save every spec on either side whose references now cross the new boundary, targets
-          unchanged, so the writer spells each again from where it lives: the parent's references
-          into the new project as `alias::name`, its references back into the parent as `<parent
-          id>::name`
+          Respell every reference that crosses the new boundary at its parsed position, targets
+          unchanged, and record each: a component or contract position as before, and every
+          qualified token of every type expression at every type position the reference-position
+          table lists (an interface method's params, returns, signature and type signatureFrom; a
+          type's fields, params, returns and each type method's params, returns and signature; an
+          asserted invariant's type) — `alias::name` into the new project, `<parent id>::name` back
+          out, and the new project's own self-prefixed token (its id now equal to the prefix) bare.
+          Then re-save every respelled spec so the writer spells each again from where it lives
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
       - stepNumber: 10
+        description: >-
+          Drop each publicInterfaces consumers entry, on either side, that names a subsystem across
+          the new boundary — a consumers list admits only subsystems of its own tree, and between
+          projects the L0 export table governs who may use a name — removing the field when no entry
+          is left, and record each drop
+        type: local
+      - stepNumber: 11
         description: >-
           Under the new project's scope, declare the parent as an external under the parent's id
           when its specs reference it (the same declaration again writes nothing)
         type: call
         targetComponent: project_config_repository
         targetMethod: declareExternal
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Re-point the parent's L0 entries that re-exported the part's subsystems (`from:
           <subsystem>`) at the member (`from: <alias>`)
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
-          For every reference that crosses the new boundary and names no public name of the other
-          side, export it there under that side's own root: a type through its own subsystem (`{
-          typeDef }`) and its L0, a component its subsystem already publishes through its L0 —
-          exactly what is used, nothing more
+          Export on its own side every name that crosses the new boundary and is not yet a public
+          name there — a type through its own subsystem (`{ typeDef }`) and an L0 entry re-exporting
+          it with `from: <its subsystem>`, a component its subsystem already publishes through its
+          L0 — and, in the new project, every name the parent's L0 re-exports from one of the part's
+          subsystems, so no re-export is left pointing at a name the member does not export. Record
+          each entry written
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Import by name each bare type a side no longer owns through the `use` of the alias that
-          now supplies it, so the text stays as written
+          now supplies it, so the text stays as written, and record each
         type: call
         targetComponent: project_config_repository
         targetMethod: importNames
-      - stepNumber: 14
-        description: Part promoted to a project in place; nothing locked
+      - stepNumber: 15
+        description: >-
+          Part promoted to a project in place; nothing locked. Answer what was written across the
+          boundary: the respelled references, the exports, the imports and the dropped consumers
         type: return
-        outcome: promoted
+        outcome: the promote result
     conformance: 'off'
   - name: demoteMember
     sourcePath: src/core/provision.ts
@@ -2235,8 +2265,11 @@ methods:
         description: >-
           Re-save every spec that referenced across the old boundary, targets unchanged: the
           parent's `alias::name` references and the member's `<parent id>::name` references become
-          local ids, and the exports and the parent external that existed only for the boundary are
-          dropped; then drop the spec cache
+          local ids — an `alias::<type>` token of a type expression or an asserted invariant written
+          `<subsystem>.<type>` (the bare id for a project-level type); a consumers list that still
+          restricts a surface widened by the subsystems across the old boundary that depend on it,
+          each recorded in consumersRestored; the exports and the parent external that existed only
+          for the boundary are dropped; then drop the spec cache
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
@@ -2472,9 +2505,16 @@ methods:
         onFalseStep: 6
       - stepNumber: 5
         label: chained-type
-        description: Refuse a type inside another project
+        description: >-
+          Refuse a type inside another project: a member project is written from its own root, never
+          through its parent's tree (the doctrine: a project member is designed from its own root).
+          The refusal names the exact way — the member's folder and `sdd_rename_type <local id> <new
+          id>` from a session opened there — and that an exported type keeps its public name through
+          `as`, so this project's references do not break
         type: throw
-        error: 'chained-type: the type lives in another project; rename it from that project''s own root'
+        error: >-
+          chained-type: the type lives in another project; rename it from that project's own root,
+          naming its folder and the session to open there
       - stepNumber: 6
         description: 'Guard: the new id must be a plain lowercase identifier'
         type: branch
@@ -2562,4 +2602,4 @@ methods:
         outcome: renamed
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-05T06:48:22.943Z'
+updatedAt: '2026-10-06T00:41:49.260Z'

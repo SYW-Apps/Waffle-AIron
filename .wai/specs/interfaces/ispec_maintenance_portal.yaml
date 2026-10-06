@@ -28,8 +28,8 @@ methods:
     description: >-
       Published write: move an internal subsystem out into a part (stage 8 default) or, with `as:
       project`, into a member project declared in `members`. Routed through the core orchestrator.
-    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): void'
-    returns: void
+    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): PromoteResult?'
+    returns: PromoteResult?
     params:
       - name: subsystemId
         type: string
@@ -244,8 +244,8 @@ methods:
     description: >-
       Published write: promote a part of the bound project to a project in place (stage 8). Routed
       through the core orchestrator.
-    signature: 'promoteMember(alias: string, id?: string): void'
-    returns: void
+    signature: 'promoteMember(alias: string, id?: string): PromoteResult'
+    returns: PromoteResult
     params:
       - name: alias
         type: string
@@ -330,4 +330,4 @@ methods:
     signatureFrom: core_orchestrator.renameType
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-04T23:37:45.691Z'
+updatedAt: '2026-10-05T23:34:33.516Z'

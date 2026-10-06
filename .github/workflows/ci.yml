@@ -67,9 +67,11 @@ jobs:
       # approval recorded in .wai/lock.json, and the fix is to run `wairon lock`
       # on the branch and commit the record BEFORE merging.
       #
-      # Not --strict: only a design that moved past its own approval fails here.
+      # --strict, as the README recommends: this repository has an approval on
+      # record, so a deleted .wai/lock.json or a member project nobody approved
+      # must fail too, not pass with a notice.
       - name: Approved-design gate
-        run: node dist/cli/index.js lock-check
+        run: node dist/cli/index.js lock-check --strict
 
   docker-build:
     name: Build Docker image (no push)

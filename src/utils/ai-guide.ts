@@ -15,6 +15,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { versionStamp } from '../core/stamp.js';
+import { writeFile } from './fs.js';
 
 export const GUIDE_MARKER_START = '<!-- wairon-guide-start -->';
 export const GUIDE_MARKER_END = '<!-- wairon-guide-end -->';
@@ -47,13 +48,13 @@ This project uses **wairon**. System specs live under \`.wai/specs/\` (L0 System
 
 **Do NOT search files or read agent configs to learn about wairon or SDD. Use the context here and the \`sdd-architect\` skill to start.**
 
-**Your first move: call the \`sdd_get_status\` MCP tool** (or \`wairon/sdd_get_status\`) to see the spec tree. Do not parse files or run CLI commands manually.
+**Your first move: call the \`sdd_get_status\` MCP tool** (or \`wairon/sdd_get_status\`) to see the spec tree. Do not parse files or run CLI commands manually. If no \`sdd_*\` tools are available, this folder is not the root of the project this guide came from — say so instead of guessing.
 
 ### How you operate
 - **To design/modify specs**: Use **\`sdd-architect\`** skill (in \`.claude/skills/\` or \`.gemini/skills/\`).
 - **Manage specs via MCP tools only**: Use \`sdd_initialize_system\`, \`sdd_add_subsystem\`, \`sdd_add_component\`, \`sdd_define_interface\`, \`sdd_write_narrative\`, \`sdd_add_type\`, \`sdd_get_spec\`, \`sdd_delete_spec\`, \`sdd_validate_tree\`, and \`sdd_get_status\` (namespaced if needed). Do not edit specs manually.
 - **Growing a system — subsystems → parts → projects**: boundaries are earned. Start with subsystems in one folder. A piece that needs its own folder or repository but stays the same system is a **part**: declared in \`.wai/project.yaml\` \`members\` by one location key (\`scheduler: services/scheduler\`, \`admin: ../admin\`, \`payments: git@host:acme/payments.git#<commit>\`; long form \`{ source, as, description }\`), its subsystems this project's own — local ids, this project's lock. \`sdd_add_member\` creates a part by default (\`as: project\` for a project) and \`sdd_externalize_subsystem\` moves a subsystem into one. A **project** is an independent boundary — its own id, exports, lock — reached as \`alias::name\`; make one only when it needs its own team, release, approval or public surface: \`sdd_promote_member\` (\`sdd_demote_member\` back). What a member is follows from its content (an id, an L0 or a lock make a project).
-- **Members & cross-project references**: relocate a member with \`sdd_move_member\`. Every other change of the family's shape is a **family migration**, each with \`dryRun\`: promote/demote, make an existing project a member with \`sdd_attach_member\`, take one out and back with \`sdd_detach_member\` / \`sdd_adopt_member\`, rename a project's id with \`sdd_rename_project\` or an alias with \`sdd_rename_member_alias\`, move a subsystem into a part with \`sdd_externalize_subsystem\` and fold a member back in with \`sdd_internalize_member\`. Run it with \`dryRun: true\` first and show the plan; applied, it writes every project it touches or none, and never locks — it names the projects to re-lock. A project member is never a subsystem of its parent: it has its own \`.wai/\` tree and is designed from its own root.
+- **Members & cross-project references**: relocate a member with \`sdd_move_member\`. Every other change of the family's shape is a **family migration**, each with \`dryRun\`: promote/demote, make an existing project a member with \`sdd_attach_member\`, take one out and back with \`sdd_detach_member\` / \`sdd_adopt_member\`, rename a project's id with \`sdd_rename_project\` or an alias with \`sdd_rename_member_alias\`, move a subsystem into a part with \`sdd_externalize_subsystem\` and fold a member back in with \`sdd_internalize_member\`. Run it with \`dryRun: true\` first and show the plan (the human's CLI calls the same plan \`--report\`); applied, it writes every project it touches or none, and never locks — it names the projects to re-lock. A project member is never a subsystem of its parent: it has its own \`.wai/\` tree and is designed from its own root — its specs, its L0 export table and its \`project.yaml\` are written by a session opened in that member's folder (its own guide and \`.mcp.json\`), and the tools here refuse such a write naming that folder.
   - **\`alias::name\`**: An id without \`::\` is local to the project that writes it. Anything another project provides is referenced as \`alias::name\` — the alias is one of your members or declared \`externals\`, the name a public name in that project's L0 export table. A reference to something it does not export is reported (\`EXTERNAL_NOT_EXPORTED\`).
   - **Deprecated forms** (they still resolve for one release, are reported, and \`wairon doctor --fix\` rewrites them): a leading \`::\` (\`::shared::error-type\`), \`super::\` (\`super::sibling_comp\`), member paths (\`billing::invoice::invoice_portal\`), and an L1 subsystem carrying \`projectPath\` (\`DEPRECATED_MOUNT_FORM\`).
 - **Do not run the \`wairon\` CLI**: Use \`sdd_validate_tree\` and \`sdd_get_status\` instead of CLI commands.
@@ -121,7 +122,7 @@ export function injectGuide(filePath: string, scope: GuideScope): void {
   const newContent = stripped.trimEnd() + section;
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, newContent, 'utf-8');
+  writeFile(filePath, newContent); // keeps the file's line endings
 }
 
 /** Remove the wairon guide section from a string (for clean replacement). */
@@ -147,7 +148,7 @@ To design or modify the system, invoke the **\`sdd-architect\`** skill
 (in \`.claude/skills/\`). Author and validate specs with the \`sdd_*\` MCP tools;
 the \`wairon\` CLI is the human developer's tool, not yours.
 `;
-    fs.writeFileSync(filePath, content, 'utf-8');
+    writeFile(filePath, content);
   } else if (targetType === 'gemini' || targetType === 'agy') {
     const filePath = path.join(projectRoot, 'GEMINI.md');
     // Gemini CLI / Antigravity auto-load the ROOT GEMINI.md but NOT .gemini/GEMINI.md,
@@ -159,7 +160,7 @@ ${versionStamp()}
 ${LOCAL_GUIDE_BODY}
 ${GUIDE_MARKER_END}
 `;
-    fs.writeFileSync(filePath, content, 'utf-8');
+    writeFile(filePath, content);
   } else if (targetType === 'cursor') {
     const filePath = path.join(projectRoot, '.cursorrules');
     const content = `# Wairon SDD Project
@@ -168,7 +169,7 @@ This project uses the Wairon Spec-Driven Development (SDD) framework.
 
 Refer to the rules in [.cursor/rules/](.cursor/rules/) for full instructions.
 `;
-    fs.writeFileSync(filePath, content, 'utf-8');
+    writeFile(filePath, content);
   } else if (targetType === 'copilot') {
     const filePath = path.join(projectRoot, '.github', 'copilot-instructions.md');
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -178,14 +179,14 @@ This project uses the Wairon Spec-Driven Development (SDD) framework.
 
 Refer to the prompts in [.github/prompts/](.github/prompts/) for instructions.
 `;
-    fs.writeFileSync(filePath, content, 'utf-8');
+    writeFile(filePath, content);
   } else if (targetType === 'codex') {
     const filePath = path.join(projectRoot, '.codexrules');
     const content = `# Wairon SDD Project
 
 Refer to [.codex/agents/](.codex/agents/) for full instructions.
 `;
-    fs.writeFileSync(filePath, content, 'utf-8');
+    writeFile(filePath, content);
   }
 }
 

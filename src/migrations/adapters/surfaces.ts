@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 export {
   pinExternals,
+  getExternalsStatus,
   listExternals,
   removeSnapshot,
 } from '../../core/surface-portal.js';

@@ -1,10 +1,12 @@
 import {
+  aliasTargetOf,
   fieldTypesOf,
   implementationSourceFiles,
   importBindingOf,
   isPattern,
   isRetired,
   localTypesOf,
+  memberTypesOf,
   methodSourceFile,
   pathKey,
   resolveImport,
@@ -208,30 +210,80 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
    * the file annotates with nothing, and a class name it cannot place, resolve
    * to nothing, exactly as the proven tier does.
    *
-   * What it deliberately does not do is follow the annotation's own
-   * DECLARATION: the name leads to the module that declares it, and whether
-   * that declaration is an interface, a class or a `Pick<…>` alias is not
-   * read. Where the type is written is the question; what it expands to is
-   * not, and expanding it would be inference rather than a record of what the
+   * A RECEIVER CHAIN (`this.deps.tracker.save()`, `deps.tracker.save()`) is
+   * the bag-of-collaborators shape, followed link by link: the root as a
+   * field or annotated name is, then each property through the type the
+   * shape declaring it writes down for it (memberTypesOf).
+   *
+   * What a type name is READ as stays the name the code writes. A
+   * member-preserving utility (`Pick<Repo, 'find'>`, `Readonly<Repo>`) is read
+   * at analysis as the type it wraps, because its members ARE that type's by
+   * the language's definition; and an alias that names one type outright is
+   * followed ONE hop (aliasTargetOf), since `type Contract = Pick<Repo, …>`
+   * is the commonest way a narrowed collaborator is spelled. Nothing further
+   * is expanded — a union, an intersection, a mapped type, an alias of an
+   * alias — because that would be inference rather than a record of what the
    * code says.
    */
   const possibleOriginsOf = (site: CallSiteFact, from: string): ReadonlySet<string> => {
     const proven = originOf(site, from);
-    if (!site.field && !site.constructed && !site.via && !site.returnedBy && !site.enclosingClass) return proven;
+    if (!site.field && !site.constructed && !site.via && !site.returnedBy && !site.enclosingClass && !site.receiverPath) {
+      return proven;
+    }
     const resolved = scopeOf(site, from);
     if (!resolved) return proven;
     const { path: scope, facts: f } = resolved;
     const out = new Set(proven);
-    /** Where a NAME this file writes down leads: its module, else this file when it declares it. */
-    const widenThrough = (name: string, specifier: string | undefined): void => {
+    /** Where a NAME a file writes down leads: its module, else that file when it declares it. */
+    const widenThroughAt = (at: string, name: string, specifier: string | undefined): void => {
       const landings = specifier !== undefined
-        ? landingFrom(scope, specifier)
-        : declarationsAt(scope).has(name) ? republishedFrom(scope) : NO_ORIGIN;
+        ? landingFrom(at, specifier)
+        : declarationsAt(at).has(name) ? republishedFrom(at) : NO_ORIGIN;
       for (const candidate of landings) out.add(candidate);
     };
-    /** A declared type name, followed wherever it was written down. */
-    const widenThroughType = (typeName: string): void => widenThrough(typeName, typeBindingOf(f, typeName));
+    const widenThrough = (name: string, specifier: string | undefined): void => widenThroughAt(scope, name, specifier);
+    /**
+     * A declared type name, followed wherever it was written down — and, where
+     * the module declaring it declares it as an ALIAS naming one type outright
+     * (`type Contract = Pick<Repository, 'find'>`), one hop further to the
+     * module that type leads to. One hop, as the facts record it: an alias of
+     * an alias is not chased.
+     */
+    const widenThroughType = (typeName: string, at: string = scope, atFacts: SourceFileFacts = f): void => {
+      widenThroughAt(at, typeName, typeBindingOf(atFacts, typeName));
+      for (const decl of typeDeclarationsOf(at, atFacts, typeName)) {
+        const target = aliasTargetOf(decl.facts, decl.name);
+        if (target !== undefined) widenThroughAt(decl.path, target, typeBindingOf(decl.facts, target));
+      }
+    };
     if (site.field) for (const typeName of fieldTypesOf(f, site.field)) widenThroughType(typeName);
+    // A receiver CHAIN — `this.deps.tracker.save()`, `deps.tracker.save()` —
+    // followed link by link through what the code DECLARES each link to be:
+    // the root's field or annotated type, then each property's declared type
+    // on the shape that declares it, read in the module the shape's name leads
+    // to (and one alias hop past it). A link nothing declares ends the walk,
+    // so the answer is empty rather than a guess.
+    if (site.receiverPath && site.receiverPath.length >= 2) {
+      const [root, ...rest] = site.receiverPath;
+      const links = [...rest];
+      let current: { at: string; facts: SourceFileFacts; type: string }[] = [];
+      if (root === 'this') {
+        const field = links.shift();
+        if (field !== undefined) current = fieldTypesOf(f, field).map(type => ({ at: scope, facts: f, type }));
+      } else {
+        current = localTypesOf(f, root).map(type => ({ at: scope, facts: f, type }));
+      }
+      for (const link of links) {
+        const next: typeof current = [];
+        for (const c of current) {
+          for (const decl of typeDeclarationsOf(c.at, c.facts, c.type, true)) {
+            for (const type of memberTypesOf(decl.facts, decl.name, link)) next.push({ at: decl.path, facts: decl.facts, type });
+          }
+        }
+        current = next;
+      }
+      for (const c of current) widenThroughType(c.type, c.at, c.facts);
+    }
     if (site.constructed) widenThrough(site.constructed, importBindingOf(f, site.constructed)?.from);
     // A receiver that is a plain identifier the file ANNOTATED. It is asked
     // on top of whatever originOf already proved through an import binding of
@@ -266,6 +318,47 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
       }
     }
     return out;
+  };
+
+  /**
+   * Where a type NAME written in a file is DECLARED: that file, when it
+   * declares the name, else each module its import binding lands in that
+   * declares it (under the name it was published by). Exact grade only. With
+   * `throughAlias`, a declaration that is an alias naming one type outright is
+   * followed that ONE hop to the declarations of the type it names.
+   */
+  const typeDeclarationsOf = (
+    at: string,
+    atFacts: SourceFileFacts,
+    typeName: string,
+    throughAlias = false,
+  ): { path: string; facts: SourceFileFacts; name: string }[] => {
+    const found: { path: string; facts: SourceFileFacts; name: string }[] = [];
+    const exactFacts = (p: string): SourceFileFacts | undefined => {
+      const x = facts.get(p);
+      return x?.status === 'analyzed' && x.analysisGrade === 'exact' ? x : undefined;
+    };
+    const direct = (where: string, whereFacts: SourceFileFacts, name: string): { path: string; facts: SourceFileFacts; name: string }[] => {
+      if (whereFacts.declaredNames.includes(name) && typeBindingOf(whereFacts, name) === undefined) {
+        return [{ path: where, facts: whereFacts, name }];
+      }
+      const specifier = typeBindingOf(whereFacts, name);
+      if (specifier === undefined) return [];
+      const published = importBindingOf(whereFacts, name)?.imported ?? name;
+      const out: { path: string; facts: SourceFileFacts; name: string }[] = [];
+      for (const candidate of landingFrom(where, specifier)) {
+        const there = exactFacts(candidate);
+        if (there && there.declaredNames.includes(published)) out.push({ path: candidate, facts: there, name: published });
+      }
+      return out;
+    };
+    for (const decl of direct(at, atFacts, typeName)) {
+      found.push(decl);
+      if (!throughAlias) continue;
+      const target = aliasTargetOf(decl.facts, decl.name);
+      if (target !== undefined) found.push(...direct(decl.path, decl.facts, target));
+    }
+    return found;
   };
 
   /** Whether a file holds a body of `name` bound as a member of `container` — a class's own method, or an object's property. */

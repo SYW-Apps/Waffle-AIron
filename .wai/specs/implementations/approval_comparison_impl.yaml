@@ -140,13 +140,15 @@ methods:
       - stepNumber: 9
         description: >-
           Answer the verdict, naming the specs that actually moved rather than a count — a number
-          tells somebody that something changed, a list tells them what to look at — with the member
-          and upgrade notes appended, and report drift when the specs moved, a member's pin moved,
-          or the identity was upgraded. A member that is merely drifted or never approved is named
-          but is not this project's drift
+          tells somebody that something changed, a list tells them what to look at: the text names
+          the first few and counts the rest, and `moved` carries every one (`~` changed, `+` added,
+          `-` removed) for a caller that wants the whole account — with the member and upgrade notes
+          appended, and report drift when the specs moved, a member's pin moved, or the identity was
+          upgraded. A member that is merely drifted or never approved is named but is not this
+          project's drift
         type: return
         outcome: verdict
     symbol: approvalVerdict
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-03T17:59:42.330Z'
+updatedAt: '2026-10-05T23:53:26.941Z'

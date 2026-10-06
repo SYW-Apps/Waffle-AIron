@@ -1,8 +1,9 @@
 id: skills_exporter_impl
 name: Skills Exporter Implementation
 description: >-
-  Copies the built-in SDD skill templates and the pack-provided skills into each active target's
-  skills directory, in src/core/skills.ts.
+  Writes the built-in SDD skill templates and the pack-provided skills into each active target's
+  skills directory, in src/core/skills.ts, through the shared file helper so an installed skill
+  keeps its line endings.
 contract: iskills_exporter
 sourcePath: src/core/skills.ts
 methods:
@@ -22,8 +23,11 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          Copy each built-in SDD skill template into every active target's skills directory as
-          <name>/SKILL.md, skipping targets that have no skills directory.
+          Write each built-in SDD skill into every active target's skills directory as
+          <name>/SKILL.md, skipping targets that have no skills directory. The file keeps its line
+          endings (the shared file helper): an installed SKILL.md checked out with CRLF stays CRLF
+          and one that is unchanged is not rewritten, so a lock or generate that re-exports the
+          skills never turns them into whole-file diffs.
         type: local
       - stepNumber: 4
         description: Load the governing extension packs to obtain their provided skills.
@@ -32,9 +36,10 @@ methods:
         targetMethod: loadProjectExtensions
       - stepNumber: 5
         description: >-
-          For each pack skill whose targets include an active target, copy its SKILL.md (resolved
+          For each pack skill whose targets include an active target, write its SKILL.md (resolved
           relative to the pack directory) into that target's skills directory namespaced as
-          <pack-id>-<skill-id>; the built-in sdd-* names are reserved so a pack cannot shadow them.
+          <pack-id>-<skill-id>, keeping the installed file's line endings the same way; the built-in
+          sdd-* names are reserved so a pack cannot shadow them.
         type: local
       - stepNumber: 6
         description: Return the export result (destinations, file count, skipped targets).
@@ -59,4 +64,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-09-25T21:13:46.560Z'
+updatedAt: '2026-10-05T23:38:16.240Z'

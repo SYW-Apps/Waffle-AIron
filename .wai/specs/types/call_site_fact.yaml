@@ -74,7 +74,19 @@ fields:
       proven one, since a subclass may override the method, and only where the class holds a body
       under the invoked name
     optional: true
+  - name: receiverPath
+    type: list<string>
+    description: >-
+      The receiver written as a CHAIN of property accesses — set only when the call was written
+      this.<field>.<property>...name(...) (this.c.tracker.checkIn() gives ["this", "c", "tracker"])
+      or <name>.<property>...name(...) (deps.tracker.checkIn() gives ["deps", "tracker"]), and never
+      together with via, field, constructed, returnedBy or enclosingClass. The shape
+      constructor-injected collaborators take when they arrive as ONE bag object. Followed link by
+      link through what the code DECLARES each link to be — the root's declared field or annotated
+      type, then each property's declared type on the shape that declares it — and like every
+      receiver past an import binding it is a POSSIBLE origin and never a proven one
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-19T15:29:49.702Z'
-updatedAt: '2026-10-05T00:38:15.510Z'
+updatedAt: '2026-10-05T23:33:01.757Z'

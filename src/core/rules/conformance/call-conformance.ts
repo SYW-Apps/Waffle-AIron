@@ -130,21 +130,63 @@ interface CallTarget {
   accepted: Set<string>;
   /** The files realizing the target method: each implementation's method sourcePath, else the implementation's own. */
   files: Set<string>;
+  /**
+   * The ONE body realizing the target in each of those files, as
+   * `<file>|<anchor>` — the anchor being the method's symbol, qualified by its
+   * exportedVia handle. What N:1 identity is judged on: a caller is the target
+   * only when it IS this body, never because it shares its name.
+   */
+  bodies: Set<string>;
+  /** The same bodies as (file, symbol, exportedVia), for following what each one forwards to. */
+  anchors: { file: string; symbol: string; exportedVia?: string }[];
 }
+
+/** A body's identity across files: the file and the anchor its method names there. */
+const bodyKey = (file: string, symbol: string, exportedVia: string | undefined): string =>
+  `${file}|${anchorKey(symbol, exportedVia)}`;
 
 function resolveCallTarget(ctx: RuleContext, componentId: string, methodName: string): CallTarget {
   const accepted = new Set<string>([methodName]);
   const files = new Set<string>();
+  const bodies = new Set<string>();
+  const anchors: CallTarget['anchors'] = [];
   for (const intf of ctx.interfacesByComponent.get(componentId) ?? []) {
     for (const impl of ctx.implementationsByContract.get(intf.id) ?? []) {
       const method = impl.methods.find(m => m.name === methodName);
       if (!method && !intf.methods.some(m => m.name === methodName)) continue;
       if (method?.symbol) accepted.add(method.symbol);
       const file = methodSourceFile(method ?? {}, impl.sourcePath);
-      if (file) files.add(pathKey(file));
+      if (!file) continue;
+      files.add(pathKey(file));
+      bodies.add(bodyKey(pathKey(file), method?.symbol ?? methodName, method?.exportedVia));
+      anchors.push({ file: pathKey(file), symbol: method?.symbol ?? methodName, exportedVia: method?.exportedVia });
     }
   }
-  return { accepted, files };
+  return { accepted, files, bodies, anchors };
+}
+
+/**
+ * Every (file, name) a target's realizing anchor IS, followed through what its
+ * file forwards it as: its own republications and export aliases, and — where
+ * the file merely BINDS the name from another module, as an orchestrator that
+ * hands a store's function straight through does — that module's function
+ * and what it in turn forwards to. A name binding a module of the code writes
+ * down is proven, never guessed.
+ */
+function targetForwards(code: CodeIndex, target: CallTarget): Set<string> {
+  const out = new Set<string>();
+  for (const anchor of target.anchors) {
+    for (const p of code.forwardsOf(anchor.file, anchor.symbol, anchor.exportedVia)) out.add(`${p.file}#${p.name}`);
+    if (anchor.exportedVia !== undefined) continue;
+    const facts = code.factsAt(anchor.file);
+    if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
+    const binding = importBindingOf(facts, anchor.symbol);
+    if (!binding || binding.namespace) continue;
+    const module = resolveImport(anchor.file, binding.from, code.paths, code.packages);
+    if (!module) continue;
+    for (const p of code.forwardsOf(module, binding.imported ?? anchor.symbol)) out.add(`${p.file}#${p.name}`);
+  }
+  return out;
 }
 
 /**
@@ -256,6 +298,7 @@ function describeSite(site: CallSiteFact): string {
   if (site.field) return `this.${site.field}.${site.name}(…)`;
   if (site.constructed) return `new ${site.constructed}(…).${site.name}(…)`;
   if (site.returnedBy) return `${site.returnedBy}(…).${site.name}(…)`;
+  if (site.receiverPath) return `${site.receiverPath.join('.')}.${site.name}(…)`;
   if (site.enclosingClass) return `this.${site.name}(…)`;
   return `<receiver>.${site.name}(…)`;
 }
@@ -272,10 +315,10 @@ export const callConformanceRule: SddRule = {
   name: 'call-conformance',
   judges: 'code',
   description:
-    'Code↔spec Level 3: the CLAIMED call ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. A method claims a call two ways and they face one check: a narrative `call` step, and an entry of the declared `calls` a narrative-less method reaches its collaborators through. They assert the same thing, and the step number is no part of the claim — this check never reads order, so it is only how a finding points at one. Forward: every claim must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS NAME came from, a plain `<name>.<method>()` receiver through the type the file ANNOTATES that name with — a parameter\'s, or an annotated variable\'s, which is how a module that wires its collaborators as closures writes every one of its calls — a `fn(...).<method>()` receiver through the type fn RETURNS where the code settles it, and a `this.<method>()` receiver through the class whose own method it sits in; a package specifier naming a package of this repository resolves like a relative one, and an export alias (`export { a as b }`, an adapter object property `{ b: a }`) forwards by identity like a re-export. A matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN tier so that widening what a call reached can accept a claim but never accuse one, and a target that names no file of its own falls back to name membership. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the method must claim it — in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported; a function forwarding by identity to a modelled method written in another file IS that method, so what it calls is that method\'s subject. A method that claims nothing at all is judged in neither direction: what it leaves unsaid is UNUSED_*\'s subject. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are no claim about a call site, a malformed declared reference is MALFORMED_DECLARED_CALL\'s finding and names no target here, the conformance dial (off) skips, and weaker analysis grades never guess.',
+    'Code↔spec Level 3: the CLAIMED call ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. A method claims a call two ways and they face one check: a narrative `call` step, and an entry of the declared `calls` a narrative-less method reaches its collaborators through. They assert the same thing, and the step number is no part of the claim — this check never reads order, so it is only how a finding points at one. Forward: every claim must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS NAME came from, a plain `<name>.<method>()` receiver through the type the file ANNOTATES that name with — a parameter\'s, or an annotated variable\'s, which is how a module that wires its collaborators as closures writes every one of its calls — a `fn(...).<method>()` receiver through the type fn RETURNS where the code settles it, and a `this.<method>()` receiver through the class whose own method it sits in, and a receiver CHAIN (`this.<field>.<property>.<method>()`, `<name>.<property>.<method>()`) link by link through each link\'s declared type — a declared type read through a member-preserving utility (Pick, Omit, Partial, Required, Readonly) and one alias hop; a package specifier naming a package of this repository resolves like a relative one, and an export alias (`export { a as b }`, an adapter object property `{ b: a }`) forwards by identity like a re-export. A matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN tier so that widening what a call reached can accept a claim but never accuse one, and a target that names no file of its own falls back to name membership. N:1 identity — a caller that IS the target — is judged on the body, the same anchor in the same file, never on a shared name: a Portal method forwarding to a same-named Orchestrator method elsewhere must make that call. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the method must claim it — in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported; a function forwarding by identity to a modelled method written in another file IS that method, so what it calls is that method\'s subject. A method that claims nothing at all is judged in neither direction: what it leaves unsaid is UNUSED_*\'s subject. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are no claim about a call site, a malformed declared reference is MALFORMED_DECLARED_CALL\'s finding and names no target here, the conformance dial (off) skips, and weaker analysis grades never guess.',
   codes: [
     { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step or declared call realized by no call that resolves to the target method\'s own source file — the call is absent, or it lands in another module', carryable: true },
-    { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step or declared call whose target name IS called, but only from call sites written in a shape this analysis cannot resolve to a file — the claim was not checked, and is neither proven realized nor accused', carryable: true },
+    { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step or declared call whose target name IS called, but only from call sites written in a shape this analysis cannot resolve to a file — the claim was not checked, and is neither proven realized nor accused. What resolves is a name bound to a module of THIS project: a bare or namespaced call through such an import binding, a this.<field> receiver whose declared type names one, a receiver chain (this.<field>.<property>, <name>.<property>) each of whose links the code declares a type for, a new Class(…) receiver whose class does, a receiver name the file annotates with such a type, a fn(…) receiver whose return the code settles, and this inside a class\'s own method — a declared type read through Pick/Omit/Partial/Required/Readonly and one alias hop. What does not: a third-party package import, a value the module assembled, and a receiver the file declares nothing for', carryable: true },
     { code: 'UNDECLARED_COLOCATED_CALL', defaultSeverity: 'warning', summary: 'The realized function calls a modelled method of another component living in the same source file, and neither a narrative step nor a declared call names it', carryable: true },
   ],
   check(ctx: RuleContext) {
@@ -358,14 +401,27 @@ export const callConformanceRule: SddRule = {
 
         const target = resolveCallTarget(ctx, claim.component, claim.method);
 
-        // N:1 identity forwarding: when the caller's own realized symbol IS
-        // the target name, facade and target collapse onto one function
-        // (pure 1:1 forwarding, barrel republication) — the claim is realized
-        // by identity, exactly as Level 1's N:1 sharing blesses. A declaration
-        // earns this exemption on the same terms a step does: the reason is
-        // the shape of the CODE, which does not know which way the claim was
-        // written.
-        if (target.accepted.has(fnSymbol)) continue;
+        // N:1 identity forwarding: when the caller's realized function IS the
+        // target's — the same body in the same file — facade and target
+        // collapse onto one function and the claim is realized by identity,
+        // exactly as Level 1's N:1 sharing blesses. A shared NAME is not
+        // identity: a Portal's `checkIn` forwarding to an Orchestrator's
+        // `checkIn` in another file is two functions, and accepting the
+        // caller's own name as the target's realization is how deleting that
+        // forwarding call once passed without a word. So the call is judged
+        // like any other, and a target naming no file of its own can prove
+        // no identity at all. A declaration earns this exemption on the same
+        // terms a step does: the reason is the shape of the CODE, which does
+        // not know which way the claim was written.
+        if (target.bodies.has(bodyKey(here, fnSymbol, implMethod.exportedVia))) continue;
+        // The same identity reached from both ends: the caller and the target
+        // each FORWARD to one function written elsewhere — a Portal barrel and
+        // the Orchestrator both handing a store's function straight through.
+        // One body under several names, each forward a binding the code writes
+        // down; a shared NAME with no shared forward is never this.
+        const sharedBody = targetForwards(code, target);
+        if (code.forwardsOf(file, fnSymbol, implMethod.exportedVia)
+          .some(p => p.file !== here && sharedBody.has(`${p.file}#${p.name}`))) continue;
         // The same identity, written as a republication under another name:
         // `export { a as b } from 'm'` makes this file's `b` m's `a`, exactly
         // as the unaliased `export { a } from 'm'` makes its `a` m's `a`. When
@@ -441,7 +497,10 @@ export const callConformanceRule: SddRule = {
         ctx.addIssue(
           'warning',
           'CALL_ORIGIN_UNRESOLVED',
-          `Method "${implMethod.name}" in implementation "${impl.id}": ${unresolved.length} ${claimNoun(implMethod)} ARE called by name inside the function "${fnSymbol}" in "${file}", but every site calling them is written in a shape this analysis cannot resolve to a file — ${unresolved.map(describeMiss).join('; ')}. What resolves is a name bound to a module of THIS project: a bare or namespaced call through such an import binding (a package of this repository included), a \`this.<field>\` receiver whose declared type names one, a \`new Class(…)\` receiver whose class does, a receiver NAME the file annotates with a type that does, a \`fn(…)\` receiver whose function's return the code settles on a type with that method's body, and \`this\` inside a class's own method that has it. What does not: an import from a third-party PACKAGE, a receiver holding a value the module assembled, a receiver this model records no name for, and one the file annotates with nothing. This reports what was not checked, not what is wrong — the claim is neither proven realized nor accused of being missing, and no working call is asked to be rewritten to suit the reader.`,
+          // The sites, and what the answer means — once. Which receiver
+          // forms resolve is the code's summary and the rule's description
+          // (`wairon rules list`), not prose every finding repeats.
+          `Method "${implMethod.name}" in implementation "${impl.id}": ${unresolved.length} ${claimNoun(implMethod)} not checked — called by name inside "${fnSymbol}" in "${file}", but only through receivers this analysis cannot resolve to a file: ${unresolved.map(describeMiss).join('; ')}. Neither proven realized nor accused; the receiver forms that do resolve are listed under CALL_ORIGIN_UNRESOLVED in \`wairon rules list\`.`,
           impl.id,
           entry.draftContext,
           undefined,

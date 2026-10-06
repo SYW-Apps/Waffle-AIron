@@ -42,6 +42,12 @@ import { RuleContext, SddRule } from '../types.js';
 //     that component's own implementation spread over two files, which the
 //     source-path model has always allowed.
 //
+//     The `owns` relation draws that fence one hop wider. A pattern
+//     CONSTRUCTS the blocks it owns — a Repository builds its Store, Registry
+//     and Index — so the owner's file importing a member's class is the owns
+//     relation made real, and so is one member of a pattern reaching for a
+//     sibling member's. Neither is a surface reached from outside.
+//
 //  4. EXACT GRADE ONLY, at both ends. Below it nothing separates an export
 //     from a mention, and no binding records which LOCAL NAME a module
 //     specifier bound — so a weaker grade could neither name the surface nor
@@ -104,7 +110,7 @@ export const exportConformanceRule: SddRule = {
   name: 'export-conformance',
   judges: 'code',
   description:
-    'Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code — it asks whether the code holds what a spec claims — so a file could export whatever it liked under a component\'s name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method\'s `exportedVia` names the export a consumer imports to REACH it — the value that composes it, which `symbol` cannot name because `symbol` names the function inside — and a listener\'s mount names the router entry it calls to hand a portal its requests; both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module.',
+    'Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code — it asks whether the code holds what a spec claims — so a file could export whatever it liked under a component\'s name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method\'s `exportedVia` names the export a consumer imports to REACH it — the value that composes it, which `symbol` cannot name because `symbol` names the function inside — and a listener\'s mount names the router entry it calls to hand a portal its requests; both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns, so the owner\'s file, or another member of the same pattern, importing a member\'s class is the owns relation made real.',
   codes: [
     {
       code: 'UNDECLARED_EXPORT',
@@ -127,6 +133,7 @@ export const exportConformanceRule: SddRule = {
   check(ctx: RuleContext): void {
     const code = ctx.codeIndex();
     const realization = ctx.realizationIndex();
+    const ownership = ctx.ownershipIndex();
 
     // ---- 1. what the components a file realizes legitimately answer to ----
     // A file may realize several components — wairon's own MCP server file
@@ -329,6 +336,15 @@ export const exportConformanceRule: SddRule = {
       const declared = promised.get(file) ?? NOTHING_PROMISED;
       const taken = takenFrom.get(file);
       const owners = new Set(realization.componentsAt(file).map(c => c.id));
+      // The fence: the file's own components, the patterns that own any of
+      // them, and the other members of those patterns.
+      const fence = new Set(owners);
+      for (const id of owners) {
+        const pattern = ownership.ownerOf(id);
+        if (pattern === undefined) continue;
+        fence.add(pattern);
+        for (const member of ownership.ownedMembers) if (ownership.ownerOf(member) === pattern) fence.add(member);
+      }
       const crossed: string[] = [];
 
       // Sorted and deduplicated, so what the register carries is the SET of
@@ -340,7 +356,7 @@ export const exportConformanceRule: SddRule = {
         const takers = taken?.get(name);
         if (!takers) continue;
         const crossing = [...takers].some(
-          taker => taker !== file && !realization.componentsAt(taker).some(c => owners.has(c.id)),
+          taker => taker !== file && !realization.componentsAt(taker).some(c => fence.has(c.id)),
         );
         if (crossing) crossed.push(name);
       }

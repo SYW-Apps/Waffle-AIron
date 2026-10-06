@@ -40,10 +40,11 @@ methods:
         onFalseStep: 7
       - stepNumber: 6
         description: >-
-          Write the output path: the snapshot for native format; for openapi, the single document
-          when one portal remains (either the project has one, or portalId selected one), and
-          otherwise ONE FILE PER PORTAL — the out path's stem suffixed with each portalId — never
-          only the first document.
+          Write the output path: the snapshot for native format — as YAML, or as JSON when the path
+          ends in .json, so a file is always what its name says (both read back by import: JSON is
+          YAML); for openapi, the single document when one portal remains (either the project has
+          one, or portalId selected one), and otherwise ONE FILE PER PORTAL — the out path's stem
+          suffixed with each portalId — never only the first document.
         type: call
         targetComponent: surface_transfer_adapter
         targetMethod: writeSnapshotTo
@@ -632,4 +633,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-04T22:35:17.223Z'
+updatedAt: '2026-10-05T23:51:08.488Z'

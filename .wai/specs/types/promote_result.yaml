@@ -1,0 +1,51 @@
+kind: value-object
+id: promote_result
+name: PromoteResult
+description: >-
+  What promoting a part (or externalizing a subsystem as a project) wrote across the new project
+  boundary, each one named — so the family migration's plan lists exactly what its rehearsal, and
+  therefore its apply, wrote: every reference respelled at its parsed position (a component, a
+  contract, and every qualified token of a type expression, at every type position the
+  reference-position table lists), every name exported on either side, every bare type imported by
+  name, and every consumers entry that named a subsystem across the boundary and was dropped.
+subsystem: sdd_core
+fields:
+  - name: respelled
+    type: list<ReferenceEdit>
+    description: >-
+      Every reference of the PARENT's specs respelled across the new boundary, as written before and
+      after, at the position the loader parses it — each reference into the new project as
+      `alias::name`.
+    optional: false
+  - name: exported
+    type: list<string>
+    description: >-
+      One line per export entry written, naming the side and the name, e.g. "platform L0: money
+      (from contracts)" — every name crossing the boundary, and every name the parent's L0
+      re-exports from a moved subsystem, so no re-export is left pointing at nothing.
+    optional: false
+  - name: imported
+    type: list<string>
+    description: >-
+      One line per bare type name imported by name through the `use` of the alias that now supplies
+      it, e.g. "payments: platform.use gains money".
+    optional: false
+  - name: consumersDropped
+    type: list<string>
+    description: >-
+      One line per publicInterfaces consumers entry that named a subsystem across the new boundary
+      and was dropped — between projects the L0 export table governs who may use a name, and a
+      consumers list admits only subsystems of its own tree — e.g. "payments payments_portal:
+      orders".
+    optional: false
+  - name: memberRespelled
+    type: list<ReferenceEdit>
+    description: >-
+      Every reference of the NEW PROJECT's specs respelled, as written before and after, at the
+      position the loader parses it — each reference back into the parent as `<parent id>::name`,
+      and each self-prefixed one (its id now equal to the prefix) as the bare local id.
+    optional: false
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-10-05T23:34:25.221Z'
+updatedAt: '2026-10-05T23:45:22.681Z'

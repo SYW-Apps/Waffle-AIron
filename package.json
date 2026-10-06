@@ -28,7 +28,9 @@
   "files": [
     "dist",
     "schemas",
-    "README.md"
+    "README.md",
+    "docs/*.md",
+    "docs/standards/**"
   ],
   "workspaces": [
     "sdk"

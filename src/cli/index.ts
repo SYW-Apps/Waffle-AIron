@@ -20,6 +20,7 @@ import {
   runPack,
   runAgent,
   mcpInstallCommand,
+  announceBinding,
 } from './runner.js';
 import { runAliasesList, runAliasesEnable, runAliasesDisable } from '../commands/aliases.js';
 import { runInit } from '../commands/init.js';
@@ -82,10 +83,16 @@ program
   .version(WAIRON_VERSION, '-v, --version')
   .option('--verbose', 'enable verbose output')
   .option('--silent', 'suppress all output except errors')
-  .hook('preAction', (thisCommand) => {
+  .hook('preAction', (thisCommand, actionCommand) => {
     const opts = thisCommand.opts();
     if (opts.verbose) setLogLevel('verbose');
     else if (opts.silent) setLogLevel('silent');
+    // Name the project the command is about to act on (stderr; silent under --silent).
+    if (!opts.silent) {
+      const names: string[] = [];
+      for (let c: Command | null = actionCommand; c && c.parent; c = c.parent) names.unshift(c.name());
+      announceBinding(names.join(' '));
+    }
   });
 
 // ---------------------------------------------------------------------------
@@ -183,6 +190,7 @@ program
   .description('Show the spec tree with its authoring readiness (how far each spec is written out, from its draft/design/complete status) and, separately, its approval state from .wai/lock.json')
   .option('--subsystem <id>', 'only show status for the specified subsystem')
   .option('--no-recursive', 'show this project only, without its members')
+  .option('--all', 'list every spec that moved since the approval, not the first few')
   .action(async (opts) => {
     await statusCommand(opts);
   });
@@ -442,7 +450,7 @@ program
   .option('--drawio', 'emit an editable draw.io / diagrams.net file (same layout as the canvas)')
   .option('--excalidraw', 'emit an editable Excalidraw scene (same layout as the canvas)')
   .option('--format <fmt>', 'alias for the flags above: mermaid | canvas | drawio | excalidraw')
-  .option('--out <path>', 'write to a file (or directory with --all; default .wai/docs/diagrams) instead of stdout')
+  .option('--out <path>', 'the file to write (a directory with --all); every format writes a file — default under .wai/docs/diagrams/ (system.md for Mermaid, canvas.html for the canvas); a .mmd path writes raw Mermaid')
   .option('--no-health', 'skip comparing each consumption relation with its live producer: the canvas draws those edges as not checked')
   .action(async (opts) => {
     await runDiagram({

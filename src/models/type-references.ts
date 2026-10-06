@@ -98,7 +98,7 @@ function extractTypesFromSignature(signature: string, returns: string): string[]
   sigCleaned = sigCleaned.replace(/(?<=\S)\s+[-—:]\s+[a-z\s_-]+$/, '');
 
   const returnsCleaned = returns.replace(/\/\/.*$/gm, '').replace(/#.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
-                                .replace(/[a-zA-Z0-9_-]+\s*\??\s*:/g, '');
+                                .replace(/(?<![:\w-])[a-zA-Z0-9_-]+\s*\??\s*:(?!:)/g, '');
 
   types.push(...extractTypeIdentifiers(returnsCleaned));
 
@@ -134,7 +134,7 @@ function extractTypesFromSignature(signature: string, returns: string): string[]
       const colonIndex = param.indexOf(':');
       if (colonIndex !== -1) {
         const paramType = param.slice(colonIndex + 1).trim();
-        const paramTypeCleaned = paramType.replace(/[a-zA-Z0-9_-]+\s*\??\s*:/g, '');
+        const paramTypeCleaned = paramType.replace(/(?<![:\w-])[a-zA-Z0-9_-]+\s*\??\s*:(?!:)/g, '');
         types.push(...extractTypeIdentifiers(paramTypeCleaned));
       }
     }

@@ -82,6 +82,15 @@ methods:
           same producer; a local spec id equal to the new alias is a note
         type: local
       - stepNumber: 5
+        description: >-
+          Under each other family project that pins the bound project, read its externals' status:
+          the alias is the bound project's own, so a pin whose every use is unchanged is taken again
+          after the rename (the names it uses are the same; only how the bound project re-exports
+          them is spelled) — one already broken is left with a note, never laundered
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 6
         description: Answer the plan
         type: return
         outcome: the alias-rename plan
@@ -126,8 +135,13 @@ methods:
         targetComponent: migration_surfaces_adapter
         targetMethod: renamePin
       - stepNumber: 8
+        description: Then re-take each family consumer's pin the plan read intact, under its own rehearsal root
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: pinExternals
+      - stepNumber: 9
         description: Restore the caller's binding
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:43.534Z'
-updatedAt: '2026-09-30T22:58:39.668Z'
+updatedAt: '2026-10-05T23:56:48.289Z'

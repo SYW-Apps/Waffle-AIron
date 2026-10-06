@@ -165,11 +165,14 @@ methods:
   - name: serveMcpStdio
     narrative: []
     intent: >-
-      Resolve the project root to attach to — a pinned WAIRON_PROJECT_DIR, else the nearest ancestor
-      holding a .wai, else the cwd — and record HOW it resolved, announcing root and method on
-      stderr (never stdout, which is the JSON-RPC channel) so an attachment to an ancestor tree is
-      observable rather than mysterious. Then start the MCP server on the stdio transport and run
-      until the transport closes.
+      Resolve the project root to attach to — a pinned WAIRON_PROJECT_DIR, else the project the
+      binding rule binds from the cwd (WaiPaths: the nearest folder with an L0, never past the
+      repository root unless an ancestor declares the crossing as a member — the very root every CLI
+      command and `wairon dev` bind), else a cwd that holds a .wai of its own (a project not yet
+      bootstrapped), else the cwd — and record HOW it resolved, announcing `project <id> at <root>`
+      and the method on stderr (never stdout, which is the JSON-RPC channel) so an attachment to an
+      ancestor tree is observable rather than mysterious. Then start the MCP server on the stdio
+      transport and run until the transport closes.
     symbol: runMcpServe
   - name: planInstall
     narrative: []
@@ -198,4 +201,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-10-05T20:55:09.608Z'
+updatedAt: '2026-10-05T23:37:11.580Z'

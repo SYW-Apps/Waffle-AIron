@@ -19,7 +19,8 @@ import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete, computeGateStateId } from '../commands/validate.js';
 import { designOnly } from '../models/lock.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
-import { pathExists, writeFile, getProjectRoot } from '../utils/fs.js';
+import { pathExists, writeFile, getProjectRoot, getProjectRootOverride, resolveProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import { effectiveProjectId } from '../models/project.js';
 import { runMcpInstall } from '../commands/mcp.js';
 import { runStatus } from '../commands/status.js';
 // The pending-transaction banner: unfinished family migrations under this root.
@@ -191,7 +192,7 @@ export async function validateCommand(opts: { ci?: boolean; subsystem?: string; 
 }
 
 /** cli_runner.runStatus — hosted when attached, else the local dashboard. */
-export async function statusCommand(opts: { subsystem?: string; recursive?: boolean }): Promise<void> {
+export async function statusCommand(opts: { subsystem?: string; recursive?: boolean; all?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
     logger.info(`Status of "${target.projectId}" on ${target.url}:`);
@@ -199,7 +200,38 @@ export async function statusCommand(opts: { subsystem?: string; recursive?: bool
     return;
   }
   // The flag at the edge: --no-recursive is a member depth of 0, the default every level.
-  await runStatus({ subsystem: opts.subsystem, ...(opts.recursive === false ? { memberDepth: 0 } : {}) });
+  await runStatus({ subsystem: opts.subsystem, ...(opts.recursive === false ? { memberDepth: 0 } : {}) }, opts.all === true);
+}
+
+// ---------------------------------------------------------------------------
+// cli_runner.announceBinding — which project a command acts on
+//
+// Every command that acts on a project names the one it bound, on one line and
+// on stderr, so `wairon export` (or any --json output) keeps a pure stdout. The
+// root is the one getProjectRoot resolves: an explicit override, else the
+// binding rule from the cwd — the nearest folder with an L0, never past the
+// repository root unless an ancestor declares the crossing as a member.
+// ---------------------------------------------------------------------------
+
+/** Commands (first word, or the whole path) that act on no project, or announce their own binding. */
+const ANNOUNCE_SILENT = new Set(['init', 'host', 'remote', 'login', 'logout', 'serve', 'dev', 'update', 'aliases', 'help', 'mcp serve']);
+
+/** cli_runner.announceBinding — print `project <id> at <root>` to stderr before a command that acts on a project. */
+export function announceBinding(commandPath: string): void {
+  // Step 1: a command that acts on no project says nothing.
+  const first = commandPath.split(' ')[0];
+  if (ANNOUNCE_SILENT.has(first) || ANNOUNCE_SILENT.has(commandPath)) return;
+  // Steps 3-5: the bound root; none bound, the command reports it itself.
+  const root = getProjectRootOverride() ?? resolveProjectBinding(process.cwd())?.root;
+  if (!root) return;
+  // Step 6: its effective id.
+  let id: string | null = null;
+  try {
+    const config = runWithProjectRoot(root, () => loadProjectConfig());
+    if (config) id = effectiveProjectId(config);
+  } catch { /* an unreadable configuration names no id */ }
+  // Step 7.
+  process.stderr.write(`project ${id ?? path.basename(root)} at ${root}\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +339,10 @@ export async function runAgent(action: string, id: string): Promise<void> {
       if (brief.ownedPaths.length > 0) {
         logger.info('Owned paths:');
         for (const p of brief.ownedPaths) logger.info(`  ${p}`);
+      }
+      if (brief.codeFence) {
+        logger.info(brief.codeFence.length > 0 ? 'Code write fence:' : 'Code write fence: none declared yet (name the planned files when spawning)');
+        for (const p of brief.codeFence) logger.info(`  ${p}`);
       }
       if (brief.readPaths && brief.readPaths.length > 0) {
         logger.info('Read paths:');

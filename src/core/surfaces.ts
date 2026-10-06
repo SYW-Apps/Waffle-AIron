@@ -580,7 +580,10 @@ function writeSurfaceFile(targetPath: string, snapshot: SurfaceSnapshot, rendere
   const resolved = path.resolve(targetPath);
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
   if (!renderedSet || renderedSet.length === 0) {
-    writeYamlFile(resolved, snapshot);
+    // A file is what its name says: `--out x.json` gets JSON (import reads it
+    // back too — JSON is YAML), anything else the YAML snapshot.
+    if (path.extname(resolved).toLowerCase() === '.json') fs.writeFileSync(resolved, `${JSON.stringify(snapshot, null, 2)}\n`);
+    else writeYamlFile(resolved, snapshot);
     return [resolved];
   }
   if (renderedSet.length === 1) {

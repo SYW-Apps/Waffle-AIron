@@ -190,6 +190,12 @@ const HEALTHY_STDOUT = [
   `${gray('    └── ')}${colour(35, '[Component: Orchestrator] comp-a')} ${colour(32, '(100%)')}`,
   `${gray('        ├── ')}${colour(34, 'Interface: icomp-a')} (1 methods)`,
   `${gray('        └── ')}${colour(32, 'Implementation: comp-a-impl')}${colour(32, ' -> src/one.ts')}`,
+  // The approval state, always said — a project never locked included.
+  `${bold(colour(34, 'Approval:'))} this project is never approved (\`wairon lock\` approves the design)`,
+  // What the percentages measure, always said.
+  `${colour(36, 'ℹ')}  ${gray('The percentages measure authoring progress, not approval: 80% once a component\'s component, contract and '
+    + 'implementation specs are written, 100% once its implementation names source files that exist (capped at 50% '
+    + 'while any of them is draft or design). Approval is the lock record (.wai/lock.json); `wairon lock` changes no spec.')}`,
   '',
   '',
 ].join('\n');
@@ -229,6 +235,7 @@ describe('e2e wairon status exit codes (built binary)', () => {
     // Byte equality, not containment: restoring two refusals must not have
     // touched a single escape sequence of the report a person actually reads.
     expect(res.stdout).toBe(HEALTHY_STDOUT);
-    expect(res.stderr).toBe('');
+    // stderr carries one line: the project the command bound, and nothing else.
+    expect(res.stderr).toMatch(/^project \S+ at [^\n]+\n$/);
   });
 });

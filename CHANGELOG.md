@@ -178,6 +178,10 @@ last.
 | `doctor --fix`, `subsystem externalize`, `member internalize` | print a plan and ask; `--yes` in scripts, `--report` to see the plan only |
 | `doctor --fix` / `generate` writing outside the project root | needs `--global` (each replaced file is backed up) |
 | `wairon generate --target <unknown>` | refused, naming the configured targets |
+| Which project a command binds (every command, `wairon mcp serve`, `wairon dev`) | the walk up to the nearest project stops at the repository root (the nearest folder holding `.git`) unless a project above declares the folder as a member; a stray `.wai` above a repository binds nothing. Each command prints `project <id> at <root>` on stderr |
+| `wairon init -y` | configures the `claude` target only (name from the folder, profile backend); another tool is one interactive answer or one `targets` entry away |
+| `wairon init` in a folder a parent project binds | asks on a terminal before making the folder a member, which edits the parent's `project.yaml`; with `--yes` it refuses, writes nothing and prints the `wairon member add <alias> <path> --project` to run from the parent |
+| `wairon lock-check` at a project with members | judges the members too: a member with spec changes nobody approved fails, and a member that re-locked fails until this project is locked again to pin its new approval. `--strict` also fails a member that was never approved |
 
 #### MCP tools
 
@@ -237,6 +241,7 @@ Also: `LoadedExtensions` has the required fields `instructions` and
 | `DUPLICATE_SPEC_ID` | error | two spec files of one project declare one id | remove or rename one |
 | `EXPORT_INVALID`, `EXPORT_ID_DUPLICATE`, `EXPORT_CYCLE`, `EXPORT_UNCONSUMABLE`, `EXPORT_WIDENS_AUDIENCE` | error | an L0 or L1 `publicInterfaces` entry has no source, names something not exported, repeats an id, cycles, re-exports a non-Portal/Observer, or widens a member's audience | fix the entry |
 | `EXTERNAL_UNDECLARED`, `EXTERNAL_NOT_EXPORTED`, `IMPORT_AMBIGUOUS`, `IMPORT_UNRESOLVED`, `IMPORT_SHADOWED_BY_LOCAL`, `TRUSTED_LINK_CROSSES_PROJECT` | error | a reference reaches another project undeclared or at a name it does not export, or a `use` import is ambiguous, unresolved or shadowed | `doctor --fix`, then the hand items |
+| `UNDEFINED_TYPE_REFERENCE` | error | a dotted type reference names another project through its alias (`alias.name`); it used to be accepted silently | write `alias::name`, as the message says |
 | `EXTERNAL_INCOMPATIBLE`, `MEMBER_NOT_FOUND`, `PROJECT_ID_COLLISION`, `PART_UNAVAILABLE`, `MEMBER_KIND_MISMATCH` | error | family run: a used contract changed or vanished, a member is missing or unreadable, or two projects share an id | re-pin, restore, or rename |
 | `MEMBER_UNAPPROVED`, `MEMBER_DRIFTED`, `PROJECT_DEPENDENCY_CYCLE`, `EXTERNAL_CHECK_UNAVAILABLE`, `PROJECT_ID_AMBIGUOUS`, `LOCAL_ID_SHADOWS_PROJECT` | warning | family run: a member is unlocked or its lock is stale, two projects depend on each other, a used contract cannot be compared, or an id is missing or shadowed | lock members bottom-up; tune in the parent's `rules.sddRuleSeverity` |
 | `PROJECTPATH_ESCAPE` | error | a legacy mount leaves the project that declares it (a `../sibling`) | declare the sibling from the project that contains both, or migrate with `doctor --fix` |
@@ -539,6 +544,9 @@ design as one deterministic JSON document (`wairon-design` 1.0,
     registers the server machine-wide instead.
   - It refuses clearly without a terminal (use `-y`).
   - Provisioning and externalizing never overwrite an existing `project.yaml`.
+  - It never edits a parent project's `project.yaml` without asking.
+- **Promoted projects.** A project made by `member promote` or
+  `subsystem externalize --as project` is set up like one made by `init`.
 - **MCP registration.** A project-scoped registration (`.mcp.json`,
   `.gemini/settings.json`), written by `init`, `mcp install` or `doctor --fix`, holds
   nothing machine-specific. It runs `wairon mcp serve` from the PATH (or the CLI by a
@@ -571,6 +579,16 @@ design as one deterministic JSON document (`wairon-design` 1.0,
     followed.
   - A technology can declare the tokens it is matched by
     (`{ name, matches }`).
+  - A forwarding method that shares its target's name is no longer assumed to
+    realize the call: identity is judged on the function body, so a handler that
+    bypasses its orchestrator is reported (`CALL_STEP_UNREALIZED`).
+  - A collaborator typed through `Pick`, `Omit`, `Partial`, `Required` or
+    `Readonly`, through one type alias, or as a property of an object of
+    collaborators is followed to its module.
+  - An `import type` realizes a dependency edge, and a pattern's own files may
+    import its members.
+  - A component with no code yet gets no simulation finding.
+  - Findings use shorter messages.
 - **Migrations.**
   - Self-qualified invariant references are migrated.
   - `EXPORT_INVALID` names a duplicate export id.
@@ -579,6 +597,25 @@ design as one deterministic JSON document (`wairon-design` 1.0,
     `project.yaml` that never set it. The migration rehearses in a copy that has no
     agent files, so the default was recorded and the next lock deleted the
     committed agent files.
+  - `member promote` and `subsystem externalize --as project` respell every
+    reference across the new boundary: dotted type tokens at every type position
+    (fields, params, returns, type-method signatures), `signatureFrom` and asserted
+    invariants. They drop `consumers` entries that name a subsystem across the
+    boundary, write type re-exports with `from:`, and take intact pins of other
+    family projects again. The plan is the rehearsal the apply commits, so it lists
+    exactly what is written.
+  - `member rename-alias` also respells type-method signatures and returns.
+  - `member demote` writes an `alias::<type>` token of a type expression or an
+    asserted invariant back as a local reference. A `consumers` list that still
+    restricts a surface gets back each subsystem across the old boundary that
+    depends on it, so a promote followed by a demote no longer leaves
+    `CROSS_SUBSYSTEM_UNLISTED_CONSUMER` behind. A list the promote removed whole
+    is not recreated: absent means any subsystem may depend, and the promote's plan
+    named the removal.
+  - `subsystem externalize` moves every spec file the subsystem owns, whatever the
+    layout. In the flat layout (`subsystems/`, `types/`, …) it used to declare the
+    part and move nothing. In the nested layout a type of the subsystem kept in the
+    shared `types/` folder was left behind.
 - **Packs.** `pack bundle` of a pack installed as a single file by an older
   `packs add --global` writes a pack directory that resolves without the store. It
   used to write the file where the directory belongs, so a clone and CI still
@@ -606,6 +643,20 @@ design as one deterministic JSON document (`wairon-design` 1.0,
     that did not resolve.
 - **Packages.** The library entry ships TypeScript declarations, and the npm package
   and release binaries ship the web app (the build fails without it).
+  The npm package also ships the documentation. Generated skills, guides and
+  `.mcp.json` keep their line endings.
+- **Agent briefs.** A brief states which files the agent may write, and a brief
+  can be asked for by component id.
+- **Generated guidance.** The `sdd-architect` skill no longer tells assistants to
+  give a lone Portal `mounts: []`. That marks the Portal as its own listener and
+  hid `UNMOUNTED_PORTAL`. The skill now says a service's HTTP listener is the
+  Portal that declares `mounts`, one entry for each Portal it serves.
+- **`wairon status`.** Progress is measured per component: 80% once its
+  component, contract and implementation specs are written, and 100% once its
+  implementation names source files that exist. It is capped at 50% while any of
+  them is a draft. `--all` lists every spec that moved since the approval.
+- **Wording.** `status`, `doctor` and the externals commands word their output
+  more clearly.
 
 ### Security
 

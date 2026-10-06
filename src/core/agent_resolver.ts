@@ -267,8 +267,13 @@ function isWithinDir(dir: string, target: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-/** One layer's topology; `delegate` lists each member's own agents by reference. */
-function resolveLayer(delegate: boolean): AgentRecord[] {
+/**
+ * One layer's topology; `delegate` lists each member's own agents by reference.
+ * `implementers` derives every component's implementer record even when
+ * rules.generateComponentImplementers is off — what a per-component brief
+ * composes from, so it never needs agent files or the setting.
+ */
+function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
   projectFilesCache.clear();
 
   const system = loadSystemSpec();
@@ -462,7 +467,7 @@ function resolveLayer(delegate: boolean): AgentRecord[] {
   }
 
   // 3. Component Implementers
-  if (config.rules.generateComponentImplementers) {
+  if (config.rules.generateComponentImplementers || implementers) {
     for (const comp of components) {
       // Find contract interfaces for this component
       const compInterfaces = interfaces.filter((i) => i.component === comp.id);
@@ -545,7 +550,7 @@ function resolveLayer(delegate: boolean): AgentRecord[] {
 /** Thrown when composeAgentBrief is asked for an id the current topology does not resolve. */
 export class UnknownAgentError extends WaironError {
   constructor(agentId: string, knownIds: string[]) {
-    super(`Unknown agent id: "${agentId}". Known agent ids: ${knownIds.join(', ')}`);
+    super(`Unknown agent id: "${agentId}". Known agent ids: ${knownIds.join(', ')} — or any component id of this project, which composes that component's implementer brief.`);
     this.name = 'UnknownAgentError';
   }
 }
@@ -567,7 +572,10 @@ export function composeAgentBrief(agentId: string): AgentBrief {
 
   // Always resolve against the live topology — a re-lock changes the next call.
   const records = resolveAgentTopology();
-  const record = records.find((r) => r.id === agentId);
+  // Step 5: the record, or — for a component id (`<component>` or
+  // `<component>-implementer`) — that component's implementer record derived
+  // on demand, so a per-component brief never needs agent files or a setting.
+  const record = records.find((r) => r.id === agentId) ?? componentImplementer(agentId);
   if (!record) {
     throw new UnknownAgentError(agentId, records.map((r) => r.id));
   }
@@ -592,6 +600,15 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     domainName: '',
     variantGuidance: record.variantGuidance ?? '',
   });
+
+  // Step 13 (part): the code write fence — where this agent may write CODE —
+  // ahead of the user's own guidance, which stays the last word.
+  const codeFence = codeFenceOf(record);
+  if (codeFence) {
+    instructions = `${instructions.trimEnd()}\n\n## Code write fence\n\n${codeFence.length > 0
+      ? `Write code only here (and tests beside it, as the project lays tests out):\n\n${codeFence.map((p) => `- \`${p}\``).join('\n')}\n`
+      : 'No implementation names a source file yet, so no code location is declared. The spawning session must name the file(s) this agent may create (the planned sourcePath); set `sourcePath` on the implementation once the file exists.\n'}`;
+  }
 
   // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
   // read LIVE — an edit applies on the next call) under an attributed section,
@@ -627,9 +644,51 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     instructions,
     variantGuidance: record.variantGuidance || undefined,
     ...(typeMapping ? { typeMapping } : {}),
+    ...(codeFence ? { codeFence } : {}),
     profile: budget ? profile : undefined,
     budget,
   };
+}
+
+/**
+ * A component's implementer record, derived on demand for an id naming a
+ * component (`<component>` or `<component>-implementer`) of this layer — the
+ * record rules.generateComponentImplementers would materialize. Null when the
+ * id names no component.
+ */
+function componentImplementer(agentId: string): AgentRecord | null {
+  const componentId = agentId.endsWith('-implementer') ? agentId.slice(0, -'-implementer'.length) : agentId;
+  if (componentId === '' || componentId.includes('::')) return null;
+  return resolveLayer(true, true).find((r) => r.id === `${componentId}-implementer`) ?? null;
+}
+
+/**
+ * The code write fence of a record that implements components: each source
+ * file it owns, plus the folder they share below the project root as
+ * `<folder>/**` — the subsystem's code folder, so a first file beside the
+ * existing ones is inside the fence. Empty when the record implements
+ * components but no implementation names a file yet; null for a record that
+ * implements nothing (the architect, a delegating member owner, a
+ * free-standing domain).
+ */
+function codeFenceOf(record: AgentRecord): string[] | null {
+  const implementsComponents = record.template === 'implementer'
+    || (record.template === 'domain-owner' && record.creationReason.startsWith('Automatically inferred from L1'));
+  if (!implementsComponents) return null;
+  const files = record.ownedPaths.filter((p) => !p.startsWith('.wai/') && !p.includes('/.wai/') && !/[*?]/.test(p));
+  if (files.length === 0) return [];
+  const dirs = files.map((f) => path.posix.dirname(f.replace(/\\/g, '/')));
+  let shared = dirs[0].split('/');
+  for (const dir of dirs.slice(1)) {
+    const parts = dir.split('/');
+    let i = 0;
+    while (i < shared.length && i < parts.length && shared[i] === parts[i]) i++;
+    shared = shared.slice(0, i);
+  }
+  const folder = shared.join('/');
+  const fence = [...files];
+  if (folder !== '' && folder !== '.') fence.push(`${folder}/**`);
+  return fence;
 }
 
 /**
@@ -675,6 +734,7 @@ function throughMount(brief: AgentBrief, alias: string, relative: string): Agent
     ...brief,
     agentId: `${alias}::${brief.agentId}`,
     ownedPaths: brief.ownedPaths.map(under),
+    ...(brief.codeFence ? { codeFence: brief.codeFence.map(under) } : {}),
     ...(brief.readPaths ? { readPaths: brief.readPaths.map(under) } : {}),
     root: brief.root ? under(brief.root) : relative,
   };

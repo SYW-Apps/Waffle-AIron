@@ -1045,3 +1045,22 @@ describe('the report says whether it could be produced at all', () => {
     expect(source).toContain(`const NO_SYSTEM_SPEC = '${NO_SYSTEM_SENTENCE}';`);
   });
 });
+
+describe('status scores and states in plain words', () => {
+  it('a subsystem of types alone scores by its own status (a complete contracts library is 100%, not 0%)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', "schemaVersion: 1.0.0\nname: TestSystem\nvision: v\ncreatedAt: '2026-06-10T22:00:00Z'\nupdatedAt: '2026-06-10T22:00:00Z'\n");
+    proj.writeSpec('subsystem', 'contracts', "schemaVersion: 1.0.0\nid: contracts\nname: Contracts\ndescription: shared types\nparentSystem: TestSystem\nstatus: complete\ncreatedAt: '2026-06-10T22:00:00Z'\nupdatedAt: '2026-06-10T22:00:00Z'\n");
+    fs.mkdirSync(path.join(proj.tempDir, '.wai', 'specs', 'types'), { recursive: true });
+    fs.writeFileSync(path.join(proj.tempDir, '.wai', 'specs', 'types', 'money.yaml'),
+      "kind: value-object\nid: money\nname: Money\ndescription: an amount\nsubsystem: contracts\nfields:\n  - name: cents\n    type: int\n    optional: false\nmethods: []\ncreatedAt: '2026-06-10T22:00:00Z'\nupdatedAt: '2026-06-10T22:00:00Z'\n");
+    proj.activate();
+    try {
+      const report = getStatusReport({});
+      expect(report.text).toMatch(/Contracts.*\(100%\)|contracts.*\(100%\)/);
+      expect(report.text).toMatch(/TestSystem \(100% Complete\)/);
+    } finally {
+      proj.cleanup();
+    }
+  });
+});

@@ -396,6 +396,10 @@ interface ExactFacts {
    * one that calls it.
    */
   localTypes: Map<string, Set<string>>;
+  /** The type names each property of a named shape is declared with, keyed `<shape>.<property>` — read as fieldTypes reads a field. */
+  memberTypes: Map<string, Set<string>>;
+  /** The one type each type alias names outright, by alias name. */
+  aliasTargets: Map<string, string>;
   /**
    * The members of each named shape the file declares, by declaration name
    * — an interface's, a class's, a type literal alias's, and a derived
@@ -472,6 +476,8 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const typeOnlyBindings = new Map<string, string>();
   const fieldTypes = new Map<string, Set<string>>();
   const localTypes = new Map<string, Set<string>>();
+  const memberTypes = new Map<string, Set<string>>();
+  const aliasTargets = new Map<string, string>();
   const typeShapes = new Map<string, TypeShapeFact>();
   const functionParams = new Map<string, ParameterFact[][]>();
   const functionRoutes = new Map<string, Map<string, RouteFact>>();
@@ -497,7 +503,8 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     site.via ?? (site.field ? `this.${site.field}`
       : site.constructed ? `new ${site.constructed}`
         : site.returnedBy ? `${site.returnedBy}()`
-          : site.enclosingClass ? `this:${site.enclosingClass}` : '');
+          : site.enclosingClass ? `this:${site.enclosingClass}`
+            : site.receiverPath ? site.receiverPath.join('.') : '');
   const siteKey = (site: CallSiteFact): string =>
     `${site.member ? 'm' : 'b'}:${receiverKey(site)}:${site.name}`;
 
@@ -517,11 +524,50 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
 
   // A declared type, read only where the declaration NAMES one: a plain type
-  // reference (`store: SpecStore`). A generic, a literal, a union or an
-  // intersection resolves to nothing rather than to one arbitrary member of
-  // itself — what a field could then be is a question this model does not ask.
-  const typeReferenceName = (type: import('typescript').TypeNode | undefined): string | undefined =>
-    type && ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName) ? type.typeName.text : undefined;
+  // reference (`store: SpecStore`), or a member-preserving utility around one
+  // (`Pick<HabitRepository, 'find'>`, `Readonly<Store>`), which names the type
+  // it wraps — its members ARE that type's members by the language's own
+  // definition, so reading the wrapped name infers nothing. Any other
+  // generic, a literal, a union or an intersection resolves to nothing rather
+  // than to one arbitrary member of itself — what a field could then be is a
+  // question this model does not ask.
+  const MEMBER_PRESERVING = new Set(['Pick', 'Omit', 'Partial', 'Required', 'Readonly']);
+  const typeReferenceName = (type: import('typescript').TypeNode | undefined): string | undefined => {
+    let at = type;
+    for (let depth = 0; at && depth < 4; depth++) {
+      if (!ts.isTypeReferenceNode(at) || !ts.isIdentifier(at.typeName)) return undefined;
+      const name = at.typeName.text;
+      if (!MEMBER_PRESERVING.has(name) || !at.typeArguments?.length) return name;
+      at = at.typeArguments[0];
+    }
+    return undefined;
+  };
+
+  // What a named shape's PROPERTY is declared as: the link a receiver chain
+  // (`this.deps.tracker.save()`) is followed through. Read exactly as a field
+  // is, keyed by the shape that declares it.
+  const recordMemberType = (
+    shape: string | undefined,
+    name: import('typescript').PropertyName | import('typescript').BindingName,
+    type: import('typescript').TypeNode | undefined,
+  ): void => {
+    if (!shape) return;
+    const typeName = typeReferenceName(type);
+    if (!typeName) return;
+    const property = propertyNameText(name as import('typescript').PropertyName);
+    if (!property) return;
+    const key = `${shape}.${property}`;
+    const named = memberTypes.get(key) ?? new Set<string>();
+    named.add(typeName);
+    memberTypes.set(key, named);
+  };
+  /** The named shape a property node is declared in: its class, its interface, or the alias of the type literal holding it. */
+  const shapeNameOf = (holder: import('typescript').Node | undefined): string | undefined => {
+    if (!holder) return undefined;
+    if ((ts.isClassDeclaration(holder) || ts.isInterfaceDeclaration(holder)) && holder.name) return holder.name.text;
+    if (ts.isTypeLiteralNode(holder) && holder.parent && ts.isTypeAliasDeclaration(holder.parent)) return holder.parent.name.text;
+    return undefined;
+  };
 
   // The one modifier set that turns a constructor parameter into a FIELD.
   // A decorator is a modifier too, so the check is by keyword, not by count.
@@ -835,7 +881,23 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
             // file declares, when `this` provably is one.
             const owner = enclosingClassOf(node);
             addSite(owner !== undefined ? { name, member: true, enclosingClass: owner } : { name, member: true });
-          } else addSite({ name, member: true });
+          } else {
+            // `this.deps.tracker.save()` / `deps.tracker.save()` — a chain of
+            // plain property accesses rooted in `this` or a plain identifier:
+            // the shape collaborators take when they arrive as one bag. Each
+            // link is a name the code declares a type for; anything else in
+            // the chain (a call, an index, `?.`) is a value again.
+            const chain: string[] = [];
+            let at: import('typescript').Expression = receiver;
+            while (ts.isPropertyAccessExpression(at) && !at.questionDotToken && ts.isIdentifier(at.name)) {
+              chain.unshift(at.name.text);
+              at = at.expression;
+            }
+            if (ts.isIdentifier(at)) chain.unshift(at.text);
+            else if (at.kind === ts.SyntaxKind.ThisKeyword) chain.unshift('this');
+            else chain.length = 0;
+            addSite(chain.length >= 2 ? { name, member: true, receiverPath: chain } : { name, member: true });
+          }
         }
       }
       ts.forEachChild(node, count);
@@ -1035,9 +1097,14 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     // annotation, and a constructor parameter property's — the shape that
     // writes down what a constructor-injected collaborator is. Read outside
     // the chain below, which is an else-if over the same node kinds.
-    if (ts.isPropertyDeclaration(node)) recordFieldType(node.name, node.type);
-    else if (ts.isParameter(node) && node.parent && ts.isConstructorDeclaration(node.parent) && isParameterProperty(node)) {
+    if (ts.isPropertyDeclaration(node)) {
       recordFieldType(node.name, node.type);
+      recordMemberType(shapeNameOf(node.parent), node.name, node.type);
+    } else if (ts.isParameter(node) && node.parent && ts.isConstructorDeclaration(node.parent) && isParameterProperty(node)) {
+      recordFieldType(node.name, node.type);
+      recordMemberType(shapeNameOf(node.parent.parent), node.name, node.type);
+    } else if (ts.isPropertySignature(node)) {
+      recordMemberType(shapeNameOf(node.parent), node.name, node.type);
     }
     // And what it declares a locally BOUND name to be: the receiver shape a
     // module that wires its collaborators as closures is written in. A
@@ -1066,6 +1133,11 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         // (`type PackPath = string`) is judged on it through the dialect.
         // First declaration wins, as for every other per-name fact.
         if (!aliasTypes.has(node.name.text)) aliasTypes.set(node.name.text, node.type.getText(sf));
+        // The one type the alias NAMES outright, read as a field's type is.
+        const named = typeReferenceName(node.type);
+        if (named !== undefined && named !== node.name.text && !aliasTargets.has(node.name.text)) {
+          aliasTargets.set(node.name.text, named);
+        }
         const constant = inferredSchemaConstant(node.type);
         if (constant) derivedAliases.push({ name: node.name.text, constant });
         // An alias that IS a closed set of strings: the enum-like declaration
@@ -1294,7 +1366,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // property aliases join the specifier aliases.
   for (const alias of propertyAliases) if (exported.has(alias.container!)) exportAliases.push(alias);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -1872,6 +1944,8 @@ export function buildCodeModel(
             typeOnlyBindings: Object.fromEntries(facts.typeOnlyBindings),
             fieldTypes: Object.fromEntries([...facts.fieldTypes].map(([k, v]) => [k, [...v]])),
             localTypes: Object.fromEntries([...facts.localTypes].map(([k, v]) => [k, [...v]])),
+            memberTypes: Object.fromEntries([...facts.memberTypes].map(([k, v]) => [k, [...v]])),
+            aliasTargets: Object.fromEntries(facts.aliasTargets),
             typeShapes: Object.fromEntries(facts.typeShapes),
             functionParams: Object.fromEntries(facts.functionParams),
             functionRoutes: Object.fromEntries([...facts.functionRoutes].map(([k, v]) => [k, [...v.values()]])),

@@ -243,14 +243,47 @@ export function planAliasRename(family: ProjectFamily, bound: string, request: M
   if ([...family.owners].some(([key, owner]) => owner === bound && key.split('::').pop() === next)) {
     plan.notes.push(`${label(bound)} has a spec whose id is "${next}" — a local id equal to an alias (LOCAL_ID_SHADOWS_PROJECT reports it)`);
   }
-  // Step 5.
+  // Step 5: every family consumer's intact pin of the bound project, taken again after the rename.
+  repinIntactConsumers(plan, family, bound);
+  // Step 6.
   return plan;
+}
+
+/**
+ * Each OTHER family project that pins the bound project: an alias rename
+ * changes only how the bound project spells its own re-exports, never a name a
+ * consumer uses, so a pin whose every use is unchanged now is taken again after
+ * it; one already broken is left as it is, with a note — a migration never
+ * launders a real incompatibility.
+ */
+function repinIntactConsumers(plan: MigrationPlan, family: ProjectFamily, bound: string): void {
+  const boundNode = familyNode(family, bound)!;
+  for (const node of family.nodes) {
+    if (path.resolve(node.directory) === path.resolve(boundNode.directory)) continue;
+    let statuses: ReturnType<typeof surfaces.getExternalsStatus> = [];
+    try {
+      statuses = runWithProjectRoot(node.directory, () => surfaces.getExternalsStatus());
+    } catch {
+      continue;
+    }
+    for (const status of statuses) {
+      const producer = node.aliases.get(status.alias);
+      const pinsBound = producer !== undefined ? producer === bound : boundNode.id !== undefined && status.project === boundNode.id;
+      if (!status.pinned || status.outOfReach || !pinsBound) continue;
+      const broken = status.uses.filter((u) => u.state === 'changed' || u.state === 'removed');
+      if (broken.length > 0) {
+        plan.notes.push(`${label(node.namespace)}'s pin of "${status.alias}" is already incompatible (${broken.map((u) => u.publicName ?? u.member ?? '?').join(', ')}): not re-pinned — adapt its uses, then run \`wairon externals pin ${status.alias}\` there.`);
+        continue;
+      }
+      edit(plan, node.namespace, 'pin', `pin ${status.alias} taken again: the names it uses of ${label(bound)} are unchanged`, { root: node.directory, call: 'pinExternals', args: [[status.alias]] });
+    }
+  }
 }
 
 // ── write ───────────────────────────────────────────────────────────────────
 
 /** The order the writes run in: references, then the alias tables, then the producer ids, then the id, then the pins. */
-const PHASES = ['rewriteReferences', 'renameAlias', 'repointExternal', 'renameId', 'renamePin'];
+const PHASES = ['rewriteReferences', 'renameAlias', 'repointExternal', 'renameId', 'renamePin', 'pinExternals'];
 
 /** iidentity_migration.write — make a confirmed rename or alias-rename plan's writes in the rehearsal roots. Idempotent. */
 export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
@@ -271,7 +304,9 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   }
   // Step 7: last, the pins carried.
   for (const e of planned.filter((x) => x.write.call === 'renamePin')) writeOne(rehearsal, e.write);
-  // Step 8: every hop was a scoped binding; the caller's is back.
+  // Step 8: each family consumer's intact pin taken again.
+  for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
+  // Step 9: every hop was a scoped binding; the caller's is back.
 }
 
 /** The planned reference edits grouped per spec, in plan order. */
@@ -293,6 +328,7 @@ function writeOne(rehearsal: Rehearsal, w: PlannedWrite): void {
       case 'repointExternal': return core.repointExternal(args[0], args[1], args[2]);
       case 'renameId': return core.renameId(args[0], args[1]);
       case 'renamePin': return surfaces.renamePin(args[0], args[1], args[2]);
+      case 'pinExternals': return surfaces.pinExternals(args[0]);
       default: throw new Error(`identity_migration makes no "${w.call}" write`);
     }
   });

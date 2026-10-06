@@ -237,6 +237,8 @@ export interface ApprovalVerdict {
   text: string;
   /** Whether the tree has actually moved since it was approved. */
   drifted: boolean;
+  /** Every own spec that moved since the approval, prefixed `~` changed, `+` added, `-` removed; absent when none moved. */
+  moved?: string[];
 }
 
 /**
@@ -315,6 +317,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
         + childNote
         + '\n',
       drifted: true,
+      moved: [...diff.changed.map((p) => `~ ${p}`), ...diff.added.map((p) => `+ ${p}`), ...diff.removed.map((p) => `- ${p}`)],
     };
   } catch {
     return quiet; // never let a report line break the report

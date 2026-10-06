@@ -175,8 +175,8 @@ methods:
     description: >-
       Forward to spec_maintenance_portal.externalizeSubsystem: move an internal subsystem of the
       bound project out into a contained part, or with `as: project` into a member project.
-    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): void'
-    returns: void
+    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): PromoteResult?'
+    returns: PromoteResult?
     params:
       - name: subsystemId
         type: string
@@ -274,8 +274,8 @@ methods:
         description: The spec's in-memory key, from the family's top root
   - name: promoteMember
     description: 'Forward to spec_maintenance_portal.promoteMember: a part becomes a project in place.'
-    signature: 'promoteMember(alias: string, id?: string): void'
-    returns: void
+    signature: 'promoteMember(alias: string, id?: string): PromoteResult'
+    returns: PromoteResult
     params:
       - name: alias
         type: string
@@ -311,4 +311,4 @@ methods:
         description: The fields to set
 status: complete
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-10-04T23:37:43.141Z'
+updatedAt: '2026-10-05T23:34:34.853Z'

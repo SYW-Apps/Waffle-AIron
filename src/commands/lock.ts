@@ -15,6 +15,7 @@ import {
   readLockState,
   readLockRecord,
   loadProjectConfig,
+  projectFamily,
   type LockRecord,
   type MemberPin,
   type StateId,
@@ -122,6 +123,32 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   const lock = readLockState(computeGateStateId());
   const record = lock.record;
 
+  // Step 6: every member PROJECT's own approval, at every depth (a part's
+  // approval is its declaring project's, so parts are left out). The gate
+  // identity reads each member's RECORDED approval, never its tree, so a
+  // member's unapproved edits are invisible to it — this read is what keeps
+  // the merge gate from going green over them.
+  const members = familyApprovals().filter((a) => a.key !== '' && a.as !== 'part');
+  const drifted = members.filter((a) => a.state === 'drifted');
+  const never = members.filter((a) => a.state === 'never');
+
+  // Steps 7-9: a member with unapproved changes refuses at every strictness.
+  if (drifted.length > 0) {
+    const where = memberFolders();
+    const own = lock.state === 'locked'
+      ? 'This project\'s own approval still covers its design.'
+      : lock.state === 'stale'
+        ? 'This project\'s own approval is stale too — run `wairon lock` here afterwards.'
+        : 'This project itself has no approval on record.';
+    return {
+      state: lock.state === 'unlocked' ? 'unlocked' : 'stale',
+      approved: false,
+      message: `Member project(s) carry spec changes nobody approved: ${drifted.map((m) => describeMemberAt(m, where)).join('; ')}. `
+        + 'Nothing says a human has seen what is about to merge in them. '
+        + `Fix: run \`wairon lock\` in each member's own folder and commit its .wai/lock.json. ${own}`,
+    };
+  }
+
   // A stale verdict that is only the v6 gate-identity upgrade still refuses —
   // the old identity cannot be recomputed, so nothing proves the design
   // unchanged — but it says so plainly, with whether any own spec file moved.
@@ -129,14 +156,48 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   if (lock.state === 'stale' && record!.stateId.algorithm !== lock.current.algorithm) return upgradedCheck(record!);
 
   switch (lock.state) {
-    case 'locked':
+    case 'locked': {
+      // Steps 11-12: --strict asks for an approved family; a member never
+      // approved by anyone fails it.
+      if (strict && never.length > 0) {
+        const where = memberFolders();
+        return {
+          state: 'locked',
+          approved: false,
+          message: `This project's own design is approved, but --strict asks for an approved family and member project(s) were never approved by anyone: ${never.map((m) => describeMemberAt(m, where)).join('; ')}. `
+            + 'Fix: run `wairon lock` in each member\'s own folder and commit its .wai/lock.json.',
+        };
+      }
+      // Step 13: pass, and never call a never-approved member approved.
+      const approvedMembers = members.length - never.length;
+      const family = members.length === 0
+        ? ''
+        : ` ${approvedMembers} member project(s) approved at their own roots.`
+          + (never.length > 0
+            ? ` NOT gated: ${never.map((m) => m.alias ?? m.key).join(', ')} — never approved by anyone (\`--strict\` fails here).`
+            : '');
       return {
         state: 'locked',
         approved: true,
-        message: 'The design in this tree is the approved design — '
-          + `approved ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}.`,
+        message: (never.length > 0 ? 'This project\'s own design is the approved design — ' : 'The design in this tree is the approved design — ')
+          + `approved ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}.${family}`,
       };
-    case 'stale':
+    }
+    case 'stale': {
+      // Steps 17-19: only member approvals moved — expected; the pin is what is stale.
+      const repinned = repinOnly(record!);
+      if (repinned) {
+        return {
+          state: 'stale',
+          approved: false,
+          message: `Member project(s) were re-approved at their own roots since this project's approval was taken: ${repinned.join(', ')}. `
+            + 'That is how a member\'s approval is meant to move — its own approver signed its new design off — so the member is not in question. '
+            + 'What is stale is this project\'s pin of it: the approval on record '
+            + `(${record!.lockedAt} by ${describeApprover(record!.lockedBy)}) still names the member's earlier approval, `
+            + 'so it does not cover the member design about to merge. No own spec file changed. '
+            + 'Fix: run `wairon lock` here to pin the member(s)\' new approval (the same lock records anything else the gate identity covers that moved alongside), and commit the updated .wai/lock.json.',
+        };
+      }
       return {
         state: 'stale',
         approved: false,
@@ -146,6 +207,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
           + 'Nothing says a human has seen what is about to merge. '
           + 'Fix: run `wairon lock` on this branch and commit the updated .wai/lock.json.',
       };
+    }
     default:
       return {
         state: 'unlocked',
@@ -153,11 +215,60 @@ export function checkApproval(strict: boolean): ApprovalCheck {
         message: strict
           ? 'No approval on record (.wai/lock.json is absent), and --strict asks for one. '
             + 'Run `wairon lock` and commit the record.'
-          : 'No approval on record (.wai/lock.json is absent) — this project has not opted into the '
-            + 'approval gate, so nothing is gated. Run `wairon lock` and commit the record to turn it '
-            + 'on, or pass --strict to fail here instead.',
+          : 'No approval on record (.wai/lock.json is absent), so nothing is gated: plain `wairon lock-check` '
+            + 'fails only a committed approval that no longer matches the design, and a project with no '
+            + '.wai/lock.json — never locked, or the record deleted — reads the same. CI should run '
+            + '`wairon lock-check --strict`, which fails here. Run `wairon lock` and commit the record to approve the design.',
       };
   }
+}
+
+/** Where each member project lives, keyed as familyApprovals keys it (namespace for a contained member, alias for a referenced one). */
+function memberFolders(): Map<string, string> {
+  const folders = new Map<string, string>();
+  try {
+    const family = projectFamily();
+    for (const node of family.nodes) if (node.namespace !== '') folders.set(node.namespace, node.directory);
+    for (const external of family.nodes.find((n) => n.namespace === '')?.externals ?? []) {
+      if (external.role === 'member' && external.directory) folders.set(external.alias, external.directory);
+    }
+  } catch { /* a graph that cannot be read names no folders */ }
+  return folders;
+}
+
+/** A member as a verdict names it: alias, state and the folder (relative to the cwd) to lock in. */
+function describeMemberAt(member: ProjectApproval, folders: Map<string, string>): string {
+  const dir = folders.get(member.key);
+  const shown = dir ? (path.relative(process.cwd(), dir) || '.') : undefined;
+  const state = member.state === 'drifted'
+    ? (member.upgraded ? 'approved under an earlier gate identity — re-lock it once' : 'changed since its own approval')
+    : 'never approved';
+  return `${member.alias ?? member.key} (${state}${shown ? `, in ${shown}` : ''})`;
+}
+
+/**
+ * Steps 16-18: the aliases of the direct members whose approval moved, when
+ * that is ALL that moved — no own spec file changed, no direct member was
+ * added or removed, and each moved member is approved at its own root. Null
+ * otherwise (including a record that predates per-spec digests, where which
+ * spec moved cannot be said).
+ */
+function repinOnly(record: LockRecord): string[] | null {
+  const diff = diffAgainstApproval();
+  if (!diff || diffSize(diff) > 0) return null;
+  const direct = familyApprovals(1).filter((a) => a.parent === '');
+  const members = direct.filter((a) => a.as !== 'part');
+  // A part is a member too (the lock records its pin): never call it removed.
+  const current = new Set(direct.map((m) => m.alias ?? m.key));
+  if (Object.keys(record.members ?? {}).some((alias) => !current.has(alias))) return null;
+  const moved: string[] = [];
+  for (const m of members) {
+    if (m.pinned === 'unpinned') return null;
+    if (m.pinned !== 'moved') continue;
+    if (m.state !== 'approved') return null;
+    moved.push(m.alias ?? m.key);
+  }
+  return moved.length > 0 ? moved : null;
 }
 
 /**
@@ -170,7 +281,8 @@ export function checkApproval(strict: boolean): ApprovalCheck {
 function whatMoved(record: LockRecord): string {
   const diff = diffAgainstApproval();
   const own = diff ? diffSize(diff) : null;
-  const members = familyApprovals(1).filter((a) => a.parent === '' && a.as !== 'part');
+  const direct = familyApprovals(1).filter((a) => a.parent === '');
+  const members = direct.filter((a) => a.as !== 'part');
   const named: string[] = [];
   for (const m of members) {
     const name = m.alias ?? m.key;
@@ -178,7 +290,8 @@ function whatMoved(record: LockRecord): string {
     else if (m.pinned === 'moved') named.push(`${name} (its approval moved since this one was taken${m.state === 'approved' ? '' : `; now ${m.state}`})`);
     else if (m.state !== 'approved') named.push(`${name} (${m.state} at its own root)`);
   }
-  const current = new Set(members.map((m) => m.alias ?? m.key));
+  // A part is a member too (the lock records its pin): never call it removed.
+  const current = new Set(direct.map((m) => m.alias ?? m.key));
   for (const alias of Object.keys(record.members ?? {})) {
     if (!current.has(alias)) named.push(`${alias} (removed since the approval)`);
   }

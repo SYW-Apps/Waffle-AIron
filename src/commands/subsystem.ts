@@ -9,9 +9,14 @@ import {
   advanceMember,
   moveMember,
   projectConfigExists,
+  projectFamily,
 } from './adapters/core.js';
 // cli_migration_adapter — the family migrations every member verb runs through.
 import * as migrations from './adapters/migrations.js';
+// What `wairon init` gives a project, given to one a migration made (runMigration steps 12-15).
+import { runGenerate } from './generate.js';
+import { runMcpInstall } from './mcp.js';
+import { getProjectRoot, runWithProjectRoot, pathExists } from '../utils/fs.js';
 import type { MemberCreation } from '../core/index.js';
 import type { InternalizeDestination } from '../models/project.js';
 import type { FamilyMigrationReport, MigrationPlan, MigrationRequest } from '../migrations/types.js';
@@ -243,6 +248,39 @@ export async function runMigration(request: MigrationRequest, options: Migration
   const report = migrations.apply(planned);
   // Step 11: the outcome.
   printOutcome(report);
+  // Steps 12-15: a project made for a team is usable by that team's session.
+  if (report.applied) await provisionMadeProjects(request);
+}
+
+/**
+ * Steps 12-15 of runMigration: each project an applied promote (or an
+ * externalize --as project) made gets what `wairon init` gives a project — its
+ * guide and root pointer, skills and context (generate's own layer) and, when
+ * claude is a configured target, its portable .mcp.json — so a teammate opening
+ * its folder has the wairon tools. A failure is reported with the commands to
+ * run there, never fatal: the migration itself already committed.
+ */
+async function provisionMadeProjects(request: MigrationRequest): Promise<void> {
+  const madeProject = request.verb === 'promote' || (request.verb === 'externalize' && request.as === 'project');
+  if (!madeProject) return;
+  const root = nodePath.resolve(getProjectRoot());
+  // Where the project was made: a promoted member's folder, or externalize's --path.
+  let made: string | undefined;
+  if (request.verb === 'externalize') made = request.path ? nodePath.resolve(root, request.path) : undefined;
+  else made = projectFamily().nodes.find((n) => n.parent === '' && n.mountAlias === request.alias)?.directory;
+  for (const dir of made ? [nodePath.resolve(made)] : []) {
+    if (dir === root || !pathExists(nodePath.join(dir, '.wai', 'project.yaml'))) continue;
+    const shown = shownDir(dir);
+    try {
+      await runWithProjectRoot(dir, async () => {
+        await runGenerate({});
+        runMcpInstall({ global: false, backend: 'claude' });
+      });
+      logger.success(`Set ${shown} up for its own sessions (guide, skills, .mcp.json): a teammate opens that folder in their AI tool.`);
+    } catch (e) {
+      logger.warn(`Could not set ${shown} up for its own sessions (${e instanceof Error ? e.message : String(e)}). Run there: \`wairon generate\` and \`wairon mcp install --backend claude\`.`);
+    }
+  }
 }
 
 /** A project key as the plan prints it. */

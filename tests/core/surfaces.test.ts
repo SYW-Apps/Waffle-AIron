@@ -346,6 +346,13 @@ describe('OpenAPI round-trip of x-wairon-* contract keys', () => {
     exportSurface('external', 'yaml', yamlPath);
     const native = importSurface(yamlPath, 'exchanged');
 
+    // A native export to a .json path is JSON — a file is what its name says —
+    // and imports back exactly like the YAML one.
+    const jsonPath = path.join(rootDir, 'exchange', 'native.json');
+    exportSurface('external', 'yaml', jsonPath);
+    expect(() => JSON.parse(fs.readFileSync(jsonPath, 'utf8'))).not.toThrow();
+    expect(importSurface(jsonPath, 'exchanged').interfaces).toEqual(native.interfaces);
+
     // OpenAPI path: toOpenApi render → consumer import via fromOpenApi.
     const apiPath = path.join(rootDir, 'exchange', 'via-openapi.json');
     const { rendered } = exportSurface('external', 'openapi', apiPath);

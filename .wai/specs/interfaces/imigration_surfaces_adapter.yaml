@@ -60,6 +60,14 @@ methods:
       - name: projectName
         type: string
         description: The snapshot's storage key
+  - name: getExternalsStatus
+    description: >-
+      Forward to surface_portal.getExternalsStatus: each declared external of the bound project
+      compared at signature level with its live producer — what a boundary verb reads before it
+      re-pins a family consumer whose producer's names only moved. Writes nothing.
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params: []
 status: complete
 createdAt: '2026-09-30T20:31:55.432Z'
-updatedAt: '2026-10-04T18:29:42.781Z'
+updatedAt: '2026-10-05T23:35:15.904Z'

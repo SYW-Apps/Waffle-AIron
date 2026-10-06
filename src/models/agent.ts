@@ -147,6 +147,15 @@ export const AgentBriefSchema = z.object({
   typeMapping: z.array(z.string()).optional(),
 
   /**
+   * Where an implementing agent may write CODE: each source file its
+   * implementations name, plus the folder they share below the project root as
+   * `<folder>/**`. Empty when nothing names a file yet (the instructions then
+   * ask the spawning session to name the planned files); absent for an agent
+   * that implements nothing.
+   */
+  codeFence: z.array(z.string()).optional(),
+
+  /**
    * Set only on a brief for a member's agent (an id qualified `<alias>::`): the
    * member's directory relative to the root the brief was asked from. The
    * brief was composed at that root, and its ownedPaths and readPaths are

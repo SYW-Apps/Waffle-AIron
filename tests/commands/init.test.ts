@@ -203,7 +203,7 @@ describe('cli_runner.runInit: registers only what a selected tool reads (real CL
     try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* win file locks */ }
   });
 
-  it('an agy target writes no project .gemini/settings.json and says how to register it; doctor calls a missing Antigravity nothing to fix', async () => {
+  it('--yes configures claude only — no Gemini/Antigravity files or hint; doctor calls a missing Antigravity nothing to fix', async () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-agy-'));
     const rootDir = path.join(base, 'proj');
     const home = path.join(base, 'home');
@@ -225,12 +225,17 @@ describe('cli_runner.runInit: registers only what a selected tool reads (real CL
     expect(JSON.parse(fs.readFileSync(path.join(rootDir, '.mcp.json'), 'utf8')).mcpServers.wairon)
       .toEqual({ command: 'wairon', args: ['mcp', 'serve'] });
     expect(fs.existsSync(path.join(rootDir, '.gemini', 'settings.json'))).toBe(false);
-    expect(init.stdout).toContain('wairon mcp install --backend gemini --global');
+    // --yes configures claude only: a tool nobody chose gets no files and no hint.
+    expect(fs.existsSync(path.join(rootDir, '.gemini'))).toBe(false);
+    expect(fs.existsSync(path.join(rootDir, 'GEMINI.md'))).toBe(false);
+    expect(fs.existsSync(path.join(rootDir, '.agents'))).toBe(false);
+    expect((yaml.load(fs.readFileSync(path.join(rootDir, '.wai', 'project.yaml'), 'utf8')) as { targets: { type: string }[] }).targets.map((t) => t.type)).toEqual(['claude']);
+    expect(init.stdout).not.toContain('wairon mcp install --backend gemini --global');
     expect(`${init.stdout}${init.stderr}`).not.toContain('not this project file');
 
     const doctor = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'doctor'], { cwd: rootDir, env, timeout: 180_000 })
       .catch((e: { stdout: string; stderr: string }) => e);
-    expect(doctor.stdout).toContain('Antigravity: not installed on this machine');
+    // No agy target: doctor does not ask for an Antigravity registration nobody chose.
     expect(doctor.stdout).not.toContain('Antigravity (global mcp_config.json): not registered');
   }, 360_000);
 });

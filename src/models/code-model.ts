@@ -131,6 +131,20 @@ export interface CallSiteFact {
    */
   enclosingClass?: string;
   /**
+   * The receiver written as a CHAIN of property accesses — set only when the
+   * call was written `this.<field>.<property>….name(…)`
+   * (`this.c.tracker.checkIn()` → ["this", "c", "tracker"]) or
+   * `<name>.<property>….name(…)` (`deps.tracker.checkIn()` → ["deps",
+   * "tracker"]), and never together with `via`, `field`, `constructed`,
+   * `returnedBy` or `enclosingClass`. The shape constructor-injected
+   * collaborators take when they arrive as ONE bag object. Followed link by
+   * link through what the code DECLARES each link to be — the root's field
+   * or annotated type, then each property's declared type on the shape that
+   * declares it — and, like every receiver past an import binding, a
+   * POSSIBLE origin and never a proven one.
+   */
+  receiverPath?: string[];
+  /**
    * The file this site was READ in, set only when it is not the file these
    * facts describe — a pure re-export barrel carries the sites of the function
    * it publishes. A carried site's bare names and receivers resolve in that
@@ -387,7 +401,9 @@ export interface SourceFileFacts {
    * bindings therefore keep EVERY declared type, and a wider answer only ever
    * widens what a call may have reached. A binding the file annotates with
    * nothing records nothing, and so does one annotated with anything but a
-   * plain type reference: what an initializer INFERS is not what the code
+   * plain type reference or a member-preserving utility (`Pick`, `Omit`,
+   * `Partial`, `Required`, `Readonly`) around one, which names the type it
+   * wraps: what an initializer INFERS is not what the code
    * declares, and a guess is not a fact.
    */
   localTypes?: Record<string, string[]>;
@@ -401,6 +417,27 @@ export interface SourceFileFacts {
    * rather than folded in.
    */
   typeOnlyBindings?: Record<string, string>;
+  /**
+   * The type names each PROPERTY of a named shape the file declares is
+   * DECLARED with, keyed `<shape>.<property>` — an interface's or a type
+   * literal alias's property signatures, and a class's property declarations
+   * and constructor parameter properties. EXACT grade only.
+   *
+   * What a receiver CHAIN (`CallSiteFact.receiverPath`) is followed through:
+   * a bag of collaborators handed to a constructor names each one's type
+   * exactly here. Read the way `fieldTypes` is, and a property annotated with
+   * anything else records nothing.
+   */
+  memberTypes?: Record<string, string[]>;
+  /**
+   * The ONE type each type alias NAMES outright, by alias name —
+   * `type Contract = Pick<HabitRepository, 'find'>` names HabitRepository,
+   * `type Store = SpecStore` names SpecStore. EXACT grade only. Read the way
+   * `fieldTypes` is, so a union, an intersection, a literal or any other
+   * generic names nothing. The one hop a declared type is followed through
+   * when it is an alias of this file.
+   */
+  aliasTargets?: Record<string, string>;
   /**
    * The members of each named shape the file declares, by declaration name
    * (see TypeShapeFact). EXACT grade only — below it a member list cannot be
@@ -584,6 +621,26 @@ export function fieldTypesOf(facts: SourceFileFacts, field: string): string[] {
  */
 export function localTypesOf(facts: SourceFileFacts, name: string): string[] {
   return ownEntry(facts.localTypes, name) ?? NO_DECLARED_TYPES;
+}
+
+/**
+ * source_file_facts.memberTypesOf — the type names a property of a named
+ * shape this file declares is DECLARED with, or EMPTY when the file declares
+ * no such shape or property, annotates it with nothing, or was analyzed below
+ * exact grade. The empty answer keeps an unresolvable link of a receiver
+ * chain from becoming a guess.
+ */
+export function memberTypesOf(facts: SourceFileFacts, shape: string, property: string): string[] {
+  return ownEntry(facts.memberTypes, `${shape}.${property}`) ?? NO_DECLARED_TYPES;
+}
+
+/**
+ * source_file_facts.aliasTargetOf — the type a type alias this file declares
+ * names outright, or undefined when the name is no such alias or its right
+ * side names no single type.
+ */
+export function aliasTargetOf(facts: SourceFileFacts, name: string): string | undefined {
+  return ownEntry(facts.aliasTargets, name);
 }
 
 /**

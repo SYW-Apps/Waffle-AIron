@@ -5,9 +5,10 @@ import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, isProjectInitialized } from '../config/paths.js';
 import { loadProjectConfig } from '../core/index.js';
-import { aiDir, getProjectRoot, isOutsideRoot, backupBeside } from '../utils/fs.js';
+import { aiDir, getProjectRoot, isOutsideRoot, backupBeside, withLineEndings, resolveProjectBinding } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
+import { effectiveProjectId } from '../models/project.js';
 
 /** The Gemini/Antigravity home dir. Precedence: override > GEMINI_CONFIG_DIR > ~/.gemini. */
 function geminiGlobalDir(override?: string): string {
@@ -25,7 +26,9 @@ function geminiGlobalDir(override?: string): string {
  * Claude (the tools never load). That mis-targeting was the long-standing reason the sdd_* tools were invisible.
  */
 export function claudeMcpConfigPath(useGlobal: boolean, override?: string): string {
-  if (!useGlobal) return path.join(process.cwd(), '.mcp.json');
+  // The BOUND project's root (the binding rule), not the cwd: run from a
+  // subfolder, `.mcp.json` still lands where Claude reads it — the project root.
+  if (!useGlobal) return path.join(getProjectRoot(), '.mcp.json');
   const dir = override || process.env['CLAUDE_CONFIG_DIR'];
   return dir ? path.join(dir, '.claude.json') : path.join(os.homedir(), '.claude.json');
 }
@@ -68,45 +71,55 @@ export function validateConfigDir(dir: string, backend: 'claude' | 'gemini'): vo
 // wairon mcp serve
 // ---------------------------------------------------------------------------
 
+/** The binding as every surface announces it: `project <id> at <root>`. */
+function bindingLine(root: string): string {
+  let id: string | null = null;
+  try {
+    const config = loadProjectConfig();
+    if (config) id = effectiveProjectId(config);
+  } catch { /* an unreadable configuration names no id */ }
+  return `project ${id ?? path.basename(root)} at ${root}`;
+}
+
+/**
+ * The root `mcp serve` attaches to, and HOW it resolved: a pinned
+ * WAIRON_PROJECT_DIR holding a .wai, else the binding rule from the cwd (the
+ * root every CLI command and `wairon dev` bind), else a cwd holding a .wai of
+ * its own (not yet bootstrapped), else the cwd.
+ */
+function serveRoot(cwd: string, envDir: string | undefined): { root: string; how: string } {
+  if (envDir && fs.existsSync(path.join(envDir, '.wai'))) return { root: path.resolve(envDir), how: 'WAIRON_PROJECT_DIR (pinned at install)' };
+  const binding = resolveProjectBinding(cwd);
+  // An ancestor binding is observable here; roots (if the client sends them)
+  // can still correct it post-connect via scopeToClientWorkspace.
+  if (binding?.via === 'here') return { root: binding.root, how: 'cwd' };
+  if (binding?.via === 'ancestor') return { root: binding.root, how: `walked up to ancestor inside the repository — cwd (${cwd}) holds no project` };
+  if (binding) return { root: binding.root, how: `walked up past the repository root to the project that declares it as a member — cwd (${cwd})` };
+  if (fs.existsSync(path.join(cwd, '.wai'))) return { root: cwd, how: 'cwd (its .wai holds no L0 yet)' };
+  return { root: cwd, how: 'cwd (no project binds this folder)' };
+}
+
 export async function runMcpServe(): Promise<void> {
   // A host (e.g. Antigravity) may launch this server with a cwd that is NOT the
   // project — especially a globally-registered server shared across projects.
   // Resolve the project root explicitly so the sdd_* tools operate on the right
-  // .wai/ tree: WAIRON_PROJECT_DIR env > nearest .wai/ above cwd > cwd.
-  const { setProjectRoot, getProjectRoot, findProjectRoot } = await import('../utils/fs.js');
+  // .wai/ tree: WAIRON_PROJECT_DIR env > the binding rule from cwd > cwd.
+  const { setProjectRoot, getProjectRoot } = await import('../utils/fs.js');
   const cwd = path.resolve(process.cwd());
   const envDir = process.env['WAIRON_PROJECT_DIR'];
 
   // Resolve the project root and record HOW we got it, so the stderr log makes a
-  // silent mis-attachment (walking up to an ANCESTOR .wai) observable.
-  let resolved: string;
-  let how: string;
-  if (envDir && fs.existsSync(path.join(envDir, '.wai'))) {
-    resolved = path.resolve(envDir);
-    how = 'WAIRON_PROJECT_DIR (pinned at install)';
-  } else {
-    const found = findProjectRoot(cwd);
-    if (found && found === cwd) {
-      resolved = found;
-      how = 'cwd';
-    } else if (found) {
-      resolved = found;
-      // cwd has no .wai of its own — we climbed to an ancestor. For nested
-      // projects this can attach to the WRONG tree; roots (if the client sends
-      // them) will correct it post-connect via scopeToClientWorkspace.
-      how = `walked up to ancestor — cwd (${cwd}) has no .wai`;
-    } else {
-      resolved = cwd;
-      how = 'cwd (no .wai found anywhere above)';
-    }
-  }
+  // silent mis-attachment (walking up to an ANCESTOR .wai) observable. The walk
+  // is the binding rule every CLI command and `wairon dev` use — never past the
+  // repository root unless an ancestor declares the crossing as a member.
+  const { root: resolved, how } = serveRoot(cwd, envDir);
   setProjectRoot(resolved);
 
   const initialized = isProjectInitialized();
   // Log to stderr (never stdout — stdout is the JSON-RPC channel). Visible in the
   // host's MCP server logs, so you can confirm which project the server attached to.
   process.stderr.write(
-    `[wairon mcp] v${WAIRON_VERSION} — project root: ${getProjectRoot()} [via ${how}] ` +
+    `[wairon mcp] v${WAIRON_VERSION} — ${bindingLine(getProjectRoot())} [via ${how}] ` +
     `(.wai ${initialized ? 'found' : 'NOT found — sdd_* tools will report no project'})\n`,
   );
 
@@ -320,7 +333,7 @@ function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
         settingsPath = path.join(configBase, 'mcp_config.json');
       } else {
         // Project-local Gemini/Antigravity settings — stays within the project.
-        configBase = path.join(process.cwd(), '.gemini');
+        configBase = path.join(root, '.gemini');
         settingsPath = path.join(configBase, 'settings.json');
       }
     } else {
@@ -441,7 +454,8 @@ function writeInstallTarget(target: InstallTarget): void {
   if (target.outsideProject && fs.existsSync(target.path)) {
     logger.info(`Backed up ${chalk.gray(target.path)} to ${chalk.cyan(backupBeside(target.path))} before replacing it (outside the project root).`);
   }
-  fs.writeFileSync(target.path, JSON.stringify(target.settings, null, 2) + '\n');
+  // Keeps the file's line endings: a committed .mcp.json checked out with CRLF stays CRLF.
+  fs.writeFileSync(target.path, withLineEndings(target.path, JSON.stringify(target.settings, null, 2) + '\n'));
 }
 
 /** Step 12: where it wrote, what the entry points at, and what the agent must do to pick it up. */
@@ -452,7 +466,7 @@ function reportInstalled(target: InstallTarget, agentLabel: string): void {
   // A pointer, not a list: a hand-kept list of tool names went stale every
   // time a tool was added (it named 12 of 37). The server lists its own tools.
   logger.info('AI tools using this config get the wairon MCP server: the sdd_* spec-authoring, validation, member and');
-  logger.info('rename tools, plus live agent briefs (sdd_get_agent_brief). The full list is in docs/cli.md ("MCP tools").');
+  logger.info('rename tools, plus live agent briefs (sdd_get_agent_brief). The full list is in docs/cli.md ("MCP tools"), shipped with the package (node_modules/@wairon/cli/docs/cli.md) and at https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/cli.md');
   logger.blank();
   const restartApp = target.backend === 'gemini' ? 'Antigravity CLI (agy)' : 'claude';
   logger.info(`Restart ${chalk.bold(restartApp)} (or reload MCP servers) to activate.`);
@@ -483,7 +497,7 @@ export function runMcpStatus(): void {
   if (!projectConfig) throw new ProjectNotInitializedError();
   const claudeProject = claudeMcpConfigPath(false);
   const claudeGlobal  = claudeMcpConfigPath(true);
-  const geminiProject = path.join(process.cwd(), '.gemini', 'settings.json');
+  const geminiProject = path.join(getProjectRoot(), '.gemini', 'settings.json');
   const geminiGlobal  = path.join(geminiGlobalDir(), 'antigravity-cli', 'mcp_config.json');
 
   logger.blank();
