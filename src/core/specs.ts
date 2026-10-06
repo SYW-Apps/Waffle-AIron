@@ -7477,7 +7477,8 @@ export interface LockStatus {
 /**
  * Resolve the project's lock into one of three honest states, comparing the
  * recorded gate identity against the one the caller computed now
- * (validator_portal.computeGateStateId). Nothing is hashed here: the gate
+ * (validator_portal.computeGateStateId) — or, for a format-2 record, against
+ * its asRecorded reading. Nothing is hashed here: the gate
  * identity is the validator's, because the doctrine it covers is the
  * validator's rule set.
  *
@@ -7491,7 +7492,12 @@ export interface LockStatus {
 export function readLockState(current: StateId): LockStatus {
   const record = readLockRecord();
   if (!record) return { state: 'unlocked', record: null, current };
-  return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
+  // A format-2 record is judged under its own algorithm: current.asRecorded
+  // is the same gate identity recomputed the way that record was taken, so a
+  // lock taken before code linkage left the approval stays valid as long as
+  // nothing it covered moved.
+  const holds = stateIdEquals(record.stateId, current) || stateIdEquals(record.stateId, current.asRecorded);
+  return { state: holds ? 'locked' : 'stale', record, current };
 }
 
 /**

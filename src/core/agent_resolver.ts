@@ -22,6 +22,7 @@ import {
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadImplementationSpecs,
+  loadTypeSpecs,
   getSubsystemPath,
   getComponentPath,
   getInterfacePath,
@@ -31,7 +32,7 @@ import {
   // collapsing to one delegating owner.
   graph,
 } from './specs.js';
-import { ComponentSpec, implementationSourceFiles } from '../models/specs.js';
+import { ComponentSpec, implementationSourceFiles, typeSourceFiles, type ImplementationSpec } from '../models/specs.js';
 import { languageOfSourcePath } from '../models/code-model.js';
 import { typeDialectFor } from '../models/type-dialects.js';
 import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
@@ -313,6 +314,23 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
   const components = loadComponentSpecs().filter((c) => isLocal(c.id) && isLocal(c.subsystem));
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
+  const types = loadTypeSpecs();
+  // Which subsystems' specs name each code file — implementations through
+  // their component, types directly — so a file shared across subsystems is
+  // never fenced to one owner.
+  const namedBy = new Map<string, Set<string>>();
+  const nameFile = (file: string, subsystem: string | undefined): void => {
+    if (!subsystem) return;
+    const set = namedBy.get(file) ?? new Set<string>();
+    set.add(subsystem);
+    namedBy.set(file, set);
+  };
+  for (const impl of implementations) {
+    const contract = interfaces.find((i) => i.id === impl.contract);
+    const owner = contract ? components.find((c) => c.id === contract.component)?.subsystem : undefined;
+    for (const file of codeLocationsOf(impl)) nameFile(file, owner);
+  }
+  for (const type of types) for (const file of typeSourceFiles(type)) nameFile(file, type.subsystem);
   // Component-variant registry (dynamic layer on top of packs) — resolved here so
   // each owner/implementer carries its variant-tagged components' guidance + siblings.
   const variantsById = new Map(loadProjectVariants().map((v) => [v.id, v]));
@@ -401,8 +419,9 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
 
         let hasExplicitSource = false;
         for (const impl of compImpls) {
-          // Every file the implementation names: its own sourcePath and each method's.
-          const files = implementationSourceFiles(impl);
+          // Every code location the implementation names, existing or PLANNED:
+          // its own sourcePath, each method's, and its simPath harness.
+          const files = codeLocationsOf(impl);
           if (files.length > 0) hasExplicitSource = true;
           for (const file of files) {
             if (!ownedPaths.includes(file)) ownedPaths.push(file);
@@ -419,6 +438,19 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
           if (inferred && !ownedPaths.includes(inferred)) {
             ownedPaths.push(inferred);
           }
+        }
+      }
+    }
+
+    // The types this subsystem owns are its code too: each one's own
+    // sourcePath and its methods', existing or planned. A file the specs of
+    // ANOTHER subsystem name as well (a shared models module) is no single
+    // owner's to fence: claiming it would give one path two owners.
+    if (!config.rules.generateComponentImplementers) {
+      for (const type of types.filter((t) => t.subsystem === sub.id)) {
+        for (const file of typeSourceFiles(type)) {
+          if ((namedBy.get(file)?.size ?? 0) > 1) continue;
+          if (!ownedPaths.includes(file)) ownedPaths.push(file);
         }
       }
     }
@@ -478,7 +510,14 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
 
       const ownedPaths: string[] = [];
       for (const impl of compImpls) {
-        for (const file of implementationSourceFiles(impl)) {
+        // Existing or PLANNED: implementation and method files and the simPath harness.
+        for (const file of codeLocationsOf(impl)) {
+          if (!ownedPaths.includes(file)) ownedPaths.push(file);
+        }
+      }
+      // The types this component realizes (its componentClass) are its code too.
+      for (const type of types.filter((t) => t.componentClass === comp.id && t.subsystem === comp.subsystem)) {
+        for (const file of typeSourceFiles(type)) {
           if (!ownedPaths.includes(file)) ownedPaths.push(file);
         }
       }
@@ -605,9 +644,14 @@ export function composeAgentBrief(agentId: string): AgentBrief {
   // ahead of the user's own guidance, which stays the last word.
   const codeFence = codeFenceOf(record);
   if (codeFence) {
+    // A planned file (named, not on disk yet) is marked, so the implementer
+    // writes it rather than looks for it.
+    const shown = (p: string): string => (/[*?]/.test(p) || fs.existsSync(path.resolve(getProjectRoot(), p))
+      ? `- \`${p}\``
+      : `- \`${p}\` (planned — create it)`);
     instructions = `${instructions.trimEnd()}\n\n## Code write fence\n\n${codeFence.length > 0
-      ? `Write code only here (and tests beside it, as the project lays tests out):\n\n${codeFence.map((p) => `- \`${p}\``).join('\n')}\n`
-      : 'No implementation names a source file yet, so no code location is declared. The spawning session must name the file(s) this agent may create (the planned sourcePath); set `sourcePath` on the implementation once the file exists.\n'}`;
+      ? `Write code only here (and tests beside it, as the project lays tests out):\n\n${codeFence.map(shown).join('\n')}\n`
+      : 'No spec names a code location yet, so no code location is declared. The spawning session should declare the planned `sourcePath` on the implementation now — it is code linkage, not part of the approval, so declaring it costs no re-lock — and that file is then this agent\'s fence.\n'}`;
   }
 
   // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
@@ -663,8 +707,18 @@ function componentImplementer(agentId: string): AgentRecord | null {
 }
 
 /**
- * The code write fence of a record that implements components: each source
- * file it owns, plus the folder they share below the project root as
+ * Every code location an implementation names, existing or planned: its own
+ * sourcePath, each method's, then its simPath harness.
+ */
+function codeLocationsOf(impl: ImplementationSpec): string[] {
+  const files = implementationSourceFiles(impl);
+  if (impl.simPath && !files.includes(impl.simPath)) files.push(impl.simPath);
+  return files;
+}
+
+/**
+ * The code write fence of a record that implements components: each code
+ * location it owns (existing or planned), plus the folder they share below the project root as
  * `<folder>/**` — the subsystem's code folder, so a first file beside the
  * existing ones is inside the fence. Empty when the record implements
  * components but no implementation names a file yet; null for a record that
@@ -712,6 +766,12 @@ function implementationLanguage(record: AgentRecord): string | undefined {
       const language = languageOfSourcePath(file);
       if (language) return language;
     }
+  }
+  // Else the language any fenced file's extension names — a planned file
+  // selects the mapping as well as an existing one.
+  for (const file of record.ownedPaths.filter((p) => !p.startsWith('.wai/') && !p.includes('/.wai/'))) {
+    const language = languageOfSourcePath(file);
+    if (language) return language;
   }
   return undefined;
 }

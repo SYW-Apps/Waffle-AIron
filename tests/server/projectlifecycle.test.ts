@@ -444,7 +444,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
 
     const parent = executeApprovedLock(cfg, 'hosted-pins', TEST_APPROVER);
     expect(parent.children).toBeUndefined();
-    expect(parent.format).toBe(2);
+    expect(parent.format).toBe(3);
     expect(parent.members).toMatchObject({
       billing: { subject: pinOf(billing.stateId), state: 'approved' },
       claims: { subject: pinOf(claims.stateId), state: 'approved' },
@@ -503,7 +503,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(Object.keys(lock!.specs!).length).toBeGreaterThan(0);
     // The record carries the validator's gate identity, the one every staleness
     // check later compares against.
-    expect(lock!.stateId.algorithm).toBe('sha256+content+doctrine+inputs+members');
+    expect(lock!.stateId.algorithm).toBe('sha256+design+doctrine+inputs+members');
     expect(lock!.stateId).toEqual(runWithProjectRoot(root, () => computeGateStateId()));
     // Hosted creation declared the hosted project id as the project's id, and
     // the lock records the id it approved.

@@ -19,6 +19,7 @@ import {
   loadProjectExtensions,
   loadProjectConfig,
   computeOwnStateId,
+  computeOwnDesignId,
   consumedContractInputs,
   settledSpecPaths,
   readLockRecord,
@@ -1065,7 +1066,7 @@ export function builtinProjectKinds(): string[] {
 /**
  * The gate identity a lock records and every staleness check compares
  * (ispec_validator/ivalidator_portal.computeGateStateId): the project's OWN
- * content identity, the design doctrine, its own consumed contract inputs, its
+ * DESIGN identity (code linkage and timestamps out), the design doctrine, its own consumed contract inputs, its
  * `composition`, and each direct member's composition subject — read from the
  * member's own lock record, never recomputed and never its specs. So a
  * parent's identity costs its own tree plus one lock file per direct member,
@@ -1078,7 +1079,7 @@ export function computeGateStateId(): StateId {
   // The whole scan, so the graph names every direct member whatever an earlier
   // caller narrowed it to.
   scanAllSpecs();
-  const content = computeOwnStateId();
+  const content = computeOwnDesignId();
   const extensions = loadProjectExtensions();
   // The project's governing configuration decides verdicts too: which profile
   // applies, how it tuned the rules, and what it requires of its members. A
@@ -1093,7 +1094,18 @@ export function computeGateStateId(): StateId {
   const members = directMemberSubjects();
   // The built-in rules only: pack rules enter the identity through the extensions.
   registerBuiltinRules();
-  return computeGateIdentity(content, extensions, ruleSequence(), inputs, gate, members);
+  const builtin = ruleSequence();
+  const current = computeGateIdentity(content, extensions, builtin, inputs, gate, members);
+  // Steps 13-16: a lock taken under the previous, full-content gate algorithm
+  // (format 2) is judged as it was taken — the same inputs, its own content
+  // reading — so an upgrade never forces a re-lock of an unchanged design.
+  // Only a record under another algorithm can be one; the recomputation (whose
+  // marker gate_identity sets from the full-content identity it is handed)
+  // decides whether it IS the previous algorithm.
+  const record = approvalRecord(getProjectRoot());
+  if (!record?.stateId || record.stateId.algorithm === current.algorithm) return current;
+  const asRecorded = computeGateIdentity(computeOwnStateId(), extensions, builtin, inputs, gate, members);
+  return record.stateId.algorithm === asRecorded.algorithm ? { ...current, asRecorded } : current;
 }
 
 /** The subject recorded for a member with no lock (or no project on disk). */

@@ -179,11 +179,12 @@ describe('type_spec.sourceFiles', () => {
 });
 
 describe('type-realization — a type claim is judged like every other claim on code', () => {
-  it('reports a type sourcePath that resolves to no file, naming the type', () => {
+  it('reports a type sourcePath that resolves to no file as PLANNED while nothing the type names exists, naming the type', () => {
     const dir = mkTemp();
     try {
       const issues = findingsFor(dir, [type({ id: 'invoice', name: 'Invoice', sourcePath: 'src/billing/invoice.ts' })]);
-      expect(issues.map((i) => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(issues.map((i) => i.code)).toEqual(['SOURCE_FILE_PLANNED']);
+      expect(issues[0].severity).toBe('notice');
       expect(issues[0].message).toContain('Type "invoice"');
       expect(issues[0].specId).toBe('invoice');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }

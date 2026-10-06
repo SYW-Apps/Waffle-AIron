@@ -87,6 +87,33 @@ export interface CodeAnalysis {
   notices: number;
 }
 
+/**
+ * spec_digest_reading — which reading of a spec file a lock record's per-spec
+ * digests were taken in. `content`: the raw text, line endings normalized —
+ * what every record written before format 3 carries (the field absent).
+ * `design`: the spec's design view (code linkage and timestamps out) in
+ * canonical form, so a sourcePath, a whitespace edit or a no-op re-save never
+ * moves it.
+ */
+export type SpecDigestReading = 'content' | 'design';
+
+/**
+ * lock_reexpression — provenance on a lock record a tool carried into a newer
+ * reading after PROVING the design is the one approved (its own earlier
+ * identity, recomputed over the tree as it stands, matched), rather than a
+ * human re-approving it. Who approved and when stay the human's.
+ */
+export interface LockReexpression {
+  /** ISO-8601 time of the re-expression. */
+  at: string;
+  /** The gate algorithm the record carried before. */
+  fromAlgorithm: string;
+  /** The per-spec digest reading the record carried before. */
+  fromReading: SpecDigestReading;
+  /** The command that re-expressed it (e.g. `wairon doctor --fix`), never a person. */
+  by: string;
+}
+
 /** A project's approval state as seen from its own root. */
 export type ProjectApprovalState = 'approved' | 'drifted' | 'never';
 

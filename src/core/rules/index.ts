@@ -95,6 +95,8 @@ const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
   // L4 expectations: implementations and their code linkage.
   MISSING_IMPLEMENTATION_METHOD: 'implementations',
   MISSING_SOURCE_PATH: 'implementations',
+  METHOD_SOURCE_PATH_MISSING: 'implementations',
+  SOURCE_FILE_PLANNED: 'implementations',
   PORTAL_AUTH_UNMET: 'implementations',
   MISSING_SOURCE_FILE: 'implementations',
   SOURCE_PATH_ESCAPES_ROOT: 'implementations',
@@ -141,7 +143,9 @@ const COMPLETENESS_RULES = new Set([
   // Structural conformance: a draft tree is allowed to name code that does
   // not exist yet — the findings gate only once the specs claim completeness.
   'MISSING_SOURCE_PATH',
+  'METHOD_SOURCE_PATH_MISSING',
   'MISSING_SOURCE_FILE',
+  'SOURCE_FILE_PLANNED',
   'SOURCE_PATH_ESCAPES_ROOT',
   'UNREALIZED_METHOD',
   'UNREALIZED_FINDING',

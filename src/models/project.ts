@@ -275,6 +275,16 @@ export const ConformanceRuleConfigSchema = z.object({
    * carryable, an entry of kind `undecided`, which is exactly that sentence.
    */
   carried: z.array(CarriedDebtSchema).optional(),
+  /**
+   * Opt-in strictness for teams that want CI to say "every designed component
+   * has code": every implementation must have begun (some file it names
+   * exists). When true, SOURCE_FILE_PLANNED and MISSING_SOURCE_PATH are
+   * reported at error, naming this setting, instead of as notices. Off by
+   * default, so a design-only tree passes `validate --ci`. Code-conformance
+   * tuning like the rest of `rules.conformance`: it enters the analyzer's
+   * digest, never the gate identity, so switching it never stales a lock.
+   */
+  requireCode: z.boolean().optional(),
 });
 export type ConformanceRuleConfig = z.infer<typeof ConformanceRuleConfigSchema>;
 

@@ -4,6 +4,7 @@ description: >-
   The declare workflow: read the request, refuse in one sentence, write, check against the producer,
   compensate, pin.
 contract: iexternal_declarations
+sourcePath: src/core/external-declarations.ts
 methods:
   - name: declare
     narrative:
@@ -110,4 +111,4 @@ methods:
         outcome: declared
 status: complete
 createdAt: '2026-10-06T10:14:16.933Z'
-updatedAt: '2026-10-06T10:14:17.521Z'
+updatedAt: '2026-10-06T10:59:14.735Z'

@@ -130,7 +130,7 @@ function validate(t: Tree, children: Record<string, Tree> = {}): ValidationIssue
 const byCode = (issues: ValidationIssue[], code: string): ValidationIssue[] => issues.filter(i => i.code === code);
 
 describe('integration-sim-wiring — a missing own file reports once', () => {
-  it('a component whose named file does not exist gets MISSING_SOURCE_FILE, not UNWIRED_INTEGRATION_SIM on top', () => {
+  it('a component whose named file does not exist gets one file finding (planned: nothing it names exists), not UNWIRED_INTEGRATION_SIM on top', () => {
     const issues = validate(tree([
       unit('order-orchestrator', {
         subsystem: 'ordering',
@@ -147,7 +147,8 @@ describe('integration-sim-wiring — a missing own file reports once', () => {
         'tests/integration/order.sim.ts': "import { priceCart } from '../../src/ordering/pricing-engine.js';\npriceCart();\n",
       },
     }));
-    expect(byCode(issues, 'MISSING_SOURCE_FILE').map(i => i.specId)).toEqual(['order-orchestrator-impl']);
+    expect(byCode(issues, 'SOURCE_FILE_PLANNED').map(i => i.specId)).toEqual(['order-orchestrator-impl']);
+    expect(byCode(issues, 'MISSING_SOURCE_FILE')).toEqual([]);
     expect(byCode(issues, 'UNWIRED_INTEGRATION_SIM')).toEqual([]);
   });
 

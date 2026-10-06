@@ -353,4 +353,94 @@ export default [
       },
     },
   }),
+
+  // -------------------------------------------------------------------------
+  // Planned code on a type (type-realization): SOURCE_FILE_PLANNED until any
+  // file the type names exists, MISSING_SOURCE_FILE once one does
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'SOURCE_FILE_PLANNED',
+    severity: 'notice',
+    anchoredTo: 'shipment-manifest',
+    expectFire: true,
+    scenario:
+      'The shipment manifest entity was designed ahead of the code and already names its planned module src/warehouse/manifest.ts, which nobody has written yet.',
+    tree: {
+      ...pickingSpecs,
+      types: [{
+        id: 'shipment-manifest',
+        name: 'ShipmentManifest',
+        subsystem: 'warehouse',
+        sourcePath: 'src/warehouse/manifest.ts',
+        fields: [{ name: 'id', type: 'string', key: 'primary' }],
+      }],
+      files: { 'src/warehouse/picking.ts': PICKING_MODULE },
+    },
+  }),
+  defineRuleFixture({
+    code: 'SOURCE_FILE_PLANNED',
+    expectFire: false,
+    reason:
+      'The type\'s own module exists, so its realization has begun: a method module that is missing is a broken link (MISSING_SOURCE_FILE), never planned.',
+    scenario:
+      'The shipment manifest entity\'s module is committed, but its totalWeight method names a helper module that was never committed.',
+    tree: {
+      ...pickingSpecs,
+      types: [{
+        id: 'shipment-manifest',
+        name: 'ShipmentManifest',
+        subsystem: 'warehouse',
+        sourcePath: 'src/warehouse/manifest.ts',
+        fields: [{ name: 'id', type: 'string', key: 'primary' }],
+        methods: [{ name: 'totalWeight', signature: 'totalWeight(): float', returns: 'float', sourcePath: 'src/warehouse/manifest-weight.ts' }],
+      }],
+      files: {
+        'src/warehouse/picking.ts': PICKING_MODULE,
+        'src/warehouse/manifest.ts': 'export interface ShipmentManifest { id: string; }\n',
+      },
+    },
+  }),
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_FILE',
+    severity: 'error',
+    anchoredTo: 'shipment-manifest',
+    expectFire: true,
+    scenario:
+      'The shipment manifest entity\'s module is committed, but its totalWeight method names a helper module that was never committed — the type\'s realization has begun, so the claim is a broken link.',
+    tree: {
+      ...pickingSpecs,
+      types: [{
+        id: 'shipment-manifest',
+        name: 'ShipmentManifest',
+        subsystem: 'warehouse',
+        sourcePath: 'src/warehouse/manifest.ts',
+        fields: [{ name: 'id', type: 'string', key: 'primary' }],
+        methods: [{ name: 'totalWeight', signature: 'totalWeight(): float', returns: 'float', sourcePath: 'src/warehouse/manifest-weight.ts' }],
+      }],
+      files: {
+        'src/warehouse/picking.ts': PICKING_MODULE,
+        'src/warehouse/manifest.ts': 'export interface ShipmentManifest { id: string; }\n',
+      },
+    },
+  }),
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_FILE',
+    expectFire: false,
+    reason:
+      'Nothing the type names exists yet, so its realization has not begun: the named module is planned (SOURCE_FILE_PLANNED), not missing.',
+    scenario:
+      'The shipment manifest entity was designed ahead of the code: it names its planned module and a planned helper for totalWeight, neither written yet.',
+    tree: {
+      ...pickingSpecs,
+      types: [{
+        id: 'shipment-manifest',
+        name: 'ShipmentManifest',
+        subsystem: 'warehouse',
+        sourcePath: 'src/warehouse/manifest.ts',
+        fields: [{ name: 'id', type: 'string', key: 'primary' }],
+        methods: [{ name: 'totalWeight', signature: 'totalWeight(): float', returns: 'float', sourcePath: 'src/warehouse/manifest-weight.ts' }],
+      }],
+      files: { 'src/warehouse/picking.ts': PICKING_MODULE },
+    },
+  }),
 ];

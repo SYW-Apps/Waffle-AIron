@@ -359,9 +359,46 @@ describe('briefs carry a code write fence, and every component has a brief witho
     try {
       const brief = composeAgentBrief('alpha-owner');
       expect(brief.codeFence).toEqual([]);
-      expect(brief.instructions).toContain('No implementation names a source file yet');
+      expect(brief.instructions).toContain('No spec names a code location yet');
+      expect(brief.instructions).toContain('declare the planned `sourcePath` on the implementation now');
+      expect(brief.instructions).toContain('costs no re-lock');
       // The architect implements nothing: no fence at all.
       expect(composeAgentBrief('system-architect').codeFence).toBeUndefined();
+    } finally { proj.cleanup(); }
+  });
+
+  it('fences PLANNED code too — simPaths and the subsystem\'s types\' files — and marks what is not written yet', () => {
+    const proj = billingProject();
+    proj.writeSpec('implementation', 'billing_impl', 'id: billing_impl\nname: Billing\ndescription: d\ncontract: ibilling\nsourcePath: src/alpha/billing.ts\nsimPath: tests/sim/alpha-billing.sim.ts\nmethods: []');
+    proj.writeSpec('type', 'invoice', 'kind: entity\nid: invoice\nname: Invoice\nsubsystem: alpha\nsourcePath: src/alpha/invoice.ts\nfields: []\nmethods: []');
+    proj.writeFile('src/alpha/billing.ts', 'export {};\n');
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('alpha-owner');
+      expect(brief.codeFence).toEqual(expect.arrayContaining([
+        'src/alpha/billing.ts', 'src/alpha/ledger.ts', 'tests/sim/alpha-billing.sim.ts', 'src/alpha/invoice.ts',
+      ]));
+      // Written files are listed plainly; planned ones say to create them.
+      expect(brief.instructions).toContain('- `src/alpha/billing.ts`\n');
+      expect(brief.instructions).toContain('- `src/alpha/ledger.ts` (planned — create it)');
+      expect(brief.instructions).toContain('- `src/alpha/invoice.ts` (planned — create it)');
+      expect(brief.instructions).toContain('- `tests/sim/alpha-billing.sim.ts` (planned — create it)');
+      // The implementer fences its own simPath, planned or not.
+      expect(composeAgentBrief('billing').codeFence).toEqual(expect.arrayContaining(['src/alpha/billing.ts', 'tests/sim/alpha-billing.sim.ts']));
+    } finally { proj.cleanup(); }
+  });
+
+  it('a planned file alone selects the brief\'s type mapping by its extension', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'billing', 'id: billing\nname: Billing\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator');
+    proj.writeSpec('interface', 'ibilling', 'id: ibilling\nname: IBilling\ndescription: d\ncomponent: billing\nmethods: []');
+    proj.writeSpec('implementation', 'billing_impl', 'id: billing_impl\nname: Billing\ndescription: d\ncontract: ibilling\nsourcePath: src/alpha/billing.ts\nmethods: []');
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('billing');
+      expect(brief.instructions).toContain('(planned — create it)');
+      expect(brief.typeMapping).toBeDefined();
     } finally { proj.cleanup(); }
   });
 

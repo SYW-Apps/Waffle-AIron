@@ -1122,6 +1122,92 @@ export default [
       },
     },
   }),
+
+  // -------------------------------------------------------------------------
+  // A harness planned with the code it wires (integration-sim-file)
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'SOURCE_FILE_PLANNED',
+    severity: 'notice',
+    anchoredTo: 'checkout_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The checkout orchestrator was designed up front with its planned module and its planned integration harness tests/integration/checkout-flow.sim.ts; neither is written yet.',
+    tree: {
+      subsystems: [{ id: 'checkout', description: 'Cart pricing and order placement.' }],
+      components: [
+        {
+          id: 'checkout-orchestrator',
+          componentType: 'Orchestrator',
+          subsystem: 'checkout',
+          description: 'Drives order placement over the priced cart.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'icheckout_orchestrator',
+          component: 'checkout-orchestrator',
+          methods: [{ name: 'placeOrder', description: 'Place the order for the priced cart.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'checkout_orchestrator_impl',
+          contract: 'icheckout_orchestrator',
+          sourcePath: 'src/checkout/checkout-orchestrator.ts',
+          simPath: 'tests/integration/checkout-flow.sim.ts',
+          methods: [
+            {
+              name: 'placeOrder',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Validate the priced cart and persist the order.' }],
+            },
+          ],
+        },
+      ],
+      files: {},
+    },
+  }),
+  defineRuleFixture({
+    code: 'SIM_FILE_MISSING',
+    expectFire: false,
+    reason:
+      'The implementation the harness wires has no code yet, so the harness is planned with it (SOURCE_FILE_PLANNED), not a missing file.',
+    scenario:
+      'The checkout orchestrator was designed up front with its planned module and its planned integration harness; neither is written yet.',
+    tree: {
+      subsystems: [{ id: 'checkout', description: 'Cart pricing and order placement.' }],
+      components: [
+        {
+          id: 'checkout-orchestrator',
+          componentType: 'Orchestrator',
+          subsystem: 'checkout',
+          description: 'Drives order placement over the priced cart.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'icheckout_orchestrator',
+          component: 'checkout-orchestrator',
+          methods: [{ name: 'placeOrder', description: 'Place the order for the priced cart.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'checkout_orchestrator_impl',
+          contract: 'icheckout_orchestrator',
+          sourcePath: 'src/checkout/checkout-orchestrator.ts',
+          simPath: 'tests/integration/checkout-flow.sim.ts',
+          methods: [
+            {
+              name: 'placeOrder',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Validate the priced cart and persist the order.' }],
+            },
+          ],
+        },
+      ],
+      files: {},
+    },
+  }),
 ];
 
 /**

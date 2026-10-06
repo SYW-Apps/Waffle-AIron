@@ -4,7 +4,7 @@ import { aiDir, aiDirAt, withLineEndings } from '../utils/fs.js';
 import type { StateId } from './statehash.js';
 // The approver is shared vocabulary, not this store's private shape: a command
 // that only wants to RENDER one must not have to reach a Store to do it.
-import type { ApproverIdentity, CodeAnalysis, ProjectApprovalState } from '../models/lock.js';
+import type { ApproverIdentity, CodeAnalysis, LockReexpression, ProjectApprovalState, SpecDigestReading } from '../models/lock.js';
 import type { MemberKind } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
@@ -80,8 +80,26 @@ export interface LockRecord {
    * one release as the member pins; never written from stage 5 on.
    */
   children?: Record<string, string>;
-  /** The record format: 2 from stage 5 on; absent means format 1. */
+  /**
+   * The record format: 3 from the release in which code linkage left the
+   * approval (stateId under the design gate algorithm, `specs` in the design
+   * reading), 2 from stage 5 on, absent means format 1. A format-2 record stays
+   * valid as written: it is judged under its own algorithm (StateId.asRecorded)
+   * and its own reading until it is re-locked or re-expressed.
+   */
   format?: number;
+  /**
+   * The reading `specs` was digested in: `design` on every record written from
+   * format 3 on, absent on an earlier record (raw-content digests). A reader
+   * compares the tree in the reading the record names, never in another.
+   */
+  specsReading?: SpecDigestReading;
+  /**
+   * Present when a tool carried this record into the current reading and gate
+   * algorithm after proving the design unchanged (doctor --fix), instead of a
+   * human re-approving it.
+   */
+  reexpressed?: LockReexpression;
   /**
    * Each DIRECT member, keyed by alias → its composition subject and approval
    * state as they stood when this project locked. Present (possibly empty) on

@@ -1759,6 +1759,110 @@ export function typeSourceFiles(
 }
 
 // ---------------------------------------------------------------------------
+// The design view — a spec as the approval sees it
+//
+// Code linkage says WHERE or HOW a design is realized in code, never WHAT the
+// design is: pointing a spec at the file that realizes it must not reopen the
+// human approval. One table names every field of the three kinds that carry
+// linkage, in or out, and the projections below drop exactly the `linkage`
+// half (with the volatile timestamps). Both the gate identity
+// (state_hash.ownDesign) and the per-spec approval digests read it, so the
+// two can never disagree about what is design.
+//
+// A test classifies EVERY schema field against this table, so a new field
+// cannot slip into (or out of) the approval silently: it must be placed.
+// ---------------------------------------------------------------------------
+
+/** Each schema's fields, split into the design (approved) and the code linkage (not approved). */
+export const DESIGN_VIEW_FIELDS = {
+  implementation: {
+    linkage: ['sourcePath', 'simPath', 'injectedParams', 'conformance', 'createdAt', 'updatedAt'],
+    design: ['id', 'name', 'description', 'contract', 'technologies', 'methods', 'detail', 'previousIds', 'lint', 'ext', 'status'],
+  },
+  implementationMethod: {
+    linkage: ['sourcePath', 'symbol', 'exportedVia', 'conformance'],
+    design: ['name', 'narrative', 'detail', 'intent', 'calls', 'ext'],
+  },
+  type: {
+    linkage: ['sourcePath', 'symbol', 'createdAt', 'updatedAt'],
+    design: [
+      'kind', 'id', 'name', 'description', 'subsystem', 'group', 'fields', 'methods', 'componentClass', 'invariants',
+      'database', 'table', 'linkedEntity', 'previousIds', 'lint', 'ext', 'params', 'returns', 'values', 'holds',
+    ],
+  },
+  typeMethod: {
+    linkage: ['sourcePath', 'symbol'],
+    design: ['name', 'signature', 'params', 'returns', 'description'],
+  },
+  component: {
+    linkage: ['externalLinks', 'createdAt', 'updatedAt'],
+    design: [
+      'id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn', 'portalType', 'basePath', 'auth',
+      'dispatch', 'mounts', 'durability', 'dependencyClass', 'emits', 'subscribesTo', 'patterns', 'variant',
+      'previousIds', 'lint', 'ext', 'status',
+    ],
+  },
+  portalMount: {
+    linkage: ['via'],
+    design: ['portal', 'prefixes'],
+  },
+} as const;
+
+/** A copy of an object without the named keys; anything that is not a plain object passes through. */
+function withoutFields<T>(value: T, fields: readonly string[]): T {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(value as Record<string, unknown>)) {
+    if (!fields.includes(key)) out[key] = field;
+  }
+  return out as T;
+}
+
+/** Each element of an array field projected; an absent or malformed field stays as it is. */
+function eachOf<T>(items: T, project: (item: unknown) => unknown): T {
+  return (Array.isArray(items) ? items.map(project) : items) as T;
+}
+
+/**
+ * implementation_spec.designView — this implementation as the approval sees it:
+ * its own sourcePath, simPath, injectedParams and conformance tier, each
+ * method's sourcePath, symbol, exportedVia and conformance tier, and the
+ * timestamps left out. Everything else — the contract, technologies, the
+ * detail dial, each method's narrative, intent and calls, the rename trace,
+ * lint, ext, status — stays. Pure: a sourcePath added, moved or removed never
+ * changes it. Reads a stored (raw) spec as readily as a loaded one.
+ */
+export function implementationDesignView<T extends object>(impl: T): T {
+  const view = withoutFields(impl, DESIGN_VIEW_FIELDS.implementation.linkage) as Record<string, unknown>;
+  if ('methods' in view) view.methods = eachOf(view.methods, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.implementationMethod.linkage));
+  return view as T;
+}
+
+/**
+ * type_spec.designView — this type as the approval sees it: its own sourcePath
+ * and symbol, each method's sourcePath and symbol, and the timestamps left
+ * out; its fields, methods' signatures and descriptions, invariants, values,
+ * holds, rename trace, lint and ext stay. Pure.
+ */
+export function typeDesignView<T extends object>(type: T): T {
+  const view = withoutFields(type, DESIGN_VIEW_FIELDS.type.linkage) as Record<string, unknown>;
+  if ('methods' in view) view.methods = eachOf(view.methods, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.typeMethod.linkage));
+  return view as T;
+}
+
+/**
+ * component_spec.designView — this component as the approval sees it: each
+ * mount's `via` (the router entry the portal's file exports, held to code by
+ * UNREALIZED_EXPORT_HANDLE), its externalLinks and the timestamps left out. A
+ * mount's portal and prefixes, and every other field, stay. Pure.
+ */
+export function componentDesignView<T extends object>(component: T): T {
+  const view = withoutFields(component, DESIGN_VIEW_FIELDS.component.linkage) as Record<string, unknown>;
+  if ('mounts' in view) view.mounts = eachOf(view.mounts, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.portalMount.linkage));
+  return view as T;
+}
+
+// ---------------------------------------------------------------------------
 // Surface snapshots — the portable, contract-grade public-surface artifact
 // (Public Surface Exchange). One format, three origins: generated (own
 // parent/child family), exchanged (another wairon project), authored (an

@@ -32,6 +32,7 @@ import { admits, rangeProblem, requiredPolicies, type PackRequirement, type Pack
 import { packSettings, type PackSettings } from '../models/pack-impact.js';
 import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
+import type { StateId } from './statehash.js';
 import type { PinState, ProjectApproval } from '../models/lock.js';
 
 /** A project's lock record, as the core adapter reads one. */
@@ -534,10 +535,12 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
       ...(node.id !== undefined ? { projectId: node.id } : {}),
       state: 'never',
     };
-    // Step 7: none is never; a matching identity is approved; else drifted,
-    // upgraded when only the algorithm marker moved.
+    // Step 7: none is never; a matching identity is approved — for a format-2
+    // record, matching the identity recomputed under its own algorithm
+    // (asRecorded) — else drifted, upgraded when only the algorithm marker moved.
     if (!record) return base;
-    const matches = record.stateId.algorithm === current.algorithm && record.stateId.digest === current.digest;
+    const same = (id: StateId | undefined): boolean => !!id && record.stateId.algorithm === id.algorithm && record.stateId.digest === id.digest;
+    const matches = same(current) || same(current.asRecorded);
     return {
       ...base,
       state: matches ? 'approved' : 'drifted',

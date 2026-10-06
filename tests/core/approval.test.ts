@@ -82,6 +82,9 @@ function approve(
     validationResult: { valid: true, errors: 0, warnings: 0 },
     status: 'ready',
     specs: captureApprovedSpecs(undefined, scope),
+    // captureApprovedSpecs answers the design reading (lock format 3).
+    specsReading: 'design',
+    format: 3,
     children,
   };
   writeLockRecord(record);

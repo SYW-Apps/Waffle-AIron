@@ -40,13 +40,24 @@ export interface GateConfig {
 
 /**
  * Algorithm marker for the gate identity. It names the composition — the own
- * content digest, the design doctrine, the own inputs and the members' subjects
- * — so a record written under an earlier one (sha256+doctrine+inputs,
- * sha256+content+doctrine+inputs) never matches and reads stale once
- * (LockStatus.upgraded names why), and a content identity (sha256) never
- * compares equal to a gate identity.
+ * DESIGN digest (code linkage out, lock format 3), the design doctrine, the
+ * own inputs and the members' subjects — so a record written under an earlier
+ * one never matches by accident, and a spec identity (sha256, sha256-design)
+ * never compares equal to a gate identity.
  */
-export const GATE_ALGORITHM = 'sha256+content+doctrine+inputs+members';
+export const GATE_ALGORITHM = 'sha256+design+doctrine+inputs+members';
+
+/**
+ * The previous gate algorithm, whose content half was the FULL content
+ * identity (code linkage included) — what every format-2 lock was taken
+ * under. compute marks an identity with it when handed a full-content
+ * identity, which is how a format-2 lock is recomputed exactly as it was
+ * taken (StateId.asRecorded) instead of being forced into a re-lock.
+ */
+const CONTENT_GATE_ALGORITHM = 'sha256+content+doctrine+inputs+members';
+
+/** The spec-identity marker of a design identity (state_hash.ownDesign). */
+const DESIGN_CONTENT_ALGORITHM = 'sha256-design';
 
 // Ordinal, never localeCompare: collation is locale- and ICU-dependent, and it
 // re-weights exactly the characters rule names are full of (hyphens,
@@ -153,8 +164,9 @@ function doctrineIdentity(doctrine: LoadedExtensions, builtinRules: SddRule[], g
 }
 
 /**
- * gate_identity.compute — the gate identity of one project: its OWN content
- * identity digested together with the design doctrine, its own consumed
+ * gate_identity.compute — the gate identity of one project: its OWN spec
+ * identity (the design identity from format 3 on; a full-content identity to
+ * recompute a format-2 lock) digested together with the design doctrine, its own consumed
  * contract inputs, its composition block and each direct member's composition
  * subject. The same inputs always give the same identity.
  *
@@ -179,7 +191,9 @@ export function computeGateIdentity(
     members: byKey(Object.entries(members), ([alias]) => alias).map(([alias, subject]) => ({ alias, subject })),
   };
   const digest = crypto.createHash('sha256').update(canonicalize(payload)).digest('hex');
-  return { algorithm: GATE_ALGORITHM, digest };
+  // The marker follows the content identity handed in: a design identity
+  // gives the current gate algorithm, a full-content one the previous.
+  return { algorithm: content.algorithm === DESIGN_CONTENT_ALGORITHM ? GATE_ALGORITHM : CONTENT_GATE_ALGORITHM, digest };
 }
 
 /**

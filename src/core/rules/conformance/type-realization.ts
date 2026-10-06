@@ -1,4 +1,5 @@
 import { pathKey, typeSourceFiles, type TypeSpec } from '../../../models/index.js';
+import { plannedCode } from './source-file-linkage.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -45,7 +46,9 @@ import { RuleContext, SddRule } from '../types.js';
 // what the rule exists to stop.
 //
 // A type that names no sourcePath claims nothing and is never reported: the
-// model layer is opt-in, one type at a time.
+// model layer is opt-in, one type at a time. Until a claim has BEGUN
+// (code_index.holdsAny over the type's own file and its methods' files) a
+// named file not on disk is PLANNED — a notice — and nothing else is judged.
 // ---------------------------------------------------------------------------
 
 /** The three file-status verdicts, as (code, severity, what it means for the reader). */
@@ -58,7 +61,7 @@ const FILE_PROBLEMS: Record<string, { code: string; severity: 'error' | 'warning
   missing: {
     code: 'MISSING_SOURCE_FILE',
     severity: 'error',
-    detail: 'does not resolve to a file — the spec names code that does not exist.',
+    detail: 'does not resolve to a file although the type\'s realization has begun — a broken link: the spec names code that does not exist.',
   },
   unreadable: {
     code: 'CONFORMANCE_ANALYSIS_SKIPPED',
@@ -79,13 +82,14 @@ export const typeRealizationRule: SddRule = {
   name: 'type-realization',
   judges: 'code',
   description:
-    'Code↔spec Level 1 for the data model: a type that names a sourcePath is claiming code, so every file it names — its own and each method\'s — must resolve to a real, readable file inside the project root, its file must PUBLISH its declaration (an exported name at exact grade, the declaration tier below it, under its `symbol` when the code-level name differs from the type\'s name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never realized), and each of its pure methods must appear in its own file (the method\'s sourcePath, else the type\'s) at the declaration tier, under the method\'s `symbol`, else the method\'s name. A type that names no sourcePath claims nothing and is never reported. Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible, a file that escapes the root, is missing or could not be analyzed is reported once and blocks only what it would have realized, and types under chained subsystems (projectPath) validate standalone in their own project run.',
+    'Code↔spec Level 1 for the data model: a type that names a sourcePath is claiming code. Until that claim has BEGUN (code_index.holdsAny over the type\'s own file and its methods\' files) a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice; an error under rules.conformance.requireCode). Once it has begun, every file it names must resolve to a real, readable file inside the project root (MISSING_SOURCE_FILE, an error, otherwise), its file must PUBLISH its declaration (an exported name at exact grade, the declaration tier below it, under its `symbol` when the code-level name differs from the type\'s name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never realized), and each of its pure methods must appear in its own file (the method\'s sourcePath, else the type\'s) at the declaration tier, under the method\'s `symbol`, else the method\'s name. A type that names no sourcePath claims nothing and is never reported. Findings carry the analysis grade, a file that escapes the root or could not be analyzed is reported once and blocks only what it would have realized, and types under chained subsystems (projectPath) validate standalone in their own project run.',
   codes: [
     { code: 'UNREALIZED_TYPE', defaultSeverity: 'warning', summary: 'A type names a sourcePath but its declaration is nowhere in that file — the claim points at code that does not hold it' },
     { code: 'UNREALIZED_TYPE_METHOD', defaultSeverity: 'warning', summary: 'A pure method of a claimed type is nowhere in its own source file (the method\'s sourcePath, else the type\'s)' },
-    { code: 'MISSING_SOURCE_FILE', defaultSeverity: 'error', summary: 'A source file a type or one of its methods names does not resolve to a file on disk' },
+    { code: 'MISSING_SOURCE_FILE', defaultSeverity: 'error', summary: 'A source file a type or one of its methods names does not resolve to a file on disk although the type\'s realization has begun (another file it names exists)' },
     { code: 'SOURCE_PATH_ESCAPES_ROOT', defaultSeverity: 'error', summary: 'A source file a type or one of its methods names is absolute or escapes the project root (containment refusal)' },
     { code: 'CONFORMANCE_ANALYSIS_SKIPPED', defaultSeverity: 'warning', summary: 'A source file a type or one of its methods names could not be analyzed (binary/unreadable) — what it would have realized was not checked' },
+    { code: 'SOURCE_FILE_PLANNED', defaultSeverity: 'notice', summary: 'A source file a type names is not on disk and none of its named files is — planned, not written yet; an error under rules.conformance.requireCode' },
   ],
 
   check(ctx: RuleContext): void {
@@ -101,11 +105,23 @@ export const typeRealizationRule: SddRule = {
       // only what it would have realized, so a broken path costs one finding
       // rather than one per method.
       const blocked = new Set<string>();
+      // Realization has begun once any file the type names exists.
+      const begun = code.holdsAny(typeSourceFiles(type));
       for (const file of typeSourceFiles(type)) {
         const key = pathKey(file);
         const facts = code.factsAt(key);
         if (!facts || facts.status === 'analyzed') continue;
         blocked.add(key);
+        if (facts.status === 'missing' && !begun) {
+          const planned = plannedCode(ctx);
+          ctx.addIssue(
+            planned.severity,
+            'SOURCE_FILE_PLANNED',
+            `${ownerOf(type, file)} sourcePath "${file}" is planned, not written yet — conformance judges the type once a file it names exists${planned.note}.`,
+            type.id,
+          );
+          continue;
+        }
         const problem = FILE_PROBLEMS[facts.status];
         if (!problem) continue;
         ctx.addIssue(problem.severity, problem.code, `${ownerOf(type, file)} sourcePath "${file}" ${problem.detail}`, type.id);

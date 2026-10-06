@@ -519,9 +519,13 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     saveImplementationSpec({
       id: 'trans-orch-impl', name: 'impl', description: 'd', contract: 'itrans-orch',
       sourcePath: 'src/lives-in-the-parent.ts',
-      methods: [{ name: 'run', narrative: [] }],
+      // The method's own file exists in the child, so realization has begun:
+      // the missing file is a broken link, not planned code.
+      methods: [{ name: 'run', sourcePath: 'src/run.ts', narrative: [] }],
       status: 'complete', createdAt: now, updatedAt: now,
     } as ImplementationSpec);
+    fs.mkdirSync(path.join(childDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(childDir, 'src', 'run.ts'), 'export function run(): void {}');
     invalidateSpecCache();
     setProjectRoot(childDir);
     const res = validateProject();

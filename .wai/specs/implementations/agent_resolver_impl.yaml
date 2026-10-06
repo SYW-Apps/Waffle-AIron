@@ -36,13 +36,21 @@ methods:
         targetMethod: loadImplementationSpecs
       - stepNumber: 6
         description: >-
+          Load type specs: the sourcePaths of the types a subsystem owns (a type's own and its
+          methods') are code locations its owner fences, and those of the types whose componentClass
+          a component is are its implementer's
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: >-
           Load the component-variant registry (the dynamic layer on top of packs), so each
           owner/implementer can carry its variant-tagged components' guidance + same-variant
           siblings
         type: call
         targetComponent: variant_registry_adapter
         targetMethod: loadProjectVariants
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Render each owner/implementer's variant guidance through the variant registry, so the
           generated agent and the MCP spec-read path emit the SAME text from one implementation
@@ -50,14 +58,14 @@ methods:
         type: call
         targetComponent: variant_registry_adapter
         targetMethod: composeVariantGuidance
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Read the project configuration through the project config repository: its enabled targets,
           stamped on every record, and rules.generateComponentImplementers.
         type: call
         targetComponent: project_config_repository
         targetMethod: load
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Read the declared domains through the topology repository's facade, so a domain the
           repository declares but the spec tree does not model still gets an owner — domains are a
@@ -65,7 +73,7 @@ methods:
         type: call
         targetComponent: topology_repository
         targetMethod: loadConfig
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           For each member the bound root declares directly, bind the member's own root and collect
           the ids of the agents ITS layer resolves (its architect, its owners and implementers, and
@@ -73,27 +81,27 @@ methods:
           `<alias>::<agentId>`. Ids only: nothing of the member's agents is rendered here, and the
           walk stops at one level, so this layer's topology stays proportional to itself
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Ask the spec loader where each local subsystem's spec lives, for its owner's ownedPaths
         type: call
         targetComponent: spec_loader
         targetMethod: subsystemPath
-      - stepNumber: 12
+      - stepNumber: 13
         description: Ask where each component's spec lives, for its owner's and implementer's ownedPaths
         type: call
         targetComponent: spec_loader
         targetMethod: componentPath
-      - stepNumber: 13
+      - stepNumber: 14
         description: Ask where each of the component's interfaces lives, for its implementer's ownedPaths
         type: call
         targetComponent: spec_loader
         targetMethod: interfacePath
-      - stepNumber: 14
+      - stepNumber: 15
         description: Ask where each of the component's implementations lives, for its implementer's ownedPaths
         type: call
         targetComponent: spec_loader
         targetMethod: implementationPath
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per member project this project declares (in `members`, or for
@@ -106,11 +114,14 @@ methods:
           cache's; it is changed in its own repository and taken in with `member update`). Each
           owner's and implementer's ownedPaths fence holds every code location its specs name,
           whether the file exists yet or is PLANNED: the source files its implementations and their
-          methods name, their simPath harnesses, and the sourcePaths of the types its subsystem owns
-          (a type's own and its methods'). A planned path is declared at design time since code
-          linkage left the approval, so the fence of a component with no code yet is already the
-          file the implementer must create. Each record carries the rendered variantGuidance for its
-          variant-tagged components.
+          methods name, their simPath harnesses, and the sourcePaths of its types (an owner's: the
+          types its subsystem owns; an implementer's: the types whose componentClass its component
+          is — a type's own file and its methods'). A type file the specs of another subsystem also
+          name (a shared models module) is no single owner's to fence and is left out, so no path
+          has two owners. A planned path is declared at design time since code linkage left the
+          approval, so the fence of a component with no code yet is already the file the implementer
+          must create. Each record carries the rendered variantGuidance for its variant-tagged
+          components.
         type: local
   - name: composeAgentBrief
     narrative:
@@ -235,4 +246,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T10:12:48.964Z'
+updatedAt: '2026-10-06T10:57:58.978Z'

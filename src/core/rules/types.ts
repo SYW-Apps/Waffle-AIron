@@ -227,6 +227,16 @@ export interface CodeIndex {
    * written down in the code.
    */
   forwardsOf(path: string, name: string, container?: string): ForwardedName[];
+  /**
+   * Whether realization has BEGUN for whatever names these files: true when at
+   * least one of them resolves to a file the run analyzed or could read (any
+   * status but missing or escaped). The one definition every code rule shares
+   * — an implementation has begun when any file it names (its sourcePath or a
+   * method's) exists, a type when its own file or a method's exists; a simPath
+   * harness does not count, it follows the code it wires. Before that a named
+   * file is planned, not missing. Pure: over the index's own facts.
+   */
+  holdsAny(files: string[]): boolean;
 }
 
 /** One (file, name) a republished name resolves to (forwarded_name). */

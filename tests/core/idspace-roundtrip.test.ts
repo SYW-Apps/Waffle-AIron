@@ -741,7 +741,7 @@ describe("a chained child's implementation file paths are relative to its own ro
       invalidateSpecCache();
       setProjectRoot(kidDir);
       return validateProject().issues
-        .filter((i) => i.code === 'MISSING_SOURCE_FILE' || i.code === 'SOURCE_PATH_ESCAPES_ROOT')
+        .filter((i) => i.code === 'MISSING_SOURCE_FILE' || i.code === 'SOURCE_FILE_PLANNED' || i.code === 'SOURCE_PATH_ESCAPES_ROOT')
         .map((i) => `${i.code} @${i.specId}`);
     };
 
@@ -749,10 +749,11 @@ describe("a chained child's implementation file paths are relative to its own ro
     saveImplementationSpec(kidImpl({ sourcePath: 'packages/kid/src/run.ts' }));
     expect(missingFromKid()).toEqual([]);
 
-    // The control: a file that does not exist is still reported from the child.
+    // The control: a file that does not exist is still reported from the child
+    // (planned, since nothing the implementation names exists yet).
     setProjectRoot(rootDir!);
     saveImplementationSpec(kidImpl({ sourcePath: 'packages/kid/src/missing.ts' }));
-    expect(missingFromKid()).toEqual(['MISSING_SOURCE_FILE @kid-impl']);
+    expect(missingFromKid()).toEqual(['SOURCE_FILE_PLANNED @kid-impl']);
   });
 });
 

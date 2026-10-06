@@ -11,7 +11,7 @@ import {
 } from './specs.js';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
-import type { ImplementationSpec } from '../models/specs.js';
+import { componentDesignView, implementationDesignView, typeDesignView, type ImplementationSpec } from '../models/specs.js';
 import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 
 // ---------------------------------------------------------------------------
@@ -34,10 +34,33 @@ import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 export interface StateId {
   algorithm: string;
   digest: string;
+  /**
+   * On a gate identity only: the same gate identity computed under the
+   * algorithm the bound project's lock record was taken with, when that is the
+   * previous (full-content, format-2) algorithm this release can still
+   * recompute. Present only while the record on disk carries it, so such a
+   * lock is judged exactly as it was taken. Never recorded: a lock writes
+   * algorithm and digest alone.
+   */
+  asRecorded?: StateId;
 }
 
 /** Algorithm marker for the CONTENT identity: the spec tree alone. */
-const CONTENT_ALGORITHM = 'sha256';
+export const CONTENT_ALGORITHM = 'sha256';
+
+/**
+ * Algorithm marker for the DESIGN identity: the own specs through their design
+ * views. Distinct from the content marker, so the two can never compare equal.
+ */
+export const DESIGN_ALGORITHM = 'sha256-design';
+
+/** How each kind of spec is read into a digest — as loaded, or through a projection. */
+interface TreeReading {
+  implementation?: (impl: ImplementationSpec) => ImplementationSpec;
+  component?: <T extends object>(spec: T) => T;
+  type?: <T extends object>(spec: T) => T;
+  algorithm?: string;
+}
 
 /**
  * Put one kind of spec into the order the identity is taken in: by id, then by
@@ -67,18 +90,25 @@ function inIdentityOrder<T extends { id: string }>(specs: T[]): T[] {
 }
 
 /** The canonical digest of one tree reading, in identity order. */
-function digestTree(keep: (id: string) => boolean, asStored: (impl: ImplementationSpec) => ImplementationSpec = (impl) => impl): StateId {
+function digestTree(keep: (id: string) => boolean, reading: TreeReading = {}): StateId {
   const kind = <T extends { id: string }>(specs: T[]): T[] => inIdentityOrder(specs.filter((s) => keep(s.id)));
+  const same = <T>(spec: T): T => spec;
   const tree = {
     system: loadSystemSpec(),
     subsystems: kind(loadSubsystemSpecs()),
-    components: kind(loadComponentSpecs()),
+    components: kind(loadComponentSpecs().map(reading.component ?? same)),
     interfaces: kind(loadInterfaceSpecs()),
-    implementations: kind(loadImplementationSpecs().map(asStored)),
-    types: kind(loadTypeSpecs()),
+    implementations: kind(loadImplementationSpecs().map(reading.implementation ?? same)),
+    types: kind(loadTypeSpecs().map(reading.type ?? same)),
   };
   const digest = crypto.createHash('sha256').update(canonicalize(tree)).digest('hex');
-  return { algorithm: CONTENT_ALGORITHM, digest };
+  return { algorithm: reading.algorithm ?? CONTENT_ALGORITHM, digest };
+}
+
+/** Whether a spec key belongs to the bound root (owner key empty): a member's specs are its own lock's. */
+function ownedByRoot(): (id: string) => boolean {
+  const owners = graph().owners;
+  return (id) => (owners.get(id) ?? '') === '';
 }
 
 /**
@@ -112,7 +142,27 @@ export function computeOwnStateId(): StateId {
     const part = file === undefined ? undefined : parts.find((p) => p.directory !== undefined && isInside(p.directory, file));
     return part?.directory !== undefined ? fromPartRoot(impl, root, part.directory) : impl;
   };
-  return digestTree((id) => (owners.get(id) ?? '') === '', asStored);
+  return digestTree((id) => (owners.get(id) ?? '') === '', { implementation: asStored });
+}
+
+/**
+ * state_hash.ownDesign — the DESIGN identity of the bound project's own specs:
+ * exactly ownTree's selection, storage-independence and ordering, but each
+ * spec digested in its design view — an implementation, a type and a
+ * component through their type's designView (code linkage and timestamps
+ * out), every other kind with its timestamps out (canonicalize drops them).
+ * A part's implementation needs no re-expression from the part's root: the
+ * paths are linkage, and the view leaves them out. Algorithm marker
+ * `sha256-design`, so it never compares equal to a content identity. The
+ * content half of the gate identity from lock format 3 on.
+ */
+export function computeOwnDesignStateId(): StateId {
+  return digestTree(ownedByRoot(), {
+    implementation: implementationDesignView,
+    component: componentDesignView,
+    type: typeDesignView,
+    algorithm: DESIGN_ALGORITHM,
+  });
 }
 
 /** Whether a file lies inside a directory. */
