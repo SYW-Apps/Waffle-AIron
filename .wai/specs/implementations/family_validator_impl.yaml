@@ -752,10 +752,23 @@ methods:
       - stepNumber: 4
         description: >-
           Drop each finding a project's own gate already carried; stamp the rest with the key of the
-          project whose spec they sit on, tune each by that project's rules.sddRuleSeverity and drop
-          one a lint.allow on that spec covers at its site
+          project whose spec they sit on (a call's caller, a verb's Portal, a MULTIPLE_GATEWAYS
+          finding's first gateway Portal: always the project holding that spec, never a guess from a
+          name in the message), tune each by that project's rules.sddRuleSeverity and drop one a
+          lint.allow on that spec covers at its site
         type: local
       - stepNumber: 5
+        description: Read the codes the family judges over every member
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: familyCodes
+      - stepNumber: 6
+        description: >-
+          Report UNUSED_LINT_ALLOW (warning) for each lint.allow of one of those codes on a selected
+          project's own spec that covers no finding of the family's model (carried by its own gate
+          or not) at its site: the project's own gate left that judgement to this run
+        type: local
+      - stepNumber: 7
         description: Answer them
         type: return
         outcome: the family's reach findings
@@ -791,4 +804,4 @@ methods:
         outcome: the family's reach model
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-06T13:00:31.273Z'
+updatedAt: '2026-10-06T18:32:23.879Z'

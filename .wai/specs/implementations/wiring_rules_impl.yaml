@@ -574,6 +574,26 @@ methods:
           as well, or intf.status is draft or design) on intf.id, naming the method, the component
           and the invokedBy kind
         type: local
+      - stepNumber: 6
+        label: portals
+        description: >-
+          Then the Portal-level declarations: for each Portal component of ctx.components in scope
+          that declares its own invokedBy (the entry every verb inherits)
+        type: loop
+        loopKind: forEach
+        over: each Portal comp of ctx.components with comp.invokedBy set and ctx.isSpecInScope(comp.id)
+        endStep: 8
+      - stepNumber: 7
+        description: The caller prose must say who reaches the Portal and how
+        type: branch
+        condition: passesIntentFloor(comp.invokedBy.caller, comp.id) is false
+        onFalseStep: 6
+      - stepNumber: 8
+        label: portalUndescribed
+        description: >-
+          Report INVOKED_BY_UNDESCRIBED (warning; draft context when ctx.isComponentDraft(comp.id))
+          on comp.id, naming the Portal and the invokedBy kind
+        type: local
     symbol: check
     exportedVia: invokedByDescriptionRule
   - name: unusedDetection
@@ -582,9 +602,14 @@ methods:
       - stepNumber: 1
         description: >-
           Collect the base roots: every Observer, seeding all its contract methods; each lifecycle
-          entrypoint of ctx.subsystems, seeding its one method; and every method of each interface
-          in ctx.interfaces that declares `implements` (an imported extension point the producer
-          calls). A Portal and a published component are no longer roots of their own
+          entrypoint of ctx.subsystems, seeding its one method; every method of each interface in
+          ctx.interfaces that declares `implements` (an imported extension point the producer
+          calls); and every MessageBus subscribe verb of a Portal whose topic the tree emits (an
+          emits declaration or a MessageBus publish endpoint): the emitted topic reaches it, as an
+          Observer's subscription is reached. A subscribe verb whose topic nothing in the tree emits
+          is not a root: an entry declared for its outside publisher reaches it, and
+          UNSOURCED_SUBSCRIPTION already reports the missing source. A Portal and a published
+          component are no longer roots of their own
         type: local
       - stepNumber: 2
         description: >-
@@ -984,4 +1009,4 @@ methods:
     exportedVia: networkBoundariesRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-06T13:21:12.799Z'
+updatedAt: '2026-10-06T18:32:45.154Z'

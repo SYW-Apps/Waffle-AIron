@@ -346,17 +346,19 @@ methods:
       resolves every unfinished family-migration transaction under the root — rolling back each one
       whose coordinator never committed, cleaning up each one that did — then applies the repairs it
       can — regenerating stale guides, context and skills, registering the MCP server, retiring
-      Specialists into Orchestrators — and then the chaining migration, which it prints and applies
-      only after confirmation (--yes answers it for a non-interactive run; without either nothing of
-      it is written). A repair that would write OUTSIDE the project root — a machine-wide MCP
-      configuration such as Antigravity's global mcp_config.json, the legacy global plugin — is
-      listed in its own plan with the file and the old and new value, and needs its own
-      confirmation: --yes covers it only together with --global, a terminal asks, and a run with
-      neither skips it and says so; a replaced file is kept beside itself as
-      <file>.wairon-backup-<timestamp>. With --report chaining it prints the chaining plan per
-      project; with --report composed-validation it prints what stage 4 changed in each project's
-      verdict (today's gate against the totals its lock recorded, and every new finding with its
-      reason) — either report changes nothing and never combines with --fix.
+      Specialists into Orchestrators, migrating onto the reachability model — and then the chaining
+      migration, which it prints and applies only after confirmation (--yes answers it for a
+      non-interactive run; without either nothing of it is written). A repair that would write
+      OUTSIDE the project root — a machine-wide MCP configuration such as Antigravity's global
+      mcp_config.json, the legacy global plugin — is listed in its own plan with the file and the
+      old and new value, and needs its own confirmation: --yes covers it only together with
+      --global, a terminal asks, and a run with neither skips it and says so; a replaced file is
+      kept beside itself as <file>.wairon-backup-<timestamp>. With --report chaining it prints the
+      chaining plan per project; with --report composed-validation it prints what stage 4 changed in
+      each project's verdict (today's gate against the totals its lock recorded, and every new
+      finding with its reason); with --report reachability it prints the bound project's
+      reachability migration plan, each rewrite by its retired form and what it will not fix — each
+      report changes nothing and never combines with --fix.
     signature: 'runDoctor(options?: DoctorOptions): async void'
     returns: async void
     params:
@@ -844,4 +846,4 @@ methods:
         type: NetworkCommandOptions
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T13:13:18.837Z'
+updatedAt: '2026-10-06T18:33:30.585Z'

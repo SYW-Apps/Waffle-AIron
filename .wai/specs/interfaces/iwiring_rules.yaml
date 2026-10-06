@@ -99,7 +99,8 @@ methods:
       Rule invoked-by-description. An invokedBy declaration names a caller outside the modeled graph
       and silences unused-detection for its method, so the claim must stay reviewable: its "caller"
       prose is held to the intent floor (missing or placeholder-thin prose is reported), stating WHO
-      invokes the method and when.
+      invokes the method and when. A Portal-level invokedBy (the entry every verb of the Portal
+      inherits) is held to the same floor, on the Portal.
     signature: 'invokedByDescription(ctx: RuleContext): void'
     returns: void
     params:
@@ -116,14 +117,15 @@ methods:
       dispatch-table routing, lifecycle flows) from every declared root and flags the components and
       methods no execution chain reaches. The roots are: each lifecycle entrypoint; each Observer;
       each method of an interface that implements an imported extension point (the producer calls
-      it); each Portal verb with an entry (its own invokedBy of kind entry, or its Portal's); and
-      each method declaring a runtime invokedBy. A Portal is no longer a root of its own and a
-      published component is not either, so a Portal verb that no modelled caller reaches and nobody
-      declared an entry for is reported: the message names the two remedies, modelling the caller or
-      declaring the entry with its scope. A network-scoped entry counts as declared here; the family
-      run proves it. A runtime declaration the INTERNAL walk (without the declared roots) already
-      reaches is stale and is reported. An entry never is, because it also states the verb's scope
-      for the network rules and the flow matrix.
+      it); each MessageBus subscribe verb of a Portal whose topic the tree emits (the emitted topic
+      reaches it); each Portal verb with an entry (its own invokedBy of kind entry, or its
+      Portal's); and each method declaring a runtime invokedBy. A Portal is no longer a root of its
+      own and a published component is not either, so a Portal verb that no modelled caller reaches
+      and nobody declared an entry for is reported: the message names the two remedies, modelling
+      the caller or declaring the entry with its scope. A network-scoped entry counts as declared
+      here; the family run proves it. A runtime declaration the INTERNAL walk (without the declared
+      roots) already reaches is stale and is reported. An entry never is, because it also states the
+      verb's scope for the network rules and the flow matrix.
     signature: 'unusedDetection(ctx: RuleContext): void'
     returns: void
     params:
@@ -374,4 +376,4 @@ methods:
           beyond the network cannot reach
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-06T17:53:15.491Z'
+updatedAt: '2026-10-06T18:32:49.374Z'

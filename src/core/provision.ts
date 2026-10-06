@@ -55,7 +55,7 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import { admits, declaredMembers, DesignDepthSchema, readExternalSource, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type MemberKind, type MemberStorage, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { admits, declaredMembers, DesignDepthSchema, methodCasingFor, readExternalSource, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type MemberKind, type MemberStorage, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 // extension_orchestrator: the installed packs a member's required packs are pinned from.
 import { listInstalledPacks, loadProjectExtensions } from './extensions.js';
 // The built-in subsystem profiles, so internalize stamps only a profile a subsystem can hold.
@@ -2935,8 +2935,45 @@ function removeSpecFile(file: string, id: string): void {
 // never silently rename an RPC — so both are reported instead.
 // ---------------------------------------------------------------------------
 
-/** The grammar a renamed method is written in: a camel-case identifier, which no namespace separator passes. */
-const METHOD_NAME = /^[a-z][a-zA-Z0-9]*$/;
+/**
+ * The identifier grammar of each method casing a tree may ask for — the
+ * casings the naming-conventions rule knows. None admits a namespace separator.
+ */
+const METHOD_CASINGS: Readonly<Record<string, RegExp>> = {
+  camelCase: /^[a-z][a-zA-Z0-9]*$/,
+  PascalCase: /^[A-Z][a-zA-Z0-9]*$/,
+  snake_case: /^[a-z0-9]+(_[a-z0-9]+)*$/,
+  'kebab-case': /^[a-z0-9]+(-[a-z0-9]+)*$/,
+  UPPER_CASE: /^[A-Z0-9]+(_[A-Z0-9]+)*$/,
+};
+
+/** An identifier at all: what a configured regular expression still has to admit. */
+const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * Whether a new method name is an identifier in the tree's method casing:
+ * naming_rule_config.methodCasingFor(the configured naming, the subsystem's
+ * effective targetLanguage) — the casing the naming-conventions rule judges
+ * by, so define and rename accept the same names (snake_case in a Rust or
+ * Python tree, camelCase in a TypeScript one). A configured regular
+ * expression is honoured, on top of the identifier grammar.
+ */
+function methodNameFits(name: string, casing: string): boolean {
+  const known = METHOD_CASINGS[casing];
+  if (known) return known.test(name);
+  if (!IDENTIFIER.test(name)) return false;
+  try {
+    return new RegExp(casing).test(name);
+  } catch {
+    return METHOD_CASINGS.camelCase.test(name);
+  }
+}
+
+/** The method casing of a component's tree: its subsystem's targetLanguage, else the system's, against the configured naming. */
+function methodCasingOf(component: { subsystem: string }): string {
+  const language = loadSubsystemSpec(component.subsystem)?.targetLanguage ?? loadSystemSpec()?.targetLanguage;
+  return methodCasingFor(projectConfigRepository.load()?.rules?.naming, language);
+}
 
 /**
  * The fields a mention is read from — a spec's prose, wherever it nests: every
@@ -3005,9 +3042,10 @@ export function renameMethod(componentId: string, methodName: string, newName: s
       `chained-component: "${componentId}" lives in another project; rename its method from that project's own root. ${memberRootWay(componentId, `sdd_rename_method ${componentId.slice(componentId.lastIndexOf('::') + 2)} <method> <new name>`)}`,
     );
   }
-  // Steps 6–7: the new name must be a camel-case identifier.
-  if (!METHOD_NAME.test(newName)) {
-    throw new WaironError(`invalid-name: "${newName}" is not a camel-case identifier.`);
+  // Steps 6–7: the new name must be an identifier in the tree's method casing.
+  const casing = methodCasingOf(component);
+  if (!methodNameFits(newName, casing)) {
+    throw new WaironError(`invalid-name: "${newName}" is not an identifier in this tree's method casing (${casing}).`);
   }
 
   // Step 8: the component's own contracts, and the ones declaring the method.

@@ -93,12 +93,36 @@ describe('reach_model_projector.compose and network_arbiter.judge (family scope)
   it('proves it with a cross-project call the family references record', () => {
     const models = new Map([['', { scope: 'own', networks: [], verbs: [], calls: [] } as ReachModel], ['settlement', ownModel('settle-api', 'settle', networkEntry)]]);
     const references: ProjectFamily['references'] = [
+      // Two components depend on the Portal; only the implementation's call step says which one calls it.
+      { specId: 'checkout-audit', position: 'dependsOn', target: 'settlement::settle-api', consumer: '', producer: 'settlement', authored: 'settlement::settlement' },
       { specId: 'checkout-adapter', position: 'dependsOn', target: 'settlement::settle-api', consumer: '', producer: 'settlement', authored: 'settlement::settlement' },
-      { specId: 'checkout_adapter_impl', position: 'call', target: 'settlement::settle-api', member: 'settle', consumer: '', producer: 'settlement', authored: 'settlement::settlement' },
+      { specId: 'checkout_adapter_impl', position: 'call', target: 'settlement::settle-api', member: 'settle', consumer: '', producer: 'settlement', authored: 'settlement::settlement', caller: 'checkout-adapter' },
     ];
     const model = compose(models, familyOf({ settlement: '' }, references), new Map([['', {}]]));
     expect(model.calls).toEqual([expect.objectContaining({ fromProject: '', fromComponent: 'checkout-adapter', fromNetwork: '', toPortal: 'settlement::settle-api', verb: 'settle' })]);
     expect(judge(model).filter((f) => f.code === 'ENTRY_UNPROVEN')).toEqual([]);
+  });
+
+  it('maps a cross-project call\'s caller from the implementation, never from a matching dependsOn', () => {
+    const models = new Map([['', { scope: 'own', networks: [], verbs: [], calls: [] } as ReachModel], ['settlement', ownModel('settle-api', 'settle', networkEntry)]]);
+    const references: ProjectFamily['references'] = [
+      // A name-alike that depends on the Portal but never calls it.
+      { specId: 'checkout', position: 'dependsOn', target: 'settlement::settle-api', consumer: '', producer: 'settlement', authored: 'settlement::settlement' },
+      { specId: 'checkout_impl', position: 'call', target: 'settlement::settle-api', member: 'settle', consumer: '', producer: 'settlement', authored: 'settlement::settlement', caller: 'payments-adapter' },
+    ];
+    const model = compose(models, familyOf({ settlement: '' }, references), new Map([['', {}]]));
+    expect(model.calls.map((c) => c.fromComponent)).toEqual(['payments-adapter']);
+  });
+
+  it('sites MULTIPLE_GATEWAYS on the network\'s first gateway Portal, so it belongs to that gateway\'s project', () => {
+    const outside = { kind: 'entry', caller: 'Browsers and mobile clients of the shop.' };
+    const models = new Map([
+      ['edge', ownModel('web-gateway', 'browse', outside, true)],
+      ['api', ownModel('api-gateway', 'call', outside, true)],
+    ]);
+    const findings = judge(compose(models, familyOf({ edge: '', api: '' }), new Map([['', {}]])));
+    const multiple = findings.filter((f) => f.code === 'MULTIPLE_GATEWAYS');
+    expect(multiple.map((f) => [f.specId, f.at])).toEqual([['api::api-gateway', undefined]]);
   });
 
   it('names a network-scoped entry with no declared network around it (ENTRY_SCOPE_UNBOUNDED), proving it against the whole family', () => {
@@ -193,7 +217,25 @@ describe('family_validator.checkReach (the family run)', () => {
 
   it('honours a lint.allow on the member\'s spec at the verb', () => {
     bindTree(shopFamily({ rootCalls: false, allow: true }));
-    expect(validateFamily({}).issues.filter((i) => i.code === 'ENTRY_UNPROVEN')).toEqual([]);
+    const issues = validateFamily({}).issues;
+    expect(issues.filter((i) => i.code === 'ENTRY_UNPROVEN')).toEqual([]);
+    expect(issues.filter((i) => i.code === 'UNUSED_LINT_ALLOW' || i.code === 'UNKNOWN_LINT_ALLOW_CODE')).toEqual([]);
+  });
+
+  it('an allow of a family code is a known code on the member\'s own gate, never judged stale there', () => {
+    const root = bindTree(shopFamily({ rootCalls: true, allow: true }));
+    setProjectRoot(path.join(root, 'packages', 'settlement'));
+    invalidateSpecCache();
+    const own = validateProject({}).issues.filter((i) => i.code === 'UNKNOWN_LINT_ALLOW_CODE' || i.code === 'UNUSED_LINT_ALLOW');
+    expect(own).toEqual([]);
+  });
+
+  it('the family run judges that allow stale when the entry is proven', () => {
+    bindTree(shopFamily({ rootCalls: true, allow: true }));
+    const stale = validateFamily({}).issues.filter((i) => i.code === 'UNUSED_LINT_ALLOW');
+    expect(stale).toHaveLength(1);
+    expect(stale[0]).toMatchObject({ project: 'settlement', severity: 'warning', specId: 'settlement::settle-api' });
+    expect(stale[0].message).toContain('ENTRY_UNPROVEN');
   });
 
   it('answers the bound project\'s own model from spec_validator.reachModel', () => {

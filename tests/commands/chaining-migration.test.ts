@@ -83,11 +83,11 @@ function fleet(o: { billingL1?: boolean } = {}): Family {
   write(root, `${b}/specs/.index.yaml`, dump({ name: 'BillingService', vision: 'Invoices.' }));
   write(root, `${b}/specs/subsystems/invoicing.yaml`, dump({
     id: 'invoicing', name: 'Invoicing', description: 'Invoicing.', parentSystem: 'BillingService',
-    publicInterfaces: o.billingL1 === false ? [] : [{ component: 'invoice-portal', type: 'REST', details: 'Issue invoices.' }],
+    publicInterfaces: o.billingL1 === false ? [] : [{ component: 'invoice-portal', details: 'Issue invoices.' }],
   }));
   write(root, `${b}/specs/components/invoice-portal.yaml`, dump({
     id: 'invoice-portal', name: 'Invoice Portal', description: 'Issues invoices.', subsystem: 'invoicing',
-    componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: [],
+    componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [],
   }));
   write(root, `${b}/specs/interfaces/iinvoice-portal.yaml`, dump({
     id: 'iinvoice-portal', name: 'Invoice Portal Interface', description: 'Issue invoices.', component: 'invoice-portal',

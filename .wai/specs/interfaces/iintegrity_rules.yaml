@@ -167,7 +167,9 @@ methods:
       Allows silence warnings and notices; errors always surface — so an allow naming a code that is
       an error on its spec (it fired there as one, or its resolved severity is error) covers
       nothing, and the finding says plainly that an error cannot be allowed rather than that the
-      code never fired.
+      code never fired. A code the family run judges over every member (network_arbiter.familyCodes,
+      ENTRY_UNPROVEN among them) is a known code on any spec, and an allow of one this gate saw no
+      finding of is the family run's to judge stale, not this gate's.
     signature: 'lintAllows(ctx: RuleContext): void'
     returns: void
     params:
@@ -640,4 +642,4 @@ methods:
           with different params or returns
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-06T13:03:04.324Z'
+updatedAt: '2026-10-06T18:32:13.853Z'

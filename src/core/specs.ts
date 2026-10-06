@@ -398,6 +398,19 @@ function storedDocument(file: string): Record<string, unknown> | null {
   }
 }
 
+/** A stored interface document with every method's invokedBy of one retired kind left out (a copy; the document is not touched). */
+function withoutRetiredKind(doc: Record<string, unknown> | null, kind: string): Record<string, unknown> | null {
+  if (!doc || !Array.isArray(doc.methods)) return doc;
+  const methods = doc.methods.map((m) => {
+    if (!m || typeof m !== 'object') return m;
+    const invokedBy = (m as Record<string, unknown>).invokedBy as Record<string, unknown> | undefined;
+    if (invokedBy?.kind !== kind) return m;
+    const { invokedBy: _retired, ...rest } = m as Record<string, unknown>;
+    return rest;
+  });
+  return { ...doc, methods };
+}
+
 /**
  * The retired reachability forms only the whole family can read, once every
  * spec is keyed and every reference bound: a method's stored `external`
@@ -2000,6 +2013,14 @@ export interface SaveSpecOptions {
    * lines per spec where the status flip alone is one.
    */
   preserveUpdatedAt?: boolean;
+  /**
+   * The reachability migration's own write: the retired reachability forms it
+   * rewrote are retired, not carried back — a component's stored listener
+   * `mounts`, an interface method's stored retired invokedBy kind, and a stored
+   * endpoint the written method leaves out (an in-process Custom address the
+   * migration dropped). Every other write keeps carrying them.
+   */
+  retireReachForms?: boolean;
 }
 
 /**
@@ -4529,7 +4550,7 @@ export class SpecWorkspace {
     const retainedMounts = retiredMountsOf(specToWrite).declared
       ? { mounts: (specToWrite as unknown as Record<string, unknown>).mounts }
       : storedDocument(p);
-    carryRetiredReachForms('component', retainedMounts, componentOut as unknown as Record<string, unknown>);
+    if (!opts?.retireReachForms) carryRetiredReachForms('component', retainedMounts, componentOut as unknown as Record<string, unknown>);
     this.writeHome(p, componentOut, 'component');
     registryInvalidateCache();
     // Keep the physical layout in sync with ownership: nest owned members under
@@ -4680,8 +4701,9 @@ export class SpecWorkspace {
       if (!opts?.allowStatusDemotion && existing.status && (!spec.status || spec.status === 'draft')) {
         specToWrite.status = existing.status;
       }
-      // Preserve endpoint bindings for matching methods that don't carry their own
-      for (const m of specToWrite.methods) {
+      // Preserve endpoint bindings for matching methods that don't carry their
+      // own — unless the reachability migration dropped them deliberately.
+      for (const m of opts?.retireReachForms ? [] : specToWrite.methods) {
         if (m.endpoint) continue;
         const existingMethod = existing.methods.find(x => x.name === m.name);
         if (existingMethod && existingMethod.endpoint) {
@@ -4693,7 +4715,10 @@ export class SpecWorkspace {
     const interfaceOut = parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id);
     // A retired invokedBy kind the author left as it was read stays as stored
     // until doctor --fix rewrites it.
-    carryRetiredReachForms('interface', storedDocument(p), interfaceOut as unknown as Record<string, unknown>);
+    // The reachability migration retires a stored `external` it rewrote, but
+    // never a stored `sibling-subsystem`: that one it only reports.
+    const storedInterface = storedDocument(p);
+    carryRetiredReachForms('interface', opts?.retireReachForms ? withoutRetiredKind(storedInterface, 'external') : storedInterface, interfaceOut as unknown as Record<string, unknown>);
     this.writeHome(p, interfaceOut, 'interface');
     registryInvalidateCache();
     return notices;

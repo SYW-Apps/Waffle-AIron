@@ -23,7 +23,7 @@ export const reachabilityRule: SddRule = {
   needsWholeTree: true,
   judges: 'design',
   description:
-    "Walks the narrative execution graph (call steps, register handoffs, dispatch-table routing, lifecycle flows) from every declared root and flags the components and methods no execution chain reaches. The roots are: each lifecycle entrypoint; each Observer; each method of an interface that implements an imported extension point (the producer calls it); each Portal verb with an entry (its own invokedBy of kind entry, or its Portal's); and each method declaring a runtime invokedBy. A Portal is no longer a root of its own and a published component is not either, so a Portal verb that no modelled caller reaches and nobody declared an entry for is reported: the message names the two remedies, modelling the caller or declaring the entry with its scope. A network-scoped entry counts as declared here; the family run proves it. A runtime declaration the INTERNAL walk (without the declared roots) already reaches is stale and is reported. An entry never is, because it also states the verb's scope for the network rules and the flow matrix.",
+    "Walks the narrative execution graph (call steps, register handoffs, dispatch-table routing, lifecycle flows) from every declared root and flags the components and methods no execution chain reaches. The roots are: each lifecycle entrypoint; each Observer; each method of an interface that implements an imported extension point (the producer calls it); each MessageBus subscribe verb of a Portal whose topic the tree emits (the emitted topic reaches it); each Portal verb with an entry (its own invokedBy of kind entry, or its Portal's); and each method declaring a runtime invokedBy. A Portal is no longer a root of its own and a published component is not either, so a Portal verb that no modelled caller reaches and nobody declared an entry for is reported: the message names the two remedies, modelling the caller or declaring the entry with its scope. A network-scoped entry counts as declared here; the family run proves it. A runtime declaration the INTERNAL walk (without the declared roots) already reaches is stale and is reported. An entry never is, because it also states the verb's scope for the network rules and the flow matrix.",
   codes: [
     { code: 'UNUSED_COMPONENT', defaultSeverity: 'warning', summary: 'Component never reached by any narrative call chain from a declared root; for a Portal, none of its verbs is called by a modelled caller or declared an entry' },
     { code: 'UNUSED_METHOD', defaultSeverity: 'warning', summary: 'Method never called by any narrative step; for a Portal verb, no modelled caller reaches it and no entry is declared for it' },
@@ -43,6 +43,27 @@ export const reachabilityRule: SddRule = {
     for (const intf of ctx.interfaces) {
       if (intf.implements === undefined || !ctx.componentMap.has(intf.component)) continue;
       for (const m of intf.methods) baseRoots.push({ compId: intf.component, methodName: m.name });
+    }
+    // A MessageBus subscribe verb of a Portal is reached by its topic when the
+    // tree emits it (an emits declaration or a publish endpoint), as an
+    // Observer's subscription is. One whose topic nothing here emits is not a
+    // root: UNSOURCED_SUBSCRIPTION reports the missing source, and an entry
+    // declared for its outside publisher reaches it.
+    const emitted = new Set<string>();
+    for (const comp of ctx.components) for (const e of comp.emits ?? []) emitted.add(e.topic);
+    for (const intf of ctx.interfaces) {
+      for (const m of intf.methods) {
+        if (m.endpoint?.transport === 'MessageBus' && m.endpoint.direction === 'publish') emitted.add(m.endpoint.topic);
+      }
+    }
+    for (const intf of ctx.interfaces) {
+      if (ctx.componentMap.get(intf.component)?.componentType !== 'Portal') continue;
+      for (const m of intf.methods) {
+        const ep = m.endpoint;
+        if (ep?.transport === 'MessageBus' && ep.direction !== 'publish' && emitted.has(ep.topic)) {
+          baseRoots.push({ compId: intf.component, methodName: m.name });
+        }
+      }
     }
 
     // Step 2: phase 1, the INTERNAL walk — the baseline a runtime declaration

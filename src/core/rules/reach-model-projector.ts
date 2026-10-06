@@ -234,22 +234,15 @@ export function compose(
 
   // Step 4: the cross-project calls the family's references record.
   const portals = new Set(verbs.map((v) => v.portal));
-  const dependsOn = family.references.filter((r) => r.position === 'dependsOn');
-  /** The component making a call written in a spec: the spec itself when it is a component, else the consumer's component depending on the target whose key best matches the spec's. */
-  const callerOf = (specId: string, consumer: string, target: string): string => {
-    const candidates = dependsOn.filter((r) => r.consumer === consumer && r.target === target).map((r) => r.specId);
-    if (candidates.includes(specId)) return specId;
-    const local = specId.split('::').pop() ?? specId;
-    const prefixed = candidates.filter((c) => local.startsWith(c.split('::').pop() ?? c)).sort((a, b) => b.length - a.length || a.localeCompare(b));
-    return prefixed[0] ?? candidates.sort()[0] ?? specId;
-  };
   for (const ref of family.references) {
     if (!['call', 'calls', 'register', 'dispatch'].includes(ref.position) || ref.member === undefined) continue;
     if (!portals.has(ref.target)) continue;
     const net = innermost(ref.consumer);
     calls.push({
       fromProject: ref.consumer,
-      fromComponent: callerOf(ref.specId, ref.consumer, ref.target),
+      // The component whose implementation writes the call, as the
+      // reference recorded it — never guessed from a matching dependsOn.
+      fromComponent: ref.caller ?? ref.specId,
       ...(net !== undefined ? { fromNetwork: net } : {}),
       toPortal: ref.target,
       verb: ref.member,

@@ -310,8 +310,11 @@ methods:
       network around it (ENTRY_SCOPE_UNBOUNDED). A finding a project's own gate already carried (its
       own network over its own tree) is not repeated. Each finding names the project whose spec it
       sits on and is tuned by that project's rules.sddRuleSeverity; a lint.allow on that spec covers
-      it, sited at the verb or call it names. A member's own verdict is unchanged by it: the
-      member's gate judged the member alone.
+      it, sited at the verb or call it names. An allow of one of these codes
+      (network_arbiter.familyCodes) on a selected project's own spec that covers no finding of the
+      family's model and none its own gate carried is stale, and is reported here
+      (UNUSED_LINT_ALLOW): the project's own gate leaves that judgement to this run. A member's own
+      verdict is unchanged by it: the member's gate judged the member alone.
     signature: 'checkReach(family: ProjectFamily, models: map<string, ReachModel>): list<ValidationIssue>'
     returns: list<ValidationIssue>
     params:
@@ -321,7 +324,12 @@ methods:
       - name: models
         type: map<string, ReachModel>
         description: Each selected project's own reach model, by project key, as the run collected them
-    findings: []
+    findings:
+      - code: UNUSED_LINT_ALLOW
+        severity: warning
+        summary: >-
+          An allow of a family-judged reach code covers no finding of the family's reach model at
+          its site
   - name: reachModel
     description: >-
       The family's reach model at the bound root, for the derived networking outputs: the same
@@ -337,4 +345,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-06T13:00:23.281Z'
+updatedAt: '2026-10-06T18:32:17.955Z'

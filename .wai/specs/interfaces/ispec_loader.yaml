@@ -30,7 +30,9 @@ methods:
   - name: saveComponentSpec
     description: >-
       Saves a component specification. A spec arriving at draft, or without a status, keeps the
-      status already stored unless the caller states the demotion.
+      status already stored unless the caller states the demotion. A retired listener `mounts` the
+      stored file holds is carried onto the write unless the spec states its own, or the caller is
+      the reachability migration retiring it.
     signature: 'saveComponentSpec(spec: ComponentSpec): void'
     returns: void
   - name: loadInterfaceSpecs
@@ -44,7 +46,9 @@ methods:
   - name: saveInterfaceSpec
     description: >-
       Saves an interface specification. A spec arriving at draft, or without a status, keeps the
-      status already stored unless the caller states the demotion.
+      status already stored unless the caller states the demotion. A retired invokedBy kind the
+      author left as it was read, and a stored endpoint the written method leaves out, are carried
+      onto the write, unless the caller is the reachability migration retiring them.
     signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
     returns: void
   - name: loadImplementationSpecs
@@ -256,4 +260,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T13:06:56.177Z'
+updatedAt: '2026-10-06T18:31:03.106Z'

@@ -203,7 +203,7 @@ program
   .command('doctor')
   .description('Health check: flags stale generated guides/skills, an unregistered MCP server, spec-tree issues and the chaining migration still pending')
   .option('--fix', 'regenerate stale in-project guides/context/skills, register the MCP server, then apply the chaining migration once confirmed')
-  .option('--report <section>', "print one section's report and nothing else, writing nothing (chaining | composed-validation); never combines with --fix")
+  .option('--report <section>', "print one section's report and nothing else, writing nothing (chaining | composed-validation | reachability); never combines with --fix")
   .option('-y, --yes', "answer the chaining migration's confirmation (for a non-interactive --fix); a write outside the project root also needs --global")
   .option('--global', 'consent to the --fix writes outside the project root (a machine-wide MCP config, the legacy global plugin); with --yes it answers their confirmation, and each replaced file is backed up beside itself')
   .action(async (opts) => {

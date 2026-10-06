@@ -2009,8 +2009,13 @@ export function componentEntryFor(
 // Retired reachability forms — read compatibly for one release
 // ---------------------------------------------------------------------------
 
-/** A form the reachability model retired, as the scan met it in a stored spec. */
-export const RetiredReachFormSchema = z.enum(['portal-type', 'listener-mounts', 'invoked-by-kind', 'export-type', 'in-process-endpoint']);
+/**
+ * A form the reachability model retired, as the scan met it in a stored spec.
+ * `retired-allow` (a lint allow of a retired code) is never recorded by the
+ * scan: the reachability migration reads the allows itself and names its
+ * rewrites with it.
+ */
+export const RetiredReachFormSchema = z.enum(['portal-type', 'listener-mounts', 'invoked-by-kind', 'export-type', 'in-process-endpoint', 'retired-allow']);
 export type RetiredReachForm = z.infer<typeof RetiredReachFormSchema>;
 
 /**

@@ -14,7 +14,7 @@ export const invokedByDescriptionRule: SddRule = {
   name: 'invoked-by-description',
   judges: 'design',
   description:
-    'An invokedBy declaration names a caller outside the modeled graph and silences unused-detection for its method, so the claim must stay reviewable: its "caller" prose is held to the intent floor (missing or placeholder-thin prose is reported), stating WHO invokes the method and when.',
+    'An invokedBy declaration names a caller outside the modeled graph and silences unused-detection for its method, so the claim must stay reviewable: its "caller" prose is held to the intent floor (missing or placeholder-thin prose is reported), stating WHO invokes the method and when. A Portal-level invokedBy (the entry every verb of the Portal inherits) is held to the same floor, on the Portal.',
   codes: [
     { code: 'INVOKED_BY_UNDESCRIBED', defaultSeverity: 'warning', summary: 'invokedBy declaration whose caller prose is missing or placeholder-thin' },
   ],
@@ -37,6 +37,18 @@ export const invokedByDescriptionRule: SddRule = {
           isDraftCtx,
         );
       }
+    }
+    // Then the Portal-level declarations: the entry every verb inherits.
+    for (const comp of ctx.components) {
+      if (comp.componentType !== 'Portal' || !comp.invokedBy || !ctx.isSpecInScope(comp.id)) continue;
+      if (passesIntentFloor(comp.invokedBy.caller, comp.id)) continue;
+      ctx.addIssue(
+        'warning',
+        'INVOKED_BY_UNDESCRIBED',
+        `Portal "${comp.id}" declares invokedBy (${comp.invokedBy.kind}) for every verb, but its "caller" prose is missing or placeholder-thin — state WHO reaches the Portal and how, so the entry claim stays reviewable.`,
+        comp.id,
+        ctx.isComponentDraft(comp.id),
+      );
     }
   },
 };

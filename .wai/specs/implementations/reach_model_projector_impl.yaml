@@ -66,8 +66,10 @@ methods:
         description: >-
           Add the cross-project calls: every reference in family.references at position call, calls,
           register or dispatch that names a method on a Portal of another project, as a ModelledCall
-          from its consumer project's component (placed in the consumer's innermost network) to the
-          producer's verb, with the referring spec as its evidence
+          from the reference's caller (the component whose implementation writes the step, never a
+          guess from a matching dependsOn; the referring spec when the reference records none),
+          placed in the consumer's innermost network, to the producer's verb, with the referring
+          spec as its evidence
         type: local
       - stepNumber: 5
         description: Answer the ReachModel with scope family, every list in a stable order
@@ -76,4 +78,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-06T12:58:16.938Z'
-updatedAt: '2026-10-06T12:59:58.824Z'
+updatedAt: '2026-10-06T18:31:09.578Z'

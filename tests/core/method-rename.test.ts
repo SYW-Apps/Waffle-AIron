@@ -436,3 +436,63 @@ describe('renameMethod — the debt register and the lint allows (F78)', () => {
     expect(report.rewritten).toEqual(expect.arrayContaining(['iledger', 'books_orch_impl']));
   });
 });
+
+describe('renameMethod — the method casing follows the tree (naming_rule_config.methodCasingFor)', () => {
+  let root: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  /** Re-declare the tree's targetLanguage (and optionally the configured method casing). */
+  function speak(dir: string, targetLanguage: string | undefined, methods?: string): void {
+    const system = path.join(dir, '.wai', 'specs', '.index.yaml');
+    const doc = readYamlFile(system) as Record<string, unknown>;
+    writeYamlFile(system, { ...doc, ...(targetLanguage ? { targetLanguage } : {}) });
+    if (methods) {
+      const config = path.join(dir, '.wai', 'project.yaml');
+      const cfg = readYamlFile(config) as Record<string, unknown>;
+      writeYamlFile(config, { ...cfg, rules: { naming: { methods } } });
+    }
+    invalidateSpecCache();
+  }
+
+  it('a Rust tree takes a snake_case name, and its trace (the pinned symbol) is kept', () => {
+    root = books();
+    speak(root, 'rust');
+    const report = renameMethod('ledger', 'post', 'append_entry');
+    expect(report.to).toBe('append_entry');
+    expect(method(root, 'ledger_impl', 'append_entry').symbol).toBe('post');
+    // The implementation that bound the old function keeps binding it.
+    expect(report.pinnedSymbol).toBe('post');
+  });
+
+  it('a Python tree takes snake_case too, and refuses camelCase', () => {
+    root = books();
+    speak(root, 'python');
+    const before = snapshot(root);
+    expect(() => renameMethod('ledger', 'post', 'appendEntry')).toThrow(/invalid-name: .*snake_case/);
+    expect(snapshot(root)).toEqual(before);
+  });
+
+  it('a TypeScript tree refuses snake_case, naming the casing it asks for', () => {
+    root = books();
+    speak(root, 'typescript');
+    expect(() => renameMethod('ledger', 'post', 'append_entry')).toThrow(/invalid-name: .*camelCase/);
+  });
+
+  it('the configured rules.naming.methods casing wins over the language convention', () => {
+    root = books();
+    speak(root, 'typescript', 'snake_case');
+    expect(renameMethod('ledger', 'post', 'append_entry').to).toBe('append_entry');
+  });
+
+  it('no casing admits a namespace separator', () => {
+    root = books();
+    speak(root, 'rust');
+    expect(() => renameMethod('ledger', 'post', 'ext::append')).toThrow(/invalid-name/);
+  });
+});

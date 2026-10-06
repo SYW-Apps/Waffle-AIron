@@ -150,6 +150,70 @@ export default [
     tree: storefront({ portals: [{ id: 'checkout-portal', verb: 'placeOrder', path: '/orders', entry: { kind: 'entry', caller: SHOPPERS } }] }),
   }),
 
+  // A MessageBus subscribe verb is reached by its topic when the tree emits it.
+  defineRuleFixture({
+    code: 'UNUSED_COMPONENT',
+    expectFire: false,
+    reason: 'The payments portal emits orders.paid, so the topic reaches the intake portal\'s subscribe verb the way an Observer\'s subscription is reached: no entry is needed for it.',
+    scenario: 'The fulfilment intake portal subscribes to orders.paid on the message bus, and the payments portal (entered by shoppers) emits that topic.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [ORDERS_SUB],
+      components: [
+        { ...httpPortal('payments-portal', { entry: { kind: 'entry', caller: SHOPPERS } }), emits: [{ topic: 'orders.paid', event: 'OrderPaid' }] },
+        { id: 'fulfilment-intake', componentType: 'Portal', transport: 'MessageBus', subsystem: 'orders', description: 'Takes paid orders off the message bus for fulfilment.' },
+      ],
+      interfaces: [
+        httpContract('payments-portal', 'pay', '/payments'),
+        {
+          id: 'ifulfilment_intake',
+          component: 'fulfilment-intake',
+          methods: [{ name: 'onOrderPaid', description: 'Start fulfilment of a paid order.', endpoint: { transport: 'MessageBus', topic: 'orders.paid', event: 'OrderPaid', direction: 'subscribe' } }],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNUSED_COMPONENT',
+    severity: 'warning',
+    anchoredTo: 'fulfilment-intake',
+    expectFire: true,
+    scenario:
+      'The fulfilment intake portal subscribes to orders.paid, but nothing in the tree emits that topic and the Portal declares no entry for an outside publisher, so nothing reaches it.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [ORDERS_SUB],
+      components: [
+        { id: 'fulfilment-intake', componentType: 'Portal', transport: 'MessageBus', subsystem: 'orders', description: 'Takes paid orders off the message bus for fulfilment.' },
+      ],
+      interfaces: [{
+        id: 'ifulfilment_intake',
+        component: 'fulfilment-intake',
+        methods: [{ name: 'onOrderPaid', description: 'Start fulfilment of a paid order.', endpoint: { transport: 'MessageBus', topic: 'orders.paid', event: 'OrderPaid', direction: 'subscribe' } }],
+      }],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // INVOKED_BY_UNDESCRIBED on a Portal-level entry
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'INVOKED_BY_UNDESCRIBED',
+    severity: 'warning',
+    anchoredTo: 'checkout-portal',
+    expectFire: true,
+    scenario:
+      'The checkout portal declares one Portal-level entry every verb inherits, but its caller prose is a placeholder, so nobody reviewing it can tell who reaches the Portal.',
+    tree: storefront({ portals: [{ id: 'checkout-portal', verb: 'placeOrder', path: '/orders', entry: { kind: 'entry', caller: 'tbd' } }] }),
+  }),
+  defineRuleFixture({
+    code: 'INVOKED_BY_UNDESCRIBED',
+    expectFire: false,
+    reason: 'The Portal-level entry names who reaches the Portal and how, which is what keeps the claim reviewable.',
+    scenario: 'The checkout portal declares one Portal-level entry for shoppers\' browsers and the mobile app.',
+    tree: storefront({ portals: [{ id: 'checkout-portal', verb: 'placeOrder', path: '/orders', entry: { kind: 'entry', caller: SHOPPERS } }] }),
+  }),
+
   // -------------------------------------------------------------------------
   // ENTRY_ON_NON_PORTAL
   // -------------------------------------------------------------------------

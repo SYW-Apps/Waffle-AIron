@@ -105,6 +105,12 @@ export interface CrossProjectReference {
   authored: string;
   /** The producer's public name it bound to; absent when it bound to none. */
   publicName?: string;
+  /**
+   * For a call, register, dispatch or calls reference an implementation
+   * writes: the key of the component that implementation realizes (its
+   * contract's component), the component making the call. Absent elsewhere.
+   */
+  caller?: string;
 }
 
 /** Where a declared external's producer was found. */

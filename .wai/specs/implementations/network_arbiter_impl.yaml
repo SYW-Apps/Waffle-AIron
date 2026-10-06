@@ -79,13 +79,22 @@ methods:
       - stepNumber: 12
         description: >-
           For each network of model.networks with more than one gateway, report MULTIPLE_GATEWAYS
-          (notice) on the network naming them
+          (notice) naming them, sited on its first gateway Portal (in sorted order) so the finding
+          belongs to that gateway's project and an allow on that Portal covers it
         type: local
       - stepNumber: 13
         description: Answer the findings in a stable order
         type: return
         outcome: the network findings
     detail: full
+  - name: familyCodes
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the five codes judge declares, in that order: GATEWAY_BYPASSED, MULTIPLE_GATEWAYS,
+          ENTRY_SCOPE_UNBOUNDED, ENTRY_UNPROVEN, EXPORT_BEYOND_NETWORK
+        type: return
+        outcome: the family codes
 status: complete
 createdAt: '2026-10-06T12:58:27.434Z'
-updatedAt: '2026-10-06T12:58:28.035Z'
+updatedAt: '2026-10-06T18:50:35.479Z'

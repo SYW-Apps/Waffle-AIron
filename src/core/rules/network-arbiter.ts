@@ -48,6 +48,19 @@ function insideNetwork(model: ReachModel, call: ModelledCall, network: string): 
   return enclosing(model, call.fromNetwork).includes(network);
 }
 
+/** The codes judge reports, in the order its contract declares them. */
+const FAMILY_CODES: readonly string[] = ['GATEWAY_BYPASSED', 'MULTIPLE_GATEWAYS', 'ENTRY_SCOPE_UNBOUNDED', 'ENTRY_UNPROVEN', 'EXPORT_BEYOND_NETWORK'];
+
+/**
+ * inetwork_arbiter.familyCodes — every code judge reports, for the lint-allow
+ * audit: the family run judges each of them over every member (ENTRY_UNPROVEN
+ * and ENTRY_SCOPE_UNBOUNDED only there), so an allow of one is a known code on
+ * any spec, and only the family run can tell that it covers nothing. Pure.
+ */
+export function familyCodes(): string[] {
+  return [...FAMILY_CODES];
+}
+
 /** inetwork_arbiter.judge — the network findings of a reach model. */
 export function judge(model: ReachModel): (ValidationIssue & { at?: string })[] {
   const out: NetworkFinding[] = [];
@@ -117,13 +130,17 @@ export function judge(model: ReachModel): (ValidationIssue & { at?: string })[] 
     });
   }
 
-  // Step 12: more than one gateway in one network.
+  // Step 12: more than one gateway in one network, sited on its first gateway
+  // Portal, so the finding belongs to that gateway's project and an allow on
+  // that Portal covers it.
   for (const n of model.networks) {
     if (n.gateways.length < 2) continue;
+    const first = [...n.gateways].sort()[0];
     out.push({
       severity: 'notice',
       code: 'MULTIPLE_GATEWAYS',
       message: `${networkName(n.id).replace(/^t/, 'T')} has ${n.gateways.length} gateway Portals taking entries from outside it (${n.gateways.map((g) => `"${g}"`).join(', ')}). Allowed, not recommended: one front door per network keeps the boundary reviewable.`,
+      specId: first,
     });
   }
 

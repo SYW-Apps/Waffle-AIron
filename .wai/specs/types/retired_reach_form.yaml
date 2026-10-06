@@ -23,5 +23,11 @@ values:
     description: >-
       A Custom endpoint whose address names an in-process call (`in-process …`,
       `<package>#<function>`), or a Custom Portal that binds no endpoint at all
+  - name: retired-allow
+    description: >-
+      A lint allow of a code the reachability model retired (UNMOUNTED_PORTAL,
+      ENDPOINT_OUTSIDE_MOUNT, MOUNT_TARGET_NOT_PORTAL, PUBLIC_INTERFACE_TYPE_MISMATCH,
+      PUBLIC_INTERFACE_EVENT_MISTYPED, MISSING_PORTAL_TYPE). The scan does not record it; the
+      reachability migration reads the allows itself and names its rewrites with this form
 createdAt: '2026-10-06T13:06:37.170Z'
-updatedAt: '2026-10-06T13:23:57.843Z'
+updatedAt: '2026-10-06T18:30:31.693Z'

@@ -40,7 +40,7 @@ import type { ReachModel } from '../models/reach.js';
 // reach_model_projector and network_arbiter: the family's reach model and its
 // network verdicts — pure, over the models each project's own gate projected.
 import { compose as composeReach } from './rules/reach-model-projector.js';
-import { judge as judgeNetwork } from './rules/network-arbiter.js';
+import { judge as judgeNetwork, familyCodes } from './rules/network-arbiter.js';
 
 /** A project's lock record, as the core adapter reads one. */
 type LockRecord = NonNullable<ReturnType<typeof approvalRecord>>;
@@ -103,6 +103,9 @@ const FAMILY_SEVERITY: Record<string, IssueSeverity> = {
   EXPORT_BEYOND_NETWORK: 'warning',
   ENTRY_SCOPE_UNBOUNDED: 'notice',
   ENTRY_UNPROVEN: 'warning',
+  // An allow of one of those codes the family's model gives no finding at its
+  // site: the project's own gate leaves that judgement to the family run.
+  UNUSED_LINT_ALLOW: 'warning',
 };
 
 /** The ceiling a run may read up to: none (the explicit local walk), or a root and whether the caller narrowed it. */
@@ -1189,12 +1192,14 @@ function localKey(project: string, key: string): string {
   return project !== '' && key.startsWith(`${project}::`) ? key.slice(project.length + 2) : key;
 }
 
-/** The key of the project a finding of the family's reach model sits on. */
+/**
+ * The key of the project a finding of the family's reach model sits on: the
+ * project holding the spec it names — a verb's Portal (MULTIPLE_GATEWAYS sits
+ * on its network's first gateway Portal), a call's caller. Never read from a
+ * name in the message.
+ */
 function projectOfFinding(model: ReachModel, finding: { code: string; specId?: string; at?: string; message: string }): string {
-  if (finding.specId === undefined) {
-    // MULTIPLE_GATEWAYS: on the network, named by its declaring project.
-    return model.networks.find((n) => finding.message.includes(`"${n.gateways[0]}"`))?.id ?? '';
-  }
+  if (finding.specId === undefined) return '';
   const verb = model.verbs.find((v) => v.portal === finding.specId);
   if (verb) return verb.project;
   const call = model.calls.find((c) => c.fromComponent === finding.specId && c.evidence === finding.at);
@@ -1244,7 +1249,37 @@ export function checkReach(family: ProjectFamily, models: Map<string, ReachModel
     const tuned = finding(configs.get(project) ?? null, f.code, f.message, project, f.specId);
     if (tuned) out.push(tuned);
   }
-  // Step 5.
+  // Steps 5-6: an allow of a code the family judges, on a selected project's
+  // own spec, that covers no finding of the family's model at its site (carried
+  // by the project's own gate or not) is stale. The project's own gate left
+  // that judgement here, because only this run sees every finding of them.
+  const codes = new Set(familyCodes());
+  const fired = new Set(carried);
+  for (const f of findings) {
+    const project = projectOfFinding(model, f);
+    fired.add(`${project}\u0000${f.code}\u0000${f.specId !== undefined ? localKey(project, f.specId) : ''}\u0000${f.at ?? ''}`);
+  }
+  for (const key of models.keys()) {
+    const node = nodeOf.get(key);
+    if (!node) continue;
+    if (!allows.has(key)) allows.set(key, runWithProjectRoot(node.directory, lintAllows));
+    if (!configs.has(key)) configs.set(key, runWithProjectRoot(node.directory, configOrNull));
+    for (const a of allows.get(key) ?? []) {
+      // A contained member's specs are keyed under its namespace: its own run judges them.
+      if (!codes.has(a.code) || a.specId.includes('::')) continue;
+      if (fired.has(`${key}\u0000${a.code}\u0000${a.specId}\u0000${a.at ?? ''}`)) continue;
+      const at = a.at !== undefined ? ` at "${a.at}"` : '';
+      const stale = finding(
+        configs.get(key) ?? null,
+        'UNUSED_LINT_ALLOW',
+        `Spec "${a.specId}"${key === '' ? '' : ` of ${named(key)}`} allows "${a.code}"${at}, but the family run reports no such finding there — remove the stale allow (the project's own gate leaves allows of the family's reach codes to this run).`,
+        key,
+        key === '' ? a.specId : `${key}::${a.specId}`,
+      );
+      if (stale) out.push(stale);
+    }
+  }
+  // Step 7.
   return out;
 }
 
